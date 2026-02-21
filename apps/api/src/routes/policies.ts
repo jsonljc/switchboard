@@ -1,34 +1,66 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { Policy } from "@switchboard/schemas";
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/policies
-  app.get("/", async (_request, reply) => {
-    return reply.code(200).send({ policies: [] });
+  app.get("/", async (request, reply) => {
+    const query = request.query as { cartridgeId?: string };
+    const policies = await app.storageContext.policies.listActive(
+      query.cartridgeId ? { cartridgeId: query.cartridgeId } : undefined,
+    );
+    return reply.code(200).send({ policies });
   });
 
   // POST /api/policies
   app.post("/", async (request, reply) => {
-    const body = request.body as Record<string, unknown>;
-    const id = `policy_${Date.now()}`;
-    return reply.code(201).send({ id, ...body, createdAt: new Date().toISOString() });
+    const body = request.body as Omit<Policy, "id" | "createdAt" | "updatedAt">;
+    const now = new Date();
+    const policy: Policy = {
+      id: `policy_${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+      ...body,
+    };
+
+    await app.storageContext.policies.save(policy);
+    return reply.code(201).send({ policy });
   });
 
   // GET /api/policies/:id
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    return reply.code(200).send({ id, status: "not_found" });
+    const policy = await app.storageContext.policies.getById(id);
+    if (!policy) {
+      return reply.code(404).send({ error: "Policy not found" });
+    }
+    return reply.code(200).send({ policy });
   });
 
   // PUT /api/policies/:id
   app.put("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, unknown>;
-    return reply.code(200).send({ id, ...body, updatedAt: new Date().toISOString() });
+    const body = request.body as Partial<Policy>;
+
+    const existing = await app.storageContext.policies.getById(id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Policy not found" });
+    }
+
+    await app.storageContext.policies.update(id, {
+      ...body,
+      updatedAt: new Date(),
+    });
+    const updated = await app.storageContext.policies.getById(id);
+    return reply.code(200).send({ policy: updated });
   });
 
   // DELETE /api/policies/:id
   app.delete("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const deleted = await app.storageContext.policies.delete(id);
+    if (!deleted) {
+      return reply.code(404).send({ error: "Policy not found" });
+    }
     return reply.code(200).send({ id, deleted: true });
   });
 };

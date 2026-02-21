@@ -35,6 +35,9 @@ importers:
       '@fastify/rate-limit':
         specifier: ^10.2.0
         version: 10.3.0
+      '@switchboard/ads-spend':
+        specifier: workspace:*
+        version: link:../../cartridges/ads-spend
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -72,6 +75,9 @@ importers:
 
   apps/chat:
     dependencies:
+      '@switchboard/ads-spend':
+        specifier: workspace:*
+        version: link:../../cartridges/ads-spend
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -81,6 +87,9 @@ importers:
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      fastify:
+        specifier: ^5.2.0
+        version: 5.7.4
       zod:
         specifier: ^3.23.0
         version: 3.25.76

@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/runtime.ts",
-    "start": "node dist/runtime.js",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
@@ -16,6 +16,8 @@
     "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
+    "@switchboard/ads-spend": "workspace:*",
+    "fastify": "^5.2.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

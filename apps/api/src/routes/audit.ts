@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import type { AuditQueryFilter } from "@switchboard/core";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/audit - Query audit ledger
@@ -13,27 +14,44 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
       limit?: string;
     };
 
-    // In production, would query the audit ledger
+    const filter: AuditQueryFilter = {};
+    if (query.eventType) filter.eventType = query.eventType as AuditQueryFilter["eventType"];
+    if (query.entityType) filter.entityType = query.entityType;
+    if (query.entityId) filter.entityId = query.entityId;
+    if (query.envelopeId) filter.envelopeId = query.envelopeId;
+    if (query.after) filter.after = new Date(query.after);
+    if (query.before) filter.before = new Date(query.before);
+    if (query.limit) filter.limit = parseInt(query.limit, 10);
+
+    const entries = await app.auditLedger.query(filter);
     return reply.code(200).send({
-      entries: [],
-      total: 0,
+      entries,
+      total: entries.length,
       filter: query,
     });
   });
 
-  // GET /api/audit/:id - Get single audit entry
-  app.get("/:id", async (request, reply) => {
-    const { id } = request.params as { id: string };
-    return reply.code(200).send({ id, status: "not_found" });
-  });
-
   // GET /api/audit/verify - Verify hash chain integrity
   app.get("/verify", async (_request, reply) => {
-    // In production, would verify the hash chain
+    const allEntries = await app.auditLedger.query({});
+    const result = await app.auditLedger.verifyChain(allEntries);
     return reply.code(200).send({
-      valid: true,
-      entriesChecked: 0,
-      brokenAt: null,
+      valid: result.valid,
+      entriesChecked: allEntries.length,
+      brokenAt: result.brokenAt,
     });
+  });
+
+  // GET /api/audit/:id - Get single audit entry (must be after /verify to avoid route conflict)
+  app.get("/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    // Query with a filter to find by ID — the ledger doesn't expose getById directly
+    // but InMemoryLedgerStorage does. For now, query all and filter.
+    const entries = await app.auditLedger.query({});
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) {
+      return reply.code(404).send({ error: "Audit entry not found" });
+    }
+    return reply.code(200).send({ entry });
   });
 };
