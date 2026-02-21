@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@switchboard/schemas": "workspace:*",
+    "@switchboard/cartridge-sdk": "workspace:*",
     "json-canonicalize": "^1.0.6"
   },
   "devDependencies": {

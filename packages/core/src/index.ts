@@ -35,6 +35,28 @@ export { checkExpiry, getExpiryMs } from "./approval/expiry.js";
 export { canApprove } from "./approval/delegation.js";
 export { applyPatch, describePatch } from "./approval/patching.js";
 
+// Storage
+export {
+  InMemoryEnvelopeStore,
+  InMemoryPolicyStore,
+  InMemoryIdentityStore,
+  InMemoryApprovalStore,
+  InMemoryCartridgeRegistry,
+  createInMemoryStorage,
+} from "./storage/index.js";
+export type {
+  EnvelopeStore,
+  PolicyStore,
+  IdentityStore,
+  ApprovalStore,
+  CartridgeRegistry,
+  StorageContext,
+} from "./storage/index.js";
+
+// Orchestrator
+export { LifecycleOrchestrator } from "./orchestrator/index.js";
+export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./orchestrator/index.js";
+
 // Audit
 export { computeAuditHash, computeAuditHashSync, sha256, verifyChain } from "./audit/canonical-hash.js";
 export type { AuditHashInput } from "./audit/canonical-hash.js";
