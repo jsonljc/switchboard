@@ -1,0 +1,33 @@
+{
+  "name": "@switchboard/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir src",
+    "test:integration": "vitest run --dir tests",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@switchboard/core": "workspace:*",
+    "@switchboard/db": "workspace:*",
+    "@switchboard/schemas": "workspace:*",
+    "@switchboard/cartridge-sdk": "workspace:*",
+    "fastify": "^5.2.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/rate-limit": "^10.2.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

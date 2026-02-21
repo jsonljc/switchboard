@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Principal {
+  id             String   @id @default(uuid())
+  type           String   // user, agent, service_account, system
+  name           String
+  organizationId String?
+  roles          String[] // requester, approver, operator, admin
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  identitySpecs    IdentitySpec[]
+  delegationsGiven DelegationRule[] @relation("grantor")
+  delegationsRecvd DelegationRule[] @relation("grantee")
+
+  @@index([organizationId])
+}
+
+model DelegationRule {
+  id        String    @id @default(uuid())
+  grantorId String
+  granteeId String
+  scope     String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  grantor Principal @relation("grantor", fields: [grantorId], references: [id])
+  grantee Principal @relation("grantee", fields: [granteeId], references: [id])
+
+  @@index([grantorId])
+  @@index([granteeId])
+}
+
+model IdentitySpec {
+  id                   String   @id @default(uuid())
+  principalId          String
+  organizationId       String?
+  name                 String
+  description          String
+  riskTolerance        Json     // RiskTolerance object
+  globalSpendLimits    Json     // SpendLimits object
+  cartridgeSpendLimits Json     // Record<string, SpendLimits>
+  forbiddenBehaviors   String[]
+  trustBehaviors       String[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  principal Principal     @relation(fields: [principalId], references: [id])
+  overlays  RoleOverlay[]
+
+  @@index([principalId])
+  @@index([organizationId])
+}
+
+model RoleOverlay {
+  id             String   @id @default(uuid())
+  identitySpecId String
+  name           String
+  description    String
+  mode           String   // restrict, extend
+  priority       Int
+  active         Boolean  @default(true)
+  conditions     Json     // overlay conditions
+  overrides      Json     // overlay overrides
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  identitySpec IdentitySpec @relation(fields: [identitySpecId], references: [id])
+
+  @@index([identitySpecId])
+}
+
+model Policy {
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String
+  organizationId       String?
+  cartridgeId          String?
+  priority             Int
+  active               Boolean  @default(true)
+  rule                 Json     // PolicyRule
+  effect               String   // allow, deny, modify, require_approval
+  effectParams         Json?
+  approvalRequirement  String?  // none, standard, elevated, mandatory
+  riskCategoryOverride String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([cartridgeId])
+  @@index([priority])
+}
+
+model ActionEnvelope {
+  id               String   @id @default(uuid())
+  version          Int      @default(0)
+  incomingMessage  Json?
+  conversationId   String?
+  proposals        Json     // ActionProposal[]
+  resolvedEntities Json     // ResolvedEntity[]
+  plan             Json?    // ActionPlan
+  decisions        Json     // DecisionTrace[]
+  approvalRequests Json     // ApprovalRequest[]
+  executionResults Json     // ExecutionResult[]
+  auditEntryIds    String[]
+  status           String
+  parentEnvelopeId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  parentEnvelope   ActionEnvelope?  @relation("EnvelopeChain", fields: [parentEnvelopeId], references: [id])
+  childEnvelopes   ActionEnvelope[] @relation("EnvelopeChain")
+
+  @@index([status])
+  @@index([conversationId])
+  @@index([parentEnvelopeId])
+}
+
+model ConversationState {
+  id                    String   @id @default(uuid())
+  threadId              String   @unique
+  channel               String
+  principalId           String
+  status                String
+  currentIntent         String?
+  pendingProposalIds    String[]
+  pendingApprovalIds    String[]
+  clarificationQuestion String?
+  lastActivityAt        DateTime @default(now())
+  expiresAt             DateTime
+
+  @@index([principalId])
+  @@index([status])
+}
+
+model AuditEntry {
+  id                String   @id @default(uuid())
+  eventType         String
+  timestamp         DateTime @default(now())
+  actorType         String
+  actorId           String
+  entityType        String
+  entityId          String
+  riskCategory      String
+  visibilityLevel   String   @default("public")
+  summary           String
+  snapshot          Json
+  evidencePointers  Json     // EvidencePointer[]
+  redactionApplied  Boolean  @default(false)
+  redactedFields    String[]
+  chainHashVersion  Int      @default(1)
+  schemaVersion     Int      @default(1)
+  entryHash         String
+  previousEntryHash String?
+  envelopeId        String?
+  organizationId    String?
+  createdAt         DateTime @default(now())
+
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([envelopeId])
+  @@index([organizationId])
+  @@index([timestamp])
+}
+
+model CartridgeRegistration {
+  id          String   @id @default(uuid())
+  cartridgeId String   @unique
+  name        String
+  version     String
+  manifest    Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Connection {
+  id              String   @id @default(uuid())
+  serviceId       String
+  serviceName     String
+  organizationId  String?
+  authType        String   // oauth2, api_key, service_account
+  credentials     Json     // encrypted credentials
+  scopes          String[]
+  refreshStrategy String   @default("auto")
+  status          String   @default("connected")
+  lastHealthCheck DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([serviceId, organizationId])
+  @@index([organizationId])
+}
+
+model IdempotencyRecord {
+  id        String   @id
+  response  Json
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model ProcessedMessage {
+  id        String   @id
+  channel   String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}

@@ -1,0 +1,56 @@
+import type { ApprovalRequirement, RiskCategory } from "@switchboard/schemas";
+import type { ResolvedIdentity } from "../identity/spec.js";
+
+export interface ApprovalRouting {
+  approvalRequired: ApprovalRequirement;
+  approvers: string[];
+  fallbackApprover: string | null;
+  expiresInMs: number;
+  expiredBehavior: "deny" | "re_request";
+}
+
+export interface ApprovalRoutingConfig {
+  defaultApprovers: string[];
+  defaultFallbackApprover: string | null;
+  defaultExpiryMs: number;
+  defaultExpiredBehavior: "deny" | "re_request";
+  elevatedExpiryMs: number;
+  mandatoryExpiryMs: number;
+}
+
+export const DEFAULT_ROUTING_CONFIG: ApprovalRoutingConfig = {
+  defaultApprovers: [],
+  defaultFallbackApprover: null,
+  defaultExpiryMs: 24 * 60 * 60 * 1000, // 24 hours
+  defaultExpiredBehavior: "deny",
+  elevatedExpiryMs: 12 * 60 * 60 * 1000, // 12 hours
+  mandatoryExpiryMs: 4 * 60 * 60 * 1000, // 4 hours
+};
+
+export function routeApproval(
+  riskCategory: RiskCategory,
+  identity: ResolvedIdentity,
+  config: ApprovalRoutingConfig = DEFAULT_ROUTING_CONFIG,
+): ApprovalRouting {
+  const approvalRequired = identity.effectiveRiskTolerance[riskCategory];
+
+  let expiresInMs: number;
+  switch (approvalRequired) {
+    case "mandatory":
+      expiresInMs = config.mandatoryExpiryMs;
+      break;
+    case "elevated":
+      expiresInMs = config.elevatedExpiryMs;
+      break;
+    default:
+      expiresInMs = config.defaultExpiryMs;
+  }
+
+  return {
+    approvalRequired,
+    approvers: config.defaultApprovers,
+    fallbackApprover: config.defaultFallbackApprover,
+    expiresInMs,
+    expiredBehavior: config.defaultExpiredBehavior,
+  };
+}
