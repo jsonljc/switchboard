@@ -175,6 +175,9 @@ importers:
       '@prisma/client':
         specifier: ^6.3.0
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../core
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../schemas

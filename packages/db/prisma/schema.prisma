@@ -16,7 +16,6 @@ model Principal {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  identitySpecs    IdentitySpec[]
   delegationsGiven DelegationRule[] @relation("grantor")
   delegationsRecvd DelegationRule[] @relation("grantee")
 
@@ -52,7 +51,6 @@ model IdentitySpec {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  principal Principal     @relation(fields: [principalId], references: [id])
   overlays  RoleOverlay[]
 
   @@index([principalId])
@@ -215,4 +213,20 @@ model ProcessedMessage {
   expiresAt DateTime
 
   @@index([expiresAt])
+}
+
+model ApprovalRecord {
+  id          String    @id
+  envelopeId  String
+  request     Json
+  status      String    @default("pending")
+  respondedBy String?
+  respondedAt DateTime?
+  patchValue  Json?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([envelopeId])
 }

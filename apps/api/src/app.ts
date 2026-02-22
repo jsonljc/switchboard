@@ -20,7 +20,7 @@ import {
   AuditLedger,
   createGuardrailState,
 } from "@switchboard/core";
-import type { StorageContext } from "@switchboard/core";
+import type { StorageContext, LedgerStorage } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 
 declare module "fastify" {
@@ -96,8 +96,19 @@ export async function buildServer() {
   });
 
   // Create storage and orchestrator
-  const storage = createInMemoryStorage();
-  const ledgerStorage = new InMemoryLedgerStorage();
+  let storage: StorageContext;
+  let ledgerStorage: LedgerStorage;
+
+  if (process.env["DATABASE_URL"]) {
+    const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
+    const prisma = getDb();
+    storage = createPrismaStorage(prisma);
+    ledgerStorage = new PrismaLedgerStorage(prisma);
+  } else {
+    storage = createInMemoryStorage();
+    ledgerStorage = new InMemoryLedgerStorage();
+  }
+
   const ledger = new AuditLedger(ledgerStorage);
   const guardrailState = createGuardrailState();
 

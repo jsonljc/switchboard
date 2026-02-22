@@ -1,0 +1,131 @@
+import type { PrismaClient } from "@prisma/client";
+import type { ActionEnvelope } from "@switchboard/schemas";
+import type { EnvelopeStore } from "@switchboard/core";
+
+export class PrismaEnvelopeStore implements EnvelopeStore {
+  constructor(private prisma: PrismaClient) {}
+
+  async save(envelope: ActionEnvelope): Promise<void> {
+    await this.prisma.actionEnvelope.upsert({
+      where: { id: envelope.id },
+      create: {
+        id: envelope.id,
+        version: envelope.version,
+        incomingMessage: envelope.incomingMessage as object ?? undefined,
+        conversationId: envelope.conversationId,
+        proposals: envelope.proposals as object[],
+        resolvedEntities: envelope.resolvedEntities as object[],
+        plan: envelope.plan as object ?? undefined,
+        decisions: envelope.decisions as object[],
+        approvalRequests: envelope.approvalRequests as object[],
+        executionResults: envelope.executionResults as object[],
+        auditEntryIds: envelope.auditEntryIds,
+        status: envelope.status,
+        parentEnvelopeId: envelope.parentEnvelopeId,
+        createdAt: envelope.createdAt,
+        updatedAt: envelope.updatedAt,
+      },
+      update: {
+        version: envelope.version,
+        incomingMessage: envelope.incomingMessage as object ?? undefined,
+        conversationId: envelope.conversationId,
+        proposals: envelope.proposals as object[],
+        resolvedEntities: envelope.resolvedEntities as object[],
+        plan: envelope.plan as object ?? undefined,
+        decisions: envelope.decisions as object[],
+        approvalRequests: envelope.approvalRequests as object[],
+        executionResults: envelope.executionResults as object[],
+        auditEntryIds: envelope.auditEntryIds,
+        status: envelope.status,
+        parentEnvelopeId: envelope.parentEnvelopeId,
+        updatedAt: envelope.updatedAt,
+      },
+    });
+  }
+
+  async getById(id: string): Promise<ActionEnvelope | null> {
+    const row = await this.prisma.actionEnvelope.findUnique({ where: { id } });
+    if (!row) return null;
+    return toEnvelope(row);
+  }
+
+  async update(id: string, updates: Partial<ActionEnvelope>): Promise<void> {
+    const data: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (updates.version !== undefined) data["version"] = updates.version;
+    if (updates.incomingMessage !== undefined) data["incomingMessage"] = updates.incomingMessage as object;
+    if (updates.conversationId !== undefined) data["conversationId"] = updates.conversationId;
+    if (updates.proposals !== undefined) data["proposals"] = updates.proposals as object[];
+    if (updates.resolvedEntities !== undefined) data["resolvedEntities"] = updates.resolvedEntities as object[];
+    if (updates.plan !== undefined) data["plan"] = updates.plan as object;
+    if (updates.decisions !== undefined) data["decisions"] = updates.decisions as object[];
+    if (updates.approvalRequests !== undefined) data["approvalRequests"] = updates.approvalRequests as object[];
+    if (updates.executionResults !== undefined) data["executionResults"] = updates.executionResults as object[];
+    if (updates.auditEntryIds !== undefined) data["auditEntryIds"] = updates.auditEntryIds;
+    if (updates.status !== undefined) data["status"] = updates.status;
+    if (updates.parentEnvelopeId !== undefined) data["parentEnvelopeId"] = updates.parentEnvelopeId;
+
+    await this.prisma.actionEnvelope.update({ where: { id }, data });
+  }
+
+  async list(filter?: {
+    principalId?: string;
+    status?: string;
+    limit?: number;
+  }): Promise<ActionEnvelope[]> {
+    const where: Record<string, unknown> = {};
+    if (filter?.status) where["status"] = filter.status;
+
+    const rows = await this.prisma.actionEnvelope.findMany({
+      where,
+      take: filter?.limit,
+      orderBy: { createdAt: "desc" },
+    });
+
+    let results = rows.map(toEnvelope);
+
+    if (filter?.principalId) {
+      results = results.filter((e) =>
+        e.proposals.some((p) => p.parameters["principalId"] === filter.principalId),
+      );
+    }
+
+    return results;
+  }
+}
+
+function toEnvelope(row: {
+  id: string;
+  version: number;
+  incomingMessage: unknown;
+  conversationId: string | null;
+  proposals: unknown;
+  resolvedEntities: unknown;
+  plan: unknown;
+  decisions: unknown;
+  approvalRequests: unknown;
+  executionResults: unknown;
+  auditEntryIds: string[];
+  status: string;
+  parentEnvelopeId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): ActionEnvelope {
+  return {
+    id: row.id,
+    version: row.version,
+    incomingMessage: row.incomingMessage ?? null,
+    conversationId: row.conversationId,
+    proposals: row.proposals as ActionEnvelope["proposals"],
+    resolvedEntities: row.resolvedEntities as ActionEnvelope["resolvedEntities"],
+    plan: (row.plan as ActionEnvelope["plan"]) ?? null,
+    decisions: row.decisions as ActionEnvelope["decisions"],
+    approvalRequests: row.approvalRequests as ActionEnvelope["approvalRequests"],
+    executionResults: row.executionResults as ActionEnvelope["executionResults"],
+    auditEntryIds: row.auditEntryIds,
+    status: row.status as ActionEnvelope["status"],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    parentEnvelopeId: row.parentEnvelopeId,
+  };
+}
