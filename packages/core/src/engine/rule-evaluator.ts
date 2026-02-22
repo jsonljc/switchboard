@@ -113,13 +113,14 @@ export function evaluateRule(rule: PolicyRule, context: EvaluationContext): Rule
         conditionResults.some((r) => r.matched) ||
         childResults.some((r) => r.matched);
       break;
-    case "NOT":
+    case "NOT": {
       // NOT applies to the first child/condition group
       const innerMatched =
         conditionResults.every((r) => r.matched) &&
         childResults.every((r) => r.matched);
       matched = !innerMatched;
       break;
+    }
     default:
       matched = false;
   }

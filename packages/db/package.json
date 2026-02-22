@@ -17,6 +17,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
+    "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {

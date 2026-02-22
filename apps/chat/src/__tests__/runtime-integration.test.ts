@@ -138,7 +138,8 @@ describe("ChatRuntime Integration", () => {
     }));
 
     // Add resolveEntity to cartridge
-    (cartridge as TestCartridge & { resolveEntity: Function }).resolveEntity = async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (cartridge as any).resolveEntity = async (
       inputRef: string,
       entityType: string,
     ) => ({
@@ -250,7 +251,8 @@ describe("ChatRuntime Integration", () => {
 
   it("should send clarification for ambiguous entity", async () => {
     // Set up resolver to return ambiguous result
-    (cartridge as TestCartridge & { resolveEntity: Function }).resolveEntity = async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (cartridge as any).resolveEntity = async (
       inputRef: string,
       entityType: string,
     ) => ({
