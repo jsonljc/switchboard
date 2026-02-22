@@ -15,6 +15,7 @@ services:
       - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
       - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
