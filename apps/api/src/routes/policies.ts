@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { Policy } from "@switchboard/schemas";
+import { CreatePolicyBodySchema, UpdatePolicyBodySchema } from "../validation.js";
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/policies
@@ -13,13 +14,17 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/policies
   app.post("/", async (request, reply) => {
-    const body = request.body as Omit<Policy, "id" | "createdAt" | "updatedAt">;
+    const parsed = CreatePolicyBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+
     const now = new Date();
     const policy: Policy = {
       id: `policy_${Date.now()}`,
       createdAt: now,
       updatedAt: now,
-      ...body,
+      ...parsed.data,
     };
 
     await app.storageContext.policies.save(policy);
@@ -39,7 +44,11 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // PUT /api/policies/:id
   app.put("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Partial<Policy>;
+
+    const parsed = UpdatePolicyBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
 
     const existing = await app.storageContext.policies.getById(id);
     if (!existing) {
@@ -47,7 +56,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     }
 
     await app.storageContext.policies.update(id, {
-      ...body,
+      ...parsed.data,
       updatedAt: new Date(),
     });
     const updated = await app.storageContext.policies.getById(id);

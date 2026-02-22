@@ -1,15 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
+import { ApprovalRespondBodySchema } from "../validation.js";
 
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/approvals/:id/respond - Respond to an approval request
   app.post("/:id/respond", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as {
-      action: "approve" | "reject" | "patch";
-      respondedBy: string;
-      patchValue?: Record<string, unknown>;
-      bindingHash?: string;
-    };
+
+    const parsed = ApprovalRespondBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     try {
       const response = await app.orchestrator.respondToApproval({

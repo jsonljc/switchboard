@@ -40,6 +40,19 @@ describe("Policies API", () => {
       expect(body.policy.id).toBeDefined();
       expect(body.policy.name).toBe("Test Policy");
     });
+
+    it("should return 400 for invalid policy body", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/policies",
+        payload: {
+          name: "Missing required fields",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
   });
 
   describe("GET /api/policies", () => {

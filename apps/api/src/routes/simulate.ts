@@ -1,14 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
+import { SimulateBodySchema } from "../validation.js";
 
 export const simulateRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/simulate - Dry-run action evaluation
   app.post("/", async (request, reply) => {
-    const body = request.body as {
-      actionType: string;
-      parameters: Record<string, unknown>;
-      principalId: string;
-      cartridgeId?: string;
-    };
+    const parsed = SimulateBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
     if (!cartridgeId) {

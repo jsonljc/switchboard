@@ -1,17 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
+import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/actions/propose - Create a new action proposal via envelope
   app.post("/propose", async (request, reply) => {
-    const body = request.body as {
-      actionType: string;
-      parameters: Record<string, unknown>;
-      principalId: string;
-      organizationId?: string;
-      cartridgeId?: string;
-      entityRefs?: Array<{ inputRef: string; entityType: string }>;
-      message?: string;
-    };
+    const parsed = ProposeBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
     if (!cartridgeId) {
@@ -105,15 +102,11 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/actions/batch - Create a batch of actions with a plan
   app.post("/batch", async (request, reply) => {
-    const body = request.body as {
-      proposals: Array<{
-        actionType: string;
-        parameters: Record<string, unknown>;
-      }>;
-      principalId: string;
-      organizationId?: string;
-      cartridgeId?: string;
-    };
+    const parsed = BatchProposeBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const results = [];
     for (const proposal of body.proposals) {
