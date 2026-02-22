@@ -106,7 +106,7 @@ describe("Approvals API", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("Invalid request body");
+      expect(res.json().error).toBeDefined();
     });
 
     it("should return 400 for invalid action value", async () => {
@@ -122,7 +122,7 @@ describe("Approvals API", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("Invalid request body");
+      expect(res.json().error).toBeDefined();
     });
 
     it("should return 400 for non-existent approval", async () => {

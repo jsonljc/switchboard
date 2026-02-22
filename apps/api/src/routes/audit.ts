@@ -3,7 +3,24 @@ import type { AuditQueryFilter } from "@switchboard/core";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/audit - Query audit ledger
-  app.get("/", async (request, reply) => {
+  app.get("/", {
+    schema: {
+      description: "Query audit ledger entries with optional filters.",
+      tags: ["Audit"],
+      querystring: {
+        type: "object",
+        properties: {
+          eventType: { type: "string" },
+          entityType: { type: "string" },
+          entityId: { type: "string" },
+          envelopeId: { type: "string" },
+          after: { type: "string", format: "date-time" },
+          before: { type: "string", format: "date-time" },
+          limit: { type: "integer" },
+        },
+      },
+    },
+  }, async (request, reply) => {
     const query = request.query as {
       eventType?: string;
       entityType?: string;
@@ -32,7 +49,12 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/audit/verify - Verify hash chain integrity
-  app.get("/verify", async (_request, reply) => {
+  app.get("/verify", {
+    schema: {
+      description: "Verify the integrity of the audit hash chain.",
+      tags: ["Audit"],
+    },
+  }, async (_request, reply) => {
     const allEntries = await app.auditLedger.query({});
     const result = await app.auditLedger.verifyChain(allEntries);
     return reply.code(200).send({
@@ -43,7 +65,13 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/audit/:id - Get single audit entry (must be after /verify to avoid route conflict)
-  app.get("/:id", async (request, reply) => {
+  app.get("/:id", {
+    schema: {
+      description: "Get a single audit entry by ID.",
+      tags: ["Audit"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
     // Query with a filter to find by ID — the ledger doesn't expose getById directly
     // but InMemoryLedgerStorage does. For now, query all and filter.

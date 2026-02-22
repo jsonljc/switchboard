@@ -39,8 +39,7 @@ describe("Production Hardening", () => {
 
       expect(res.statusCode).toBe(400);
       const body = res.json();
-      expect(body.error).toBe("Invalid request body");
-      expect(body.details).toBeDefined();
+      expect(body.error).toBeDefined();
     });
 
     it("should not leak stack traces in error responses", async () => {

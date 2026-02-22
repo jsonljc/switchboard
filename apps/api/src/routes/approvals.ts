@@ -1,9 +1,19 @@
 import type { FastifyPluginAsync } from "fastify";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { ApprovalRespondBodySchema } from "../validation.js";
+
+const respondJsonSchema = zodToJsonSchema(ApprovalRespondBodySchema, { target: "openApi3" });
 
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/approvals/:id/respond - Respond to an approval request
-  app.post("/:id/respond", async (request, reply) => {
+  app.post("/:id/respond", {
+    schema: {
+      description: "Respond to a pending approval request (approve, reject, or patch).",
+      tags: ["Approvals"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      body: respondJsonSchema,
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const parsed = ApprovalRespondBodySchema.safeParse(request.body);
@@ -34,7 +44,12 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/approvals/pending - List pending approval requests
-  app.get("/pending", async (_request, reply) => {
+  app.get("/pending", {
+    schema: {
+      description: "List all pending approval requests.",
+      tags: ["Approvals"],
+    },
+  }, async (_request, reply) => {
     const pending = await app.storageContext.approvals.listPending();
     return reply.code(200).send({
       approvals: pending.map((a) => ({
@@ -51,7 +66,13 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/approvals/:id - Get approval request details
-  app.get("/:id", async (request, reply) => {
+  app.get("/:id", {
+    schema: {
+      description: "Get approval request details by ID.",
+      tags: ["Approvals"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const approval = await app.storageContext.approvals.getById(id);
