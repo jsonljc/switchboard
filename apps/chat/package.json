@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
+    "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {

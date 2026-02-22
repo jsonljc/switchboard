@@ -30,7 +30,7 @@ export function resolveIdentity(
   // Start with base spec values
   let effectiveRiskTolerance = { ...spec.riskTolerance };
   let effectiveSpendLimits = { ...spec.globalSpendLimits };
-  let effectiveForbiddenBehaviors = [...spec.forbiddenBehaviors];
+  const effectiveForbiddenBehaviors = [...spec.forbiddenBehaviors];
   let effectiveTrustBehaviors = [...spec.trustBehaviors];
 
   // Apply overlays in priority order

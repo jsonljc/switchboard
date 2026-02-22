@@ -72,7 +72,8 @@ export async function buildTestServer(): Promise<TestContext> {
   }));
 
   // Add resolveEntity to cartridge
-  (cartridge as TestCartridge & { resolveEntity: Function }).resolveEntity = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (cartridge as any).resolveEntity = async (
     inputRef: string,
     entityType: string,
   ) => ({
