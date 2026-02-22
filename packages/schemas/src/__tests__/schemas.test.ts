@@ -14,6 +14,10 @@ import {
   IncomingMessageSchema,
   ConversationStateSchema,
   ApprovalRequestSchema,
+  DelegationRuleSchema,
+  CompositeRiskContextSchema,
+  CheckCodeSchema,
+  AuditEventTypeSchema,
 } from "../index.js";
 
 // ---------------------------------------------------------------------------
@@ -722,5 +726,126 @@ describe("ApprovalRequestSchema", () => {
       expiredBehavior: "escalate",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. DelegationRuleSchema — maxChainDepth
+// ---------------------------------------------------------------------------
+describe("DelegationRuleSchema", () => {
+  const validRule = {
+    id: "del_001",
+    grantor: "admin_1",
+    grantee: "user_1",
+    scope: "*",
+    expiresAt: null,
+  };
+
+  it("accepts a valid delegation rule without maxChainDepth", () => {
+    const result = DelegationRuleSchema.safeParse(validRule);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxChainDepth).toBeUndefined();
+    }
+  });
+
+  it("accepts a valid delegation rule with maxChainDepth", () => {
+    const result = DelegationRuleSchema.safeParse({
+      ...validRule,
+      maxChainDepth: 3,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.maxChainDepth).toBe(3);
+    }
+  });
+
+  it("rejects maxChainDepth of 0", () => {
+    const result = DelegationRuleSchema.safeParse({
+      ...validRule,
+      maxChainDepth: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative maxChainDepth", () => {
+    const result = DelegationRuleSchema.safeParse({
+      ...validRule,
+      maxChainDepth: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-integer maxChainDepth", () => {
+    const result = DelegationRuleSchema.safeParse({
+      ...validRule,
+      maxChainDepth: 1.5,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. CompositeRiskContextSchema
+// ---------------------------------------------------------------------------
+describe("CompositeRiskContextSchema", () => {
+  const validContext = {
+    recentActionCount: 10,
+    windowMs: 3600000,
+    cumulativeExposure: 5000,
+    distinctTargetEntities: 3,
+    distinctCartridges: 2,
+  };
+
+  it("accepts a valid composite risk context", () => {
+    const result = CompositeRiskContextSchema.safeParse(validContext);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects negative recentActionCount", () => {
+    const result = CompositeRiskContextSchema.safeParse({
+      ...validContext,
+      recentActionCount: -1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative cumulativeExposure", () => {
+    const result = CompositeRiskContextSchema.safeParse({
+      ...validContext,
+      cumulativeExposure: -100,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts zero values", () => {
+    const result = CompositeRiskContextSchema.safeParse({
+      recentActionCount: 0,
+      windowMs: 0,
+      cumulativeExposure: 0,
+      distinctTargetEntities: 0,
+      distinctCartridges: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. New CheckCode and AuditEventType enums
+// ---------------------------------------------------------------------------
+describe("New enum values", () => {
+  it("CheckCodeSchema accepts COMPOSITE_RISK", () => {
+    const result = CheckCodeSchema.safeParse("COMPOSITE_RISK");
+    expect(result.success).toBe(true);
+  });
+
+  it("CheckCodeSchema accepts DELEGATION_CHAIN", () => {
+    const result = CheckCodeSchema.safeParse("DELEGATION_CHAIN");
+    expect(result.success).toBe(true);
+  });
+
+  it("AuditEventTypeSchema accepts delegation.chain_resolved", () => {
+    const result = AuditEventTypeSchema.safeParse("delegation.chain_resolved");
+    expect(result.success).toBe(true);
   });
 });

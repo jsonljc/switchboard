@@ -3,6 +3,7 @@ import type {
   RiskInput,
   RiskScore,
   RiskFactor,
+  CompositeRiskContext,
 } from "@switchboard/schemas";
 
 export interface RiskScoringConfig {
@@ -15,6 +16,24 @@ export interface RiskScoringConfig {
   learningPenalty: number;
   cooldownPenalty: number;
 }
+
+export interface CompositeRiskConfig {
+  cumulativeExposureWeight: number;
+  cumulativeExposureThreshold: number;
+  velocityWeight: number;
+  velocityThreshold: number;
+  concentrationWeight: number;
+  crossCartridgeWeight: number;
+}
+
+export const DEFAULT_COMPOSITE_RISK_CONFIG: CompositeRiskConfig = {
+  cumulativeExposureWeight: 15,
+  cumulativeExposureThreshold: 50000,
+  velocityWeight: 10,
+  velocityThreshold: 20,
+  concentrationWeight: 5,
+  crossCartridgeWeight: 5,
+};
 
 export const DEFAULT_RISK_CONFIG: RiskScoringConfig = {
   baseWeights: {
@@ -146,4 +165,85 @@ export function computeRiskScore(
     category: scoreToCategory(rawScore),
     factors,
   };
+}
+
+export function computeCompositeRiskAdjustment(
+  baseScore: RiskScore,
+  context: CompositeRiskContext,
+  config: CompositeRiskConfig = DEFAULT_COMPOSITE_RISK_CONFIG,
+): { adjustedScore: RiskScore; compositeFactors: RiskFactor[] } {
+  const compositeFactors: RiskFactor[] = [];
+  let compositeContribution = 0;
+
+  // 1. Cumulative exposure — penalty scales with total $ at risk across recent actions
+  if (context.cumulativeExposure > 0) {
+    const ratio = Math.min(1, context.cumulativeExposure / config.cumulativeExposureThreshold);
+    const contribution = ratio * config.cumulativeExposureWeight;
+    compositeFactors.push({
+      factor: "cumulative_exposure",
+      weight: config.cumulativeExposureWeight,
+      contribution,
+      detail: `Cumulative exposure: $${context.cumulativeExposure.toFixed(2)} across ${context.recentActionCount} recent actions (threshold: $${config.cumulativeExposureThreshold})`,
+    });
+    compositeContribution += contribution;
+  }
+
+  // 2. Action velocity — penalty when action count in window exceeds threshold
+  if (context.recentActionCount > config.velocityThreshold) {
+    const overageRatio = Math.min(
+      1,
+      (context.recentActionCount - config.velocityThreshold) / config.velocityThreshold,
+    );
+    const contribution = overageRatio * config.velocityWeight;
+    compositeFactors.push({
+      factor: "action_velocity",
+      weight: config.velocityWeight,
+      contribution,
+      detail: `Action velocity: ${context.recentActionCount} actions in ${context.windowMs}ms window (threshold: ${config.velocityThreshold})`,
+    });
+    compositeContribution += contribution;
+  }
+
+  // 3. Concentration risk — penalty when distinctTargetEntities is low relative to action count
+  // (hammering the same target repeatedly)
+  if (context.recentActionCount > 1 && context.distinctTargetEntities > 0) {
+    const concentrationRatio = 1 - (context.distinctTargetEntities / context.recentActionCount);
+    if (concentrationRatio > 0.5) {
+      const contribution = (concentrationRatio - 0.5) * 2 * config.concentrationWeight;
+      compositeFactors.push({
+        factor: "concentration_risk",
+        weight: config.concentrationWeight,
+        contribution,
+        detail: `Concentration risk: ${context.distinctTargetEntities} distinct entities across ${context.recentActionCount} actions`,
+      });
+      compositeContribution += contribution;
+    }
+  }
+
+  // 4. Cross-cartridge risk — penalty when actions span many cartridges (unusual pattern)
+  if (context.distinctCartridges > 1) {
+    const contribution = Math.min(
+      config.crossCartridgeWeight,
+      (context.distinctCartridges - 1) * (config.crossCartridgeWeight / 3),
+    );
+    compositeFactors.push({
+      factor: "cross_cartridge_risk",
+      weight: config.crossCartridgeWeight,
+      contribution,
+      detail: `Cross-cartridge spread: ${context.distinctCartridges} distinct cartridges`,
+    });
+    compositeContribution += contribution;
+  }
+
+  // Adjusted raw score = min(100, baseScore.rawScore + compositeContribution)
+  const adjustedRawScore = Math.min(100, baseScore.rawScore + compositeContribution);
+  const adjustedCategory = scoreToCategory(adjustedRawScore);
+
+  const adjustedScore: RiskScore = {
+    rawScore: adjustedRawScore,
+    category: adjustedCategory,
+    factors: [...baseScore.factors, ...compositeFactors],
+  };
+
+  return { adjustedScore, compositeFactors };
 }

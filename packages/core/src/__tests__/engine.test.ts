@@ -51,6 +51,7 @@ import type {
   Policy,
   GuardrailConfig,
   ActionProposal,
+  CompositeRiskContext,
 } from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
@@ -1439,5 +1440,102 @@ describe("createGuardrailState", () => {
     const state = createGuardrailState();
     expect(state.actionCounts.size).toBe(0);
     expect(state.lastActionTimes.size).toBe(0);
+  });
+});
+
+// ===================================================================
+// POLICY ENGINE — COMPOSITE RISK
+// ===================================================================
+
+describe("Policy Engine — Composite Risk", () => {
+  function makeEngineContext(overrides: Partial<PolicyEngineContext> = {}): PolicyEngineContext {
+    return {
+      policies: [],
+      guardrails: null,
+      guardrailState: createGuardrailState(),
+      resolvedIdentity: makeResolvedIdentity(),
+      riskInput: makeRiskInput(),
+      now: new Date(),
+      ...overrides,
+    };
+  }
+
+  it("COMPOSITE_RISK check appears in trace when compositeContext is present", () => {
+    const compositeContext: CompositeRiskContext = {
+      recentActionCount: 5,
+      windowMs: 3600000,
+      cumulativeExposure: 1000,
+      distinctTargetEntities: 3,
+      distinctCartridges: 1,
+    };
+
+    const ctx = makeEvalContext();
+    const proposal = makeProposal();
+    const engineCtx = makeEngineContext({ compositeContext });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    const compositeCheck = trace.checks.find(
+      (c) => c.checkCode === "COMPOSITE_RISK",
+    );
+    expect(compositeCheck).toBeDefined();
+  });
+
+  it("no COMPOSITE_RISK check when compositeContext is absent", () => {
+    const ctx = makeEvalContext();
+    const proposal = makeProposal();
+    const engineCtx = makeEngineContext();
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    const compositeCheck = trace.checks.find(
+      (c) => c.checkCode === "COMPOSITE_RISK",
+    );
+    expect(compositeCheck).toBeUndefined();
+  });
+
+  it("composite risk bumps category → changes approval requirement", () => {
+    // Start with low risk identity that requires "standard" for medium
+    const identity = makeResolvedIdentity({
+      effectiveRiskTolerance: {
+        none: "none",
+        low: "none",
+        medium: "standard",
+        high: "elevated",
+        critical: "mandatory",
+      },
+    });
+
+    // Base score will be in the "low" range (~35)
+    const riskInput = makeRiskInput({
+      baseRisk: "medium",
+    });
+
+    // Large composite penalties to push from low to medium
+    const compositeContext: CompositeRiskContext = {
+      recentActionCount: 50,
+      windowMs: 3600000,
+      cumulativeExposure: 50000,
+      distinctTargetEntities: 2,
+      distinctCartridges: 5,
+    };
+
+    const ctx = makeEvalContext();
+    const proposal = makeProposal();
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      riskInput,
+      compositeContext,
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+
+    // The composite risk check should be matched (category changed)
+    const compositeCheck = trace.checks.find(
+      (c) => c.checkCode === "COMPOSITE_RISK",
+    );
+    expect(compositeCheck).toBeDefined();
+    expect(compositeCheck!.matched).toBe(true);
+
+    // Score should have increased
+    expect(trace.computedRiskScore.rawScore).toBeGreaterThan(35);
   });
 });

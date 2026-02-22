@@ -7,6 +7,7 @@ import type {
   RiskCategory,
   UndoRecipe,
   CompetenceAdjustment,
+  CompositeRiskContext,
 } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { StorageContext } from "../storage/interfaces.js";
@@ -29,7 +30,7 @@ import {
 } from "../approval/state-machine.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
 import { applyPatch } from "../approval/patching.js";
-import { canApprove } from "../approval/delegation.js";
+import { canApproveWithChain } from "../approval/delegation.js";
 import {
   resolveEntities,
   buildClarificationQuestion,
@@ -176,6 +177,7 @@ export class LifecycleOrchestrator {
       resolvedIdentity: effectiveIdentity,
       riskInput,
       competenceAdjustments,
+      compositeContext: await this.buildCompositeContext(params.principalId),
     };
 
     // 9. Evaluate
@@ -351,8 +353,28 @@ export class LifecycleOrchestrator {
         throw new Error(`Principal not found: ${params.respondedBy}`);
       }
       const delegations = await this.storage.identity.listDelegationRules();
-      if (!canApprove(principal, approval.request.approvers, delegations)) {
+      const chainResult = canApproveWithChain(principal, approval.request.approvers, delegations);
+      if (!chainResult.authorized) {
         throw new Error(`Principal ${params.respondedBy} is not authorized to respond to this approval`);
+      }
+
+      // Record delegation chain audit entry if chain depth > 1
+      if (chainResult.depth > 1) {
+        await this.ledger.record({
+          eventType: "delegation.chain_resolved",
+          actorType: "system",
+          actorId: "orchestrator",
+          entityType: "approval",
+          entityId: params.approvalId,
+          riskCategory: approval.request.riskCategory as RiskCategory,
+          summary: `Delegation chain resolved: ${chainResult.chain.join(" → ")} (depth ${chainResult.depth})`,
+          snapshot: {
+            chain: chainResult.chain,
+            depth: chainResult.depth,
+            effectiveScope: chainResult.effectiveScope,
+          },
+          envelopeId: approval.envelopeId,
+        });
       }
     }
 
@@ -905,6 +927,64 @@ export class LifecycleOrchestrator {
 
   private inferCartridgeId(actionType: string): string | null {
     return inferCartridgeId(actionType);
+  }
+
+  private async buildCompositeContext(principalId: string): Promise<CompositeRiskContext | undefined> {
+    const windowMs = 60 * 60 * 1000; // 60 minutes
+    const cutoff = new Date(Date.now() - windowMs);
+
+    let allRecentEnvelopes: ActionEnvelope[];
+    try {
+      allRecentEnvelopes = await this.storage.envelopes.list({
+        limit: 200,
+      });
+    } catch {
+      return undefined;
+    }
+
+    // Filter to envelopes by this principal within the window
+    const windowEnvelopes = allRecentEnvelopes.filter((e) => {
+      if (e.createdAt < cutoff) return false;
+      return e.proposals.some(
+        (p) => p.parameters["_principalId"] === principalId,
+      );
+    });
+
+    if (windowEnvelopes.length === 0) return undefined;
+
+    let cumulativeExposure = 0;
+    const targetEntities = new Set<string>();
+    const cartridges = new Set<string>();
+
+    for (const env of windowEnvelopes) {
+      // Extract exposure from decisions
+      for (const decision of env.decisions) {
+        const dollarsFactor = decision.computedRiskScore.factors.find(
+          (f) => f.factor === "dollars_at_risk",
+        );
+        if (dollarsFactor) {
+          // Extract actual dollars from factor detail or use contribution as proxy
+          cumulativeExposure += dollarsFactor.contribution;
+        }
+      }
+
+      // Extract entity and cartridge from proposals
+      for (const proposal of env.proposals) {
+        const entityId = proposal.parameters["entityId"] as string | undefined;
+        if (entityId) targetEntities.add(entityId);
+
+        const cartridgeId = proposal.parameters["_cartridgeId"] as string | undefined;
+        if (cartridgeId) cartridges.add(cartridgeId);
+      }
+    }
+
+    return {
+      recentActionCount: windowEnvelopes.length,
+      windowMs,
+      cumulativeExposure,
+      distinctTargetEntities: targetEntities.size,
+      distinctCartridges: cartridges.size,
+    };
   }
 }
 

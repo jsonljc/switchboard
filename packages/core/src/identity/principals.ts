@@ -1,4 +1,5 @@
 import type { Principal, DelegationRule } from "@switchboard/schemas";
+import { resolveDelegationChain } from "../approval/chain.js";
 
 export function canActAs(
   principal: Principal,
@@ -13,13 +14,19 @@ export function canActAs(
   // System principals can act as anyone
   if (principal.type === "system") return true;
 
-  // Check delegation rules
-  return delegations.some((rule) => {
-    if (rule.grantor !== targetPrincipalId) return false;
-    if (rule.grantee !== principal.id) return false;
-    if (rule.expiresAt && rule.expiresAt < now) return false;
-    return matchesScope(rule.scope, actionScope);
-  });
+  // Chain-based delegation resolution with scope narrowing
+  // For canActAs, the "approver" is the target principal (the grantor)
+  const result = resolveDelegationChain(
+    principal.id,
+    [targetPrincipalId],
+    delegations,
+    { now, requiredScope: actionScope },
+  );
+
+  if (!result.authorized) return false;
+
+  // Verify the effective scope covers the action scope
+  return matchesScope(result.effectiveScope, actionScope);
 }
 
 function matchesScope(ruleScope: string, actionScope: string): boolean {

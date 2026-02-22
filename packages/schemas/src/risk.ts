@@ -35,3 +35,12 @@ export const RiskScoreSchema = z.object({
   factors: z.array(RiskFactorSchema),
 });
 export type RiskScore = z.infer<typeof RiskScoreSchema>;
+
+export const CompositeRiskContextSchema = z.object({
+  recentActionCount: z.number().int().nonnegative(),
+  windowMs: z.number().nonnegative(),
+  cumulativeExposure: z.number().nonnegative(),
+  distinctTargetEntities: z.number().int().nonnegative(),
+  distinctCartridges: z.number().int().nonnegative(),
+});
+export type CompositeRiskContext = z.infer<typeof CompositeRiskContextSchema>;
