@@ -734,9 +734,15 @@ export class LifecycleOrchestrator {
   }
 
   private inferCartridgeId(actionType: string): string | null {
-    // Infer cartridge from action type prefix: "ads.campaign.pause" -> "ads-spend"
-    if (actionType.startsWith("ads.")) return "ads-spend";
-    // Add more mappings as needed
-    return null;
+    return inferCartridgeId(actionType);
   }
+}
+
+/**
+ * Infer cartridge ID from action type prefix.
+ * e.g. "ads.campaign.pause" -> "ads-spend"
+ */
+export function inferCartridgeId(actionType: string): string | null {
+  if (actionType.startsWith("ads.")) return "ads-spend";
+  return null;
 }

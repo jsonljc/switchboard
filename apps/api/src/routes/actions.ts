@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { inferCartridgeId } from "@switchboard/core";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
@@ -165,8 +166,3 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send({ results });
   });
 };
-
-function inferCartridgeId(actionType: string): string | null {
-  if (actionType.startsWith("ads.")) return "ads-spend";
-  return null;
-}

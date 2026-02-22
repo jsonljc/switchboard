@@ -11,9 +11,10 @@ import {
 } from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
-import type { LifecycleOrchestrator, ProposeResult, StorageContext } from "@switchboard/core";
+import type { LifecycleOrchestrator, ProposeResult } from "@switchboard/core";
 import {
   createInMemoryStorage,
+  seedDefaultStorage,
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
@@ -321,7 +322,7 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
     storage.cartridges.register("ads-spend", adsCartridge);
 
     // Seed default policies
-    await seedStorage(storage);
+    await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
 
     orchestrator = new OrchestratorClass({
       storage,
@@ -341,35 +342,4 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
     ],
     apiBaseUrl: config?.apiBaseUrl ?? "http://localhost:3000",
   });
-}
-
-async function seedStorage(storage: StorageContext): Promise<void> {
-  // Seed a default identity spec that allows any Telegram user to operate.
-  // In production, identity specs would be provisioned through the API.
-  const defaultSpec = {
-    id: "spec_default",
-    principalId: "default",
-    organizationId: null,
-    name: "Default User",
-    description: "Default identity spec for chat users",
-    riskTolerance: {
-      none: "none" as const,
-      low: "none" as const,
-      medium: "standard" as const,
-      high: "elevated" as const,
-      critical: "mandatory" as const,
-    },
-    globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
-    cartridgeSpendLimits: {},
-    forbiddenBehaviors: [] as string[],
-    trustBehaviors: [] as string[],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  await storage.identity.saveSpec(defaultSpec);
-
-  // Load default ads policies
-  for (const policy of DEFAULT_ADS_POLICIES) {
-    await storage.policies.save(policy);
-  }
 }

@@ -14,6 +14,7 @@ import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import {
   LifecycleOrchestrator,
   createInMemoryStorage,
+  seedDefaultStorage,
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
@@ -26,34 +27,6 @@ declare module "fastify" {
     orchestrator: LifecycleOrchestrator;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
-  }
-}
-
-async function seedStorage(storage: StorageContext): Promise<void> {
-  const now = new Date();
-  await storage.identity.saveSpec({
-    id: "spec_default",
-    principalId: "default",
-    organizationId: null,
-    name: "Default User",
-    description: "Default identity spec for API users",
-    riskTolerance: {
-      none: "none" as const,
-      low: "none" as const,
-      medium: "standard" as const,
-      high: "elevated" as const,
-      critical: "mandatory" as const,
-    },
-    globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
-    cartridgeSpendLimits: {},
-    forbiddenBehaviors: [],
-    trustBehaviors: [],
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  for (const policy of DEFAULT_ADS_POLICIES) {
-    await storage.policies.save(policy);
   }
 }
 
@@ -130,7 +103,7 @@ export async function buildServer() {
   storage.cartridges.register("ads-spend", adsCartridge);
 
   // Seed default data
-  await seedStorage(storage);
+  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
 
   const orchestrator = new LifecycleOrchestrator({
     storage,
