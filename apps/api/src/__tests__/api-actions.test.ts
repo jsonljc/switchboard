@@ -93,6 +93,33 @@ describe("Actions API", () => {
       expect(body.denied).toBe(true);
       expect(body.envelope.status).toBe("denied");
     });
+
+    it("should return 400 for empty body", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/propose",
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json();
+      expect(body.error).toContain("Invalid request body");
+      expect(body.details).toBeDefined();
+    });
+
+    it("should return 400 when principalId is missing", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/propose",
+        payload: {
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: "camp_123" },
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
   });
 
   describe("GET /api/actions/:id", () => {

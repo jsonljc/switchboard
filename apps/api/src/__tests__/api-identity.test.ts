@@ -44,6 +44,19 @@ describe("Identity API", () => {
       expect(body.spec.id).toBeDefined();
       expect(body.spec.principalId).toBe("user_new");
     });
+
+    it("should return 400 for invalid spec body", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/identity/specs",
+        payload: {
+          name: "Missing required fields",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
   });
 
   describe("GET /api/identity/specs/:id", () => {

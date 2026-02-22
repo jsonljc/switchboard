@@ -49,6 +49,17 @@ describe("Simulate API", () => {
       expect(envelope).toBeNull();
     });
 
+    it("should return 400 for empty body", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/simulate",
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
+
     it("should return 400 when cartridge cannot be inferred", async () => {
       const res = await app.inject({
         method: "POST",

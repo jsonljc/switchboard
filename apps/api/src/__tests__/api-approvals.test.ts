@@ -94,6 +94,37 @@ describe("Approvals API", () => {
       expect(body.error).toContain("stale");
     });
 
+    it("should return 400 for invalid body (missing action)", async () => {
+      const { approvalRequest } = await proposeWithApproval();
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/approvals/${approvalRequest.id}/respond`,
+        payload: {
+          respondedBy: "reviewer_1",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
+
+    it("should return 400 for invalid action value", async () => {
+      const { approvalRequest } = await proposeWithApproval();
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/approvals/${approvalRequest.id}/respond`,
+        payload: {
+          action: "invalid_action",
+          respondedBy: "reviewer_1",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Invalid request body");
+    });
+
     it("should return 400 for non-existent approval", async () => {
       const res = await app.inject({
         method: "POST",

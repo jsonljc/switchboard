@@ -1,16 +1,26 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { IdentitySpec, RoleOverlay } from "@switchboard/schemas";
+import {
+  CreateIdentitySpecBodySchema,
+  UpdateIdentitySpecBodySchema,
+  CreateRoleOverlayBodySchema,
+  UpdateRoleOverlayBodySchema,
+} from "../validation.js";
 
 export const identityRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/identity/specs
   app.post("/specs", async (request, reply) => {
-    const body = request.body as Omit<IdentitySpec, "id" | "createdAt" | "updatedAt">;
+    const parsed = CreateIdentitySpecBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+
     const now = new Date();
     const spec: IdentitySpec = {
       id: `spec_${Date.now()}`,
       createdAt: now,
       updatedAt: now,
-      ...body,
+      ...parsed.data,
     };
 
     await app.storageContext.identity.saveSpec(spec);
@@ -40,7 +50,11 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // PUT /api/identity/specs/:id
   app.put("/specs/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Partial<IdentitySpec>;
+
+    const parsed = UpdateIdentitySpecBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
 
     const existing = await app.storageContext.identity.getSpecById(id);
     if (!existing) {
@@ -49,7 +63,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
 
     const updated: IdentitySpec = {
       ...existing,
-      ...body,
+      ...parsed.data,
       id, // cannot change ID
       updatedAt: new Date(),
     };
@@ -59,13 +73,17 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/identity/overlays
   app.post("/overlays", async (request, reply) => {
-    const body = request.body as Omit<RoleOverlay, "id" | "createdAt" | "updatedAt">;
+    const parsed = CreateRoleOverlayBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+
     const now = new Date();
     const overlay: RoleOverlay = {
       id: `overlay_${Date.now()}`,
       createdAt: now,
       updatedAt: now,
-      ...body,
+      ...parsed.data,
     };
 
     await app.storageContext.identity.saveOverlay(overlay);
@@ -85,7 +103,12 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // PUT /api/identity/overlays/:id
   app.put("/overlays/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Partial<RoleOverlay>;
+
+    const parsed = UpdateRoleOverlayBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+    const body = parsed.data;
 
     const overlay: RoleOverlay = {
       id,
@@ -97,7 +120,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       active: body.active ?? true,
       conditions: body.conditions ?? {},
       overrides: body.overrides ?? {},
-      createdAt: body.createdAt ?? new Date(),
+      createdAt: new Date(),
       updatedAt: new Date(),
     };
 
