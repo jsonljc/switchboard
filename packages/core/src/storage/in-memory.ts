@@ -6,6 +6,8 @@ import type {
   ApprovalRequest,
   Principal,
   DelegationRule,
+  CompetenceRecord,
+  CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
@@ -15,6 +17,7 @@ import type {
   IdentityStore,
   ApprovalStore,
   CartridgeRegistry,
+  CompetenceStore,
 } from "./interfaces.js";
 
 export class InMemoryEnvelopeStore implements EnvelopeStore {
@@ -201,5 +204,74 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
 
   list(): string[] {
     return [...this.store.keys()];
+  }
+}
+
+export function matchActionTypePattern(pattern: string, actionType: string): boolean {
+  const regex = new RegExp(
+    "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$",
+  );
+  return regex.test(actionType);
+}
+
+export class InMemoryCompetenceStore implements CompetenceStore {
+  private records = new Map<string, CompetenceRecord>();
+  private policies = new Map<string, CompetencePolicy>();
+
+  private recordKey(principalId: string, actionType: string): string {
+    return `${principalId}:${actionType}`;
+  }
+
+  async getRecord(principalId: string, actionType: string): Promise<CompetenceRecord | null> {
+    const record = this.records.get(this.recordKey(principalId, actionType));
+    return record ? { ...record, history: [...record.history] } : null;
+  }
+
+  async saveRecord(record: CompetenceRecord): Promise<void> {
+    this.records.set(this.recordKey(record.principalId, record.actionType), {
+      ...record,
+      history: [...record.history],
+    });
+  }
+
+  async listRecords(principalId: string): Promise<CompetenceRecord[]> {
+    return [...this.records.values()].filter((r) => r.principalId === principalId);
+  }
+
+  async getPolicy(actionType: string): Promise<CompetencePolicy | null> {
+    // First try exact match
+    for (const policy of this.policies.values()) {
+      if (policy.enabled && policy.actionTypePattern === actionType) {
+        return { ...policy };
+      }
+    }
+    // Then try glob match
+    for (const policy of this.policies.values()) {
+      if (
+        policy.enabled &&
+        policy.actionTypePattern !== null &&
+        matchActionTypePattern(policy.actionTypePattern, actionType)
+      ) {
+        return { ...policy };
+      }
+    }
+    return null;
+  }
+
+  async getDefaultPolicy(): Promise<CompetencePolicy | null> {
+    for (const policy of this.policies.values()) {
+      if (policy.enabled && policy.actionTypePattern === null) {
+        return { ...policy };
+      }
+    }
+    return null;
+  }
+
+  async savePolicy(policy: CompetencePolicy): Promise<void> {
+    this.policies.set(policy.id, { ...policy });
+  }
+
+  async listPolicies(): Promise<CompetencePolicy[]> {
+    return [...this.policies.values()];
   }
 }

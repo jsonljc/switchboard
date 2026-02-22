@@ -15,7 +15,7 @@ export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine
 export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState } from "./engine/policy-engine.js";
 
 // Identity
-export { resolveIdentity } from "./identity/spec.js";
+export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js";
 export type { ResolvedIdentity } from "./identity/spec.js";
 export { getActiveOverlays } from "./identity/overlay.js";
 export { canActAs, resolveApprovers } from "./identity/principals.js";
@@ -42,6 +42,7 @@ export {
   InMemoryIdentityStore,
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
+  InMemoryCompetenceStore,
   createInMemoryStorage,
   seedDefaultStorage,
 } from "./storage/index.js";
@@ -51,6 +52,7 @@ export type {
   IdentityStore,
   ApprovalStore,
   CartridgeRegistry,
+  CompetenceStore,
   StorageContext,
 } from "./storage/index.js";
 
@@ -67,3 +69,6 @@ export { storeEvidence, verifyEvidence } from "./audit/evidence.js";
 export type { EvidencePointer } from "./audit/evidence.js";
 export { AuditLedger, InMemoryLedgerStorage } from "./audit/ledger.js";
 export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
+
+// Competence
+export { CompetenceTracker, DEFAULT_COMPETENCE_THRESHOLDS } from "./competence/index.js";

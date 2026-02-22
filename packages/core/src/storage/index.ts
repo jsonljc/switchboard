@@ -4,6 +4,7 @@ export type {
   IdentityStore,
   ApprovalStore,
   CartridgeRegistry,
+  CompetenceStore,
   StorageContext,
 } from "./interfaces.js";
 
@@ -13,6 +14,7 @@ export {
   InMemoryIdentityStore,
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
+  InMemoryCompetenceStore,
 } from "./in-memory.js";
 
 import type { Policy } from "@switchboard/schemas";
@@ -23,6 +25,7 @@ import {
   InMemoryIdentityStore,
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
+  InMemoryCompetenceStore,
 } from "./in-memory.js";
 
 export function createInMemoryStorage(): StorageContext {
@@ -32,6 +35,7 @@ export function createInMemoryStorage(): StorageContext {
     identity: new InMemoryIdentityStore(),
     approvals: new InMemoryApprovalStore(),
     cartridges: new InMemoryCartridgeRegistry(),
+    competence: new InMemoryCompetenceStore(),
   };
 }
 

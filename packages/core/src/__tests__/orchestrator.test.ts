@@ -4,6 +4,7 @@ import { createInMemoryStorage } from "../storage/index.js";
 import { AuditLedger, InMemoryLedgerStorage } from "../audit/ledger.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
+import { CompetenceTracker } from "../competence/index.js";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
@@ -907,6 +908,124 @@ describe("LifecycleOrchestrator", () => {
 
       expect(response.approvalState.status).toBe("approved");
       expect(response.executionResult?.success).toBe(true);
+    });
+  });
+
+  describe("Competence integration", () => {
+    let competenceOrchestrator: LifecycleOrchestrator;
+    let competenceTracker: CompetenceTracker;
+
+    beforeEach(async () => {
+      competenceTracker = new CompetenceTracker(storage.competence, ledger);
+      competenceOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        competenceTracker,
+      });
+    });
+
+    it("should earn trust through successful executions → eventually auto-approved", async () => {
+      // Action starts as NOT trusted — needs approval (medium risk)
+      cartridge.onRiskInput(() => ({
+        baseRisk: "medium" as const,
+        exposure: { dollarsAtRisk: 100, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      // Simulate enough successes to earn trust (score >= 80 + >= 10 successes)
+      for (let i = 0; i < 25; i++) {
+        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+      }
+
+      // Now propose — should be auto-approved because competence adds to trust behaviors
+      const result = await competenceOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // Agent has earned trust, so action should be approved without manual approval
+      expect(result.envelope.status).toBe("approved");
+      expect(result.decisionTrace.approvalRequired).toBe("none");
+
+      // Check COMPETENCE_TRUST trace is present
+      const competenceCheck = result.decisionTrace.checks.find(
+        (c) => c.checkCode === "COMPETENCE_TRUST",
+      );
+      expect(competenceCheck).toBeDefined();
+      expect(competenceCheck!.checkData["shouldTrust"]).toBe(true);
+    });
+
+    it("should reduce competence on failed execution", async () => {
+      // Build up trust
+      for (let i = 0; i < 25; i++) {
+        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+      }
+
+      // Verify trusted
+      const adj1 = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      expect(adj1!.shouldTrust).toBe(true);
+      const scoreBeforeFailures = adj1!.score;
+
+      // Record multiple failures to lose trust
+      for (let i = 0; i < 5; i++) {
+        await competenceTracker.recordFailure("user_1", "ads.campaign.pause");
+      }
+
+      const adj2 = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      expect(adj2!.score).toBeLessThan(scoreBeforeFailures);
+      expect(adj2!.shouldTrust).toBe(false);
+    });
+
+    it("should record rollback against original action type on undo", async () => {
+      // Build up some competence
+      for (let i = 0; i < 5; i++) {
+        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+      }
+
+      const adjBefore = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+
+      // Execute an action
+      const result = await competenceOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // Execute it
+      await competenceOrchestrator.executeApproved(result.envelope.id);
+
+      // Now undo
+      await competenceOrchestrator.requestUndo(result.envelope.id);
+
+      // The rollback should have been recorded against the original action type
+      const adjAfter = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      // Score should have gone up from the execution success (+3 + streak), then down from rollback (-15)
+      // Net change from adjBefore: +success points + streak bonus - 15
+      expect(adjAfter!.record.rollbackCount).toBe(1);
+      expect(adjAfter!.score).toBeLessThan(adjBefore!.score + 10); // The rollback penalty should dominate
+    });
+
+    it("should work without competenceTracker (backward compat)", async () => {
+      // Use the original orchestrator (no competence tracker)
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(result.denied).toBe(false);
+      expect(result.envelope).toBeDefined();
+      // No COMPETENCE_TRUST check
+      const competenceCheck = result.decisionTrace.checks.find(
+        (c) => c.checkCode === "COMPETENCE_TRUST",
+      );
+      expect(competenceCheck).toBeUndefined();
     });
   });
 });

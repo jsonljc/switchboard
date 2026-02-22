@@ -6,6 +6,7 @@ import type {
   ApprovalRequirement,
   ActionProposal,
   GuardrailConfig,
+  CompetenceAdjustment,
 } from "@switchboard/schemas";
 import type { EvaluationContext } from "./rule-evaluator.js";
 import { evaluateRule } from "./rule-evaluator.js";
@@ -35,6 +36,7 @@ export interface PolicyEngineContext {
   guardrailState: GuardrailState;
   resolvedIdentity: ResolvedIdentity;
   riskInput: RiskInput | null;
+  competenceAdjustments?: CompetenceAdjustment[];
   now?: Date;
 }
 
@@ -86,6 +88,28 @@ export function evaluate(
     ? `Action type "${proposal.actionType}" is pre-approved (trusted).`
     : `Action type "${proposal.actionType}" is not in the trust list.`,
   isTrusted, isTrusted ? "allow" : "skip");
+
+  // Step 2b: Competence trust (informational trace)
+  if (engineContext.competenceAdjustments && engineContext.competenceAdjustments.length > 0) {
+    for (const adj of engineContext.competenceAdjustments) {
+      addCheck(builder, "COMPETENCE_TRUST", {
+        principalId: adj.principalId,
+        actionType: adj.actionType,
+        score: adj.score,
+        shouldTrust: adj.shouldTrust,
+        shouldEscalate: adj.shouldEscalate,
+        successCount: adj.record.successCount,
+        failureCount: adj.record.failureCount,
+        rollbackCount: adj.record.rollbackCount,
+        consecutiveSuccesses: adj.record.consecutiveSuccesses,
+      }, adj.shouldTrust
+        ? `Competence earned: score ${adj.score.toFixed(1)} qualifies for auto-trust.`
+        : adj.shouldEscalate
+          ? `Competence low: score ${adj.score.toFixed(1)} suggests escalation.`
+          : `Competence tracking: score ${adj.score.toFixed(1)}.`,
+      adj.shouldTrust || adj.shouldEscalate, "skip");
+    }
+  }
 
   // Step 3: Rate guardrails
   if (guardrails) {

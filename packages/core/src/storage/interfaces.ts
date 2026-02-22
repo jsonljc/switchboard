@@ -6,6 +6,8 @@ import type {
   ApprovalRequest,
   Principal,
   DelegationRule,
+  CompetenceRecord,
+  CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
@@ -68,10 +70,21 @@ export interface CartridgeRegistry {
   list(): string[];
 }
 
+export interface CompetenceStore {
+  getRecord(principalId: string, actionType: string): Promise<CompetenceRecord | null>;
+  saveRecord(record: CompetenceRecord): Promise<void>;
+  listRecords(principalId: string): Promise<CompetenceRecord[]>;
+  getPolicy(actionType: string): Promise<CompetencePolicy | null>;
+  getDefaultPolicy(): Promise<CompetencePolicy | null>;
+  savePolicy(policy: CompetencePolicy): Promise<void>;
+  listPolicies(): Promise<CompetencePolicy[]>;
+}
+
 export interface StorageContext {
   envelopes: EnvelopeStore;
   policies: PolicyStore;
   identity: IdentityStore;
   approvals: ApprovalStore;
   cartridges: CartridgeRegistry;
+  competence: CompetenceStore;
 }

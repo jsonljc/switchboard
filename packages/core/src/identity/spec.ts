@@ -3,6 +3,7 @@ import type {
   RoleOverlay,
   RiskTolerance,
   SpendLimits,
+  CompetenceAdjustment,
 } from "@switchboard/schemas";
 
 export interface ResolvedIdentity {
@@ -191,4 +192,26 @@ function maxNullable(a: number | null, b: number | null): number | null {
   if (a === null) return b;
   if (b === null) return a;
   return Math.max(a, b);
+}
+
+export function applyCompetenceAdjustments(
+  identity: ResolvedIdentity,
+  adjustments: CompetenceAdjustment[],
+): ResolvedIdentity {
+  const newTrustBehaviors = [...identity.effectiveTrustBehaviors];
+
+  for (const adj of adjustments) {
+    if (
+      adj.shouldTrust &&
+      !identity.effectiveForbiddenBehaviors.includes(adj.actionType) &&
+      !newTrustBehaviors.includes(adj.actionType)
+    ) {
+      newTrustBehaviors.push(adj.actionType);
+    }
+  }
+
+  return {
+    ...identity,
+    effectiveTrustBehaviors: newTrustBehaviors,
+  };
 }

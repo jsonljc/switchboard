@@ -3,4 +3,5 @@ export { PrismaPolicyStore } from "./prisma-policy-store.js";
 export { PrismaIdentityStore } from "./prisma-identity-store.js";
 export { PrismaApprovalStore } from "./prisma-approval-store.js";
 export { PrismaLedgerStorage } from "./prisma-ledger-storage.js";
+export { PrismaCompetenceStore } from "./prisma-competence-store.js";
 export { createPrismaStorage } from "./factory.js";

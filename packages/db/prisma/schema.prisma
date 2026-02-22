@@ -230,3 +230,36 @@ model ApprovalRecord {
   @@index([status])
   @@index([envelopeId])
 }
+
+model CompetenceRecord {
+  id                    String   @id @default(uuid())
+  principalId           String
+  actionType            String
+  successCount          Int      @default(0)
+  failureCount          Int      @default(0)
+  rollbackCount         Int      @default(0)
+  consecutiveSuccesses  Int      @default(0)
+  score                 Float    @default(0)
+  lastActivityAt        DateTime @default(now())
+  lastDecayAppliedAt    DateTime @default(now())
+  history               Json     @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([principalId, actionType])
+  @@index([principalId])
+  @@index([score])
+}
+
+model CompetencePolicy {
+  id                String   @id @default(uuid())
+  name              String
+  description       String
+  actionTypePattern String?
+  thresholds        Json
+  enabled           Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([actionTypePattern])
+}

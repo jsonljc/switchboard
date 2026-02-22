@@ -6,6 +6,7 @@ import type {
   DecisionTrace,
   RiskCategory,
   UndoRecipe,
+  CompetenceAdjustment,
 } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { StorageContext } from "../storage/interfaces.js";
@@ -19,7 +20,7 @@ import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
-import { resolveIdentity } from "../identity/spec.js";
+import { resolveIdentity, applyCompetenceAdjustments } from "../identity/spec.js";
 import { routeApproval, DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import {
   createApprovalState,
@@ -34,6 +35,7 @@ import {
   buildClarificationQuestion,
   buildNotFoundExplanation,
 } from "../engine/resolver.js";
+import type { CompetenceTracker } from "../competence/tracker.js";
 
 export interface OrchestratorConfig {
   storage: StorageContext;
@@ -41,6 +43,7 @@ export interface OrchestratorConfig {
   guardrailState: GuardrailState;
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
+  competenceTracker?: CompetenceTracker;
 }
 
 export interface ProposeResult {
@@ -71,6 +74,7 @@ export class LifecycleOrchestrator {
   private guardrailState: GuardrailState;
   private routingConfig: ApprovalRoutingConfig;
   private riskScoringConfig?: RiskScoringConfig;
+  private competenceTracker: CompetenceTracker | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -78,6 +82,7 @@ export class LifecycleOrchestrator {
     this.guardrailState = config.guardrailState;
     this.routingConfig = config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
     this.riskScoringConfig = config.riskScoringConfig;
+    this.competenceTracker = config.competenceTracker ?? null;
   }
 
   async propose(params: {
@@ -100,6 +105,17 @@ export class LifecycleOrchestrator {
     const resolvedIdentity = resolveIdentity(identitySpec, overlays, {
       cartridgeId: params.cartridgeId,
     });
+
+    // 2b. Apply competence adjustments
+    let competenceAdjustments: CompetenceAdjustment[] = [];
+    let effectiveIdentity = resolvedIdentity;
+    if (this.competenceTracker) {
+      const adj = await this.competenceTracker.getAdjustment(params.principalId, params.actionType);
+      if (adj) {
+        competenceAdjustments = [adj];
+        effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
+      }
+    }
 
     // 3. Look up cartridge
     const cartridge = this.storage.cartridges.get(params.cartridgeId);
@@ -150,8 +166,9 @@ export class LifecycleOrchestrator {
       policies,
       guardrails,
       guardrailState: this.guardrailState,
-      resolvedIdentity,
+      resolvedIdentity: effectiveIdentity,
       riskInput,
+      competenceAdjustments,
     };
 
     // 9. Evaluate
@@ -519,6 +536,18 @@ export class LifecycleOrchestrator {
       this.updateGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
     }
 
+    // 5b. Record competence outcome
+    if (this.competenceTracker) {
+      const principalId = proposal.parameters["_principalId"] as string | undefined;
+      if (principalId) {
+        if (executeResult.success) {
+          await this.competenceTracker.recordSuccess(principalId, proposal.actionType);
+        } else {
+          await this.competenceTracker.recordFailure(principalId, proposal.actionType);
+        }
+      }
+    }
+
     // 6. Record audit entry
     await this.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
@@ -578,6 +607,11 @@ export class LifecycleOrchestrator {
     const principalId =
       (originalProposal?.parameters["_principalId"] as string) ?? "system";
 
+    // Record rollback against original action type
+    if (this.competenceTracker && originalProposal) {
+      await this.competenceTracker.recordRollback(principalId, originalProposal.actionType);
+    }
+
     // 4. Run through propose() with parentEnvelopeId set
     return this.propose({
       actionType: undoRecipe.reverseActionType,
@@ -604,6 +638,17 @@ export class LifecycleOrchestrator {
     const resolvedIdentity = resolveIdentity(identitySpec, overlays, {
       cartridgeId: params.cartridgeId,
     });
+
+    // Apply competence adjustments
+    let competenceAdjustments: CompetenceAdjustment[] = [];
+    let effectiveIdentity = resolvedIdentity;
+    if (this.competenceTracker) {
+      const adj = await this.competenceTracker.getAdjustment(params.principalId, params.actionType);
+      if (adj) {
+        competenceAdjustments = [adj];
+        effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
+      }
+    }
 
     const cartridge = this.storage.cartridges.get(params.cartridgeId);
     if (!cartridge) {
@@ -644,8 +689,9 @@ export class LifecycleOrchestrator {
       policies,
       guardrails,
       guardrailState: this.guardrailState,
-      resolvedIdentity,
+      resolvedIdentity: effectiveIdentity,
       riskInput,
+      competenceAdjustments,
     };
 
     return policySimulate(
