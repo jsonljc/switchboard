@@ -12,4 +12,5 @@ export function getDb(): PrismaClient {
 export { PrismaClient };
 export type { Prisma } from "@prisma/client";
 
-export { createPrismaStorage, PrismaLedgerStorage } from "./storage/index.js";
+export { createPrismaStorage, PrismaLedgerStorage, PrismaConnectionStore } from "./storage/index.js";
+export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";

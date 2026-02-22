@@ -7,6 +7,7 @@ import type {
   ActionProposal,
   GuardrailConfig,
   CompetenceAdjustment,
+  SystemRiskPosture,
 } from "@switchboard/schemas";
 import type { EvaluationContext } from "./rule-evaluator.js";
 import { evaluateRule } from "./rule-evaluator.js";
@@ -37,6 +38,7 @@ export interface PolicyEngineContext {
   resolvedIdentity: ResolvedIdentity;
   riskInput: RiskInput | null;
   competenceAdjustments?: CompetenceAdjustment[];
+  systemRiskPosture?: SystemRiskPosture;
   now?: Date;
 }
 
@@ -55,7 +57,7 @@ export function evaluate(
 ): DecisionTrace {
   const { resolvedIdentity, guardrails, guardrailState, policies } = engineContext;
   const now = engineContext.now ?? new Date();
-  const builder = createTraceBuilder(evalContext.metadata["envelopeId"] as string ?? "unknown", proposal.id);
+  const builder = createTraceBuilder((evalContext.metadata["envelopeId"] ?? "unknown") as string, proposal.id);
 
   // Step 1: Forbidden behaviors
   const isForbidden = resolvedIdentity.effectiveForbiddenBehaviors.includes(
@@ -297,8 +299,27 @@ export function evaluate(
   true, "skip");
 
   // Step 9: Determine approval requirement
-  const approvalReq = policyApprovalOverride
+  let approvalReq: ApprovalRequirement = policyApprovalOverride
     ?? resolvedIdentity.effectiveRiskTolerance[effectiveRiskCategory];
+
+  // Step 9b: System-wide risk posture override
+  const posture = engineContext.systemRiskPosture ?? "normal";
+  if (posture === "critical") {
+    approvalReq = "mandatory";
+    addCheck(builder, "SYSTEM_POSTURE", {
+      posture,
+      previousApproval: approvalReq,
+    }, `System posture is CRITICAL: all actions require mandatory approval.`,
+    true, "skip");
+  } else if (posture === "elevated" && (approvalReq === "none" || approvalReq === "standard")) {
+    approvalReq = "elevated";
+    addCheck(builder, "SYSTEM_POSTURE", {
+      posture,
+      previousApproval: approvalReq,
+    }, `System posture is ELEVATED: approval escalated to elevated.`,
+    true, "skip");
+  }
+
   builder.approvalRequired = approvalReq;
 
   // If trusted, allow without approval regardless
@@ -308,8 +329,8 @@ export function evaluate(
     return buildTrace(builder);
   }
 
-  // Step 10: Final decision
-  builder.finalDecision = policyDecision ?? "allow";
+  // Step 10: Final decision — default deny if no policy matched
+  builder.finalDecision = policyDecision ?? "deny";
 
   return buildTrace(builder);
 }

@@ -1,13 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { CompetenceRecord, CompetencePolicy, CompetenceEvent, CompetenceThresholds } from "@switchboard/schemas";
 import type { CompetenceStore } from "@switchboard/core";
-
-function matchActionTypePattern(pattern: string, actionType: string): boolean {
-  const regex = new RegExp(
-    "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$",
-  );
-  return regex.test(actionType);
-}
+import { matchActionTypePattern } from "@switchboard/core";
 
 export class PrismaCompetenceStore implements CompetenceStore {
   constructor(private prisma: PrismaClient) {}

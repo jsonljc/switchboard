@@ -34,6 +34,7 @@ function makeEnvelope(overrides?: Partial<ActionEnvelope>): ActionEnvelope {
     createdAt: now,
     updatedAt: now,
     parentEnvelopeId: null,
+    traceId: null,
     ...overrides,
   };
 }
@@ -75,6 +76,7 @@ function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,

@@ -47,7 +47,7 @@ export class InMemoryEnvelopeStore implements EnvelopeStore {
 
     if (filter?.principalId) {
       results = results.filter((e) =>
-        e.proposals.some((p) => p.parameters["principalId"] === filter.principalId),
+        e.proposals.some((p) => p.parameters["_principalId"] === filter.principalId),
       );
     }
     if (filter?.status) {
@@ -120,6 +120,14 @@ export class InMemoryIdentityStore implements IdentityStore {
 
   async listOverlaysBySpecId(specId: string): Promise<RoleOverlay[]> {
     return [...(this.overlays.get(specId) ?? [])];
+  }
+
+  async getOverlayById(id: string): Promise<RoleOverlay | null> {
+    for (const list of this.overlays.values()) {
+      const found = list.find((o) => o.id === id);
+      if (found) return { ...found };
+    }
+    return null;
   }
 
   async saveOverlay(overlay: RoleOverlay): Promise<void> {

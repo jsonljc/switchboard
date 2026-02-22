@@ -317,6 +317,7 @@ describe("ActionEnvelopeSchema", () => {
     createdAt: iso(),
     updatedAt: iso(),
     parentEnvelopeId: null,
+    traceId: null,
   };
 
   it("accepts a valid envelope", () => {

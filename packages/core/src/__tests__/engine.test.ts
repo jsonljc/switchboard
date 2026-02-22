@@ -93,6 +93,7 @@ function makeBaseIdentitySpec(overrides: Partial<IdentitySpec> = {}): IdentitySp
     cartridgeSpendLimits: {},
     forbiddenBehaviors: ["account.delete"],
     trustBehaviors: ["campaign.read"],
+    delegatedApprovers: [],
     createdAt: new Date("2025-01-01"),
     updatedAt: new Date("2025-01-01"),
     ...overrides,
@@ -108,6 +109,7 @@ function makeResolvedIdentity(overrides: Partial<ResolvedIdentity> = {}): Resolv
     effectiveSpendLimits: { ...spec.globalSpendLimits },
     effectiveForbiddenBehaviors: [...spec.forbiddenBehaviors],
     effectiveTrustBehaviors: [...spec.trustBehaviors],
+    delegatedApprovers: [],
     ...overrides,
   };
 }

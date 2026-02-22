@@ -88,6 +88,7 @@ function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -169,7 +170,6 @@ describe("ChatRuntime Integration", () => {
       interpreter: new RuleBasedInterpreter(),
       orchestrator,
       availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
-      apiBaseUrl: "http://localhost:3000",
     });
 
     // Clean up thread state

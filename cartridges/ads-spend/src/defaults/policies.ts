@@ -13,7 +13,7 @@ export const DEFAULT_ADS_POLICIES: Policy[] = [
       composition: "AND",
       conditions: [
         { field: "actionType", operator: "eq", value: "ads.budget.adjust" },
-        { field: "parameters.percentageChange", operator: "gt", value: 50 },
+        { field: "parameters.newBudget", operator: "gt", value: 5000 },
       ],
     },
     effect: "require_approval",

@@ -36,6 +36,7 @@ export interface IdentityStore {
   getSpecByPrincipalId(principalId: string): Promise<IdentitySpec | null>;
   getSpecById(id: string): Promise<IdentitySpec | null>;
   listOverlaysBySpecId(specId: string): Promise<RoleOverlay[]>;
+  getOverlayById(id: string): Promise<RoleOverlay | null>;
   saveOverlay(overlay: RoleOverlay): Promise<void>;
   getPrincipal(id: string): Promise<Principal | null>;
   savePrincipal(principal: Principal): Promise<void>;

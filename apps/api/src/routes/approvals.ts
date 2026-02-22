@@ -65,6 +65,48 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // POST /api/approvals/:id/remind - Re-notify approvers
+  app.post("/:id/remind", {
+    schema: {
+      description: "Re-send approval notification to designated approvers.",
+      tags: ["Approvals"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const approval = await app.storageContext.approvals.getById(id);
+    if (!approval) {
+      return reply.code(404).send({ error: "Approval not found" });
+    }
+
+    if (approval.state.status !== "pending") {
+      return reply.code(400).send({ error: `Cannot remind: approval status is ${approval.state.status}` });
+    }
+
+    // Re-notify via the orchestrator's notifier if available
+    const envelope = await app.storageContext.envelopes.getById(approval.envelopeId);
+    const trace = envelope?.decisions[0];
+
+    if (trace) {
+      const { buildApprovalNotification } = await import("@switchboard/core");
+      const notification = buildApprovalNotification(approval.request, trace);
+
+      // Use the orchestrator's notifier if configured
+      const orch = app.orchestrator as unknown as Record<string, unknown>;
+      if (orch["approvalNotifier"]) {
+        const notifier = orch["approvalNotifier"] as { notify: (n: unknown) => Promise<void> };
+        await notifier.notify(notification);
+      }
+    }
+
+    return reply.code(200).send({
+      reminded: true,
+      approvalId: id,
+      approvers: approval.request.approvers,
+    });
+  });
+
   // GET /api/approvals/:id - Get approval request details
   app.get("/:id", {
     schema: {

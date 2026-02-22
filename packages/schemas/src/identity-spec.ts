@@ -31,6 +31,7 @@ export const IdentitySpecSchema = z.object({
   cartridgeSpendLimits: z.record(z.string(), SpendLimitsSchema),
   forbiddenBehaviors: z.array(z.string()),
   trustBehaviors: z.array(z.string()),
+  delegatedApprovers: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

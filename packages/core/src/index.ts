@@ -13,6 +13,8 @@ export { formatSimulationResult } from "./engine/simulator.js";
 export type { SimulationInput, SimulationResult } from "./engine/simulator.js";
 export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine.js";
 export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState } from "./engine/policy-engine.js";
+export { InMemoryRiskPostureStore } from "./engine/risk-posture.js";
+export type { RiskPostureStore } from "./engine/risk-posture.js";
 
 // Identity
 export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js";
@@ -43,6 +45,7 @@ export {
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
   InMemoryCompetenceStore,
+  matchActionTypePattern,
   createInMemoryStorage,
   seedDefaultStorage,
 } from "./storage/index.js";
@@ -72,6 +75,19 @@ export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
 
 // Competence
 export { CompetenceTracker, DEFAULT_COMPETENCE_THRESHOLDS } from "./competence/index.js";
+
+// Telemetry
+export { getTracer, setTracer, createOTelTracer, NoopTracer } from "./telemetry/index.js";
+export type { Tracer, Span } from "./telemetry/index.js";
+export { getMetrics, setMetrics, createInMemoryMetrics } from "./telemetry/index.js";
+export type { SwitchboardMetrics, Counter, Histogram } from "./telemetry/index.js";
+
+// Execution Guard
+export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
+
+// Notifications
+export { NoopNotifier, CompositeNotifier, buildApprovalNotification } from "./notifications/index.js";
+export type { ApprovalNotifier, ApprovalNotification } from "./notifications/index.js";
 
 // Guardrail State Store
 export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";

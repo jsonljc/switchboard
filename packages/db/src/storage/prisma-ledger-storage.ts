@@ -2,6 +2,9 @@ import type { PrismaClient } from "@prisma/client";
 import type { AuditEntry } from "@switchboard/schemas";
 import type { LedgerStorage, AuditQueryFilter } from "@switchboard/core";
 
+// Advisory lock key for serializing audit chain writes
+const AUDIT_CHAIN_LOCK_KEY = 900_001;
+
 export class PrismaLedgerStorage implements LedgerStorage {
   constructor(private prisma: PrismaClient) {}
 
@@ -29,6 +32,54 @@ export class PrismaLedgerStorage implements LedgerStorage {
         envelopeId: entry.envelopeId,
         organizationId: entry.organizationId,
       },
+    });
+  }
+
+  /**
+   * Atomically get latest entry hash + build + append within a PostgreSQL advisory lock.
+   * This prevents race conditions when multiple instances write to the audit chain concurrently.
+   */
+  async appendAtomic(buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>): Promise<AuditEntry> {
+    return this.prisma.$transaction(async (tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">) => {
+      // Acquire advisory lock — blocks other writers until this transaction commits
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
+
+      // Get latest within the lock
+      const latest = await tx.auditEntry.findFirst({
+        orderBy: { timestamp: "desc" },
+      });
+      const previousEntryHash = latest?.entryHash ?? null;
+
+      // Build the entry with the correct previousEntryHash
+      const entry = await buildEntry(previousEntryHash);
+
+      // Append within the same transaction
+      await tx.auditEntry.create({
+        data: {
+          id: entry.id,
+          eventType: entry.eventType,
+          timestamp: entry.timestamp,
+          actorType: entry.actorType,
+          actorId: entry.actorId,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          riskCategory: entry.riskCategory,
+          visibilityLevel: entry.visibilityLevel,
+          summary: entry.summary,
+          snapshot: entry.snapshot as object,
+          evidencePointers: entry.evidencePointers as object[],
+          redactionApplied: entry.redactionApplied,
+          redactedFields: entry.redactedFields,
+          chainHashVersion: entry.chainHashVersion,
+          schemaVersion: entry.schemaVersion,
+          entryHash: entry.entryHash,
+          previousEntryHash: entry.previousEntryHash,
+          envelopeId: entry.envelopeId,
+          organizationId: entry.organizationId,
+        },
+      });
+
+      return entry;
     });
   }
 

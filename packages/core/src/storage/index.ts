@@ -15,6 +15,7 @@ export {
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
   InMemoryCompetenceStore,
+  matchActionTypePattern,
 } from "./in-memory.js";
 
 import type { Policy } from "@switchboard/schemas";
@@ -65,6 +66,7 @@ export async function seedDefaultStorage(
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
   });

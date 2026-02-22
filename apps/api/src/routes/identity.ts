@@ -159,19 +159,16 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
     }
-    const body = parsed.data;
+
+    const existing = await app.storageContext.identity.getOverlayById(id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Role overlay not found" });
+    }
 
     const overlay: RoleOverlay = {
+      ...existing,
+      ...parsed.data,
       id,
-      identitySpecId: body.identitySpecId ?? "",
-      name: body.name ?? "",
-      description: body.description ?? "",
-      mode: body.mode ?? "restrict",
-      priority: body.priority ?? 0,
-      active: body.active ?? true,
-      conditions: body.conditions ?? {},
-      overrides: body.overrides ?? {},
-      createdAt: new Date(),
       updatedAt: new Date(),
     };
 

@@ -83,8 +83,9 @@ function redactString(
 
   for (const pattern of config.patterns) {
     const regex = new RegExp(pattern.source, pattern.flags);
-    if (regex.test(result)) {
-      result = result.replace(new RegExp(pattern.source, pattern.flags), config.replacement);
+    const replaced = result.replace(regex, config.replacement);
+    if (replaced !== result) {
+      result = replaced;
       wasRedacted = true;
     }
   }

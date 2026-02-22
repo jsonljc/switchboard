@@ -30,6 +30,7 @@ function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -895,6 +896,7 @@ describe("LifecycleOrchestrator", () => {
         defaultExpiredBehavior: "deny",
         elevatedExpiryMs: 12 * 60 * 60 * 1000,
         mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
       };
 
       const authOrchestrator = new LifecycleOrchestrator({
@@ -948,6 +950,7 @@ describe("LifecycleOrchestrator", () => {
         defaultExpiredBehavior: "deny",
         elevatedExpiryMs: 12 * 60 * 60 * 1000,
         mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
       };
 
       const authOrchestrator = new LifecycleOrchestrator({
@@ -998,6 +1001,7 @@ describe("LifecycleOrchestrator", () => {
         defaultExpiredBehavior: "deny",
         elevatedExpiryMs: 12 * 60 * 60 * 1000,
         mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
       };
 
       const authOrchestrator = new LifecycleOrchestrator({

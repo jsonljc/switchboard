@@ -55,6 +55,7 @@ export const ActionProposalSchema = z.object({
   evidence: z.string(),
   confidence: z.number().min(0).max(1),
   originatingMessageId: z.string(),
+  interpreterName: z.string().nullable().optional(),
 });
 export type ActionProposal = z.infer<typeof ActionProposalSchema>;
 

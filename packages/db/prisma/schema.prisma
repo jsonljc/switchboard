@@ -48,6 +48,7 @@ model IdentitySpec {
   cartridgeSpendLimits Json     // Record<string, SpendLimits>
   forbiddenBehaviors   String[]
   trustBehaviors       String[]
+  delegatedApprovers   String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -110,6 +111,7 @@ model ActionEnvelope {
   auditEntryIds    String[]
   status           String
   parentEnvelopeId String?
+  traceId          String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -249,6 +251,13 @@ model CompetenceRecord {
   @@unique([principalId, actionType])
   @@index([principalId])
   @@index([score])
+}
+
+model SystemRiskPosture {
+  id        String   @id @default("singleton")
+  posture   String   @default("normal") // normal, elevated, critical
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
 
 model CompetencePolicy {

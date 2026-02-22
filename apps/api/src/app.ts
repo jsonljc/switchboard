@@ -10,6 +10,8 @@ import { policiesRoutes } from "./routes/policies.js";
 import { auditRoutes } from "./routes/audit.js";
 import { identityRoutes } from "./routes/identity.js";
 import { simulateRoutes } from "./routes/simulate.js";
+import { healthRoutes } from "./routes/health.js";
+import { interpretersRoutes } from "./routes/interpreters.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -19,10 +21,15 @@ import {
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
+  DEFAULT_REDACTION_CONFIG,
+  GuardedCartridge,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
+import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
+import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
+import { startChainVerificationJob } from "./jobs/chain-verification.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -96,21 +103,30 @@ export async function buildServer() {
     });
   });
 
-  // Create storage and orchestrator
+  // Create storage and orchestrator — with degraded mode fallback
   let storage: StorageContext;
   let ledgerStorage: LedgerStorage;
+  let degraded = false;
 
   if (process.env["DATABASE_URL"]) {
-    const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-    const prisma = getDb();
-    storage = createPrismaStorage(prisma);
-    ledgerStorage = new PrismaLedgerStorage(prisma);
+    try {
+      const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
+      const prisma = getDb();
+      await prisma.$queryRaw`SELECT 1`; // verify connectivity
+      storage = createPrismaStorage(prisma);
+      ledgerStorage = new PrismaLedgerStorage(prisma);
+    } catch (err) {
+      app.log.error({ err }, "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)");
+      storage = createInMemoryStorage();
+      ledgerStorage = new InMemoryLedgerStorage();
+      degraded = true;
+    }
   } else {
     storage = createInMemoryStorage();
     ledgerStorage = new InMemoryLedgerStorage();
   }
 
-  const ledger = new AuditLedger(ledgerStorage);
+  const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
   const guardrailState = createGuardrailState();
   const guardrailStateStore = createGuardrailStateStore();
 
@@ -124,16 +140,58 @@ export async function buildServer() {
       adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
     },
   });
-  storage.cartridges.register("ads-spend", adsCartridge);
+  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
 
   // Seed default data
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+
+  // Queue-based execution when Redis is available
+  const redisUrl = process.env["REDIS_URL"];
+  let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
+  const executionMode = redisUrl ? "queue" as const : "inline" as const;
+
+  if (redisUrl) {
+    const connection = { url: redisUrl };
+    const queue = createExecutionQueue(connection);
+    onEnqueue = async (envelopeId: string) => {
+      await queue.add(`execute:${envelopeId}`, {
+        envelopeId,
+        enqueuedAt: new Date().toISOString(),
+      });
+    };
+  }
 
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
     guardrailState,
     guardrailStateStore,
+    executionMode,
+    onEnqueue,
+  });
+
+  // Start worker in-process when queue mode is active
+  if (redisUrl) {
+    const worker = createExecutionWorker({
+      connection: { url: redisUrl },
+      orchestrator,
+      storage,
+    });
+    app.addHook("onClose", async () => {
+      await worker.close();
+    });
+  }
+
+  // Start approval expiry background job
+  const stopExpiryJob = startApprovalExpiryJob({ storage, ledger });
+  app.addHook("onClose", async () => {
+    stopExpiryJob();
+  });
+
+  // Start daily audit chain verification job
+  const stopChainVerify = startChainVerificationJob({ ledger });
+  app.addHook("onClose", async () => {
+    stopChainVerify();
   });
 
   // Decorate Fastify with shared instances
@@ -146,7 +204,11 @@ export async function buildServer() {
   await app.register(idempotencyMiddleware);
 
   // Health check
-  app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
+  app.get("/health", async () => ({
+    status: degraded ? "degraded" : "ok",
+    degraded,
+    timestamp: new Date().toISOString(),
+  }));
 
   // Register routes
   await app.register(actionsRoutes, { prefix: "/api/actions" });
@@ -155,6 +217,8 @@ export async function buildServer() {
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
   await app.register(simulateRoutes, { prefix: "/api/simulate" });
+  await app.register(healthRoutes, { prefix: "/api/health" });
+  await app.register(interpretersRoutes, { prefix: "/api/interpreters" });
 
   return app;
 }

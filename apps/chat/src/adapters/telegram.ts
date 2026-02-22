@@ -1,12 +1,22 @@
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
 
+export type PrincipalLookup = (principalId: string) => Promise<{ organizationId: string | null } | null>;
+
 export class TelegramAdapter implements ChannelAdapter {
   readonly channel = "telegram" as const;
   private baseUrl: string;
+  private principalLookup: PrincipalLookup | null;
 
-  constructor(botToken: string) {
+  constructor(botToken: string, principalLookup?: PrincipalLookup) {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
+    this.principalLookup = principalLookup ?? null;
+  }
+
+  async resolveOrganizationId(principalId: string): Promise<string | null> {
+    if (!this.principalLookup) return null;
+    const principal = await this.principalLookup(principalId);
+    return principal?.organizationId ?? null;
   }
 
   parseIncomingMessage(rawPayload: unknown): IncomingMessage | null {
@@ -24,7 +34,7 @@ export class TelegramAdapter implements ChannelAdapter {
         channelMessageId: String(message["message_id"]),
         threadId: String(chat["id"]),
         principalId: String(from["id"]),
-        organizationId: null,
+        organizationId: null, // resolved async via resolveOrganizationId
         text: (message["text"] as string) ?? "",
         attachments: [],
         timestamp: new Date((message["date"] as number) * 1000),
@@ -42,7 +52,7 @@ export class TelegramAdapter implements ChannelAdapter {
         channelMessageId: String(callbackQuery["id"]),
         threadId: String(chat["id"]),
         principalId: String(from["id"]),
-        organizationId: null,
+        organizationId: null, // resolved async via resolveOrganizationId
         text: (callbackQuery["data"] as string) ?? "",
         attachments: [],
         timestamp: new Date(),

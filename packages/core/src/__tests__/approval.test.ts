@@ -59,6 +59,7 @@ function makeResolvedIdentity(overrides: Partial<ResolvedIdentity> = {}): Resolv
       cartridgeSpendLimits: {},
       forbiddenBehaviors: [],
       trustBehaviors: [],
+      delegatedApprovers: [],
       createdAt: new Date("2025-01-01"),
       updatedAt: new Date("2025-01-01"),
     },
@@ -73,6 +74,7 @@ function makeResolvedIdentity(overrides: Partial<ResolvedIdentity> = {}): Resolv
     effectiveSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
     effectiveForbiddenBehaviors: [],
     effectiveTrustBehaviors: [],
+    delegatedApprovers: [],
     ...overrides,
   };
 }

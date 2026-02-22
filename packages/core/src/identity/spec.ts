@@ -13,6 +13,7 @@ export interface ResolvedIdentity {
   effectiveSpendLimits: SpendLimits;
   effectiveForbiddenBehaviors: string[];
   effectiveTrustBehaviors: string[];
+  delegatedApprovers: string[];
 }
 
 export function resolveIdentity(
@@ -88,10 +89,11 @@ export function resolveIdentity(
     effectiveSpendLimits,
     effectiveForbiddenBehaviors,
     effectiveTrustBehaviors,
+    delegatedApprovers: spec.delegatedApprovers ?? [],
   };
 }
 
-function matchesOverlayConditions(
+export function matchesOverlayConditions(
   overlay: RoleOverlay,
   context: { cartridgeId?: string; riskCategory?: string },
   now: Date,

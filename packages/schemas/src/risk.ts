@@ -35,3 +35,6 @@ export const RiskScoreSchema = z.object({
   factors: z.array(RiskFactorSchema),
 });
 export type RiskScore = z.infer<typeof RiskScoreSchema>;
+
+export const SystemRiskPostureSchema = z.enum(["normal", "elevated", "critical"]);
+export type SystemRiskPosture = z.infer<typeof SystemRiskPostureSchema>;

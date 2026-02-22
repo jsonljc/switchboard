@@ -22,6 +22,7 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
         auditEntryIds: envelope.auditEntryIds,
         status: envelope.status,
         parentEnvelopeId: envelope.parentEnvelopeId,
+        traceId: envelope.traceId,
         createdAt: envelope.createdAt,
         updatedAt: envelope.updatedAt,
       },
@@ -38,6 +39,7 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
         auditEntryIds: envelope.auditEntryIds,
         status: envelope.status,
         parentEnvelopeId: envelope.parentEnvelopeId,
+        traceId: envelope.traceId,
         updatedAt: envelope.updatedAt,
       },
     });
@@ -85,8 +87,9 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
     let results = rows.map(toEnvelope);
 
     if (filter?.principalId) {
-      results = results.filter((e) =>
-        e.proposals.some((p) => p.parameters["principalId"] === filter.principalId),
+      const pid = filter.principalId;
+      results = results.filter((e: ActionEnvelope) =>
+        e.proposals.some((p: ActionEnvelope["proposals"][number]) => p.parameters["_principalId"] === pid),
       );
     }
 
@@ -108,6 +111,7 @@ function toEnvelope(row: {
   auditEntryIds: string[];
   status: string;
   parentEnvelopeId: string | null;
+  traceId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): ActionEnvelope {
@@ -127,5 +131,6 @@ function toEnvelope(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     parentEnvelopeId: row.parentEnvelopeId,
+    traceId: row.traceId,
   };
 }

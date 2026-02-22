@@ -2,8 +2,10 @@ import type { ChannelAdapter } from "./adapters/adapter.js";
 import { TelegramAdapter } from "./adapters/telegram.js";
 import { RuleBasedInterpreter } from "./interpreter/interpreter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
+import type { InterpreterRegistry } from "./interpreter/registry.js";
+import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
-import { getThread, setThread } from "./conversation/threads.js";
+import { getThread, setThread, setConversationStore } from "./conversation/threads.js";
 import {
   composeHelpMessage,
   composeUncertainReply,
@@ -18,8 +20,10 @@ import {
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
-  InMemoryGuardrailStateStore,
+  DEFAULT_REDACTION_CONFIG,
+  GuardedCartridge,
 } from "@switchboard/core";
+import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
@@ -27,37 +31,66 @@ import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend"
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
   interpreter: Interpreter;
+  interpreterRegistry?: InterpreterRegistry;
   orchestrator: LifecycleOrchestrator;
   availableActions: string[];
-  apiBaseUrl: string;
+  storage?: StorageContext;
 }
 
 export class ChatRuntime {
   private adapter: ChannelAdapter;
   private interpreter: Interpreter;
+  private interpreterRegistry: InterpreterRegistry | null;
   private orchestrator: LifecycleOrchestrator;
   private availableActions: string[];
-  // Track the last executed envelope per thread for undo
-  private lastExecutedEnvelope = new Map<string, string>();
+  private storage: StorageContext | null;
+  // Fallback in-memory tracker when no storage is available
+  private lastExecutedEnvelopeFallback = new Map<string, string>();
 
   constructor(config: ChatRuntimeConfig) {
     this.adapter = config.adapter;
     this.interpreter = config.interpreter;
+    this.interpreterRegistry = config.interpreterRegistry ?? null;
     this.orchestrator = config.orchestrator;
     this.availableActions = config.availableActions;
+    this.storage = config.storage ?? null;
+  }
+
+  private async trackLastExecuted(threadId: string, envelopeId: string): Promise<void> {
+    this.lastExecutedEnvelopeFallback.set(threadId, envelopeId);
+  }
+
+  private async getLastExecutedEnvelopeId(threadId: string): Promise<string | null> {
+    // Try DB lookup: find most recent executed envelope for this thread
+    if (this.storage) {
+      const envelopes = await this.storage.envelopes.list({
+        status: "executed",
+        limit: 1,
+      });
+      // Filter by conversationId matching threadId
+      const match = envelopes.find((e) => e.conversationId === threadId);
+      if (match) return match.id;
+    }
+    // Fallback to in-memory
+    return this.lastExecutedEnvelopeFallback.get(threadId) ?? null;
   }
 
   async handleIncomingMessage(rawPayload: unknown): Promise<void> {
     const message = this.adapter.parseIncomingMessage(rawPayload);
     if (!message) return;
 
+    // Resolve organizationId from principal store if adapter supports it
+    if (!message.organizationId && this.adapter.resolveOrganizationId) {
+      message.organizationId = await this.adapter.resolveOrganizationId(message.principalId);
+    }
+
     const threadId = message.threadId ?? message.id;
 
     // Get or create conversation
-    let conversation = getThread(threadId);
+    let conversation = await getThread(threadId);
     if (!conversation) {
       conversation = createConversation(threadId, message.channel, message.principalId);
-      setThread(conversation);
+      await setThread(conversation);
     }
 
     // Handle help command
@@ -70,17 +103,36 @@ export class ChatRuntime {
     }
 
     // Handle callback queries (approval button taps)
-    if (message.text.startsWith("{") && message.text.includes('"action"')) {
+    if (message.text.startsWith("{") && message.text.includes('"action"') && message.text.includes('"approvalId"')) {
       await this.handleCallbackQuery(threadId, message.text, message.principalId);
       return;
     }
 
-    // Interpret the message
-    const result = await this.interpreter.interpret(
-      message.text,
-      { conversation },
-      this.availableActions,
-    );
+    // Interpret the message — use registry if available, else single interpreter
+    let rawResult;
+    if (this.interpreterRegistry) {
+      rawResult = await this.interpreterRegistry.interpret(
+        message.text,
+        { conversation },
+        this.availableActions,
+        message.organizationId,
+      );
+    } else {
+      rawResult = await this.interpreter.interpret(
+        message.text,
+        { conversation },
+        this.availableActions,
+      );
+    }
+
+    // Schema-guard interpreter output before trusting it
+    const guard = guardInterpreterOutput(rawResult);
+    if (!guard.valid || !guard.data) {
+      console.error("Interpreter output failed schema guard:", guard.errors);
+      await this.adapter.sendTextReply(threadId, composeUncertainReply());
+      return;
+    }
+    const result = guard.data;
 
     // If clarification needed
     if (result.needsClarification || result.confidence < 0.5) {
@@ -89,7 +141,7 @@ export class ChatRuntime {
         type: "set_clarifying",
         question,
       });
-      setThread(conversation);
+      await setThread(conversation);
       await this.adapter.sendTextReply(threadId, question);
       return;
     }
@@ -111,7 +163,7 @@ export class ChatRuntime {
       type: "set_proposals",
       proposalIds: result.proposals.map((p) => p.id),
     });
-    setThread(conversation);
+    await setThread(conversation);
 
     // Process each proposal through the orchestrator
     for (const proposal of result.proposals) {
@@ -144,7 +196,7 @@ export class ChatRuntime {
             type: "set_clarifying",
             question: proposeResult.question,
           });
-          setThread(conversation);
+          await setThread(conversation);
           await this.adapter.sendTextReply(threadId, proposeResult.question);
         } else if ("notFound" in proposeResult) {
           await this.adapter.sendTextReply(threadId, proposeResult.explanation);
@@ -176,13 +228,13 @@ export class ChatRuntime {
 
     if (result.approvalRequest) {
       // Needs approval - send approval card
-      const conversation = getThread(threadId);
+      const conversation = await getThread(threadId);
       if (conversation) {
         const updated = transitionConversation(conversation, {
           type: "set_awaiting_approval",
           approvalIds: [result.approvalRequest.id],
         });
-        setThread(updated);
+        await setThread(updated);
       }
 
       const card = buildApprovalCard(
@@ -199,7 +251,7 @@ export class ChatRuntime {
     // Auto-approved - execute immediately
     try {
       const executeResult = await this.orchestrator.executeApproved(result.envelope.id);
-      this.lastExecutedEnvelope.set(threadId, result.envelope.id);
+      await this.trackLastExecuted(threadId, result.envelope.id);
 
       const undoRecipe = executeResult.undoRecipe as UndoRecipe | null;
 
@@ -249,7 +301,7 @@ export class ChatRuntime {
 
       if (parsed.action === "approve" || parsed.action === "patch") {
         if (response.executionResult) {
-          this.lastExecutedEnvelope.set(threadId, response.envelope.id);
+          await this.trackLastExecuted(threadId, response.envelope.id);
 
           const undoRecipe = response.executionResult.undoRecipe as UndoRecipe | null;
 
@@ -278,7 +330,7 @@ export class ChatRuntime {
   }
 
   private async handleUndo(threadId: string, principalId: string): Promise<void> {
-    const lastEnvelopeId = this.lastExecutedEnvelope.get(threadId);
+    const lastEnvelopeId = await this.getLastExecutedEnvelopeId(threadId);
     if (!lastEnvelopeId) {
       await this.adapter.sendTextReply(threadId, "No recent action to undo.");
       return;
@@ -303,25 +355,27 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
   const interpreter = config?.interpreter ?? new RuleBasedInterpreter();
 
   let orchestrator = config?.orchestrator;
+  let storage: StorageContext | undefined = config?.storage;
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
-    let storage: StorageContext;
     let ledgerStorage: LedgerStorage;
 
     if (process.env["DATABASE_URL"]) {
       const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
+      const { PrismaConversationStore } = await import("./conversation/prisma-store.js");
       const prisma = getDb();
       storage = createPrismaStorage(prisma);
       ledgerStorage = new PrismaLedgerStorage(prisma);
+      setConversationStore(new PrismaConversationStore(prisma));
     } else {
       storage = createInMemoryStorage();
       ledgerStorage = new InMemoryLedgerStorage();
     }
 
-    const ledger = new AuditLedger(ledgerStorage);
+    const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
     const guardrailState = createGuardrailState();
-    const guardrailStateStore = new InMemoryGuardrailStateStore();
+    const guardrailStateStore = createGuardrailStateStore();
 
     // Register ads-spend cartridge
     const adsCartridge = new AdsSpendCartridge();
@@ -333,7 +387,7 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
         adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
       },
     });
-    storage.cartridges.register("ads-spend", adsCartridge);
+    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
 
     // Seed default policies
     await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
@@ -350,11 +404,11 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
     adapter,
     interpreter,
     orchestrator,
+    storage,
     availableActions: config?.availableActions ?? [
       "ads.campaign.pause",
       "ads.campaign.resume",
       "ads.budget.adjust",
     ],
-    apiBaseUrl: config?.apiBaseUrl ?? "http://localhost:3000",
   });
 }
