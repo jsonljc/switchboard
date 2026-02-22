@@ -11,7 +11,7 @@ import {
 } from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
-import type { LifecycleOrchestrator, ProposeResult } from "@switchboard/core";
+import type { LifecycleOrchestrator, ProposeResult, StorageContext } from "@switchboard/core";
 import {
   createInMemoryStorage,
   InMemoryLedgerStorage,
@@ -20,6 +20,7 @@ import {
 } from "@switchboard/core";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
+import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
@@ -294,21 +295,40 @@ export class ChatRuntime {
 }
 
 // Bootstrap function
-export function createChatRuntime(config?: Partial<ChatRuntimeConfig>): ChatRuntime {
+export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Promise<ChatRuntime> {
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
   const adapter = config?.adapter ?? new TelegramAdapter(botToken);
   const interpreter = config?.interpreter ?? new RuleBasedInterpreter();
 
-  // Create storage and orchestrator
-  const storage = createInMemoryStorage();
-  const ledger = new AuditLedger(new InMemoryLedgerStorage());
-  const guardrailState = createGuardrailState();
+  let orchestrator = config?.orchestrator;
 
-  const orchestrator = config?.orchestrator ?? new OrchestratorClass({
-    storage,
-    ledger,
-    guardrailState,
-  });
+  if (!orchestrator) {
+    // Create storage and seed it
+    const storage = createInMemoryStorage();
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const guardrailState = createGuardrailState();
+
+    // Register ads-spend cartridge
+    const adsCartridge = new AdsSpendCartridge();
+    await adsCartridge.initialize({
+      principalId: "system",
+      organizationId: null,
+      connectionCredentials: {
+        accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
+        adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      },
+    });
+    storage.cartridges.register("ads-spend", adsCartridge);
+
+    // Seed default policies
+    await seedStorage(storage);
+
+    orchestrator = new OrchestratorClass({
+      storage,
+      ledger,
+      guardrailState,
+    });
+  }
 
   return new ChatRuntime({
     adapter,
@@ -321,4 +341,35 @@ export function createChatRuntime(config?: Partial<ChatRuntimeConfig>): ChatRunt
     ],
     apiBaseUrl: config?.apiBaseUrl ?? "http://localhost:3000",
   });
+}
+
+async function seedStorage(storage: StorageContext): Promise<void> {
+  // Seed a default identity spec that allows any Telegram user to operate.
+  // In production, identity specs would be provisioned through the API.
+  const defaultSpec = {
+    id: "spec_default",
+    principalId: "default",
+    organizationId: null,
+    name: "Default User",
+    description: "Default identity spec for chat users",
+    riskTolerance: {
+      none: "none" as const,
+      low: "none" as const,
+      medium: "standard" as const,
+      high: "elevated" as const,
+      critical: "mandatory" as const,
+    },
+    globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
+    cartridgeSpendLimits: {},
+    forbiddenBehaviors: [] as string[],
+    trustBehaviors: [] as string[],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  await storage.identity.saveSpec(defaultSpec);
+
+  // Load default ads policies
+  for (const policy of DEFAULT_ADS_POLICIES) {
+    await storage.policies.save(policy);
+  }
 }

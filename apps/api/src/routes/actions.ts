@@ -9,78 +9,98 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       principalId: string;
       organizationId?: string;
       cartridgeId?: string;
+      entityRefs?: Array<{ inputRef: string; entityType: string }>;
       message?: string;
     };
 
-    const envelope = {
-      id: `env_${Date.now()}`,
-      version: 0,
-      incomingMessage: null,
-      conversationId: null,
-      proposals: [
-        {
-          id: `prop_${Date.now()}`,
-          actionType: body.actionType,
-          parameters: body.parameters,
-          evidence: body.message ?? "API-initiated action",
-          confidence: 1.0,
-          originatingMessageId: "",
-        },
-      ],
-      resolvedEntities: [],
-      plan: null,
-      decisions: [],
-      approvalRequests: [],
-      executionResults: [],
-      auditEntryIds: [],
-      status: "proposed" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      parentEnvelopeId: null,
-    };
+    const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
+    if (!cartridgeId) {
+      return reply.code(400).send({ error: "Cannot infer cartridgeId from actionType" });
+    }
 
-    return reply.code(201).send({ envelope });
+    try {
+      const result = await app.orchestrator.resolveAndPropose({
+        actionType: body.actionType,
+        parameters: body.parameters,
+        principalId: body.principalId,
+        organizationId: body.organizationId ?? null,
+        cartridgeId,
+        entityRefs: body.entityRefs ?? [],
+        message: body.message,
+      });
+
+      if ("needsClarification" in result) {
+        return reply.code(422).send({
+          status: "needs_clarification",
+          question: result.question,
+        });
+      }
+
+      if ("notFound" in result) {
+        return reply.code(404).send({
+          status: "not_found",
+          explanation: result.explanation,
+        });
+      }
+
+      return reply.code(201).send({
+        envelope: result.envelope,
+        decisionTrace: result.decisionTrace,
+        approvalRequest: result.approvalRequest,
+        denied: result.denied,
+        explanation: result.explanation,
+      });
+    } catch (err) {
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // GET /api/actions/:id - Get action/envelope by ID
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    // In production, would look up from database
-    return reply.code(200).send({ id, status: "not_found" });
+
+    const envelope = await app.storageContext.envelopes.getById(id);
+    if (!envelope) {
+      return reply.code(404).send({ error: "Envelope not found" });
+    }
+
+    return reply.code(200).send({ envelope });
+  });
+
+  // POST /api/actions/:id/execute - Execute an approved envelope
+  app.post("/:id/execute", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    try {
+      const result = await app.orchestrator.executeApproved(id);
+      return reply.code(200).send({ result });
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // POST /api/actions/:id/undo - Request undo for an executed action
   app.post("/:id/undo", async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const undoEnvelope = {
-      id: `env_undo_${Date.now()}`,
-      version: 0,
-      incomingMessage: null,
-      conversationId: null,
-      proposals: [
-        {
-          id: `prop_undo_${Date.now()}`,
-          actionType: "system.undo",
-          parameters: { originalActionId: id },
-          evidence: "User-initiated undo",
-          confidence: 1.0,
-          originatingMessageId: "",
-        },
-      ],
-      resolvedEntities: [],
-      plan: null,
-      decisions: [],
-      approvalRequests: [],
-      executionResults: [],
-      auditEntryIds: [],
-      status: "proposed" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      parentEnvelopeId: id,
-    };
-
-    return reply.code(201).send({ envelope: undoEnvelope });
+    try {
+      const result = await app.orchestrator.requestUndo(id);
+      return reply.code(201).send({
+        envelope: result.envelope,
+        decisionTrace: result.decisionTrace,
+        approvalRequest: result.approvalRequest,
+        denied: result.denied,
+        explanation: result.explanation,
+      });
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // POST /api/actions/batch - Create a batch of actions with a plan
@@ -90,46 +110,36 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         actionType: string;
         parameters: Record<string, unknown>;
       }>;
-      strategy: "atomic" | "best_effort" | "sequential";
-      approvalMode: "per_action" | "single_approval";
       principalId: string;
+      organizationId?: string;
+      cartridgeId?: string;
     };
 
-    const envelopeId = `env_${Date.now()}`;
-    const proposals = body.proposals.map((p, i) => ({
-      id: `prop_${Date.now()}_${i}`,
-      actionType: p.actionType,
-      parameters: p.parameters,
-      evidence: "Batch action",
-      confidence: 1.0,
-      originatingMessageId: "",
-    }));
+    const results = [];
+    for (const proposal of body.proposals) {
+      const cartridgeId = body.cartridgeId ?? inferCartridgeId(proposal.actionType);
+      if (!cartridgeId) continue;
 
-    const envelope = {
-      id: envelopeId,
-      version: 0,
-      incomingMessage: null,
-      conversationId: null,
-      proposals,
-      resolvedEntities: [],
-      plan: {
-        id: `plan_${Date.now()}`,
-        envelopeId,
-        strategy: body.strategy,
-        approvalMode: body.approvalMode,
-        summary: null,
-        proposalOrder: proposals.map((p) => p.id),
-      },
-      decisions: [],
-      approvalRequests: [],
-      executionResults: [],
-      auditEntryIds: [],
-      status: "proposed" as const,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      parentEnvelopeId: null,
-    };
+      try {
+        const result = await app.orchestrator.resolveAndPropose({
+          actionType: proposal.actionType,
+          parameters: proposal.parameters,
+          principalId: body.principalId,
+          organizationId: body.organizationId ?? null,
+          cartridgeId,
+          entityRefs: [],
+        });
+        results.push(result);
+      } catch (err) {
+        results.push({ error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
-    return reply.code(201).send({ envelope });
+    return reply.code(201).send({ results });
   });
 };
+
+function inferCartridgeId(actionType: string): string | null {
+  if (actionType.startsWith("ads.")) return "ads-spend";
+  return null;
+}

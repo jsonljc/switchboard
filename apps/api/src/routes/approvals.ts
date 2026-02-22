@@ -11,32 +11,57 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       bindingHash?: string;
     };
 
-    // In production:
-    // 1. Look up the approval request
-    // 2. Verify binding hash matches current state
-    // 3. Check if respondent is authorized
-    // 4. Transition approval state
-    // 5. If approved, queue action for execution
-    // 6. Audit the response
+    try {
+      const response = await app.orchestrator.respondToApproval({
+        approvalId: id,
+        action: body.action,
+        respondedBy: body.respondedBy,
+        bindingHash: body.bindingHash ?? "",
+        patchValue: body.patchValue,
+      });
 
-    return reply.code(200).send({
-      approvalId: id,
-      status: body.action === "approve" ? "approved" : body.action === "reject" ? "rejected" : "patched",
-      respondedBy: body.respondedBy,
-      respondedAt: new Date().toISOString(),
-      patchValue: body.patchValue ?? null,
-    });
+      return reply.code(200).send({
+        envelope: response.envelope,
+        approvalState: response.approvalState,
+        executionResult: response.executionResult,
+      });
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // GET /api/approvals/pending - List pending approval requests
   app.get("/pending", async (_request, reply) => {
-    // In production, would query database for pending approvals
-    return reply.code(200).send({ approvals: [] });
+    const pending = await app.storageContext.approvals.listPending();
+    return reply.code(200).send({
+      approvals: pending.map((a) => ({
+        id: a.request.id,
+        summary: a.request.summary,
+        riskCategory: a.request.riskCategory,
+        status: a.state.status,
+        envelopeId: a.envelopeId,
+        expiresAt: a.state.expiresAt,
+        bindingHash: a.request.bindingHash,
+        createdAt: a.request.createdAt,
+      })),
+    });
   });
 
   // GET /api/approvals/:id - Get approval request details
   app.get("/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    return reply.code(200).send({ id, status: "not_found" });
+
+    const approval = await app.storageContext.approvals.getById(id);
+    if (!approval) {
+      return reply.code(404).send({ error: "Approval not found" });
+    }
+
+    return reply.code(200).send({
+      request: approval.request,
+      state: approval.state,
+      envelopeId: approval.envelopeId,
+    });
   });
 };
