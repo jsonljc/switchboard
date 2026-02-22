@@ -36,11 +36,13 @@ import {
   buildNotFoundExplanation,
 } from "../engine/resolver.js";
 import type { CompetenceTracker } from "../competence/tracker.js";
+import type { GuardrailStateStore } from "../guardrail-state/store.js";
 
 export interface OrchestratorConfig {
   storage: StorageContext;
   ledger: AuditLedger;
   guardrailState: GuardrailState;
+  guardrailStateStore?: GuardrailStateStore;
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker?: CompetenceTracker;
@@ -72,6 +74,7 @@ export class LifecycleOrchestrator {
   private storage: StorageContext;
   private ledger: AuditLedger;
   private guardrailState: GuardrailState;
+  private guardrailStateStore: GuardrailStateStore | null;
   private routingConfig: ApprovalRoutingConfig;
   private riskScoringConfig?: RiskScoringConfig;
   private competenceTracker: CompetenceTracker | null;
@@ -80,6 +83,7 @@ export class LifecycleOrchestrator {
     this.storage = config.storage;
     this.ledger = config.ledger;
     this.guardrailState = config.guardrailState;
+    this.guardrailStateStore = config.guardrailStateStore ?? null;
     this.routingConfig = config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
     this.riskScoringConfig = config.riskScoringConfig;
     this.competenceTracker = config.competenceTracker ?? null;
@@ -132,6 +136,9 @@ export class LifecycleOrchestrator {
 
     // 5. Get guardrails from cartridge
     const guardrails = cartridge.getGuardrails();
+
+    // 5b. Hydrate guardrail state from store
+    await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
 
     // 6. Load policies
     const policies = await this.storage.policies.listActive({
@@ -534,6 +541,7 @@ export class LifecycleOrchestrator {
     // 5. Update guardrail state after successful execution
     if (executeResult.success) {
       this.updateGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
+      await this.flushGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
     }
 
     // 5b. Record competence outcome
@@ -662,6 +670,10 @@ export class LifecycleOrchestrator {
     );
 
     const guardrails = cartridge.getGuardrails();
+
+    // Hydrate guardrail state from store (read-only for simulation)
+    await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
+
     const policies = await this.storage.policies.listActive({
       cartridgeId: params.cartridgeId,
     });
@@ -792,6 +804,74 @@ export class LifecycleOrchestrator {
 
     // No entity refs - propose directly
     return this.propose(params);
+  }
+
+  private async hydrateGuardrailState(
+    guardrails: import("@switchboard/schemas").GuardrailConfig | null,
+    actionType: string,
+    parameters: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.guardrailStateStore || !guardrails) return;
+
+    const scopeKeys: string[] = [];
+    for (const rl of guardrails.rateLimits) {
+      const key = rl.scope === "global" ? "global" : `${rl.scope}:${actionType}`;
+      scopeKeys.push(key);
+    }
+
+    const entityKeys: string[] = [];
+    for (const cd of guardrails.cooldowns) {
+      if (cd.actionType === actionType || cd.actionType === "*") {
+        const entityId = (parameters["entityId"] as string) ?? "unknown";
+        entityKeys.push(`${cd.scope}:${entityId}`);
+      }
+    }
+
+    const [rateLimits, cooldowns] = await Promise.all([
+      scopeKeys.length > 0 ? this.guardrailStateStore.getRateLimits(scopeKeys) : Promise.resolve(new Map()),
+      entityKeys.length > 0 ? this.guardrailStateStore.getCooldowns(entityKeys) : Promise.resolve(new Map()),
+    ]);
+
+    for (const [key, entry] of rateLimits) {
+      this.guardrailState.actionCounts.set(key, entry);
+    }
+    for (const [key, timestamp] of cooldowns) {
+      this.guardrailState.lastActionTimes.set(key, timestamp);
+    }
+  }
+
+  private async flushGuardrailState(
+    proposal: ActionProposal,
+    cartridgeId: string,
+  ): Promise<void> {
+    if (!this.guardrailStateStore) return;
+
+    const cartridge = this.storage.cartridges.get(cartridgeId);
+    if (!cartridge) return;
+
+    const guardrails = cartridge.getGuardrails();
+    const writes: Promise<void>[] = [];
+
+    for (const rl of guardrails.rateLimits) {
+      const scopeKey = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
+      const entry = this.guardrailState.actionCounts.get(scopeKey);
+      if (entry) {
+        writes.push(this.guardrailStateStore.setRateLimit(scopeKey, entry, rl.windowMs));
+      }
+    }
+
+    for (const cd of guardrails.cooldowns) {
+      if (cd.actionType === proposal.actionType || cd.actionType === "*") {
+        const entityId = (proposal.parameters["entityId"] as string) ?? "unknown";
+        const entityKey = `${cd.scope}:${entityId}`;
+        const timestamp = this.guardrailState.lastActionTimes.get(entityKey);
+        if (timestamp !== undefined) {
+          writes.push(this.guardrailStateStore.setCooldown(entityKey, timestamp, cd.cooldownMs));
+        }
+      }
+    }
+
+    await Promise.all(writes);
   }
 
   private updateGuardrailState(proposal: ActionProposal, cartridgeId: string): void {

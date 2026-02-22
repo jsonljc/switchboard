@@ -22,6 +22,7 @@ import {
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { createGuardrailStateStore } from "./guardrail-state/index.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -111,6 +112,7 @@ export async function buildServer() {
 
   const ledger = new AuditLedger(ledgerStorage);
   const guardrailState = createGuardrailState();
+  const guardrailStateStore = createGuardrailStateStore();
 
   // Register ads-spend cartridge
   const adsCartridge = new AdsSpendCartridge();
@@ -131,6 +133,7 @@ export async function buildServer() {
     storage,
     ledger,
     guardrailState,
+    guardrailStateStore,
   });
 
   // Decorate Fastify with shared instances

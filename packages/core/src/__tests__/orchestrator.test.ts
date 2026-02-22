@@ -5,6 +5,7 @@ import { AuditLedger, InMemoryLedgerStorage } from "../audit/ledger.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import { CompetenceTracker } from "../competence/index.js";
+import { InMemoryGuardrailStateStore } from "../guardrail-state/in-memory.js";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
@@ -698,6 +699,177 @@ describe("LifecycleOrchestrator", () => {
       const denied = await orchestrator.propose({
         actionType: "ads.campaign.pause",
         parameters: { campaignId: "camp_1", entityId: "ent_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(denied.denied).toBe(true);
+      expect(denied.envelope.status).toBe("denied");
+    });
+  });
+
+  describe("Guardrail state persistence", () => {
+    it("should persist rate limit counts to store after execution", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      const stateStore = new InMemoryGuardrailStateStore();
+      const persistOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: createGuardrailState(),
+        guardrailStateStore: stateStore,
+      });
+
+      cartridge.onGuardrails({
+        rateLimits: [{ scope: "user", maxActions: 10, windowMs: 60_000 }],
+        cooldowns: [],
+        protectedEntities: [],
+      });
+
+      const result = await persistOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      await persistOrch.executeApproved(result.envelope.id);
+
+      // Verify the store has the entry
+      const stored = await stateStore.getRateLimits(["user:ads.campaign.pause"]);
+      expect(stored.size).toBe(1);
+      expect(stored.get("user:ads.campaign.pause")?.count).toBe(1);
+    });
+
+    it("should persist cooldown timestamps to store after execution", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      const stateStore = new InMemoryGuardrailStateStore();
+      const persistOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: createGuardrailState(),
+        guardrailStateStore: stateStore,
+      });
+
+      cartridge.onGuardrails({
+        rateLimits: [],
+        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        protectedEntities: [],
+      });
+
+      const result = await persistOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1", entityId: "ent_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      await persistOrch.executeApproved(result.envelope.id);
+
+      const stored = await stateStore.getCooldowns(["entity:ent_1"]);
+      expect(stored.size).toBe(1);
+      expect(stored.get("entity:ent_1")).toBeGreaterThan(0);
+    });
+
+    it("should hydrate state — new orchestrator instance sees prior counts", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      const stateStore = new InMemoryGuardrailStateStore();
+
+      cartridge.onGuardrails({
+        rateLimits: [{ scope: "user", maxActions: 10, windowMs: 60_000 }],
+        cooldowns: [],
+        protectedEntities: [],
+      });
+
+      // First orchestrator: execute an action
+      const orch1 = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: createGuardrailState(),
+        guardrailStateStore: stateStore,
+      });
+
+      const result = await orch1.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+      await orch1.executeApproved(result.envelope.id);
+
+      // Second orchestrator: fresh guardrailState, same store
+      const freshGuardrailState = createGuardrailState();
+      const orch2 = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: freshGuardrailState,
+        guardrailStateStore: stateStore,
+      });
+
+      // Propose triggers hydration — the rate limit count should be visible
+      const result2 = await orch2.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_2" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // The action should succeed (not denied) but the count should reflect prior execution
+      expect(result2.denied).toBe(false);
+      // After hydration, the in-memory state should have the prior count
+      expect(freshGuardrailState.actionCounts.get("user:ads.campaign.pause")?.count).toBe(1);
+    });
+
+    it("should deny rate-limited action across orchestrator restarts", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      const stateStore = new InMemoryGuardrailStateStore();
+
+      cartridge.onGuardrails({
+        rateLimits: [{ scope: "user", maxActions: 2, windowMs: 60_000 }],
+        cooldowns: [],
+        protectedEntities: [],
+      });
+
+      // First orchestrator: fill up rate limit
+      const orch1 = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: createGuardrailState(),
+        guardrailStateStore: stateStore,
+      });
+
+      for (let i = 0; i < 2; i++) {
+        const result = await orch1.propose({
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: `camp_${i}` },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+        });
+        await orch1.executeApproved(result.envelope.id);
+      }
+
+      // Second orchestrator: should deny due to persisted rate limit
+      const orch2 = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState: createGuardrailState(),
+        guardrailStateStore: stateStore,
+      });
+
+      const denied = await orch2.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_3" },
         principalId: "user_1",
         cartridgeId: "ads-spend",
       });

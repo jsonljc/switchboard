@@ -72,3 +72,7 @@ export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
 
 // Competence
 export { CompetenceTracker, DEFAULT_COMPETENCE_THRESHOLDS } from "./competence/index.js";
+
+// Guardrail State Store
+export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";
+export { InMemoryGuardrailStateStore } from "./guardrail-state/index.js";

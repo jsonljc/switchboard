@@ -18,6 +18,7 @@ import {
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
+  InMemoryGuardrailStateStore,
 } from "@switchboard/core";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
@@ -320,6 +321,7 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
 
     const ledger = new AuditLedger(ledgerStorage);
     const guardrailState = createGuardrailState();
+    const guardrailStateStore = new InMemoryGuardrailStateStore();
 
     // Register ads-spend cartridge
     const adsCartridge = new AdsSpendCartridge();
@@ -340,6 +342,7 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
       storage,
       ledger,
       guardrailState,
+      guardrailStateStore,
     });
   }
 
