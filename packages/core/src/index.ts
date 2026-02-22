@@ -43,6 +43,7 @@ export {
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
   createInMemoryStorage,
+  seedDefaultStorage,
 } from "./storage/index.js";
 export type {
   EnvelopeStore,
@@ -54,7 +55,7 @@ export type {
 } from "./storage/index.js";
 
 // Orchestrator
-export { LifecycleOrchestrator } from "./orchestrator/index.js";
+export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js";
 export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./orchestrator/index.js";
 
 // Audit
