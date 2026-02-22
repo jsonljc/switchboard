@@ -4,6 +4,8 @@ import type {
   IdentitySpec,
   RoleOverlay,
   ApprovalRequest,
+  Principal,
+  DelegationRule,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
@@ -94,6 +96,8 @@ export class InMemoryPolicyStore implements PolicyStore {
 export class InMemoryIdentityStore implements IdentityStore {
   private specs = new Map<string, IdentitySpec>();
   private overlays = new Map<string, RoleOverlay[]>();
+  private principals = new Map<string, Principal>();
+  private delegationRules = new Map<string, DelegationRule>();
 
   async saveSpec(spec: IdentitySpec): Promise<void> {
     this.specs.set(spec.id, { ...spec });
@@ -124,6 +128,23 @@ export class InMemoryIdentityStore implements IdentityStore {
       list.push({ ...overlay });
     }
     this.overlays.set(overlay.identitySpecId, list);
+  }
+
+  async getPrincipal(id: string): Promise<Principal | null> {
+    const principal = this.principals.get(id);
+    return principal ? { ...principal } : null;
+  }
+
+  async savePrincipal(principal: Principal): Promise<void> {
+    this.principals.set(principal.id, { ...principal });
+  }
+
+  async listDelegationRules(): Promise<DelegationRule[]> {
+    return [...this.delegationRules.values()];
+  }
+
+  async saveDelegationRule(rule: DelegationRule): Promise<void> {
+    this.delegationRules.set(rule.id, { ...rule });
   }
 }
 

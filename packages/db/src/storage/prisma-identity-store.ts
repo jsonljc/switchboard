@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { IdentitySpec, RoleOverlay } from "@switchboard/schemas";
+import type { IdentitySpec, RoleOverlay, Principal, DelegationRule } from "@switchboard/schemas";
 import type { IdentityStore } from "@switchboard/core";
 
 export class PrismaIdentityStore implements IdentityStore {
@@ -84,6 +84,67 @@ export class PrismaIdentityStore implements IdentityStore {
         conditions: overlay.conditions as object,
         overrides: overlay.overrides as object,
         updatedAt: overlay.updatedAt,
+      },
+    });
+  }
+
+  async getPrincipal(id: string): Promise<Principal | null> {
+    const row = await this.prisma.principal.findUnique({ where: { id } });
+    if (!row) return null;
+    return {
+      id: row.id,
+      type: row.type as Principal["type"],
+      name: row.name,
+      organizationId: row.organizationId,
+      roles: row.roles as Principal["roles"],
+    };
+  }
+
+  async savePrincipal(principal: Principal): Promise<void> {
+    await this.prisma.principal.upsert({
+      where: { id: principal.id },
+      create: {
+        id: principal.id,
+        type: principal.type,
+        name: principal.name,
+        organizationId: principal.organizationId,
+        roles: principal.roles,
+      },
+      update: {
+        type: principal.type,
+        name: principal.name,
+        organizationId: principal.organizationId,
+        roles: principal.roles,
+      },
+    });
+  }
+
+  async listDelegationRules(): Promise<DelegationRule[]> {
+    const rows = await this.prisma.delegationRule.findMany();
+    return rows.map((row) => ({
+      id: row.id,
+      grantor: row.grantorId,
+      grantee: row.granteeId,
+      scope: row.scope,
+      expiresAt: row.expiresAt,
+    }));
+  }
+
+  async saveDelegationRule(rule: DelegationRule): Promise<void> {
+    await this.prisma.delegationRule.upsert({
+      where: { id: rule.id },
+      create: {
+        id: rule.id,
+        grantor: { connect: { id: rule.grantor } },
+        grantee: { connect: { id: rule.grantee } },
+        scope: rule.scope,
+        expiresAt: rule.expiresAt,
+      },
+      update: {
+        grantor: { connect: { id: rule.grantor } },
+        grantee: { connect: { id: rule.grantee } },
+        scope: rule.scope,
+        expiresAt: rule.expiresAt,
       },
     });
   }

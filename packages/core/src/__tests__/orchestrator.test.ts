@@ -7,6 +7,7 @@ import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
+import type { ApprovalRoutingConfig } from "../approval/router.js";
 
 function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
   const now = new Date();
@@ -582,6 +583,330 @@ describe("LifecycleOrchestrator", () => {
       // Verify chain integrity
       const chainResult = await ledger.verifyChain(allEntries);
       expect(chainResult.valid).toBe(true);
+    });
+  });
+
+  describe("Guardrail state mutations", () => {
+    it("should increment rate limit counters after execution", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      cartridge.onGuardrails({
+        rateLimits: [{ scope: "user", maxActions: 10, windowMs: 60_000 }],
+        cooldowns: [],
+        protectedEntities: [],
+      });
+
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      await orchestrator.executeApproved(result.envelope.id);
+
+      const scopeKey = "user:ads.campaign.pause";
+      const entry = guardrailState.actionCounts.get(scopeKey);
+      expect(entry).toBeDefined();
+      expect(entry!.count).toBe(1);
+    });
+
+    it("should set cooldown timestamp after execution", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      cartridge.onGuardrails({
+        rateLimits: [],
+        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        protectedEntities: [],
+      });
+
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1", entityId: "ent_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      await orchestrator.executeApproved(result.envelope.id);
+
+      const entityKey = "entity:ent_1";
+      const lastTime = guardrailState.lastActionTimes.get(entityKey);
+      expect(lastTime).toBeDefined();
+      expect(lastTime).toBeGreaterThan(0);
+    });
+
+    it("should deny when rate limit is exceeded", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      cartridge.onGuardrails({
+        rateLimits: [{ scope: "user", maxActions: 2, windowMs: 60_000 }],
+        cooldowns: [],
+        protectedEntities: [],
+      });
+
+      // Execute twice to fill the rate limit
+      for (let i = 0; i < 2; i++) {
+        const result = await orchestrator.propose({
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: `camp_${i}` },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+        });
+        await orchestrator.executeApproved(result.envelope.id);
+      }
+
+      // Third proposal should be denied
+      const denied = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_3" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(denied.denied).toBe(true);
+      expect(denied.envelope.status).toBe("denied");
+    });
+
+    it("should deny when cooldown is active", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      cartridge.onGuardrails({
+        rateLimits: [],
+        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        protectedEntities: [],
+      });
+
+      // Execute once
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1", entityId: "ent_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+      await orchestrator.executeApproved(result.envelope.id);
+
+      // Second proposal for same entity should be denied due to cooldown
+      const denied = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1", entityId: "ent_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(denied.denied).toBe(true);
+      expect(denied.envelope.status).toBe("denied");
+    });
+  });
+
+  describe("Approver authorization", () => {
+    it("should reject approval from unauthorized principal", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const routingConfig: ApprovalRoutingConfig = {
+        defaultApprovers: ["admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+      };
+
+      const authOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig,
+      });
+
+      // Seed admin_1 as an approver principal
+      await storage.identity.savePrincipal({
+        id: "admin_1",
+        type: "user",
+        name: "Admin",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      const proposeResult = await authOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Attempt approval from "hacker" (non-existent principal)
+      await expect(
+        authOrchestrator.respondToApproval({
+          approvalId: proposeResult.approvalRequest!.id,
+          action: "approve",
+          respondedBy: "hacker",
+          bindingHash: proposeResult.approvalRequest!.bindingHash,
+        }),
+      ).rejects.toThrow("Principal not found: hacker");
+    });
+
+    it("should allow approval from authorized principal", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const routingConfig: ApprovalRoutingConfig = {
+        defaultApprovers: ["admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+      };
+
+      const authOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig,
+      });
+
+      await storage.identity.savePrincipal({
+        id: "admin_1",
+        type: "user",
+        name: "Admin",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      const proposeResult = await authOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      const response = await authOrchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "admin_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+      expect(response.executionResult?.success).toBe(true);
+    });
+
+    it("should allow delegated approval", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const routingConfig: ApprovalRoutingConfig = {
+        defaultApprovers: ["admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+      };
+
+      const authOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig,
+      });
+
+      // Seed both principals
+      await storage.identity.savePrincipal({
+        id: "admin_1",
+        type: "user",
+        name: "Admin",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      await storage.identity.savePrincipal({
+        id: "delegate_1",
+        type: "user",
+        name: "Delegate",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      // Create delegation rule from admin_1 to delegate_1
+      await storage.identity.saveDelegationRule({
+        id: "deleg_1",
+        grantor: "admin_1",
+        grantee: "delegate_1",
+        scope: "*",
+        expiresAt: null,
+      });
+
+      const proposeResult = await authOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // Approve as delegate
+      const response = await authOrchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "delegate_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+      expect(response.executionResult?.success).toBe(true);
+    });
+
+    it("should skip authorization when no approvers configured", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      // Use default routing config (empty approvers)
+      const proposeResult = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Approve as anyone — no principal seeded, but should succeed
+      const response = await orchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "anyone",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+      expect(response.executionResult?.success).toBe(true);
     });
   });
 });

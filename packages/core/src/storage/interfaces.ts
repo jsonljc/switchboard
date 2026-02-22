@@ -4,6 +4,8 @@ import type {
   IdentitySpec,
   RoleOverlay,
   ApprovalRequest,
+  Principal,
+  DelegationRule,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
@@ -33,6 +35,10 @@ export interface IdentityStore {
   getSpecById(id: string): Promise<IdentitySpec | null>;
   listOverlaysBySpecId(specId: string): Promise<RoleOverlay[]>;
   saveOverlay(overlay: RoleOverlay): Promise<void>;
+  getPrincipal(id: string): Promise<Principal | null>;
+  savePrincipal(principal: Principal): Promise<void>;
+  listDelegationRules(): Promise<DelegationRule[]>;
+  saveDelegationRule(rule: DelegationRule): Promise<void>;
 }
 
 export interface ApprovalStore {

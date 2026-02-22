@@ -6,6 +6,7 @@ export class TestCartridge implements Cartridge {
   private executeHandler: ((actionType: string, params: Record<string, unknown>) => ExecuteResult) | null = null;
   private enrichHandler: ((actionType: string, params: Record<string, unknown>) => Record<string, unknown>) | null = null;
   private riskInputHandler: ((actionType: string, params: Record<string, unknown>) => RiskInput) | null = null;
+  private guardrailConfig: GuardrailConfig = { rateLimits: [], cooldowns: [], protectedEntities: [] };
 
   constructor(manifest: CartridgeManifest) {
     this.manifest = manifest;
@@ -23,6 +24,11 @@ export class TestCartridge implements Cartridge {
 
   onRiskInput(handler: (actionType: string, params: Record<string, unknown>) => RiskInput): this {
     this.riskInputHandler = handler;
+    return this;
+  }
+
+  onGuardrails(config: GuardrailConfig): this {
+    this.guardrailConfig = config;
     return this;
   }
 
@@ -72,7 +78,7 @@ export class TestCartridge implements Cartridge {
   }
 
   getGuardrails(): GuardrailConfig {
-    return { rateLimits: [], cooldowns: [], protectedEntities: [] };
+    return this.guardrailConfig;
   }
 
   async healthCheck(): Promise<ConnectionHealth> {

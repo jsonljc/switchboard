@@ -28,6 +28,7 @@ import {
 } from "../approval/state-machine.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
 import { applyPatch } from "../approval/patching.js";
+import { canApprove } from "../approval/delegation.js";
 import {
   resolveEntities,
   buildClarificationQuestion,
@@ -319,7 +320,19 @@ export class LifecycleOrchestrator {
       }
     }
 
-    // 4. Transition approval state
+    // 4. Authorization check (only when approvers are configured)
+    if (approval.request.approvers.length > 0) {
+      const principal = await this.storage.identity.getPrincipal(params.respondedBy);
+      if (!principal) {
+        throw new Error(`Principal not found: ${params.respondedBy}`);
+      }
+      const delegations = await this.storage.identity.listDelegationRules();
+      if (!canApprove(principal, approval.request.approvers, delegations)) {
+        throw new Error(`Principal ${params.respondedBy} is not authorized to respond to this approval`);
+      }
+    }
+
+    // 5. Transition approval state
     const newState = transitionApproval(
       approval.state,
       params.action,
@@ -501,7 +514,12 @@ export class LifecycleOrchestrator {
       ],
     });
 
-    // 5. Record audit entry
+    // 5. Update guardrail state after successful execution
+    if (executeResult.success) {
+      this.updateGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
+    }
+
+    // 6. Record audit entry
     await this.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
       actorType: "system",
@@ -728,6 +746,35 @@ export class LifecycleOrchestrator {
 
     // No entity refs - propose directly
     return this.propose(params);
+  }
+
+  private updateGuardrailState(proposal: ActionProposal, cartridgeId: string): void {
+    const cartridge = this.storage.cartridges.get(cartridgeId);
+    if (!cartridge) return;
+
+    const guardrails = cartridge.getGuardrails();
+    const now = Date.now();
+
+    // Rate limit increment
+    for (const rl of guardrails.rateLimits) {
+      const scopeKey = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
+      const current = this.guardrailState.actionCounts.get(scopeKey);
+
+      if (current && now - current.windowStart < rl.windowMs) {
+        current.count += 1;
+      } else {
+        this.guardrailState.actionCounts.set(scopeKey, { count: 1, windowStart: now });
+      }
+    }
+
+    // Cooldown stamp
+    for (const cd of guardrails.cooldowns) {
+      if (cd.actionType === proposal.actionType || cd.actionType === "*") {
+        const entityId = (proposal.parameters["entityId"] as string) ?? "unknown";
+        const entityKey = `${cd.scope}:${entityId}`;
+        this.guardrailState.lastActionTimes.set(entityKey, now);
+      }
+    }
   }
 
   private inferCartridgeId(actionType: string): string | null {
