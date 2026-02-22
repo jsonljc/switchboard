@@ -102,6 +102,9 @@ importers:
       '@switchboard/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@switchboard/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

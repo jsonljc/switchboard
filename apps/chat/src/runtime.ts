@@ -11,7 +11,7 @@ import {
 } from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
-import type { LifecycleOrchestrator, ProposeResult } from "@switchboard/core";
+import type { LifecycleOrchestrator, ProposeResult, StorageContext, LedgerStorage } from "@switchboard/core";
 import {
   createInMemoryStorage,
   seedDefaultStorage,
@@ -304,9 +304,21 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
   let orchestrator = config?.orchestrator;
 
   if (!orchestrator) {
-    // Create storage and seed it
-    const storage = createInMemoryStorage();
-    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
+    let storage: StorageContext;
+    let ledgerStorage: LedgerStorage;
+
+    if (process.env["DATABASE_URL"]) {
+      const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
+      const prisma = getDb();
+      storage = createPrismaStorage(prisma);
+      ledgerStorage = new PrismaLedgerStorage(prisma);
+    } else {
+      storage = createInMemoryStorage();
+      ledgerStorage = new InMemoryLedgerStorage();
+    }
+
+    const ledger = new AuditLedger(ledgerStorage);
     const guardrailState = createGuardrailState();
 
     // Register ads-spend cartridge

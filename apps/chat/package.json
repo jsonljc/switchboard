@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@switchboard/core": "workspace:*",
+    "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/ads-spend": "workspace:*",
