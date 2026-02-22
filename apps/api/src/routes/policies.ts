@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import type { Policy } from "@switchboard/schemas";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -37,7 +38,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     const now = new Date();
     const policy: Policy = {
-      id: `policy_${Date.now()}`,
+      id: `policy_${randomUUID()}`,
       createdAt: now,
       updatedAt: now,
       ...parsed.data,

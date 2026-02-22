@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   ActionEnvelope,
   ActionProposal,
@@ -55,16 +56,12 @@ export interface ApprovalResponse {
   executionResult: ExecuteResult | null;
 }
 
-let envelopeCounter = 0;
 function generateEnvelopeId(): string {
-  envelopeCounter++;
-  return `env_${Date.now()}_${envelopeCounter}`;
+  return `env_${randomUUID()}`;
 }
 
-let approvalCounter = 0;
 function generateApprovalId(): string {
-  approvalCounter++;
-  return `appr_${Date.now()}_${approvalCounter}`;
+  return `appr_${randomUUID()}`;
 }
 
 export class LifecycleOrchestrator {
@@ -125,7 +122,7 @@ export class LifecycleOrchestrator {
     });
 
     // Create proposal object
-    const proposalId = `prop_${Date.now()}_${envelopeCounter}`;
+    const proposalId = `prop_${randomUUID()}`;
     const envelopeId = generateEnvelopeId();
     const proposal: ActionProposal = {
       id: proposalId,
@@ -607,7 +604,7 @@ export class LifecycleOrchestrator {
     });
 
     const proposal: ActionProposal = {
-      id: `sim_${Date.now()}`,
+      id: `sim_${randomUUID()}`,
       actionType: params.actionType,
       parameters: params.parameters,
       evidence: "Simulation",
@@ -674,7 +671,7 @@ export class LifecycleOrchestrator {
           }
           // Default: not found
           return {
-            id: `resolve_${Date.now()}`,
+            id: `resolve_${randomUUID()}`,
             inputRef,
             resolvedType: entityType,
             resolvedId: "",
