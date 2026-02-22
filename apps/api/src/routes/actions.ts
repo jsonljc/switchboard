@@ -1,9 +1,19 @@
 import type { FastifyPluginAsync } from "fastify";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
+
+const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
+const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/actions/propose - Create a new action proposal via envelope
-  app.post("/propose", async (request, reply) => {
+  app.post("/propose", {
+    schema: {
+      description: "Create a new action proposal. Evaluates policies, risk scoring, and approval requirements.",
+      tags: ["Actions"],
+      body: proposeJsonSchema,
+    },
+  }, async (request, reply) => {
     const parsed = ProposeBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -55,7 +65,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/actions/:id - Get action/envelope by ID
-  app.get("/:id", async (request, reply) => {
+  app.get("/:id", {
+    schema: {
+      description: "Get an action envelope by ID.",
+      tags: ["Actions"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const envelope = await app.storageContext.envelopes.getById(id);
@@ -67,7 +83,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // POST /api/actions/:id/execute - Execute an approved envelope
-  app.post("/:id/execute", async (request, reply) => {
+  app.post("/:id/execute", {
+    schema: {
+      description: "Execute a previously approved action envelope.",
+      tags: ["Actions"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     try {
@@ -81,7 +103,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // POST /api/actions/:id/undo - Request undo for an executed action
-  app.post("/:id/undo", async (request, reply) => {
+  app.post("/:id/undo", {
+    schema: {
+      description: "Request undo for a previously executed action. Creates a new reverse proposal.",
+      tags: ["Actions"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     try {
@@ -101,7 +129,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // POST /api/actions/batch - Create a batch of actions with a plan
-  app.post("/batch", async (request, reply) => {
+  app.post("/batch", {
+    schema: {
+      description: "Submit multiple action proposals in a single batch.",
+      tags: ["Actions"],
+      body: batchJsonSchema,
+    },
+  }, async (request, reply) => {
     const parsed = BatchProposeBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });

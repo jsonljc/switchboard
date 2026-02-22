@@ -1,9 +1,18 @@
 import type { FastifyPluginAsync } from "fastify";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { SimulateBodySchema } from "../validation.js";
+
+const simulateJsonSchema = zodToJsonSchema(SimulateBodySchema, { target: "openApi3" });
 
 export const simulateRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/simulate - Dry-run action evaluation
-  app.post("/", async (request, reply) => {
+  app.post("/", {
+    schema: {
+      description: "Dry-run action evaluation. Returns the decision trace without creating an envelope or executing anything.",
+      tags: ["Simulate"],
+      body: simulateJsonSchema,
+    },
+  }, async (request, reply) => {
     const parsed = SimulateBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });

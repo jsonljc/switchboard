@@ -2,6 +2,8 @@ import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { actionsRoutes } from "./routes/actions.js";
 import { approvalsRoutes } from "./routes/approvals.js";
 import { policiesRoutes } from "./routes/policies.js";
@@ -70,6 +72,28 @@ export async function buildServer() {
   await app.register(rateLimit, {
     max: parseInt(process.env["RATE_LIMIT_MAX"] ?? "100", 10),
     timeWindow: parseInt(process.env["RATE_LIMIT_WINDOW_MS"] ?? "60000", 10),
+  });
+
+  // OpenAPI documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: "Switchboard API",
+        description: "AI agent guardrail and approval orchestration API",
+        version: "0.1.0",
+      },
+      tags: [
+        { name: "Actions", description: "Propose, execute, undo, and batch actions" },
+        { name: "Approvals", description: "Respond to approval requests and list pending approvals" },
+        { name: "Simulate", description: "Dry-run action evaluation without side effects" },
+        { name: "Policies", description: "CRUD operations for guardrail policies" },
+        { name: "Identity", description: "Manage identity specs and role overlays" },
+        { name: "Audit", description: "Query audit ledger and verify chain integrity" },
+      ],
+    },
+  });
+  await app.register(swaggerUi, {
+    routePrefix: "/docs",
   });
 
   // Global error handler — consistent error format, no stack leaks in production

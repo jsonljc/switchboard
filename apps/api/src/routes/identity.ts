@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { IdentitySpec, RoleOverlay } from "@switchboard/schemas";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   CreateIdentitySpecBodySchema,
   UpdateIdentitySpecBodySchema,
@@ -7,9 +8,20 @@ import {
   UpdateRoleOverlayBodySchema,
 } from "../validation.js";
 
+const createSpecJsonSchema = zodToJsonSchema(CreateIdentitySpecBodySchema, { target: "openApi3" });
+const updateSpecJsonSchema = zodToJsonSchema(UpdateIdentitySpecBodySchema, { target: "openApi3" });
+const createOverlayJsonSchema = zodToJsonSchema(CreateRoleOverlayBodySchema, { target: "openApi3" });
+const updateOverlayJsonSchema = zodToJsonSchema(UpdateRoleOverlayBodySchema, { target: "openApi3" });
+
 export const identityRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/identity/specs
-  app.post("/specs", async (request, reply) => {
+  app.post("/specs", {
+    schema: {
+      description: "Create a new identity spec.",
+      tags: ["Identity"],
+      body: createSpecJsonSchema,
+    },
+  }, async (request, reply) => {
     const parsed = CreateIdentitySpecBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -28,7 +40,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/identity/specs/:id
-  app.get("/specs/:id", async (request, reply) => {
+  app.get("/specs/:id", {
+    schema: {
+      description: "Get an identity spec by ID.",
+      tags: ["Identity"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const spec = await app.storageContext.identity.getSpecById(id);
     if (!spec) {
@@ -38,7 +56,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/identity/specs/by-principal/:principalId
-  app.get("/specs/by-principal/:principalId", async (request, reply) => {
+  app.get("/specs/by-principal/:principalId", {
+    schema: {
+      description: "Look up an identity spec by principal ID.",
+      tags: ["Identity"],
+      params: { type: "object", properties: { principalId: { type: "string" } }, required: ["principalId"] },
+    },
+  }, async (request, reply) => {
     const { principalId } = request.params as { principalId: string };
     const spec = await app.storageContext.identity.getSpecByPrincipalId(principalId);
     if (!spec) {
@@ -48,7 +72,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // PUT /api/identity/specs/:id
-  app.put("/specs/:id", async (request, reply) => {
+  app.put("/specs/:id", {
+    schema: {
+      description: "Update an existing identity spec.",
+      tags: ["Identity"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      body: updateSpecJsonSchema,
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const parsed = UpdateIdentitySpecBodySchema.safeParse(request.body);
@@ -72,7 +103,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // POST /api/identity/overlays
-  app.post("/overlays", async (request, reply) => {
+  app.post("/overlays", {
+    schema: {
+      description: "Create a new role overlay for an identity spec.",
+      tags: ["Identity"],
+      body: createOverlayJsonSchema,
+    },
+  }, async (request, reply) => {
     const parsed = CreateRoleOverlayBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -91,7 +128,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/identity/overlays - List overlays by spec ID
-  app.get("/overlays", async (request, reply) => {
+  app.get("/overlays", {
+    schema: {
+      description: "List role overlays for a given identity spec.",
+      tags: ["Identity"],
+      querystring: { type: "object", properties: { specId: { type: "string" } }, required: ["specId"] },
+    },
+  }, async (request, reply) => {
     const query = request.query as { specId?: string };
     if (!query.specId) {
       return reply.code(400).send({ error: "specId query parameter required" });
@@ -101,7 +144,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // PUT /api/identity/overlays/:id
-  app.put("/overlays/:id", async (request, reply) => {
+  app.put("/overlays/:id", {
+    schema: {
+      description: "Update an existing role overlay.",
+      tags: ["Identity"],
+      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      body: updateOverlayJsonSchema,
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const parsed = UpdateRoleOverlayBodySchema.safeParse(request.body);
