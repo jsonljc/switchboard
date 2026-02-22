@@ -11,6 +11,7 @@ import { auditRoutes } from "./routes/audit.js";
 import { identityRoutes } from "./routes/identity.js";
 import { simulateRoutes } from "./routes/simulate.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import { authMiddleware } from "./middleware/auth.js";
 import {
   LifecycleOrchestrator,
   createInMemoryStorage,
@@ -63,6 +64,16 @@ export async function buildServer() {
         { name: "Identity", description: "Manage identity specs and role overlays" },
         { name: "Audit", description: "Query audit ledger and verify chain integrity" },
       ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            description: "API key passed as Bearer token. Set API_KEYS env var to enable.",
+          },
+        },
+      },
+      security: [{ bearerAuth: [] }],
     },
   });
   await app.register(swaggerUi, {
@@ -117,6 +128,7 @@ export async function buildServer() {
   app.decorate("auditLedger", ledger);
 
   // Register middleware
+  await app.register(authMiddleware);
   await app.register(idempotencyMiddleware);
 
   // Health check
