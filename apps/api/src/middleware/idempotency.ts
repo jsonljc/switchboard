@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
 // In-memory store for dev; in production, use Redis
@@ -33,13 +32,3 @@ export const idempotencyMiddleware: FastifyPluginAsync = async (app) => {
     return payload;
   });
 };
-
-export function computeIdempotencyKey(
-  principalId: string,
-  actionType: string,
-  parameters: Record<string, unknown>,
-): string {
-  const windowBucket = Math.floor(Date.now() / WINDOW_MS);
-  const input = JSON.stringify({ principalId, actionType, parameters, windowBucket });
-  return createHash("sha256").update(input).digest("hex");
-}
