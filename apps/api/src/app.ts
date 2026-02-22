@@ -1,5 +1,7 @@
 import Fastify from "fastify";
+import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { actionsRoutes } from "./routes/actions.js";
 import { approvalsRoutes } from "./routes/approvals.js";
 import { policiesRoutes } from "./routes/policies.js";
@@ -58,7 +60,32 @@ export async function buildServer() {
     logger: true,
   });
 
-  await app.register(cors, { origin: true });
+  // CORS — restrict origins in production, allow all in development
+  const allowedOrigins = process.env["CORS_ORIGIN"];
+  await app.register(cors, {
+    origin: allowedOrigins ? allowedOrigins.split(",") : true,
+  });
+
+  // Rate limiting
+  await app.register(rateLimit, {
+    max: parseInt(process.env["RATE_LIMIT_MAX"] ?? "100", 10),
+    timeWindow: parseInt(process.env["RATE_LIMIT_WINDOW_MS"] ?? "60000", 10),
+  });
+
+  // Global error handler — consistent error format, no stack leaks in production
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
+    const statusCode = error.statusCode ?? 500;
+    const message = statusCode >= 500 ? "Internal server error" : error.message;
+
+    if (statusCode >= 500) {
+      app.log.error(error);
+    }
+
+    return reply.code(statusCode).send({
+      error: message,
+      statusCode,
+    });
+  });
 
   // Create storage and orchestrator
   const storage = createInMemoryStorage();
