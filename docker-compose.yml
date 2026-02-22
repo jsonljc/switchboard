@@ -1,0 +1,75 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  chat:
+    build:
+      context: .
+      target: chat
+    ports:
+      - "${CHAT_PORT:-3001}:3001"
+    environment:
+      - CHAT_PORT=3001
+      - NODE_ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=switchboard
+      - POSTGRES_PASSWORD=switchboard
+      - POSTGRES_DB=switchboard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U switchboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/var/lib/redis/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
