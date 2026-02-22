@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import type { IdentitySpec, RoleOverlay } from "@switchboard/schemas";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -29,7 +30,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
 
     const now = new Date();
     const spec: IdentitySpec = {
-      id: `spec_${Date.now()}`,
+      id: `spec_${randomUUID()}`,
       createdAt: now,
       updatedAt: now,
       ...parsed.data,
@@ -117,7 +118,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
 
     const now = new Date();
     const overlay: RoleOverlay = {
-      id: `overlay_${Date.now()}`,
+      id: `overlay_${randomUUID()}`,
       createdAt: now,
       updatedAt: now,
       ...parsed.data,

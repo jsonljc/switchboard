@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ConversationStatus } from "@switchboard/schemas";
 
 export interface ConversationStateData {
@@ -20,7 +21,7 @@ export function createConversation(
   principalId: string,
 ): ConversationStateData {
   return {
-    id: `conv_${Date.now()}`,
+    id: `conv_${randomUUID()}`,
     threadId,
     channel,
     principalId,

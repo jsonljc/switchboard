@@ -1,6 +1,5 @@
+import { randomUUID } from "node:crypto";
 import type { ActionProposal } from "@switchboard/schemas";
-
-let proposalCounter = 0;
 
 export class ActionBuilder {
   private actionType: string;
@@ -39,9 +38,8 @@ export class ActionBuilder {
   }
 
   build(): ActionProposal {
-    proposalCounter++;
     return {
-      id: `proposal_${Date.now()}_${proposalCounter}`,
+      id: `proposal_${randomUUID()}`,
       actionType: this.actionType,
       parameters: this.params,
       evidence: this.evidenceText,

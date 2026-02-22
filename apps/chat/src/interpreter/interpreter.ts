@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ActionProposal } from "@switchboard/schemas";
 import { ActionProposalSchema } from "@switchboard/schemas";
 import { z } from "zod";
@@ -98,7 +99,7 @@ export class RuleBasedInterpreter implements Interpreter {
       return {
         proposals: [
           {
-            id: `prop_${Date.now()}`,
+            id: `prop_${randomUUID()}`,
             actionType: "system.undo",
             parameters: {},
             evidence: "User requested undo",
@@ -132,7 +133,7 @@ export class RuleBasedInterpreter implements Interpreter {
         return {
           proposals: [
             {
-              id: `prop_${Date.now()}`,
+              id: `prop_${randomUUID()}`,
               actionType: pattern.actionType,
               parameters: params,
               evidence: `Matched pattern for ${pattern.actionType}`,

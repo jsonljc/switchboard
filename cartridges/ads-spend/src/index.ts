@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   CartridgeManifest,
   ConnectionHealth,
@@ -194,7 +195,7 @@ export class AdsSpendCartridge implements Cartridge {
 
     if (campaigns.length === 0) {
       return {
-        id: `resolve_${Date.now()}`,
+        id: `resolve_${randomUUID()}`,
         inputRef,
         resolvedType: entityType,
         resolvedId: "",
@@ -208,7 +209,7 @@ export class AdsSpendCartridge implements Cartridge {
     if (campaigns.length === 1) {
       const c = campaigns[0]!;
       return {
-        id: `resolve_${Date.now()}`,
+        id: `resolve_${randomUUID()}`,
         inputRef,
         resolvedType: entityType,
         resolvedId: c.id,

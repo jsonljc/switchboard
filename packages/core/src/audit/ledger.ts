@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AuditEntry,
   AuditEventType,
@@ -30,11 +31,8 @@ export interface AuditQueryFilter {
   limit?: number;
 }
 
-let idCounter = 0;
-
 function generateId(): string {
-  idCounter++;
-  return `audit_${Date.now()}_${idCounter}`;
+  return `audit_${randomUUID()}`;
 }
 
 export class AuditLedger {
