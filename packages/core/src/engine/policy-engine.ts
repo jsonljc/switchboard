@@ -7,11 +7,12 @@ import type {
   ActionProposal,
   GuardrailConfig,
   CompetenceAdjustment,
+  CompositeRiskContext,
 } from "@switchboard/schemas";
 import type { EvaluationContext } from "./rule-evaluator.js";
 import { evaluateRule } from "./rule-evaluator.js";
-import { computeRiskScore } from "./risk-scorer.js";
-import type { RiskScoringConfig } from "./risk-scorer.js";
+import { computeRiskScore, computeCompositeRiskAdjustment } from "./risk-scorer.js";
+import type { RiskScoringConfig, CompositeRiskConfig } from "./risk-scorer.js";
 import {
   createTraceBuilder,
   addCheck,
@@ -23,6 +24,7 @@ import type { SimulationResult } from "./simulator.js";
 
 export interface PolicyEngineConfig {
   riskScoringConfig?: RiskScoringConfig;
+  compositeRiskConfig?: CompositeRiskConfig;
 }
 
 export interface GuardrailState {
@@ -37,6 +39,7 @@ export interface PolicyEngineContext {
   resolvedIdentity: ResolvedIdentity;
   riskInput: RiskInput | null;
   competenceAdjustments?: CompetenceAdjustment[];
+  compositeContext?: CompositeRiskContext;
   now?: Date;
 }
 
@@ -296,9 +299,38 @@ export function evaluate(
   }, `Risk score: ${riskScoreResult.rawScore.toFixed(1)} (${effectiveRiskCategory}).`,
   true, "skip");
 
+  // Step 8b: Composite risk adjustment
+  let finalRiskCategory = effectiveRiskCategory;
+  if (engineContext.compositeContext) {
+    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
+      riskScoreResult,
+      engineContext.compositeContext,
+      config?.compositeRiskConfig,
+    );
+
+    const categoryChanged = adjustedScore.category !== riskScoreResult.category;
+
+    addCheck(builder, "COMPOSITE_RISK", {
+      originalScore: riskScoreResult.rawScore,
+      adjustedScore: adjustedScore.rawScore,
+      originalCategory: riskScoreResult.category,
+      adjustedCategory: adjustedScore.category,
+      compositeFactors,
+      context: engineContext.compositeContext,
+    }, categoryChanged
+      ? `Composite risk adjustment: score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)} (${riskScoreResult.category} → ${adjustedScore.category}).`
+      : `Composite risk check: no category change (score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)}).`,
+    categoryChanged, "skip");
+
+    if (categoryChanged) {
+      builder.computedRiskScore = adjustedScore;
+      finalRiskCategory = policyRiskOverride ?? adjustedScore.category;
+    }
+  }
+
   // Step 9: Determine approval requirement
   const approvalReq = policyApprovalOverride
-    ?? resolvedIdentity.effectiveRiskTolerance[effectiveRiskCategory];
+    ?? resolvedIdentity.effectiveRiskTolerance[finalRiskCategory];
   builder.approvalRequired = approvalReq;
 
   // If trusted, allow without approval regardless

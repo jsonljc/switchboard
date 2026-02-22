@@ -21,5 +21,6 @@ export const DelegationRuleSchema = z.object({
   grantee: z.string(),
   scope: z.string(),
   expiresAt: z.coerce.date().nullable(),
+  maxChainDepth: z.number().int().min(1).optional(),
 });
 export type DelegationRule = z.infer<typeof DelegationRuleSchema>;

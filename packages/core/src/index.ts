@@ -1,8 +1,8 @@
 // Engine
 export { evaluateRule } from "./engine/rule-evaluator.js";
 export type { EvaluationContext, ConditionResult, RuleResult } from "./engine/rule-evaluator.js";
-export { computeRiskScore, DEFAULT_RISK_CONFIG } from "./engine/risk-scorer.js";
-export type { RiskScoringConfig } from "./engine/risk-scorer.js";
+export { computeRiskScore, DEFAULT_RISK_CONFIG, computeCompositeRiskAdjustment, DEFAULT_COMPOSITE_RISK_CONFIG } from "./engine/risk-scorer.js";
+export type { RiskScoringConfig, CompositeRiskConfig } from "./engine/risk-scorer.js";
 export { createTraceBuilder, addCheck, buildTrace } from "./engine/decision-trace.js";
 export type { DecisionTraceBuilder } from "./engine/decision-trace.js";
 export { resolveEntities, buildClarificationQuestion, buildNotFoundExplanation } from "./engine/resolver.js";
@@ -32,8 +32,10 @@ export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./approval/router.js";
 export type { ApprovalRouting, ApprovalRoutingConfig } from "./approval/router.js";
 export { computeBindingHash, hashObject, validateBindingHash } from "./approval/binding.js";
 export { checkExpiry, getExpiryMs } from "./approval/expiry.js";
-export { canApprove } from "./approval/delegation.js";
+export { canApprove, canApproveWithChain } from "./approval/delegation.js";
 export { applyPatch, describePatch } from "./approval/patching.js";
+export { resolveDelegationChain, narrowScope } from "./approval/chain.js";
+export type { DelegationChainResult, ChainResolutionOptions } from "./approval/chain.js";
 
 // Storage
 export {

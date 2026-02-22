@@ -1200,4 +1200,143 @@ describe("LifecycleOrchestrator", () => {
       expect(competenceCheck).toBeUndefined();
     });
   });
+
+  describe("Delegation chain (end-to-end)", () => {
+    it("should allow approval via 2-hop delegation chain", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const routingConfig: ApprovalRoutingConfig = {
+        defaultApprovers: ["admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+      };
+
+      const chainOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig,
+      });
+
+      // Seed the principal chain: admin_1 → mid_1 → delegate_1
+      await storage.identity.savePrincipal({
+        id: "admin_1",
+        type: "user",
+        name: "Admin",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      await storage.identity.savePrincipal({
+        id: "mid_1",
+        type: "user",
+        name: "Mid-level",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      await storage.identity.savePrincipal({
+        id: "delegate_1",
+        type: "user",
+        name: "Delegate",
+        organizationId: null,
+        roles: ["approver"],
+      });
+
+      // Delegation chain: admin_1 → mid_1 → delegate_1
+      await storage.identity.saveDelegationRule({
+        id: "chain_d1",
+        grantor: "admin_1",
+        grantee: "mid_1",
+        scope: "*",
+        expiresAt: null,
+        maxChainDepth: 5,
+      });
+
+      await storage.identity.saveDelegationRule({
+        id: "chain_d2",
+        grantor: "mid_1",
+        grantee: "delegate_1",
+        scope: "*",
+        expiresAt: null,
+        maxChainDepth: 5,
+      });
+
+      const proposeResult = await chainOrchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Approve as delegate_1 (2 hops from admin_1)
+      const response = await chainOrchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "delegate_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+      expect(response.executionResult?.success).toBe(true);
+
+      // Verify delegation.chain_resolved audit entry was recorded
+      const entries = await ledger.query({ eventType: "delegation.chain_resolved" as any });
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      const chainEntry = entries[0];
+      expect(chainEntry?.snapshot["depth"]).toBe(2);
+      expect(chainEntry?.snapshot["chain"]).toEqual(["delegate_1", "mid_1", "admin_1"]);
+    });
+  });
+
+  describe("Composite risk (end-to-end)", () => {
+    it("agent with many recent actions gets higher risk score on next propose", async () => {
+      // Set risk to produce a score that lands in "medium" range
+      cartridge.onRiskInput(() => ({
+        baseRisk: "medium" as const,
+        exposure: { dollarsAtRisk: 100, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+      );
+
+      // Execute several actions to build up composite risk context
+      for (let i = 0; i < 5; i++) {
+        const result = await orchestrator.propose({
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: `camp_${i}`, entityId: `ent_${i}` },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+        });
+        await orchestrator.executeApproved(result.envelope.id);
+      }
+
+      // The next proposal should have composite context information
+      const nextResult = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_final", entityId: "ent_final" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // Composite risk check should be present in the trace
+      const compositeCheck = nextResult.decisionTrace.checks.find(
+        (c) => c.checkCode === "COMPOSITE_RISK",
+      );
+      expect(compositeCheck).toBeDefined();
+    });
+  });
 });

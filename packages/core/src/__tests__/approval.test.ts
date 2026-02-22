@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import {
   canApprove,
+  canApproveWithChain,
   routeApproval,
   DEFAULT_ROUTING_CONFIG,
   applyPatch,
@@ -133,6 +134,42 @@ describe("Approval Delegation", () => {
     });
     // "non-approver" is not in the approverIds list
     expect(canApprove(principal, ["admin-1"], [delegation])).toBe(false);
+  });
+
+  it("allows multi-hop delegation via chain resolution", () => {
+    const principal = makePrincipal({ id: "user-1", roles: ["requester"] });
+    const delegations: DelegationRule[] = [
+      makeDelegation({ id: "d1", grantor: "mid-1", grantee: "user-1", maxChainDepth: 5 }),
+      makeDelegation({ id: "d2", grantor: "admin-1", grantee: "mid-1", maxChainDepth: 5 }),
+    ];
+    expect(canApprove(principal, ["admin-1"], delegations)).toBe(true);
+  });
+
+  it("canApproveWithChain returns chain details", () => {
+    const principal = makePrincipal({ id: "user-1", roles: ["requester"] });
+    const delegations: DelegationRule[] = [
+      makeDelegation({ id: "d1", grantor: "mid-1", grantee: "user-1", maxChainDepth: 5 }),
+      makeDelegation({ id: "d2", grantor: "admin-1", grantee: "mid-1", maxChainDepth: 5 }),
+    ];
+    const result = canApproveWithChain(principal, ["admin-1"], delegations);
+    expect(result.authorized).toBe(true);
+    expect(result.chain).toEqual(["user-1", "mid-1", "admin-1"]);
+    expect(result.depth).toBe(2);
+  });
+
+  it("canApproveWithChain returns direct approver chain for approver", () => {
+    const principal = makePrincipal({ id: "admin-1", roles: ["approver"] });
+    const result = canApproveWithChain(principal, ["admin-1"], []);
+    expect(result.authorized).toBe(true);
+    expect(result.chain).toEqual(["admin-1"]);
+    expect(result.depth).toBe(0);
+  });
+
+  it("canApproveWithChain returns unauthorized for no path", () => {
+    const principal = makePrincipal({ id: "user-1", roles: ["requester"] });
+    const result = canApproveWithChain(principal, ["admin-1"], []);
+    expect(result.authorized).toBe(false);
+    expect(result.chain).toEqual([]);
   });
 });
 
