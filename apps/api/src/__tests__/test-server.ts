@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyError } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
@@ -35,6 +35,13 @@ export interface TestContext {
 
 export async function buildTestServer(): Promise<TestContext> {
   const app = Fastify({ logger: false });
+
+  // Global error handler (mirrors app.ts)
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
+    const statusCode = error.statusCode ?? 500;
+    const message = statusCode >= 500 ? "Internal server error" : error.message;
+    return reply.code(statusCode).send({ error: message, statusCode });
+  });
 
   const storage = createInMemoryStorage();
   const ledgerStorage = new InMemoryLedgerStorage();
