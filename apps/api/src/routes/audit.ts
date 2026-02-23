@@ -48,16 +48,37 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // GET /api/audit/verify - Verify hash chain integrity
+  // GET /api/audit/verify - Verify hash chain integrity (shallow: chain links only)
   app.get("/verify", {
     schema: {
       description: "Verify the integrity of the audit hash chain.",
       tags: ["Audit"],
+      querystring: {
+        type: "object",
+        properties: {
+          deep: { type: "string", enum: ["true", "false"] },
+        },
+      },
     },
-  }, async (_request, reply) => {
+  }, async (request, reply) => {
+    const query = request.query as { deep?: string };
     const allEntries = await app.auditLedger.query({});
+
+    if (query.deep === "true") {
+      const result = await app.auditLedger.deepVerify(allEntries);
+      return reply.code(200).send({
+        mode: "deep",
+        valid: result.valid,
+        entriesChecked: result.entriesChecked,
+        chainValid: result.chainValid,
+        chainBrokenAt: result.chainBrokenAt,
+        hashMismatches: result.hashMismatches,
+      });
+    }
+
     const result = await app.auditLedger.verifyChain(allEntries);
     return reply.code(200).send({
+      mode: "shallow",
       valid: result.valid,
       entriesChecked: allEntries.length,
       brokenAt: result.brokenAt,
@@ -73,10 +94,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    // Query with a filter to find by ID — the ledger doesn't expose getById directly
-    // but InMemoryLedgerStorage does. For now, query all and filter.
-    const entries = await app.auditLedger.query({});
-    const entry = entries.find((e) => e.id === id);
+    const entry = await app.auditLedger.getById(id);
     if (!entry) {
       return reply.code(404).send({ error: "Audit entry not found" });
     }

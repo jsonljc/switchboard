@@ -3,6 +3,7 @@ import type { IncomingMessage, Channel } from "@switchboard/schemas";
 export interface ChannelAdapter {
   readonly channel: Channel;
   parseIncomingMessage(rawPayload: unknown): IncomingMessage | null;
+  resolveOrganizationId?(principalId: string): Promise<string | null>;
   sendTextReply(threadId: string, text: string): Promise<void>;
   sendApprovalCard(threadId: string, card: ApprovalCardPayload): Promise<void>;
   sendResultCard(threadId: string, card: ResultCardPayload): Promise<void>;

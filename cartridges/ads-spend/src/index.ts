@@ -106,7 +106,25 @@ export class AdsSpendCartridge implements Cartridge {
 
       case "ads.budget.adjust": {
         const campaignId = parameters["campaignId"] as string;
-        const newBudget = parameters["newBudget"] as number;
+        let newBudget = parameters["newBudget"] as number | undefined;
+        if (newBudget === undefined) {
+          const budgetChange = parameters["budgetChange"] as number | undefined;
+          if (budgetChange !== undefined) {
+            const current = await provider.getCampaign(campaignId);
+            newBudget = current.dailyBudget / 100 + budgetChange;
+          }
+        }
+        if (newBudget === undefined || isNaN(newBudget)) {
+          return {
+            success: false,
+            summary: `Missing budget value for campaign ${campaignId}`,
+            externalRefs: { campaignId },
+            rollbackAvailable: false,
+            partialFailures: [{ step: "execute", error: "newBudget or budgetChange required" }],
+            durationMs: Date.now() - start,
+            undoRecipe: null,
+          };
+        }
         const result = await provider.updateBudget(campaignId, newBudget * 100);
         return {
           success: result.success,
@@ -223,7 +241,7 @@ export class AdsSpendCartridge implements Cartridge {
     // Multiple matches -> ambiguous
     const best = campaigns[0]!;
     return {
-      id: `resolve_${Date.now()}`,
+      id: `resolve_${randomUUID()}`,
       inputRef,
       resolvedType: entityType,
       resolvedId: best.id,

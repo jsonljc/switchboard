@@ -20,6 +20,7 @@
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/ads-spend": "workspace:*",
     "fastify": "^5.2.0",
+    "ioredis": "^5.4.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

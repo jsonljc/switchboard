@@ -49,21 +49,21 @@ export class RuleBasedInterpreter implements Interpreter {
   constructor() {
     this.patterns = [
       {
-        regex: /pause\s+(?:campaign\s+)?['""]?(.+?)['""]?\s*$/i,
+        regex: /pause\s+(?:campaign\s+)?['"]?(.+?)['"]?\s*$/i,
         actionType: "ads.campaign.pause",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
         }),
       },
       {
-        regex: /resume\s+(?:campaign\s+)?['""]?(.+?)['""]?\s*$/i,
+        regex: /resume\s+(?:campaign\s+)?['"']?(.+?)['"']?\s*$/i,
         actionType: "ads.campaign.resume",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
         }),
       },
       {
-        regex: /(?:set|change|adjust|update)\s+(?:the\s+)?budget\s+(?:for\s+)?['""]?(.+?)['""]?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex: /(?:set|change|adjust|update)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "ads.budget.adjust",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
@@ -71,7 +71,7 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:increase|raise)\s+(?:the\s+)?budget\s+(?:for\s+)?['""]?(.+?)['""]?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex: /(?:increase|raise)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "ads.budget.adjust",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
@@ -79,7 +79,7 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:decrease|lower|reduce)\s+(?:the\s+)?budget\s+(?:for\s+)?['""]?(.+?)['""]?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex: /(?:decrease|lower|reduce)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "ads.budget.adjust",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),

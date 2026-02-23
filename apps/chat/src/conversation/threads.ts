@@ -1,22 +1,29 @@
 import type { ConversationStateData } from "./state.js";
+import type { ConversationStore } from "./store.js";
+import { InMemoryConversationStore } from "./store.js";
 
-// In-memory thread tracker; in production, use database
-const threads = new Map<string, ConversationStateData>();
+let store: ConversationStore = new InMemoryConversationStore();
 
-export function getThread(threadId: string): ConversationStateData | undefined {
-  return threads.get(threadId);
+export function setConversationStore(s: ConversationStore): void {
+  store = s;
 }
 
-export function setThread(state: ConversationStateData): void {
-  threads.set(state.threadId, state);
+export function getConversationStore(): ConversationStore {
+  return store;
 }
 
-export function deleteThread(threadId: string): void {
-  threads.delete(threadId);
+export async function getThread(threadId: string): Promise<ConversationStateData | undefined> {
+  return store.get(threadId);
 }
 
-export function getActiveThreads(): ConversationStateData[] {
-  return Array.from(threads.values()).filter(
-    (t) => t.status !== "completed" && t.status !== "expired",
-  );
+export async function setThread(state: ConversationStateData): Promise<void> {
+  await store.save(state);
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  await store.delete(threadId);
+}
+
+export async function getActiveThreads(): Promise<ConversationStateData[]> {
+  return store.listActive();
 }

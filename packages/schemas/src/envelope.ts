@@ -52,5 +52,6 @@ export const ActionEnvelopeSchema = z.object({
 
   // Traceability
   parentEnvelopeId: z.string().nullable(),
+  traceId: z.string().nullable(),
 });
 export type ActionEnvelope = z.infer<typeof ActionEnvelopeSchema>;

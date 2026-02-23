@@ -81,6 +81,7 @@ export function transitionApproval(
       return {
         ...state,
         status: "expired",
+        respondedBy: null,
         respondedAt: new Date(),
       };
   }

@@ -26,6 +26,7 @@ function makeResolvedIdentity(overrides?: Partial<ResolvedIdentity>): ResolvedId
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -37,6 +38,7 @@ function makeResolvedIdentity(overrides?: Partial<ResolvedIdentity>): ResolvedId
     effectiveSpendLimits: { ...spec.globalSpendLimits },
     effectiveForbiddenBehaviors: [],
     effectiveTrustBehaviors: [],
+    delegatedApprovers: [],
     ...overrides,
   };
 }

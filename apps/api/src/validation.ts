@@ -3,6 +3,7 @@ import {
   PolicySchema,
   IdentitySpecSchema,
   RoleOverlaySchema,
+  ExecuteActionSchema,
 } from "@switchboard/schemas";
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -29,6 +30,19 @@ export const BatchProposeBodySchema = z.object({
   principalId: z.string().min(1),
   organizationId: z.string().optional(),
   cartridgeId: z.string().optional(),
+});
+
+// ── Execute (unified runtime endpoint) ────────────────────────────────
+
+export const ExecuteBodySchema = z.object({
+  actorId: z.string().min(1),
+  organizationId: z.string().optional().nullable(),
+  action: ExecuteActionSchema,
+  entityRefs: z
+    .array(z.object({ inputRef: z.string(), entityType: z.string() }))
+    .optional(),
+  message: z.string().optional(),
+  traceId: z.string().optional(),
 });
 
 // ── Approvals ────────────────────────────────────────────────────────

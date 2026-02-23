@@ -19,3 +19,4 @@ export * from "./decision-trace.js";
 export * from "./resolver.js";
 export * from "./undo.js";
 export * from "./competence.js";
+export * from "./governance-profile.js";

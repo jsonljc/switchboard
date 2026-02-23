@@ -33,6 +33,7 @@ export const IdentitySpecSchema = z.object({
   forbiddenBehaviors: z.array(z.string()),
   trustBehaviors: z.array(z.string()),
   governanceProfile: GovernanceProfileSchema.optional(),
+  delegatedApprovers: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

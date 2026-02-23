@@ -88,6 +88,7 @@ function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
+    delegatedApprovers: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -169,7 +170,6 @@ describe("ChatRuntime Integration", () => {
       interpreter: new RuleBasedInterpreter(),
       orchestrator,
       availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
-      apiBaseUrl: "http://localhost:3000",
     });
 
     // Clean up thread state
@@ -183,7 +183,7 @@ describe("ChatRuntime Integration", () => {
     // Should have sent an approval card
     expect(adapter.sentApprovalCards).toHaveLength(1);
     expect(adapter.sentApprovalCards[0]?.card.buttons.length).toBeGreaterThan(0);
-    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("ads.campaign.pause");
+    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("Pause campaign");
   });
 
   it("should execute after approval button tap", async () => {

@@ -13,6 +13,8 @@ export { formatSimulationResult } from "./engine/simulator.js";
 export type { SimulationInput, SimulationResult } from "./engine/simulator.js";
 export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine.js";
 export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState } from "./engine/policy-engine.js";
+export { InMemoryRiskPostureStore } from "./engine/risk-posture.js";
+export type { RiskPostureStore } from "./engine/risk-posture.js";
 
 // Identity
 export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js";
@@ -47,6 +49,7 @@ export {
   InMemoryApprovalStore,
   InMemoryCartridgeRegistry,
   InMemoryCompetenceStore,
+  matchActionTypePattern,
   createInMemoryStorage,
   seedDefaultStorage,
 } from "./storage/index.js";
@@ -77,6 +80,54 @@ export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
 // Competence
 export { CompetenceTracker, DEFAULT_COMPETENCE_THRESHOLDS } from "./competence/index.js";
 
+// Telemetry
+export { getTracer, setTracer, createOTelTracer, NoopTracer } from "./telemetry/index.js";
+export type { Tracer, Span } from "./telemetry/index.js";
+export { getMetrics, setMetrics, createInMemoryMetrics } from "./telemetry/index.js";
+export type { SwitchboardMetrics, Counter, Histogram } from "./telemetry/index.js";
+
+// Execution Guard
+export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
+
+// Notifications
+export { NoopNotifier, CompositeNotifier, buildApprovalNotification } from "./notifications/index.js";
+export type { ApprovalNotifier, ApprovalNotification } from "./notifications/index.js";
+
 // Guardrail State Store
 export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";
 export { InMemoryGuardrailStateStore } from "./guardrail-state/index.js";
+
+// Runtime Adapters (execute request/response for OpenClaw, MCP, etc.)
+export type {
+  RuntimeExecuteRequest,
+  RuntimeExecuteResponse,
+  ExecuteOutcome,
+  RuntimeAdapter,
+} from "./runtime-adapters/types.js";
+
+// Execution service (single propose + conditional execute facade)
+export { ExecutionService, NeedsClarificationError, NotFoundError } from "./execution-service.js";
+
+// OpenClaw adapter (tool payload ↔ RuntimeExecuteRequest/Response)
+export {
+  openclawPayloadToRequest,
+  responseToOpenclawTool,
+  openclawExecute,
+} from "./runtime-adapters/openclaw.js";
+export type { OpenClawToolPayload, OpenClawToolResponse } from "./runtime-adapters/openclaw.js";
+
+// HTTP adapter (call POST /api/execute from another process)
+export { HttpExecutionAdapter } from "./runtime-adapters/http-adapter.js";
+export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapter.js";
+
+// Governance profiles (per-org posture)
+export {
+  profileToPosture,
+  DEFAULT_GOVERNANCE_PROFILE,
+  InMemoryGovernanceProfileStore,
+} from "./governance/profile.js";
+export type { GovernanceProfileStore } from "./governance/profile.js";
+
+// Policy cache
+export { InMemoryPolicyCache, DEFAULT_POLICY_CACHE_TTL_MS } from "./policy-cache.js";
+export type { PolicyCache } from "./policy-cache.js";

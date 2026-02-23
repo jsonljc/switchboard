@@ -16,6 +16,7 @@ export interface ResolvedIdentity {
   effectiveForbiddenBehaviors: string[];
   effectiveTrustBehaviors: string[];
   governanceProfile?: GovernanceProfile;
+  delegatedApprovers: string[];
 }
 
 export function resolveIdentity(
@@ -110,10 +111,11 @@ export function resolveIdentity(
     effectiveForbiddenBehaviors,
     effectiveTrustBehaviors,
     governanceProfile,
+    delegatedApprovers: spec.delegatedApprovers ?? [],
   };
 }
 
-function matchesOverlayConditions(
+export function matchesOverlayConditions(
   overlay: RoleOverlay,
   context: { cartridgeId?: string; riskCategory?: string },
   now: Date,

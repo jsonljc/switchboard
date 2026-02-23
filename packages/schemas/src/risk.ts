@@ -44,3 +44,6 @@ export const CompositeRiskContextSchema = z.object({
   distinctCartridges: z.number().int().nonnegative(),
 });
 export type CompositeRiskContext = z.infer<typeof CompositeRiskContextSchema>;
+
+export const SystemRiskPostureSchema = z.enum(["normal", "elevated", "critical"]);
+export type SystemRiskPosture = z.infer<typeof SystemRiskPostureSchema>;

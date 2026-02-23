@@ -6,7 +6,7 @@ import type {
   VisibilityLevel,
   ActorType,
 } from "@switchboard/schemas";
-import { computeAuditHashSync, verifyChain as verifyChainIntegrity, ensureCanonicalize } from "./canonical-hash.js";
+import { computeAuditHash, computeAuditHashSync, verifyChain as verifyChainIntegrity, ensureCanonicalize } from "./canonical-hash.js";
 import type { AuditHashInput } from "./canonical-hash.js";
 import { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./redaction.js";
 import type { RedactionConfig } from "./redaction.js";
@@ -18,6 +18,12 @@ export interface LedgerStorage {
   getLatest(): Promise<AuditEntry | null>;
   getById(id: string): Promise<AuditEntry | null>;
   query(filter: AuditQueryFilter): Promise<AuditEntry[]>;
+  /**
+   * Optional: atomically get latest + append within a serialized lock.
+   * Prevents race conditions on previousEntryHash in multi-instance deployments.
+   * If not implemented, AuditLedger falls back to non-atomic getLatest() + append().
+   */
+  appendAtomic?(buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>): Promise<AuditEntry>;
 }
 
 export interface AuditQueryFilter {
@@ -57,13 +63,42 @@ export class AuditLedger {
     envelopeId?: string;
     organizationId?: string;
     visibilityLevel?: VisibilityLevel;
+    /** Optional correlation id; not part of chain hash. */
+    traceId?: string | null;
   }): Promise<AuditEntry> {
     // Ensure canonicalize is loaded before computing hashes
     await ensureCanonicalize();
 
+    // Use atomic append if available (prevents race on previousEntryHash)
+    if (this.storage.appendAtomic) {
+      return this.storage.appendAtomic((previousEntryHash) =>
+        this.buildEntry(params, previousEntryHash),
+      );
+    }
+
+    // Fallback: non-atomic path (safe for single-instance)
     const latest = await this.storage.getLatest();
     const previousEntryHash = latest?.entryHash ?? null;
+    const entry = await this.buildEntry(params, previousEntryHash);
+    await this.storage.append(entry);
+    return entry;
+  }
 
+  private async buildEntry(params: {
+    eventType: AuditEventType;
+    actorType: ActorType;
+    actorId: string;
+    entityType: string;
+    entityId: string;
+    riskCategory: RiskCategory;
+    summary: string;
+    snapshot: Record<string, unknown>;
+    evidence?: unknown[];
+    envelopeId?: string;
+    organizationId?: string;
+    visibilityLevel?: VisibilityLevel;
+    traceId?: string | null;
+  }, previousEntryHash: string | null): Promise<AuditEntry> {
     // Redact snapshot
     const redactionResult = this.redactionConfig
       ? redactSnapshot(params.snapshot, this.redactionConfig)
@@ -99,9 +134,9 @@ export class AuditLedger {
       previousEntryHash,
     };
 
-    const entryHash = computeAuditHashSync(hashInput);
+    const entryHash = await computeAuditHash(hashInput);
 
-    const entry: AuditEntry = {
+    return {
       id,
       eventType: params.eventType,
       timestamp,
@@ -122,14 +157,16 @@ export class AuditLedger {
       previousEntryHash,
       envelopeId: params.envelopeId ?? null,
       organizationId: params.organizationId ?? null,
+      traceId: params.traceId ?? null,
     };
-
-    await this.storage.append(entry);
-    return entry;
   }
 
   async query(filter: AuditQueryFilter): Promise<AuditEntry[]> {
     return this.storage.query(filter);
+  }
+
+  async getById(id: string): Promise<AuditEntry | null> {
+    return this.storage.getById(id);
   }
 
   async verifyChain(entries: AuditEntry[]): Promise<{
@@ -160,6 +197,73 @@ export class AuditLedger {
     }));
     await ensureCanonicalize();
     return verifyChainIntegrity(hashEntries);
+  }
+
+  async deepVerify(entries: AuditEntry[]): Promise<{
+    valid: boolean;
+    entriesChecked: number;
+    chainValid: boolean;
+    chainBrokenAt: number | null;
+    hashMismatches: Array<{ index: number; entryId: string; expected: string; actual: string }>;
+  }> {
+    const sorted = [...entries].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
+
+    const hashMismatches: Array<{ index: number; entryId: string; expected: string; actual: string }> = [];
+    let chainBrokenAt: number | null = null;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const entry = sorted[i]!;
+
+      // Recompute hash from entry fields
+      const hashInput: AuditHashInput = {
+        chainHashVersion: entry.chainHashVersion,
+        schemaVersion: entry.schemaVersion,
+        id: entry.id,
+        eventType: entry.eventType,
+        timestamp: entry.timestamp.toISOString(),
+        actorType: entry.actorType,
+        actorId: entry.actorId,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        riskCategory: entry.riskCategory,
+        snapshot: entry.snapshot,
+        evidencePointers: entry.evidencePointers.map((ep) => ({
+          type: ep.type,
+          hash: ep.hash,
+          storageRef: ep.storageRef,
+        })),
+        summary: entry.summary,
+        previousEntryHash: entry.previousEntryHash,
+      };
+
+      const recomputed = computeAuditHashSync(hashInput);
+      if (recomputed !== entry.entryHash) {
+        hashMismatches.push({
+          index: i,
+          entryId: entry.id,
+          expected: entry.entryHash,
+          actual: recomputed,
+        });
+      }
+
+      // Chain link check
+      if (i > 0 && chainBrokenAt === null) {
+        const previous = sorted[i - 1]!;
+        if (entry.previousEntryHash !== previous.entryHash) {
+          chainBrokenAt = i;
+        }
+      }
+    }
+
+    return {
+      valid: hashMismatches.length === 0 && chainBrokenAt === null,
+      entriesChecked: sorted.length,
+      chainValid: chainBrokenAt === null,
+      chainBrokenAt,
+      hashMismatches,
+    };
   }
 }
 

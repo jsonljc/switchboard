@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyError } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
+import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
@@ -14,8 +15,11 @@ import {
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
+  InMemoryPolicyCache,
+  InMemoryGovernanceProfileStore,
+  ExecutionService,
 } from "@switchboard/core";
-import type { StorageContext } from "@switchboard/core";
+import type { StorageContext, PolicyCache } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import { DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 
@@ -25,6 +29,8 @@ declare module "fastify" {
     orchestrator: LifecycleOrchestrator;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
+    policyCache: PolicyCache;
+    executionService: ExecutionService;
   }
 }
 
@@ -48,6 +54,8 @@ export async function buildTestServer(): Promise<TestContext> {
   const ledgerStorage = new InMemoryLedgerStorage();
   const ledger = new AuditLedger(ledgerStorage);
   const guardrailState = createGuardrailState();
+  const policyCache = new InMemoryPolicyCache();
+  const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
   // Create and configure TestCartridge
   const cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
@@ -104,17 +112,23 @@ export async function buildTestServer(): Promise<TestContext> {
     storage,
     ledger,
     guardrailState,
+    policyCache,
+    governanceProfileStore,
   });
 
+  const executionService = new ExecutionService(orchestrator);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);
+  app.decorate("policyCache", policyCache);
+  app.decorate("executionService", executionService);
 
   await app.register(idempotencyMiddleware);
 
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
   await app.register(actionsRoutes, { prefix: "/api/actions" });
+  await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });

@@ -19,6 +19,7 @@ export class PrismaIdentityStore implements IdentityStore {
         cartridgeSpendLimits: spec.cartridgeSpendLimits as object,
         forbiddenBehaviors: spec.forbiddenBehaviors,
         trustBehaviors: spec.trustBehaviors,
+        delegatedApprovers: spec.delegatedApprovers ?? [],
         createdAt: spec.createdAt,
         updatedAt: spec.updatedAt,
       },
@@ -32,6 +33,7 @@ export class PrismaIdentityStore implements IdentityStore {
         cartridgeSpendLimits: spec.cartridgeSpendLimits as object,
         forbiddenBehaviors: spec.forbiddenBehaviors,
         trustBehaviors: spec.trustBehaviors,
+        delegatedApprovers: spec.delegatedApprovers ?? [],
         updatedAt: spec.updatedAt,
       },
     });
@@ -56,6 +58,12 @@ export class PrismaIdentityStore implements IdentityStore {
       where: { identitySpecId: specId },
     });
     return rows.map(toRoleOverlay);
+  }
+
+  async getOverlayById(id: string): Promise<RoleOverlay | null> {
+    const row = await this.prisma.roleOverlay.findUnique({ where: { id } });
+    if (!row) return null;
+    return toRoleOverlay(row);
   }
 
   async saveOverlay(overlay: RoleOverlay): Promise<void> {
@@ -121,7 +129,7 @@ export class PrismaIdentityStore implements IdentityStore {
 
   async listDelegationRules(): Promise<DelegationRule[]> {
     const rows = await this.prisma.delegationRule.findMany();
-    return rows.map((row) => ({
+    return rows.map((row: { id: string; grantorId: string; granteeId: string; scope: string; expiresAt: Date | null }) => ({
       id: row.id,
       grantor: row.grantorId,
       grantee: row.granteeId,
@@ -161,6 +169,7 @@ function toIdentitySpec(row: {
   cartridgeSpendLimits: unknown;
   forbiddenBehaviors: string[];
   trustBehaviors: string[];
+  delegatedApprovers: string[];
   createdAt: Date;
   updatedAt: Date;
 }): IdentitySpec {
@@ -175,6 +184,7 @@ function toIdentitySpec(row: {
     cartridgeSpendLimits: row.cartridgeSpendLimits as IdentitySpec["cartridgeSpendLimits"],
     forbiddenBehaviors: row.forbiddenBehaviors,
     trustBehaviors: row.trustBehaviors,
+    delegatedApprovers: row.delegatedApprovers ?? [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -15,6 +15,7 @@ export const CheckCodeSchema = z.enum([
   "COMPETENCE_TRUST",
   "COMPOSITE_RISK",
   "DELEGATION_CHAIN",
+  "SYSTEM_POSTURE",
 ]);
 export type CheckCode = z.infer<typeof CheckCodeSchema>;
 

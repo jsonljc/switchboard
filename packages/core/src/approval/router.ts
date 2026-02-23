@@ -16,6 +16,12 @@ export interface ApprovalRoutingConfig {
   defaultExpiredBehavior: "deny" | "re_request";
   elevatedExpiryMs: number;
   mandatoryExpiryMs: number;
+  /**
+   * If true, approval requests with no approvers will be auto-denied
+   * rather than created with an empty approver list.
+   * Default: true (safe by default).
+   */
+  denyWhenNoApprovers: boolean;
 }
 
 export const DEFAULT_ROUTING_CONFIG: ApprovalRoutingConfig = {
@@ -25,6 +31,7 @@ export const DEFAULT_ROUTING_CONFIG: ApprovalRoutingConfig = {
   defaultExpiredBehavior: "deny",
   elevatedExpiryMs: 12 * 60 * 60 * 1000, // 12 hours
   mandatoryExpiryMs: 4 * 60 * 60 * 1000, // 4 hours
+  denyWhenNoApprovers: true,
 };
 
 export function routeApproval(
@@ -46,9 +53,36 @@ export function routeApproval(
       expiresInMs = config.defaultExpiryMs;
   }
 
+  // Resolve approvers: identity delegatedApprovers > config defaults
+  let approvers = config.defaultApprovers;
+  if (identity.delegatedApprovers && identity.delegatedApprovers.length > 0) {
+    approvers = identity.delegatedApprovers;
+  }
+
+  // Safety: if approval is required but no approvers are configured,
+  // either deny or use fallback approver
+  if (
+    approvalRequired !== "none" &&
+    approvers.length === 0 &&
+    !config.defaultFallbackApprover
+  ) {
+    if (config.denyWhenNoApprovers) {
+      // Override to "none" is wrong — we need to signal denial.
+      // Return mandatory with empty approvers; the orchestrator will
+      // check and deny if no approvers are available.
+      return {
+        approvalRequired: "mandatory",
+        approvers: [],
+        fallbackApprover: null,
+        expiresInMs,
+        expiredBehavior: "deny",
+      };
+    }
+  }
+
   return {
     approvalRequired,
-    approvers: config.defaultApprovers,
+    approvers,
     fallbackApprover: config.defaultFallbackApprover,
     expiresInMs,
     expiredBehavior: config.defaultExpiredBehavior,

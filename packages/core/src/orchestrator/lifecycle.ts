@@ -38,6 +38,21 @@ import {
 } from "../engine/resolver.js";
 import type { CompetenceTracker } from "../competence/tracker.js";
 import type { GuardrailStateStore } from "../guardrail-state/store.js";
+import type { RiskPostureStore } from "../engine/risk-posture.js";
+import type { GovernanceProfileStore } from "../governance/profile.js";
+import { profileToPosture } from "../governance/profile.js";
+import type { PolicyCache } from "../policy-cache.js";
+import { DEFAULT_POLICY_CACHE_TTL_MS } from "../policy-cache.js";
+import type { ApprovalNotifier } from "../notifications/notifier.js";
+import { buildApprovalNotification } from "../notifications/notifier.js";
+import { buildActionSummary } from "./summary-builder.js";
+import { beginExecution, endExecution } from "../execution-guard.js";
+import { getTracer } from "../telemetry/tracing.js";
+import { getMetrics } from "../telemetry/metrics.js";
+
+export type ExecutionMode = "inline" | "queue";
+
+export type EnqueueCallback = (envelopeId: string) => Promise<void>;
 
 export interface OrchestratorConfig {
   storage: StorageContext;
@@ -47,6 +62,14 @@ export interface OrchestratorConfig {
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker?: CompetenceTracker;
+  riskPostureStore?: RiskPostureStore;
+  /** When set, per-org governance profile overrides system risk posture for propose. */
+  governanceProfileStore?: GovernanceProfileStore;
+  /** Optional policy cache (keyed by cartridgeId + org); invalidate on policy CRUD. */
+  policyCache?: PolicyCache;
+  executionMode?: ExecutionMode;
+  onEnqueue?: EnqueueCallback;
+  approvalNotifier?: ApprovalNotifier;
 }
 
 export interface ProposeResult {
@@ -79,6 +102,12 @@ export class LifecycleOrchestrator {
   private routingConfig: ApprovalRoutingConfig;
   private riskScoringConfig?: RiskScoringConfig;
   private competenceTracker: CompetenceTracker | null;
+  private riskPostureStore: RiskPostureStore | null;
+  private governanceProfileStore: GovernanceProfileStore | null;
+  private policyCache: PolicyCache | null;
+  private executionMode: ExecutionMode;
+  private onEnqueue: EnqueueCallback | null;
+  private approvalNotifier: ApprovalNotifier | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -88,6 +117,12 @@ export class LifecycleOrchestrator {
     this.routingConfig = config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
     this.riskScoringConfig = config.riskScoringConfig;
     this.competenceTracker = config.competenceTracker ?? null;
+    this.riskPostureStore = config.riskPostureStore ?? null;
+    this.governanceProfileStore = config.governanceProfileStore ?? null;
+    this.policyCache = config.policyCache ?? null;
+    this.executionMode = config.executionMode ?? "inline";
+    this.onEnqueue = config.onEnqueue ?? null;
+    this.approvalNotifier = config.approvalNotifier ?? null;
   }
 
   async propose(params: {
@@ -98,7 +133,34 @@ export class LifecycleOrchestrator {
     cartridgeId: string;
     message?: string;
     parentEnvelopeId?: string | null;
+    traceId?: string;
   }): Promise<ProposeResult> {
+    const span = getTracer().startSpan("orchestrator.propose", {
+      "action.type": params.actionType,
+      "principal.id": params.principalId,
+      "cartridge.id": params.cartridgeId,
+    });
+    const proposeStart = Date.now();
+    try {
+    return await this._proposeInner(params, span, proposeStart);
+    } catch (err) {
+      span.setStatus("ERROR", err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      span.end();
+    }
+  }
+
+  private async _proposeInner(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId?: string | null;
+    cartridgeId: string;
+    message?: string;
+    parentEnvelopeId?: string | null;
+    traceId?: string;
+  }, span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>, proposeStart: number): Promise<ProposeResult> {
     // 1. Look up IdentitySpec + overlays
     const identitySpec = await this.storage.identity.getSpecByPrincipalId(params.principalId);
     if (!identitySpec) {
@@ -141,14 +203,36 @@ export class LifecycleOrchestrator {
     // 5b. Hydrate guardrail state from store
     await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
 
-    // 6. Load policies
-    const policies = await this.storage.policies.listActive({
-      cartridgeId: params.cartridgeId,
-    });
+    // 6. Load policies (with optional cache)
+    let policies: import("@switchboard/schemas").Policy[];
+    if (this.policyCache) {
+      const cached = await this.policyCache.get(
+        params.cartridgeId,
+        params.organizationId ?? null,
+      );
+      if (cached !== null) {
+        policies = cached;
+      } else {
+        policies = await this.storage.policies.listActive({
+          cartridgeId: params.cartridgeId,
+        });
+        await this.policyCache.set(
+          params.cartridgeId,
+          params.organizationId ?? null,
+          policies,
+          DEFAULT_POLICY_CACHE_TTL_MS,
+        );
+      }
+    } else {
+      policies = await this.storage.policies.listActive({
+        cartridgeId: params.cartridgeId,
+      });
+    }
 
     // Create proposal object
     const proposalId = `prop_${randomUUID()}`;
     const envelopeId = generateEnvelopeId();
+    const traceId = params.traceId ?? `trace_${randomUUID()}`;
     const proposal: ActionProposal = {
       id: proposalId,
       actionType: params.actionType,
@@ -169,7 +253,15 @@ export class LifecycleOrchestrator {
       metadata: { envelopeId },
     };
 
-    // 8. Build policy engine context
+    // 8. Build policy engine context (per-org governance profile overrides global posture when set)
+    let systemRiskPosture: import("@switchboard/schemas").SystemRiskPosture | undefined;
+    if (this.governanceProfileStore) {
+      const profile = await this.governanceProfileStore.get(params.organizationId ?? null);
+      systemRiskPosture = profileToPosture(profile);
+    } else if (this.riskPostureStore) {
+      systemRiskPosture = await this.riskPostureStore.get();
+    }
+
     const engineContext: PolicyEngineContext = {
       policies,
       guardrails,
@@ -178,6 +270,7 @@ export class LifecycleOrchestrator {
       riskInput,
       competenceAdjustments,
       compositeContext: await this.buildCompositeContext(params.principalId),
+      systemRiskPosture,
     };
 
     // 9. Evaluate
@@ -207,6 +300,7 @@ export class LifecycleOrchestrator {
       createdAt: now,
       updatedAt: now,
       parentEnvelopeId: params.parentEnvelopeId ?? null,
+      traceId,
     };
 
     // 10. Handle decision outcome
@@ -243,7 +337,7 @@ export class LifecycleOrchestrator {
         actionId: proposal.id,
         envelopeId: envelope.id,
         conversationId: null,
-        summary: `${params.actionType}: ${JSON.stringify(params.parameters)}`,
+        summary: buildActionSummary(params.actionType, params.parameters, params.principalId),
         riskCategory: decisionTrace.computedRiskScore.category,
         bindingHash,
         evidenceBundle: {
@@ -275,6 +369,14 @@ export class LifecycleOrchestrator {
         state: approvalState,
         envelopeId: envelope.id,
       });
+
+      // Push notification to approvers
+      if (this.approvalNotifier) {
+        const notification = buildApprovalNotification(approvalRequest, decisionTrace);
+        this.approvalNotifier.notify(notification).catch((err) => {
+          console.error("Failed to send approval notification:", err);
+        });
+      }
     } else {
       // Auto-allowed
       envelope.status = "approved";
@@ -283,7 +385,7 @@ export class LifecycleOrchestrator {
     // 11. Save envelope
     await this.storage.envelopes.save(envelope);
 
-    // 12. Record audit entry
+    // 12. Record audit entry (with evidence)
     const auditEntry = await this.ledger.record({
       eventType: envelope.status === "denied" ? "action.denied" : "action.proposed",
       actorType: "user",
@@ -302,15 +404,37 @@ export class LifecycleOrchestrator {
         matchedChecks: decisionTrace.checks
           .filter((c) => c.matched)
           .map((c) => ({ code: c.checkCode, effect: c.effect })),
+        interpreterName: proposal.interpreterName ?? null,
       },
+      evidence: [
+        { type: "decision_trace", data: decisionTrace },
+        { type: "evaluation_context", data: evalContext },
+      ],
       envelopeId: envelope.id,
       organizationId: params.organizationId ?? undefined,
+      traceId: traceId,
     });
 
     envelope.auditEntryIds = [auditEntry.id];
     await this.storage.envelopes.update(envelope.id, {
       auditEntryIds: envelope.auditEntryIds,
     });
+
+    // Record metrics
+    const metrics = getMetrics();
+    const proposeDuration = Date.now() - proposeStart;
+    metrics.proposalsTotal.inc({ actionType: params.actionType });
+    metrics.proposalLatencyMs.observe({ actionType: params.actionType }, proposeDuration);
+    if (decisionTrace.finalDecision === "deny") {
+      metrics.proposalsDenied.inc({ actionType: params.actionType });
+    }
+    if (approvalRequest) {
+      metrics.approvalsCreated.inc({ actionType: params.actionType });
+    }
+    span.setAttribute("envelope.id", envelope.id);
+    span.setAttribute("decision", decisionTrace.finalDecision);
+    span.setAttribute("duration.ms", proposeDuration);
+    span.setStatus("OK");
 
     return {
       envelope,
@@ -431,10 +555,15 @@ export class LifecycleOrchestrator {
         summary: `Action approved by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
 
-      // Auto-execute after approval
-      executionResult = await this.executeApproved(envelope.id);
+      // Execute after approval: inline or enqueue
+      if (this.executionMode === "queue" && this.onEnqueue) {
+        await this.onEnqueue(envelope.id);
+      } else {
+        executionResult = await this.executeApproved(envelope.id);
+      }
     } else if (params.action === "reject") {
       envelope.status = "denied";
       await this.storage.envelopes.update(envelope.id, { status: "denied" });
@@ -449,6 +578,7 @@ export class LifecycleOrchestrator {
         summary: `Action rejected by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
     } else if (params.action === "patch") {
       // Apply patch to parameters and re-evaluate
@@ -534,9 +664,14 @@ export class LifecycleOrchestrator {
         summary: `Action patched and approved by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId, patchValue: params.patchValue },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
 
-      executionResult = await this.executeApproved(envelope.id);
+      if (this.executionMode === "queue" && this.onEnqueue) {
+        await this.onEnqueue(envelope.id);
+      } else {
+        executionResult = await this.executeApproved(envelope.id);
+      }
     }
 
     // Re-fetch envelope to get latest state
@@ -550,6 +685,11 @@ export class LifecycleOrchestrator {
   }
 
   async executeApproved(envelopeId: string): Promise<ExecuteResult> {
+    const execSpan = getTracer().startSpan("orchestrator.executeApproved", {
+      "envelope.id": envelopeId,
+    });
+    const execStart = Date.now();
+
     // 1. Load envelope, verify status
     const envelope = await this.storage.envelopes.getById(envelopeId);
     if (!envelope) {
@@ -608,6 +748,7 @@ export class LifecycleOrchestrator {
     });
 
     let executeResult: ExecuteResult;
+    const execToken = beginExecution();
     try {
       // Pass envelope/action IDs to the cartridge for undo recipe building
       const execParams = {
@@ -620,7 +761,7 @@ export class LifecycleOrchestrator {
         proposal.actionType,
         execParams,
         {
-          principalId: envelope.proposals[0]?.parameters["principalId"] as string ?? "",
+          principalId: envelope.proposals[0]?.parameters["_principalId"] as string ?? "",
           organizationId: null,
           connectionCredentials: {},
         },
@@ -635,6 +776,8 @@ export class LifecycleOrchestrator {
         durationMs: 0,
         undoRecipe: null,
       };
+    } finally {
+      endExecution(execToken);
     }
 
     // 4. Update envelope
@@ -676,7 +819,7 @@ export class LifecycleOrchestrator {
       }
     }
 
-    // 6. Record audit entry
+    // 6. Record audit entry (with evidence)
     await this.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
       actorType: "system",
@@ -690,8 +833,28 @@ export class LifecycleOrchestrator {
         externalRefs: executeResult.externalRefs,
         durationMs: executeResult.durationMs,
       },
+      evidence: [
+        { type: "execution_result", data: executeResult },
+        ...(decision ? [{ type: "decision_trace", data: decision }] : []),
+      ],
       envelopeId: envelope.id,
+      traceId: envelope.traceId,
     });
+
+    // Record execution metrics
+    const execMetrics = getMetrics();
+    const execDuration = Date.now() - execStart;
+    execMetrics.executionsTotal.inc({ actionType: proposal.actionType });
+    execMetrics.executionLatencyMs.observe({ actionType: proposal.actionType }, execDuration);
+    if (executeResult.success) {
+      execMetrics.executionsSuccess.inc({ actionType: proposal.actionType });
+    } else {
+      execMetrics.executionsFailed.inc({ actionType: proposal.actionType });
+    }
+    execSpan.setAttribute("success", executeResult.success);
+    execSpan.setAttribute("duration.ms", execDuration);
+    execSpan.setStatus(executeResult.success ? "OK" : "ERROR", executeResult.summary);
+    execSpan.end();
 
     return executeResult;
   }
@@ -715,6 +878,26 @@ export class LifecycleOrchestrator {
 
     // 2. Check undo hasn't expired
     if (new Date() > undoRecipe.undoExpiresAt) {
+      const principalId =
+        (envelope.proposals[0]?.parameters["_principalId"] as string) ?? "system";
+
+      await this.ledger.record({
+        eventType: "action.expired",
+        actorType: "user",
+        actorId: principalId,
+        entityType: "action",
+        entityId: envelope.proposals[0]?.id ?? envelopeId,
+        riskCategory: envelope.decisions[0]?.computedRiskScore.category ?? "low",
+        summary: `Undo denied: window expired for envelope ${envelopeId}`,
+        snapshot: {
+          envelopeId,
+          undoExpiresAt: undoRecipe.undoExpiresAt.toISOString(),
+          attemptedAt: new Date().toISOString(),
+        },
+        envelopeId,
+        traceId: envelope.traceId,
+      });
+
       throw new Error("Undo window has expired");
     }
 
@@ -807,9 +990,29 @@ export class LifecycleOrchestrator {
     // Hydrate guardrail state from store (read-only for simulation)
     await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
 
-    const policies = await this.storage.policies.listActive({
-      cartridgeId: params.cartridgeId,
-    });
+    let policiesSim: import("@switchboard/schemas").Policy[];
+    if (this.policyCache) {
+      const cached = await this.policyCache.get(params.cartridgeId, null);
+      if (cached !== null) {
+        policiesSim = cached;
+      } else {
+        policiesSim = await this.storage.policies.listActive({
+          cartridgeId: params.cartridgeId,
+        });
+        await this.policyCache.set(
+          params.cartridgeId,
+          null,
+          policiesSim,
+          DEFAULT_POLICY_CACHE_TTL_MS,
+        );
+      }
+    } else {
+      policiesSim = await this.storage.policies.listActive({
+        cartridgeId: params.cartridgeId,
+      });
+    }
+
+    const policies = policiesSim;
 
     const proposal: ActionProposal = {
       id: `sim_${randomUUID()}`,
@@ -855,6 +1058,7 @@ export class LifecycleOrchestrator {
     entityRefs: Array<{ inputRef: string; entityType: string }>;
     message?: string;
     organizationId?: string | null;
+    traceId?: string;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

@@ -73,6 +73,7 @@ describe("Actions API", () => {
         cartridgeSpendLimits: {},
         forbiddenBehaviors: ["ads.campaign.pause"],
         trustBehaviors: [],
+        delegatedApprovers: [],
         createdAt: new Date(),
         updatedAt: new Date(),
       });

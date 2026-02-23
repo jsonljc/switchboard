@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { createChatRuntime } from "./runtime.js";
-import { checkIngressRateLimit } from "./adapters/security.js";
+import { checkIngressRateLimit, checkNonce } from "./adapters/security.js";
 
 async function main() {
   const app = Fastify({ logger: true });
@@ -46,6 +46,16 @@ async function main() {
     if (!checkIngressRateLimit(sourceIp, rateLimitConfig)) {
       app.log.warn({ ip: sourceIp }, "Webhook rate limit exceeded");
       return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
+    }
+
+    // Nonce dedup — prevent duplicate processing on Telegram webhook retries
+    const payload = request.body as Record<string, unknown>;
+    const msg = payload["message"] as Record<string, unknown> | undefined;
+    const cb = payload["callback_query"] as Record<string, unknown> | undefined;
+    const nonceId = msg ? String(msg["message_id"]) : cb ? String(cb["id"]) : null;
+    if (nonceId && !checkNonce(nonceId, rateLimitConfig.windowMs)) {
+      app.log.warn({ nonceId }, "Duplicate webhook message, skipping");
+      return reply.code(200).send({ ok: true });
     }
 
     try {

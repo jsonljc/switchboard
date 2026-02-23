@@ -12,7 +12,7 @@ import {
   createApprovalState,
 } from "../index.js";
 
-import type { ResolvedIdentity } from "../index.js";
+import type { ResolvedIdentity, ApprovalRoutingConfig } from "../index.js";
 import type { Principal, DelegationRule } from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
@@ -60,6 +60,7 @@ function makeResolvedIdentity(overrides: Partial<ResolvedIdentity> = {}): Resolv
       cartridgeSpendLimits: {},
       forbiddenBehaviors: [],
       trustBehaviors: [],
+      delegatedApprovers: [],
       createdAt: new Date("2025-01-01"),
       updatedAt: new Date("2025-01-01"),
     },
@@ -74,6 +75,7 @@ function makeResolvedIdentity(overrides: Partial<ResolvedIdentity> = {}): Resolv
     effectiveSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
     effectiveForbiddenBehaviors: [],
     effectiveTrustBehaviors: [],
+    delegatedApprovers: [],
     ...overrides,
   };
 }
@@ -179,27 +181,31 @@ describe("Approval Delegation", () => {
 
 describe("Approval Router", () => {
   const identity = makeResolvedIdentity();
+  const configWithApprovers: ApprovalRoutingConfig = {
+    ...DEFAULT_ROUTING_CONFIG,
+    defaultApprovers: ["admin_1"],
+  };
 
   it("mandatory approval gets mandatoryExpiryMs timeout", () => {
-    const result = routeApproval("critical", identity);
+    const result = routeApproval("critical", identity, configWithApprovers);
     expect(result.approvalRequired).toBe("mandatory");
     expect(result.expiresInMs).toBe(DEFAULT_ROUTING_CONFIG.mandatoryExpiryMs);
   });
 
   it("elevated approval gets elevatedExpiryMs timeout", () => {
-    const result = routeApproval("high", identity);
+    const result = routeApproval("high", identity, configWithApprovers);
     expect(result.approvalRequired).toBe("elevated");
     expect(result.expiresInMs).toBe(DEFAULT_ROUTING_CONFIG.elevatedExpiryMs);
   });
 
   it("standard approval gets defaultExpiryMs timeout", () => {
-    const result = routeApproval("medium", identity);
+    const result = routeApproval("medium", identity, configWithApprovers);
     expect(result.approvalRequired).toBe("standard");
     expect(result.expiresInMs).toBe(DEFAULT_ROUTING_CONFIG.defaultExpiryMs);
   });
 
   it("none approval gets defaultExpiryMs timeout", () => {
-    const result = routeApproval("low", identity);
+    const result = routeApproval("low", identity, configWithApprovers);
     expect(result.approvalRequired).toBe("none");
     expect(result.expiresInMs).toBe(DEFAULT_ROUTING_CONFIG.defaultExpiryMs);
   });
@@ -207,6 +213,7 @@ describe("Approval Router", () => {
   it("custom config overrides default timeouts", () => {
     const config = {
       ...DEFAULT_ROUTING_CONFIG,
+      defaultApprovers: ["admin_1"],
       mandatoryExpiryMs: 1000,
       elevatedExpiryMs: 2000,
       defaultExpiryMs: 3000,

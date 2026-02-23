@@ -7,7 +7,15 @@
       "Bash(npm install:*)",
       "Bash(npx corepack enable)",
       "Bash(corepack prepare:*)",
-      "Bash(npx pnpm:*)"
+      "Bash(npx pnpm:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create --base main --title \"Add governance spine hardening\" --body \"$\\(cat <<''EOF''\n## Summary\n\n- **Default audit redaction**: `AuditLedger` now applies `DEFAULT_REDACTION_CONFIG` by default, preventing PII from leaking into audit storage\n- **Production auth guard**: Logs an error when `API_KEYS` is empty in production, making the security gap visible\n- **Audit before execution**: Records `action.executing` entry before cartridge call, ensuring audit trail even if execution crashes\n- **Missing audit events**: Adds `action.expired` and `action.undo_requested` entries for approval expiry and undo paths\n- **Enriched audit snapshots**: `propose\\(\\)` audit entries now include `riskScore`, `riskCategory`, and `matchedChecks`\n- **Patch re-evaluation**: Re-runs the policy engine after parameter patching to prevent policy bypass via patched parameters\n- **Hash chain integrity**: Uses `json-canonicalize` \\(RFC 8785\\) in the sync hash path; `verifyChain\\(\\)` now recomputes hashes to detect data tampering\n- **Governance profiles**: Adds `observe`/`guarded`/`strict`/`locked` named profiles with preset risk tolerances and spend limits; observe mode auto-approves while preserving full decision trace; locked mode requires mandatory approval for all risk levels\n\n## Test plan\n\n- [x] All 474 existing + new tests pass \\(`npx vitest run`\\)\n- [x] `packages/schemas` compiles cleanly\n- [x] `packages/core` compiles cleanly\n- [x] `apps/api` compiles cleanly\n- [x] Existing `DelegationRule` without `maxChainDepth` still works \\(backward compat\\)\n- [x] Existing `IdentitySpec` without `governanceProfile` still works \\(backward compat\\)\nEOF\n\\)\")",
+      "Bash(gh pr merge:*)",
+      "Bash(git branch:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

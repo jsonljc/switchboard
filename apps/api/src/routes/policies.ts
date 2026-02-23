@@ -45,6 +45,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     };
 
     await app.storageContext.policies.save(policy);
+    await app.policyCache.invalidate(policy.cartridgeId ?? undefined);
     return reply.code(201).send({ policy });
   });
 
@@ -89,6 +90,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       ...parsed.data,
       updatedAt: new Date(),
     });
+    await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
     const updated = await app.storageContext.policies.getById(id);
     return reply.code(200).send({ policy: updated });
   });
@@ -102,10 +104,12 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const existing = await app.storageContext.policies.getById(id);
     const deleted = await app.storageContext.policies.delete(id);
     if (!deleted) {
       return reply.code(404).send({ error: "Policy not found" });
     }
+    if (existing) await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
     return reply.code(200).send({ id, deleted: true });
   });
 };
