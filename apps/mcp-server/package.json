@@ -1,0 +1,27 @@
+{
+  "name": "@switchboard/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@switchboard/ads-spend": "workspace:*",
+    "@switchboard/cartridge-sdk": "workspace:*",
+    "@switchboard/core": "workspace:*",
+    "@switchboard/schemas": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

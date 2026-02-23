@@ -116,6 +116,18 @@ export {
 } from "./runtime-adapters/openclaw.js";
 export type { OpenClawToolPayload, OpenClawToolResponse } from "./runtime-adapters/openclaw.js";
 
+// MCP adapter (tool payload ↔ RuntimeExecuteRequest/Response)
+export {
+  mcpToolCallToExecuteRequest,
+  executeResponseToMcpResult,
+  mcpExecute,
+} from "./runtime-adapters/mcp.js";
+export type { McpToolCallPayload, McpToolResponse } from "./runtime-adapters/mcp.js";
+
+// CartridgeReadAdapter (governed read path for cartridge provider methods)
+export { CartridgeReadAdapter } from "./read-adapter.js";
+export type { ReadOperation, ReadResult } from "./read-adapter.js";
+
 // HTTP adapter (call POST /api/execute from another process)
 export { HttpExecutionAdapter } from "./runtime-adapters/http-adapter.js";
 export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapter.js";
