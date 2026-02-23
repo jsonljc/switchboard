@@ -12,7 +12,7 @@ export type { PlanEvaluationResult } from "./engine/composites.js";
 export { formatSimulationResult } from "./engine/simulator.js";
 export type { SimulationInput, SimulationResult } from "./engine/simulator.js";
 export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine.js";
-export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState } from "./engine/policy-engine.js";
+export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState, SpendLookup } from "./engine/policy-engine.js";
 export { InMemoryRiskPostureStore } from "./engine/risk-posture.js";
 export type { RiskPostureStore } from "./engine/risk-posture.js";
 

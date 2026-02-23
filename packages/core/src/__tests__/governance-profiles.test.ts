@@ -167,6 +167,15 @@ describe("Governance Profiles", () => {
         storage,
         ledger,
         guardrailState,
+        routingConfig: {
+          defaultApprovers: ["admin_1"],
+          defaultFallbackApprover: null,
+          defaultExpiryMs: 24 * 60 * 60 * 1000,
+          defaultExpiredBehavior: "deny",
+          elevatedExpiryMs: 12 * 60 * 60 * 1000,
+          mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+          denyWhenNoApprovers: true,
+        },
       });
     });
 

@@ -75,10 +75,28 @@ describe("LifecycleOrchestrator", () => {
     // Seed identity
     await storage.identity.saveSpec(makeIdentitySpec());
 
+    // Seed admin principal for approval authorization
+    await storage.identity.savePrincipal({
+      id: "admin_1",
+      type: "user",
+      name: "Admin",
+      organizationId: null,
+      roles: ["approver"],
+    });
+
     orchestrator = new LifecycleOrchestrator({
       storage,
       ledger,
       guardrailState,
+      routingConfig: {
+        defaultApprovers: ["admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
+      },
     });
   });
 
@@ -1142,7 +1160,7 @@ describe("LifecycleOrchestrator", () => {
       expect(response.executionResult?.success).toBe(true);
     });
 
-    it("should skip authorization when no approvers configured", async () => {
+    it("should deny when no approvers configured (denyWhenNoApprovers)", async () => {
       cartridge.onRiskInput(() => ({
         baseRisk: "high" as const,
         exposure: { dollarsAtRisk: 500, blastRadius: 1 },
@@ -1150,26 +1168,34 @@ describe("LifecycleOrchestrator", () => {
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       }));
 
-      // Use default routing config (empty approvers)
-      const proposeResult = await orchestrator.propose({
+      // Create orchestrator with empty approvers and denyWhenNoApprovers: true
+      const noApproverOrchestrator = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig: {
+          defaultApprovers: [],
+          defaultFallbackApprover: null,
+          defaultExpiryMs: 24 * 60 * 60 * 1000,
+          defaultExpiredBehavior: "deny",
+          elevatedExpiryMs: 12 * 60 * 60 * 1000,
+          mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+          denyWhenNoApprovers: true,
+        },
+      });
+
+      const proposeResult = await noApproverOrchestrator.propose({
         actionType: "ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
         cartridgeId: "ads-spend",
       });
 
-      expect(proposeResult.approvalRequest).not.toBeNull();
-
-      // Approve as anyone — no principal seeded, but should succeed
-      const response = await orchestrator.respondToApproval({
-        approvalId: proposeResult.approvalRequest!.id,
-        action: "approve",
-        respondedBy: "anyone",
-        bindingHash: proposeResult.approvalRequest!.bindingHash,
-      });
-
-      expect(response.approvalState.status).toBe("approved");
-      expect(response.executionResult?.success).toBe(true);
+      // Should be denied because no approvers are configured
+      expect(proposeResult.denied).toBe(true);
+      expect(proposeResult.envelope.status).toBe("denied");
+      expect(proposeResult.approvalRequest).toBeNull();
+      expect(proposeResult.explanation).toContain("no approvers");
     });
   });
 
@@ -1428,6 +1454,74 @@ describe("LifecycleOrchestrator", () => {
         (c) => c.checkCode === "COMPOSITE_RISK",
       );
       expect(compositeCheck).toBeDefined();
+    });
+  });
+
+  describe("Time-windowed spend limits (end-to-end)", () => {
+    it("should deny when daily spend limit is exceeded across multiple actions", async () => {
+      // Set daily limit of $3000, perAction $2000
+      await storage.identity.saveSpec(
+        makeIdentitySpec({
+          trustBehaviors: ["ads.budget.adjust"],
+          globalSpendLimits: { daily: 3000, weekly: null, monthly: null, perAction: 2000 },
+        }),
+      );
+
+      // Execute two $1500 actions (total $3000 — at the limit)
+      for (let i = 0; i < 2; i++) {
+        const result = await orchestrator.propose({
+          actionType: "ads.budget.adjust",
+          parameters: { campaignId: `camp_${i}`, amount: 1500 },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+        });
+        expect(result.denied).toBe(false);
+        await orchestrator.executeApproved(result.envelope.id);
+      }
+
+      // Third action of $500 should be denied ($3000 + $500 = $3500 > $3000 daily)
+      const denied = await orchestrator.propose({
+        actionType: "ads.budget.adjust",
+        parameters: { campaignId: "camp_final", amount: 500 },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(denied.denied).toBe(true);
+      expect(denied.envelope.status).toBe("denied");
+      const dailyCheck = denied.decisionTrace.checks.find(
+        (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.checkData["field"] === "daily",
+      );
+      expect(dailyCheck).toBeDefined();
+    });
+
+    it("should allow when within daily spend limit", async () => {
+      await storage.identity.saveSpec(
+        makeIdentitySpec({
+          trustBehaviors: ["ads.budget.adjust"],
+          globalSpendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
+        }),
+      );
+
+      // Execute one $2000 action
+      const first = await orchestrator.propose({
+        actionType: "ads.budget.adjust",
+        parameters: { campaignId: "camp_1", amount: 2000 },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+      expect(first.denied).toBe(false);
+      await orchestrator.executeApproved(first.envelope.id);
+
+      // Second $3000 action should succeed ($2000 + $3000 = $5000 < $10000)
+      const second = await orchestrator.propose({
+        actionType: "ads.budget.adjust",
+        parameters: { campaignId: "camp_2", amount: 3000 },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(second.denied).toBe(false);
     });
   });
 });

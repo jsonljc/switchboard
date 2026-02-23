@@ -21,6 +21,7 @@ import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
+import type { SpendLookup } from "../engine/policy-engine.js";
 import { resolveIdentity, applyCompetenceAdjustments } from "../identity/spec.js";
 import { routeApproval, DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import {
@@ -271,6 +272,7 @@ export class LifecycleOrchestrator {
       competenceAdjustments,
       compositeContext: await this.buildCompositeContext(params.principalId),
       systemRiskPosture,
+      spendLookup: await this.buildSpendLookup(params.principalId),
     };
 
     // 9. Evaluate
@@ -319,6 +321,41 @@ export class LifecycleOrchestrator {
         resolvedIdentity,
         this.routingConfig,
       );
+
+      // Enforce denyWhenNoApprovers: if approval is required but no approvers
+      // are available (and no fallback), deny the action outright.
+      if (
+        routing.approvalRequired !== "none" &&
+        routing.approvers.length === 0 &&
+        !routing.fallbackApprover
+      ) {
+        envelope.status = "denied";
+        await this.storage.envelopes.save(envelope);
+        await this.ledger.record({
+          eventType: "action.denied",
+          actorType: "system",
+          actorId: "orchestrator",
+          entityType: "action",
+          entityId: proposal.id,
+          riskCategory: decisionTrace.computedRiskScore.category,
+          summary: `Action denied: approval required but no approvers configured`,
+          snapshot: {
+            actionType: params.actionType,
+            approvalRequired: routing.approvalRequired,
+            reason: "no_approvers_configured",
+          },
+          envelopeId: envelope.id,
+          traceId,
+        });
+
+        return {
+          envelope,
+          decisionTrace,
+          approvalRequest: null,
+          denied: true,
+          explanation: "Action denied: approval required but no approvers are configured.",
+        };
+      }
 
       const expiresAt = new Date(now.getTime() + routing.expiresInMs);
 
@@ -1242,6 +1279,51 @@ export class LifecycleOrchestrator {
 
   private inferCartridgeId(actionType: string): string | null {
     return inferCartridgeId(actionType);
+  }
+
+  private async buildSpendLookup(principalId: string): Promise<SpendLookup> {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const weekMs = 7 * dayMs;
+    const monthMs = 30 * dayMs;
+
+    let allEnvelopes: ActionEnvelope[];
+    try {
+      allEnvelopes = await this.storage.envelopes.list({ limit: 500 });
+    } catch {
+      return { dailySpend: 0, weeklySpend: 0, monthlySpend: 0 };
+    }
+
+    let dailySpend = 0;
+    let weeklySpend = 0;
+    let monthlySpend = 0;
+
+    for (const env of allEnvelopes) {
+      // Only count executed envelopes by this principal
+      if (env.status !== "executed") continue;
+      const isPrincipal = env.proposals.some(
+        (p) => p.parameters["_principalId"] === principalId,
+      );
+      if (!isPrincipal) continue;
+
+      // Extract spend from proposals
+      for (const p of env.proposals) {
+        const amount = typeof p.parameters["amount"] === "number"
+          ? Math.abs(p.parameters["amount"])
+          : typeof p.parameters["budgetChange"] === "number"
+            ? Math.abs(p.parameters["budgetChange"])
+            : 0;
+
+        if (amount === 0) continue;
+
+        const age = now - env.createdAt.getTime();
+        if (age < monthMs) monthlySpend += amount;
+        if (age < weekMs) weeklySpend += amount;
+        if (age < dayMs) dailySpend += amount;
+      }
+    }
+
+    return { dailySpend, weeklySpend, monthlySpend };
   }
 
   private async buildCompositeContext(principalId: string): Promise<CompositeRiskContext | undefined> {

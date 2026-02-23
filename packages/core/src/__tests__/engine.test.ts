@@ -1354,6 +1354,127 @@ describe("Policy Engine", () => {
     expect(trace.checks.some((c) => c.checkCode === "SPEND_LIMIT" && c.matched)).toBe(true);
   });
 
+  it("daily spend limit exceeded -> deny", () => {
+    const identity = makeResolvedIdentity({
+      effectiveSpendLimits: {
+        daily: 5000,
+        weekly: null,
+        monthly: null,
+        perAction: 10000,
+      },
+    });
+    const ctx = makeEvalContext();
+    const proposal = makeProposal({ parameters: { amount: 1000 } });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      spendLookup: { dailySpend: 4500, weeklySpend: 4500, monthlySpend: 4500 },
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("deny");
+    const dailyCheck = trace.checks.find(
+      (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.checkData["field"] === "daily",
+    );
+    expect(dailyCheck).toBeDefined();
+    expect(dailyCheck!.humanDetail).toContain("daily");
+  });
+
+  it("weekly spend limit exceeded -> deny", () => {
+    const identity = makeResolvedIdentity({
+      effectiveSpendLimits: {
+        daily: null,
+        weekly: 20000,
+        monthly: null,
+        perAction: 10000,
+      },
+    });
+    const ctx = makeEvalContext();
+    const proposal = makeProposal({ parameters: { amount: 5000 } });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      spendLookup: { dailySpend: 5000, weeklySpend: 18000, monthlySpend: 18000 },
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("deny");
+    const weeklyCheck = trace.checks.find(
+      (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.checkData["field"] === "weekly",
+    );
+    expect(weeklyCheck).toBeDefined();
+  });
+
+  it("monthly spend limit exceeded -> deny", () => {
+    const identity = makeResolvedIdentity({
+      effectiveSpendLimits: {
+        daily: null,
+        weekly: null,
+        monthly: 50000,
+        perAction: 10000,
+      },
+    });
+    const ctx = makeEvalContext();
+    const proposal = makeProposal({ parameters: { amount: 2000 } });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      spendLookup: { dailySpend: 2000, weeklySpend: 10000, monthlySpend: 49000 },
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("deny");
+    const monthlyCheck = trace.checks.find(
+      (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.checkData["field"] === "monthly",
+    );
+    expect(monthlyCheck).toBeDefined();
+  });
+
+  it("time-windowed spend within limits -> allow", () => {
+    const identity = makeResolvedIdentity({
+      effectiveSpendLimits: {
+        daily: 10000,
+        weekly: 50000,
+        monthly: 200000,
+        perAction: 5000,
+      },
+    });
+    const ctx = makeEvalContext();
+    const proposal = makeProposal({ parameters: { amount: 1000 } });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      spendLookup: { dailySpend: 2000, weeklySpend: 10000, monthlySpend: 30000 },
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("allow");
+    // All spend checks should be unmatched
+    const spendChecks = trace.checks.filter(
+      (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.effect === "deny",
+    );
+    expect(spendChecks).toHaveLength(0);
+  });
+
+  it("no spendLookup provided -> skips time-windowed checks", () => {
+    const identity = makeResolvedIdentity({
+      effectiveSpendLimits: {
+        daily: 1000,
+        weekly: 5000,
+        monthly: 20000,
+        perAction: 10000,
+      },
+    });
+    const ctx = makeEvalContext();
+    const proposal = makeProposal({ parameters: { amount: 500 } });
+    // No spendLookup — should not check daily/weekly/monthly
+    const engineCtx = makeEngineContext({ resolvedIdentity: identity });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("allow");
+    // Should have perAction check only, no daily/weekly/monthly
+    const dailyCheck = trace.checks.find(
+      (c) => c.checkCode === "SPEND_LIMIT" && c.checkData["field"] === "daily",
+    );
+    expect(dailyCheck).toBeUndefined();
+  });
+
   it("policy rule match -> apply deny effect", () => {
     const denyPolicy = makePolicy({
       id: "deny-policy",

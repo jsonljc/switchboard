@@ -33,6 +33,16 @@ export interface GuardrailState {
   lastActionTimes: Map<string, number>;
 }
 
+/**
+ * Provides cumulative spend totals for a principal within rolling time windows.
+ * The orchestrator populates this by querying executed envelopes.
+ */
+export interface SpendLookup {
+  dailySpend: number;
+  weeklySpend: number;
+  monthlySpend: number;
+}
+
 export interface PolicyEngineContext {
   policies: Policy[];
   guardrails: GuardrailConfig | null;
@@ -42,6 +52,7 @@ export interface PolicyEngineContext {
   competenceAdjustments?: CompetenceAdjustment[];
   compositeContext?: CompositeRiskContext;
   systemRiskPosture?: SystemRiskPosture;
+  spendLookup?: SpendLookup;
   now?: Date;
 }
 
@@ -228,6 +239,44 @@ export function evaluate(
         threshold: perActionLimit,
       }, `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
       false, "skip");
+    }
+
+    // Step 6b: Time-windowed spend limits (daily/weekly/monthly)
+    if (engineContext.spendLookup) {
+      const lookup = engineContext.spendLookup;
+      const absSpend = Math.abs(spendAmount);
+
+      const windowChecks: Array<{ field: string; cumulative: number; limit: number | null }> = [
+        { field: "daily", cumulative: lookup.dailySpend, limit: limits.daily },
+        { field: "weekly", cumulative: lookup.weeklySpend, limit: limits.weekly },
+        { field: "monthly", cumulative: lookup.monthlySpend, limit: limits.monthly },
+      ];
+
+      for (const wc of windowChecks) {
+        if (wc.limit === null) continue;
+
+        const projected = wc.cumulative + absSpend;
+        const exceeded = projected > wc.limit;
+
+        addCheck(builder, "SPEND_LIMIT", {
+          field: wc.field,
+          currentCumulative: wc.cumulative,
+          proposedSpend: absSpend,
+          projectedTotal: projected,
+          threshold: wc.limit,
+        }, exceeded
+          ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
+          : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
+        exceeded, exceeded ? "deny" : "skip");
+
+        if (exceeded) {
+          const riskScoreResult = riskInput(engineContext, config);
+          builder.computedRiskScore = riskScoreResult;
+          builder.finalDecision = "deny";
+          builder.approvalRequired = "none";
+          return buildTrace(builder);
+        }
+      }
     }
   }
 
