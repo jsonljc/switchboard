@@ -25,6 +25,7 @@ import {
 } from "@switchboard/core";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
+import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import type { UndoRecipe } from "@switchboard/schemas";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 
@@ -356,6 +357,16 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
 
   let orchestrator = config?.orchestrator;
   let storage: StorageContext | undefined = config?.storage;
+
+  // Optional: single choke point via Switchboard API (propose/execute/approvals over HTTP)
+  const apiUrl = process.env["SWITCHBOARD_API_URL"];
+  if (!orchestrator && apiUrl) {
+    const adapter = new ApiOrchestratorAdapter({
+      baseUrl: apiUrl,
+      apiKey: process.env["SWITCHBOARD_API_KEY"],
+    });
+    orchestrator = adapter as unknown as LifecycleOrchestrator;
+  }
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory

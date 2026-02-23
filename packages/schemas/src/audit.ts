@@ -85,5 +85,7 @@ export const AuditEntrySchema = z.object({
   // References
   envelopeId: z.string().nullable(),
   organizationId: z.string().nullable(),
+  /** Optional correlation id (e.g. from request); not part of chain hash. */
+  traceId: z.string().nullable().optional(),
 });
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;

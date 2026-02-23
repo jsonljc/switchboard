@@ -27,3 +27,22 @@ export const ActionSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 export type Action = z.infer<typeof ActionSchema>;
+
+// ── Execute (runtime request) action schema ─────────────────────────────
+
+export const MagnitudeSchema = z
+  .object({
+    currencyDelta: z.number().optional(),
+    countDelta: z.number().optional(),
+  })
+  .optional();
+export type Magnitude = z.infer<typeof MagnitudeSchema>;
+
+/** Canonical action shape for execute/propose requests (e.g. OpenClaw, API). */
+export const ExecuteActionSchema = z.object({
+  actionType: z.string().min(1),
+  parameters: z.record(z.string(), z.unknown()),
+  sideEffect: z.boolean(),
+  magnitude: MagnitudeSchema,
+});
+export type ExecuteAction = z.infer<typeof ExecuteActionSchema>;

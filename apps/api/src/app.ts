@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { actionsRoutes } from "./routes/actions.js";
+import { executeRoutes } from "./routes/execute.js";
 import { approvalsRoutes } from "./routes/approvals.js";
 import { policiesRoutes } from "./routes/policies.js";
 import { auditRoutes } from "./routes/audit.js";
@@ -23,8 +24,11 @@ import {
   createGuardrailState,
   DEFAULT_REDACTION_CONFIG,
   GuardedCartridge,
+  InMemoryPolicyCache,
+  InMemoryGovernanceProfileStore,
+  ExecutionService,
 } from "@switchboard/core";
-import type { StorageContext, LedgerStorage } from "@switchboard/core";
+import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
@@ -36,6 +40,14 @@ declare module "fastify" {
     orchestrator: LifecycleOrchestrator;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
+    policyCache: PolicyCache;
+    executionService: ExecutionService;
+  }
+  interface FastifyRequest {
+    /** Set by auth when API_KEY_METADATA maps this key to an org. */
+    organizationIdFromAuth?: string;
+    /** Set by auth when API_KEY_METADATA maps this key to a runtime. */
+    runtimeIdFromAuth?: string;
   }
 }
 
@@ -66,6 +78,7 @@ export async function buildServer() {
       },
       tags: [
         { name: "Actions", description: "Propose, execute, undo, and batch actions" },
+        { name: "Execute", description: "Single endpoint: propose + conditional execute (EXECUTED | PENDING_APPROVAL | DENIED)" },
         { name: "Approvals", description: "Respond to approval requests and list pending approvals" },
         { name: "Simulate", description: "Dry-run action evaluation without side effects" },
         { name: "Policies", description: "CRUD operations for guardrail policies" },
@@ -129,6 +142,8 @@ export async function buildServer() {
   const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
   const guardrailState = createGuardrailState();
   const guardrailStateStore = createGuardrailStateStore();
+  const policyCache = new InMemoryPolicyCache();
+  const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
   // Register ads-spend cartridge
   const adsCartridge = new AdsSpendCartridge();
@@ -166,6 +181,8 @@ export async function buildServer() {
     ledger,
     guardrailState,
     guardrailStateStore,
+    policyCache,
+    governanceProfileStore,
     executionMode,
     onEnqueue,
   });
@@ -195,9 +212,12 @@ export async function buildServer() {
   });
 
   // Decorate Fastify with shared instances
+  const executionService = new ExecutionService(orchestrator);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);
+  app.decorate("policyCache", policyCache);
+  app.decorate("executionService", executionService);
 
   // Register middleware
   await app.register(authMiddleware);
@@ -212,6 +232,7 @@ export async function buildServer() {
 
   // Register routes
   await app.register(actionsRoutes, { prefix: "/api/actions" });
+  await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });

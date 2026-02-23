@@ -63,6 +63,8 @@ export class AuditLedger {
     envelopeId?: string;
     organizationId?: string;
     visibilityLevel?: VisibilityLevel;
+    /** Optional correlation id; not part of chain hash. */
+    traceId?: string | null;
   }): Promise<AuditEntry> {
     // Use atomic append if available (prevents race on previousEntryHash)
     if (this.storage.appendAtomic) {
@@ -92,6 +94,7 @@ export class AuditLedger {
     envelopeId?: string;
     organizationId?: string;
     visibilityLevel?: VisibilityLevel;
+    traceId?: string | null;
   }, previousEntryHash: string | null): Promise<AuditEntry> {
     // Redact snapshot
     const redactionResult = this.redactionConfig
@@ -151,6 +154,7 @@ export class AuditLedger {
       previousEntryHash,
       envelopeId: params.envelopeId ?? null,
       organizationId: params.organizationId ?? null,
+      traceId: params.traceId ?? null,
     };
   }
 

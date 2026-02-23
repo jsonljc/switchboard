@@ -38,6 +38,10 @@ import {
 import type { CompetenceTracker } from "../competence/tracker.js";
 import type { GuardrailStateStore } from "../guardrail-state/store.js";
 import type { RiskPostureStore } from "../engine/risk-posture.js";
+import type { GovernanceProfileStore } from "../governance/profile.js";
+import { profileToPosture } from "../governance/profile.js";
+import type { PolicyCache } from "../policy-cache.js";
+import { DEFAULT_POLICY_CACHE_TTL_MS } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
 import { buildApprovalNotification } from "../notifications/notifier.js";
 import { buildActionSummary } from "./summary-builder.js";
@@ -58,6 +62,10 @@ export interface OrchestratorConfig {
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker?: CompetenceTracker;
   riskPostureStore?: RiskPostureStore;
+  /** When set, per-org governance profile overrides system risk posture for propose. */
+  governanceProfileStore?: GovernanceProfileStore;
+  /** Optional policy cache (keyed by cartridgeId + org); invalidate on policy CRUD. */
+  policyCache?: PolicyCache;
   executionMode?: ExecutionMode;
   onEnqueue?: EnqueueCallback;
   approvalNotifier?: ApprovalNotifier;
@@ -94,6 +102,8 @@ export class LifecycleOrchestrator {
   private riskScoringConfig?: RiskScoringConfig;
   private competenceTracker: CompetenceTracker | null;
   private riskPostureStore: RiskPostureStore | null;
+  private governanceProfileStore: GovernanceProfileStore | null;
+  private policyCache: PolicyCache | null;
   private executionMode: ExecutionMode;
   private onEnqueue: EnqueueCallback | null;
   private approvalNotifier: ApprovalNotifier | null;
@@ -107,6 +117,8 @@ export class LifecycleOrchestrator {
     this.riskScoringConfig = config.riskScoringConfig;
     this.competenceTracker = config.competenceTracker ?? null;
     this.riskPostureStore = config.riskPostureStore ?? null;
+    this.governanceProfileStore = config.governanceProfileStore ?? null;
+    this.policyCache = config.policyCache ?? null;
     this.executionMode = config.executionMode ?? "inline";
     this.onEnqueue = config.onEnqueue ?? null;
     this.approvalNotifier = config.approvalNotifier ?? null;
@@ -190,10 +202,31 @@ export class LifecycleOrchestrator {
     // 5b. Hydrate guardrail state from store
     await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
 
-    // 6. Load policies
-    const policies = await this.storage.policies.listActive({
-      cartridgeId: params.cartridgeId,
-    });
+    // 6. Load policies (with optional cache)
+    let policies: import("@switchboard/schemas").Policy[];
+    if (this.policyCache) {
+      const cached = await this.policyCache.get(
+        params.cartridgeId,
+        params.organizationId ?? null,
+      );
+      if (cached !== null) {
+        policies = cached;
+      } else {
+        policies = await this.storage.policies.listActive({
+          cartridgeId: params.cartridgeId,
+        });
+        await this.policyCache.set(
+          params.cartridgeId,
+          params.organizationId ?? null,
+          policies,
+          DEFAULT_POLICY_CACHE_TTL_MS,
+        );
+      }
+    } else {
+      policies = await this.storage.policies.listActive({
+        cartridgeId: params.cartridgeId,
+      });
+    }
 
     // Create proposal object
     const proposalId = `prop_${randomUUID()}`;
@@ -219,10 +252,14 @@ export class LifecycleOrchestrator {
       metadata: { envelopeId },
     };
 
-    // 8. Build policy engine context
-    const systemRiskPosture = this.riskPostureStore
-      ? await this.riskPostureStore.get()
-      : undefined;
+    // 8. Build policy engine context (per-org governance profile overrides global posture when set)
+    let systemRiskPosture: import("@switchboard/schemas").SystemRiskPosture | undefined;
+    if (this.governanceProfileStore) {
+      const profile = await this.governanceProfileStore.get(params.organizationId ?? null);
+      systemRiskPosture = profileToPosture(profile);
+    } else if (this.riskPostureStore) {
+      systemRiskPosture = await this.riskPostureStore.get();
+    }
 
     const engineContext: PolicyEngineContext = {
       policies,
@@ -364,6 +401,7 @@ export class LifecycleOrchestrator {
       ],
       envelopeId: envelope.id,
       organizationId: params.organizationId ?? undefined,
+      traceId: traceId,
     });
 
     envelope.auditEntryIds = [auditEntry.id];
@@ -473,6 +511,7 @@ export class LifecycleOrchestrator {
         summary: `Action approved by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
 
       // Execute after approval: inline or enqueue
@@ -495,6 +534,7 @@ export class LifecycleOrchestrator {
         summary: `Action rejected by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
     } else if (params.action === "patch") {
       // Apply patch to parameters and re-evaluate
@@ -523,6 +563,7 @@ export class LifecycleOrchestrator {
         summary: `Action patched and approved by ${params.respondedBy}`,
         snapshot: { approvalId: params.approvalId, patchValue: params.patchValue },
         envelopeId: envelope.id,
+        traceId: envelope.traceId,
       });
 
       if (this.executionMode === "queue" && this.onEnqueue) {
@@ -677,6 +718,7 @@ export class LifecycleOrchestrator {
         ...(decision ? [{ type: "decision_trace", data: decision }] : []),
       ],
       envelopeId: envelope.id,
+      traceId: envelope.traceId,
     });
 
     // Record execution metrics
@@ -733,6 +775,7 @@ export class LifecycleOrchestrator {
           attemptedAt: new Date().toISOString(),
         },
         envelopeId,
+        traceId: envelope.traceId,
       });
 
       throw new Error("Undo window has expired");
@@ -814,9 +857,29 @@ export class LifecycleOrchestrator {
     // Hydrate guardrail state from store (read-only for simulation)
     await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
 
-    const policies = await this.storage.policies.listActive({
-      cartridgeId: params.cartridgeId,
-    });
+    let policiesSim: import("@switchboard/schemas").Policy[];
+    if (this.policyCache) {
+      const cached = await this.policyCache.get(params.cartridgeId, null);
+      if (cached !== null) {
+        policiesSim = cached;
+      } else {
+        policiesSim = await this.storage.policies.listActive({
+          cartridgeId: params.cartridgeId,
+        });
+        await this.policyCache.set(
+          params.cartridgeId,
+          null,
+          policiesSim,
+          DEFAULT_POLICY_CACHE_TTL_MS,
+        );
+      }
+    } else {
+      policiesSim = await this.storage.policies.listActive({
+        cartridgeId: params.cartridgeId,
+      });
+    }
+
+    const policies = policiesSim;
 
     const proposal: ActionProposal = {
       id: `sim_${randomUUID()}`,
@@ -862,6 +925,7 @@ export class LifecycleOrchestrator {
     entityRefs: Array<{ inputRef: string; entityType: string }>;
     message?: string;
     organizationId?: string | null;
+    traceId?: string;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

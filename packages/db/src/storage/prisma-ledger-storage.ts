@@ -31,6 +31,7 @@ export class PrismaLedgerStorage implements LedgerStorage {
         previousEntryHash: entry.previousEntryHash,
         envelopeId: entry.envelopeId,
         organizationId: entry.organizationId,
+        traceId: entry.traceId ?? undefined,
       },
     });
   }
@@ -76,6 +77,7 @@ export class PrismaLedgerStorage implements LedgerStorage {
           previousEntryHash: entry.previousEntryHash,
           envelopeId: entry.envelopeId,
           organizationId: entry.organizationId,
+          traceId: entry.traceId ?? undefined,
         },
       });
 
@@ -144,6 +146,7 @@ function toAuditEntry(row: {
   previousEntryHash: string | null;
   envelopeId: string | null;
   organizationId: string | null;
+  traceId: string | null;
 }): AuditEntry {
   return {
     id: row.id,
@@ -166,5 +169,6 @@ function toAuditEntry(row: {
     previousEntryHash: row.previousEntryHash,
     envelopeId: row.envelopeId,
     organizationId: row.organizationId,
+    traceId: row.traceId ?? null,
   };
 }

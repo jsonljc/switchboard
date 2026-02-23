@@ -92,3 +92,38 @@ export type { ApprovalNotifier, ApprovalNotification } from "./notifications/ind
 // Guardrail State Store
 export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";
 export { InMemoryGuardrailStateStore } from "./guardrail-state/index.js";
+
+// Runtime Adapters (execute request/response for OpenClaw, MCP, etc.)
+export type {
+  RuntimeExecuteRequest,
+  RuntimeExecuteResponse,
+  ExecuteOutcome,
+  RuntimeAdapter,
+} from "./runtime-adapters/types.js";
+
+// Execution service (single propose + conditional execute facade)
+export { ExecutionService, NeedsClarificationError, NotFoundError } from "./execution-service.js";
+
+// OpenClaw adapter (tool payload ↔ RuntimeExecuteRequest/Response)
+export {
+  openclawPayloadToRequest,
+  responseToOpenclawTool,
+  openclawExecute,
+} from "./runtime-adapters/openclaw.js";
+export type { OpenClawToolPayload, OpenClawToolResponse } from "./runtime-adapters/openclaw.js";
+
+// HTTP adapter (call POST /api/execute from another process)
+export { HttpExecutionAdapter } from "./runtime-adapters/http-adapter.js";
+export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapter.js";
+
+// Governance profiles (per-org posture)
+export {
+  profileToPosture,
+  DEFAULT_GOVERNANCE_PROFILE,
+  InMemoryGovernanceProfileStore,
+} from "./governance/profile.js";
+export type { GovernanceProfileStore } from "./governance/profile.js";
+
+// Policy cache
+export { InMemoryPolicyCache, DEFAULT_POLICY_CACHE_TTL_MS } from "./policy-cache.js";
+export type { PolicyCache } from "./policy-cache.js";

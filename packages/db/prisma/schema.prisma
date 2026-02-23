@@ -161,12 +161,14 @@ model AuditEntry {
   previousEntryHash String?
   envelopeId        String?
   organizationId    String?
+  traceId           String?  // optional correlation id (not part of chain hash)
   createdAt         DateTime @default(now())
 
   @@index([eventType])
   @@index([entityType, entityId])
   @@index([envelopeId])
   @@index([organizationId])
+  @@index([traceId])
   @@index([timestamp])
 }
 
