@@ -31,7 +31,7 @@ export {
   isExpired,
   determineApprovalRequirement,
 } from "./approval/state-machine.js";
-export type { ApprovalState, ApprovalStatus } from "./approval/state-machine.js";
+export type { ApprovalState, ApprovalStatus, QuorumState, QuorumEntry } from "./approval/state-machine.js";
 export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./approval/router.js";
 export type { ApprovalRouting, ApprovalRoutingConfig } from "./approval/router.js";
 export { computeBindingHash, hashObject, validateBindingHash } from "./approval/binding.js";

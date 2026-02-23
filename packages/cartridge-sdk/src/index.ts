@@ -1,4 +1,4 @@
-export type { Cartridge, CartridgeContext, ExecuteResult } from "./cartridge.js";
+export type { Cartridge, CartridgeContext, CartridgeInterceptor, ExecuteResult } from "./cartridge.js";
 export { ActionBuilder, action } from "./action-builder.js";
 export { validateConnection } from "./context.js";
 export type { CartridgeConnectionConfig } from "./context.js";

@@ -1,4 +1,4 @@
-import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeContext, CartridgeInterceptor, ExecuteResult } from "@switchboard/cartridge-sdk";
 
 /**
  * Runtime guard that wraps a Cartridge and only allows execute() when
@@ -8,6 +8,11 @@ import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/ca
  * Uses a Set of active tokens instead of a single global to avoid
  * race conditions under concurrent execution (e.g. BullMQ concurrency > 1).
  * Each executeApproved() call gets its own token.
+ *
+ * Optionally runs a chain of CartridgeInterceptors:
+ * - beforeEnrich: parameter transformation before enrichContext()
+ * - beforeExecute: gate check before execute() (can block execution)
+ * - afterExecute: result transformation after execute()
  */
 
 const activeTokens = new Set<symbol>();
@@ -24,8 +29,11 @@ export function endExecution(token: symbol): void {
 
 export class GuardedCartridge implements Cartridge {
   private requiredToken: symbol | null = null;
+  private interceptors: CartridgeInterceptor[];
 
-  constructor(private inner: Cartridge) {}
+  constructor(private inner: Cartridge, interceptors?: CartridgeInterceptor[]) {
+    this.interceptors = interceptors ?? [];
+  }
 
   /**
    * Bind this cartridge instance to a specific execution token.
@@ -48,12 +56,20 @@ export class GuardedCartridge implements Cartridge {
     return this.inner.initialize(context);
   }
 
-  enrichContext(
+  async enrichContext(
     actionType: string,
     parameters: Record<string, unknown>,
     context: CartridgeContext,
   ): Promise<Record<string, unknown>> {
-    return this.inner.enrichContext(actionType, parameters, context);
+    // Run beforeEnrich interceptors (parameter transformation chain)
+    let currentParams = parameters;
+    for (const interceptor of this.interceptors) {
+      if (interceptor.beforeEnrich) {
+        const result = await interceptor.beforeEnrich(actionType, currentParams, context);
+        currentParams = result.parameters;
+      }
+    }
+    return this.inner.enrichContext(actionType, currentParams, context);
   }
 
   async execute(
@@ -76,7 +92,37 @@ export class GuardedCartridge implements Cartridge {
         "Direct execution is forbidden — all actions must go through the governance pipeline.",
       );
     }
-    return this.inner.execute(actionType, parameters, context);
+
+    // Run beforeExecute interceptors (gate check chain)
+    let currentParams = parameters;
+    for (const interceptor of this.interceptors) {
+      if (interceptor.beforeExecute) {
+        const result = await interceptor.beforeExecute(actionType, currentParams, context);
+        if (!result.proceed) {
+          return {
+            success: false,
+            summary: result.reason ?? "Blocked by pre-execution interceptor",
+            externalRefs: {},
+            rollbackAvailable: false,
+            partialFailures: [{ step: "interceptor.beforeExecute", error: result.reason ?? "Blocked" }],
+            durationMs: 0,
+            undoRecipe: null,
+          };
+        }
+        currentParams = result.parameters;
+      }
+    }
+
+    let execResult = await this.inner.execute(actionType, currentParams, context);
+
+    // Run afterExecute interceptors (result transformation chain)
+    for (const interceptor of this.interceptors) {
+      if (interceptor.afterExecute) {
+        execResult = await interceptor.afterExecute(actionType, currentParams, execResult, context);
+      }
+    }
+
+    return execResult;
   }
 
   getRiskInput(

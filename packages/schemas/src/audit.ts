@@ -20,6 +20,7 @@ export const AuditEventTypeSchema = z.enum([
   "action.enriched",
   "action.evaluated",
   "action.approved",
+  "action.partially_approved",
   "action.rejected",
   "action.patched",
   "action.queued",

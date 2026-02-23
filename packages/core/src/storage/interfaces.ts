@@ -10,7 +10,7 @@ import type {
   CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
-import type { Cartridge } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
 
 export interface EnvelopeStore {
   save(envelope: ActionEnvelope): Promise<void>;
@@ -70,7 +70,7 @@ export interface ApprovalStore {
 }
 
 export interface CartridgeRegistry {
-  register(cartridgeId: string, cartridge: Cartridge): void;
+  register(cartridgeId: string, cartridge: Cartridge, interceptors?: CartridgeInterceptor[]): void;
   get(cartridgeId: string): Cartridge | null;
   list(): string[];
 }

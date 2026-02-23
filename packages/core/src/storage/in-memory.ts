@@ -10,7 +10,8 @@ import type {
   CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
-import type { Cartridge } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
+import { GuardedCartridge } from "../execution-guard.js";
 import type {
   EnvelopeStore,
   PolicyStore,
@@ -230,8 +231,18 @@ export class InMemoryApprovalStore implements ApprovalStore {
 export class InMemoryCartridgeRegistry implements CartridgeRegistry {
   private store = new Map<string, Cartridge>();
 
-  register(cartridgeId: string, cartridge: Cartridge): void {
-    this.store.set(cartridgeId, cartridge);
+  register(cartridgeId: string, cartridge: Cartridge, interceptors?: CartridgeInterceptor[]): void {
+    // If interceptors are provided and the cartridge isn't already guarded, wrap it
+    if (interceptors && interceptors.length > 0) {
+      if (cartridge instanceof GuardedCartridge) {
+        // Already guarded — store as-is (interceptors should have been set at construction)
+        this.store.set(cartridgeId, cartridge);
+      } else {
+        this.store.set(cartridgeId, new GuardedCartridge(cartridge, interceptors));
+      }
+    } else {
+      this.store.set(cartridgeId, cartridge);
+    }
   }
 
   get(cartridgeId: string): Cartridge | null {
