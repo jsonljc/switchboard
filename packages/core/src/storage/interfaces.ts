@@ -18,6 +18,7 @@ export interface EnvelopeStore {
   update(id: string, updates: Partial<ActionEnvelope>): Promise<void>;
   list(filter?: {
     principalId?: string;
+    organizationId?: string;
     status?: string;
     limit?: number;
   }): Promise<ActionEnvelope[]>;
@@ -28,7 +29,7 @@ export interface PolicyStore {
   getById(id: string): Promise<Policy | null>;
   update(id: string, data: Partial<Policy>): Promise<void>;
   delete(id: string): Promise<boolean>;
-  listActive(filter?: { cartridgeId?: string }): Promise<Policy[]>;
+  listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]>;
 }
 
 export interface IdentityStore {
@@ -40,7 +41,7 @@ export interface IdentityStore {
   saveOverlay(overlay: RoleOverlay): Promise<void>;
   getPrincipal(id: string): Promise<Principal | null>;
   savePrincipal(principal: Principal): Promise<void>;
-  listDelegationRules(): Promise<DelegationRule[]>;
+  listDelegationRules(organizationId?: string): Promise<DelegationRule[]>;
   saveDelegationRule(rule: DelegationRule): Promise<void>;
 }
 
@@ -56,7 +57,7 @@ export interface ApprovalStore {
     envelopeId: string;
   } | null>;
   updateState(id: string, state: ApprovalState): Promise<void>;
-  listPending(): Promise<
+  listPending(organizationId?: string): Promise<
     Array<{
       request: ApprovalRequest;
       state: ApprovalState;

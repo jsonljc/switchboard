@@ -45,7 +45,7 @@ export class PrismaApprovalStore implements ApprovalStore {
     });
   }
 
-  async listPending(): Promise<ApprovalRecord[]> {
+  async listPending(_organizationId?: string): Promise<ApprovalRecord[]> {
     const rows = await this.prisma.approvalRecord.findMany({
       where: { status: "pending" },
     });

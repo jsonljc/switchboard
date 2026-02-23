@@ -17,8 +17,12 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (request, reply) => {
     const query = request.query as { cartridgeId?: string };
+    const orgId = request.organizationIdFromAuth ?? undefined;
+    const filter: { cartridgeId?: string; organizationId?: string | null } = {};
+    if (query.cartridgeId) filter.cartridgeId = query.cartridgeId;
+    if (orgId !== undefined) filter.organizationId = orgId;
     const policies = await app.storageContext.policies.listActive(
-      query.cartridgeId ? { cartridgeId: query.cartridgeId } : undefined,
+      Object.keys(filter).length > 0 ? filter : undefined,
     );
     return reply.code(200).send({ policies });
   });

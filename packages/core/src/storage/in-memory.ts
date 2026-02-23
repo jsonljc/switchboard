@@ -40,6 +40,7 @@ export class InMemoryEnvelopeStore implements EnvelopeStore {
 
   async list(filter?: {
     principalId?: string;
+    organizationId?: string;
     status?: string;
     limit?: number;
   }): Promise<ActionEnvelope[]> {
@@ -48,6 +49,11 @@ export class InMemoryEnvelopeStore implements EnvelopeStore {
     if (filter?.principalId) {
       results = results.filter((e) =>
         e.proposals.some((p) => p.parameters["_principalId"] === filter.principalId),
+      );
+    }
+    if (filter?.organizationId) {
+      results = results.filter((e) =>
+        e.proposals.some((p) => p.parameters["_organizationId"] === filter.organizationId),
       );
     }
     if (filter?.status) {
@@ -83,12 +89,21 @@ export class InMemoryPolicyStore implements PolicyStore {
     return this.store.delete(id);
   }
 
-  async listActive(filter?: { cartridgeId?: string }): Promise<Policy[]> {
+  async listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]> {
     let results = [...this.store.values()].filter((p) => p.active);
 
     if (filter?.cartridgeId) {
       results = results.filter(
         (p) => p.cartridgeId === null || p.cartridgeId === filter.cartridgeId,
+      );
+    }
+
+    // When organizationId is provided, return policies that are global (null org)
+    // OR belong to the specified organization.
+    if (filter?.organizationId !== undefined) {
+      const orgId = filter.organizationId;
+      results = results.filter(
+        (p) => p.organizationId === null || p.organizationId === orgId,
       );
     }
 
@@ -150,7 +165,7 @@ export class InMemoryIdentityStore implements IdentityStore {
     this.principals.set(principal.id, { ...principal });
   }
 
-  async listDelegationRules(): Promise<DelegationRule[]> {
+  async listDelegationRules(_organizationId?: string): Promise<DelegationRule[]> {
     return [...this.delegationRules.values()];
   }
 
@@ -188,7 +203,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     this.store.set(id, { ...entry, state });
   }
 
-  async listPending(): Promise<
+  async listPending(_organizationId?: string): Promise<
     Array<{
       request: ApprovalRequest;
       state: ApprovalState;

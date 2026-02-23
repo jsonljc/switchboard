@@ -74,7 +74,7 @@ export class PrismaPolicyStore implements PolicyStore {
     }
   }
 
-  async listActive(filter?: { cartridgeId?: string }): Promise<Policy[]> {
+  async listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]> {
     const where: Record<string, unknown> = { active: true };
 
     if (filter?.cartridgeId) {
@@ -82,6 +82,25 @@ export class PrismaPolicyStore implements PolicyStore {
         { cartridgeId: null },
         { cartridgeId: filter.cartridgeId },
       ];
+    }
+
+    // Scope to global policies + org-specific policies when org is provided
+    if (filter?.organizationId !== undefined) {
+      const orgCondition = [
+        { organizationId: null },
+        { organizationId: filter.organizationId },
+      ];
+      if (where["OR"]) {
+        // Combine with existing cartridgeId OR using AND
+        const cartridgeOr = where["OR"];
+        delete where["OR"];
+        where["AND"] = [
+          { OR: cartridgeOr },
+          { OR: orgCondition },
+        ];
+      } else {
+        where["OR"] = orgCondition;
+      }
     }
 
     const rows = await this.prisma.policy.findMany({

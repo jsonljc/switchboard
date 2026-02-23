@@ -2,26 +2,43 @@ import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/ca
 
 /**
  * Runtime guard that wraps a Cartridge and only allows execute() when
- * the orchestrator has set the execution token. This prevents direct
+ * the orchestrator has set an execution token. This prevents direct
  * calls to cartridge.execute() from outside executeApproved().
+ *
+ * Uses a Set of active tokens instead of a single global to avoid
+ * race conditions under concurrent execution (e.g. BullMQ concurrency > 1).
+ * Each executeApproved() call gets its own token.
  */
 
-let executionToken: symbol | null = null;
+const activeTokens = new Set<symbol>();
 
 export function beginExecution(): symbol {
   const token = Symbol("execution-token");
-  executionToken = token;
+  activeTokens.add(token);
   return token;
 }
 
 export function endExecution(token: symbol): void {
-  if (executionToken === token) {
-    executionToken = null;
-  }
+  activeTokens.delete(token);
 }
 
 export class GuardedCartridge implements Cartridge {
+  private requiredToken: symbol | null = null;
+
   constructor(private inner: Cartridge) {}
+
+  /**
+   * Bind this cartridge instance to a specific execution token.
+   * Only that token will be accepted for execute() calls.
+   * Call unbindToken() after execution completes.
+   */
+  bindToken(token: symbol): void {
+    this.requiredToken = token;
+  }
+
+  unbindToken(): void {
+    this.requiredToken = null;
+  }
 
   get manifest() {
     return this.inner.manifest;
@@ -44,7 +61,16 @@ export class GuardedCartridge implements Cartridge {
     parameters: Record<string, unknown>,
     context: CartridgeContext,
   ): Promise<ExecuteResult> {
-    if (!executionToken) {
+    // If a specific token is bound, check that exact token is still active.
+    // Otherwise fall back to checking if ANY token is active (backward compat).
+    if (this.requiredToken) {
+      if (!activeTokens.has(this.requiredToken)) {
+        throw new Error(
+          "Cartridge.execute() called outside of orchestrator executeApproved(). " +
+          "Direct execution is forbidden — all actions must go through the governance pipeline.",
+        );
+      }
+    } else if (activeTokens.size === 0) {
       throw new Error(
         "Cartridge.execute() called outside of orchestrator executeApproved(). " +
         "Direct execution is forbidden — all actions must go through the governance pipeline.",

@@ -23,6 +23,15 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
 
     try {
+      // Verify that respondedBy matches the authenticated principal when auth is configured.
+      // This prevents approval spoofing where a user claims to be a different principal.
+      const authenticatedPrincipal = request.principalIdFromAuth;
+      if (authenticatedPrincipal && authenticatedPrincipal !== body.respondedBy) {
+        return reply.code(403).send({
+          error: `Forbidden: authenticated principal '${authenticatedPrincipal}' cannot respond as '${body.respondedBy}'`,
+        });
+      }
+
       const response = await app.orchestrator.respondToApproval({
         approvalId: id,
         action: body.action,

@@ -31,7 +31,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         actionType: body.actionType,
         parameters: body.parameters,
         principalId: body.principalId,
-        organizationId: body.organizationId ?? null,
+        organizationId: body.organizationId ?? request.organizationIdFromAuth ?? null,
         cartridgeId,
         entityRefs: body.entityRefs ?? [],
         message: body.message,
@@ -153,7 +153,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           actionType: proposal.actionType,
           parameters: proposal.parameters,
           principalId: body.principalId,
-          organizationId: body.organizationId ?? null,
+          organizationId: body.organizationId ?? request.organizationIdFromAuth ?? null,
           cartridgeId,
           entityRefs: [],
         });

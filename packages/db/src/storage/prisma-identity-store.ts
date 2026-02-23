@@ -127,7 +127,7 @@ export class PrismaIdentityStore implements IdentityStore {
     });
   }
 
-  async listDelegationRules(): Promise<DelegationRule[]> {
+  async listDelegationRules(_organizationId?: string): Promise<DelegationRule[]> {
     const rows = await this.prisma.delegationRule.findMany();
     return rows.map((row: { id: string; grantorId: string; granteeId: string; scope: string; expiresAt: Date | null }) => ({
       id: row.id,

@@ -48,6 +48,8 @@ declare module "fastify" {
     organizationIdFromAuth?: string;
     /** Set by auth when API_KEY_METADATA maps this key to a runtime. */
     runtimeIdFromAuth?: string;
+    /** Set by auth when API_KEY_METADATA maps this key to a principal. */
+    principalIdFromAuth?: string;
   }
 }
 
@@ -147,12 +149,20 @@ export async function buildServer() {
 
   // Register ads-spend cartridge
   const adsCartridge = new AdsSpendCartridge();
+  const adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
+  const adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
+  if (process.env.NODE_ENV === "production" && (!adsAccessToken || !adsAccountId)) {
+    throw new Error(
+      "META_ADS_ACCESS_TOKEN and META_ADS_ACCOUNT_ID are required in production. " +
+      "Set these environment variables or set NODE_ENV to something other than 'production'.",
+    );
+  }
   await adsCartridge.initialize({
     principalId: "system",
     organizationId: null,
     connectionCredentials: {
-      accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
-      adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      accessToken: adsAccessToken ?? "mock-token-dev-only",
+      adAccountId: adsAccountId ?? "act_mock_dev_only",
     },
   });
   storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));

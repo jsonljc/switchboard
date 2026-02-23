@@ -72,6 +72,7 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
 
   async list(filter?: {
     principalId?: string;
+    organizationId?: string;
     status?: string;
     limit?: number;
   }): Promise<ActionEnvelope[]> {
@@ -90,6 +91,13 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
       const pid = filter.principalId;
       results = results.filter((e: ActionEnvelope) =>
         e.proposals.some((p: ActionEnvelope["proposals"][number]) => p.parameters["_principalId"] === pid),
+      );
+    }
+
+    if (filter?.organizationId) {
+      const orgId = filter.organizationId;
+      results = results.filter((e: ActionEnvelope) =>
+        e.proposals.some((p: ActionEnvelope["proposals"][number]) => p.parameters["_organizationId"] === orgId),
       );
     }
 

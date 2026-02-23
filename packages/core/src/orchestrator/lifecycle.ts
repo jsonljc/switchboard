@@ -47,7 +47,7 @@ import { DEFAULT_POLICY_CACHE_TTL_MS } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
 import { buildApprovalNotification } from "../notifications/notifier.js";
 import { buildActionSummary } from "./summary-builder.js";
-import { beginExecution, endExecution } from "../execution-guard.js";
+import { beginExecution, endExecution, GuardedCartridge } from "../execution-guard.js";
 import { getTracer } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
 
@@ -216,6 +216,7 @@ export class LifecycleOrchestrator {
       } else {
         policies = await this.storage.policies.listActive({
           cartridgeId: params.cartridgeId,
+          organizationId: params.organizationId ?? null,
         });
         await this.policyCache.set(
           params.cartridgeId,
@@ -227,6 +228,7 @@ export class LifecycleOrchestrator {
     } else {
       policies = await this.storage.policies.listActive({
         cartridgeId: params.cartridgeId,
+        organizationId: params.organizationId ?? null,
       });
     }
 
@@ -786,6 +788,11 @@ export class LifecycleOrchestrator {
 
     let executeResult: ExecuteResult;
     const execToken = beginExecution();
+    // Bind this specific token to the cartridge instance so concurrent
+    // executions each validate their own token (not a shared global).
+    if (cartridge instanceof GuardedCartridge) {
+      cartridge.bindToken(execToken);
+    }
     try {
       // Pass envelope/action IDs to the cartridge for undo recipe building
       const execParams = {
@@ -815,6 +822,9 @@ export class LifecycleOrchestrator {
       };
     } finally {
       endExecution(execToken);
+      if (cartridge instanceof GuardedCartridge) {
+        cartridge.unbindToken();
+      }
     }
 
     // 4. Update envelope

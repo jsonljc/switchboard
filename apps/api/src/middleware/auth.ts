@@ -4,6 +4,7 @@ import fp from "fastify-plugin";
 export interface ApiKeyMetadata {
   organizationId?: string;
   runtimeId?: string;
+  principalId?: string;
 }
 
 /**
@@ -25,7 +26,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   // If no keys configured, skip auth entirely (development mode)
   if (apiKeys.size === 0) {
     if (process.env.NODE_ENV === "production") {
-      app.log.error("API_KEYS not set — authentication disabled in production. Set API_KEYS env var.");
+      throw new Error(
+        "API_KEYS environment variable is required in production. " +
+        "Set API_KEYS to a comma-separated list of valid API keys, or set NODE_ENV to something other than 'production'.",
+      );
     }
     return;
   }
@@ -58,6 +62,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     if (meta) {
       request.organizationIdFromAuth = meta.organizationId;
       request.runtimeIdFromAuth = meta.runtimeId;
+      request.principalIdFromAuth = meta.principalId;
     }
   });
 };
@@ -75,7 +80,7 @@ function loadApiKeys(): Set<string> {
 
 /**
  * Load optional per-key metadata from API_KEY_METADATA.
- * Format: "key:orgId:runtimeId,key2:org2:runtime2" (empty org or runtime allowed, e.g. "key::runtime1")
+ * Format: "key:orgId:runtimeId:principalId" (empty parts allowed, e.g. "key:::principal1")
  */
 function loadApiKeyMetadata(): Map<string, ApiKeyMetadata> {
   const raw = process.env["API_KEY_METADATA"] ?? "";
@@ -88,7 +93,8 @@ function loadApiKeyMetadata(): Map<string, ApiKeyMetadata> {
     if (!key) continue;
     const organizationId = parts[1]?.trim() || undefined;
     const runtimeId = parts[2]?.trim() || undefined;
-    out.set(key, { organizationId, runtimeId });
+    const principalId = parts[3]?.trim() || undefined;
+    out.set(key, { organizationId, runtimeId, principalId });
   }
   return out;
 }
