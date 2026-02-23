@@ -856,23 +856,125 @@ describe("Audit", () => {
   });
 
   it("hash chain verification: valid chain", () => {
+    // Build valid chain entries with proper hashes (matching ledger behavior)
+    const hashInput1: AuditHashInput = {
+      chainHashVersion: 1,
+      schemaVersion: 1,
+      id: "chain-1",
+      eventType: "action.evaluated",
+      timestamp: "2025-01-15T10:00:00.000Z",
+      actorType: "agent",
+      actorId: "agent-1",
+      entityType: "campaign",
+      entityId: "camp-1",
+      riskCategory: "low",
+      snapshot: { a: 1 },
+      evidencePointers: [],
+      summary: "Entry 1",
+      previousEntryHash: null,
+    };
+    const hash1 = computeAuditHashSync(hashInput1);
+
+    const hashInput2: AuditHashInput = {
+      ...hashInput1,
+      id: "chain-2",
+      summary: "Entry 2",
+      previousEntryHash: hash1,
+    };
+    const hash2 = computeAuditHashSync(hashInput2);
+
     const result = verifyChain([
-      { entryHash: "aaa", previousEntryHash: null },
-      { entryHash: "bbb", previousEntryHash: "aaa" },
-      { entryHash: "ccc", previousEntryHash: "bbb" },
+      { ...hashInput1, entryHash: hash1 },
+      { ...hashInput2, entryHash: hash2 },
     ]);
     expect(result.valid).toBe(true);
     expect(result.brokenAt).toBeNull();
   });
 
   it("hash chain break detection", () => {
+    // Build entries with valid hashes but broken linkage
+    const hashInput1: AuditHashInput = {
+      chainHashVersion: 1,
+      schemaVersion: 1,
+      id: "break-1",
+      eventType: "action.evaluated",
+      timestamp: "2025-01-15T10:00:00.000Z",
+      actorType: "agent",
+      actorId: "agent-1",
+      entityType: "campaign",
+      entityId: "camp-1",
+      riskCategory: "low",
+      snapshot: { a: 1 },
+      evidencePointers: [],
+      summary: "Entry 1",
+      previousEntryHash: null,
+    };
+    const hash1 = computeAuditHashSync(hashInput1);
+
+    const hashInput2: AuditHashInput = {
+      ...hashInput1,
+      id: "break-2",
+      summary: "Entry 2",
+      previousEntryHash: hash1,
+    };
+    const hash2 = computeAuditHashSync(hashInput2);
+
+    // Entry 3 has previousEntryHash = "WRONG" instead of hash2
+    const hashInput3: AuditHashInput = {
+      ...hashInput1,
+      id: "break-3",
+      summary: "Entry 3",
+      previousEntryHash: "WRONG",
+    };
+    const hash3 = computeAuditHashSync(hashInput3);
+
     const result = verifyChain([
-      { entryHash: "aaa", previousEntryHash: null },
-      { entryHash: "bbb", previousEntryHash: "aaa" },
-      { entryHash: "ccc", previousEntryHash: "WRONG" }, // broken
+      { ...hashInput1, entryHash: hash1 },
+      { ...hashInput2, entryHash: hash2 },
+      { ...hashInput3, entryHash: hash3 },
     ]);
     expect(result.valid).toBe(false);
     expect(result.brokenAt).toBe(2);
+  });
+
+  it("verifyChain catches tampered entry data", () => {
+    // Create valid hash inputs (without entryHash, matching ledger behavior)
+    const hashInput1: AuditHashInput = {
+      chainHashVersion: 1,
+      schemaVersion: 1,
+      id: "audit-tamper-1",
+      eventType: "action.evaluated",
+      timestamp: "2025-01-15T10:00:00.000Z",
+      actorType: "agent",
+      actorId: "agent-1",
+      entityType: "campaign",
+      entityId: "campaign-1",
+      riskCategory: "low",
+      snapshot: { budget: 500 },
+      evidencePointers: [],
+      summary: "Original entry",
+      previousEntryHash: null,
+    };
+    const hash1 = computeAuditHashSync(hashInput1);
+
+    const hashInput2: AuditHashInput = {
+      ...hashInput1,
+      id: "audit-tamper-2",
+      summary: "Second entry",
+      previousEntryHash: hash1,
+    };
+    const hash2 = computeAuditHashSync(hashInput2);
+
+    const entry1 = { ...hashInput1, entryHash: hash1 };
+    const entry2 = { ...hashInput2, entryHash: hash2 };
+
+    // Valid chain should pass
+    expect(verifyChain([entry1, entry2]).valid).toBe(true);
+
+    // Tamper with entry1's snapshot data but keep its old hash
+    const tampered1 = { ...entry1, snapshot: { budget: 999999 } };
+    expect(verifyChain([tampered1, entry2]).valid).toBe(false);
+    expect(verifyChain([tampered1, entry2]).brokenAt).toBe(0);
   });
 
   it("redaction of email patterns", () => {
@@ -1337,6 +1439,31 @@ describe("AuditLedger", () => {
 
     const chainResult = await ledger.verifyChain([entry1, entry2]);
     expect(chainResult.valid).toBe(true);
+  });
+
+  it("applies redaction by default when no config is passed", async () => {
+    const storage = new InMemoryLedgerStorage();
+    const ledger = new AuditLedger(storage); // no second arg
+
+    const entry = await ledger.record({
+      eventType: "action.evaluated",
+      actorType: "user",
+      actorId: "user-1",
+      entityType: "account",
+      entityId: "acct-1",
+      riskCategory: "medium",
+      summary: "Default redaction test",
+      snapshot: {
+        email: "pii@example.com",
+        password: "supersecret",
+        normalField: "visible",
+      },
+    });
+
+    expect(entry.snapshot["email"]).toBe("[REDACTED]");
+    expect(entry.snapshot["password"]).toBe("[REDACTED]");
+    expect(entry.snapshot["normalField"]).toBe("visible");
+    expect(entry.redactionApplied).toBe(true);
   });
 
   it("applies redaction when configured", async () => {

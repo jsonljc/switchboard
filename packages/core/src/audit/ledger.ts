@@ -6,9 +6,9 @@ import type {
   VisibilityLevel,
   ActorType,
 } from "@switchboard/schemas";
-import { computeAuditHashSync } from "./canonical-hash.js";
+import { computeAuditHashSync, verifyChain as verifyChainIntegrity, ensureCanonicalize } from "./canonical-hash.js";
 import type { AuditHashInput } from "./canonical-hash.js";
-import { redactSnapshot } from "./redaction.js";
+import { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./redaction.js";
 import type { RedactionConfig } from "./redaction.js";
 import { storeEvidence } from "./evidence.js";
 import type { EvidencePointer } from "./evidence.js";
@@ -39,7 +39,7 @@ export class AuditLedger {
   private storage: LedgerStorage;
   private redactionConfig: RedactionConfig | undefined;
 
-  constructor(storage: LedgerStorage, redactionConfig?: RedactionConfig) {
+  constructor(storage: LedgerStorage, redactionConfig: RedactionConfig | undefined = DEFAULT_REDACTION_CONFIG) {
     this.storage = storage;
     this.redactionConfig = redactionConfig;
   }
@@ -58,6 +58,9 @@ export class AuditLedger {
     organizationId?: string;
     visibilityLevel?: VisibilityLevel;
   }): Promise<AuditEntry> {
+    // Ensure canonicalize is loaded before computing hashes
+    await ensureCanonicalize();
+
     const latest = await this.storage.getLatest();
     const previousEntryHash = latest?.entryHash ?? null;
 
@@ -133,14 +136,30 @@ export class AuditLedger {
     valid: boolean;
     brokenAt: number | null;
   }> {
-    for (let i = 1; i < entries.length; i++) {
-      const entry = entries[i]!;
-      const previous = entries[i - 1]!;
-      if (entry.previousEntryHash !== previous.entryHash) {
-        return { valid: false, brokenAt: i };
-      }
-    }
-    return { valid: true, brokenAt: null };
+    // Convert AuditEntry[] to the format expected by verifyChainIntegrity
+    const hashEntries = entries.map((entry) => ({
+      chainHashVersion: entry.chainHashVersion,
+      schemaVersion: entry.schemaVersion,
+      id: entry.id,
+      eventType: entry.eventType,
+      timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : String(entry.timestamp),
+      actorType: entry.actorType,
+      actorId: entry.actorId,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      riskCategory: entry.riskCategory,
+      snapshot: entry.snapshot,
+      evidencePointers: entry.evidencePointers.map((ep) => ({
+        type: ep.type,
+        hash: ep.hash,
+        storageRef: ep.storageRef,
+      })),
+      summary: entry.summary,
+      previousEntryHash: entry.previousEntryHash,
+      entryHash: entry.entryHash,
+    }));
+    await ensureCanonicalize();
+    return verifyChainIntegrity(hashEntries);
   }
 }
 

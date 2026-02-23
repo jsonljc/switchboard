@@ -18,6 +18,7 @@ import {
   CompositeRiskContextSchema,
   CheckCodeSchema,
   AuditEventTypeSchema,
+  GovernanceProfileSchema,
 } from "../index.js";
 
 // ---------------------------------------------------------------------------
@@ -847,5 +848,77 @@ describe("New enum values", () => {
   it("AuditEventTypeSchema accepts delegation.chain_resolved", () => {
     const result = AuditEventTypeSchema.safeParse("delegation.chain_resolved");
     expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18. GovernanceProfileSchema
+// ---------------------------------------------------------------------------
+describe("GovernanceProfileSchema", () => {
+  it("accepts all valid profile values", () => {
+    for (const profile of ["observe", "guarded", "strict", "locked"] as const) {
+      const result = GovernanceProfileSchema.safeParse(profile);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects invalid profile value", () => {
+    const result = GovernanceProfileSchema.safeParse("permissive");
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. IdentitySpecSchema with governanceProfile
+// ---------------------------------------------------------------------------
+describe("IdentitySpecSchema — governanceProfile", () => {
+  const baseSpec = {
+    id: "is_001",
+    principalId: "usr_001",
+    organizationId: "org_001",
+    name: "Default Identity",
+    description: "Standard identity spec",
+    riskTolerance: {
+      none: "none",
+      low: "none",
+      medium: "standard",
+      high: "elevated",
+      critical: "mandatory",
+    },
+    globalSpendLimits: {
+      daily: 1000,
+      weekly: 5000,
+      monthly: 20000,
+      perAction: 500,
+    },
+    cartridgeSpendLimits: {},
+    forbiddenBehaviors: [],
+    trustBehaviors: [],
+    createdAt: iso(),
+    updatedAt: iso(),
+  };
+
+  it("accepts IdentitySpec without governanceProfile", () => {
+    const result = IdentitySpecSchema.safeParse(baseSpec);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts IdentitySpec with valid governanceProfile", () => {
+    const result = IdentitySpecSchema.safeParse({
+      ...baseSpec,
+      governanceProfile: "strict",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.governanceProfile).toBe("strict");
+    }
+  });
+
+  it("rejects IdentitySpec with invalid governanceProfile", () => {
+    const result = IdentitySpecSchema.safeParse({
+      ...baseSpec,
+      governanceProfile: "yolo",
+    });
+    expect(result.success).toBe(false);
   });
 });

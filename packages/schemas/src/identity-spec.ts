@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GovernanceProfileSchema } from "./governance-profile.js";
 
 export const ApprovalRequirementSchema = z.enum(["none", "standard", "elevated", "mandatory"]);
 export type ApprovalRequirement = z.infer<typeof ApprovalRequirementSchema>;
@@ -31,6 +32,7 @@ export const IdentitySpecSchema = z.object({
   cartridgeSpendLimits: z.record(z.string(), SpendLimitsSchema),
   forbiddenBehaviors: z.array(z.string()),
   trustBehaviors: z.array(z.string()),
+  governanceProfile: GovernanceProfileSchema.optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

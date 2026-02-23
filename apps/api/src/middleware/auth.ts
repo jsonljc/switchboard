@@ -15,6 +15,9 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
   // If no keys configured, skip auth entirely (development mode)
   if (apiKeys.size === 0) {
+    if (process.env.NODE_ENV === "production") {
+      app.log.error("API_KEYS not set — authentication disabled in production. Set API_KEYS env var.");
+    }
     return;
   }
 
