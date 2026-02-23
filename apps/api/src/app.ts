@@ -222,7 +222,7 @@ export async function buildServer() {
   });
 
   // Decorate Fastify with shared instances
-  const executionService = new ExecutionService(orchestrator);
+  const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);

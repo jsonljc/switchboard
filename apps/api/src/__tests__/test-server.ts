@@ -58,7 +58,14 @@ export async function buildTestServer(): Promise<TestContext> {
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
   // Create and configure TestCartridge
-  const cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
+  const cartridge = new TestCartridge(createTestManifest({
+    id: "ads-spend",
+    actions: [
+      { actionType: "ads.campaign.pause", name: "Pause Campaign", description: "Pause a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+      { actionType: "ads.campaign.resume", name: "Resume Campaign", description: "Resume a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+      { actionType: "ads.budget.adjust", name: "Adjust Budget", description: "Adjust budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
+    ],
+  }));
 
   // Default: high base risk → "medium" risk category (score ~56) → standard approval
   cartridge.onRiskInput(() => ({
@@ -108,15 +115,40 @@ export async function buildTestServer(): Promise<TestContext> {
   // Seed default identity spec and policies
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
 
+  // Save principal records for test actors
+  await storage.identity.savePrincipal({
+    id: "default",
+    type: "user",
+    name: "Default User",
+    organizationId: null,
+    roles: ["requester"],
+  });
+  await storage.identity.savePrincipal({
+    id: "reviewer_1",
+    type: "user",
+    name: "Reviewer 1",
+    organizationId: null,
+    roles: ["approver"],
+  });
+
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
     guardrailState,
     policyCache,
     governanceProfileStore,
+    routingConfig: {
+      defaultApprovers: ["reviewer_1"],
+      defaultFallbackApprover: null,
+      defaultExpiryMs: 24 * 60 * 60 * 1000,
+      defaultExpiredBehavior: "deny" as const,
+      elevatedExpiryMs: 12 * 60 * 60 * 1000,
+      mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+      denyWhenNoApprovers: true,
+    },
   });
 
-  const executionService = new ExecutionService(orchestrator);
+  const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);

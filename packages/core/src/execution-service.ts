@@ -1,5 +1,6 @@
 import type { LifecycleOrchestrator } from "./orchestrator/lifecycle.js";
 import { inferCartridgeId } from "./orchestrator/lifecycle.js";
+import type { StorageContext } from "./storage/interfaces.js";
 import type {
   RuntimeExecuteRequest,
   RuntimeExecuteResponse,
@@ -12,12 +13,19 @@ import type {
  * Used by POST /api/execute and by runtime adapters (OpenClaw, MCP).
  */
 export class ExecutionService implements RuntimeAdapter {
-  constructor(private orchestrator: LifecycleOrchestrator) {}
+  private storage: StorageContext | null;
+
+  constructor(private orchestrator: LifecycleOrchestrator, storage?: StorageContext) {
+    this.storage = storage ?? null;
+  }
 
   async execute(request: RuntimeExecuteRequest): Promise<RuntimeExecuteResponse> {
     const { requestedAction, actorId, organizationId, entityRefs, message, traceId } = request;
 
-    const cartridgeId = inferCartridgeId(requestedAction.actionType);
+    const cartridgeId = inferCartridgeId(
+      requestedAction.actionType,
+      this.storage?.cartridges ?? undefined,
+    );
     if (!cartridgeId) {
       throw new Error(
         `Cannot infer cartridgeId from actionType: ${requestedAction.actionType}`,

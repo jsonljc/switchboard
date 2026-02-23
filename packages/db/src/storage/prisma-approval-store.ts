@@ -71,6 +71,7 @@ function toApprovalRecord(row: {
     respondedAt: row.respondedAt,
     patchValue: (row.patchValue as Record<string, unknown>) ?? null,
     expiresAt: row.expiresAt,
+    quorum: (request.quorum as ApprovalState["quorum"]) ?? null,
   };
   return { request, state, envelopeId: row.envelopeId };
 }
