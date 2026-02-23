@@ -13,7 +13,14 @@ import {
 } from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
-import type { LifecycleOrchestrator, ProposeResult, StorageContext, LedgerStorage } from "@switchboard/core";
+import { handleReadIntent } from "./clinic/read-handler.js";
+import type {
+  LifecycleOrchestrator,
+  ProposeResult,
+  StorageContext,
+  LedgerStorage,
+  CartridgeReadAdapter as CartridgeReadAdapterType,
+} from "@switchboard/core";
 import {
   createInMemoryStorage,
   seedDefaultStorage,
@@ -22,6 +29,7 @@ import {
   createGuardrailState,
   DEFAULT_REDACTION_CONFIG,
   GuardedCartridge,
+  CartridgeReadAdapter,
 } from "@switchboard/core";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
@@ -36,6 +44,16 @@ export interface ChatRuntimeConfig {
   orchestrator: LifecycleOrchestrator;
   availableActions: string[];
   storage?: StorageContext;
+  /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
+  readAdapter?: CartridgeReadAdapterType;
+}
+
+/** Configuration for clinic mode (LLM interpreter + read tools). */
+export interface ClinicConfig {
+  clinicName?: string;
+  adAccountId?: string;
+  anthropicApiKey?: string;
+  dailyTokenBudget?: number;
 }
 
 export class ChatRuntime {
@@ -45,6 +63,7 @@ export class ChatRuntime {
   private orchestrator: LifecycleOrchestrator;
   private availableActions: string[];
   private storage: StorageContext | null;
+  private readAdapter: CartridgeReadAdapterType | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
 
@@ -55,6 +74,7 @@ export class ChatRuntime {
     this.orchestrator = config.orchestrator;
     this.availableActions = config.availableActions;
     this.storage = config.storage ?? null;
+    this.readAdapter = config.readAdapter ?? null;
   }
 
   private async trackLastExecuted(threadId: string, envelopeId: string): Promise<void> {
@@ -134,6 +154,29 @@ export class ChatRuntime {
       return;
     }
     const result = guard.data;
+
+    // Handle read intents (no governance pipeline needed)
+    if (result.readIntent && result.proposals.length === 0) {
+      if (!this.readAdapter) {
+        await this.adapter.sendTextReply(threadId, "Read operations are not configured.");
+        return;
+      }
+      try {
+        const readResult = await handleReadIntent(result.readIntent as import("./clinic/types.js").ReadIntentDescriptor, {
+          readAdapter: this.readAdapter,
+          cartridgeId: "ads-spend",
+          actorId: message.principalId,
+          organizationId: message.organizationId,
+        });
+        await this.adapter.sendTextReply(threadId, readResult.text);
+      } catch (err) {
+        await this.adapter.sendTextReply(
+          threadId,
+          `Error reading data: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return;
+    }
 
     // If clarification needed
     if (result.needsClarification || result.confidence < 0.5) {
@@ -350,10 +393,14 @@ export class ChatRuntime {
 }
 
 // Bootstrap function
-export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Promise<ChatRuntime> {
+export async function createChatRuntime(
+  config?: Partial<ChatRuntimeConfig>,
+  clinicConfig?: ClinicConfig,
+): Promise<ChatRuntime> {
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
   const adapter = config?.adapter ?? new TelegramAdapter(botToken);
-  const interpreter = config?.interpreter ?? new RuleBasedInterpreter();
+  let interpreter: Interpreter | undefined = config?.interpreter;
+  let readAdapter: CartridgeReadAdapterType | undefined = config?.readAdapter;
 
   let orchestrator = config?.orchestrator;
   let storage: StorageContext | undefined = config?.storage;
@@ -361,12 +408,14 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
   // Optional: single choke point via Switchboard API (propose/execute/approvals over HTTP)
   const apiUrl = process.env["SWITCHBOARD_API_URL"];
   if (!orchestrator && apiUrl) {
-    const adapter = new ApiOrchestratorAdapter({
+    const apiAdapter = new ApiOrchestratorAdapter({
       baseUrl: apiUrl,
       apiKey: process.env["SWITCHBOARD_API_KEY"],
     });
-    orchestrator = adapter as unknown as LifecycleOrchestrator;
+    orchestrator = apiAdapter as unknown as LifecycleOrchestrator;
   }
+
+  let ledger: AuditLedger | undefined;
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
@@ -384,7 +433,7 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
       ledgerStorage = new InMemoryLedgerStorage();
     }
 
-    const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
+    ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
     const guardrailState = createGuardrailState();
     const guardrailStateStore = createGuardrailStateStore();
 
@@ -411,11 +460,49 @@ export async function createChatRuntime(config?: Partial<ChatRuntimeConfig>): Pr
     });
   }
 
+  // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
+  const isClinicMode = clinicConfig || process.env["CLINIC_MODE"] === "true";
+  if (isClinicMode && !interpreter) {
+    const { ClinicInterpreter } = await import("./clinic/interpreter.js");
+    const { ModelRouter } = await import("./clinic/model-router.js");
+
+    const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
+    const adAccountId = clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
+
+    const modelRouter = new ModelRouter({
+      dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
+      clinicId: adAccountId,
+    });
+
+    interpreter = new ClinicInterpreter(
+      {
+        apiKey: anthropicApiKey,
+        model: "claude-3-5-haiku-20241022",
+        baseUrl: "https://api.anthropic.com",
+      },
+      {
+        adAccountId,
+        clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
+      },
+      modelRouter,
+    );
+
+    // Create CartridgeReadAdapter for read intents
+    if (storage && ledger && !readAdapter) {
+      readAdapter = new CartridgeReadAdapter(storage, ledger);
+    }
+  }
+
+  if (!interpreter) {
+    interpreter = new RuleBasedInterpreter();
+  }
+
   return new ChatRuntime({
     adapter,
     interpreter,
     orchestrator,
     storage,
+    readAdapter,
     availableActions: config?.availableActions ?? [
       "ads.campaign.pause",
       "ads.campaign.resume",

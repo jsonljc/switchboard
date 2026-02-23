@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Interpreter, InterpreterResult } from "./interpreter.js";
 import { guardInterpreterOutput } from "./schema-guard.js";
 import { detectPromptInjection, detectPromptInjectionInOutput } from "./injection-detector.js";
+import type { ReadIntentDescriptor } from "../clinic/types.js";
 
 export interface LLMConfig {
   apiKey: string;
@@ -126,6 +127,7 @@ export abstract class LLMInterpreter implements Interpreter {
       clarificationQuestion: guard.data.clarificationQuestion,
       confidence: guard.data.confidence,
       rawResponse: llmResponse.text,
+      readIntent: guard.data.readIntent as ReadIntentDescriptor | null | undefined ?? undefined,
     };
   }
 
