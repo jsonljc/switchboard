@@ -407,6 +407,7 @@ export class LifecycleOrchestrator {
         request: approvalRequest,
         state: approvalState,
         envelopeId: envelope.id,
+        organizationId: params.organizationId ?? null,
       });
 
       // Push notification to approvers

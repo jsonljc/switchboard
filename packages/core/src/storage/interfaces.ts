@@ -50,11 +50,13 @@ export interface ApprovalStore {
     request: ApprovalRequest;
     state: ApprovalState;
     envelopeId: string;
+    organizationId?: string | null;
   }): Promise<void>;
   getById(id: string): Promise<{
     request: ApprovalRequest;
     state: ApprovalState;
     envelopeId: string;
+    organizationId?: string | null;
   } | null>;
   updateState(id: string, state: ApprovalState): Promise<void>;
   listPending(organizationId?: string): Promise<
@@ -62,6 +64,7 @@ export interface ApprovalStore {
       request: ApprovalRequest;
       state: ApprovalState;
       envelopeId: string;
+      organizationId?: string | null;
     }>
   >;
 }

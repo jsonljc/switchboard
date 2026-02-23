@@ -58,8 +58,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       description: "List all pending approval requests.",
       tags: ["Approvals"],
     },
-  }, async (_request, reply) => {
-    const pending = await app.storageContext.approvals.listPending();
+  }, async (request, reply) => {
+    const pending = await app.storageContext.approvals.listPending(
+      request.organizationIdFromAuth,
+    );
     return reply.code(200).send({
       approvals: pending.map((a) => ({
         id: a.request.id,

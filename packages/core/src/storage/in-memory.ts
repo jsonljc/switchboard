@@ -165,8 +165,14 @@ export class InMemoryIdentityStore implements IdentityStore {
     this.principals.set(principal.id, { ...principal });
   }
 
-  async listDelegationRules(_organizationId?: string): Promise<DelegationRule[]> {
-    return [...this.delegationRules.values()];
+  async listDelegationRules(organizationId?: string): Promise<DelegationRule[]> {
+    const rules = [...this.delegationRules.values()];
+    if (!organizationId) return rules;
+    // Filter to rules where the grantor belongs to the specified org
+    return rules.filter((rule) => {
+      const grantor = this.principals.get(rule.grantor);
+      return grantor && grantor.organizationId === organizationId;
+    });
   }
 
   async saveDelegationRule(rule: DelegationRule): Promise<void> {
@@ -177,13 +183,14 @@ export class InMemoryIdentityStore implements IdentityStore {
 export class InMemoryApprovalStore implements ApprovalStore {
   private store = new Map<
     string,
-    { request: ApprovalRequest; state: ApprovalState; envelopeId: string }
+    { request: ApprovalRequest; state: ApprovalState; envelopeId: string; organizationId?: string | null }
   >();
 
   async save(approval: {
     request: ApprovalRequest;
     state: ApprovalState;
     envelopeId: string;
+    organizationId?: string | null;
   }): Promise<void> {
     this.store.set(approval.request.id, { ...approval });
   }
@@ -192,6 +199,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     request: ApprovalRequest;
     state: ApprovalState;
     envelopeId: string;
+    organizationId?: string | null;
   } | null> {
     const entry = this.store.get(id);
     return entry ? { ...entry } : null;
@@ -203,14 +211,19 @@ export class InMemoryApprovalStore implements ApprovalStore {
     this.store.set(id, { ...entry, state });
   }
 
-  async listPending(_organizationId?: string): Promise<
+  async listPending(organizationId?: string): Promise<
     Array<{
       request: ApprovalRequest;
       state: ApprovalState;
       envelopeId: string;
+      organizationId?: string | null;
     }>
   > {
-    return [...this.store.values()].filter((e) => e.state.status === "pending");
+    let results = [...this.store.values()].filter((e) => e.state.status === "pending");
+    if (organizationId) {
+      results = results.filter((e) => e.organizationId === organizationId);
+    }
+    return results;
   }
 }
 

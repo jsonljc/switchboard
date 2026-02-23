@@ -6,6 +6,7 @@ type ApprovalRecord = {
   request: ApprovalRequest;
   state: ApprovalState;
   envelopeId: string;
+  organizationId?: string | null;
 };
 
 export class PrismaApprovalStore implements ApprovalStore {
