@@ -212,7 +212,11 @@ export class LifecycleOrchestrator {
     // 10. Handle decision outcome
     let approvalRequest: ApprovalRequest | null = null;
 
-    if (decisionTrace.finalDecision === "deny") {
+    // Observe mode: run full evaluation but force auto-approve regardless
+    const isObserveMode = effectiveIdentity.governanceProfile === "observe";
+    if (isObserveMode) {
+      envelope.status = "approved";
+    } else if (decisionTrace.finalDecision === "deny") {
       envelope.status = "denied";
     } else if (decisionTrace.approvalRequired !== "none") {
       // Approval needed
@@ -293,6 +297,11 @@ export class LifecycleOrchestrator {
         parameters: params.parameters,
         decision: decisionTrace.finalDecision,
         approvalRequired: decisionTrace.approvalRequired,
+        riskScore: decisionTrace.computedRiskScore.rawScore,
+        riskCategory: decisionTrace.computedRiskScore.category,
+        matchedChecks: decisionTrace.checks
+          .filter((c) => c.matched)
+          .map((c) => ({ code: c.checkCode, effect: c.effect })),
       },
       envelopeId: envelope.id,
       organizationId: params.organizationId ?? undefined,
@@ -334,6 +343,19 @@ export class LifecycleOrchestrator {
       if (envelope) {
         await this.storage.envelopes.update(envelope.id, { status: "expired" });
         envelope.status = "expired";
+
+        await this.ledger.record({
+          eventType: "action.expired",
+          actorType: "system",
+          actorId: "orchestrator",
+          entityType: "approval",
+          entityId: params.approvalId,
+          riskCategory: approval.request.riskCategory as RiskCategory,
+          summary: `Approval expired for envelope ${approval.envelopeId}`,
+          snapshot: { approvalId: params.approvalId, envelopeId: approval.envelopeId },
+          envelopeId: approval.envelopeId,
+        });
+
         return { envelope, approvalState: expiredState, executionResult: null };
       }
       throw new Error(`Envelope not found for expired approval`);
@@ -437,6 +459,63 @@ export class LifecycleOrchestrator {
           params.patchValue,
         );
         originalProposal.parameters = patchedParams;
+
+        // Re-evaluate patched parameters through the policy engine
+        const principalId = (originalProposal.parameters["_principalId"] as string) ?? "";
+        const cartridgeId = (originalProposal.parameters["_cartridgeId"] as string) ?? "";
+        const identitySpec = await this.storage.identity.getSpecByPrincipalId(principalId);
+        if (identitySpec) {
+          const overlays = await this.storage.identity.listOverlaysBySpecId(identitySpec.id);
+          const reEvalIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
+          const cartridge = this.storage.cartridges.get(cartridgeId);
+          if (cartridge) {
+            const riskInput = await cartridge.getRiskInput(
+              originalProposal.actionType,
+              patchedParams,
+              { principalId },
+            );
+            const guardrails = cartridge.getGuardrails();
+            const policies = await this.storage.policies.listActive({ cartridgeId });
+
+            const reEvalProposal = { ...originalProposal, parameters: patchedParams };
+            const reEvalContext: import("../engine/rule-evaluator.js").EvaluationContext = {
+              actionType: originalProposal.actionType,
+              parameters: patchedParams,
+              cartridgeId,
+              principalId,
+              organizationId: null,
+              riskCategory: riskInput.baseRisk,
+              metadata: { envelopeId: envelope.id },
+            };
+            const reEngineContext: import("../engine/policy-engine.js").PolicyEngineContext = {
+              policies,
+              guardrails,
+              guardrailState: this.guardrailState,
+              resolvedIdentity: reEvalIdentity,
+              riskInput,
+            };
+
+            const reEvalTrace = evaluate(reEvalProposal, reEvalContext, reEngineContext);
+            if (reEvalTrace.finalDecision === "deny") {
+              envelope.status = "denied";
+              await this.storage.envelopes.update(envelope.id, { status: "denied", proposals: envelope.proposals });
+              await this.ledger.record({
+                eventType: "action.denied",
+                actorType: "system",
+                actorId: "orchestrator",
+                entityType: "action",
+                entityId: approval.request.actionId,
+                riskCategory: reEvalTrace.computedRiskScore.category,
+                summary: `Patched parameters denied by policy re-evaluation`,
+                snapshot: { approvalId: params.approvalId, patchValue: params.patchValue, reason: reEvalTrace.explanation },
+                envelopeId: envelope.id,
+              });
+
+              const updatedEnvelope = await this.storage.envelopes.getById(envelope.id);
+              return { envelope: updatedEnvelope ?? envelope, approvalState: newState, executionResult: null };
+            }
+          }
+        }
       }
 
       envelope.status = "approved";
@@ -508,6 +587,25 @@ export class LifecycleOrchestrator {
 
     // 3. Execute
     await this.storage.envelopes.update(envelopeId, { status: "executing" });
+
+    // Record pre-execution audit entry
+    await this.ledger.record({
+      eventType: "action.executing",
+      actorType: "system",
+      actorId: "orchestrator",
+      entityType: "action",
+      entityId: proposal.id,
+      riskCategory: decision?.computedRiskScore.category ?? "low",
+      summary: `Executing ${proposal.actionType}`,
+      snapshot: {
+        actionType: proposal.actionType,
+        parameters: Object.fromEntries(
+          Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
+        ),
+        cartridgeId: storedCartridgeId ?? inferredCartridgeId ?? "",
+      },
+      envelopeId: envelope.id,
+    });
 
     let executeResult: ExecuteResult;
     try {
@@ -641,6 +739,19 @@ export class LifecycleOrchestrator {
     if (this.competenceTracker && originalProposal) {
       await this.competenceTracker.recordRollback(principalId, originalProposal.actionType);
     }
+
+    // Record undo audit entry
+    await this.ledger.record({
+      eventType: "action.undo_requested",
+      actorType: "system",
+      actorId: "orchestrator",
+      entityType: "action",
+      entityId: envelope.id,
+      riskCategory: (envelope.decisions[0]?.computedRiskScore.category ?? "none") as RiskCategory,
+      summary: `Undo requested for envelope ${envelope.id}`,
+      snapshot: { originalEnvelopeId: envelope.id, reverseActionType: undoRecipe.reverseActionType },
+      envelopeId: envelope.id,
+    });
 
     // 4. Run through propose() with parentEnvelopeId set
     return this.propose({

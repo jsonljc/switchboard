@@ -4,7 +4,9 @@ import type {
   RiskTolerance,
   SpendLimits,
   CompetenceAdjustment,
+  GovernanceProfile,
 } from "@switchboard/schemas";
+import { GOVERNANCE_PROFILE_PRESETS } from "./governance-presets.js";
 
 export interface ResolvedIdentity {
   spec: IdentitySpec;
@@ -13,6 +15,7 @@ export interface ResolvedIdentity {
   effectiveSpendLimits: SpendLimits;
   effectiveForbiddenBehaviors: string[];
   effectiveTrustBehaviors: string[];
+  governanceProfile?: GovernanceProfile;
 }
 
 export function resolveIdentity(
@@ -33,6 +36,24 @@ export function resolveIdentity(
   let effectiveSpendLimits = { ...spec.globalSpendLimits };
   const effectiveForbiddenBehaviors = [...spec.forbiddenBehaviors];
   let effectiveTrustBehaviors = [...spec.trustBehaviors];
+
+  // Apply governance profile presets as base (before overlays)
+  const governanceProfile = spec.governanceProfile;
+  if (governanceProfile) {
+    const presets = GOVERNANCE_PROFILE_PRESETS[governanceProfile];
+    effectiveRiskTolerance = { ...presets.riskTolerance };
+    effectiveSpendLimits = { ...presets.spendLimits };
+    for (const b of presets.forbiddenBehaviors) {
+      if (!effectiveForbiddenBehaviors.includes(b)) {
+        effectiveForbiddenBehaviors.push(b);
+      }
+    }
+    for (const b of presets.trustBehaviors) {
+      if (!effectiveTrustBehaviors.includes(b)) {
+        effectiveTrustBehaviors.push(b);
+      }
+    }
+  }
 
   // Apply overlays in priority order
   for (const overlay of activeOverlays) {
@@ -88,6 +109,7 @@ export function resolveIdentity(
     effectiveSpendLimits,
     effectiveForbiddenBehaviors,
     effectiveTrustBehaviors,
+    governanceProfile,
   };
 }
 

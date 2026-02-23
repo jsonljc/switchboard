@@ -19,6 +19,8 @@ export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js"
 export type { ResolvedIdentity } from "./identity/spec.js";
 export { getActiveOverlays } from "./identity/overlay.js";
 export { canActAs, resolveApprovers } from "./identity/principals.js";
+export { GOVERNANCE_PROFILE_PRESETS } from "./identity/governance-presets.js";
+export type { GovernanceProfilePreset } from "./identity/governance-presets.js";
 
 // Approval
 export {
@@ -63,7 +65,7 @@ export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js
 export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./orchestrator/index.js";
 
 // Audit
-export { computeAuditHash, computeAuditHashSync, sha256, verifyChain } from "./audit/canonical-hash.js";
+export { computeAuditHash, computeAuditHashSync, sha256, verifyChain, ensureCanonicalize } from "./audit/canonical-hash.js";
 export type { AuditHashInput } from "./audit/canonical-hash.js";
 export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./audit/redaction.js";
 export type { RedactionConfig, RedactionResult } from "./audit/redaction.js";

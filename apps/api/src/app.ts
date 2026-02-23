@@ -19,6 +19,7 @@ import {
   InMemoryLedgerStorage,
   AuditLedger,
   createGuardrailState,
+  DEFAULT_REDACTION_CONFIG,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
@@ -110,7 +111,7 @@ export async function buildServer() {
     ledgerStorage = new InMemoryLedgerStorage();
   }
 
-  const ledger = new AuditLedger(ledgerStorage);
+  const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
   const guardrailState = createGuardrailState();
   const guardrailStateStore = createGuardrailStateStore();
 

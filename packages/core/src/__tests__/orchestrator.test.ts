@@ -167,6 +167,14 @@ describe("LifecycleOrchestrator", () => {
       expect(result.envelope.auditEntryIds.length).toBeGreaterThan(0);
       const entries = await ledger.query({ envelopeId: result.envelope.id });
       expect(entries.length).toBeGreaterThan(0);
+
+      // Verify enriched snapshot contains riskScore and matchedChecks
+      const proposedEntry = entries.find((e) => e.eventType === "action.proposed");
+      expect(proposedEntry).toBeDefined();
+      expect(proposedEntry?.snapshot["riskScore"]).toBeDefined();
+      expect(typeof proposedEntry?.snapshot["riskScore"]).toBe("number");
+      expect(proposedEntry?.snapshot["riskCategory"]).toBeDefined();
+      expect(Array.isArray(proposedEntry?.snapshot["matchedChecks"])).toBe(true);
     });
 
     it("should throw for unknown principal", async () => {
@@ -221,6 +229,17 @@ describe("LifecycleOrchestrator", () => {
       expect(response.executionResult).not.toBeNull();
       expect(response.executionResult?.success).toBe(true);
       expect(response.envelope.status).toBe("executed");
+
+      // Verify action.executing audit entry exists before action.executed
+      const allEntries = ledgerStorage.getAll();
+      const executingEntry = allEntries.find((e) => e.eventType === "action.executing");
+      const executedEntry = allEntries.find((e) => e.eventType === "action.executed");
+      expect(executingEntry).toBeDefined();
+      expect(executedEntry).toBeDefined();
+      // executing should come before executed
+      const executingIdx = allEntries.indexOf(executingEntry!);
+      const executedIdx = allEntries.indexOf(executedEntry!);
+      expect(executingIdx).toBeLessThan(executedIdx);
     });
 
     it("should reject and set status denied", async () => {
@@ -275,6 +294,60 @@ describe("LifecycleOrchestrator", () => {
       ).rejects.toThrow("Binding hash mismatch");
     });
 
+    it("should reject patch that violates policy", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      // Forbid the action type so patched parameters get denied on re-evaluation
+      await storage.identity.saveSpec(
+        makeIdentitySpec({
+          forbiddenBehaviors: ["ads.campaign.pause"],
+          riskTolerance: {
+            none: "none",
+            low: "none",
+            medium: "none",
+            high: "none",
+            critical: "none",
+          },
+        }),
+      );
+
+      // But we need a proposal that was originally allowed, so create a different identity first
+      await storage.identity.saveSpec(makeIdentitySpec());
+
+      const proposeResult = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Now forbid the behavior before patching
+      await storage.identity.saveSpec(
+        makeIdentitySpec({
+          forbiddenBehaviors: ["ads.campaign.pause"],
+        }),
+      );
+
+      const response = await orchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "patch",
+        respondedBy: "admin_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+        patchValue: { campaignId: "camp_2" },
+      });
+
+      // The patched parameters should be denied by re-evaluation
+      expect(response.envelope.status).toBe("denied");
+      expect(response.executionResult).toBeNull();
+    });
+
     it("should handle expired approval", async () => {
       cartridge.onRiskInput(() => ({
         baseRisk: "high" as const,
@@ -308,6 +381,12 @@ describe("LifecycleOrchestrator", () => {
       expect(response.approvalState.status).toBe("expired");
       expect(response.envelope.status).toBe("expired");
       expect(response.executionResult).toBeNull();
+
+      // Verify action.expired audit entry exists
+      const allEntries = ledgerStorage.getAll();
+      const expiredEntry = allEntries.find((e) => e.eventType === "action.expired");
+      expect(expiredEntry).toBeDefined();
+      expect(expiredEntry?.snapshot["approvalId"]).toBe(proposeResult.approvalRequest!.id);
     });
 
     it("should throw for non-existent approval", async () => {
@@ -386,6 +465,13 @@ describe("LifecycleOrchestrator", () => {
       expect(undoResult.envelope.parentEnvelopeId).toBe(proposeResult.envelope.id);
       // The undo uses the reverse action type from the recipe
       expect(undoResult.envelope.proposals[0]?.actionType).toBe("ads.campaign.resume");
+
+      // Verify action.undo_requested audit entry exists
+      const allEntries = ledgerStorage.getAll();
+      const undoEntry = allEntries.find((e) => e.eventType === "action.undo_requested");
+      expect(undoEntry).toBeDefined();
+      expect(undoEntry?.snapshot["originalEnvelopeId"]).toBe(proposeResult.envelope.id);
+      expect(undoEntry?.snapshot["reverseActionType"]).toBe("ads.campaign.resume");
     });
 
     it("should throw if no undo recipe available", async () => {

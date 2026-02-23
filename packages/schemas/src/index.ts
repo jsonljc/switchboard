@@ -1,6 +1,7 @@
 // Core types
 export * from "./principals.js";
 export * from "./risk.js";
+export * from "./governance-profile.js";
 export * from "./identity-spec.js";
 export * from "./role-overlay.js";
 export * from "./policy.js";

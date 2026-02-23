@@ -12,6 +12,19 @@ async function getCanonicalize(): Promise<(obj: unknown) => string> {
   return canonicalizeImpl;
 }
 
+/**
+ * Ensure the canonicalize function is loaded before any sync hash computation.
+ * Await this in code paths that need deterministic hashing.
+ */
+export async function ensureCanonicalize(): Promise<void> {
+  if (!canonicalizeImpl) {
+    await getCanonicalize();
+  }
+}
+
+// Eagerly start loading
+getCanonicalize().catch(() => {});
+
 export function sha256(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
@@ -40,8 +53,10 @@ export async function computeAuditHash(input: AuditHashInput): Promise<string> {
 }
 
 export function computeAuditHashSync(input: AuditHashInput): string {
-  // Fallback sync version using deterministic JSON serialization
-  // For production, use the async version with RFC 8785
+  if (canonicalizeImpl) {
+    return sha256(canonicalizeImpl(input));
+  }
+  // Fallback: deterministic key-sorted JSON (used only before dynamic import resolves)
   const keys = Object.keys(input).sort();
   const ordered: Record<string, unknown> = {};
   for (const key of keys) {
@@ -51,12 +66,37 @@ export function computeAuditHashSync(input: AuditHashInput): string {
 }
 
 export function verifyChain(
-  entries: Array<{ entryHash: string; previousEntryHash: string | null }>,
+  entries: Array<AuditHashInput & { entryHash: string; previousEntryHash: string | null }>,
 ): { valid: boolean; brokenAt: number | null } {
-  for (let i = 1; i < entries.length; i++) {
+  for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
-    const previous = entries[i - 1]!;
-    if (entry.previousEntryHash !== previous.entryHash) {
+
+    // Extract only AuditHashInput fields for hash recomputation
+    const hashInput: AuditHashInput = {
+      chainHashVersion: entry.chainHashVersion,
+      schemaVersion: entry.schemaVersion,
+      id: entry.id,
+      eventType: entry.eventType,
+      timestamp: entry.timestamp,
+      actorType: entry.actorType,
+      actorId: entry.actorId,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      riskCategory: entry.riskCategory,
+      snapshot: entry.snapshot,
+      evidencePointers: entry.evidencePointers,
+      summary: entry.summary,
+      previousEntryHash: entry.previousEntryHash,
+    };
+
+    // Recompute hash from data and verify it matches
+    const recomputed = computeAuditHashSync(hashInput);
+    if (recomputed !== entry.entryHash) {
+      return { valid: false, brokenAt: i };
+    }
+
+    // Check chain linkage
+    if (i > 0 && entry.previousEntryHash !== entries[i - 1]!.entryHash) {
       return { valid: false, brokenAt: i };
     }
   }
