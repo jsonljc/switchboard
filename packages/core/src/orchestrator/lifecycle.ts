@@ -17,7 +17,7 @@ import type { ApprovalRoutingConfig } from "../approval/router.js";
 import type { RiskScoringConfig } from "../engine/risk-scorer.js";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { SimulationResult } from "../engine/simulator.js";
-import type { EvaluationContext } from "../engine/rule-evaluator.js";
+import { type EvaluationContext, evaluateRule } from "../engine/rule-evaluator.js";
 import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
@@ -191,11 +191,22 @@ export class LifecycleOrchestrator {
       throw new Error(`Cartridge not found: ${params.cartridgeId}`);
     }
 
-    // 4. Get risk input from cartridge
+    // 3b. Enrich context from cartridge
+    const enriched = await cartridge.enrichContext(
+      params.actionType,
+      params.parameters,
+      {
+        principalId: params.principalId,
+        organizationId: params.organizationId ?? null,
+        connectionCredentials: {},
+      },
+    );
+
+    // 4. Get risk input from cartridge (include enriched signals)
     const riskInput = await cartridge.getRiskInput(
       params.actionType,
       params.parameters,
-      { principalId: params.principalId },
+      { principalId: params.principalId, ...enriched },
     );
 
     // 5. Get guardrails from cartridge
@@ -253,7 +264,7 @@ export class LifecycleOrchestrator {
       principalId: params.principalId,
       organizationId: params.organizationId ?? null,
       riskCategory: riskInput.baseRisk,
-      metadata: { envelopeId },
+      metadata: { ...enriched, envelopeId },
     };
 
     // 8. Build policy engine context (per-org governance profile overrides global posture when set)
@@ -371,6 +382,10 @@ export class LifecycleOrchestrator {
       });
 
       const approvalId = generateApprovalId();
+
+      // Extract quorum requirement from matched policy effectParams
+      const quorumRequired = this.extractQuorumFromPolicies(policies, evalContext);
+
       approvalRequest = {
         id: approvalId,
         actionId: proposal.id,
@@ -397,12 +412,16 @@ export class LifecycleOrchestrator {
         expiresAt,
         expiredBehavior: routing.expiredBehavior,
         createdAt: now,
+        quorum: quorumRequired ? { required: quorumRequired, approvalHashes: [] } : null,
       };
 
       envelope.approvalRequests = [approvalRequest];
       envelope.status = "pending_approval";
 
-      const approvalState = createApprovalState(expiresAt);
+      const approvalState = createApprovalState(
+        expiresAt,
+        quorumRequired ? { required: quorumRequired } : null,
+      );
       await this.storage.approvals.save({
         request: approvalRequest,
         state: approvalState,
@@ -491,6 +510,7 @@ export class LifecycleOrchestrator {
     respondedBy: string;
     bindingHash: string;
     patchValue?: Record<string, unknown>;
+    approvalHash?: string;
   }): Promise<ApprovalResponse> {
     // 1. Look up approval
     const approval = await this.storage.approvals.getById(params.approvalId);
@@ -570,6 +590,7 @@ export class LifecycleOrchestrator {
       params.action,
       params.respondedBy,
       params.patchValue,
+      params.approvalHash,
     );
     await this.storage.approvals.updateState(params.approvalId, newState);
 
@@ -582,27 +603,52 @@ export class LifecycleOrchestrator {
     let executionResult: ExecuteResult | null = null;
 
     if (params.action === "approve") {
-      envelope.status = "approved";
-      await this.storage.envelopes.update(envelope.id, { status: "approved" });
+      // With quorum, the state may still be "pending" (accumulating approvals)
+      if (newState.status === "approved") {
+        envelope.status = "approved";
+        await this.storage.envelopes.update(envelope.id, { status: "approved" });
 
-      await this.ledger.record({
-        eventType: "action.approved",
-        actorType: "user",
-        actorId: params.respondedBy,
-        entityType: "action",
-        entityId: approval.request.actionId,
-        riskCategory: approval.request.riskCategory as RiskCategory,
-        summary: `Action approved by ${params.respondedBy}`,
-        snapshot: { approvalId: params.approvalId },
-        envelopeId: envelope.id,
-        traceId: envelope.traceId,
-      });
+        await this.ledger.record({
+          eventType: "action.approved",
+          actorType: "user",
+          actorId: params.respondedBy,
+          entityType: "action",
+          entityId: approval.request.actionId,
+          riskCategory: approval.request.riskCategory as RiskCategory,
+          summary: newState.quorum
+            ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
+            : `Action approved by ${params.respondedBy}`,
+          snapshot: {
+            approvalId: params.approvalId,
+            quorum: newState.quorum ?? null,
+          },
+          envelopeId: envelope.id,
+          traceId: envelope.traceId,
+        });
 
-      // Execute after approval: inline or enqueue
-      if (this.executionMode === "queue" && this.onEnqueue) {
-        await this.onEnqueue(envelope.id);
+        // Execute after approval: inline or enqueue
+        if (this.executionMode === "queue" && this.onEnqueue) {
+          await this.onEnqueue(envelope.id);
+        } else {
+          executionResult = await this.executeApproved(envelope.id);
+        }
       } else {
-        executionResult = await this.executeApproved(envelope.id);
+        // Quorum not yet met — record partial approval
+        await this.ledger.record({
+          eventType: "action.partially_approved",
+          actorType: "user",
+          actorId: params.respondedBy,
+          entityType: "action",
+          entityId: approval.request.actionId,
+          riskCategory: approval.request.riskCategory as RiskCategory,
+          summary: `Approval ${newState.quorum?.approvalHashes.length ?? 0}/${newState.quorum?.required ?? 1} received from ${params.respondedBy}`,
+          snapshot: {
+            approvalId: params.approvalId,
+            quorum: newState.quorum ?? null,
+          },
+          envelopeId: envelope.id,
+          traceId: envelope.traceId,
+        });
       }
     } else if (params.action === "reject") {
       envelope.status = "denied";
@@ -639,10 +685,21 @@ export class LifecycleOrchestrator {
           const reEvalIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
           const cartridge = this.storage.cartridges.get(cartridgeId);
           if (cartridge) {
+            // Enrich context for re-evaluation
+            const enriched = await cartridge.enrichContext(
+              originalProposal.actionType,
+              patchedParams,
+              {
+                principalId,
+                organizationId: null,
+                connectionCredentials: {},
+              },
+            );
+
             const riskInput = await cartridge.getRiskInput(
               originalProposal.actionType,
               patchedParams,
-              { principalId },
+              { principalId, ...enriched },
             );
             const guardrails = cartridge.getGuardrails();
             const policies = await this.storage.policies.listActive({ cartridgeId });
@@ -655,7 +712,7 @@ export class LifecycleOrchestrator {
               principalId,
               organizationId: null,
               riskCategory: riskInput.baseRisk,
-              metadata: { envelopeId: envelope.id },
+              metadata: { ...enriched, envelopeId: envelope.id },
             };
             const reEngineContext: import("../engine/policy-engine.js").PolicyEngineContext = {
               policies,
@@ -1027,10 +1084,21 @@ export class LifecycleOrchestrator {
       throw new Error(`Cartridge not found: ${params.cartridgeId}`);
     }
 
+    // Enrich context from cartridge
+    const enriched = await cartridge.enrichContext(
+      params.actionType,
+      params.parameters,
+      {
+        principalId: params.principalId,
+        organizationId: null,
+        connectionCredentials: {},
+      },
+    );
+
     const riskInput = await cartridge.getRiskInput(
       params.actionType,
       params.parameters,
-      { principalId: params.principalId },
+      { principalId: params.principalId, ...enriched },
     );
 
     const guardrails = cartridge.getGuardrails();
@@ -1078,7 +1146,7 @@ export class LifecycleOrchestrator {
       principalId: params.principalId,
       organizationId: null,
       riskCategory: riskInput.baseRisk,
-      metadata: { envelopeId: "simulation" },
+      metadata: { ...enriched, envelopeId: "simulation" },
     };
 
     const engineContext: PolicyEngineContext = {
@@ -1175,9 +1243,9 @@ export class LifecycleOrchestrator {
             resolvedParams[key] = entity.resolvedId;
           }
         }
-        // Also set campaignId if that's what we resolved
-        if (entity.resolvedType === "campaign") {
-          resolvedParams["campaignId"] = entity.resolvedId;
+        // Set the canonical entity ID parameter based on the resolved type
+        if (entity.resolvedType) {
+          resolvedParams[`${entity.resolvedType}Id`] = entity.resolvedId;
         }
       }
 
@@ -1289,7 +1357,32 @@ export class LifecycleOrchestrator {
   }
 
   private inferCartridgeId(actionType: string): string | null {
-    return inferCartridgeId(actionType);
+    return inferCartridgeId(actionType, this.storage.cartridges);
+  }
+
+  /**
+   * Extract quorum requirement from matched policies' effectParams.
+   * Returns the quorum count if any matched require_approval policy specifies one.
+   */
+  private extractQuorumFromPolicies(
+    policies: import("@switchboard/schemas").Policy[],
+    evalContext: EvaluationContext,
+  ): number | null {
+    const sorted = [...policies].filter((p) => p.active).sort((a, b) => a.priority - b.priority);
+    for (const policy of sorted) {
+      if (policy.cartridgeId && policy.cartridgeId !== evalContext.cartridgeId) continue;
+      if (policy.effect !== "require_approval") continue;
+      if (!policy.effectParams) continue;
+
+      const ruleResult = evaluateRule(policy.rule, evalContext);
+      if (!ruleResult.matched) continue;
+
+      const quorum = policy.effectParams["quorum"];
+      if (typeof quorum === "number" && quorum >= 1) {
+        return quorum;
+      }
+    }
+    return null;
   }
 
   private async buildSpendLookup(principalId: string): Promise<SpendLookup> {
@@ -1397,10 +1490,35 @@ export class LifecycleOrchestrator {
 }
 
 /**
- * Infer cartridge ID from action type prefix.
- * e.g. "ads.campaign.pause" -> "ads-spend"
+ * Infer cartridge ID from action type prefix by matching against
+ * registered cartridge IDs. Falls back to null if no match found.
+ * e.g. "ads.campaign.pause" -> matches cartridge "ads-spend" if its
+ * manifest declares an action with that type.
  */
-export function inferCartridgeId(actionType: string): string | null {
-  if (actionType.startsWith("ads.")) return "ads-spend";
+export function inferCartridgeId(
+  actionType: string,
+  registry?: import("../storage/interfaces.js").CartridgeRegistry,
+): string | null {
+  if (!registry) return null;
+
+  const prefix = actionType.split(".")[0];
+  if (!prefix) return null;
+
+  for (const cartridgeId of registry.list()) {
+    const cartridge = registry.get(cartridgeId);
+    if (!cartridge) continue;
+
+    // Match by manifest actions: check if cartridge declares this action type
+    const manifest = cartridge.manifest;
+    if (manifest.actions) {
+      for (const action of manifest.actions) {
+        if (actionType === action.actionType) return cartridgeId;
+        // Also match by shared prefix (e.g. "ads." prefix)
+        const actionPrefix = action.actionType.split(".")[0];
+        if (actionPrefix && actionPrefix === prefix) return cartridgeId;
+      }
+    }
+  }
+
   return null;
 }

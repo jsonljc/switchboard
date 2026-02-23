@@ -8,12 +8,24 @@ export type ApprovalStatus =
   | "expired"
   | "patched";
 
+export interface QuorumEntry {
+  approverId: string;
+  hash: string;
+  approvedAt: Date;
+}
+
+export interface QuorumState {
+  required: number;
+  approvalHashes: QuorumEntry[];
+}
+
 export interface ApprovalState {
   status: ApprovalStatus;
   respondedBy: string | null;
   respondedAt: Date | null;
   patchValue: Record<string, unknown> | null;
   expiresAt: Date;
+  quorum: QuorumState | null;
 }
 
 export function determineApprovalRequirement(
@@ -23,13 +35,14 @@ export function determineApprovalRequirement(
   return identity.effectiveRiskTolerance[riskCategory];
 }
 
-export function createApprovalState(expiresAt: Date): ApprovalState {
+export function createApprovalState(expiresAt: Date, quorum?: { required: number } | null): ApprovalState {
   return {
     status: "pending",
     respondedBy: null,
     respondedAt: null,
     patchValue: null,
     expiresAt,
+    quorum: quorum ? { required: quorum.required, approvalHashes: [] } : null,
   };
 }
 
@@ -38,12 +51,52 @@ export function transitionApproval(
   action: "approve" | "reject" | "patch" | "expire",
   respondedBy?: string,
   patchValue?: Record<string, unknown>,
+  approvalHash?: string,
 ): ApprovalState {
   switch (action) {
     case "approve":
       if (state.status !== "pending") {
         throw new Error(`Cannot approve: current status is ${state.status}`);
       }
+
+      // Quorum mode: accumulate approvals until threshold is met
+      if (state.quorum) {
+        if (!respondedBy) {
+          throw new Error("Quorum approval requires respondedBy");
+        }
+
+        // Reject duplicate approvers
+        if (state.quorum.approvalHashes.some((h) => h.approverId === respondedBy)) {
+          throw new Error(`Approver ${respondedBy} has already approved this request`);
+        }
+
+        const newEntry: QuorumEntry = {
+          approverId: respondedBy,
+          hash: approvalHash ?? "",
+          approvedAt: new Date(),
+        };
+        const newHashes = [...state.quorum.approvalHashes, newEntry];
+        const newQuorum: QuorumState = { ...state.quorum, approvalHashes: newHashes };
+
+        // Threshold met: transition to approved
+        if (newHashes.length >= state.quorum.required) {
+          return {
+            ...state,
+            status: "approved",
+            respondedBy,
+            respondedAt: new Date(),
+            quorum: newQuorum,
+          };
+        }
+
+        // Still pending — more approvals needed
+        return {
+          ...state,
+          quorum: newQuorum,
+        };
+      }
+
+      // Single-approver mode (unchanged behavior)
       return {
         ...state,
         status: "approved",

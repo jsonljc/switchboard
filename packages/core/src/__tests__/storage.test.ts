@@ -300,6 +300,7 @@ describe("InMemoryApprovalStore", () => {
       expiresAt: new Date(Date.now() + 3600000),
       expiredBehavior: "deny" as const,
       createdAt: new Date(),
+      quorum: null,
     },
     state: {
       status,
@@ -307,6 +308,7 @@ describe("InMemoryApprovalStore", () => {
       respondedAt: null,
       patchValue: null,
       expiresAt: new Date(Date.now() + 3600000),
+      quorum: null,
     } as ApprovalState,
     envelopeId: "env_1",
   });
@@ -336,6 +338,7 @@ describe("InMemoryApprovalStore", () => {
       respondedAt: new Date(),
       patchValue: null,
       expiresAt: new Date(Date.now() + 3600000),
+      quorum: null,
     };
     await store.updateState("appr_2", newState);
     const retrieved = await store.getById("appr_2");

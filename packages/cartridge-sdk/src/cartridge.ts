@@ -49,3 +49,34 @@ export interface Cartridge {
 
   healthCheck(): Promise<ConnectionHealth>;
 }
+
+/**
+ * Interceptor interface for cross-cutting concerns that apply to specific cartridges.
+ * Interceptors are composed externally at registration time — cartridges themselves
+ * don't implement interceptors. The GuardedCartridge wrapper runs the interceptor chain.
+ *
+ * Use cases:
+ * - `beforeEnrich`: Parameter redaction before enrichment (e.g. HIPAA PII removal)
+ * - `beforeExecute`: Shadow execution / dry-run gates (e.g. K8s blast radius check)
+ * - `afterExecute`: Result transformation or audit decoration
+ */
+export interface CartridgeInterceptor {
+  beforeEnrich?(
+    actionType: string,
+    parameters: Record<string, unknown>,
+    context: CartridgeContext,
+  ): Promise<{ parameters: Record<string, unknown> }>;
+
+  beforeExecute?(
+    actionType: string,
+    parameters: Record<string, unknown>,
+    context: CartridgeContext,
+  ): Promise<{ proceed: boolean; parameters: Record<string, unknown>; reason?: string }>;
+
+  afterExecute?(
+    actionType: string,
+    parameters: Record<string, unknown>,
+    result: ExecuteResult,
+    context: CartridgeContext,
+  ): Promise<ExecuteResult>;
+}

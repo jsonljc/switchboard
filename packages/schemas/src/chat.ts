@@ -89,6 +89,14 @@ export const ApprovalRequestSchema = z.object({
   expiresAt: z.coerce.date(),
   expiredBehavior: z.enum(["deny", "re_request"]),
   createdAt: z.coerce.date(),
+  quorum: z.object({
+    required: z.number().int().min(1),
+    approvalHashes: z.array(z.object({
+      approverId: z.string(),
+      hash: z.string(),
+      approvedAt: z.coerce.date(),
+    })),
+  }).nullable().default(null),
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
