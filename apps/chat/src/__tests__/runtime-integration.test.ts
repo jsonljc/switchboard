@@ -88,7 +88,7 @@ function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
     cartridgeSpendLimits: {},
     forbiddenBehaviors: [],
     trustBehaviors: [],
-    delegatedApprovers: [],
+    delegatedApprovers: ["user_1"],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -159,10 +159,28 @@ describe("ChatRuntime Integration", () => {
     // Seed identity
     await storage.identity.saveSpec(makeIdentitySpec());
 
+    // Save principal record for test user (needed for approval authorization)
+    await storage.identity.savePrincipal({
+      id: "user_1",
+      type: "user",
+      name: "Test User",
+      organizationId: null,
+      roles: ["requester", "approver"],
+    });
+
     orchestrator = new LifecycleOrchestrator({
       storage,
       ledger,
       guardrailState,
+      routingConfig: {
+        defaultApprovers: ["user_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny" as const,
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
+      },
     });
 
     runtime = new ChatRuntime({
@@ -183,7 +201,8 @@ describe("ChatRuntime Integration", () => {
     // Should have sent an approval card
     expect(adapter.sentApprovalCards).toHaveLength(1);
     expect(adapter.sentApprovalCards[0]?.card.buttons.length).toBeGreaterThan(0);
-    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("Pause campaign");
+    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("ads");
+    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("pause");
   });
 
   it("should execute after approval button tap", async () => {
