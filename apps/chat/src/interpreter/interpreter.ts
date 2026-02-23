@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ActionProposal } from "@switchboard/schemas";
 import { ActionProposalSchema } from "@switchboard/schemas";
 import { z } from "zod";
+import type { ReadIntentDescriptor } from "../clinic/types.js";
 
 export interface InterpreterResult {
   proposals: ActionProposal[];
@@ -9,6 +10,8 @@ export interface InterpreterResult {
   clarificationQuestion: string | null;
   confidence: number;
   rawResponse: string;
+  /** Set by clinic interpreter for read-only intents (performance reports, status checks). */
+  readIntent?: ReadIntentDescriptor | null;
 }
 
 export interface Interpreter {
