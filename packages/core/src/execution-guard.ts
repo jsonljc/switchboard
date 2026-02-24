@@ -77,16 +77,9 @@ export class GuardedCartridge implements Cartridge {
     parameters: Record<string, unknown>,
     context: CartridgeContext,
   ): Promise<ExecuteResult> {
-    // If a specific token is bound, check that exact token is still active.
-    // Otherwise fall back to checking if ANY token is active (backward compat).
-    if (this.requiredToken) {
-      if (!activeTokens.has(this.requiredToken)) {
-        throw new Error(
-          "Cartridge.execute() called outside of orchestrator executeApproved(). " +
-          "Direct execution is forbidden — all actions must go through the governance pipeline.",
-        );
-      }
-    } else if (activeTokens.size === 0) {
+    // Require a bound token — bindToken() must be called before execute().
+    // The orchestrator calls bindToken() in executeApproved() before each execution.
+    if (!this.requiredToken || !activeTokens.has(this.requiredToken)) {
       throw new Error(
         "Cartridge.execute() called outside of orchestrator executeApproved(). " +
         "Direct execution is forbidden — all actions must go through the governance pipeline.",

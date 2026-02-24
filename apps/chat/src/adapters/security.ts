@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface ChannelSecurityConfig {
   signatureHeader: string;
@@ -25,9 +25,18 @@ export function verifySignature(
 ): boolean {
   if (algorithm === "hmac-sha256") {
     const expected = createHmac("sha256", secret).update(body).digest("hex");
-    return signature === expected || signature === `sha256=${expected}`;
+    // Try both raw hex and prefixed formats, using timing-safe comparison
+    try {
+      if (timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return true;
+    } catch { /* length mismatch */ }
+    try {
+      const prefixed = `sha256=${expected}`;
+      if (timingSafeEqual(Buffer.from(prefixed), Buffer.from(signature))) return true;
+    } catch { /* length mismatch */ }
+    return false;
   }
-  // Other algorithms would be implemented here
+  // RSA-SHA256 and Ed25519 are not yet implemented — deny by default
+  console.warn(`[security] Unsupported signature algorithm: ${algorithm}`);
   return false;
 }
 
