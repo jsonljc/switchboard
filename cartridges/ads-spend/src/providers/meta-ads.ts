@@ -18,7 +18,16 @@ export interface CampaignInfo {
   objective: string;
 }
 
-export class MetaAdsProvider {
+export interface MetaAdsProvider {
+  getCampaign(campaignId: string): Promise<CampaignInfo>;
+  searchCampaigns(query: string, adAccountId?: string): Promise<CampaignInfo[]>;
+  pauseCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }>;
+  resumeCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }>;
+  updateBudget(campaignId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }>;
+  healthCheck(): Promise<ConnectionHealth>;
+}
+
+export class MockMetaAdsProvider implements MetaAdsProvider {
   private config: MetaAdsConfig;
 
   constructor(config: MetaAdsConfig) {
@@ -26,8 +35,6 @@ export class MetaAdsProvider {
   }
 
   async getCampaign(campaignId: string): Promise<CampaignInfo> {
-    // In production, this would call the Meta Marketing API
-    // For now, return a mock that can be replaced with real API calls
     return {
       id: campaignId,
       name: `Campaign ${campaignId}`,
@@ -45,7 +52,6 @@ export class MetaAdsProvider {
     _query: string,
     adAccountId?: string,
   ): Promise<CampaignInfo[]> {
-    // In production, this would search via the Marketing API
     const accountId = adAccountId ?? this.config.adAccountId;
     return [
       {
@@ -75,12 +81,10 @@ export class MetaAdsProvider {
 
   async pauseCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     const campaign = await this.getCampaign(campaignId);
-    // In production: POST to /{campaignId}?status=PAUSED
     return { success: true, previousStatus: campaign.status };
   }
 
   async resumeCampaign(_campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
-    // In production: POST to /{campaignId}?status=ACTIVE
     return { success: true, previousStatus: "PAUSED" };
   }
 
@@ -89,13 +93,11 @@ export class MetaAdsProvider {
     _newBudgetCents: number,
   ): Promise<{ success: boolean; previousBudget: number }> {
     const campaign = await this.getCampaign(campaignId);
-    // In production: POST to /{campaignId}?daily_budget={newBudgetCents}
     return { success: true, previousBudget: campaign.dailyBudget };
   }
 
   async healthCheck(): Promise<ConnectionHealth> {
     try {
-      // In production, would call /me endpoint
       return {
         status: "connected",
         latencyMs: 50,

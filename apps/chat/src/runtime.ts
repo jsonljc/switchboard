@@ -125,6 +125,11 @@ export class ChatRuntime {
 
     // Handle callback queries (approval button taps)
     if (message.text.startsWith("{") && message.text.includes('"action"') && message.text.includes('"approvalId"')) {
+      // Dismiss the button loading spinner in Telegram
+      const cbqId = this.extractCallbackQueryId(rawPayload);
+      if (cbqId && this.adapter.answerCallbackQuery) {
+        await this.adapter.answerCallbackQuery(cbqId);
+      }
       await this.handleCallbackQuery(threadId, message.text, message.principalId);
       return;
     }
@@ -199,6 +204,12 @@ export class ChatRuntime {
     // Handle undo command
     if (result.proposals[0]?.actionType === "system.undo") {
       await this.handleUndo(threadId, message.principalId);
+      return;
+    }
+
+    // Handle kill switch (emergency pause all)
+    if (result.proposals[0]?.actionType === "system.kill_switch") {
+      await this.handleKillSwitch(threadId, message.principalId, message.organizationId);
       return;
     }
 
@@ -389,6 +400,83 @@ export class ChatRuntime {
         `Cannot undo: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  private async handleKillSwitch(
+    threadId: string,
+    principalId: string,
+    organizationId: string | null,
+  ): Promise<void> {
+    if (!this.readAdapter) {
+      await this.adapter.sendTextReply(threadId, "Cannot execute kill switch: read adapter not configured.");
+      return;
+    }
+
+    try {
+      // Query all campaigns
+      const queryResult = await this.readAdapter.query({
+        cartridgeId: "ads-spend",
+        operation: "searchCampaigns",
+        parameters: { query: "" },
+        actorId: principalId,
+        organizationId,
+      });
+
+      const campaigns = queryResult.data as Array<{ id: string; name: string; status: string }>;
+      const activeCampaigns = campaigns.filter(
+        (c) => c.status === "ACTIVE" || c.status === "active",
+      );
+
+      if (activeCampaigns.length === 0) {
+        await this.adapter.sendTextReply(threadId, "No active campaigns to pause.");
+        return;
+      }
+
+      await this.adapter.sendTextReply(
+        threadId,
+        `Emergency: pausing ${activeCampaigns.length} active campaign(s)...`,
+      );
+
+      const failures: string[] = [];
+      for (const campaign of activeCampaigns) {
+        try {
+          const proposeResult = await this.orchestrator.resolveAndPropose({
+            actionType: "ads.campaign.pause",
+            parameters: { campaignId: campaign.id, entityId: campaign.id },
+            principalId,
+            cartridgeId: "ads-spend",
+            entityRefs: [],
+            message: `Emergency kill switch: pause ${campaign.name}`,
+            organizationId,
+          });
+
+          if (!("needsClarification" in proposeResult) && !("notFound" in proposeResult)) {
+            await this.handleProposeResult(threadId, proposeResult, principalId);
+          }
+        } catch (err) {
+          failures.push(`${campaign.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      if (failures.length > 0) {
+        await this.adapter.sendTextReply(
+          threadId,
+          `Kill switch failures:\n${failures.map((f) => `- ${f}`).join("\n")}`,
+        );
+      }
+    } catch (err) {
+      await this.adapter.sendTextReply(
+        threadId,
+        `Kill switch error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private extractCallbackQueryId(rawPayload: unknown): string | null {
+    const payload = rawPayload as Record<string, unknown> | undefined;
+    if (!payload) return null;
+    const callbackQuery = payload["callback_query"] as Record<string, unknown> | undefined;
+    return callbackQuery ? String(callbackQuery["id"]) : null;
   }
 }
 

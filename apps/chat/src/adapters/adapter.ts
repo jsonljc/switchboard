@@ -7,6 +7,7 @@ export interface ChannelAdapter {
   sendTextReply(threadId: string, text: string): Promise<void>;
   sendApprovalCard(threadId: string, card: ApprovalCardPayload): Promise<void>;
   sendResultCard(threadId: string, card: ResultCardPayload): Promise<void>;
+  answerCallbackQuery?(callbackQueryId: string, text?: string): Promise<void>;
   extractMessageId(rawPayload: unknown): string | null;
 }
 

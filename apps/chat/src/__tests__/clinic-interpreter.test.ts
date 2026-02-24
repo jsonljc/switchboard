@@ -243,7 +243,7 @@ describe("ClinicInterpreter", () => {
       expect(result.proposals[0]!.parameters).toEqual({});
     });
 
-    it("stubs kill_switch with clarification message", async () => {
+    it("emits system.kill_switch proposal", async () => {
       interpreter.setMockResponse({
         intent: "kill_switch",
         confidence: 0.95,
@@ -257,9 +257,9 @@ describe("ClinicInterpreter", () => {
         ALL_ACTIONS,
       );
 
-      expect(result.proposals).toHaveLength(0);
-      expect(result.needsClarification).toBe(true);
-      expect(result.clarificationQuestion).toContain("kill switch");
+      expect(result.proposals).toHaveLength(1);
+      expect(result.proposals[0]?.actionType).toBe("system.kill_switch");
+      expect(result.confidence).toBe(0.95);
     });
   });
 

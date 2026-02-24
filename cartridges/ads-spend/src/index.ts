@@ -8,8 +8,8 @@ import type {
 } from "@switchboard/schemas";
 import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/cartridge-sdk";
 import { ADS_SPEND_MANIFEST } from "./manifest.js";
-import { MetaAdsProvider } from "./providers/meta-ads.js";
-import type { MetaAdsConfig } from "./providers/meta-ads.js";
+import type { MetaAdsProvider, MetaAdsConfig, CampaignInfo } from "./providers/meta-ads.js";
+import { createMetaAdsProvider } from "./providers/factory.js";
 import { DEFAULT_ADS_GUARDRAILS } from "./defaults/guardrails.js";
 import {
   computeAdsBudgetRiskInput,
@@ -31,12 +31,16 @@ export class AdsSpendCartridge implements Cartridge {
       accessToken: context.connectionCredentials["accessToken"] as string,
       adAccountId: context.connectionCredentials["adAccountId"] as string,
     };
-    this.provider = new MetaAdsProvider(config);
+    this.provider = createMetaAdsProvider(config);
   }
 
-  private getProvider(): MetaAdsProvider {
+  getProvider(): MetaAdsProvider {
     if (!this.provider) throw new Error("Cartridge not initialized");
     return this.provider;
+  }
+
+  async searchCampaigns(query: string): Promise<CampaignInfo[]> {
+    return this.getProvider().searchCampaigns(query);
   }
 
   async enrichContext(
