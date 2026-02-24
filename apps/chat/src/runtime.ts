@@ -35,7 +35,7 @@ import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import type { UndoRecipe } from "@switchboard/schemas";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
@@ -535,7 +535,8 @@ export async function createChatRuntime(
         adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
       },
     });
-    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
+    const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
+    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
 
     // Seed default policies
     await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
@@ -578,6 +579,30 @@ export async function createChatRuntime(
     // Create CartridgeReadAdapter for read intents
     if (storage && ledger && !readAdapter) {
       readAdapter = new CartridgeReadAdapter(storage, ledger);
+    }
+
+    // Load campaign names for LLM context grounding
+    if (storage && interpreter && "updateCampaignNames" in interpreter) {
+      const cartridge = storage.cartridges.get("ads-spend");
+      if (cartridge && "searchCampaigns" in cartridge) {
+        const loadCampaignNames = async () => {
+          try {
+            const campaigns = await (cartridge as unknown as { searchCampaigns: (q: string) => Promise<Array<{ name: string }>> }).searchCampaigns("");
+            const names = campaigns.map((c) => c.name);
+            (interpreter as unknown as { updateCampaignNames: (n: string[]) => void }).updateCampaignNames(names);
+            return names.length;
+          } catch (err) {
+            console.warn("[Clinic] Failed to load campaign names:", err);
+            return 0;
+          }
+        };
+
+        const count = await loadCampaignNames();
+        console.log(`[Clinic] Loaded ${count} campaign names`);
+
+        // Refresh campaign names every 5 minutes
+        setInterval(loadCampaignNames, 5 * 60 * 1000);
+      }
     }
   }
 

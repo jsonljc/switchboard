@@ -126,6 +126,11 @@ export class ClinicInterpreter extends LLMInterpreter {
     this.modelRouter = modelRouter ?? null;
   }
 
+  /** Update campaign names for LLM grounding. Called by runtime on refresh. */
+  updateCampaignNames(names: string[]): void {
+    this.clinicContext.campaignNames = names;
+  }
+
   async interpret(
     text: string,
     conversationContext: Record<string, unknown>,

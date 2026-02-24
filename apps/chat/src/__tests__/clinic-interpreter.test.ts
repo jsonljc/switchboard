@@ -419,6 +419,31 @@ describe("ClinicInterpreter", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // updateCampaignNames
+  // ---------------------------------------------------------------------------
+  describe("updateCampaignNames", () => {
+    it("updates the clinic context campaign names", async () => {
+      interpreter.updateCampaignNames(["New Campaign 1", "New Campaign 2"]);
+      interpreter.setMockResponse({
+        intent: "report_performance",
+        confidence: 0.9,
+        slots: {},
+        reasoning: "test",
+      });
+
+      const result = await interpreter.interpret(
+        "how are my campaigns?",
+        {},
+        ALL_ACTIONS,
+      );
+
+      // Should still work correctly after updating names
+      expect(result.readIntent).toBeDefined();
+      expect(result.readIntent!.intent).toBe(AllowedIntent.REPORT_PERFORMANCE);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Regex fallback patterns (budget exceeded)
   // ---------------------------------------------------------------------------
   describe("regex fallback patterns", () => {

@@ -12,7 +12,7 @@ import {
   ExecutionService,
   CartridgeReadAdapter,
 } from "@switchboard/core";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
 import { SwitchboardMcpServer } from "./server.js";
 
 async function main() {
@@ -43,7 +43,8 @@ async function main() {
       adAccountId: adsAccountId ?? "act_mock_dev_only",
     },
   });
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
+  const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
+  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
 
   // ── Seed defaults ────────────────────────────────────────────────────
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);

@@ -264,3 +264,4 @@ export class AdsSpendCartridge implements Cartridge {
 export { ADS_SPEND_MANIFEST } from "./manifest.js";
 export { DEFAULT_ADS_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_ADS_POLICIES } from "./defaults/policies.js";
+export { PostMutationVerifier } from "./interceptors/verification.js";
