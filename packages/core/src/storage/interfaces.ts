@@ -71,6 +71,7 @@ export interface ApprovalStore {
 
 export interface CartridgeRegistry {
   register(cartridgeId: string, cartridge: Cartridge, interceptors?: CartridgeInterceptor[]): void;
+  unregister(cartridgeId: string): boolean;
   get(cartridgeId: string): Cartridge | null;
   list(): string[];
 }

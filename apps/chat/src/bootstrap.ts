@@ -1,6 +1,7 @@
 import { TelegramAdapter } from "./adapters/telegram.js";
 import { RuleBasedInterpreter } from "./interpreter/interpreter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
+import { InterpreterRegistry } from "./interpreter/registry.js";
 import { setConversationStore } from "./conversation/threads.js";
 import type {
   StorageContext,
@@ -37,7 +38,8 @@ export async function createChatRuntime(
   clinicConfig?: ClinicConfig,
 ): Promise<ChatRuntime> {
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
-  const adapter = config?.adapter ?? new TelegramAdapter(botToken);
+  const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
+  const adapter = config?.adapter ?? new TelegramAdapter(botToken, undefined, webhookSecret);
   let interpreter: Interpreter | undefined = config?.interpreter;
   let readAdapter: CartridgeReadAdapterType | undefined = config?.readAdapter;
 
@@ -154,9 +156,24 @@ export async function createChatRuntime(
     interpreter = new RuleBasedInterpreter();
   }
 
+  // Build interpreter registry — always register the rule-based interpreter as a fallback
+  const interpreterRegistry = new InterpreterRegistry();
+  const ruleBasedInterpreter = new RuleBasedInterpreter();
+  interpreterRegistry.register("rule-based", ruleBasedInterpreter, 1000);
+
+  // Register the primary interpreter under a descriptive name
+  if (interpreter !== ruleBasedInterpreter) {
+    interpreterRegistry.register("primary", interpreter, 10);
+  }
+
+  interpreterRegistry.setDefaultFallbackChain(
+    interpreter !== ruleBasedInterpreter ? ["primary", "rule-based"] : ["rule-based"],
+  );
+
   return new ChatRuntime({
     adapter,
     interpreter,
+    interpreterRegistry,
     orchestrator,
     storage,
     readAdapter,

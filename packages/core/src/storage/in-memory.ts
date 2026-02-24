@@ -245,6 +245,10 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
     }
   }
 
+  unregister(cartridgeId: string): boolean {
+    return this.store.delete(cartridgeId);
+  }
+
   get(cartridgeId: string): Cartridge | null {
     return this.store.get(cartridgeId) ?? null;
   }

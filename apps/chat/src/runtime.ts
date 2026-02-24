@@ -58,6 +58,10 @@ export class ChatRuntime {
     this.readAdapter = config.readAdapter ?? null;
   }
 
+  getAdapter(): ChannelAdapter {
+    return this.adapter;
+  }
+
   private async trackLastExecuted(threadId: string, envelopeId: string): Promise<void> {
     this.lastExecutedEnvelopeFallback.set(threadId, envelopeId);
   }

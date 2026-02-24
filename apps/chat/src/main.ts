@@ -7,9 +7,6 @@ async function main() {
 
   const runtime = await createChatRuntime();
 
-  // Webhook secret for Telegram (set via TELEGRAM_WEBHOOK_SECRET env var)
-  const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"] ?? "";
-
   // Rate limit config for webhook ingress
   const rateLimitConfig = {
     windowMs: parseInt(process.env["WEBHOOK_RATE_LIMIT_WINDOW_MS"] ?? "60000", 10),
@@ -32,11 +29,13 @@ async function main() {
 
   // Telegram webhook endpoint
   app.post("/webhook/telegram", async (request, reply) => {
-    // Verify webhook secret if configured
-    if (webhookSecret) {
-      const token = request.headers["x-telegram-bot-api-secret-token"] as string | undefined;
-      if (token !== webhookSecret) {
-        app.log.warn("Webhook request with invalid or missing secret token");
+    // Verify request via adapter's verifyRequest() (timing-safe comparison)
+    const adapter = runtime.getAdapter();
+    if (adapter.verifyRequest) {
+      const rawBody = JSON.stringify(request.body);
+      const headers = request.headers as Record<string, string | undefined>;
+      if (!adapter.verifyRequest(rawBody, headers)) {
+        app.log.warn("Webhook request failed signature verification");
         return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
       }
     }

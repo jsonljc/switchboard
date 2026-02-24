@@ -102,6 +102,7 @@ model ActionEnvelope {
   version          Int      @default(0)
   incomingMessage  Json?
   conversationId   String?
+  organizationId   String?
   proposals        Json     // ActionProposal[]
   resolvedEntities Json     // ResolvedEntity[]
   plan             Json?    // ActionPlan
@@ -121,6 +122,7 @@ model ActionEnvelope {
   @@index([status])
   @@index([conversationId])
   @@index([parentEnvelopeId])
+  @@index([organizationId])
 }
 
 model ConversationState {
