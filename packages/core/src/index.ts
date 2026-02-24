@@ -65,7 +65,7 @@ export type {
 
 // Orchestrator
 export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js";
-export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./orchestrator/index.js";
+export type { OrchestratorConfig, ProposeResult, ApprovalResponse, RuntimeOrchestrator } from "./orchestrator/index.js";
 
 // Audit
 export { computeAuditHash, computeAuditHashSync, sha256, verifyChain, ensureCanonicalize } from "./audit/canonical-hash.js";

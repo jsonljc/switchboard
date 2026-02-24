@@ -265,3 +265,5 @@ export { ADS_SPEND_MANIFEST } from "./manifest.js";
 export { DEFAULT_ADS_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_ADS_POLICIES } from "./defaults/policies.js";
 export { PostMutationVerifier } from "./interceptors/verification.js";
+export { bootstrapAdsSpendCartridge } from "./bootstrap.js";
+export type { BootstrapAdsSpendConfig, BootstrapAdsSpendResult } from "./bootstrap.js";

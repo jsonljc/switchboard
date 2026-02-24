@@ -9,3 +9,4 @@ export type {
   ExecutionMode,
   EnqueueCallback,
 } from "./lifecycle.js";
+export type { RuntimeOrchestrator } from "./runtime-orchestrator.js";

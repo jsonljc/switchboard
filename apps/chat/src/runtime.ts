@@ -1,11 +1,9 @@
 import type { ChannelAdapter } from "./adapters/adapter.js";
-import { TelegramAdapter } from "./adapters/telegram.js";
-import { RuleBasedInterpreter } from "./interpreter/interpreter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
 import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
-import { getThread, setThread, setConversationStore } from "./conversation/threads.js";
+import { getThread, setThread } from "./conversation/threads.js";
 import {
   composeHelpMessage,
   composeUncertainReply,
@@ -15,52 +13,31 @@ import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
 import type {
-  LifecycleOrchestrator,
+  RuntimeOrchestrator,
   ProposeResult,
   StorageContext,
-  LedgerStorage,
   CartridgeReadAdapter as CartridgeReadAdapterType,
 } from "@switchboard/core";
-import {
-  createInMemoryStorage,
-  seedDefaultStorage,
-  InMemoryLedgerStorage,
-  AuditLedger,
-  createGuardrailState,
-  DEFAULT_REDACTION_CONFIG,
-  GuardedCartridge,
-  CartridgeReadAdapter,
-} from "@switchboard/core";
-import { createGuardrailStateStore } from "./guardrail-state/index.js";
-import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
-import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import type { UndoRecipe } from "@switchboard/schemas";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
+
+export { createChatRuntime, type ClinicConfig } from "./bootstrap.js";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
   interpreter: Interpreter;
   interpreterRegistry?: InterpreterRegistry;
-  orchestrator: LifecycleOrchestrator;
+  orchestrator: RuntimeOrchestrator;
   availableActions: string[];
   storage?: StorageContext;
   /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
   readAdapter?: CartridgeReadAdapterType;
 }
 
-/** Configuration for clinic mode (LLM interpreter + read tools). */
-export interface ClinicConfig {
-  clinicName?: string;
-  adAccountId?: string;
-  anthropicApiKey?: string;
-  dailyTokenBudget?: number;
-}
-
 export class ChatRuntime {
   private adapter: ChannelAdapter;
   private interpreter: Interpreter;
   private interpreterRegistry: InterpreterRegistry | null;
-  private orchestrator: LifecycleOrchestrator;
+  private orchestrator: RuntimeOrchestrator;
   private availableActions: string[];
   private storage: StorageContext | null;
   private readAdapter: CartridgeReadAdapterType | null;
@@ -478,148 +455,4 @@ export class ChatRuntime {
     const callbackQuery = payload["callback_query"] as Record<string, unknown> | undefined;
     return callbackQuery ? String(callbackQuery["id"]) : null;
   }
-}
-
-// Bootstrap function
-export async function createChatRuntime(
-  config?: Partial<ChatRuntimeConfig>,
-  clinicConfig?: ClinicConfig,
-): Promise<ChatRuntime> {
-  const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
-  const adapter = config?.adapter ?? new TelegramAdapter(botToken);
-  let interpreter: Interpreter | undefined = config?.interpreter;
-  let readAdapter: CartridgeReadAdapterType | undefined = config?.readAdapter;
-
-  let orchestrator = config?.orchestrator;
-  let storage: StorageContext | undefined = config?.storage;
-
-  // Optional: single choke point via Switchboard API (propose/execute/approvals over HTTP)
-  const apiUrl = process.env["SWITCHBOARD_API_URL"];
-  if (!orchestrator && apiUrl) {
-    const apiAdapter = new ApiOrchestratorAdapter({
-      baseUrl: apiUrl,
-      apiKey: process.env["SWITCHBOARD_API_KEY"],
-    });
-    orchestrator = apiAdapter as unknown as LifecycleOrchestrator;
-  }
-
-  let ledger: AuditLedger | undefined;
-
-  if (!orchestrator) {
-    // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
-    let ledgerStorage: LedgerStorage;
-
-    if (process.env["DATABASE_URL"]) {
-      const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-      const { PrismaConversationStore } = await import("./conversation/prisma-store.js");
-      const prisma = getDb();
-      storage = createPrismaStorage(prisma);
-      ledgerStorage = new PrismaLedgerStorage(prisma);
-      setConversationStore(new PrismaConversationStore(prisma));
-    } else {
-      storage = createInMemoryStorage();
-      ledgerStorage = new InMemoryLedgerStorage();
-    }
-
-    ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
-    const guardrailState = createGuardrailState();
-    const guardrailStateStore = createGuardrailStateStore();
-
-    // Register ads-spend cartridge
-    const adsCartridge = new AdsSpendCartridge();
-    await adsCartridge.initialize({
-      principalId: "system",
-      organizationId: null,
-      connectionCredentials: {
-        accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
-        adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
-      },
-    });
-    const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
-    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
-
-    // Seed default policies
-    await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
-
-    orchestrator = new OrchestratorClass({
-      storage,
-      ledger,
-      guardrailState,
-      guardrailStateStore,
-    });
-  }
-
-  // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
-  const isClinicMode = clinicConfig || process.env["CLINIC_MODE"] === "true";
-  if (isClinicMode && !interpreter) {
-    const { ClinicInterpreter } = await import("./clinic/interpreter.js");
-    const { ModelRouter } = await import("./clinic/model-router.js");
-
-    const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-    const adAccountId = clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
-
-    const modelRouter = new ModelRouter({
-      dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
-      clinicId: adAccountId,
-    });
-
-    interpreter = new ClinicInterpreter(
-      {
-        apiKey: anthropicApiKey,
-        model: "claude-3-5-haiku-20241022",
-        baseUrl: "https://api.anthropic.com",
-      },
-      {
-        adAccountId,
-        clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
-      },
-      modelRouter,
-    );
-
-    // Create CartridgeReadAdapter for read intents
-    if (storage && ledger && !readAdapter) {
-      readAdapter = new CartridgeReadAdapter(storage, ledger);
-    }
-
-    // Load campaign names for LLM context grounding
-    if (storage && interpreter && "updateCampaignNames" in interpreter) {
-      const cartridge = storage.cartridges.get("ads-spend");
-      if (cartridge && "searchCampaigns" in cartridge) {
-        const loadCampaignNames = async () => {
-          try {
-            const campaigns = await (cartridge as unknown as { searchCampaigns: (q: string) => Promise<Array<{ name: string }>> }).searchCampaigns("");
-            const names = campaigns.map((c) => c.name);
-            (interpreter as unknown as { updateCampaignNames: (n: string[]) => void }).updateCampaignNames(names);
-            return names.length;
-          } catch (err) {
-            console.warn("[Clinic] Failed to load campaign names:", err);
-            return 0;
-          }
-        };
-
-        const count = await loadCampaignNames();
-        console.log(`[Clinic] Loaded ${count} campaign names`);
-
-        // Refresh campaign names every 5 minutes
-        setInterval(loadCampaignNames, 5 * 60 * 1000);
-      }
-    }
-  }
-
-  if (!interpreter) {
-    interpreter = new RuleBasedInterpreter();
-  }
-
-  return new ChatRuntime({
-    adapter,
-    interpreter,
-    orchestrator,
-    storage,
-    readAdapter,
-    availableActions: config?.availableActions ?? [
-      "ads.campaign.pause",
-      "ads.campaign.resume",
-      "ads.budget.adjust",
-    ],
-  });
 }

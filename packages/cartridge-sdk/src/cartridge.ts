@@ -48,6 +48,8 @@ export interface Cartridge {
   getGuardrails(): GuardrailConfig;
 
   healthCheck(): Promise<ConnectionHealth>;
+
+  searchCampaigns?(query: string): Promise<Array<{ id: string; name: string; status: string }>>;
 }
 
 /**

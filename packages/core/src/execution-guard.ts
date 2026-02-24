@@ -141,10 +141,7 @@ export class GuardedCartridge implements Cartridge {
     return this.inner.healthCheck();
   }
 
-  async searchCampaigns(query: string): Promise<unknown[]> {
-    if ("searchCampaigns" in this.inner && typeof (this.inner as Record<string, unknown>).searchCampaigns === "function") {
-      return (this.inner as unknown as { searchCampaigns: (q: string) => Promise<unknown[]> }).searchCampaigns(query);
-    }
-    return [];
+  async searchCampaigns(query: string): Promise<Array<{ id: string; name: string; status: string }>> {
+    return this.inner.searchCampaigns?.(query) ?? [];
   }
 }
