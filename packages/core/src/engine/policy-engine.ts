@@ -327,6 +327,9 @@ export function evaluate(
       }
       if (policy.effect === "require_approval" && policy.approvalRequirement) {
         policyApprovalOverride = policy.approvalRequirement;
+        if (policyDecision === null) {
+          policyDecision = "allow"; // require_approval implies allow-with-conditions
+        }
       }
       if (policy.riskCategoryOverride) {
         policyRiskOverride = policy.riskCategoryOverride;
@@ -417,7 +420,7 @@ export function evaluate(
   }
 
   // Step 10: Final decision — default deny if no policy matched
-  builder.finalDecision = policyDecision ?? "allow";
+  builder.finalDecision = policyDecision ?? "deny";
 
   return buildTrace(builder);
 }

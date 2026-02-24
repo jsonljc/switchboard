@@ -1444,7 +1444,7 @@ describe("Policy Engine", () => {
     });
 
     const trace = evaluate(proposal, ctx, engineCtx);
-    expect(trace.finalDecision).toBe("allow");
+    expect(trace.finalDecision).toBe("deny"); // no policies match -> default deny
     // All spend checks should be unmatched
     const spendChecks = trace.checks.filter(
       (c) => c.checkCode === "SPEND_LIMIT" && c.matched && c.effect === "deny",
@@ -1467,8 +1467,7 @@ describe("Policy Engine", () => {
     const engineCtx = makeEngineContext({ resolvedIdentity: identity });
 
     const trace = evaluate(proposal, ctx, engineCtx);
-    expect(trace.finalDecision).toBe("allow");
-    // Should have perAction check only, no daily/weekly/monthly
+    expect(trace.finalDecision).toBe("deny");
     const dailyCheck = trace.checks.find(
       (c) => c.checkCode === "SPEND_LIMIT" && c.checkData["field"] === "daily",
     );
@@ -1521,8 +1520,49 @@ describe("Policy Engine", () => {
 
     const trace = evaluate(proposal, ctx, engineCtx);
     // The risk score should map to a category and then look up approval requirement
-    expect(trace.finalDecision).toBe("allow");
+    // No policies match -> default deny; approval requirement is still computed for auditing
+    expect(trace.finalDecision).toBe("deny");
     expect(["standard", "elevated", "mandatory"]).toContain(trace.approvalRequired);
+  });
+  it("default deny when no policies match", () => {
+    const identity = makeResolvedIdentity({
+      effectiveTrustBehaviors: [],
+      effectiveForbiddenBehaviors: [],
+    });
+    const ctx = makeEvalContext({ actionType: "unknown.action" });
+    const proposal = makeProposal({ actionType: "unknown.action" });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: identity,
+      policies: [],
+    });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    expect(trace.finalDecision).toBe("deny");
+  });
+
+  it("require_approval policy sets policyDecision to allow", () => {
+    const approvalPolicy = makePolicy({
+      id: "require-approval-policy",
+      name: "Require approval for budget",
+      priority: 1,
+      effect: "require_approval",
+      approvalRequirement: "elevated",
+      rule: {
+        composition: "AND",
+        conditions: [
+          { field: "actionType", operator: "eq", value: "campaign.update_budget" },
+        ],
+      },
+    });
+
+    const ctx = makeEvalContext();
+    const proposal = makeProposal();
+    const engineCtx = makeEngineContext({ policies: [approvalPolicy] });
+
+    const trace = evaluate(proposal, ctx, engineCtx);
+    // require_approval implies allow-with-conditions, not deny
+    expect(trace.finalDecision).toBe("allow");
+    expect(trace.approvalRequired).toBe("elevated");
   });
 });
 
