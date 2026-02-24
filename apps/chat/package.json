@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "cli:register-webhook": "tsx src/cli/register-webhook.ts"
   },
   "dependencies": {
     "@switchboard/core": "workspace:*",

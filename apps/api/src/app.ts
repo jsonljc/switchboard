@@ -29,7 +29,7 @@ import {
   ExecutionService,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -165,7 +165,8 @@ export async function buildServer() {
       adAccountId: adsAccountId ?? "act_mock_dev_only",
     },
   });
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
+  const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
+  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
 
   // Seed default data
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);

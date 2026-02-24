@@ -1,12 +1,47 @@
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
 
+/**
+ * Token bucket rate limiter for Telegram Bot API (30 msg/sec limit).
+ */
+class TelegramRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly capacity = 30;
+  private readonly refillRate = 30; // tokens per second
+
+  constructor() {
+    this.tokens = this.capacity;
+    this.lastRefill = Date.now();
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return;
+    }
+    const waitMs = ((1 - this.tokens) / this.refillRate) * 1000;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    this.refill();
+    this.tokens = Math.max(0, this.tokens - 1);
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+  }
+}
+
 export type PrincipalLookup = (principalId: string) => Promise<{ organizationId: string | null } | null>;
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly channel = "telegram" as const;
   private baseUrl: string;
   private principalLookup: PrincipalLookup | null;
+  private rateLimiter = new TelegramRateLimiter();
 
   constructor(botToken: string, principalLookup?: PrincipalLookup) {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
@@ -120,6 +155,7 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   private async apiCall(method: string, body: Record<string, unknown>): Promise<unknown> {
+    await this.rateLimiter.acquire();
     const response = await fetch(`${this.baseUrl}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
