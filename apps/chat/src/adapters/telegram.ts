@@ -99,6 +99,13 @@ export class TelegramAdapter implements ChannelAdapter {
     });
   }
 
+  async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+    await this.apiCall("answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+      text: text ?? "",
+    });
+  }
+
   extractMessageId(rawPayload: unknown): string | null {
     const payload = rawPayload as Record<string, unknown>;
     const message = payload["message"] as Record<string, unknown> | undefined;

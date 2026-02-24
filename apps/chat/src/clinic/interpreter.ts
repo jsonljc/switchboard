@@ -286,15 +286,20 @@ export class ClinicInterpreter extends LLMInterpreter {
       };
     }
 
-    // KILL_SWITCH → stub for Phase 1
+    // KILL_SWITCH → system.kill_switch
     if (intent === AllowedIntent.KILL_SWITCH) {
       return {
-        proposals: [],
-        needsClarification: true,
-        clarificationQuestion:
-          "Emergency kill switch is coming soon. For now, I can pause individual campaigns.\n" +
-          "Which campaign would you like to pause?",
-        confidence: 0.9,
+        proposals: [{
+          id: `prop_${randomUUID()}`,
+          actionType: "system.kill_switch",
+          parameters: {},
+          evidence: "Emergency kill switch requested",
+          confidence,
+          originatingMessageId: "",
+        }],
+        needsClarification: false,
+        clarificationQuestion: null,
+        confidence,
       };
     }
 

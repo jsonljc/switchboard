@@ -1247,6 +1247,8 @@ export class LifecycleOrchestrator {
         if (entity.resolvedType) {
           resolvedParams[`${entity.resolvedType}Id`] = entity.resolvedId;
         }
+        // Also set the generic entityId for cooldown scope lookups
+        resolvedParams["entityId"] = entity.resolvedId;
       }
 
       return this.propose({

@@ -65,14 +65,19 @@ export class CartridgeReadAdapter {
         break;
       }
       case "searchCampaigns": {
-        // Use resolveEntity to search — it returns matches
-        if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
+        // Prefer cartridge.searchCampaigns() which returns CampaignInfo[]
+        if ("searchCampaigns" in cartridge && typeof (cartridge as Record<string, unknown>).searchCampaigns === "function") {
+          const query = (op.parameters["query"] as string) ?? "";
+          data = await (cartridge as unknown as { searchCampaigns: (q: string) => Promise<unknown[]> })
+            .searchCampaigns(query);
+        } else if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
+          // Fallback to resolveEntity for backward compatibility
           const query = (op.parameters["query"] as string) ?? "";
           const results = await (cartridge as { resolveEntity: (ref: string, type: string, ctx: Record<string, unknown>) => Promise<unknown> })
             .resolveEntity(query, "campaign", { principalId: op.actorId });
           data = results;
         } else {
-          data = { campaigns: [] };
+          data = [];
         }
         break;
       }
