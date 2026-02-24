@@ -9,6 +9,7 @@ import {
   GetActionStatusInputSchema,
 } from "@switchboard/schemas";
 import type { McpAuthContext } from "../auth.js";
+import type { SessionGuard } from "../session-guard.js";
 import type { ToolDefinition } from "./side-effect.js";
 
 export const readToolDefinitions: ToolDefinition[] = [
@@ -90,12 +91,23 @@ export const readToolDefinitions: ToolDefinition[] = [
       required: ["envelopeId"],
     },
   },
+  {
+    name: "get_session_status",
+    description:
+      "Get current session metrics: call count, mutation count, dollar exposure, " +
+      "limits, and whether forced escalation is active.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
 export interface ReadToolDeps {
   readAdapter: CartridgeReadAdapter;
   orchestrator: LifecycleOrchestrator;
   storage: StorageContext;
+  sessionGuard?: SessionGuard;
 }
 
 export async function handleReadTool(
@@ -201,6 +213,17 @@ export async function handleReadTool(
         throw new Error(`Envelope not found: ${parsed.envelopeId}`);
       }
       const decision = envelope.decisions[0];
+      // Detect auto-approval: approval was required but no approval requests were created and envelope executed
+      let governanceNote: string | undefined;
+      if (
+        decision &&
+        decision.approvalRequired !== "none" &&
+        envelope.approvalRequests.length === 0 &&
+        envelope.status === "executed"
+      ) {
+        governanceNote =
+          "Auto-approved: full governance evaluation ran but approval requirement was bypassed (observe mode or emergency override).";
+      }
       return {
         id: envelope.id,
         status: envelope.status,
@@ -208,7 +231,15 @@ export async function handleReadTool(
         riskCategory: decision?.computedRiskScore.category,
         decisionTrace: decision,
         createdAt: envelope.createdAt,
+        governanceNote,
       };
+    }
+
+    case "get_session_status": {
+      if (!deps.sessionGuard) {
+        return { error: "Session guard not configured" };
+      }
+      return deps.sessionGuard.getStatus();
     }
 
     default:

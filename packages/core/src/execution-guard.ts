@@ -144,4 +144,12 @@ export class GuardedCartridge implements Cartridge {
   async searchCampaigns(query: string): Promise<Array<{ id: string; name: string; status: string }>> {
     return this.inner.searchCampaigns?.(query) ?? [];
   }
+
+  async captureSnapshot(
+    actionType: string,
+    parameters: Record<string, unknown>,
+    context: CartridgeContext,
+  ): Promise<Record<string, unknown>> {
+    return this.inner.captureSnapshot?.(actionType, parameters, context) ?? {};
+  }
 }

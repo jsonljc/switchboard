@@ -79,6 +79,8 @@ export interface ProposeResult {
   approvalRequest: ApprovalRequest | null;
   denied: boolean;
   explanation: string;
+  /** Set when observe mode or emergency override auto-approved the action. */
+  governanceNote?: string;
 }
 
 export interface ApprovalResponse {
@@ -342,15 +344,19 @@ export class LifecycleOrchestrator {
 
     // 10. Handle decision outcome
     let approvalRequest: ApprovalRequest | null = null;
+    let governanceNote: string | undefined;
 
     // Observe mode or emergency override: run full evaluation but force auto-approve regardless
     const isObserveMode = effectiveIdentity.governanceProfile === "observe";
     const isEmergencyOverride = params.emergencyOverride === true;
     if (isObserveMode || isEmergencyOverride) {
       envelope.status = "approved";
+      governanceNote = isEmergencyOverride
+        ? "Auto-approved (emergency override): full governance evaluation ran but approval requirement was bypassed."
+        : "Auto-approved (observe mode): full governance evaluation ran but approval requirement was bypassed.";
     } else if (decisionTrace.finalDecision === "deny") {
       envelope.status = "denied";
-    } else if (decisionTrace.approvalRequired !== "none") {
+    } else if (decisionTrace.approvalRequired !== "none" || params.parameters["_forceApproval"] === true) {
       // Approval needed
       const routing = routeApproval(
         decisionTrace.computedRiskScore.category,
@@ -525,6 +531,7 @@ export class LifecycleOrchestrator {
       approvalRequest,
       denied: decisionTrace.finalDecision === "deny",
       explanation: decisionTrace.explanation,
+      governanceNote,
     };
   }
 
@@ -888,6 +895,43 @@ export class LifecycleOrchestrator {
       envelopeId: envelope.id,
     });
 
+    // Capture pre-mutation snapshot (read-only, no execution token needed)
+    let preMutationSnapshot: Record<string, unknown> | undefined;
+    try {
+      if (cartridge.captureSnapshot) {
+        preMutationSnapshot = await cartridge.captureSnapshot(
+          proposal.actionType,
+          Object.fromEntries(
+            Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
+          ),
+          {
+            principalId: envelope.proposals[0]?.parameters["_principalId"] as string ?? "",
+            organizationId: null,
+            connectionCredentials: {},
+          },
+        );
+
+        if (preMutationSnapshot && Object.keys(preMutationSnapshot).length > 0) {
+          await this.ledger.record({
+            eventType: "action.snapshot",
+            actorType: "system",
+            actorId: "orchestrator",
+            entityType: "action",
+            entityId: proposal.id,
+            riskCategory: decision?.computedRiskScore.category ?? "low",
+            summary: `Pre-mutation snapshot captured for ${proposal.actionType}`,
+            snapshot: preMutationSnapshot,
+            envelopeId: envelope.id,
+            traceId: envelope.traceId,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[orchestrator] captureSnapshot failed, proceeding without snapshot: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     let executeResult: ExecuteResult;
     const execToken = beginExecution();
     // Bind this specific token to the cartridge instance so concurrent
@@ -946,6 +990,7 @@ export class LifecycleOrchestrator {
           durationMs: executeResult.durationMs,
           undoRecipe: executeResult.undoRecipe,
           executedAt: new Date(),
+          preMutationSnapshot,
         },
       ],
     });

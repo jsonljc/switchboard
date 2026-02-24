@@ -53,6 +53,8 @@ async function main() {
     readAdapter,
     orchestrator,
     storage,
+    ledger,
+    governanceProfileStore,
   });
 
   // Graceful shutdown

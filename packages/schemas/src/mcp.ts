@@ -60,6 +60,33 @@ export const GetActionStatusInputSchema = z.object({
 });
 export type GetActionStatusInput = z.infer<typeof GetActionStatusInputSchema>;
 
+// ── Governance Tool Inputs ────────────────────────────────────────────────
+
+export const RequestUndoInputSchema = z.object({
+  envelopeId: z.string().min(1),
+});
+export type RequestUndoInput = z.infer<typeof RequestUndoInputSchema>;
+
+export const EmergencyHaltInputSchema = z.object({
+  reason: z.string().optional(),
+});
+export type EmergencyHaltInput = z.infer<typeof EmergencyHaltInputSchema>;
+
+export const GetAuditTrailInputSchema = z.object({
+  envelopeId: z.string().optional(),
+  entityId: z.string().optional(),
+  eventType: z.string().optional(),
+  after: z.string().optional(),
+  before: z.string().optional(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+export type GetAuditTrailInput = z.infer<typeof GetAuditTrailInputSchema>;
+
+export const GetGovernanceStatusInputSchema = z.object({
+  organizationId: z.string().optional(),
+});
+export type GetGovernanceStatusInput = z.infer<typeof GetGovernanceStatusInputSchema>;
+
 // ── Result Schemas ─────────────────────────────────────────────────────────
 
 export const McpExecuteResultSchema = z.object({
@@ -69,6 +96,7 @@ export const McpExecuteResultSchema = z.object({
   summary: z.string().optional(),
   approvalId: z.string().optional(),
   deniedExplanation: z.string().optional(),
+  governanceNote: z.string().optional(),
 });
 export type McpExecuteResult = z.infer<typeof McpExecuteResultSchema>;
 

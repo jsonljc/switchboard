@@ -116,5 +116,6 @@ export const ExecutionResultSchema = z.object({
   durationMs: z.number(),
   undoRecipe: z.unknown().nullable(),
   executedAt: z.coerce.date(),
+  preMutationSnapshot: z.record(z.string(), z.unknown()).optional(),
 });
 export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;

@@ -31,6 +31,8 @@ export interface McpToolResponse {
   executionResult?: RuntimeExecuteResponse["executionResult"];
   deniedExplanation?: string;
   error?: string;
+  /** Set when observe mode or emergency override forced auto-approval. */
+  governanceNote?: string;
 }
 
 /** Maps an MCP tool name to the corresponding actionType. */
@@ -91,6 +93,10 @@ export function executeResponseToMcpResult(response: RuntimeExecuteResponse): Mc
   if (response.outcome === "EXECUTED" && response.executionResult) {
     out.executionResult = response.executionResult;
     out.summary = response.executionResult.summary;
+  }
+
+  if (response.governanceNote) {
+    out.governanceNote = response.governanceNote;
   }
 
   return out;
