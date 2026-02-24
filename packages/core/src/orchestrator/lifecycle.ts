@@ -135,6 +135,7 @@ export class LifecycleOrchestrator {
     message?: string;
     parentEnvelopeId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }): Promise<ProposeResult> {
     const span = getTracer().startSpan("orchestrator.propose", {
       "action.type": params.actionType,
@@ -161,6 +162,7 @@ export class LifecycleOrchestrator {
     message?: string;
     parentEnvelopeId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }, span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>, proposeStart: number): Promise<ProposeResult> {
     // 1. Look up IdentitySpec + overlays
     const identitySpec = await this.storage.identity.getSpecByPrincipalId(params.principalId);
@@ -192,22 +194,42 @@ export class LifecycleOrchestrator {
     }
 
     // 3b. Enrich context from cartridge
-    const enriched = await cartridge.enrichContext(
-      params.actionType,
-      params.parameters,
-      {
-        principalId: params.principalId,
-        organizationId: params.organizationId ?? null,
-        connectionCredentials: {},
-      },
-    );
+    let enriched: Record<string, unknown> = {};
+    try {
+      enriched = await cartridge.enrichContext(
+        params.actionType,
+        params.parameters,
+        {
+          principalId: params.principalId,
+          organizationId: params.organizationId ?? null,
+          connectionCredentials: {},
+        },
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     // 4. Get risk input from cartridge (include enriched signals)
-    const riskInput = await cartridge.getRiskInput(
-      params.actionType,
-      params.parameters,
-      { principalId: params.principalId, ...enriched },
-    );
+    let riskInput: import("@switchboard/schemas").RiskInput;
+    try {
+      riskInput = await cartridge.getRiskInput(
+        params.actionType,
+        params.parameters,
+        { principalId: params.principalId, ...enriched },
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] getRiskInput failed, using default medium risk: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      riskInput = {
+        baseRisk: "medium",
+        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    }
 
     // 5. Get guardrails from cartridge
     const guardrails = cartridge.getGuardrails();
@@ -321,9 +343,10 @@ export class LifecycleOrchestrator {
     // 10. Handle decision outcome
     let approvalRequest: ApprovalRequest | null = null;
 
-    // Observe mode: run full evaluation but force auto-approve regardless
+    // Observe mode or emergency override: run full evaluation but force auto-approve regardless
     const isObserveMode = effectiveIdentity.governanceProfile === "observe";
-    if (isObserveMode) {
+    const isEmergencyOverride = params.emergencyOverride === true;
+    if (isObserveMode || isEmergencyOverride) {
       envelope.status = "approved";
     } else if (decisionTrace.finalDecision === "deny") {
       envelope.status = "denied";
@@ -464,6 +487,7 @@ export class LifecycleOrchestrator {
           .filter((c) => c.matched)
           .map((c) => ({ code: c.checkCode, effect: c.effect })),
         interpreterName: proposal.interpreterName ?? null,
+        emergencyOverride: params.emergencyOverride ?? false,
       },
       evidence: [
         { type: "decision_trace", data: decisionTrace },
@@ -686,21 +710,41 @@ export class LifecycleOrchestrator {
           const cartridge = this.storage.cartridges.get(cartridgeId);
           if (cartridge) {
             // Enrich context for re-evaluation
-            const enriched = await cartridge.enrichContext(
-              originalProposal.actionType,
-              patchedParams,
-              {
-                principalId,
-                organizationId: null,
-                connectionCredentials: {},
-              },
-            );
+            let enriched: Record<string, unknown> = {};
+            try {
+              enriched = await cartridge.enrichContext(
+                originalProposal.actionType,
+                patchedParams,
+                {
+                  principalId,
+                  organizationId: null,
+                  connectionCredentials: {},
+                },
+              );
+            } catch (err) {
+              console.warn(
+                `[orchestrator] enrichContext failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
 
-            const riskInput = await cartridge.getRiskInput(
-              originalProposal.actionType,
-              patchedParams,
-              { principalId, ...enriched },
-            );
+            let riskInput: import("@switchboard/schemas").RiskInput;
+            try {
+              riskInput = await cartridge.getRiskInput(
+                originalProposal.actionType,
+                patchedParams,
+                { principalId, ...enriched },
+              );
+            } catch (err) {
+              console.warn(
+                `[orchestrator] getRiskInput failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+              );
+              riskInput = {
+                baseRisk: "medium",
+                exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+                reversibility: "full",
+                sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+              };
+            }
             const guardrails = cartridge.getGuardrails();
             const policies = await this.storage.policies.listActive({ cartridgeId });
 
@@ -1175,6 +1219,7 @@ export class LifecycleOrchestrator {
     message?: string;
     organizationId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

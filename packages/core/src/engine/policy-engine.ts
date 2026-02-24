@@ -163,14 +163,20 @@ export function evaluate(
         const lastTime = guardrailState.lastActionTimes.get(entityKey);
         const inCooldown = lastTime !== undefined && now.getTime() - lastTime < cd.cooldownMs;
 
+        const elapsedMs = now.getTime() - (lastTime ?? 0);
+        const remainingMs = cd.cooldownMs - elapsedMs;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        const cooldownExpiresAt = lastTime !== undefined ? new Date(lastTime + cd.cooldownMs) : null;
+
         addCheck(builder, "COOLDOWN", {
           actionType: cd.actionType,
           scope: cd.scope,
           cooldownMs: cd.cooldownMs,
           lastActionTime: lastTime ?? null,
           entityKey,
+          cooldownExpiresAt: cooldownExpiresAt?.toISOString() ?? null,
         }, inCooldown
-          ? `Cooldown active: entity was modified ${Math.round((now.getTime() - (lastTime ?? 0)) / 60000)} minutes ago.`
+          ? `Cooldown active: entity was modified ${Math.round(elapsedMs / 60000)} minutes ago. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}.`
           : `No cooldown active for this entity.`,
         inCooldown, inCooldown ? "deny" : "skip");
 

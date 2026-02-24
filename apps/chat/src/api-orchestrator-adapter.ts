@@ -151,6 +151,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
       entityRefs: params.entityRefs,
       message: params.message,
       traceId: params.traceId,
+      emergencyOverride: params.emergencyOverride ?? false,
     };
 
     const res = await fetch(`${this.base()}/api/execute`, {

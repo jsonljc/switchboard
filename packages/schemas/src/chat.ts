@@ -87,7 +87,7 @@ export const ApprovalRequestSchema = z.object({
   respondedAt: z.coerce.date().nullable(),
   patchValue: z.record(z.string(), z.unknown()).nullable(),
   expiresAt: z.coerce.date(),
-  expiredBehavior: z.enum(["deny", "re_request"]),
+  expiredBehavior: z.enum(["deny"]),
   createdAt: z.coerce.date(),
   quorum: z.object({
     required: z.number().int().min(1),

@@ -43,6 +43,10 @@ export class ChatRuntime {
   private readAdapter: CartridgeReadAdapterType | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
+  // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
+  private proposalCounts = new Map<string, { count: number; windowStart: number }>();
+  private static readonly PROPOSAL_RATE_LIMIT = 30;
+  private static readonly PROPOSAL_RATE_WINDOW_MS = 60_000;
 
   constructor(config: ChatRuntimeConfig) {
     this.adapter = config.adapter;
@@ -71,6 +75,23 @@ export class ChatRuntime {
     }
     // Fallback to in-memory
     return this.lastExecutedEnvelopeFallback.get(threadId) ?? null;
+  }
+
+  private checkProposalRateLimit(principalId: string): boolean {
+    const now = Date.now();
+    const entry = this.proposalCounts.get(principalId);
+
+    if (!entry || now - entry.windowStart >= ChatRuntime.PROPOSAL_RATE_WINDOW_MS) {
+      this.proposalCounts.set(principalId, { count: 1, windowStart: now });
+      return true;
+    }
+
+    if (entry.count >= ChatRuntime.PROPOSAL_RATE_LIMIT) {
+      return false;
+    }
+
+    entry.count += 1;
+    return true;
   }
 
   async handleIncomingMessage(rawPayload: unknown): Promise<void> {
@@ -187,6 +208,15 @@ export class ChatRuntime {
     // Handle kill switch (emergency pause all)
     if (result.proposals[0]?.actionType === "system.kill_switch") {
       await this.handleKillSwitch(threadId, message.principalId, message.organizationId);
+      return;
+    }
+
+    // Rate limit proposals per principal (defense against compute DoS)
+    if (!this.checkProposalRateLimit(message.principalId)) {
+      await this.adapter.sendTextReply(
+        threadId,
+        "You're sending too many requests. Please wait a moment and try again.",
+      );
       return;
     }
 
@@ -425,6 +455,7 @@ export class ChatRuntime {
             entityRefs: [],
             message: `Emergency kill switch: pause ${campaign.name}`,
             organizationId,
+            emergencyOverride: true,
           });
 
           if (!("needsClarification" in proposeResult) && !("notFound" in proposeResult)) {

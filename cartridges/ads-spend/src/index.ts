@@ -34,6 +34,11 @@ export class AdsSpendCartridge implements Cartridge {
     this.provider = createMetaAdsProvider(config);
   }
 
+  /**
+   * @internal Not part of the public Cartridge API. Used only by bootstrap
+   * and PostMutationVerifier within the ads-spend package. Accessing this
+   * method from outside the package bypasses governance controls.
+   */
   getProvider(): MetaAdsProvider {
     if (!this.provider) throw new Error("Cartridge not initialized");
     return this.provider;

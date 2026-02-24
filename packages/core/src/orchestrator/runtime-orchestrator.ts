@@ -19,6 +19,8 @@ export interface RuntimeOrchestrator {
     message?: string;
     organizationId?: string | null;
     traceId?: string;
+    /** When true, bypass governance (approval, rate limits, cooldowns) while preserving full audit trail. */
+    emergencyOverride?: boolean;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

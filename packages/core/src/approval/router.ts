@@ -6,14 +6,14 @@ export interface ApprovalRouting {
   approvers: string[];
   fallbackApprover: string | null;
   expiresInMs: number;
-  expiredBehavior: "deny" | "re_request";
+  expiredBehavior: "deny";
 }
 
 export interface ApprovalRoutingConfig {
   defaultApprovers: string[];
   defaultFallbackApprover: string | null;
   defaultExpiryMs: number;
-  defaultExpiredBehavior: "deny" | "re_request";
+  defaultExpiredBehavior: "deny";
   elevatedExpiryMs: number;
   mandatoryExpiryMs: number;
   /**
