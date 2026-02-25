@@ -15,7 +15,12 @@
       "Bash(git branch:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(git -C /Users/jasonljc/switchboard branch -d governance-hardening)",
+      "Bash(git -C /Users/jasonljc/switchboard push origin --delete governance-hardening)",
+      "Bash(git -C /Users/jasonljc/switchboard push)",
+      "Bash(git -C /Users/jasonljc/switchboard add .claude/settings.local.json)",
+      "Bash(git -C:*)"
     ]
   }
 }
