@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { ConversationStatus } from "@switchboard/schemas";
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  text: string;
+  timestamp: Date;
+}
+
 export interface ConversationStateData {
   id: string;
   threadId: string;
@@ -11,6 +17,7 @@ export interface ConversationStateData {
   pendingProposalIds: string[];
   pendingApprovalIds: string[];
   clarificationQuestion: string | null;
+  messages: ConversationMessage[];
   lastActivityAt: Date;
   expiresAt: Date;
 }
@@ -30,6 +37,7 @@ export function createConversation(
     pendingProposalIds: [],
     pendingApprovalIds: [],
     clarificationQuestion: null,
+    messages: [],
     lastActivityAt: new Date(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   };
@@ -39,6 +47,7 @@ type ConversationAction =
   | { type: "set_clarifying"; question: string }
   | { type: "set_awaiting_approval"; approvalIds: string[] }
   | { type: "set_proposals"; proposalIds: string[] }
+  | { type: "add_message"; message: ConversationMessage }
   | { type: "complete" }
   | { type: "expire" }
   | { type: "resume" };
@@ -70,6 +79,12 @@ export function transitionConversation(
         status: "active",
         pendingProposalIds: action.proposalIds,
         clarificationQuestion: null,
+      };
+
+    case "add_message":
+      return {
+        ...updated,
+        messages: [...updated.messages, action.message],
       };
 
     case "complete":
