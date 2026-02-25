@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalizeSync } from "@switchboard/core";
 
 export interface SessionStatus {
   callCount: number;
@@ -9,6 +10,30 @@ export interface SessionStatus {
   maxDollars: number;
   escalationActive: boolean;
   duplicateWindowMs: number;
+}
+
+export type DollarExtractor = (toolName: string, args: Record<string, unknown>) => number;
+
+/**
+ * Default dollar extractor: looks for common dollar-amount fields.
+ */
+function defaultDollarExtractor(toolName: string, args: Record<string, unknown>): number {
+  // Check for explicit dollar amount fields
+  if (typeof args["newBudget"] === "number") return args["newBudget"];
+  if (typeof args["dollarsAtRisk"] === "number") return args["dollarsAtRisk"];
+  if (typeof args["amount"] === "number") return args["amount"];
+
+  // For trading orders: quantity * price
+  if (typeof args["quantity"] === "number" && typeof args["limitPrice"] === "number") {
+    return args["quantity"] * args["limitPrice"];
+  }
+
+  // Fallback for market orders: quantity * currentPrice
+  if (typeof args["quantity"] === "number" && typeof args["currentPrice"] === "number") {
+    return args["quantity"] * args["currentPrice"];
+  }
+
+  return 0;
 }
 
 export class SessionGuard {
@@ -22,6 +47,7 @@ export class SessionGuard {
   private readonly maxDollars: number;
   private readonly duplicateWindowMs: number;
   private readonly escalationThreshold: number;
+  private readonly dollarExtractor: DollarExtractor;
 
   constructor(options?: {
     maxCalls?: number;
@@ -29,12 +55,14 @@ export class SessionGuard {
     maxDollars?: number;
     duplicateWindowMs?: number;
     escalationThreshold?: number;
+    dollarExtractor?: DollarExtractor;
   }) {
     this.maxCalls = options?.maxCalls ?? 200;
     this.maxMutations = options?.maxMutations ?? 50;
     this.maxDollars = options?.maxDollars ?? 10_000;
     this.duplicateWindowMs = options?.duplicateWindowMs ?? 5_000;
     this.escalationThreshold = options?.escalationThreshold ?? 10;
+    this.dollarExtractor = options?.dollarExtractor ?? defaultDollarExtractor;
   }
 
   checkCall(
@@ -52,13 +80,13 @@ export class SessionGuard {
       return { allowed: false, reason: `Session mutation limit reached (${this.maxMutations})` };
     }
 
-    // 3. Dollar exposure pre-check (for budget adjustments)
-    if (isMutation && toolName === "adjust_budget") {
-      const newBudget = typeof args["newBudget"] === "number" ? args["newBudget"] : 0;
-      if (this.totalDollarsAtRisk + newBudget > this.maxDollars) {
+    // 3. Dollar exposure pre-check (generic extraction)
+    if (isMutation) {
+      const dollars = this.dollarExtractor(toolName, args);
+      if (dollars > 0 && this.totalDollarsAtRisk + dollars > this.maxDollars) {
         return {
           allowed: false,
-          reason: `Session dollar exposure limit would be exceeded ($${this.totalDollarsAtRisk + newBudget} > $${this.maxDollars})`,
+          reason: `Session dollar exposure limit would be exceeded ($${this.totalDollarsAtRisk + dollars} > $${this.maxDollars})`,
         };
       }
     }
@@ -88,9 +116,10 @@ export class SessionGuard {
       const hash = this.computeCallHash(toolName, args);
       this.recentCalls.push({ hash, timestamp: now });
 
-      // Track dollar exposure for budget adjustments
-      if (toolName === "adjust_budget" && typeof args["newBudget"] === "number") {
-        this.totalDollarsAtRisk += args["newBudget"];
+      // Track dollar exposure generically
+      const dollars = this.dollarExtractor(toolName, args);
+      if (dollars > 0) {
+        this.totalDollarsAtRisk += dollars;
       }
     }
   }
@@ -123,8 +152,8 @@ export class SessionGuard {
   }
 
   private computeCallHash(toolName: string, args: Record<string, unknown>): string {
-    const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
-    return createHash("sha256").update(`${toolName}:${sortedArgs}`).digest("hex");
+    const canonicalArgs = canonicalizeSync(args);
+    return createHash("sha256").update(`${toolName}:${canonicalArgs}`).digest("hex");
   }
 
   private pruneRecentCalls(now: number): void {

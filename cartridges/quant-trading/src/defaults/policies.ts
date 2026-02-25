@@ -1,0 +1,105 @@
+import type { Policy } from "@switchboard/schemas";
+
+export const DEFAULT_TRADING_POLICIES: Policy[] = [
+  {
+    id: "trading-market-orders-mandatory",
+    name: "Market Orders Require Mandatory Approval",
+    description: "All market orders (immediate execution) require mandatory human approval",
+    organizationId: null,
+    cartridgeId: "quant-trading",
+    priority: 1,
+    active: true,
+    rule: {
+      composition: "OR",
+      conditions: [
+        { field: "actionType", operator: "eq", value: "trading.order.market_buy" },
+        { field: "actionType", operator: "eq", value: "trading.order.market_sell" },
+      ],
+    },
+    effect: "require_approval",
+    approvalRequirement: "mandatory",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "trading-large-limit-orders",
+    name: "Large Limit Orders Require Elevated Approval",
+    description: "Limit orders with notional value (quantity * limitPrice) above $10,000 require elevated approval",
+    organizationId: null,
+    cartridgeId: "quant-trading",
+    priority: 5,
+    active: true,
+    rule: {
+      composition: "AND",
+      conditions: [
+        {
+          field: "actionType",
+          operator: "in",
+          value: ["trading.order.limit_buy", "trading.order.limit_sell"],
+        },
+        { field: "parameters.dollarsAtRisk", operator: "gt", value: 10000 },
+      ],
+    },
+    effect: "require_approval",
+    approvalRequirement: "elevated",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "trading-cancel-standard",
+    name: "Cancel Orders Require Standard Approval",
+    description: "Cancelling open orders requires standard approval",
+    organizationId: null,
+    cartridgeId: "quant-trading",
+    priority: 10,
+    active: true,
+    rule: {
+      composition: "AND",
+      conditions: [
+        { field: "actionType", operator: "eq", value: "trading.order.cancel" },
+      ],
+    },
+    effect: "require_approval",
+    approvalRequirement: "standard",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "trading-rebalance-mandatory-quorum",
+    name: "Portfolio Rebalance Requires Mandatory Approval with Quorum",
+    description: "Portfolio rebalancing requires mandatory approval with quorum of 2",
+    organizationId: null,
+    cartridgeId: "quant-trading",
+    priority: 1,
+    active: true,
+    rule: {
+      composition: "AND",
+      conditions: [
+        { field: "actionType", operator: "eq", value: "trading.portfolio.rebalance" },
+      ],
+    },
+    effect: "require_approval",
+    approvalRequirement: "mandatory",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "trading-close-position-mandatory",
+    name: "Close Position Requires Mandatory Approval",
+    description: "Closing an entire position requires mandatory approval",
+    organizationId: null,
+    cartridgeId: "quant-trading",
+    priority: 1,
+    active: true,
+    rule: {
+      composition: "AND",
+      conditions: [
+        { field: "actionType", operator: "eq", value: "trading.position.close" },
+      ],
+    },
+    effect: "require_approval",
+    approvalRequirement: "mandatory",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+];

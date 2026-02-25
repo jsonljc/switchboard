@@ -62,6 +62,17 @@ export class ChatRuntime {
     return this.adapter;
   }
 
+  private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
+    const conversation = await getThread(threadId);
+    if (conversation) {
+      const updated = transitionConversation(conversation, {
+        type: "add_message",
+        message: { role: "assistant", text, timestamp: new Date() },
+      });
+      await setThread(updated);
+    }
+  }
+
   private async trackLastExecuted(threadId: string, envelopeId: string): Promise<void> {
     this.lastExecutedEnvelopeFallback.set(threadId, envelopeId);
   }
@@ -116,12 +127,18 @@ export class ChatRuntime {
       await setThread(conversation);
     }
 
+    // Record the incoming user message for conversation memory
+    conversation = transitionConversation(conversation, {
+      type: "add_message",
+      message: { role: "user", text: message.text, timestamp: new Date() },
+    });
+    await setThread(conversation);
+
     // Handle help command
     if (/^help$/i.test(message.text.trim())) {
-      await this.adapter.sendTextReply(
-        threadId,
-        composeHelpMessage(this.availableActions),
-      );
+      const helpText = composeHelpMessage(this.availableActions);
+      await this.adapter.sendTextReply(threadId, helpText);
+      await this.recordAssistantMessage(threadId, helpText);
       return;
     }
 
@@ -137,18 +154,27 @@ export class ChatRuntime {
     }
 
     // Interpret the message — use registry if available, else single interpreter
+    // Include recent messages for conversation continuity
+    const recentMessages = conversation.messages
+      .slice(-5)
+      .map((m) => ({ role: m.role, text: m.text }));
+    const conversationContext: Record<string, unknown> = {
+      conversation,
+      recentMessages,
+    };
+
     let rawResult;
     if (this.interpreterRegistry) {
       rawResult = await this.interpreterRegistry.interpret(
         message.text,
-        { conversation },
+        conversationContext,
         this.availableActions,
         message.organizationId,
       );
     } else {
       rawResult = await this.interpreter.interpret(
         message.text,
-        { conversation },
+        conversationContext,
         this.availableActions,
       );
     }
@@ -157,7 +183,9 @@ export class ChatRuntime {
     const guard = guardInterpreterOutput(rawResult);
     if (!guard.valid || !guard.data) {
       console.error("Interpreter output failed schema guard:", guard.errors);
-      await this.adapter.sendTextReply(threadId, composeUncertainReply());
+      const uncertainReply = composeUncertainReply();
+      await this.adapter.sendTextReply(threadId, uncertainReply);
+      await this.recordAssistantMessage(threadId, uncertainReply);
       return;
     }
     const result = guard.data;
@@ -285,10 +313,9 @@ export class ChatRuntime {
   ): Promise<void> {
     if (result.denied) {
       // Denied
-      await this.adapter.sendTextReply(
-        threadId,
-        composeDenialReply(result.decisionTrace),
-      );
+      const denialText = composeDenialReply(result.decisionTrace);
+      await this.adapter.sendTextReply(threadId, denialText);
+      await this.recordAssistantMessage(threadId, denialText);
       return;
     }
 
@@ -311,6 +338,7 @@ export class ChatRuntime {
         result.approvalRequest.bindingHash,
       );
       await this.adapter.sendApprovalCard(threadId, card);
+      await this.recordAssistantMessage(threadId, `[Approval Required] ${result.approvalRequest.summary}`);
       return;
     }
 
@@ -330,11 +358,11 @@ export class ChatRuntime {
         undoRecipe?.undoExpiresAt ?? null,
       );
       await this.adapter.sendResultCard(threadId, card);
+      await this.recordAssistantMessage(threadId, executeResult.summary);
     } catch (err) {
-      await this.adapter.sendTextReply(
-        threadId,
-        `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const errText = `Execution failed: ${err instanceof Error ? err.message : String(err)}`;
+      await this.adapter.sendTextReply(threadId, errText);
+      await this.recordAssistantMessage(threadId, errText);
     }
   }
 
@@ -380,12 +408,12 @@ export class ChatRuntime {
             undoRecipe?.undoExpiresAt ?? null,
           );
           await this.adapter.sendResultCard(threadId, card);
+          await this.recordAssistantMessage(threadId, response.executionResult.summary);
         }
       } else if (parsed.action === "reject") {
-        await this.adapter.sendTextReply(
-          threadId,
-          `Action rejected by ${principalId}.`,
-        );
+        const rejectText = `Action rejected by ${principalId}.`;
+        await this.adapter.sendTextReply(threadId, rejectText);
+        await this.recordAssistantMessage(threadId, rejectText);
       }
     } catch (err) {
       await this.adapter.sendTextReply(
