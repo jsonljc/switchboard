@@ -37,6 +37,8 @@ export interface RuntimeExecuteResponse {
   executionResult?: ExecuteResult;
   /** Set when outcome is DENIED. */
   deniedExplanation?: string;
+  /** Set when observe mode or emergency override forced auto-approval. */
+  governanceNote?: string;
 }
 
 /** Adapter interface for runtimes (OpenClaw, MCP, etc.). ExecutionService is the default implementation. */

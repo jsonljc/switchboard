@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   ActionEnvelope,
+  ActionPlan,
   ActionProposal,
   ApprovalRequest,
   DecisionTrace,
@@ -22,6 +23,7 @@ import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
 import type { SpendLookup } from "../engine/policy-engine.js";
+import { evaluatePlan } from "../engine/composites.js";
 import { resolveIdentity, applyCompetenceAdjustments } from "../identity/spec.js";
 import { routeApproval, DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import {
@@ -41,7 +43,7 @@ import type { CompetenceTracker } from "../competence/tracker.js";
 import type { GuardrailStateStore } from "../guardrail-state/store.js";
 import type { RiskPostureStore } from "../engine/risk-posture.js";
 import type { GovernanceProfileStore } from "../governance/profile.js";
-import { profileToPosture } from "../governance/profile.js";
+import { profileToPosture, checkActionTypeRestriction } from "../governance/profile.js";
 import type { PolicyCache } from "../policy-cache.js";
 import { DEFAULT_POLICY_CACHE_TTL_MS } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
@@ -71,6 +73,10 @@ export interface OrchestratorConfig {
   executionMode?: ExecutionMode;
   onEnqueue?: EnqueueCallback;
   approvalNotifier?: ApprovalNotifier;
+  /** When true, allows a principal to approve their own proposals. Default: false. */
+  selfApprovalAllowed?: boolean;
+  /** Maximum approval responses per principal in a sliding window. */
+  approvalRateLimit?: { maxApprovals: number; windowMs: number };
 }
 
 export interface ProposeResult {
@@ -79,6 +85,8 @@ export interface ProposeResult {
   approvalRequest: ApprovalRequest | null;
   denied: boolean;
   explanation: string;
+  /** Set when observe mode or emergency override auto-approved the action. */
+  governanceNote?: string;
 }
 
 export interface ApprovalResponse {
@@ -109,6 +117,9 @@ export class LifecycleOrchestrator {
   private executionMode: ExecutionMode;
   private onEnqueue: EnqueueCallback | null;
   private approvalNotifier: ApprovalNotifier | null;
+  private selfApprovalAllowed: boolean;
+  private approvalRateLimit: { maxApprovals: number; windowMs: number } | null;
+  private approvalResponseTimes = new Map<string, number[]>();
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -124,6 +135,8 @@ export class LifecycleOrchestrator {
     this.executionMode = config.executionMode ?? "inline";
     this.onEnqueue = config.onEnqueue ?? null;
     this.approvalNotifier = config.approvalNotifier ?? null;
+    this.selfApprovalAllowed = config.selfApprovalAllowed ?? false;
+    this.approvalRateLimit = config.approvalRateLimit ?? null;
   }
 
   async propose(params: {
@@ -135,6 +148,7 @@ export class LifecycleOrchestrator {
     message?: string;
     parentEnvelopeId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }): Promise<ProposeResult> {
     const span = getTracer().startSpan("orchestrator.propose", {
       "action.type": params.actionType,
@@ -161,6 +175,7 @@ export class LifecycleOrchestrator {
     message?: string;
     parentEnvelopeId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }, span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>, proposeStart: number): Promise<ProposeResult> {
     // 1. Look up IdentitySpec + overlays
     const identitySpec = await this.storage.identity.getSpecByPrincipalId(params.principalId);
@@ -185,6 +200,76 @@ export class LifecycleOrchestrator {
       }
     }
 
+    // 2c. Check per-org action type restrictions
+    if (this.governanceProfileStore) {
+      const profileConfig = await this.governanceProfileStore.getConfig(params.organizationId ?? null);
+      const restriction = checkActionTypeRestriction(params.actionType, profileConfig);
+      if (restriction) {
+        const now = new Date();
+        const deniedEnvelopeId = generateEnvelopeId();
+        const deniedProposalId = `prop_${randomUUID()}`;
+        const traceId = params.traceId ?? `trace_${randomUUID()}`;
+
+        const deniedEnvelope: ActionEnvelope = {
+          id: deniedEnvelopeId,
+          version: 1,
+          incomingMessage: params.message ?? null,
+          conversationId: null,
+          proposals: [{
+            id: deniedProposalId,
+            actionType: params.actionType,
+            parameters: params.parameters,
+            evidence: params.message ?? `Proposed ${params.actionType}`,
+            confidence: 1.0,
+            originatingMessageId: "",
+          }],
+          resolvedEntities: [],
+          plan: null,
+          decisions: [],
+          approvalRequests: [],
+          executionResults: [],
+          auditEntryIds: [],
+          status: "denied",
+          createdAt: now,
+          updatedAt: now,
+          parentEnvelopeId: params.parentEnvelopeId ?? null,
+          traceId,
+        };
+
+        await this.storage.envelopes.save(deniedEnvelope);
+
+        await this.ledger.record({
+          eventType: "action.denied",
+          actorType: "system",
+          actorId: "orchestrator",
+          entityType: "action",
+          entityId: deniedProposalId,
+          riskCategory: "low",
+          summary: `Action denied: ${restriction}`,
+          snapshot: { actionType: params.actionType, reason: restriction },
+          envelopeId: deniedEnvelopeId,
+          traceId,
+        });
+
+        return {
+          envelope: deniedEnvelope,
+          decisionTrace: {
+            actionId: deniedProposalId,
+            envelopeId: deniedEnvelopeId,
+            checks: [],
+            computedRiskScore: { rawScore: 0, category: "low" as const, factors: [] },
+            finalDecision: "deny" as const,
+            approvalRequired: "none" as const,
+            explanation: restriction,
+            evaluatedAt: now,
+          },
+          approvalRequest: null,
+          denied: true,
+          explanation: restriction,
+        };
+      }
+    }
+
     // 3. Look up cartridge
     const cartridge = this.storage.cartridges.get(params.cartridgeId);
     if (!cartridge) {
@@ -192,22 +277,42 @@ export class LifecycleOrchestrator {
     }
 
     // 3b. Enrich context from cartridge
-    const enriched = await cartridge.enrichContext(
-      params.actionType,
-      params.parameters,
-      {
-        principalId: params.principalId,
-        organizationId: params.organizationId ?? null,
-        connectionCredentials: {},
-      },
-    );
+    let enriched: Record<string, unknown> = {};
+    try {
+      enriched = await cartridge.enrichContext(
+        params.actionType,
+        params.parameters,
+        {
+          principalId: params.principalId,
+          organizationId: params.organizationId ?? null,
+          connectionCredentials: {},
+        },
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     // 4. Get risk input from cartridge (include enriched signals)
-    const riskInput = await cartridge.getRiskInput(
-      params.actionType,
-      params.parameters,
-      { principalId: params.principalId, ...enriched },
-    );
+    let riskInput: import("@switchboard/schemas").RiskInput;
+    try {
+      riskInput = await cartridge.getRiskInput(
+        params.actionType,
+        params.parameters,
+        { principalId: params.principalId, ...enriched },
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] getRiskInput failed, using default medium risk: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      riskInput = {
+        baseRisk: "medium",
+        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    }
 
     // 5. Get guardrails from cartridge
     const guardrails = cartridge.getGuardrails();
@@ -250,7 +355,7 @@ export class LifecycleOrchestrator {
     const proposal: ActionProposal = {
       id: proposalId,
       actionType: params.actionType,
-      parameters: { ...params.parameters, _principalId: params.principalId, _cartridgeId: params.cartridgeId },
+      parameters: { ...params.parameters, _principalId: params.principalId, _cartridgeId: params.cartridgeId, _organizationId: params.organizationId ?? null },
       evidence: params.message ?? `Proposed ${params.actionType}`,
       confidence: 1.0,
       originatingMessageId: "",
@@ -283,9 +388,9 @@ export class LifecycleOrchestrator {
       resolvedIdentity: effectiveIdentity,
       riskInput,
       competenceAdjustments,
-      compositeContext: await this.buildCompositeContext(params.principalId),
+      compositeContext: await this.buildCompositeContext(params.principalId, params.organizationId ?? undefined),
       systemRiskPosture,
-      spendLookup: await this.buildSpendLookup(params.principalId),
+      spendLookup: await this.buildSpendLookup(params.principalId, params.organizationId ?? undefined),
     };
 
     // 9. Evaluate
@@ -320,14 +425,31 @@ export class LifecycleOrchestrator {
 
     // 10. Handle decision outcome
     let approvalRequest: ApprovalRequest | null = null;
+    let governanceNote: string | undefined;
 
-    // Observe mode: run full evaluation but force auto-approve regardless
+    // Observe mode or emergency override: run full evaluation but force auto-approve regardless
     const isObserveMode = effectiveIdentity.governanceProfile === "observe";
-    if (isObserveMode) {
+    const isEmergencyOverride = params.emergencyOverride === true;
+
+    // 1.2: Emergency override authorization — require admin or emergency_responder role
+    if (isEmergencyOverride) {
+      const principal = await this.storage.identity.getPrincipal(params.principalId);
+      const hasRole = principal?.roles.some(
+        (r) => r === "admin" || r === "emergency_responder",
+      );
+      if (!hasRole) {
+        throw new Error("Emergency override requires admin or emergency_responder role");
+      }
+    }
+
+    if (isObserveMode || isEmergencyOverride) {
       envelope.status = "approved";
+      governanceNote = isEmergencyOverride
+        ? "Auto-approved (emergency override): full governance evaluation ran but approval requirement was bypassed."
+        : "Auto-approved (observe mode): full governance evaluation ran but approval requirement was bypassed.";
     } else if (decisionTrace.finalDecision === "deny") {
       envelope.status = "denied";
-    } else if (decisionTrace.approvalRequired !== "none") {
+    } else if (decisionTrace.approvalRequired !== "none" || params.parameters["_forceApproval"] === true) {
       // Approval needed
       const routing = routeApproval(
         decisionTrace.computedRiskScore.category,
@@ -464,6 +586,7 @@ export class LifecycleOrchestrator {
           .filter((c) => c.matched)
           .map((c) => ({ code: c.checkCode, effect: c.effect })),
         interpreterName: proposal.interpreterName ?? null,
+        emergencyOverride: params.emergencyOverride ?? false,
       },
       evidence: [
         { type: "decision_trace", data: decisionTrace },
@@ -501,6 +624,77 @@ export class LifecycleOrchestrator {
       approvalRequest,
       denied: decisionTrace.finalDecision === "deny",
       explanation: decisionTrace.explanation,
+      governanceNote,
+    };
+  }
+
+  /**
+   * Propose a multi-step action plan. Evaluates each proposal according to
+   * the plan's strategy (atomic, sequential, best_effort).
+   * TODO: The "single_approval" plan mode is declared in the ActionPlan schema
+   * but not yet implemented. When added, it should collect all proposals into
+   * one approval request and execute them atomically upon approval.
+   */
+  async proposePlan(
+    plan: ActionPlan,
+    proposals: Array<{
+      actionType: string;
+      parameters: Record<string, unknown>;
+      principalId: string;
+      cartridgeId: string;
+      organizationId?: string;
+    }>,
+  ): Promise<{
+    planDecision: "allow" | "deny" | "partial";
+    results: ProposeResult[];
+    explanation: string;
+  }> {
+    // Evaluate each proposal independently first
+    const results: ProposeResult[] = [];
+    const decisionTraces: DecisionTrace[] = [];
+
+    for (const proposal of proposals) {
+      const result = await this.propose(proposal);
+      results.push(result);
+      decisionTraces.push(result.decisionTrace);
+    }
+
+    // Populate plan.proposalOrder from the generated proposal IDs
+    plan.proposalOrder = results.map((r) => r.envelope.proposals[0]?.id ?? "");
+
+    // Apply plan strategy
+    const planResult = evaluatePlan(plan, decisionTraces);
+
+    // For atomic strategy, if any denied, mark all as denied
+    if (plan.strategy === "atomic" && planResult.planDecision === "deny") {
+      for (const result of results) {
+        if (result.envelope.status !== "denied") {
+          await this.storage.envelopes.update(result.envelope.id, { status: "denied" });
+          result.envelope.status = "denied";
+        }
+      }
+    }
+
+    // For sequential strategy, deny everything after first failure
+    if (plan.strategy === "sequential" && planResult.planDecision !== "allow") {
+      let hitFailure = false;
+      for (let i = 0; i < results.length; i++) {
+        const proposalId = plan.proposalOrder[i];
+        if (hitFailure && proposalId) {
+          const result = results[i]!;
+          if (result.envelope.status !== "denied") {
+            await this.storage.envelopes.update(result.envelope.id, { status: "denied" });
+            result.envelope.status = "denied";
+          }
+        }
+        if (results[i]?.denied) hitFailure = true;
+      }
+    }
+
+    return {
+      planDecision: planResult.planDecision,
+      results,
+      explanation: planResult.explanation,
     };
   }
 
@@ -547,7 +741,9 @@ export class LifecycleOrchestrator {
 
     // 3. Validate binding hash for approve/patch
     if (params.action === "approve" || params.action === "patch") {
-      if (params.bindingHash !== approval.request.bindingHash) {
+      const a = Buffer.from(params.bindingHash);
+      const b = Buffer.from(approval.request.bindingHash);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
         throw new Error("Binding hash mismatch: action parameters may have changed (stale approval)");
       }
     }
@@ -558,7 +754,7 @@ export class LifecycleOrchestrator {
       if (!principal) {
         throw new Error(`Principal not found: ${params.respondedBy}`);
       }
-      const delegations = await this.storage.identity.listDelegationRules();
+      const delegations = await this.storage.identity.listDelegationRules(approval.organizationId ?? undefined);
       const chainResult = canApproveWithChain(principal, approval.request.approvers, delegations);
       if (!chainResult.authorized) {
         throw new Error(`Principal ${params.respondedBy} is not authorized to respond to this approval`);
@@ -584,6 +780,45 @@ export class LifecycleOrchestrator {
       }
     }
 
+    // 4b. Self-approval prevention
+    // Load envelope early so we can check the originating principal
+    const envelope = await this.storage.envelopes.getById(approval.envelopeId);
+    if (!envelope) {
+      throw new Error(`Envelope not found: ${approval.envelopeId}`);
+    }
+
+    if ((params.action === "approve" || params.action === "patch") && !this.selfApprovalAllowed) {
+      const originatingPrincipalId = envelope.proposals[0]?.parameters["_principalId"] as string | undefined;
+      if (originatingPrincipalId && params.respondedBy === originatingPrincipalId) {
+        throw new Error("Self-approval is not permitted");
+      }
+    }
+
+    // 4c. Approval rate limiting
+    if (this.approvalRateLimit && (params.action === "approve" || params.action === "patch")) {
+      const now = Date.now();
+      const windowMs = this.approvalRateLimit.windowMs;
+      const times = this.approvalResponseTimes.get(params.respondedBy) ?? [];
+      const recentTimes = times.filter((t) => now - t < windowMs);
+      if (recentTimes.length >= this.approvalRateLimit.maxApprovals) {
+        throw new Error("Approval rate limit exceeded. Try again later.");
+      }
+      recentTimes.push(now);
+      this.approvalResponseTimes.set(params.respondedBy, recentTimes);
+
+      // Prune stale entries when map grows too large
+      if (this.approvalResponseTimes.size > 1000) {
+        for (const [key, ts] of this.approvalResponseTimes) {
+          const filtered = ts.filter((t) => now - t < windowMs);
+          if (filtered.length === 0) {
+            this.approvalResponseTimes.delete(key);
+          } else {
+            this.approvalResponseTimes.set(key, filtered);
+          }
+        }
+      }
+    }
+
     // 5. Transition approval state
     const newState = transitionApproval(
       approval.state,
@@ -593,12 +828,6 @@ export class LifecycleOrchestrator {
       params.approvalHash,
     );
     await this.storage.approvals.updateState(params.approvalId, newState);
-
-    // Load envelope
-    const envelope = await this.storage.envelopes.getById(approval.envelopeId);
-    if (!envelope) {
-      throw new Error(`Envelope not found: ${approval.envelopeId}`);
-    }
 
     let executionResult: ExecuteResult | null = null;
 
@@ -686,21 +915,41 @@ export class LifecycleOrchestrator {
           const cartridge = this.storage.cartridges.get(cartridgeId);
           if (cartridge) {
             // Enrich context for re-evaluation
-            const enriched = await cartridge.enrichContext(
-              originalProposal.actionType,
-              patchedParams,
-              {
-                principalId,
-                organizationId: null,
-                connectionCredentials: {},
-              },
-            );
+            let enriched: Record<string, unknown> = {};
+            try {
+              enriched = await cartridge.enrichContext(
+                originalProposal.actionType,
+                patchedParams,
+                {
+                  principalId,
+                  organizationId: null,
+                  connectionCredentials: {},
+                },
+              );
+            } catch (err) {
+              console.warn(
+                `[orchestrator] enrichContext failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
 
-            const riskInput = await cartridge.getRiskInput(
-              originalProposal.actionType,
-              patchedParams,
-              { principalId, ...enriched },
-            );
+            let riskInput: import("@switchboard/schemas").RiskInput;
+            try {
+              riskInput = await cartridge.getRiskInput(
+                originalProposal.actionType,
+                patchedParams,
+                { principalId, ...enriched },
+              );
+            } catch (err) {
+              console.warn(
+                `[orchestrator] getRiskInput failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+              );
+              riskInput = {
+                baseRisk: "medium",
+                exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+                reversibility: "full",
+                sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+              };
+            }
             const guardrails = cartridge.getGuardrails();
             const policies = await this.storage.policies.listActive({ cartridgeId });
 
@@ -844,6 +1093,43 @@ export class LifecycleOrchestrator {
       envelopeId: envelope.id,
     });
 
+    // Capture pre-mutation snapshot (read-only, no execution token needed)
+    let preMutationSnapshot: Record<string, unknown> | undefined;
+    try {
+      if (cartridge.captureSnapshot) {
+        preMutationSnapshot = await cartridge.captureSnapshot(
+          proposal.actionType,
+          Object.fromEntries(
+            Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
+          ),
+          {
+            principalId: envelope.proposals[0]?.parameters["_principalId"] as string ?? "",
+            organizationId: null,
+            connectionCredentials: {},
+          },
+        );
+
+        if (preMutationSnapshot && Object.keys(preMutationSnapshot).length > 0) {
+          await this.ledger.record({
+            eventType: "action.snapshot",
+            actorType: "system",
+            actorId: "orchestrator",
+            entityType: "action",
+            entityId: proposal.id,
+            riskCategory: decision?.computedRiskScore.category ?? "low",
+            summary: `Pre-mutation snapshot captured for ${proposal.actionType}`,
+            snapshot: preMutationSnapshot,
+            envelopeId: envelope.id,
+            traceId: envelope.traceId,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[orchestrator] captureSnapshot failed, proceeding without snapshot: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     let executeResult: ExecuteResult;
     const execToken = beginExecution();
     // Bind this specific token to the cartridge instance so concurrent
@@ -902,6 +1188,7 @@ export class LifecycleOrchestrator {
           durationMs: executeResult.durationMs,
           undoRecipe: executeResult.undoRecipe,
           executedAt: new Date(),
+          preMutationSnapshot,
         },
       ],
     });
@@ -1175,6 +1462,7 @@ export class LifecycleOrchestrator {
     message?: string;
     organizationId?: string | null;
     traceId?: string;
+    emergencyOverride?: boolean;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }
@@ -1387,7 +1675,7 @@ export class LifecycleOrchestrator {
     return null;
   }
 
-  private async buildSpendLookup(principalId: string): Promise<SpendLookup> {
+  private async buildSpendLookup(principalId: string, organizationId?: string): Promise<SpendLookup> {
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const weekMs = 7 * dayMs;
@@ -1395,7 +1683,10 @@ export class LifecycleOrchestrator {
 
     let allEnvelopes: ActionEnvelope[];
     try {
-      allEnvelopes = await this.storage.envelopes.list({ limit: 500 });
+      allEnvelopes = await this.storage.envelopes.list({
+        limit: 500,
+        organizationId,
+      });
     } catch {
       return { dailySpend: 0, weeklySpend: 0, monthlySpend: 0 };
     }
@@ -1432,7 +1723,7 @@ export class LifecycleOrchestrator {
     return { dailySpend, weeklySpend, monthlySpend };
   }
 
-  private async buildCompositeContext(principalId: string): Promise<CompositeRiskContext | undefined> {
+  private async buildCompositeContext(principalId: string, organizationId?: string): Promise<CompositeRiskContext | undefined> {
     const windowMs = 60 * 60 * 1000; // 60 minutes
     const cutoff = new Date(Date.now() - windowMs);
 
@@ -1440,6 +1731,7 @@ export class LifecycleOrchestrator {
     try {
       allRecentEnvelopes = await this.storage.envelopes.list({
         limit: 200,
+        organizationId,
       });
     } catch {
       return undefined;

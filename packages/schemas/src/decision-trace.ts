@@ -13,13 +13,14 @@ export const CheckCodeSchema = z.enum([
   "RISK_SCORING",
   "RESOLVER_AMBIGUITY",
   "COMPETENCE_TRUST",
+  "COMPETENCE_ESCALATION",
   "COMPOSITE_RISK",
   "DELEGATION_CHAIN",
   "SYSTEM_POSTURE",
 ]);
 export type CheckCode = z.infer<typeof CheckCodeSchema>;
 
-export const CheckEffectSchema = z.enum(["allow", "deny", "modify", "skip"]);
+export const CheckEffectSchema = z.enum(["allow", "deny", "modify", "skip", "escalate"]);
 export type CheckEffect = z.infer<typeof CheckEffectSchema>;
 
 export const DecisionCheckSchema = z.object({

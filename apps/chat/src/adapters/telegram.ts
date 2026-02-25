@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
 
@@ -42,10 +43,27 @@ export class TelegramAdapter implements ChannelAdapter {
   private baseUrl: string;
   private principalLookup: PrincipalLookup | null;
   private rateLimiter = new TelegramRateLimiter();
+  private webhookSecret: string | null;
 
-  constructor(botToken: string, principalLookup?: PrincipalLookup) {
+  constructor(botToken: string, principalLookup?: PrincipalLookup, webhookSecret?: string) {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
     this.principalLookup = principalLookup ?? null;
+    this.webhookSecret = webhookSecret ?? null;
+  }
+
+  /**
+   * Verify Telegram webhook secret token using timing-safe comparison.
+   * Telegram sends the secret in the X-Telegram-Bot-Api-Secret-Token header.
+   */
+  verifyRequest(_rawBody: string, headers: Record<string, string | undefined>): boolean {
+    if (!this.webhookSecret) return true; // No secret configured
+    const token = headers["x-telegram-bot-api-secret-token"];
+    if (!token) return false;
+    try {
+      return timingSafeEqual(Buffer.from(this.webhookSecret), Buffer.from(token));
+    } catch {
+      return false; // Different lengths
+    }
   }
 
   async resolveOrganizationId(principalId: string): Promise<string | null> {

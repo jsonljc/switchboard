@@ -71,7 +71,27 @@ function evaluateCondition(condition: PolicyCondition, context: EvaluationContex
       matched = typeof actual === "string" && typeof expected === "string" && !actual.includes(expected);
       break;
     case "matches":
-      matched = typeof actual === "string" && typeof expected === "string" && new RegExp(expected).test(actual);
+      if (typeof actual === "string" && typeof expected === "string") {
+        // ReDoS protection: reject overly long patterns or inputs
+        if (expected.length > 256 || actual.length > 10_000) {
+          matched = false;
+        // Reject patterns with nested quantifiers, repeated wildcards, or adjacent unbounded groups
+        } else if (
+          /(\+|\*|\{)\s*\)(\+|\*|\?)/.test(expected) ||
+          /(\+|\*)\+/.test(expected) ||
+          /\.\*.*\.\*/.test(expected) ||
+          /\.\+.*\.\+/.test(expected)
+        ) {
+          // Potentially dangerous pattern — reject rather than risk catastrophic backtracking
+          matched = false;
+        } else {
+          try {
+            matched = new RegExp(expected).test(actual);
+          } catch {
+            matched = false;
+          }
+        }
+      }
       break;
     case "exists":
       matched = actual !== undefined && actual !== null;

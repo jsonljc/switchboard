@@ -85,6 +85,7 @@ export class ExecutionService implements RuntimeAdapter {
       envelopeId,
       traceId: outTraceId,
       executionResult,
+      governanceNote: result.governanceNote,
     };
   }
 }

@@ -72,6 +72,21 @@ describe("LifecycleOrchestrator", () => {
 
     storage.cartridges.register("ads-spend", cartridge);
 
+    // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
+    await storage.policies.save({
+      id: "default-allow-ads",
+      name: "Default allow ads-spend",
+      description: "Allow all ads-spend actions",
+      organizationId: null,
+      cartridgeId: "ads-spend",
+      priority: 100,
+      active: true,
+      rule: { composition: "AND", conditions: [], children: [] },
+      effect: "allow",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     // Seed identity
     await storage.identity.saveSpec(makeIdentitySpec());
 
@@ -1269,10 +1284,15 @@ describe("LifecycleOrchestrator", () => {
     });
 
     it("should record rollback against original action type on undo", async () => {
-      // Build up some competence
-      for (let i = 0; i < 5; i++) {
+      // Build up enough competence to avoid escalation (score >= 40)
+      for (let i = 0; i < 15; i++) {
         await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
       }
+
+      // Also trust the behavior so the action auto-approves
+      await storage.identity.saveSpec(
+        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause", "ads.campaign.resume"] }),
+      );
 
       const adjBefore = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
 
@@ -1522,6 +1542,348 @@ describe("LifecycleOrchestrator", () => {
       });
 
       expect(second.denied).toBe(false);
+    });
+  });
+
+  describe("Self-approval prevention (1.1)", () => {
+    it("should reject when requester tries to approve their own proposal", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      // Seed user_1 as both requester and approver
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        type: "user",
+        name: "User 1",
+        organizationId: null,
+        roles: ["requester", "approver"],
+      });
+
+      const routingConfig: ApprovalRoutingConfig = {
+        defaultApprovers: ["user_1", "admin_1"],
+        defaultFallbackApprover: null,
+        defaultExpiryMs: 24 * 60 * 60 * 1000,
+        defaultExpiredBehavior: "deny",
+        elevatedExpiryMs: 12 * 60 * 60 * 1000,
+        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+        denyWhenNoApprovers: true,
+      };
+
+      const selfApprovalOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig,
+      });
+
+      const proposeResult = await selfApprovalOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Attempt self-approval — should be rejected
+      await expect(
+        selfApprovalOrch.respondToApproval({
+          approvalId: proposeResult.approvalRequest!.id,
+          action: "approve",
+          respondedBy: "user_1",
+          bindingHash: proposeResult.approvalRequest!.bindingHash,
+        }),
+      ).rejects.toThrow("Self-approval is not permitted");
+    });
+
+    it("should allow approval from a different principal", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const proposeResult = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      // Approve as admin_1 (different principal) — should succeed
+      const response = await orchestrator.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "admin_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+    });
+
+    it("should allow self-approval when selfApprovalAllowed is true", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        type: "user",
+        name: "User 1",
+        organizationId: null,
+        roles: ["requester", "approver"],
+      });
+
+      const selfApprovalOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig: {
+          defaultApprovers: ["user_1"],
+          defaultFallbackApprover: null,
+          defaultExpiryMs: 24 * 60 * 60 * 1000,
+          defaultExpiredBehavior: "deny",
+          elevatedExpiryMs: 12 * 60 * 60 * 1000,
+          mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+          denyWhenNoApprovers: true,
+        },
+        selfApprovalAllowed: true,
+      });
+
+      const proposeResult = await selfApprovalOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      const response = await selfApprovalOrch.respondToApproval({
+        approvalId: proposeResult.approvalRequest!.id,
+        action: "approve",
+        respondedBy: "user_1",
+        bindingHash: proposeResult.approvalRequest!.bindingHash,
+      });
+
+      expect(response.approvalState.status).toBe("approved");
+    });
+  });
+
+  describe("Emergency override authorization (1.2)", () => {
+    it("should reject emergencyOverride from non-admin principal", async () => {
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        type: "user",
+        name: "User 1",
+        organizationId: null,
+        roles: ["requester"],
+      });
+
+      await expect(
+        orchestrator.propose({
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: "camp_1" },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+          emergencyOverride: true,
+        }),
+      ).rejects.toThrow("Emergency override requires admin or emergency_responder role");
+    });
+
+    it("should allow emergencyOverride from admin principal", async () => {
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        type: "user",
+        name: "User 1",
+        organizationId: null,
+        roles: ["admin"],
+      });
+
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+        emergencyOverride: true,
+      });
+
+      expect(result.envelope.status).toBe("approved");
+      expect(result.governanceNote).toContain("emergency override");
+    });
+
+    it("should allow emergencyOverride from emergency_responder principal", async () => {
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        type: "user",
+        name: "User 1",
+        organizationId: null,
+        roles: ["emergency_responder"],
+      });
+
+      const result = await orchestrator.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+        emergencyOverride: true,
+      });
+
+      expect(result.envelope.status).toBe("approved");
+    });
+  });
+
+  describe("Approval rate limiting (2.3)", () => {
+    it("should reject when approval rate limit is exceeded", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      const rateLimitedOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig: {
+          defaultApprovers: ["admin_1"],
+          defaultFallbackApprover: null,
+          defaultExpiryMs: 24 * 60 * 60 * 1000,
+          defaultExpiredBehavior: "deny",
+          elevatedExpiryMs: 12 * 60 * 60 * 1000,
+          mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+          denyWhenNoApprovers: true,
+        },
+        approvalRateLimit: { maxApprovals: 3, windowMs: 60_000 },
+      });
+
+      // Approve 3 proposals (at the limit)
+      for (let i = 0; i < 3; i++) {
+        const proposeResult = await rateLimitedOrch.propose({
+          actionType: "ads.campaign.pause",
+          parameters: { campaignId: `camp_${i}` },
+          principalId: "user_1",
+          cartridgeId: "ads-spend",
+        });
+
+        await rateLimitedOrch.respondToApproval({
+          approvalId: proposeResult.approvalRequest!.id,
+          action: "approve",
+          respondedBy: "admin_1",
+          bindingHash: proposeResult.approvalRequest!.bindingHash,
+        });
+      }
+
+      // 4th approval should be rate limited
+      const proposeResult = await rateLimitedOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_4" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      await expect(
+        rateLimitedOrch.respondToApproval({
+          approvalId: proposeResult.approvalRequest!.id,
+          action: "approve",
+          respondedBy: "admin_1",
+          bindingHash: proposeResult.approvalRequest!.bindingHash,
+        }),
+      ).rejects.toThrow("Approval rate limit exceeded");
+    });
+  });
+
+  describe("Self-approval via patch prevention (#2)", () => {
+    it("should reject self-approval via patch action", async () => {
+      cartridge.onRiskInput(() => ({
+        baseRisk: "high" as const,
+        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
+        reversibility: "full" as const,
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      }));
+
+      // Ensure the user_1 principal exists so the approver-authorization check works
+      await storage.identity.savePrincipal({
+        id: "user_1",
+        name: "Test User",
+        type: "human",
+        roles: ["operator"],
+        organizationId: null,
+        createdAt: new Date(),
+      });
+
+      const patchOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        routingConfig: {
+          defaultApprovers: ["user_1", "admin_1"],
+          defaultFallbackApprover: null,
+          defaultExpiryMs: 24 * 60 * 60 * 1000,
+          defaultExpiredBehavior: "deny",
+          elevatedExpiryMs: 12 * 60 * 60 * 1000,
+          mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+          denyWhenNoApprovers: true,
+        },
+        selfApprovalAllowed: false,
+      });
+
+      const proposeResult = await patchOrch.propose({
+        actionType: "ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+      });
+
+      expect(proposeResult.approvalRequest).not.toBeNull();
+
+      // Trying to patch with the same principal who proposed
+      await expect(
+        patchOrch.respondToApproval({
+          approvalId: proposeResult.approvalRequest!.id,
+          action: "patch",
+          respondedBy: "user_1",
+          bindingHash: proposeResult.approvalRequest!.bindingHash,
+          patchValue: { campaignId: "camp_2" },
+        }),
+      ).rejects.toThrow("Self-approval is not permitted");
+    });
+  });
+
+  describe("Structured denial for action type restriction (#13)", () => {
+    it("should return structured ProposeResult instead of throwing for restricted actions", async () => {
+      const { InMemoryGovernanceProfileStore } = await import("../governance/profile.js");
+      const profileStore = new InMemoryGovernanceProfileStore();
+      await profileStore.setConfig("org_restricted", {
+        profile: "enforce" as any,
+        blockedActionTypes: ["ads.campaign.delete"],
+      });
+
+      const restrictedOrch = new LifecycleOrchestrator({
+        storage,
+        ledger,
+        guardrailState,
+        governanceProfileStore: profileStore,
+      });
+
+      // This should return a structured denial, not throw
+      const result = await restrictedOrch.propose({
+        actionType: "ads.campaign.delete",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        cartridgeId: "ads-spend",
+        organizationId: "org_restricted",
+      });
+
+      expect(result.denied).toBe(true);
+      expect(result.envelope.status).toBe("denied");
     });
   });
 });

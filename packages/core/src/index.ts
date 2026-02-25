@@ -65,15 +65,16 @@ export type {
 
 // Orchestrator
 export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js";
-export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./orchestrator/index.js";
+export type { OrchestratorConfig, ProposeResult, ApprovalResponse, RuntimeOrchestrator } from "./orchestrator/index.js";
 
 // Audit
 export { computeAuditHash, computeAuditHashSync, sha256, verifyChain, ensureCanonicalize } from "./audit/canonical-hash.js";
+export { canonicalizeSync } from "./audit/canonical-json.js";
 export type { AuditHashInput } from "./audit/canonical-hash.js";
 export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./audit/redaction.js";
 export type { RedactionConfig, RedactionResult } from "./audit/redaction.js";
-export { storeEvidence, verifyEvidence } from "./audit/evidence.js";
-export type { EvidencePointer } from "./audit/evidence.js";
+export { storeEvidence, verifyEvidence, setEvidenceStore, InMemoryEvidenceStore, FileSystemEvidenceStore } from "./audit/evidence.js";
+export type { EvidencePointer, EvidenceStore } from "./audit/evidence.js";
 export { AuditLedger, InMemoryLedgerStorage } from "./audit/ledger.js";
 export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
 
@@ -121,6 +122,8 @@ export {
   mcpToolCallToExecuteRequest,
   executeResponseToMcpResult,
   mcpExecute,
+  rebuildToolMap,
+  resolveToolAction,
 } from "./runtime-adapters/mcp.js";
 export type { McpToolCallPayload, McpToolResponse } from "./runtime-adapters/mcp.js";
 
@@ -135,6 +138,7 @@ export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapte
 // Governance profiles (per-org posture)
 export {
   profileToPosture,
+  checkActionTypeRestriction,
   DEFAULT_GOVERNANCE_PROFILE,
   InMemoryGovernanceProfileStore,
 } from "./governance/profile.js";

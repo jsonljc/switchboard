@@ -230,12 +230,53 @@ export class InMemoryApprovalStore implements ApprovalStore {
 
 export class InMemoryCartridgeRegistry implements CartridgeRegistry {
   private store = new Map<string, Cartridge>();
+  private versions = new Map<string, string>();
+  private onChange: (() => void) | null;
+
+  constructor(options?: { onChange?: () => void }) {
+    this.onChange = options?.onChange ?? null;
+  }
 
   register(cartridgeId: string, cartridge: Cartridge, interceptors?: CartridgeInterceptor[]): void {
+    // Version enforcement: reject downgrades and same-version re-registration
+    const existingVersion = this.versions.get(cartridgeId);
+    const newVersion = cartridge.manifest.version;
+    if (existingVersion && newVersion) {
+      const cmp = compareSemver(newVersion, existingVersion);
+      if (cmp < 0) {
+        throw new Error(
+          `Cannot register cartridge "${cartridgeId}" v${newVersion}: ` +
+          `would downgrade from v${existingVersion}`,
+        );
+      }
+      if (cmp === 0) {
+        throw new Error(
+          `Cannot register cartridge "${cartridgeId}" v${newVersion}: ` +
+          `same version already registered. Unregister first to replace.`,
+        );
+      }
+    }
+
+    // Warn about action type collisions with other registered cartridges
+    const newActions = cartridge.manifest.actions ?? [];
+    for (const [existingId, existingCartridge] of this.store) {
+      if (existingId === cartridgeId) continue;
+      const existingActions = existingCartridge.manifest.actions ?? [];
+      for (const newAction of newActions) {
+        for (const existingAction of existingActions) {
+          if (newAction.actionType === existingAction.actionType) {
+            console.warn(
+              `[CartridgeRegistry] Action type collision: "${newAction.actionType}" ` +
+              `is declared by both "${cartridgeId}" and "${existingId}"`,
+            );
+          }
+        }
+      }
+    }
+
     // If interceptors are provided and the cartridge isn't already guarded, wrap it
     if (interceptors && interceptors.length > 0) {
       if (cartridge instanceof GuardedCartridge) {
-        // Already guarded — store as-is (interceptors should have been set at construction)
         this.store.set(cartridgeId, cartridge);
       } else {
         this.store.set(cartridgeId, new GuardedCartridge(cartridge, interceptors));
@@ -243,6 +284,15 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
     } else {
       this.store.set(cartridgeId, cartridge);
     }
+    this.versions.set(cartridgeId, newVersion);
+    this.onChange?.();
+  }
+
+  unregister(cartridgeId: string): boolean {
+    this.versions.delete(cartridgeId);
+    const result = this.store.delete(cartridgeId);
+    if (result) this.onChange?.();
+    return result;
   }
 
   get(cartridgeId: string): Cartridge | null {
@@ -252,6 +302,47 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
   list(): string[] {
     return [...this.store.keys()];
   }
+
+  getVersion(cartridgeId: string): string | null {
+    return this.versions.get(cartridgeId) ?? null;
+  }
+}
+
+/**
+ * Simple semver comparison with pre-release support. Returns:
+ *  -1 if a < b
+ *   0 if a == b
+ *   1 if a > b
+ * Pre-release versions (e.g. 1.0.0-beta) are considered less than
+ * the corresponding release version (1.0.0).
+ */
+function compareSemver(a: string, b: string): number {
+  // Strip and capture pre-release suffixes
+  const preA = a.includes("-") ? a.slice(a.indexOf("-")) : null;
+  const preB = b.includes("-") ? b.slice(b.indexOf("-")) : null;
+  const coreA = a.includes("-") ? a.slice(0, a.indexOf("-")) : a;
+  const coreB = b.includes("-") ? b.slice(0, b.indexOf("-")) : b;
+
+  const pa = coreA.split(".").map(Number);
+  const pb = coreB.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const va = pa[i] ?? 0;
+    const vb = pb[i] ?? 0;
+    if (isNaN(va) || isNaN(vb)) return 0;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+  }
+
+  // Same core version: pre-release < release
+  if (preA && !preB) return -1;
+  if (!preA && preB) return 1;
+  // Both have pre-release: compare lexicographically
+  if (preA && preB) {
+    if (preA < preB) return -1;
+    if (preA > preB) return 1;
+  }
+
+  return 0;
 }
 
 export function matchActionTypePattern(pattern: string, actionType: string): boolean {

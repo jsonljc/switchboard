@@ -34,6 +34,11 @@ export class AdsSpendCartridge implements Cartridge {
     this.provider = createMetaAdsProvider(config);
   }
 
+  /**
+   * @internal Not part of the public Cartridge API. Used only by bootstrap
+   * and PostMutationVerifier within the ads-spend package. Accessing this
+   * method from outside the package bypasses governance controls.
+   */
   getProvider(): MetaAdsProvider {
     if (!this.provider) throw new Error("Cartridge not initialized");
     return this.provider;
@@ -41,6 +46,27 @@ export class AdsSpendCartridge implements Cartridge {
 
   async searchCampaigns(query: string): Promise<CampaignInfo[]> {
     return this.getProvider().searchCampaigns(query);
+  }
+
+  async captureSnapshot(
+    _actionType: string,
+    parameters: Record<string, unknown>,
+    _context: CartridgeContext,
+  ): Promise<Record<string, unknown>> {
+    const provider = this.getProvider();
+    const campaignId = (parameters["campaignId"] ?? parameters["adSetId"]) as string | undefined;
+    if (!campaignId) return {};
+    const campaign = await provider.getCampaign(campaignId);
+    return {
+      campaignId,
+      name: campaign.name,
+      status: campaign.status,
+      dailyBudget: campaign.dailyBudget / 100,
+      lifetimeBudget: campaign.lifetimeBudget ? campaign.lifetimeBudget / 100 : null,
+      deliveryStatus: campaign.deliveryStatus,
+      objective: campaign.objective,
+      capturedAt: new Date().toISOString(),
+    };
   }
 
   async enrichContext(
@@ -265,3 +291,5 @@ export { ADS_SPEND_MANIFEST } from "./manifest.js";
 export { DEFAULT_ADS_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_ADS_POLICIES } from "./defaults/policies.js";
 export { PostMutationVerifier } from "./interceptors/verification.js";
+export { bootstrapAdsSpendCartridge } from "./bootstrap.js";
+export type { BootstrapAdsSpendConfig, BootstrapAdsSpendResult } from "./bootstrap.js";

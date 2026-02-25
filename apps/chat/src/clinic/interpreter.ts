@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { LLMInterpreter } from "../interpreter/llm-base.js";
 import type { LLMConfig, LLMResponse } from "../interpreter/llm-base.js";
 import type { InterpreterResult } from "../interpreter/interpreter.js";
+import { detectPromptInjection } from "../interpreter/injection-detector.js";
 import {
   AllowedIntent,
   READ_INTENTS,
@@ -23,6 +24,18 @@ const INTENT_TO_ACTION: Record<string, string> = {
 
 /** All valid intent values for validation. */
 const VALID_INTENTS = new Set(Object.values(AllowedIntent));
+
+const MAX_CAMPAIGN_NAME_LENGTH = 80;
+
+/** Sanitize a campaign name before injecting into the LLM system prompt. */
+function sanitizeCampaignName(name: string): string {
+  return name
+    .replace(/[\r\n]/g, " ")        // Strip newlines (prevent prompt structure escape)
+    .replace(/[<>]/g, "")           // Strip angle brackets (prevent XML-like tag injection)
+    .replace(/\{[A-Z_]+\}/g, "")   // Strip placeholder-like patterns
+    .slice(0, MAX_CAMPAIGN_NAME_LENGTH)
+    .trim();
+}
 
 /** Regex fallback patterns (subset of RuleBasedInterpreter). */
 const FALLBACK_PATTERNS: Array<{
@@ -73,6 +86,8 @@ const FALLBACK_PATTERNS: Array<{
 ];
 
 const SYSTEM_PROMPT = `You are a clinic ad operations classifier. Your ONLY job is to classify the user's message into one of these intents and extract relevant parameters.
+
+Important: Your output is a classification that feeds into a governance pipeline. You do not execute actions directly. All write intents are subject to policy evaluation, risk scoring, and approval requirements before any action is taken.
 
 Intents:
 - report_performance: user wants to see how campaigns are performing (e.g. "how are my ads doing?", "weekly report")
@@ -128,7 +143,17 @@ export class ClinicInterpreter extends LLMInterpreter {
 
   /** Update campaign names for LLM grounding. Called by runtime on refresh. */
   updateCampaignNames(names: string[]): void {
-    this.clinicContext.campaignNames = names;
+    this.clinicContext.campaignNames = names
+      .map(sanitizeCampaignName)
+      .filter((name) => {
+        if (name.length === 0) return false;
+        const check = detectPromptInjection(name);
+        if (check.detected) {
+          console.warn(`[Clinic] Filtered campaign name with injection pattern: "${name}" [${check.patterns.join(", ")}]`);
+          return false;
+        }
+        return true;
+      });
   }
 
   async interpret(
@@ -205,7 +230,7 @@ export class ClinicInterpreter extends LLMInterpreter {
     _availableActions: string[],
   ): string {
     const campaignNames = this.clinicContext.campaignNames?.length
-      ? this.clinicContext.campaignNames.map((n) => `- ${n}`).join("\n")
+      ? this.clinicContext.campaignNames.map((n) => `- ${sanitizeCampaignName(n)}`).join("\n")
       : "(no campaigns loaded yet)";
 
     const system = SYSTEM_PROMPT

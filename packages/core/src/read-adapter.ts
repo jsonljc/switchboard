@@ -65,11 +65,10 @@ export class CartridgeReadAdapter {
         break;
       }
       case "searchCampaigns": {
-        // Prefer cartridge.searchCampaigns() which returns CampaignInfo[]
-        if ("searchCampaigns" in cartridge && typeof (cartridge as Record<string, unknown>).searchCampaigns === "function") {
+        // Prefer cartridge.searchCampaigns() which returns campaign info
+        if (cartridge.searchCampaigns) {
           const query = (op.parameters["query"] as string) ?? "";
-          data = await (cartridge as unknown as { searchCampaigns: (q: string) => Promise<unknown[]> })
-            .searchCampaigns(query);
+          data = await cartridge.searchCampaigns(query);
         } else if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
           // Fallback to resolveEntity for backward compatibility
           const query = (op.parameters["query"] as string) ?? "";

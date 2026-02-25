@@ -1,11 +1,9 @@
 import type { ChannelAdapter } from "./adapters/adapter.js";
-import { TelegramAdapter } from "./adapters/telegram.js";
-import { RuleBasedInterpreter } from "./interpreter/interpreter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
 import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
-import { getThread, setThread, setConversationStore } from "./conversation/threads.js";
+import { getThread, setThread } from "./conversation/threads.js";
 import {
   composeHelpMessage,
   composeUncertainReply,
@@ -15,57 +13,40 @@ import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
 import type {
-  LifecycleOrchestrator,
+  RuntimeOrchestrator,
   ProposeResult,
   StorageContext,
-  LedgerStorage,
   CartridgeReadAdapter as CartridgeReadAdapterType,
 } from "@switchboard/core";
-import {
-  createInMemoryStorage,
-  seedDefaultStorage,
-  InMemoryLedgerStorage,
-  AuditLedger,
-  createGuardrailState,
-  DEFAULT_REDACTION_CONFIG,
-  GuardedCartridge,
-  CartridgeReadAdapter,
-} from "@switchboard/core";
-import { createGuardrailStateStore } from "./guardrail-state/index.js";
-import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
-import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import type { UndoRecipe } from "@switchboard/schemas";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
+
+export { createChatRuntime, type ClinicConfig } from "./bootstrap.js";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
   interpreter: Interpreter;
   interpreterRegistry?: InterpreterRegistry;
-  orchestrator: LifecycleOrchestrator;
+  orchestrator: RuntimeOrchestrator;
   availableActions: string[];
   storage?: StorageContext;
   /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
   readAdapter?: CartridgeReadAdapterType;
 }
 
-/** Configuration for clinic mode (LLM interpreter + read tools). */
-export interface ClinicConfig {
-  clinicName?: string;
-  adAccountId?: string;
-  anthropicApiKey?: string;
-  dailyTokenBudget?: number;
-}
-
 export class ChatRuntime {
   private adapter: ChannelAdapter;
   private interpreter: Interpreter;
   private interpreterRegistry: InterpreterRegistry | null;
-  private orchestrator: LifecycleOrchestrator;
+  private orchestrator: RuntimeOrchestrator;
   private availableActions: string[];
   private storage: StorageContext | null;
   private readAdapter: CartridgeReadAdapterType | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
+  // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
+  private proposalCounts = new Map<string, { count: number; windowStart: number }>();
+  private static readonly PROPOSAL_RATE_LIMIT = 30;
+  private static readonly PROPOSAL_RATE_WINDOW_MS = 60_000;
 
   constructor(config: ChatRuntimeConfig) {
     this.adapter = config.adapter;
@@ -75,6 +56,21 @@ export class ChatRuntime {
     this.availableActions = config.availableActions;
     this.storage = config.storage ?? null;
     this.readAdapter = config.readAdapter ?? null;
+  }
+
+  getAdapter(): ChannelAdapter {
+    return this.adapter;
+  }
+
+  private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
+    const conversation = await getThread(threadId);
+    if (conversation) {
+      const updated = transitionConversation(conversation, {
+        type: "add_message",
+        message: { role: "assistant", text, timestamp: new Date() },
+      });
+      await setThread(updated);
+    }
   }
 
   private async trackLastExecuted(threadId: string, envelopeId: string): Promise<void> {
@@ -96,6 +92,23 @@ export class ChatRuntime {
     return this.lastExecutedEnvelopeFallback.get(threadId) ?? null;
   }
 
+  private checkProposalRateLimit(principalId: string): boolean {
+    const now = Date.now();
+    const entry = this.proposalCounts.get(principalId);
+
+    if (!entry || now - entry.windowStart >= ChatRuntime.PROPOSAL_RATE_WINDOW_MS) {
+      this.proposalCounts.set(principalId, { count: 1, windowStart: now });
+      return true;
+    }
+
+    if (entry.count >= ChatRuntime.PROPOSAL_RATE_LIMIT) {
+      return false;
+    }
+
+    entry.count += 1;
+    return true;
+  }
+
   async handleIncomingMessage(rawPayload: unknown): Promise<void> {
     const message = this.adapter.parseIncomingMessage(rawPayload);
     if (!message) return;
@@ -114,12 +127,18 @@ export class ChatRuntime {
       await setThread(conversation);
     }
 
+    // Record the incoming user message for conversation memory
+    conversation = transitionConversation(conversation, {
+      type: "add_message",
+      message: { role: "user", text: message.text, timestamp: new Date() },
+    });
+    await setThread(conversation);
+
     // Handle help command
     if (/^help$/i.test(message.text.trim())) {
-      await this.adapter.sendTextReply(
-        threadId,
-        composeHelpMessage(this.availableActions),
-      );
+      const helpText = composeHelpMessage(this.availableActions);
+      await this.adapter.sendTextReply(threadId, helpText);
+      await this.recordAssistantMessage(threadId, helpText);
       return;
     }
 
@@ -135,18 +154,27 @@ export class ChatRuntime {
     }
 
     // Interpret the message — use registry if available, else single interpreter
+    // Include recent messages for conversation continuity
+    const recentMessages = conversation.messages
+      .slice(-5)
+      .map((m) => ({ role: m.role, text: m.text }));
+    const conversationContext: Record<string, unknown> = {
+      conversation,
+      recentMessages,
+    };
+
     let rawResult;
     if (this.interpreterRegistry) {
       rawResult = await this.interpreterRegistry.interpret(
         message.text,
-        { conversation },
+        conversationContext,
         this.availableActions,
         message.organizationId,
       );
     } else {
       rawResult = await this.interpreter.interpret(
         message.text,
-        { conversation },
+        conversationContext,
         this.availableActions,
       );
     }
@@ -155,7 +183,9 @@ export class ChatRuntime {
     const guard = guardInterpreterOutput(rawResult);
     if (!guard.valid || !guard.data) {
       console.error("Interpreter output failed schema guard:", guard.errors);
-      await this.adapter.sendTextReply(threadId, composeUncertainReply());
+      const uncertainReply = composeUncertainReply();
+      await this.adapter.sendTextReply(threadId, uncertainReply);
+      await this.recordAssistantMessage(threadId, uncertainReply);
       return;
     }
     const result = guard.data;
@@ -210,6 +240,15 @@ export class ChatRuntime {
     // Handle kill switch (emergency pause all)
     if (result.proposals[0]?.actionType === "system.kill_switch") {
       await this.handleKillSwitch(threadId, message.principalId, message.organizationId);
+      return;
+    }
+
+    // Rate limit proposals per principal (defense against compute DoS)
+    if (!this.checkProposalRateLimit(message.principalId)) {
+      await this.adapter.sendTextReply(
+        threadId,
+        "You're sending too many requests. Please wait a moment and try again.",
+      );
       return;
     }
 
@@ -274,10 +313,9 @@ export class ChatRuntime {
   ): Promise<void> {
     if (result.denied) {
       // Denied
-      await this.adapter.sendTextReply(
-        threadId,
-        composeDenialReply(result.decisionTrace),
-      );
+      const denialText = composeDenialReply(result.decisionTrace);
+      await this.adapter.sendTextReply(threadId, denialText);
+      await this.recordAssistantMessage(threadId, denialText);
       return;
     }
 
@@ -300,6 +338,7 @@ export class ChatRuntime {
         result.approvalRequest.bindingHash,
       );
       await this.adapter.sendApprovalCard(threadId, card);
+      await this.recordAssistantMessage(threadId, `[Approval Required] ${result.approvalRequest.summary}`);
       return;
     }
 
@@ -319,11 +358,11 @@ export class ChatRuntime {
         undoRecipe?.undoExpiresAt ?? null,
       );
       await this.adapter.sendResultCard(threadId, card);
+      await this.recordAssistantMessage(threadId, executeResult.summary);
     } catch (err) {
-      await this.adapter.sendTextReply(
-        threadId,
-        `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const errText = `Execution failed: ${err instanceof Error ? err.message : String(err)}`;
+      await this.adapter.sendTextReply(threadId, errText);
+      await this.recordAssistantMessage(threadId, errText);
     }
   }
 
@@ -369,12 +408,12 @@ export class ChatRuntime {
             undoRecipe?.undoExpiresAt ?? null,
           );
           await this.adapter.sendResultCard(threadId, card);
+          await this.recordAssistantMessage(threadId, response.executionResult.summary);
         }
       } else if (parsed.action === "reject") {
-        await this.adapter.sendTextReply(
-          threadId,
-          `Action rejected by ${principalId}.`,
-        );
+        const rejectText = `Action rejected by ${principalId}.`;
+        await this.adapter.sendTextReply(threadId, rejectText);
+        await this.recordAssistantMessage(threadId, rejectText);
       }
     } catch (err) {
       await this.adapter.sendTextReply(
@@ -448,6 +487,7 @@ export class ChatRuntime {
             entityRefs: [],
             message: `Emergency kill switch: pause ${campaign.name}`,
             organizationId,
+            emergencyOverride: true,
           });
 
           if (!("needsClarification" in proposeResult) && !("notFound" in proposeResult)) {
@@ -478,148 +518,4 @@ export class ChatRuntime {
     const callbackQuery = payload["callback_query"] as Record<string, unknown> | undefined;
     return callbackQuery ? String(callbackQuery["id"]) : null;
   }
-}
-
-// Bootstrap function
-export async function createChatRuntime(
-  config?: Partial<ChatRuntimeConfig>,
-  clinicConfig?: ClinicConfig,
-): Promise<ChatRuntime> {
-  const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
-  const adapter = config?.adapter ?? new TelegramAdapter(botToken);
-  let interpreter: Interpreter | undefined = config?.interpreter;
-  let readAdapter: CartridgeReadAdapterType | undefined = config?.readAdapter;
-
-  let orchestrator = config?.orchestrator;
-  let storage: StorageContext | undefined = config?.storage;
-
-  // Optional: single choke point via Switchboard API (propose/execute/approvals over HTTP)
-  const apiUrl = process.env["SWITCHBOARD_API_URL"];
-  if (!orchestrator && apiUrl) {
-    const apiAdapter = new ApiOrchestratorAdapter({
-      baseUrl: apiUrl,
-      apiKey: process.env["SWITCHBOARD_API_KEY"],
-    });
-    orchestrator = apiAdapter as unknown as LifecycleOrchestrator;
-  }
-
-  let ledger: AuditLedger | undefined;
-
-  if (!orchestrator) {
-    // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
-    let ledgerStorage: LedgerStorage;
-
-    if (process.env["DATABASE_URL"]) {
-      const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-      const { PrismaConversationStore } = await import("./conversation/prisma-store.js");
-      const prisma = getDb();
-      storage = createPrismaStorage(prisma);
-      ledgerStorage = new PrismaLedgerStorage(prisma);
-      setConversationStore(new PrismaConversationStore(prisma));
-    } else {
-      storage = createInMemoryStorage();
-      ledgerStorage = new InMemoryLedgerStorage();
-    }
-
-    ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
-    const guardrailState = createGuardrailState();
-    const guardrailStateStore = createGuardrailStateStore();
-
-    // Register ads-spend cartridge
-    const adsCartridge = new AdsSpendCartridge();
-    await adsCartridge.initialize({
-      principalId: "system",
-      organizationId: null,
-      connectionCredentials: {
-        accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
-        adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
-      },
-    });
-    const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
-    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
-
-    // Seed default policies
-    await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
-
-    orchestrator = new OrchestratorClass({
-      storage,
-      ledger,
-      guardrailState,
-      guardrailStateStore,
-    });
-  }
-
-  // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
-  const isClinicMode = clinicConfig || process.env["CLINIC_MODE"] === "true";
-  if (isClinicMode && !interpreter) {
-    const { ClinicInterpreter } = await import("./clinic/interpreter.js");
-    const { ModelRouter } = await import("./clinic/model-router.js");
-
-    const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-    const adAccountId = clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
-
-    const modelRouter = new ModelRouter({
-      dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
-      clinicId: adAccountId,
-    });
-
-    interpreter = new ClinicInterpreter(
-      {
-        apiKey: anthropicApiKey,
-        model: "claude-3-5-haiku-20241022",
-        baseUrl: "https://api.anthropic.com",
-      },
-      {
-        adAccountId,
-        clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
-      },
-      modelRouter,
-    );
-
-    // Create CartridgeReadAdapter for read intents
-    if (storage && ledger && !readAdapter) {
-      readAdapter = new CartridgeReadAdapter(storage, ledger);
-    }
-
-    // Load campaign names for LLM context grounding
-    if (storage && interpreter && "updateCampaignNames" in interpreter) {
-      const cartridge = storage.cartridges.get("ads-spend");
-      if (cartridge && "searchCampaigns" in cartridge) {
-        const loadCampaignNames = async () => {
-          try {
-            const campaigns = await (cartridge as unknown as { searchCampaigns: (q: string) => Promise<Array<{ name: string }>> }).searchCampaigns("");
-            const names = campaigns.map((c) => c.name);
-            (interpreter as unknown as { updateCampaignNames: (n: string[]) => void }).updateCampaignNames(names);
-            return names.length;
-          } catch (err) {
-            console.warn("[Clinic] Failed to load campaign names:", err);
-            return 0;
-          }
-        };
-
-        const count = await loadCampaignNames();
-        console.log(`[Clinic] Loaded ${count} campaign names`);
-
-        // Refresh campaign names every 5 minutes
-        setInterval(loadCampaignNames, 5 * 60 * 1000);
-      }
-    }
-  }
-
-  if (!interpreter) {
-    interpreter = new RuleBasedInterpreter();
-  }
-
-  return new ChatRuntime({
-    adapter,
-    interpreter,
-    orchestrator,
-    storage,
-    readAdapter,
-    availableActions: config?.availableActions ?? [
-      "ads.campaign.pause",
-      "ads.campaign.resume",
-      "ads.budget.adjust",
-    ],
-  });
 }

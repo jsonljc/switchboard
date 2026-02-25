@@ -48,6 +48,15 @@ export interface Cartridge {
   getGuardrails(): GuardrailConfig;
 
   healthCheck(): Promise<ConnectionHealth>;
+
+  searchCampaigns?(query: string): Promise<Array<{ id: string; name: string; status: string }>>;
+
+  /** Capture external entity state before mutation for audit/forensics. Optional. */
+  captureSnapshot?(
+    actionType: string,
+    parameters: Record<string, unknown>,
+    context: CartridgeContext,
+  ): Promise<Record<string, unknown>>;
 }
 
 /**

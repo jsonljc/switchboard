@@ -3,7 +3,7 @@
  * Use when SWITCHBOARD_API_URL is set so Chat uses a single choke point (the API) for propose/execute/approvals.
  */
 import type {
-  LifecycleOrchestrator,
+  RuntimeOrchestrator,
   ProposeResult,
   ApprovalResponse,
 } from "@switchboard/core";
@@ -104,6 +104,7 @@ function minimalApprovalRequest(
     expiresAt: new Date(expiresAt),
     expiredBehavior: "deny",
     createdAt: new Date(),
+    quorum: null,
   };
 }
 
@@ -119,10 +120,7 @@ const executedCache = new Map<string, ExecuteResult>();
  * LifecycleOrchestrator-compatible adapter that delegates to Switchboard HTTP API.
  * Single choke point: all propose/execute/approval/undo go through the API.
  */
-export class ApiOrchestratorAdapter implements Pick<
-  LifecycleOrchestrator,
-  "resolveAndPropose" | "executeApproved" | "respondToApproval" | "requestUndo"
-> {
+export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
   constructor(private config: ApiOrchestratorConfig) {}
 
   private base(): string {
@@ -136,7 +134,7 @@ export class ApiOrchestratorAdapter implements Pick<
     return h;
   }
 
-  async resolveAndPropose(params: Parameters<LifecycleOrchestrator["resolveAndPropose"]>[0]): Promise<
+  async resolveAndPropose(params: Parameters<RuntimeOrchestrator["resolveAndPropose"]>[0]): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }
     | { notFound: true; explanation: string }
@@ -153,6 +151,7 @@ export class ApiOrchestratorAdapter implements Pick<
       entityRefs: params.entityRefs,
       message: params.message,
       traceId: params.traceId,
+      emergencyOverride: params.emergencyOverride ?? false,
     };
 
     const res = await fetch(`${this.base()}/api/execute`, {

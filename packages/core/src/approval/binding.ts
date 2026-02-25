@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { canonicalizeSync } from "../audit/canonical-json.js";
 
 export function computeBindingHash(data: {
   envelopeId: string;
@@ -8,7 +9,7 @@ export function computeBindingHash(data: {
   decisionTraceHash: string;
   contextSnapshotHash: string;
 }): string {
-  const input = JSON.stringify({
+  const input = canonicalizeSync({
     envelopeId: data.envelopeId,
     envelopeVersion: data.envelopeVersion,
     actionId: data.actionId,
@@ -21,8 +22,9 @@ export function computeBindingHash(data: {
 }
 
 export function hashObject(obj: unknown): string {
+  const serialized = canonicalizeSync(obj);
   return createHash("sha256")
-    .update(JSON.stringify(obj))
+    .update(serialized)
     .digest("hex");
 }
 
@@ -38,5 +40,6 @@ export function validateBindingHash(
   },
 ): boolean {
   const currentHash = computeBindingHash(currentData);
-  return storedHash === currentHash;
+  if (storedHash.length !== currentHash.length) return false;
+  return timingSafeEqual(Buffer.from(storedHash), Buffer.from(currentHash));
 }

@@ -1,36 +1,60 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import type { ExecutionService, CartridgeReadAdapter, LifecycleOrchestrator, StorageContext } from "@switchboard/core";
+import type {
+  ExecutionService,
+  CartridgeReadAdapter,
+  LifecycleOrchestrator,
+  StorageContext,
+  AuditLedger,
+  GovernanceProfileStore,
+} from "@switchboard/core";
 import { resolveAuth, loadMcpApiKeys } from "./auth.js";
 import type { McpAuthContext } from "./auth.js";
+import { SessionGuard } from "./session-guard.js";
 import {
   toolDefinitions,
   SIDE_EFFECT_TOOLS,
   READ_TOOLS,
+  GOVERNANCE_TOOLS,
   handleSideEffectTool,
   handleReadTool,
+  handleGovernanceTool,
 } from "./tools/index.js";
 import type { ReadToolDeps } from "./tools/index.js";
+import type { GovernanceToolDeps } from "./tools/index.js";
 
 export interface SwitchboardMcpServerOptions {
   executionService: ExecutionService;
   readAdapter: CartridgeReadAdapter;
   orchestrator: LifecycleOrchestrator;
   storage: StorageContext;
+  ledger: AuditLedger;
+  governanceProfileStore: GovernanceProfileStore;
 }
 
 export class SwitchboardMcpServer {
   private mcpServer: McpServer;
   private executionService: ExecutionService;
   private readDeps: ReadToolDeps;
+  private governanceDeps: GovernanceToolDeps;
   private apiKeys: ReturnType<typeof loadMcpApiKeys>;
+  private sessionGuard: SessionGuard;
 
   constructor(options: SwitchboardMcpServerOptions) {
     this.executionService = options.executionService;
+    this.sessionGuard = SessionGuard.fromEnv();
     this.readDeps = {
       readAdapter: options.readAdapter,
       orchestrator: options.orchestrator,
+      storage: options.storage,
+      sessionGuard: this.sessionGuard,
+    };
+    this.governanceDeps = {
+      orchestrator: options.orchestrator,
+      readAdapter: options.readAdapter,
+      governanceProfileStore: options.governanceProfileStore,
+      ledger: options.ledger,
       storage: options.storage,
     };
     this.apiKeys = loadMcpApiKeys();
@@ -90,6 +114,20 @@ export class SwitchboardMcpServer {
     args: Record<string, unknown>,
   ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
     const auth = this.getAuth();
+    const isMutation = SIDE_EFFECT_TOOLS.has(toolName);
+
+    // Session guard: check limits before dispatch
+    const check = this.sessionGuard.checkCall(toolName, args, isMutation);
+    if (!check.allowed) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ error: check.reason }) }],
+      };
+    }
+
+    // Forced escalation: when mutation threshold exceeded, inject _forceApproval
+    if (isMutation && this.sessionGuard.escalationActive) {
+      args = { ...args, _forceApproval: true };
+    }
 
     try {
       let result: unknown;
@@ -103,9 +141,14 @@ export class SwitchboardMcpServer {
         );
       } else if (READ_TOOLS.has(toolName)) {
         result = await handleReadTool(toolName, args, auth, this.readDeps);
+      } else if (GOVERNANCE_TOOLS.has(toolName)) {
+        result = await handleGovernanceTool(toolName, args, auth, this.governanceDeps);
       } else {
         throw new Error(`Unknown tool: ${toolName}`);
       }
+
+      // Record successful call
+      this.sessionGuard.recordCall(toolName, args, isMutation);
 
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

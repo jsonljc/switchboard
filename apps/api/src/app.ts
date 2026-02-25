@@ -29,7 +29,7 @@ import {
   ExecutionService,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES, PostMutationVerifier } from "@switchboard/ads-spend";
+import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -148,27 +148,14 @@ export async function buildServer() {
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
   // Register ads-spend cartridge
-  const adsCartridge = new AdsSpendCartridge();
   const adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
   const adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
-  if (process.env.NODE_ENV === "production" && (!adsAccessToken || !adsAccountId)) {
-    throw new Error(
-      "META_ADS_ACCESS_TOKEN and META_ADS_ACCOUNT_ID are required in production. " +
-      "Set these environment variables or set NODE_ENV to something other than 'production'.",
-    );
-  }
-  await adsCartridge.initialize({
-    principalId: "system",
-    organizationId: null,
-    connectionCredentials: {
-      accessToken: adsAccessToken ?? "mock-token-dev-only",
-      adAccountId: adsAccountId ?? "act_mock_dev_only",
-    },
+  const { cartridge: adsCartridge, interceptors } = await bootstrapAdsSpendCartridge({
+    accessToken: adsAccessToken ?? "mock-token-dev-only",
+    adAccountId: adsAccountId ?? "act_mock_dev_only",
+    requireCredentials: process.env.NODE_ENV === "production",
   });
-  const verifier = new PostMutationVerifier(() => adsCartridge.getProvider());
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, [verifier]));
-
-  // Seed default data
+  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
 
   // Queue-based execution when Redis is available

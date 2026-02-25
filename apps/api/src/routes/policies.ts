@@ -50,6 +50,20 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
 
     await app.storageContext.policies.save(policy);
     await app.policyCache.invalidate(policy.cartridgeId ?? undefined);
+
+    // Audit: record policy creation
+    await app.auditLedger.record({
+      eventType: "policy.created",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "policy",
+      entityId: policy.id,
+      riskCategory: "low",
+      summary: `Policy "${policy.name}" created`,
+      snapshot: { policy },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
+
     return reply.code(201).send({ policy });
   });
 
@@ -96,6 +110,20 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     });
     await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
     const updated = await app.storageContext.policies.getById(id);
+
+    // Audit: record policy update with previous values
+    await app.auditLedger.record({
+      eventType: "policy.updated",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "policy",
+      entityId: id,
+      riskCategory: "low",
+      summary: `Policy "${existing.name}" updated`,
+      snapshot: { previous: existing, current: updated },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
+
     return reply.code(200).send({ policy: updated });
   });
 
@@ -113,7 +141,22 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     if (!deleted) {
       return reply.code(404).send({ error: "Policy not found" });
     }
-    if (existing) await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
+    if (existing) {
+      await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
+
+      // Audit: record policy deletion
+      await app.auditLedger.record({
+        eventType: "policy.deleted",
+        actorType: "user",
+        actorId: request.principalIdFromAuth ?? "unknown",
+        entityType: "policy",
+        entityId: id,
+        riskCategory: "medium",
+        summary: `Policy "${existing.name}" deleted`,
+        snapshot: { deletedPolicy: existing },
+        organizationId: request.organizationIdFromAuth ?? undefined,
+      });
+    }
     return reply.code(200).send({ id, deleted: true });
   });
 };

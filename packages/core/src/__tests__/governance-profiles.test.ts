@@ -163,6 +163,21 @@ describe("Governance Profiles", () => {
 
       storage.cartridges.register("ads-spend", cartridge);
 
+      // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
+      await storage.policies.save({
+        id: "default-allow-ads",
+        name: "Default allow ads-spend",
+        description: "Allow all ads-spend actions",
+        organizationId: null,
+        cartridgeId: "ads-spend",
+        priority: 100,
+        active: true,
+        rule: { composition: "AND", conditions: [], children: [] },
+        effect: "allow",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
       orchestrator = new LifecycleOrchestrator({
         storage,
         ledger,

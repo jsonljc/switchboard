@@ -87,7 +87,7 @@ export const ApprovalRequestSchema = z.object({
   respondedAt: z.coerce.date().nullable(),
   patchValue: z.record(z.string(), z.unknown()).nullable(),
   expiresAt: z.coerce.date(),
-  expiredBehavior: z.enum(["deny", "re_request"]),
+  expiredBehavior: z.enum(["deny"]),
   createdAt: z.coerce.date(),
   quorum: z.object({
     required: z.number().int().min(1),
@@ -116,5 +116,6 @@ export const ExecutionResultSchema = z.object({
   durationMs: z.number(),
   undoRecipe: z.unknown().nullable(),
   executedAt: z.coerce.date(),
+  preMutationSnapshot: z.record(z.string(), z.unknown()).optional(),
 });
 export type ExecutionResult = z.infer<typeof ExecutionResultSchema>;

@@ -102,6 +102,7 @@ model ActionEnvelope {
   version          Int      @default(0)
   incomingMessage  Json?
   conversationId   String?
+  organizationId   String?
   proposals        Json     // ActionProposal[]
   resolvedEntities Json     // ResolvedEntity[]
   plan             Json?    // ActionPlan
@@ -121,6 +122,7 @@ model ActionEnvelope {
   @@index([status])
   @@index([conversationId])
   @@index([parentEnvelopeId])
+  @@index([organizationId])
 }
 
 model ConversationState {
@@ -220,19 +222,21 @@ model ProcessedMessage {
 }
 
 model ApprovalRecord {
-  id          String    @id
-  envelopeId  String
-  request     Json
-  status      String    @default("pending")
-  respondedBy String?
-  respondedAt DateTime?
-  patchValue  Json?
-  expiresAt   DateTime
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id
+  envelopeId     String
+  organizationId String?
+  request        Json
+  status         String    @default("pending")
+  respondedBy    String?
+  respondedAt    DateTime?
+  patchValue     Json?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([status])
   @@index([envelopeId])
+  @@index([organizationId, status])
 }
 
 model CompetenceRecord {

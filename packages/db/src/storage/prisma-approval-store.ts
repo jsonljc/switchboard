@@ -17,6 +17,7 @@ export class PrismaApprovalStore implements ApprovalStore {
       data: {
         id: approval.request.id,
         envelopeId: approval.envelopeId,
+        organizationId: approval.organizationId ?? null,
         request: approval.request as object,
         status: approval.state.status,
         respondedBy: approval.state.respondedBy,
@@ -46,9 +47,12 @@ export class PrismaApprovalStore implements ApprovalStore {
     });
   }
 
-  async listPending(_organizationId?: string): Promise<ApprovalRecord[]> {
+  async listPending(organizationId?: string): Promise<ApprovalRecord[]> {
     const rows = await this.prisma.approvalRecord.findMany({
-      where: { status: "pending" },
+      where: {
+        status: "pending",
+        ...(organizationId ? { organizationId } : {}),
+      },
     });
     return rows.map(toApprovalRecord);
   }
@@ -57,6 +61,7 @@ export class PrismaApprovalStore implements ApprovalStore {
 function toApprovalRecord(row: {
   id: string;
   envelopeId: string;
+  organizationId: string | null;
   request: unknown;
   status: string;
   respondedBy: string | null;
@@ -73,5 +78,5 @@ function toApprovalRecord(row: {
     expiresAt: row.expiresAt,
     quorum: (request.quorum as ApprovalState["quorum"]) ?? null,
   };
-  return { request, state, envelopeId: row.envelopeId };
+  return { request, state, envelopeId: row.envelopeId, organizationId: row.organizationId };
 }
