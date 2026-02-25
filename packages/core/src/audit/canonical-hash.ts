@@ -1,29 +1,5 @@
 import { createHash } from "node:crypto";
-// Note: json-canonicalize provides RFC 8785 JCS canonicalization
-// Using dynamic import for ESM compatibility
-
-let canonicalizeImpl: ((obj: unknown) => string) | null = null;
-
-async function getCanonicalize(): Promise<(obj: unknown) => string> {
-  if (!canonicalizeImpl) {
-    const mod = await import("json-canonicalize");
-    canonicalizeImpl = mod.canonicalize;
-  }
-  return canonicalizeImpl;
-}
-
-/**
- * Ensure the canonicalize function is loaded before any sync hash computation.
- * Await this in code paths that need deterministic hashing.
- */
-export async function ensureCanonicalize(): Promise<void> {
-  if (!canonicalizeImpl) {
-    await getCanonicalize();
-  }
-}
-
-// Eagerly start loading
-getCanonicalize().catch(() => {});
+import { canonicalizeSync } from "./canonical-json.js";
 
 export function sha256(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
@@ -46,23 +22,13 @@ export interface AuditHashInput {
   previousEntryHash: string | null;
 }
 
-export async function computeAuditHash(input: AuditHashInput): Promise<string> {
-  const canonicalize = await getCanonicalize();
-  const canonical = canonicalize(input);
+export function computeAuditHash(input: AuditHashInput): string {
+  const canonical = canonicalizeSync(input);
   return sha256(canonical);
 }
 
 export function computeAuditHashSync(input: AuditHashInput): string {
-  if (canonicalizeImpl) {
-    return sha256(canonicalizeImpl(input));
-  }
-  // Fallback: deterministic key-sorted JSON (used only before dynamic import resolves)
-  const keys = Object.keys(input).sort();
-  const ordered: Record<string, unknown> = {};
-  for (const key of keys) {
-    ordered[key] = input[key as keyof AuditHashInput];
-  }
-  return sha256(JSON.stringify(ordered));
+  return computeAuditHash(input);
 }
 
 export function verifyChain(

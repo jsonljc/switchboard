@@ -68,7 +68,7 @@ export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js
 export type { OrchestratorConfig, ProposeResult, ApprovalResponse, RuntimeOrchestrator } from "./orchestrator/index.js";
 
 // Audit
-export { computeAuditHash, computeAuditHashSync, sha256, verifyChain, ensureCanonicalize } from "./audit/canonical-hash.js";
+export { computeAuditHash, computeAuditHashSync, sha256, verifyChain } from "./audit/canonical-hash.js";
 export { canonicalizeSync } from "./audit/canonical-json.js";
 export type { AuditHashInput } from "./audit/canonical-hash.js";
 export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./audit/redaction.js";

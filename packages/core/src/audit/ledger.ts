@@ -6,7 +6,7 @@ import type {
   VisibilityLevel,
   ActorType,
 } from "@switchboard/schemas";
-import { computeAuditHash, computeAuditHashSync, verifyChain as verifyChainIntegrity, ensureCanonicalize } from "./canonical-hash.js";
+import { computeAuditHash, computeAuditHashSync, verifyChain as verifyChainIntegrity } from "./canonical-hash.js";
 import type { AuditHashInput } from "./canonical-hash.js";
 import { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./redaction.js";
 import type { RedactionConfig } from "./redaction.js";
@@ -66,9 +66,6 @@ export class AuditLedger {
     /** Optional correlation id; not part of chain hash. */
     traceId?: string | null;
   }): Promise<AuditEntry> {
-    // Ensure canonicalize is loaded before computing hashes
-    await ensureCanonicalize();
-
     // Use atomic append if available (prevents race on previousEntryHash)
     if (this.storage.appendAtomic) {
       return this.storage.appendAtomic((previousEntryHash) =>
@@ -134,7 +131,7 @@ export class AuditLedger {
       previousEntryHash,
     };
 
-    const entryHash = await computeAuditHash(hashInput);
+    const entryHash = computeAuditHash(hashInput);
 
     return {
       id,
@@ -195,7 +192,6 @@ export class AuditLedger {
       previousEntryHash: entry.previousEntryHash,
       entryHash: entry.entryHash,
     }));
-    await ensureCanonicalize();
     return verifyChainIntegrity(hashEntries);
   }
 
