@@ -630,10 +630,12 @@ export class LifecycleOrchestrator {
 
   /**
    * Propose a multi-step action plan. Evaluates each proposal according to
-   * the plan's strategy (atomic, sequential, best_effort).
-   * TODO: The "single_approval" plan mode is declared in the ActionPlan schema
-   * but not yet implemented. When added, it should collect all proposals into
-   * one approval request and execute them atomically upon approval.
+   * the plan's strategy (atomic, sequential, best_effort) and approvalMode
+   * (per_action or single_approval).
+   *
+   * In `single_approval` mode, individual approval requests are consolidated
+   * into a single plan-level approval. On approval all proposals execute; on
+   * rejection all are denied.
    */
   async proposePlan(
     plan: ActionPlan,
@@ -648,6 +650,10 @@ export class LifecycleOrchestrator {
     planDecision: "allow" | "deny" | "partial";
     results: ProposeResult[];
     explanation: string;
+    /** Present only when approvalMode === "single_approval" and approval is needed. */
+    planApprovalRequest?: ApprovalRequest;
+    /** The umbrella envelope for single_approval mode. */
+    planEnvelope?: ActionEnvelope;
   }> {
     // Evaluate each proposal independently first
     const results: ProposeResult[] = [];
@@ -691,11 +697,354 @@ export class LifecycleOrchestrator {
       }
     }
 
+    // single_approval mode: consolidate individual approvals into one plan-level approval
+    if (plan.approvalMode === "single_approval" && planResult.planDecision !== "deny") {
+      const pendingResults = results.filter((r) => r.approvalRequest !== null);
+
+      if (pendingResults.length > 0) {
+        const now = new Date();
+        const planEnvelopeId = generateEnvelopeId();
+
+        // Build a plan-level umbrella envelope
+        const planEnvelope: ActionEnvelope = {
+          id: planEnvelopeId,
+          version: 1,
+          incomingMessage: null,
+          conversationId: null,
+          proposals: pendingResults.flatMap((r) => r.envelope.proposals),
+          resolvedEntities: [],
+          plan,
+          decisions: decisionTraces,
+          approvalRequests: [],
+          executionResults: [],
+          auditEntryIds: [],
+          status: "pending_approval",
+          createdAt: now,
+          updatedAt: now,
+          parentEnvelopeId: null,
+          traceId: `trace_${randomUUID()}`,
+        };
+
+        plan.envelopeId = planEnvelopeId;
+
+        // Combined binding hash covers all proposal envelopes
+        const combinedBindingHash = computeBindingHash({
+          envelopeId: planEnvelopeId,
+          envelopeVersion: planEnvelope.version,
+          actionId: plan.id,
+          parameters: {
+            proposalEnvelopeIds: results.map((r) => r.envelope.id),
+          },
+          decisionTraceHash: hashObject(decisionTraces),
+          contextSnapshotHash: hashObject({ planId: plan.id }),
+        });
+
+        // Use the highest risk category across all proposals
+        const riskPriority: RiskCategory[] = ["low", "medium", "high", "critical"];
+        let highestRisk: RiskCategory = "low";
+        for (const r of pendingResults) {
+          const cat = r.decisionTrace.computedRiskScore.category;
+          if (cat !== "none" && riskPriority.indexOf(cat) > riskPriority.indexOf(highestRisk)) {
+            highestRisk = cat;
+          }
+        }
+
+        // Use the shortest expiry window from the individual approval requests
+        const shortestExpiryMs = Math.min(
+          ...pendingResults.map((r) => r.approvalRequest!.expiresAt.getTime() - r.approvalRequest!.createdAt.getTime()),
+        );
+        const expiresAt = new Date(now.getTime() + shortestExpiryMs);
+
+        // Merge all unique approvers
+        const allApprovers = [
+          ...new Set(pendingResults.flatMap((r) => r.approvalRequest!.approvers)),
+        ];
+
+        // Merge fallback approvers (use first non-null)
+        const fallbackApprover = pendingResults
+          .map((r) => r.approvalRequest!.fallbackApprover)
+          .find((f) => f !== null) ?? null;
+
+        const summaryParts = pendingResults.map(
+          (r) => r.approvalRequest!.summary,
+        );
+        const planSummary = `Plan (${pendingResults.length} actions): ${summaryParts.join("; ")}`;
+
+        const approvalId = generateApprovalId();
+        const planApprovalRequest: ApprovalRequest = {
+          id: approvalId,
+          actionId: plan.id,
+          envelopeId: planEnvelopeId,
+          conversationId: null,
+          summary: planSummary,
+          riskCategory: highestRisk,
+          bindingHash: combinedBindingHash,
+          evidenceBundle: {
+            decisionTrace: decisionTraces,
+            contextSnapshot: {
+              proposalEnvelopeIds: results.map((r) => r.envelope.id),
+            },
+            identitySnapshot: {},
+          },
+          suggestedButtons: [
+            { label: "Approve All", action: "approve" },
+            { label: "Reject All", action: "reject" },
+          ],
+          approvers: allApprovers,
+          fallbackApprover,
+          status: "pending",
+          respondedBy: null,
+          respondedAt: null,
+          patchValue: null,
+          expiresAt,
+          expiredBehavior: "deny" as const,
+          createdAt: now,
+          quorum: null,
+        };
+
+        planEnvelope.approvalRequests = [planApprovalRequest];
+        await this.storage.envelopes.save(planEnvelope);
+
+        const approvalState = createApprovalState(expiresAt, null);
+        await this.storage.approvals.save({
+          request: planApprovalRequest,
+          state: approvalState,
+          envelopeId: planEnvelopeId,
+          organizationId: proposals[0]?.organizationId ?? null,
+        });
+
+        // Mark individual envelopes as queued (waiting for plan-level approval)
+        for (const result of pendingResults) {
+          await this.storage.envelopes.update(result.envelope.id, { status: "queued" });
+          result.envelope.status = "queued" as ActionEnvelope["status"];
+        }
+
+        // Remove individual approval requests (they're superseded by the plan approval)
+        for (const result of pendingResults) {
+          result.approvalRequest = null;
+        }
+
+        // Push notification to approvers
+        if (this.approvalNotifier) {
+          const notification = buildApprovalNotification(planApprovalRequest, decisionTraces[0]!);
+          this.approvalNotifier.notify(notification).catch((err) => {
+            console.error("Failed to send plan approval notification:", err);
+          });
+        }
+
+        return {
+          planDecision: planResult.planDecision,
+          results,
+          explanation: planResult.explanation,
+          planApprovalRequest,
+          planEnvelope,
+        };
+      }
+    }
+
     return {
       planDecision: planResult.planDecision,
       results,
       explanation: planResult.explanation,
     };
+  }
+
+  /**
+   * Respond to a plan-level approval (single_approval mode).
+   * On approve: marks all queued proposal envelopes as approved and executes them.
+   * On reject: marks all queued proposal envelopes as denied.
+   */
+  async respondToPlanApproval(params: {
+    approvalId: string;
+    action: "approve" | "reject";
+    respondedBy: string;
+    bindingHash: string;
+  }): Promise<{
+    planEnvelope: ActionEnvelope;
+    executionResults: ExecuteResult[];
+  }> {
+    // 1. Look up the plan approval
+    const approval = await this.storage.approvals.getById(params.approvalId);
+    if (!approval) {
+      throw new Error(`Plan approval not found: ${params.approvalId}`);
+    }
+
+    // 2. Check expired
+    if (isExpired(approval.state)) {
+      const expiredState = transitionApproval(approval.state, "expire");
+      await this.storage.approvals.updateState(params.approvalId, expiredState);
+
+      const planEnvelope = await this.storage.envelopes.getById(approval.envelopeId);
+      if (planEnvelope) {
+        await this.storage.envelopes.update(planEnvelope.id, { status: "expired" });
+        planEnvelope.status = "expired";
+
+        // Also expire all queued child envelopes
+        const proposalEnvelopeIds = (
+          approval.request.evidenceBundle.contextSnapshot as Record<string, unknown>
+        )["proposalEnvelopeIds"] as string[] | undefined;
+        if (proposalEnvelopeIds) {
+          for (const envId of proposalEnvelopeIds) {
+            await this.storage.envelopes.update(envId, { status: "expired" });
+          }
+        }
+
+        await this.ledger.record({
+          eventType: "action.expired",
+          actorType: "system",
+          actorId: "orchestrator",
+          entityType: "plan",
+          entityId: params.approvalId,
+          riskCategory: approval.request.riskCategory as RiskCategory,
+          summary: `Plan approval expired for envelope ${approval.envelopeId}`,
+          snapshot: { approvalId: params.approvalId, envelopeId: approval.envelopeId },
+          envelopeId: approval.envelopeId,
+        });
+
+        return { planEnvelope, executionResults: [] };
+      }
+      throw new Error("Plan envelope not found for expired approval");
+    }
+
+    // 3. Validate binding hash
+    if (params.action === "approve") {
+      const a = Buffer.from(params.bindingHash);
+      const b = Buffer.from(approval.request.bindingHash);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        throw new Error("Binding hash mismatch: plan parameters may have changed");
+      }
+    }
+
+    // 4. Authorization check
+    if (approval.request.approvers.length > 0) {
+      const principal = await this.storage.identity.getPrincipal(params.respondedBy);
+      if (!principal) {
+        throw new Error(`Principal not found: ${params.respondedBy}`);
+      }
+      const delegations = await this.storage.identity.listDelegationRules(
+        approval.organizationId ?? undefined,
+      );
+      const chainResult = canApproveWithChain(principal, approval.request.approvers, delegations);
+      if (!chainResult.authorized) {
+        throw new Error(`Principal ${params.respondedBy} is not authorized to respond to this plan approval`);
+      }
+    }
+
+    // 5. Transition approval state
+    const newState = transitionApproval(
+      approval.state,
+      params.action === "approve" ? "approve" : "reject",
+      params.respondedBy,
+    );
+    await this.storage.approvals.updateState(params.approvalId, newState);
+
+    // 6. Load plan envelope
+    const planEnvelope = await this.storage.envelopes.getById(approval.envelopeId);
+    if (!planEnvelope) {
+      throw new Error(`Plan envelope not found: ${approval.envelopeId}`);
+    }
+
+    // Get child envelope IDs from the evidence bundle
+    const proposalEnvelopeIds = (
+      approval.request.evidenceBundle.contextSnapshot as Record<string, unknown>
+    )["proposalEnvelopeIds"] as string[] | undefined;
+    if (!proposalEnvelopeIds || proposalEnvelopeIds.length === 0) {
+      throw new Error("No proposal envelope IDs found in plan approval");
+    }
+
+    if (params.action === "reject") {
+      // Reject: deny all child envelopes
+      await this.storage.envelopes.update(planEnvelope.id, { status: "denied" });
+      planEnvelope.status = "denied";
+
+      for (const envId of proposalEnvelopeIds) {
+        await this.storage.envelopes.update(envId, { status: "denied" });
+      }
+
+      await this.ledger.record({
+        eventType: "action.rejected",
+        actorType: "user",
+        actorId: params.respondedBy,
+        entityType: "plan",
+        entityId: params.approvalId,
+        riskCategory: approval.request.riskCategory as RiskCategory,
+        summary: `Plan rejected by ${params.respondedBy}`,
+        snapshot: {
+          approvalId: params.approvalId,
+          envelopeId: planEnvelope.id,
+          proposalEnvelopeIds,
+        },
+        envelopeId: planEnvelope.id,
+      });
+
+      return { planEnvelope, executionResults: [] };
+    }
+
+    // Approve: execute all child envelopes
+    await this.storage.envelopes.update(planEnvelope.id, { status: "approved" });
+    planEnvelope.status = "approved";
+
+    await this.ledger.record({
+      eventType: "action.approved",
+      actorType: "user",
+      actorId: params.respondedBy,
+      entityType: "plan",
+      entityId: params.approvalId,
+      riskCategory: approval.request.riskCategory as RiskCategory,
+      summary: `Plan approved by ${params.respondedBy}`,
+      snapshot: {
+        approvalId: params.approvalId,
+        envelopeId: planEnvelope.id,
+        proposalEnvelopeIds,
+      },
+      envelopeId: planEnvelope.id,
+    });
+
+    const executionResults: ExecuteResult[] = [];
+    for (const envId of proposalEnvelopeIds) {
+      // Mark each child as approved, then execute
+      await this.storage.envelopes.update(envId, { status: "approved" });
+
+      try {
+        const result = await this.executeApproved(envId);
+        executionResults.push(result);
+
+        // For atomic strategy, if one fails, mark the rest as failed
+        if (planEnvelope.plan?.strategy === "atomic" && !result.success) {
+          const remaining = proposalEnvelopeIds.slice(proposalEnvelopeIds.indexOf(envId) + 1);
+          for (const remainingId of remaining) {
+            await this.storage.envelopes.update(remainingId, { status: "failed" });
+          }
+          break;
+        }
+      } catch (err) {
+        executionResults.push({
+          success: false,
+          summary: `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
+          externalRefs: {},
+          rollbackAvailable: false,
+          partialFailures: [{ step: "execute", error: String(err) }],
+          durationMs: 0,
+          undoRecipe: null,
+        });
+
+        if (planEnvelope.plan?.strategy === "atomic") {
+          const remaining = proposalEnvelopeIds.slice(proposalEnvelopeIds.indexOf(envId) + 1);
+          for (const remainingId of remaining) {
+            await this.storage.envelopes.update(remainingId, { status: "failed" });
+          }
+          break;
+        }
+      }
+    }
+
+    // Update plan envelope status based on execution results
+    const allSuccess = executionResults.every((r) => r.success);
+    const planStatus = allSuccess ? "executed" : "failed";
+    await this.storage.envelopes.update(planEnvelope.id, { status: planStatus });
+    planEnvelope.status = planStatus as ActionEnvelope["status"];
+
+    return { planEnvelope, executionResults };
   }
 
   async respondToApproval(params: {

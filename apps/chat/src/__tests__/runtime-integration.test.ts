@@ -101,11 +101,12 @@ describe("ChatRuntime Integration", () => {
   let orchestrator: LifecycleOrchestrator;
   let runtime: ChatRuntime;
   let cartridge: TestCartridge;
+  let ledgerStorage: InMemoryLedgerStorage;
 
   beforeEach(async () => {
     adapter = new MockAdapter();
     storage = createInMemoryStorage();
-    const ledgerStorage = new InMemoryLedgerStorage();
+    ledgerStorage = new InMemoryLedgerStorage();
     const ledger = new AuditLedger(ledgerStorage);
     const guardrailState = createGuardrailState();
 
@@ -345,5 +346,47 @@ describe("ChatRuntime Integration", () => {
 
     expect(adapter.sentText.length).toBeGreaterThan(0);
     expect(adapter.sentText[0]?.text).toContain("rejected");
+  });
+
+  it("full vertical: message → propose → approve → execute → audit trail", async () => {
+    // 1. Send a command
+    adapter.setNextMessage(makeMessage("pause Summer Sale"));
+    await runtime.handleIncomingMessage({});
+
+    // 2. Verify approval card sent
+    expect(adapter.sentApprovalCards).toHaveLength(1);
+    const approveBtn = adapter.sentApprovalCards[0]!.card.buttons.find(
+      (b) => b.label === "Approve",
+    );
+    expect(approveBtn).toBeDefined();
+
+    // 3. Tap approve
+    adapter.reset();
+    adapter.setNextMessage(makeMessage(approveBtn!.callbackData));
+    await runtime.handleIncomingMessage({});
+
+    // 4. Verify execution result
+    expect(adapter.sentResultCards).toHaveLength(1);
+    expect(adapter.sentResultCards[0]?.card.success).toBe(true);
+
+    // 5. Verify audit trail
+    const allEntries = ledgerStorage.getAll();
+
+    // Should have at minimum: action.proposed, action.approved, action.executing, action.executed
+    const eventTypes = allEntries.map((e) => e.eventType);
+    expect(eventTypes).toContain("action.proposed");
+    expect(eventTypes).toContain("action.approved");
+    expect(eventTypes).toContain("action.executing");
+    expect(eventTypes).toContain("action.executed");
+
+    // 6. Verify hash chain integrity
+    const auditLedger = new AuditLedger(ledgerStorage);
+    const chainResult = await auditLedger.verifyChain(allEntries);
+    expect(chainResult.valid).toBe(true);
+
+    // 7. Verify deep integrity (hash recomputation)
+    const deepResult = await auditLedger.deepVerify(allEntries);
+    expect(deepResult.valid).toBe(true);
+    expect(deepResult.hashMismatches).toHaveLength(0);
   });
 });
