@@ -1,4 +1,5 @@
 import { TelegramAdapter } from "./adapters/telegram.js";
+import type { PrincipalLookup } from "./adapters/telegram.js";
 import { RuleBasedInterpreter } from "./interpreter/interpreter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import { InterpreterRegistry } from "./interpreter/registry.js";
@@ -39,7 +40,6 @@ export async function createChatRuntime(
 ): Promise<ChatRuntime> {
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
   const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
-  const adapter = config?.adapter ?? new TelegramAdapter(botToken, undefined, webhookSecret);
   let interpreter: Interpreter | undefined = config?.interpreter;
   let readAdapter: CartridgeReadAdapterType | undefined = config?.readAdapter;
 
@@ -93,6 +93,16 @@ export async function createChatRuntime(
       guardrailStateStore,
     });
   }
+
+  // Wire principalLookup for organizationId resolution from the principal store
+  let principalLookup: PrincipalLookup | undefined;
+  if (storage) {
+    principalLookup = async (principalId: string) => {
+      const principal = await storage!.identity.getPrincipal(principalId);
+      return principal ? { organizationId: principal.organizationId } : null;
+    };
+  }
+  const adapter = config?.adapter ?? new TelegramAdapter(botToken, principalLookup, webhookSecret);
 
   // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
   const isClinicMode = clinicConfig || process.env["CLINIC_MODE"] === "true";

@@ -21,11 +21,24 @@ async function main() {
     return reply.code(statusCode).send({ error: message, statusCode });
   });
 
-  // Health check
-  app.get("/health", async () => ({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-  }));
+  // Health check — report degraded if DB is configured but unreachable
+  app.get("/health", async () => {
+    let dbStatus = "not_configured";
+    if (process.env["DATABASE_URL"]) {
+      try {
+        const { getDb } = await import("@switchboard/db");
+        await getDb().$queryRaw`SELECT 1`;
+        dbStatus = "connected";
+      } catch {
+        dbStatus = "disconnected";
+      }
+    }
+    return {
+      status: dbStatus === "disconnected" ? "degraded" : "ok",
+      database: dbStatus,
+      timestamp: new Date().toISOString(),
+    };
+  });
 
   // Telegram webhook endpoint
   app.post("/webhook/telegram", async (request, reply) => {
