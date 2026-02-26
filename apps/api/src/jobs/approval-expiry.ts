@@ -1,5 +1,5 @@
 import type { StorageContext } from "@switchboard/core";
-import { isExpired, transitionApproval } from "@switchboard/core";
+import { isExpired, transitionApproval, StaleVersionError } from "@switchboard/core";
 import type { AuditLedger } from "@switchboard/core";
 import type { RiskCategory } from "@switchboard/schemas";
 
@@ -24,7 +24,12 @@ export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => v
         if (!isExpired(record.state)) continue;
 
         const expiredState = transitionApproval(record.state, "expire");
-        await storage.approvals.updateState(record.request.id, expiredState);
+        try {
+          await storage.approvals.updateState(record.request.id, expiredState, record.state.version);
+        } catch (err) {
+          if (err instanceof StaleVersionError) continue; // Already transitioned
+          throw err;
+        }
 
         // Update envelope status
         const envelope = await storage.envelopes.getById(record.envelopeId);

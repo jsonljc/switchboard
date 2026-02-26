@@ -872,7 +872,7 @@ export class LifecycleOrchestrator {
     // 2. Check expired
     if (isExpired(approval.state)) {
       const expiredState = transitionApproval(approval.state, "expire");
-      await this.storage.approvals.updateState(params.approvalId, expiredState);
+      await this.storage.approvals.updateState(params.approvalId, expiredState, approval.state.version);
 
       const planEnvelope = await this.storage.envelopes.getById(approval.envelopeId);
       if (planEnvelope) {
@@ -931,12 +931,13 @@ export class LifecycleOrchestrator {
     }
 
     // 5. Transition approval state
+    const planVersionBeforeTransition = approval.state.version;
     const newState = transitionApproval(
       approval.state,
       params.action === "approve" ? "approve" : "reject",
       params.respondedBy,
     );
-    await this.storage.approvals.updateState(params.approvalId, newState);
+    await this.storage.approvals.updateState(params.approvalId, newState, planVersionBeforeTransition);
 
     // 6. Load plan envelope
     const planEnvelope = await this.storage.envelopes.getById(approval.envelopeId);
@@ -1064,7 +1065,7 @@ export class LifecycleOrchestrator {
     // 2. Check expired
     if (isExpired(approval.state)) {
       const expiredState = transitionApproval(approval.state, "expire");
-      await this.storage.approvals.updateState(params.approvalId, expiredState);
+      await this.storage.approvals.updateState(params.approvalId, expiredState, approval.state.version);
 
       const envelope = await this.storage.envelopes.getById(approval.envelopeId);
       if (envelope) {
@@ -1169,6 +1170,7 @@ export class LifecycleOrchestrator {
     }
 
     // 5. Transition approval state
+    const versionBeforeTransition = approval.state.version;
     const newState = transitionApproval(
       approval.state,
       params.action,
@@ -1176,7 +1178,7 @@ export class LifecycleOrchestrator {
       params.patchValue,
       params.approvalHash,
     );
-    await this.storage.approvals.updateState(params.approvalId, newState);
+    await this.storage.approvals.updateState(params.approvalId, newState, versionBeforeTransition);
 
     let executionResult: ExecuteResult | null = null;
 

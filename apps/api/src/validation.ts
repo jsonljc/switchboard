@@ -26,7 +26,7 @@ export const BatchProposeBodySchema = z.object({
       actionType: z.string().min(1),
       parameters: z.record(z.string(), z.unknown()),
     }),
-  ).min(1),
+  ).min(1).max(50),
   principalId: z.string().min(1),
   organizationId: z.string().optional(),
   cartridgeId: z.string().optional(),

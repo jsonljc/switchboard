@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { Policy } from "@switchboard/schemas";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { CreatePolicyBodySchema, UpdatePolicyBodySchema } from "../validation.js";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 const createPolicyJsonSchema = zodToJsonSchema(CreatePolicyBodySchema, { target: "openApi3" });
 const updatePolicyJsonSchema = zodToJsonSchema(UpdatePolicyBodySchema, { target: "openApi3" });
@@ -80,6 +81,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     if (!policy) {
       return reply.code(404).send({ error: "Policy not found" });
     }
+    if (!assertOrgAccess(request, policy.organizationId, reply)) return;
     return reply.code(200).send({ policy });
   });
 
@@ -103,6 +105,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.code(404).send({ error: "Policy not found" });
     }
+    if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
     await app.storageContext.policies.update(id, {
       ...parsed.data,
@@ -137,6 +140,11 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const existing = await app.storageContext.policies.getById(id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Policy not found" });
+    }
+    if (!assertOrgAccess(request, existing.organizationId, reply)) return;
+
     const deleted = await app.storageContext.policies.delete(id);
     if (!deleted) {
       return reply.code(404).send({ error: "Policy not found" });

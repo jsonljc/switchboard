@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { inferCartridgeId } from "@switchboard/core";
 import { SimulateBodySchema } from "../validation.js";
+import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 
 const simulateJsonSchema = zodToJsonSchema(SimulateBodySchema, { target: "openApi3" });
 
@@ -36,7 +37,7 @@ export const simulateRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send(result);
     } catch (err) {
       return reply.code(400).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 400),
       });
     }
   });

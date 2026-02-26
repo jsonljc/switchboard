@@ -60,6 +60,9 @@ export async function buildServer() {
 
   // CORS — restrict origins in production, allow all in development
   const allowedOrigins = process.env["CORS_ORIGIN"];
+  if (process.env.NODE_ENV === "production" && !allowedOrigins) {
+    throw new Error("CORS_ORIGIN must be set in production (e.g. 'https://app.example.com')");
+  }
   await app.register(cors, {
     origin: allowedOrigins ? allowedOrigins.split(",") : true,
   });

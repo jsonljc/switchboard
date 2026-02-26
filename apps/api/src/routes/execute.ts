@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { NeedsClarificationError, NotFoundError } from "@switchboard/core";
 import { ExecuteBodySchema } from "../validation.js";
+import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
 
@@ -36,7 +37,7 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
 
     // Phase 2: when API key has org metadata, bind request to that org if body does not set it
-    const organizationId = body.organizationId ?? request.organizationIdFromAuth ?? null;
+    const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
     const requestPayload = {
       actorId: body.actorId,
       organizationId,
@@ -94,7 +95,7 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       return reply.code(500).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 500),
       });
     }
   });

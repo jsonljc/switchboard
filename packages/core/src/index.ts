@@ -30,6 +30,7 @@ export {
   transitionApproval,
   isExpired,
   determineApprovalRequirement,
+  StaleVersionError,
 } from "./approval/state-machine.js";
 export type { ApprovalState, ApprovalStatus, QuorumState, QuorumEntry } from "./approval/state-machine.js";
 export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./approval/router.js";

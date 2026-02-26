@@ -49,6 +49,13 @@ export class TelegramAdapter implements ChannelAdapter {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
     this.principalLookup = principalLookup ?? null;
     this.webhookSecret = webhookSecret ?? null;
+
+    if (process.env.NODE_ENV === "production" && !webhookSecret) {
+      throw new Error("TELEGRAM_WEBHOOK_SECRET must be set in production for webhook verification");
+    }
+    if (!webhookSecret && process.env.NODE_ENV !== "test") {
+      console.warn("[TelegramAdapter] No webhook secret configured — webhook verification is disabled");
+    }
   }
 
   /**

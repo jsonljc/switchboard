@@ -38,6 +38,16 @@ export async function createChatRuntime(
   config?: Partial<ChatRuntimeConfig>,
   clinicConfig?: ClinicConfig,
 ): Promise<ChatRuntime> {
+  // Production startup guards
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env["META_ADS_ACCESS_TOKEN"]) {
+      throw new Error("META_ADS_ACCESS_TOKEN must be set in production");
+    }
+    if (!process.env["META_ADS_ACCOUNT_ID"]) {
+      throw new Error("META_ADS_ACCOUNT_ID must be set in production");
+    }
+  }
+
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
   const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
   let interpreter: Interpreter | undefined = config?.interpreter;

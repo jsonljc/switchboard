@@ -136,6 +136,13 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (request, reply) => {
     const body = request.body as RoutingConfig;
+
+    // Verify the body organizationId matches the authenticated org
+    const authOrgId = request.organizationIdFromAuth;
+    if (authOrgId && body.organizationId !== authOrgId) {
+      return reply.code(403).send({ error: "Forbidden: organization mismatch" });
+    }
+
     const config: RoutingConfig = {
       organizationId: body.organizationId,
       preferredInterpreter: body.preferredInterpreter,

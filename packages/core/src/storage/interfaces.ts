@@ -58,7 +58,7 @@ export interface ApprovalStore {
     envelopeId: string;
     organizationId?: string | null;
   } | null>;
-  updateState(id: string, state: ApprovalState): Promise<void>;
+  updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void>;
   listPending(organizationId?: string): Promise<
     Array<{
       request: ApprovalRequest;

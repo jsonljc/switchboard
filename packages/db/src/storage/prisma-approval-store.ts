@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ApprovalRequest } from "@switchboard/schemas";
 import type { ApprovalState, ApprovalStore } from "@switchboard/core";
+import { StaleVersionError } from "@switchboard/core";
 
 type ApprovalRecord = {
   request: ApprovalRequest;
@@ -24,6 +25,7 @@ export class PrismaApprovalStore implements ApprovalStore {
         respondedAt: approval.state.respondedAt,
         patchValue: approval.state.patchValue as object ?? undefined,
         expiresAt: approval.state.expiresAt,
+        version: approval.state.version ?? 1,
       },
     });
   }
@@ -34,17 +36,36 @@ export class PrismaApprovalStore implements ApprovalStore {
     return toApprovalRecord(row);
   }
 
-  async updateState(id: string, state: ApprovalState): Promise<void> {
-    await this.prisma.approvalRecord.update({
-      where: { id },
-      data: {
-        status: state.status,
-        respondedBy: state.respondedBy,
-        respondedAt: state.respondedAt,
-        patchValue: state.patchValue as object ?? undefined,
-        expiresAt: state.expiresAt,
-      },
-    });
+  async updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void> {
+    if (expectedVersion !== undefined) {
+      // Optimistic concurrency: only update if version matches
+      const result = await this.prisma.approvalRecord.updateMany({
+        where: { id, version: expectedVersion },
+        data: {
+          status: state.status,
+          respondedBy: state.respondedBy,
+          respondedAt: state.respondedAt,
+          patchValue: state.patchValue as object ?? undefined,
+          expiresAt: state.expiresAt,
+          version: state.version,
+        },
+      });
+      if (result.count === 0) {
+        throw new StaleVersionError(id, expectedVersion, -1);
+      }
+    } else {
+      await this.prisma.approvalRecord.update({
+        where: { id },
+        data: {
+          status: state.status,
+          respondedBy: state.respondedBy,
+          respondedAt: state.respondedAt,
+          patchValue: state.patchValue as object ?? undefined,
+          expiresAt: state.expiresAt,
+          version: state.version,
+        },
+      });
+    }
   }
 
   async listPending(organizationId?: string): Promise<ApprovalRecord[]> {
@@ -68,6 +89,7 @@ function toApprovalRecord(row: {
   respondedAt: Date | null;
   patchValue: unknown;
   expiresAt: Date;
+  version: number;
 }): ApprovalRecord {
   const request = row.request as ApprovalRequest;
   const state: ApprovalState = {
@@ -77,6 +99,7 @@ function toApprovalRecord(row: {
     patchValue: (row.patchValue as Record<string, unknown>) ?? null,
     expiresAt: row.expiresAt,
     quorum: (request.quorum as ApprovalState["quorum"]) ?? null,
+    version: row.version ?? 1,
   };
   return { request, state, envelopeId: row.envelopeId, organizationId: row.organizationId };
 }
