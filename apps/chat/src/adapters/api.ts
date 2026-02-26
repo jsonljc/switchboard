@@ -39,11 +39,13 @@ export class ApiChannelAdapter implements ChannelAdapter {
     return {
       id: (payload["messageId"] as string) ?? `api_${Date.now()}`,
       channel: "api",
+      channelMessageId: (payload["messageId"] as string) ?? `api_${Date.now()}`,
       principalId: (payload["principalId"] as string) ?? "api-user",
       text,
       threadId: (payload["threadId"] as string) ?? `api_thread_${Date.now()}`,
       timestamp: new Date(),
       metadata: {},
+      attachments: [],
       organizationId: (payload["organizationId"] as string) ?? null,
     };
   }

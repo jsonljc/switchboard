@@ -21,6 +21,7 @@ export const IncomingMessageSchema = z.object({
   text: z.string(),
   attachments: z.array(AttachmentSchema),
   timestamp: z.coerce.date(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type IncomingMessage = z.infer<typeof IncomingMessageSchema>;
 

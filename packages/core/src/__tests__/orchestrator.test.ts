@@ -1813,10 +1813,9 @@ describe("LifecycleOrchestrator", () => {
       await storage.identity.savePrincipal({
         id: "user_1",
         name: "Test User",
-        type: "human",
+        type: "user",
         roles: ["operator"],
         organizationId: null,
-        createdAt: new Date(),
       });
 
       const patchOrch = new LifecycleOrchestrator({

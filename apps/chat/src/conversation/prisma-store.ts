@@ -81,6 +81,7 @@ function toConversationStateData(row: {
     pendingProposalIds: row.pendingProposalIds,
     pendingApprovalIds: row.pendingApprovalIds,
     clarificationQuestion: row.clarificationQuestion,
+    messages: [],
     lastActivityAt: row.lastActivityAt,
     expiresAt: row.expiresAt,
   };

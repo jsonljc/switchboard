@@ -109,11 +109,13 @@ export class WhatsAppAdapter implements ChannelAdapter {
         return {
           id: msgId ?? `wa_${Date.now()}`,
           channel: "whatsapp",
+          channelMessageId: msgId ?? `wa_${Date.now()}`,
           principalId: from ?? "unknown",
           text,
           threadId: from,
           timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
           metadata: contactName ? { contactName, interactiveType } : { interactiveType },
+          attachments: [],
           organizationId: null,
         };
       }
@@ -137,11 +139,13 @@ export class WhatsAppAdapter implements ChannelAdapter {
     return {
       id: msgId ?? `wa_${Date.now()}`,
       channel: "whatsapp",
+      channelMessageId: msgId ?? `wa_${Date.now()}`,
       principalId: from ?? "unknown",
       text,
       threadId: from, // In WhatsApp, thread is keyed by phone number
       timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
       metadata: contactName ? { contactName } : {},
+      attachments: [],
       organizationId: null,
     };
   }
@@ -203,7 +207,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     return (messages?.[0]?.["id"] as string) ?? null;
   }
 
-  private async sendMessage(to: string, body: Record<string, unknown>): Promise<void> {
+  private async sendMessage(_to: string, body: Record<string, unknown>): Promise<void> {
     const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
 
     const response = await fetch(url, {

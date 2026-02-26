@@ -3,7 +3,7 @@ import { z } from "zod";
 export const PrincipalTypeSchema = z.enum(["user", "agent", "service_account", "system"]);
 export type PrincipalType = z.infer<typeof PrincipalTypeSchema>;
 
-export const PrincipalRoleSchema = z.enum(["requester", "approver", "operator", "admin"]);
+export const PrincipalRoleSchema = z.enum(["requester", "approver", "operator", "admin", "emergency_responder"]);
 export type PrincipalRole = z.infer<typeof PrincipalRoleSchema>;
 
 export const PrincipalSchema = z.object({

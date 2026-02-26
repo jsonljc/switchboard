@@ -122,8 +122,6 @@ export {
   mcpToolCallToExecuteRequest,
   executeResponseToMcpResult,
   mcpExecute,
-  rebuildToolMap,
-  resolveToolAction,
 } from "./runtime-adapters/mcp.js";
 export type { McpToolCallPayload, McpToolResponse } from "./runtime-adapters/mcp.js";
 

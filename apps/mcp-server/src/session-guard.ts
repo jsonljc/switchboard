@@ -17,7 +17,7 @@ export type DollarExtractor = (toolName: string, args: Record<string, unknown>) 
 /**
  * Default dollar extractor: looks for common dollar-amount fields.
  */
-function defaultDollarExtractor(toolName: string, args: Record<string, unknown>): number {
+function defaultDollarExtractor(_toolName: string, args: Record<string, unknown>): number {
   // Check for explicit dollar amount fields
   if (typeof args["newBudget"] === "number") return args["newBudget"];
   if (typeof args["dollarsAtRisk"] === "number") return args["dollarsAtRisk"];
