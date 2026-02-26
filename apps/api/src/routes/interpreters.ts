@@ -1,4 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
+import { InterpreterConfigSchema, RoutingConfigSchema } from "../validation.js";
+import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 /**
  * Interpreter management API.
@@ -43,20 +46,16 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       description: "Register or update an interpreter configuration.",
       tags: ["Interpreters"],
-      body: {
-        type: "object",
-        required: ["name"],
-        properties: {
-          name: { type: "string" },
-          enabled: { type: "boolean" },
-          priority: { type: "number" },
-          model: { type: "string" },
-          provider: { type: "string" },
-        },
-      },
     },
   }, async (request, reply) => {
-    const body = request.body as InterpreterConfig;
+    if (!(await requireRole(request, reply, "admin"))) return;
+
+    const parsed = InterpreterConfigSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+
+    const body = parsed.data;
     const existing = interpreterConfigs.get(body.name);
 
     const config: InterpreterConfig = {
@@ -68,6 +67,19 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
     };
 
     interpreterConfigs.set(body.name, config);
+
+    // Audit: record interpreter registration/update
+    await app.auditLedger.record({
+      eventType: "policy.updated",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "interpreter",
+      entityId: body.name,
+      riskCategory: "low",
+      summary: `Interpreter "${body.name}" ${existing ? "updated" : "registered"}`,
+      snapshot: { config, previous: existing ?? null },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
 
     return reply.code(200).send({
       action: existing ? "updated" : "registered",
@@ -83,12 +95,28 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
       params: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const { name } = request.params as { name: string };
     const config = interpreterConfigs.get(name);
     if (!config) {
       return reply.code(404).send({ error: `Interpreter ${name} not found` });
     }
     config.enabled = true;
+
+    // Audit: record interpreter enabled
+    await app.auditLedger.record({
+      eventType: "policy.updated",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "interpreter",
+      entityId: name,
+      riskCategory: "low",
+      summary: `Interpreter "${name}" enabled`,
+      snapshot: { config },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
+
     return reply.code(200).send({ interpreter: config });
   });
 
@@ -100,12 +128,28 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
       params: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const { name } = request.params as { name: string };
     const config = interpreterConfigs.get(name);
     if (!config) {
       return reply.code(404).send({ error: `Interpreter ${name} not found` });
     }
     config.enabled = false;
+
+    // Audit: record interpreter disabled
+    await app.auditLedger.record({
+      eventType: "policy.updated",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "interpreter",
+      entityId: name,
+      riskCategory: "medium",
+      summary: `Interpreter "${name}" disabled`,
+      snapshot: { config },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
+
     return reply.code(200).send({ interpreter: config });
   });
 
@@ -124,18 +168,14 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       description: "Set interpreter routing for an organization.",
       tags: ["Interpreters"],
-      body: {
-        type: "object",
-        required: ["organizationId", "preferredInterpreter"],
-        properties: {
-          organizationId: { type: "string" },
-          preferredInterpreter: { type: "string" },
-          fallbackChain: { type: "array", items: { type: "string" } },
-        },
-      },
     },
   }, async (request, reply) => {
-    const body = request.body as RoutingConfig;
+    const parsed = RoutingConfigSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
+    }
+
+    const body = parsed.data;
 
     // Verify the body organizationId matches the authenticated org
     const authOrgId = request.organizationIdFromAuth;
@@ -149,6 +189,20 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
       fallbackChain: body.fallbackChain ?? [],
     };
     routingConfigs.set(body.organizationId, config);
+
+    // Audit: record routing config change
+    await app.auditLedger.record({
+      eventType: "policy.updated",
+      actorType: "user",
+      actorId: request.principalIdFromAuth ?? "unknown",
+      entityType: "interpreter_routing",
+      entityId: body.organizationId,
+      riskCategory: "low",
+      summary: `Interpreter routing set for org "${body.organizationId}"`,
+      snapshot: { config },
+      organizationId: request.organizationIdFromAuth ?? undefined,
+    });
+
     return reply.code(200).send({ routing: config });
   });
 
@@ -160,8 +214,30 @@ export const interpretersRoutes: FastifyPluginAsync = async (app) => {
       params: { type: "object", properties: { organizationId: { type: "string" } }, required: ["organizationId"] },
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const { organizationId } = request.params as { organizationId: string };
+
+    // Org-access check on the routing being deleted
+    if (!assertOrgAccess(request, organizationId, reply)) return;
+
     const existed = routingConfigs.delete(organizationId);
+
+    if (existed) {
+      // Audit: record routing deletion
+      await app.auditLedger.record({
+        eventType: "policy.deleted",
+        actorType: "user",
+        actorId: request.principalIdFromAuth ?? "unknown",
+        entityType: "interpreter_routing",
+        entityId: organizationId,
+        riskCategory: "medium",
+        summary: `Interpreter routing removed for org "${organizationId}"`,
+        snapshot: { organizationId },
+        organizationId: request.organizationIdFromAuth ?? undefined,
+      });
+    }
+
     return reply.code(200).send({ deleted: existed });
   });
 };

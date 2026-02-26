@@ -9,6 +9,7 @@ import {
   UpdateRoleOverlayBodySchema,
 } from "../validation.js";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 const createSpecJsonSchema = zodToJsonSchema(CreateIdentitySpecBodySchema, { target: "openApi3" });
 const updateSpecJsonSchema = zodToJsonSchema(UpdateIdentitySpecBodySchema, { target: "openApi3" });
@@ -24,6 +25,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       body: createSpecJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const parsed = CreateIdentitySpecBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -86,6 +89,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       body: updateSpecJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const { id } = request.params as { id: string };
 
     const parsed = UpdateIdentitySpecBodySchema.safeParse(request.body);
@@ -117,6 +122,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       body: createOverlayJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const parsed = CreateRoleOverlayBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -159,6 +166,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       body: updateOverlayJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin"))) return;
+
     const { id } = request.params as { id: string };
 
     const parsed = UpdateRoleOverlayBodySchema.safeParse(request.body);

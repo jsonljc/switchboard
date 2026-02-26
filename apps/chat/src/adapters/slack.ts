@@ -76,6 +76,21 @@ export class SlackAdapter implements ChannelAdapter {
   constructor(botToken: string, signingSecret?: string) {
     this.botToken = botToken;
     this.signingSecret = signingSecret ?? null;
+
+    // Production guard: signing secret is required to prevent request forgery
+    if (!this.signingSecret) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          "Slack signing secret is required in production. " +
+          "Set the SLACK_SIGNING_SECRET environment variable.",
+        );
+      } else {
+        console.warn(
+          "[SlackAdapter] No signing secret configured — request signature verification is disabled. " +
+          "This is unsafe for production use.",
+        );
+      }
+    }
   }
 
   /**

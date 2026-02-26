@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
+import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
@@ -56,6 +57,12 @@ declare module "fastify" {
 export async function buildServer() {
   const app = Fastify({
     logger: true,
+    bodyLimit: 1_048_576, // 1 MB explicit body size limit
+  });
+
+  // Security headers via Helmet (CSP disabled — API-only server, no HTML)
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
   });
 
   // CORS — restrict origins in production, allow all in development
@@ -102,9 +109,13 @@ export async function buildServer() {
       security: [{ bearerAuth: [] }],
     },
   });
-  await app.register(swaggerUi, {
-    routePrefix: "/docs",
-  });
+
+  // Only expose Swagger UI outside production (or when explicitly enabled)
+  if (process.env.NODE_ENV !== "production" || process.env["ENABLE_SWAGGER"] === "true") {
+    await app.register(swaggerUi, {
+      routePrefix: "/docs",
+    });
+  }
 
   // Global error handler — consistent error format, no stack leaks in production
   app.setErrorHandler((error: FastifyError, _request, reply) => {

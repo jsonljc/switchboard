@@ -428,7 +428,7 @@ describe("Clinic Integration", () => {
 
       expect(adapter.sentText).toHaveLength(1);
       expect(adapter.sentText[0]!.text).toContain("Error reading data");
-      expect(adapter.sentText[0]!.text).toContain("Connection timeout");
+      expect(adapter.sentText[0]!.text).toContain("Something went wrong");
     });
   });
 
