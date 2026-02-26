@@ -10,6 +10,7 @@ import type {
   CompetencePolicy,
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
+import { StaleVersionError } from "../approval/state-machine.js";
 import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
 import { GuardedCartridge } from "../execution-guard.js";
 import type {
@@ -206,9 +207,12 @@ export class InMemoryApprovalStore implements ApprovalStore {
     return entry ? { ...entry } : null;
   }
 
-  async updateState(id: string, state: ApprovalState): Promise<void> {
+  async updateState(id: string, state: ApprovalState, expectedVersion?: number): Promise<void> {
     const entry = this.store.get(id);
     if (!entry) throw new Error(`Approval not found: ${id}`);
+    if (expectedVersion !== undefined && entry.state.version !== expectedVersion) {
+      throw new StaleVersionError(id, expectedVersion, entry.state.version);
+    }
     this.store.set(id, { ...entry, state });
   }
 

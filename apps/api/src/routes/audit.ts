@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { AuditQueryFilter } from "@switchboard/core";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/audit - Query audit ledger
@@ -100,6 +101,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     if (!entry) {
       return reply.code(404).send({ error: "Audit entry not found" });
     }
+    if (!assertOrgAccess(request, entry.organizationId, reply)) return;
     return reply.code(200).send({ entry });
   });
 };

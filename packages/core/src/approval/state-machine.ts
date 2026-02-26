@@ -26,6 +26,14 @@ export interface ApprovalState {
   patchValue: Record<string, unknown> | null;
   expiresAt: Date;
   quorum: QuorumState | null;
+  version: number;
+}
+
+export class StaleVersionError extends Error {
+  constructor(id: string, expected: number, actual: number) {
+    super(`Stale version for approval ${id}: expected ${expected}, got ${actual}`);
+    this.name = "StaleVersionError";
+  }
 }
 
 export function determineApprovalRequirement(
@@ -43,6 +51,7 @@ export function createApprovalState(expiresAt: Date, quorum?: { required: number
     patchValue: null,
     expiresAt,
     quorum: quorum ? { required: quorum.required, approvalHashes: [] } : null,
+    version: 1,
   };
 }
 
@@ -86,6 +95,7 @@ export function transitionApproval(
             respondedBy,
             respondedAt: new Date(),
             quorum: newQuorum,
+            version: state.version + 1,
           };
         }
 
@@ -93,6 +103,7 @@ export function transitionApproval(
         return {
           ...state,
           quorum: newQuorum,
+          version: state.version + 1,
         };
       }
 
@@ -102,6 +113,7 @@ export function transitionApproval(
         status: "approved",
         respondedBy: respondedBy ?? null,
         respondedAt: new Date(),
+        version: state.version + 1,
       };
 
     case "reject":
@@ -113,6 +125,7 @@ export function transitionApproval(
         status: "rejected",
         respondedBy: respondedBy ?? null,
         respondedAt: new Date(),
+        version: state.version + 1,
       };
 
     case "patch":
@@ -125,6 +138,7 @@ export function transitionApproval(
         respondedBy: respondedBy ?? null,
         respondedAt: new Date(),
         patchValue: patchValue ?? null,
+        version: state.version + 1,
       };
 
     case "expire":
@@ -136,6 +150,7 @@ export function transitionApproval(
         status: "expired",
         respondedBy: null,
         respondedAt: new Date(),
+        version: state.version + 1,
       };
   }
 }

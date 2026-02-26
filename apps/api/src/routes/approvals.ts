@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { StaleVersionError } from "@switchboard/core";
 import { ApprovalRespondBodySchema } from "../validation.js";
+import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 const respondJsonSchema = zodToJsonSchema(ApprovalRespondBodySchema, { target: "openApi3" });
 
@@ -23,12 +26,26 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
 
     try {
+      // Org access check for the approval resource
+      const approval = await app.storageContext.approvals.getById(id);
+      if (!approval) {
+        return reply.code(404).send({ error: "Approval not found" });
+      }
+      if (!assertOrgAccess(request, approval.organizationId, reply)) return;
+
       // Verify that respondedBy matches the authenticated principal when auth is configured.
       // This prevents approval spoofing where a user claims to be a different principal.
       const authenticatedPrincipal = request.principalIdFromAuth;
       if (authenticatedPrincipal && authenticatedPrincipal !== body.respondedBy) {
         return reply.code(403).send({
           error: `Forbidden: authenticated principal '${authenticatedPrincipal}' cannot respond as '${body.respondedBy}'`,
+        });
+      }
+
+      // Require bindingHash for approve/patch to ensure integrity verification
+      if ((body.action === "approve" || body.action === "patch") && !body.bindingHash) {
+        return reply.code(400).send({
+          error: "bindingHash is required for approve and patch actions",
         });
       }
 
@@ -46,8 +63,13 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         executionResult: response.executionResult,
       });
     } catch (err) {
+      if (err instanceof StaleVersionError) {
+        return reply.code(409).send({
+          error: "Conflict: approval has already been responded to",
+        });
+      }
       return reply.code(400).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 400),
       });
     }
   });
@@ -91,6 +113,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Approval not found" });
     }
 
+    if (!assertOrgAccess(request, approval.organizationId, reply)) return;
+
     if (approval.state.status !== "pending") {
       return reply.code(400).send({ error: `Cannot remind: approval status is ${approval.state.status}` });
     }
@@ -132,6 +156,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     if (!approval) {
       return reply.code(404).send({ error: "Approval not found" });
     }
+
+    if (!assertOrgAccess(request, approval.organizationId, reply)) return;
 
     return reply.code(200).send({
       request: approval.request,

@@ -125,7 +125,7 @@ describe("Approvals API", () => {
       expect(res.json().error).toBeDefined();
     });
 
-    it("should return 400 for non-existent approval", async () => {
+    it("should return 404 for non-existent approval", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/approvals/non-existent-id/respond",
@@ -136,7 +136,7 @@ describe("Approvals API", () => {
         },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(404);
     });
   });
 

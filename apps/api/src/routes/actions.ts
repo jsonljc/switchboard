@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { inferCartridgeId } from "@switchboard/core";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
+import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
@@ -31,7 +33,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         actionType: body.actionType,
         parameters: body.parameters,
         principalId: body.principalId,
-        organizationId: body.organizationId ?? request.organizationIdFromAuth ?? null,
+        organizationId: request.organizationIdFromAuth ?? body.organizationId ?? null,
         cartridgeId,
         entityRefs: body.entityRefs ?? [],
         message: body.message,
@@ -60,7 +62,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       });
     } catch (err) {
       return reply.code(500).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 500),
       });
     }
   });
@@ -80,6 +82,9 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Envelope not found" });
     }
 
+    const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as string | null | undefined;
+    if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
+
     return reply.code(200).send({ envelope });
   });
 
@@ -98,7 +103,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ result });
     } catch (err) {
       return reply.code(400).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 400),
       });
     }
   });
@@ -124,7 +129,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       });
     } catch (err) {
       return reply.code(400).send({
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err, 400),
       });
     }
   });
@@ -153,13 +158,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           actionType: proposal.actionType,
           parameters: proposal.parameters,
           principalId: body.principalId,
-          organizationId: body.organizationId ?? request.organizationIdFromAuth ?? null,
+          organizationId: request.organizationIdFromAuth ?? body.organizationId ?? null,
           cartridgeId,
           entityRefs: [],
         });
         results.push(result);
       } catch (err) {
-        results.push({ error: err instanceof Error ? err.message : String(err) });
+        results.push({ error: sanitizeErrorMessage(err, 500) });
       }
     }
 

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { sanitizeHealthError } from "../utils/error-sanitizer.js";
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/health/deep - Full system health check
@@ -23,7 +24,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
         checks["database"] = { status: "not_configured", latencyMs: 0 };
       }
     } catch (err) {
-      checks["database"] = { status: "disconnected", latencyMs: Date.now() - dbStart, error: String(err) };
+      checks["database"] = { status: "disconnected", latencyMs: Date.now() - dbStart, error: sanitizeHealthError(err) };
       allHealthy = false;
     }
 
@@ -41,7 +42,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
         checks["redis"] = { status: "not_configured", latencyMs: 0 };
       }
     } catch (err) {
-      checks["redis"] = { status: "disconnected", latencyMs: Date.now() - redisStart, error: String(err) };
+      checks["redis"] = { status: "disconnected", latencyMs: Date.now() - redisStart, error: sanitizeHealthError(err) };
       allHealthy = false;
     }
 
@@ -65,7 +66,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
         checks["queue"] = { status: "not_configured", latencyMs: 0 };
       }
     } catch (err) {
-      checks["queue"] = { status: "error", latencyMs: 0, error: String(err) };
+      checks["queue"] = { status: "error", latencyMs: 0, error: sanitizeHealthError(err) };
     }
 
     // Cartridge health
@@ -80,7 +81,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
         cartridgeResults[id] = { status: h.status, latencyMs: h.latencyMs };
         if (h.status !== "connected") allHealthy = false;
       } catch (err) {
-        cartridgeResults[id] = { status: "disconnected", latencyMs: Date.now() - cStart, error: String(err) };
+        cartridgeResults[id] = { status: "disconnected", latencyMs: Date.now() - cStart, error: sanitizeHealthError(err) };
         allHealthy = false;
       }
     }
@@ -132,7 +133,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
           cartridgeId: id,
           status: "disconnected",
           latencyMs: -1,
-          error: err instanceof Error ? err.message : String(err),
+          error: sanitizeHealthError(err),
           capabilities: [],
         });
         allHealthy = false;

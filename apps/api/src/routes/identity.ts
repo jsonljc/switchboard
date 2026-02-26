@@ -8,6 +8,7 @@ import {
   CreateRoleOverlayBodySchema,
   UpdateRoleOverlayBodySchema,
 } from "../validation.js";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 const createSpecJsonSchema = zodToJsonSchema(CreateIdentitySpecBodySchema, { target: "openApi3" });
 const updateSpecJsonSchema = zodToJsonSchema(UpdateIdentitySpecBodySchema, { target: "openApi3" });
@@ -34,6 +35,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       createdAt: now,
       updatedAt: now,
       ...parsed.data,
+      // Bind to authenticated org if available
+      organizationId: request.organizationIdFromAuth ?? parsed.data.organizationId,
     };
 
     await app.storageContext.identity.saveSpec(spec);
@@ -53,6 +56,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!spec) {
       return reply.code(404).send({ error: "Identity spec not found" });
     }
+    if (!assertOrgAccess(request, spec.organizationId, reply)) return;
     return reply.code(200).send({ spec });
   });
 
@@ -69,6 +73,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!spec) {
       return reply.code(404).send({ error: "Identity spec not found" });
     }
+    if (!assertOrgAccess(request, spec.organizationId, reply)) return;
     return reply.code(200).send({ spec });
   });
 
@@ -92,6 +97,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.code(404).send({ error: "Identity spec not found" });
     }
+    if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
     const updated: IdentitySpec = {
       ...existing,
@@ -164,6 +170,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.code(404).send({ error: "Role overlay not found" });
     }
+
+    // Check org access via the parent identity spec
+    const parentSpec = await app.storageContext.identity.getSpecById(existing.identitySpecId);
+    if (parentSpec && !assertOrgAccess(request, parentSpec.organizationId, reply)) return;
 
     const overlay: RoleOverlay = {
       ...existing,
