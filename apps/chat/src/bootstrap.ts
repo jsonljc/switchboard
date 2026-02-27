@@ -23,6 +23,7 @@ import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
 
@@ -100,6 +101,11 @@ export async function createChatRuntime(
     });
     storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
     await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+
+    // Register quant-trading cartridge
+    const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
+    storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
+    await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
 
     orchestrator = new OrchestratorClass({
       storage,
@@ -208,6 +214,14 @@ export async function createChatRuntime(
       "ads.campaign.pause",
       "ads.campaign.resume",
       "ads.budget.adjust",
+      "trading.order.market_buy",
+      "trading.order.market_sell",
+      "trading.order.limit_buy",
+      "trading.order.limit_sell",
+      "trading.order.cancel",
+      "trading.position.close",
+      "trading.portfolio.rebalance",
+      "trading.risk.set_stop_loss",
     ],
   });
 

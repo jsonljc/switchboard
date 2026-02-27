@@ -4,6 +4,7 @@ import type {
   GuardrailConfig,
   RiskInput,
   UndoRecipe,
+  ResolvedEntity,
 } from "@switchboard/schemas";
 
 export interface ExecuteResult {
@@ -50,6 +51,13 @@ export interface Cartridge {
   healthCheck(): Promise<ConnectionHealth>;
 
   searchCampaigns?(query: string): Promise<Array<{ id: string; name: string; status: string }>>;
+
+  /** Resolve a user-provided reference (e.g. campaign name) to a concrete entity. Optional. */
+  resolveEntity?(
+    inputRef: string,
+    entityType: string,
+    context: Record<string, unknown>,
+  ): Promise<ResolvedEntity>;
 
   /** Capture external entity state before mutation for audit/forensics. Optional. */
   captureSnapshot?(

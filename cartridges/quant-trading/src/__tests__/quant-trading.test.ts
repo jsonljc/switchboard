@@ -114,7 +114,7 @@ describe("QuantTradingCartridge", () => {
       expect(result.summary).toContain("LIMIT BUY");
       expect(result.rollbackAvailable).toBe(true);
       expect(result.undoRecipe).not.toBeNull();
-      expect(result.undoRecipe!.undoActionType).toBe("trading.order.cancel");
+      expect(result.undoRecipe!.reverseActionType).toBe("trading.order.cancel");
     });
 
     it("should cancel an open order", async () => {

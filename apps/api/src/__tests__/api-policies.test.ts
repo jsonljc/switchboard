@@ -57,6 +57,22 @@ describe("Policies API", () => {
 
   describe("GET /api/policies", () => {
     it("should list seeded and created policies", async () => {
+      // Create a second policy so we have at least 2
+      await app.inject({
+        method: "POST",
+        url: "/api/policies",
+        payload: {
+          name: "Extra Policy",
+          description: "Second policy for listing test",
+          organizationId: null,
+          cartridgeId: "ads-spend",
+          priority: 50,
+          active: true,
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          effect: "require_approval",
+        },
+      });
+
       const res = await app.inject({
         method: "GET",
         url: "/api/policies",
@@ -64,11 +80,26 @@ describe("Policies API", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      // Should have at least the 2 seeded DEFAULT_ADS_POLICIES
       expect(body.policies.length).toBeGreaterThanOrEqual(2);
     });
 
     it("should filter by cartridgeId", async () => {
+      // Create policies for ads-spend
+      await app.inject({
+        method: "POST",
+        url: "/api/policies",
+        payload: {
+          name: "Filter Test Policy",
+          description: "For cartridgeId filter test",
+          organizationId: null,
+          cartridgeId: "ads-spend",
+          priority: 50,
+          active: true,
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          effect: "require_approval",
+        },
+      });
+
       const res = await app.inject({
         method: "GET",
         url: "/api/policies?cartridgeId=ads-spend",
@@ -85,14 +116,31 @@ describe("Policies API", () => {
 
   describe("GET /api/policies/:id", () => {
     it("should return 200 for existing policy", async () => {
+      // Create a policy with a known id
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/api/policies",
+        payload: {
+          name: "Lookup Test Policy",
+          description: "For GET by id test",
+          organizationId: null,
+          cartridgeId: "ads-spend",
+          priority: 10,
+          active: true,
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          effect: "require_approval",
+        },
+      });
+      const policyId = createRes.json().policy.id;
+
       const res = await app.inject({
         method: "GET",
-        url: "/api/policies/ads-large-budget-increase",
+        url: `/api/policies/${policyId}`,
       });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.policy.id).toBe("ads-large-budget-increase");
+      expect(body.policy.id).toBe(policyId);
     });
 
     it("should return 404 for non-existent policy", async () => {
@@ -107,9 +155,26 @@ describe("Policies API", () => {
 
   describe("PUT /api/policies/:id", () => {
     it("should update a policy and return 200", async () => {
+      // Create a policy to update
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/api/policies",
+        payload: {
+          name: "Original Policy Name",
+          description: "For update test",
+          organizationId: null,
+          cartridgeId: "ads-spend",
+          priority: 10,
+          active: true,
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          effect: "require_approval",
+        },
+      });
+      const policyId = createRes.json().policy.id;
+
       const res = await app.inject({
         method: "PUT",
-        url: "/api/policies/ads-large-budget-increase",
+        url: `/api/policies/${policyId}`,
         payload: {
           name: "Updated Policy Name",
         },

@@ -235,6 +235,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
 export class InMemoryCartridgeRegistry implements CartridgeRegistry {
   private store = new Map<string, Cartridge>();
   private versions = new Map<string, string>();
+  private initialized = new Set<string>();
   private onChange: (() => void) | null;
 
   constructor(options?: { onChange?: () => void }) {
@@ -292,8 +293,39 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
     this.onChange?.();
   }
 
+  /**
+   * Initialize a cartridge and register it in one call.
+   * Ensures initialize() is called before the cartridge becomes available
+   * for action processing. Throws if initialize() fails.
+   */
+  async initializeAndRegister(
+    cartridgeId: string,
+    cartridge: Cartridge,
+    context: import("@switchboard/cartridge-sdk").CartridgeContext,
+    interceptors?: CartridgeInterceptor[],
+  ): Promise<void> {
+    await cartridge.initialize(context);
+    this.register(cartridgeId, cartridge, interceptors);
+    this.initialized.add(cartridgeId);
+  }
+
+  /**
+   * Mark a cartridge as initialized (for cartridges initialized before registration).
+   */
+  markInitialized(cartridgeId: string): void {
+    this.initialized.add(cartridgeId);
+  }
+
+  /**
+   * Check whether a cartridge has been initialized.
+   */
+  isInitialized(cartridgeId: string): boolean {
+    return this.initialized.has(cartridgeId);
+  }
+
   unregister(cartridgeId: string): boolean {
     this.versions.delete(cartridgeId);
+    this.initialized.delete(cartridgeId);
     const result = this.store.delete(cartridgeId);
     if (result) this.onChange?.();
     return result;

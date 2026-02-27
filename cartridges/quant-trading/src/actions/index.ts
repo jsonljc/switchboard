@@ -6,12 +6,13 @@ export function buildLimitOrderUndoRecipe(
   actionId: string,
 ): UndoRecipe {
   return {
-    type: "single",
-    undoActionType: "trading.order.cancel",
-    undoParameters: { orderId },
     originalEnvelopeId: envelopeId,
     originalActionId: actionId,
+    reverseActionType: "trading.order.cancel",
+    reverseParameters: { orderId },
     undoExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+    undoRiskCategory: "low",
+    undoApprovalRequired: "standard",
   };
 }
 
@@ -21,11 +22,12 @@ export function buildStopLossUndoRecipe(
   actionId: string,
 ): UndoRecipe {
   return {
-    type: "single",
-    undoActionType: "trading.order.cancel",
-    undoParameters: { orderId },
     originalEnvelopeId: envelopeId,
     originalActionId: actionId,
+    reverseActionType: "trading.order.cancel",
+    reverseParameters: { orderId },
     undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+    undoRiskCategory: "low",
+    undoApprovalRequired: "standard",
   };
 }
