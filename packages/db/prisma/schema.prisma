@@ -279,3 +279,36 @@ model CompetencePolicy {
 
   @@index([actionTypePattern])
 }
+
+// Dashboard authentication models
+
+model DashboardUser {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String?
+  emailVerified   DateTime?
+  organizationId  String
+  principalId     String
+  apiKeyEncrypted String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        DashboardSession[]
+}
+
+model DashboardSession {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         DashboardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model DashboardVerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
