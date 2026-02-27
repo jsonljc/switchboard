@@ -31,6 +31,7 @@ import {
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
 import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -176,6 +177,11 @@ export async function buildServer() {
   });
   storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+
+  // Register quant-trading cartridge
+  const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
+  storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
+  await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
 
   // Shared Redis connection when REDIS_URL is available
   const redisUrl = process.env["REDIS_URL"];

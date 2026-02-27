@@ -91,7 +91,7 @@ export class QuantTradingCartridge implements Cartridge {
   }
 
   async enrichContext(
-    actionType: string,
+    _actionType: string,
     parameters: Record<string, unknown>,
     _context: CartridgeContext,
   ): Promise<Record<string, unknown>> {

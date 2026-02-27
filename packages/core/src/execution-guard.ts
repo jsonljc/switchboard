@@ -138,6 +138,26 @@ export class GuardedCartridge implements Cartridge {
     return this.inner.searchCampaigns?.(query) ?? [];
   }
 
+  async resolveEntity(
+    inputRef: string,
+    entityType: string,
+    context: Record<string, unknown>,
+  ): Promise<import("@switchboard/schemas").ResolvedEntity> {
+    if (!this.inner.resolveEntity) {
+      return {
+        id: "",
+        inputRef,
+        resolvedType: entityType,
+        resolvedId: "",
+        resolvedName: "",
+        confidence: 0,
+        alternatives: [],
+        status: "not_found",
+      };
+    }
+    return this.inner.resolveEntity(inputRef, entityType, context);
+  }
+
   async captureSnapshot(
     actionType: string,
     parameters: Record<string, unknown>,

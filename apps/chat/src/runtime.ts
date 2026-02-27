@@ -18,6 +18,7 @@ import type {
   StorageContext,
   CartridgeReadAdapter as CartridgeReadAdapterType,
 } from "@switchboard/core";
+import { inferCartridgeId } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 
@@ -272,8 +273,11 @@ export class ChatRuntime {
         });
       }
 
-      // Default cartridge
-      const cartridgeId = "ads-spend";
+      // Infer cartridge from action type
+      const cartridgeId = inferCartridgeId(
+        proposal.actionType,
+        this.storage?.cartridges ?? undefined,
+      ) ?? "ads-spend";
 
       try {
         const proposeResult = await this.orchestrator.resolveAndPropose({
