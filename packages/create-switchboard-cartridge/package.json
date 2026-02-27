@@ -1,0 +1,26 @@
+{
+  "name": "create-switchboard-cartridge",
+  "version": "0.1.0",
+  "description": "Scaffold a new Switchboard cartridge project",
+  "type": "module",
+  "bin": {
+    "create-switchboard-cartridge": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/prompts": "^2.4.9",
+    "typescript": "^5.7.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

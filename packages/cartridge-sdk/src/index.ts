@@ -5,3 +5,7 @@ export type { CartridgeConnectionConfig } from "./context.js";
 export { createConnectionContract } from "./connection.js";
 export type { ConnectionContract } from "./connection.js";
 export { TestCartridge, createTestManifest } from "./testing.js";
+export { validateManifest, validateCartridge } from "./validation.js";
+export type { ValidationResult, ValidationIssue } from "./validation.js";
+export { CartridgeTestHarness } from "./test-harness.js";
+export type { HarnessReport, HarnessStepResult, HarnessOptions } from "./test-harness.js";
