@@ -8,14 +8,20 @@ export interface ChainVerificationJobConfig {
 
 /**
  * Periodically runs deep verification on the audit chain.
- * Default interval is 24 hours. Returns a cleanup function.
+ * Default interval is 24 hours. Returns a cleanup function that stops the
+ * interval and signals any in-flight verification to not start new work.
  */
 export function startChainVerificationJob(config: ChainVerificationJobConfig): () => void {
   const { ledger, intervalMs = 24 * 60 * 60 * 1000, onBrokenChain } = config;
 
+  let stopped = false;
+  let inFlightPromise: Promise<void> | null = null;
+
   const run = async () => {
+    if (stopped) return;
     try {
       const entries = await ledger.query({});
+      if (stopped) return;
       const result = await ledger.deepVerify(entries);
 
       if (!result.valid) {
@@ -33,8 +39,17 @@ export function startChainVerificationJob(config: ChainVerificationJobConfig): (
   };
 
   // Run once on startup
-  run();
+  inFlightPromise = run();
 
-  const timer = setInterval(run, intervalMs);
-  return () => clearInterval(timer);
+  const timer = setInterval(() => {
+    inFlightPromise = run();
+  }, intervalMs);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    if (inFlightPromise) {
+      inFlightPromise.catch(() => {});
+    }
+  };
 }

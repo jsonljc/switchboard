@@ -35,6 +35,8 @@ import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
 import { startChainVerificationJob } from "./jobs/chain-verification.js";
+import type { Queue, Worker } from "bullmq";
+import type Redis from "ioredis";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -43,6 +45,9 @@ declare module "fastify" {
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
     executionService: ExecutionService;
+    redis: Redis | null;
+    executionQueue: Queue | null;
+    executionWorker: Worker | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -135,20 +140,20 @@ export async function buildServer() {
   // Create storage and orchestrator — with degraded mode fallback
   let storage: StorageContext;
   let ledgerStorage: LedgerStorage;
-  let degraded = false;
+  let prisma: { $queryRaw: (query: TemplateStringsArray) => Promise<unknown>; $disconnect: () => Promise<void> } | null = null;
 
   if (process.env["DATABASE_URL"]) {
     try {
       const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-      const prisma = getDb();
+      prisma = getDb();
       await prisma.$queryRaw`SELECT 1`; // verify connectivity
-      storage = createPrismaStorage(prisma);
-      ledgerStorage = new PrismaLedgerStorage(prisma);
+      storage = createPrismaStorage(prisma as Parameters<typeof createPrismaStorage>[0]);
+      ledgerStorage = new PrismaLedgerStorage(prisma as ConstructorParameters<typeof PrismaLedgerStorage>[0]);
     } catch (err) {
       app.log.error({ err }, "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)");
       storage = createInMemoryStorage();
       ledgerStorage = new InMemoryLedgerStorage();
-      degraded = true;
+      prisma = null;
     }
   } else {
     storage = createInMemoryStorage();
@@ -172,16 +177,22 @@ export async function buildServer() {
   storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
 
-  // Queue-based execution when Redis is available
+  // Shared Redis connection when REDIS_URL is available
   const redisUrl = process.env["REDIS_URL"];
+  let redis: Redis | null = null;
+  let queue: Queue | null = null;
+  let worker: Worker | null = null;
   let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
   const executionMode = redisUrl ? "queue" as const : "inline" as const;
 
   if (redisUrl) {
+    const { default: IORedis } = await import("ioredis");
+    redis = new IORedis(redisUrl);
+
     const connection = { url: redisUrl };
-    const queue = createExecutionQueue(connection);
+    queue = createExecutionQueue(connection);
     onEnqueue = async (envelopeId: string) => {
-      await queue.add(`execute:${envelopeId}`, {
+      await queue!.add(`execute:${envelopeId}`, {
         envelopeId,
         enqueuedAt: new Date().toISOString(),
       });
@@ -201,27 +212,18 @@ export async function buildServer() {
 
   // Start worker in-process when queue mode is active
   if (redisUrl) {
-    const worker = createExecutionWorker({
+    worker = createExecutionWorker({
       connection: { url: redisUrl },
       orchestrator,
       storage,
-    });
-    app.addHook("onClose", async () => {
-      await worker.close();
     });
   }
 
   // Start approval expiry background job
   const stopExpiryJob = startApprovalExpiryJob({ storage, ledger });
-  app.addHook("onClose", async () => {
-    stopExpiryJob();
-  });
 
   // Start daily audit chain verification job
   const stopChainVerify = startChainVerificationJob({ ledger });
-  app.addHook("onClose", async () => {
-    stopChainVerify();
-  });
 
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
@@ -230,17 +232,72 @@ export async function buildServer() {
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
   app.decorate("executionService", executionService);
+  app.decorate("redis", redis);
+  app.decorate("executionQueue", queue);
+  app.decorate("executionWorker", worker);
 
-  // Register middleware
+  // Resource cleanup on close — order: worker → queue → Redis → Prisma
+  app.addHook("onClose", async () => {
+    stopExpiryJob();
+    stopChainVerify();
+
+    if (worker) {
+      await worker.close();
+    }
+    if (queue) {
+      await queue.close();
+    }
+    if (redis) {
+      await redis.quit();
+    }
+    if (prisma) {
+      await prisma.$disconnect();
+    }
+  });
+
+  // Register middleware (idempotency picks up shared redis via app.redis)
   await app.register(authMiddleware);
   await app.register(idempotencyMiddleware);
 
-  // Health check
-  app.get("/health", async () => ({
-    status: degraded ? "degraded" : "ok",
-    degraded,
-    timestamp: new Date().toISOString(),
-  }));
+  // Live health check — pings configured backends
+  app.get("/health", async (_request, reply) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    const timeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+      ]);
+
+    // DB check
+    if (prisma) {
+      try {
+        await timeout(prisma.$queryRaw`SELECT 1`, 3000);
+        checks["database"] = "ok";
+      } catch {
+        checks["database"] = "unreachable";
+        healthy = false;
+      }
+    }
+
+    // Redis check
+    if (redis) {
+      try {
+        await timeout(redis.ping(), 3000);
+        checks["redis"] = "ok";
+      } catch {
+        checks["redis"] = "unreachable";
+        healthy = false;
+      }
+    }
+
+    return reply.code(healthy ? 200 : 503).send({
+      status: healthy ? "ok" : "degraded",
+      checks,
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   // Register routes
   await app.register(actionsRoutes, { prefix: "/api/actions" });

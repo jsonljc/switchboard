@@ -1,6 +1,19 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
+import { withRetry } from "@switchboard/core";
+
+/** Error carrying HTTP status for retry decisions. */
+class TelegramApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = "TelegramApiError";
+  }
+}
 
 /**
  * Token bucket rate limiter for Telegram Bot API (30 msg/sec limit).
@@ -180,12 +193,44 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   private async apiCall(method: string, body: Record<string, unknown>): Promise<unknown> {
-    await this.rateLimiter.acquire();
-    const response = await fetch(`${this.baseUrl}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return response.json();
+    return withRetry(
+      async () => {
+        await this.rateLimiter.acquire();
+        const response = await fetch(`${this.baseUrl}/${method}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          const retryAfter = response.headers.get("retry-after");
+          const retryAfterMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+          throw new TelegramApiError(
+            `Telegram API error ${response.status}: ${text}`,
+            response.status,
+            retryAfterMs,
+          );
+        }
+
+        return response.json();
+      },
+      {
+        maxAttempts: 3,
+        baseDelayMs: 500,
+        shouldRetry: (err: unknown) => {
+          if (err instanceof TelegramApiError) {
+            return err.status === 429 || err.status >= 500;
+          }
+          return true; // Network errors etc.
+        },
+        onRetry: (err: unknown) => {
+          if (err instanceof TelegramApiError && err.retryAfterMs) {
+            return err.retryAfterMs;
+          }
+          return undefined;
+        },
+      },
+    );
   }
 }

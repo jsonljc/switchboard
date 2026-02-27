@@ -1,6 +1,52 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
+import { withRetry } from "@switchboard/core";
+
+/**
+ * Token bucket rate limiter for WhatsApp Business API (80 msg/sec per phone number).
+ */
+class WhatsAppRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly capacity = 80;
+  private readonly refillRate = 80; // tokens per second
+
+  constructor() {
+    this.tokens = this.capacity;
+    this.lastRefill = Date.now();
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return;
+    }
+    const waitMs = ((1 - this.tokens) / this.refillRate) * 1000;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    this.refill();
+    this.tokens = Math.max(0, this.tokens - 1);
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+  }
+}
+
+/** Error carrying HTTP status for retry decisions. */
+class WhatsAppApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "WhatsAppApiError";
+  }
+}
 
 export class WhatsAppAdapter implements ChannelAdapter {
   readonly channel = "whatsapp" as const;
@@ -9,6 +55,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
   private appSecret: string | null;
   private verifyToken: string | null;
   private apiVersion: string;
+  private rateLimiter = new WhatsAppRateLimiter();
 
   constructor(config: {
     token: string;
@@ -210,18 +257,36 @@ export class WhatsAppAdapter implements ChannelAdapter {
   private async sendMessage(_to: string, body: Record<string, unknown>): Promise<void> {
     const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.token}`,
-      },
-      body: JSON.stringify(body),
-    });
+    await withRetry(
+      async () => {
+        await this.rateLimiter.acquire();
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.token}`,
+          },
+          body: JSON.stringify(body),
+        });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`WhatsApp API error (${response.status}): ${errorBody}`);
-    }
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new WhatsAppApiError(
+            `WhatsApp API error (${response.status}): ${errorBody}`,
+            response.status,
+          );
+        }
+      },
+      {
+        maxAttempts: 3,
+        baseDelayMs: 500,
+        shouldRetry: (err: unknown) => {
+          if (err instanceof WhatsAppApiError) {
+            return err.status === 429 || err.status >= 500;
+          }
+          return true; // Network errors etc.
+        },
+      },
+    );
   }
 }

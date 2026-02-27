@@ -16,10 +16,15 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
     const dbStart = Date.now();
     try {
       if (process.env["DATABASE_URL"]) {
-        const { getDb } = await import("@switchboard/db");
-        const prisma = getDb();
-        await prisma.$queryRaw`SELECT 1`;
-        checks["database"] = { status: "connected", latencyMs: Date.now() - dbStart };
+        // Reuse Prisma client from storageContext — avoid creating ephemeral connections
+        const storageCtx = app.storageContext as unknown as Record<string, unknown>;
+        const prismaClient = storageCtx["prisma"] as { $queryRaw: (q: TemplateStringsArray) => Promise<unknown> } | undefined;
+        if (prismaClient) {
+          await prismaClient.$queryRaw`SELECT 1`;
+          checks["database"] = { status: "connected", latencyMs: Date.now() - dbStart };
+        } else {
+          checks["database"] = { status: "in_memory", latencyMs: 0 };
+        }
       } else {
         checks["database"] = { status: "not_configured", latencyMs: 0 };
       }
@@ -28,15 +33,11 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
       allHealthy = false;
     }
 
-    // Redis check
+    // Redis check — reuse shared connection
     const redisStart = Date.now();
     try {
-      const redisUrl = process.env["REDIS_URL"];
-      if (redisUrl) {
-        const { default: Redis } = await import("ioredis");
-        const redis = new Redis(redisUrl);
-        await redis.ping();
-        await redis.quit();
+      if (app.redis) {
+        await app.redis.ping();
         checks["redis"] = { status: "connected", latencyMs: Date.now() - redisStart };
       } else {
         checks["redis"] = { status: "not_configured", latencyMs: 0 };
@@ -46,17 +47,13 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
       allHealthy = false;
     }
 
-    // Queue depth check
+    // Queue depth check — reuse shared queue
     try {
-      const redisUrl = process.env["REDIS_URL"];
-      if (redisUrl) {
-        const { createExecutionQueue } = await import("../queue/execution-queue.js");
-        const queue = createExecutionQueue({ url: redisUrl });
-        const waiting = await queue.getWaitingCount();
-        const active = await queue.getActiveCount();
-        const delayed = await queue.getDelayedCount();
-        const failed = await queue.getFailedCount();
-        await queue.close();
+      if (app.executionQueue) {
+        const waiting = await app.executionQueue.getWaitingCount();
+        const active = await app.executionQueue.getActiveCount();
+        const delayed = await app.executionQueue.getDelayedCount();
+        const failed = await app.executionQueue.getFailedCount();
         checks["queue"] = {
           status: "connected",
           latencyMs: 0,
@@ -67,6 +64,25 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
       }
     } catch (err) {
       checks["queue"] = { status: "error", latencyMs: 0, error: sanitizeHealthError(err) };
+    }
+
+    // Worker health check
+    try {
+      if (app.executionWorker) {
+        const workerRunning = app.executionWorker.isRunning();
+        const workerPaused = app.executionWorker.isPaused();
+        const workerStatus = workerPaused ? "paused" : workerRunning ? "running" : "closed";
+        checks["worker"] = {
+          status: workerStatus,
+          latencyMs: 0,
+          detail: { running: workerRunning, paused: workerPaused },
+        };
+        if (!workerRunning) allHealthy = false;
+      } else {
+        checks["worker"] = { status: "not_configured", latencyMs: 0 };
+      }
+    } catch (err) {
+      checks["worker"] = { status: "error", latencyMs: 0, error: sanitizeHealthError(err) };
     }
 
     // Cartridge health

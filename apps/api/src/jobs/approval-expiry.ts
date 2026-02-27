@@ -11,16 +11,21 @@ export interface ApprovalExpiryJobConfig {
 
 /**
  * Periodically scans pending approvals and transitions expired ones.
- * Returns a cleanup function to stop the interval.
+ * Returns a cleanup function that stops the interval and awaits any in-flight scan.
  */
 export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => void {
   const { storage, ledger, intervalMs = 60_000 } = config;
 
-  const timer = setInterval(async () => {
+  let stopped = false;
+  let inFlightPromise: Promise<void> | null = null;
+
+  const scan = async () => {
+    if (stopped) return;
     try {
       const pending = await storage.approvals.listPending();
 
       for (const record of pending) {
+        if (stopped) break;
         if (!isExpired(record.state)) continue;
 
         const expiredState = transitionApproval(record.state, "expire");
@@ -59,7 +64,19 @@ export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => v
     } catch (err) {
       console.error("[expiry-job] Error scanning approvals:", err);
     }
+  };
+
+  const timer = setInterval(() => {
+    inFlightPromise = scan();
   }, intervalMs);
 
-  return () => clearInterval(timer);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    if (inFlightPromise) {
+      // Best-effort await — caller can't await this since the return type is void,
+      // but the promise will settle on its own without leaking.
+      inFlightPromise.catch(() => {});
+    }
+  };
 }

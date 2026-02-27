@@ -34,10 +34,15 @@ export interface ClinicConfig {
   dailyTokenBudget?: number;
 }
 
+export interface ChatBootstrapResult {
+  runtime: ChatRuntime;
+  cleanup: () => void;
+}
+
 export async function createChatRuntime(
   config?: Partial<ChatRuntimeConfig>,
   clinicConfig?: ClinicConfig,
-): Promise<ChatRuntime> {
+): Promise<ChatBootstrapResult> {
   // Production startup guards
   if (process.env.NODE_ENV === "production") {
     if (!process.env["META_ADS_ACCESS_TOKEN"]) {
@@ -116,6 +121,8 @@ export async function createChatRuntime(
 
   // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
   const isClinicMode = clinicConfig || process.env["CLINIC_MODE"] === "true";
+  let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
   if (isClinicMode && !interpreter) {
     const { ClinicInterpreter } = await import("./clinic/interpreter.js");
     const { ModelRouter } = await import("./clinic/model-router.js");
@@ -167,7 +174,7 @@ export async function createChatRuntime(
         console.log(`[Clinic] Loaded ${count} campaign names`);
 
         // Refresh campaign names every 5 minutes
-        setInterval(loadCampaignNames, 5 * 60 * 1000);
+        campaignRefreshTimer = setInterval(loadCampaignNames, 5 * 60 * 1000);
       }
     }
   }
@@ -190,7 +197,7 @@ export async function createChatRuntime(
     interpreter !== ruleBasedInterpreter ? ["primary", "rule-based"] : ["rule-based"],
   );
 
-  return new ChatRuntime({
+  const runtime = new ChatRuntime({
     adapter,
     interpreter,
     interpreterRegistry,
@@ -203,4 +210,12 @@ export async function createChatRuntime(
       "ads.budget.adjust",
     ],
   });
+
+  const cleanup = () => {
+    if (campaignRefreshTimer) {
+      clearInterval(campaignRefreshTimer);
+    }
+  };
+
+  return { runtime, cleanup };
 }

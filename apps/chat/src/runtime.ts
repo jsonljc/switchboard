@@ -21,7 +21,7 @@ import type {
 import type { UndoRecipe } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 
-export { createChatRuntime, type ClinicConfig } from "./bootstrap.js";
+export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
