@@ -21,7 +21,6 @@ import {
 } from "@switchboard/core";
 import type { StorageContext, PolicyCache } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
-import { DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 
 // Re-declare Fastify augmentation for test context
 declare module "fastify" {
@@ -127,8 +126,8 @@ export async function buildTestServer(): Promise<TestContext> {
     updatedAt: new Date(),
   });
 
-  // Seed default identity spec and policies
-  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+  // Seed default identity spec (no production policies — test has its own allow policy above)
+  await seedDefaultStorage(storage);
 
   // Save principal records for test actors
   await storage.identity.savePrincipal({
