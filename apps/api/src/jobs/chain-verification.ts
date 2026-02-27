@@ -1,9 +1,12 @@
 import type { AuditLedger } from "@switchboard/core";
+import { createLogger } from "../logger.js";
+import type { Logger } from "../logger.js";
 
 export interface ChainVerificationJobConfig {
   ledger: AuditLedger;
   intervalMs?: number;
   onBrokenChain?: (result: { chainBrokenAt: number | null; hashMismatches: unknown[] }) => void;
+  logger?: Logger;
 }
 
 /**
@@ -12,7 +15,7 @@ export interface ChainVerificationJobConfig {
  * interval and signals any in-flight verification to not start new work.
  */
 export function startChainVerificationJob(config: ChainVerificationJobConfig): () => void {
-  const { ledger, intervalMs = 24 * 60 * 60 * 1000, onBrokenChain } = config;
+  const { ledger, intervalMs = 24 * 60 * 60 * 1000, onBrokenChain, logger = createLogger("chain-verify") } = config;
 
   let stopped = false;
   let inFlightPromise: Promise<void> | null = null;
@@ -25,16 +28,16 @@ export function startChainVerificationJob(config: ChainVerificationJobConfig): (
       const result = await ledger.deepVerify(entries);
 
       if (!result.valid) {
-        console.error(
-          `[chain-verify] ALERT: Audit chain integrity failure! ` +
-          `chainBrokenAt=${result.chainBrokenAt}, hashMismatches=${result.hashMismatches.length}`,
+        logger.error(
+          { chainBrokenAt: result.chainBrokenAt, hashMismatches: result.hashMismatches.length },
+          "Audit chain integrity failure",
         );
         onBrokenChain?.(result);
       } else {
-        console.log(`[chain-verify] OK: ${result.entriesChecked} entries verified`);
+        logger.info({ entriesChecked: result.entriesChecked }, "Audit chain verification passed");
       }
     } catch (err) {
-      console.error("[chain-verify] Error running verification:", err);
+      logger.error({ err }, "Error running chain verification");
     }
   };
 

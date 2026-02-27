@@ -31,7 +31,7 @@ async function main() {
 
   try {
     await server.listen({ port, host });
-    console.log(`Switchboard API server listening on ${host}:${port}`);
+    server.log.info({ host, port }, "Switchboard API server listening");
   } catch (err) {
     server.log.error(err);
     process.exit(1);
