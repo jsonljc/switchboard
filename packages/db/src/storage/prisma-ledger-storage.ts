@@ -119,6 +119,7 @@ export class PrismaLedgerStorage implements LedgerStorage {
       where,
       orderBy: { timestamp: "asc" },
       take: filter.limit,
+      skip: filter.offset,
     });
 
     return rows.map(toAuditEntry);

@@ -1,6 +1,20 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
+import { withRetry } from "@switchboard/core";
+
+/** Error carrying HTTP status and Slack error info for retry decisions. */
+class SlackApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly slackError?: string,
+    public readonly retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = "SlackApiError";
+  }
+}
 
 /**
  * Token bucket rate limiter for Slack API (Tier 1: ~1 msg/sec per method).
@@ -76,6 +90,21 @@ export class SlackAdapter implements ChannelAdapter {
   constructor(botToken: string, signingSecret?: string) {
     this.botToken = botToken;
     this.signingSecret = signingSecret ?? null;
+
+    // Production guard: signing secret is required to prevent request forgery
+    if (!this.signingSecret) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          "Slack signing secret is required in production. " +
+          "Set the SLACK_SIGNING_SECRET environment variable.",
+        );
+      } else {
+        console.warn(
+          "[SlackAdapter] No signing secret configured — request signature verification is disabled. " +
+          "This is unsafe for production use.",
+        );
+      }
+    }
   }
 
   /**
@@ -121,7 +150,6 @@ export class SlackAdapter implements ChannelAdapter {
   }
 
   async sendTextReply(threadId: string, text: string): Promise<void> {
-    await this.rateLimiter.acquire();
     await this.apiCall("chat.postMessage", {
       channel: threadId,
       text,
@@ -151,7 +179,6 @@ export class SlackAdapter implements ChannelAdapter {
       },
     ];
 
-    await this.rateLimiter.acquire();
     await this.apiCall("chat.postMessage", {
       channel: threadId,
       text: card.summary,
@@ -171,7 +198,6 @@ export class SlackAdapter implements ChannelAdapter {
       text += `*Undo available:* reply \`undo\` within ${hours}h`;
     }
 
-    await this.rateLimiter.acquire();
     await this.apiCall("chat.postMessage", {
       channel: threadId,
       text,
@@ -188,14 +214,61 @@ export class SlackAdapter implements ChannelAdapter {
   }
 
   private async apiCall(method: string, body: Record<string, unknown>): Promise<unknown> {
-    const response = await fetch(`${this.baseUrl}/${method}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.botToken}`,
+    return withRetry(
+      async () => {
+        await this.rateLimiter.acquire();
+        const response = await fetch(`${this.baseUrl}/${method}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.botToken}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          const retryAfter = response.headers.get("retry-after");
+          const retryAfterMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+          throw new SlackApiError(
+            `Slack HTTP error ${response.status}: ${text}`,
+            response.status,
+            undefined,
+            retryAfterMs,
+          );
+        }
+
+        const data = await response.json() as Record<string, unknown>;
+        if (!data["ok"]) {
+          const slackError = (data["error"] as string) ?? "unknown";
+          throw new SlackApiError(
+            `Slack API error: ${slackError}`,
+            200,
+            slackError,
+          );
+        }
+
+        return data;
       },
-      body: JSON.stringify(body),
-    });
-    return response.json();
+      {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        shouldRetry: (err: unknown) => {
+          if (err instanceof SlackApiError) {
+            if (err.status === 429) return true;
+            if (err.status >= 500) return true;
+            if (err.slackError === "ratelimited") return true;
+            return false;
+          }
+          return true; // Network errors etc.
+        },
+        onRetry: (err: unknown) => {
+          if (err instanceof SlackApiError && err.retryAfterMs) {
+            return err.retryAfterMs;
+          }
+          return undefined;
+        },
+      },
+    );
   }
 }

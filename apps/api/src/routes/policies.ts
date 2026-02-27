@@ -4,6 +4,7 @@ import type { Policy } from "@switchboard/schemas";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { CreatePolicyBodySchema, UpdatePolicyBodySchema } from "../validation.js";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 const createPolicyJsonSchema = zodToJsonSchema(CreatePolicyBodySchema, { target: "openApi3" });
 const updatePolicyJsonSchema = zodToJsonSchema(UpdatePolicyBodySchema, { target: "openApi3" });
@@ -36,6 +37,8 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       body: createPolicyJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin", "operator"))) return;
+
     const parsed = CreatePolicyBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
@@ -94,6 +97,8 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       body: updatePolicyJsonSchema,
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin", "operator"))) return;
+
     const { id } = request.params as { id: string };
 
     const parsed = UpdatePolicyBodySchema.safeParse(request.body);
@@ -138,6 +143,8 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     },
   }, async (request, reply) => {
+    if (!(await requireRole(request, reply, "admin", "operator"))) return;
+
     const { id } = request.params as { id: string };
     const existing = await app.storageContext.policies.getById(id);
     if (!existing) {

@@ -19,8 +19,9 @@ import type {
   CartridgeReadAdapter as CartridgeReadAdapterType,
 } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
+import { safeErrorMessage } from "./utils/safe-error.js";
 
-export { createChatRuntime, type ClinicConfig } from "./bootstrap.js";
+export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
@@ -205,9 +206,10 @@ export class ChatRuntime {
         });
         await this.adapter.sendTextReply(threadId, readResult.text);
       } catch (err) {
+        console.error("Read intent error:", err);
         await this.adapter.sendTextReply(
           threadId,
-          `Error reading data: ${err instanceof Error ? err.message : String(err)}`,
+          `Error reading data: ${safeErrorMessage(err)}`,
         );
       }
       return;
@@ -298,9 +300,10 @@ export class ChatRuntime {
           await this.handleProposeResult(threadId, proposeResult, message.principalId);
         }
       } catch (err) {
+        console.error("Proposal processing error:", err);
         await this.adapter.sendTextReply(
           threadId,
-          `Error processing request: ${err instanceof Error ? err.message : String(err)}`,
+          `Error processing request: ${safeErrorMessage(err)}`,
         );
       }
     }
@@ -360,7 +363,8 @@ export class ChatRuntime {
       await this.adapter.sendResultCard(threadId, card);
       await this.recordAssistantMessage(threadId, executeResult.summary);
     } catch (err) {
-      const errText = `Execution failed: ${err instanceof Error ? err.message : String(err)}`;
+      console.error("Execution error:", err);
+      const errText = `Execution failed: ${safeErrorMessage(err)}`;
       await this.adapter.sendTextReply(threadId, errText);
       await this.recordAssistantMessage(threadId, errText);
     }
@@ -416,9 +420,10 @@ export class ChatRuntime {
         await this.recordAssistantMessage(threadId, rejectText);
       }
     } catch (err) {
+      console.error("Approval callback error:", err);
       await this.adapter.sendTextReply(
         threadId,
-        `Error: ${err instanceof Error ? err.message : String(err)}`,
+        `Error: ${safeErrorMessage(err)}`,
       );
     }
   }
@@ -434,9 +439,10 @@ export class ChatRuntime {
       const undoResult = await this.orchestrator.requestUndo(lastEnvelopeId);
       await this.handleProposeResult(threadId, undoResult, principalId);
     } catch (err) {
+      console.error("Undo error:", err);
       await this.adapter.sendTextReply(
         threadId,
-        `Cannot undo: ${err instanceof Error ? err.message : String(err)}`,
+        `Cannot undo: ${safeErrorMessage(err)}`,
       );
     }
   }
@@ -494,7 +500,8 @@ export class ChatRuntime {
             await this.handleProposeResult(threadId, proposeResult, principalId);
           }
         } catch (err) {
-          failures.push(`${campaign.name}: ${err instanceof Error ? err.message : String(err)}`);
+          console.error(`Kill switch error for campaign ${campaign.name}:`, err);
+          failures.push(`${campaign.name}: ${safeErrorMessage(err)}`);
         }
       }
 
@@ -505,9 +512,10 @@ export class ChatRuntime {
         );
       }
     } catch (err) {
+      console.error("Kill switch error:", err);
       await this.adapter.sendTextReply(
         threadId,
-        `Kill switch error: ${err instanceof Error ? err.message : String(err)}`,
+        `Kill switch error: ${safeErrorMessage(err)}`,
       );
     }
   }

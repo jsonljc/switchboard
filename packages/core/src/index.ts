@@ -146,3 +146,7 @@ export type { GovernanceProfileStore } from "./governance/profile.js";
 // Policy cache
 export { InMemoryPolicyCache, DEFAULT_POLICY_CACHE_TTL_MS } from "./policy-cache.js";
 export type { PolicyCache } from "./policy-cache.js";
+
+// Retry utility
+export { withRetry } from "./utils/retry.js";
+export type { RetryOptions } from "./utils/retry.js";

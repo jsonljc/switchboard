@@ -39,7 +39,10 @@ export class RedisBackend implements IdempotencyBackend {
   }
 }
 
-export function createBackend(): IdempotencyBackend {
+export function createBackend(sharedRedis?: Redis): IdempotencyBackend {
+  if (sharedRedis) {
+    return new RedisBackend(sharedRedis);
+  }
   const redisUrl = process.env["REDIS_URL"];
   if (redisUrl) {
     return new RedisBackend(new Redis(redisUrl));
@@ -48,7 +51,8 @@ export function createBackend(): IdempotencyBackend {
 }
 
 const idempotencyPlugin: FastifyPluginAsync = async (app) => {
-  const backend = createBackend();
+  const sharedRedis = (app as unknown as Record<string, unknown>)["redis"] as Redis | undefined;
+  const backend = createBackend(sharedRedis);
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.method !== "POST") return;

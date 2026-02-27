@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { AuditQueryFilter } from "@switchboard/core";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 export const auditRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/audit - Query audit ledger
@@ -39,7 +40,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     if (query.envelopeId) filter.envelopeId = query.envelopeId;
     if (query.after) filter.after = new Date(query.after);
     if (query.before) filter.before = new Date(query.before);
-    if (query.limit) filter.limit = parseInt(query.limit, 10);
+    if (query.limit) filter.limit = Math.min(parseInt(query.limit, 10), 1000);
     // Scope audit queries to the authenticated org when available
     if (request.organizationIdFromAuth) filter.organizationId = request.organizationIdFromAuth;
 
@@ -54,37 +55,109 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/audit/verify - Verify hash chain integrity (shallow: chain links only)
   app.get("/verify", {
     schema: {
-      description: "Verify the integrity of the audit hash chain.",
+      description: "Verify the integrity of the audit hash chain. Processes entries in chunks to avoid OOM.",
       tags: ["Audit"],
       querystring: {
         type: "object",
         properties: {
           deep: { type: "string", enum: ["true", "false"] },
+          limit: { type: "integer", minimum: 1, maximum: 100000 },
         },
       },
     },
   }, async (request, reply) => {
-    const query = request.query as { deep?: string };
-    const allEntries = await app.auditLedger.query({});
+    if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
-    if (query.deep === "true") {
-      const result = await app.auditLedger.deepVerify(allEntries);
+    const query = request.query as { deep?: string; limit?: string };
+    const maxEntries = Math.min(
+      parseInt(query.limit ?? "10000", 10) || 10000,
+      100000,
+    );
+    const chunkSize = 1000;
+
+    // Scope to authenticated org when available
+    const baseFilter: AuditQueryFilter = {};
+    if (request.organizationIdFromAuth) {
+      baseFilter.organizationId = request.organizationIdFromAuth;
+    }
+
+    let totalChecked = 0;
+    let previousLastHash: string | null = null;
+    let brokenAt: number | null = null;
+    const hashMismatches: Array<{ index: number; entryId: string; expected: string; actual: string }> = [];
+    const isDeep = query.deep === "true";
+
+    while (totalChecked < maxEntries) {
+      const take = Math.min(chunkSize, maxEntries - totalChecked);
+      const chunk = await app.auditLedger.query({
+        ...baseFilter,
+        limit: take,
+        offset: totalChecked,
+      });
+
+      if (chunk.length === 0) break;
+
+      if (isDeep) {
+        const result = await app.auditLedger.deepVerify(chunk);
+
+        // Adjust indices to account for offset
+        for (const m of result.hashMismatches) {
+          hashMismatches.push({
+            ...m,
+            index: m.index + totalChecked,
+          });
+        }
+
+        // Check chain link between chunks
+        if (previousLastHash !== null && chunk.length > 0) {
+          const firstInChunk = chunk[0]!;
+          if (firstInChunk.previousEntryHash !== previousLastHash && brokenAt === null) {
+            brokenAt = totalChecked;
+          }
+        }
+
+        if (result.chainBrokenAt !== null && brokenAt === null) {
+          brokenAt = result.chainBrokenAt + totalChecked;
+        }
+      } else {
+        // Shallow: just check chain links
+        const result = await app.auditLedger.verifyChain(chunk);
+
+        // Check chain link between chunks
+        if (previousLastHash !== null && chunk.length > 0) {
+          const firstInChunk = chunk[0]!;
+          if (firstInChunk.previousEntryHash !== previousLastHash && brokenAt === null) {
+            brokenAt = totalChecked;
+          }
+        }
+
+        if (result.brokenAt !== null && brokenAt === null) {
+          brokenAt = result.brokenAt + totalChecked;
+        }
+      }
+
+      previousLastHash = chunk[chunk.length - 1]!.entryHash;
+      totalChecked += chunk.length;
+
+      if (chunk.length < take) break; // No more entries
+    }
+
+    if (isDeep) {
       return reply.code(200).send({
         mode: "deep",
-        valid: result.valid,
-        entriesChecked: result.entriesChecked,
-        chainValid: result.chainValid,
-        chainBrokenAt: result.chainBrokenAt,
-        hashMismatches: result.hashMismatches,
+        valid: hashMismatches.length === 0 && brokenAt === null,
+        entriesChecked: totalChecked,
+        chainValid: brokenAt === null,
+        chainBrokenAt: brokenAt,
+        hashMismatches,
       });
     }
 
-    const result = await app.auditLedger.verifyChain(allEntries);
     return reply.code(200).send({
       mode: "shallow",
-      valid: result.valid,
-      entriesChecked: allEntries.length,
-      brokenAt: result.brokenAt,
+      valid: brokenAt === null,
+      entriesChecked: totalChecked,
+      brokenAt,
     });
   });
 

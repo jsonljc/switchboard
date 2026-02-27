@@ -35,6 +35,7 @@ export interface AuditQueryFilter {
   after?: Date;
   before?: Date;
   limit?: number;
+  offset?: number;
 }
 
 function generateId(): string {
@@ -304,7 +305,10 @@ export class InMemoryLedgerStorage implements LedgerStorage {
       result = result.filter((e) => e.timestamp < filter.before!);
     }
     if (filter.limit) {
-      result = result.slice(0, filter.limit);
+      const offset = filter.offset ?? 0;
+      result = result.slice(offset, offset + filter.limit);
+    } else if (filter.offset) {
+      result = result.slice(filter.offset);
     }
 
     return result;

@@ -5,7 +5,7 @@ import { checkIngressRateLimit, checkNonce } from "./adapters/security.js";
 async function main() {
   const app = Fastify({ logger: true });
 
-  const runtime = await createChatRuntime();
+  const { runtime, cleanup } = await createChatRuntime();
 
   // Rate limit config for webhook ingress
   const rateLimitConfig = {
@@ -85,6 +85,7 @@ async function main() {
   // Graceful shutdown — drain connections on SIGTERM/SIGINT
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down gracefully`);
+    cleanup();
     await app.close();
     process.exit(0);
   };
