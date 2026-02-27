@@ -2,11 +2,14 @@ import type { StorageContext } from "@switchboard/core";
 import { isExpired, transitionApproval, StaleVersionError } from "@switchboard/core";
 import type { AuditLedger } from "@switchboard/core";
 import type { RiskCategory } from "@switchboard/schemas";
+import { createLogger } from "../logger.js";
+import type { Logger } from "../logger.js";
 
 export interface ApprovalExpiryJobConfig {
   storage: StorageContext;
   ledger: AuditLedger;
   intervalMs?: number;
+  logger?: Logger;
 }
 
 /**
@@ -14,7 +17,7 @@ export interface ApprovalExpiryJobConfig {
  * Returns a cleanup function that stops the interval and awaits any in-flight scan.
  */
 export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => void {
-  const { storage, ledger, intervalMs = 60_000 } = config;
+  const { storage, ledger, intervalMs = 60_000, logger = createLogger("expiry-job") } = config;
 
   let stopped = false;
   let inFlightPromise: Promise<void> | null = null;
@@ -59,10 +62,10 @@ export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => v
           envelopeId: record.envelopeId,
         });
 
-        console.log(`[expiry-job] Expired approval ${record.request.id} for envelope ${record.envelopeId}`);
+        logger.info({ approvalId: record.request.id, envelopeId: record.envelopeId }, "Expired approval");
       }
     } catch (err) {
-      console.error("[expiry-job] Error scanning approvals:", err);
+      logger.error({ err }, "Error scanning approvals");
     }
   };
 

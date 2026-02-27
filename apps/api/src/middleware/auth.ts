@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import fp from "fastify-plugin";
+import crypto from "node:crypto";
 
 export interface ApiKeyMetadata {
   organizationId?: string;
@@ -7,24 +8,31 @@ export interface ApiKeyMetadata {
   principalId?: string;
 }
 
+interface HashedKeyEntry {
+  hash: Buffer;
+  metadata?: ApiKeyMetadata;
+}
+
+function hashKey(key: string): Buffer {
+  return crypto.createHash("sha256").update(key).digest();
+}
+
 /**
  * API key authentication middleware.
  *
- * Validates Bearer tokens from the Authorization header against a set of
- * configured API keys. When no keys are configured (API_KEYS env var unset),
- * authentication is disabled — this allows frictionless local development.
+ * Keys are SHA-256 hashed on load. Incoming keys are hashed and compared
+ * using timing-safe comparison to prevent timing attacks.
  *
- * Optional API_KEY_METADATA: comma-separated entries "key:orgId:runtimeId" (empty parts allowed).
- * When present, attaches organizationIdFromAuth and runtimeIdFromAuth to the request for audit/routing.
+ * Supports SIGHUP-based hot reload: sending SIGHUP re-reads API_KEYS and
+ * API_KEY_METADATA environment variables and replaces the key set atomically.
  *
- * Excluded paths: /health, /docs (Swagger UI and OpenAPI spec)
+ * Excluded paths: /health, /metrics, /docs (Swagger UI and OpenAPI spec)
  */
 const authPlugin: FastifyPluginAsync = async (app) => {
-  const apiKeys = loadApiKeys();
-  const metadata = loadApiKeyMetadata();
+  let keyEntries = loadHashedKeys();
 
   // If no keys configured, skip auth entirely (development mode)
-  if (apiKeys.size === 0) {
+  if (keyEntries.length === 0) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "API_KEYS environment variable is required in production. " +
@@ -34,10 +42,24 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     return;
   }
 
+  // SIGHUP handler for hot-reloading API keys without restart
+  const reloadHandler = () => {
+    const newEntries = loadHashedKeys();
+    keyEntries = newEntries;
+    app.log.info({ keyCount: newEntries.length }, "API keys reloaded via SIGHUP");
+  };
+  process.on("SIGHUP", reloadHandler);
+
+  // Clean up SIGHUP listener on close
+  app.addHook("onClose", async () => {
+    process.removeListener("SIGHUP", reloadHandler);
+  });
+
   app.addHook("preHandler", async (request, reply) => {
-    // Skip auth for health check and docs
+    // Skip auth for health check, metrics, and docs
     if (
       request.url === "/health" ||
+      request.url === "/metrics" ||
       request.url.startsWith("/docs")
     ) {
       return;
@@ -53,29 +75,44 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Invalid Authorization format, expected: Bearer <key>", statusCode: 401 });
     }
 
-    const key = match[1];
-    if (!apiKeys.has(key)) {
+    const incomingHash = hashKey(match[1]);
+    let matchedEntry: HashedKeyEntry | undefined;
+
+    for (const entry of keyEntries) {
+      if (entry.hash.length === incomingHash.length && crypto.timingSafeEqual(entry.hash, incomingHash)) {
+        matchedEntry = entry;
+        break;
+      }
+    }
+
+    if (!matchedEntry) {
       return reply.code(401).send({ error: "Invalid API key", statusCode: 401 });
     }
 
-    const meta = metadata.get(key);
-    if (meta) {
-      request.organizationIdFromAuth = meta.organizationId;
-      request.runtimeIdFromAuth = meta.runtimeId;
-      request.principalIdFromAuth = meta.principalId;
+    if (matchedEntry.metadata) {
+      request.organizationIdFromAuth = matchedEntry.metadata.organizationId;
+      request.runtimeIdFromAuth = matchedEntry.metadata.runtimeId;
+      request.principalIdFromAuth = matchedEntry.metadata.principalId;
     }
   });
 };
 
 export const authMiddleware = fp(authPlugin, { name: "auth-middleware" });
 
-function loadApiKeys(): Set<string> {
-  const raw = process.env["API_KEYS"] ?? "";
-  if (!raw.trim()) return new Set();
+/**
+ * Load API keys and their metadata, returning hashed entries.
+ */
+function loadHashedKeys(): HashedKeyEntry[] {
+  const rawKeys = process.env["API_KEYS"] ?? "";
+  if (!rawKeys.trim()) return [];
 
-  return new Set(
-    raw.split(",").map((k) => k.trim()).filter(Boolean),
-  );
+  const keys = rawKeys.split(",").map((k) => k.trim()).filter(Boolean);
+  const metadata = loadApiKeyMetadata();
+
+  return keys.map((key) => ({
+    hash: hashKey(key),
+    metadata: metadata.get(key),
+  }));
 }
 
 /**

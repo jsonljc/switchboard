@@ -28,6 +28,7 @@ import {
   InMemoryPolicyCache,
   InMemoryGovernanceProfileStore,
   ExecutionService,
+  setMetrics,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
 import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
@@ -36,6 +37,7 @@ import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
 import { startChainVerificationJob } from "./jobs/chain-verification.js";
+import { createPromMetrics, metricsRoute } from "./metrics.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
@@ -138,6 +140,9 @@ export async function buildServer() {
     });
   });
 
+  // Wire Prometheus metrics before orchestrator creation
+  setMetrics(createPromMetrics());
+
   // Create storage and orchestrator — with degraded mode fallback
   let storage: StorageContext;
   let ledgerStorage: LedgerStorage;
@@ -163,7 +168,18 @@ export async function buildServer() {
 
   const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
   const guardrailState = createGuardrailState();
-  const guardrailStateStore = createGuardrailStateStore();
+
+  // Shared Redis connection when REDIS_URL is available — created early so
+  // guardrail state store can reuse it instead of opening its own connection.
+  const redisUrl = process.env["REDIS_URL"];
+  let redis: Redis | null = null;
+
+  if (redisUrl) {
+    const { default: IORedis } = await import("ioredis");
+    redis = new IORedis(redisUrl);
+  }
+
+  const guardrailStateStore = createGuardrailStateStore(redis ?? undefined);
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
@@ -183,18 +199,12 @@ export async function buildServer() {
   storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
   await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
 
-  // Shared Redis connection when REDIS_URL is available
-  const redisUrl = process.env["REDIS_URL"];
-  let redis: Redis | null = null;
   let queue: Queue | null = null;
   let worker: Worker | null = null;
   let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
   const executionMode = redisUrl ? "queue" as const : "inline" as const;
 
   if (redisUrl) {
-    const { default: IORedis } = await import("ioredis");
-    redis = new IORedis(redisUrl);
-
     const connection = { url: redisUrl };
     queue = createExecutionQueue(connection);
     onEnqueue = async (envelopeId: string) => {
@@ -222,14 +232,15 @@ export async function buildServer() {
       connection: { url: redisUrl },
       orchestrator,
       storage,
+      logger: app.log,
     });
   }
 
   // Start approval expiry background job
-  const stopExpiryJob = startApprovalExpiryJob({ storage, ledger });
+  const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger: app.log });
 
   // Start daily audit chain verification job
-  const stopChainVerify = startChainVerificationJob({ ledger });
+  const stopChainVerify = startChainVerificationJob({ ledger, logger: app.log });
 
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
@@ -304,6 +315,9 @@ export async function buildServer() {
       timestamp: new Date().toISOString(),
     });
   });
+
+  // Prometheus metrics endpoint (excluded from auth like /health)
+  app.get("/metrics", metricsRoute);
 
   // Register routes
   await app.register(actionsRoutes, { prefix: "/api/actions" });

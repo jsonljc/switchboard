@@ -12,13 +12,19 @@ import type { StorageContext, LedgerStorage } from "@switchboard/core";
 import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { createGuardrailStateStore } from "../guardrail-state/index.js";
 import { createExecutionWorker } from "./worker.js";
+import { createLogger } from "../logger.js";
 
 async function main() {
+  const logger = createLogger("worker");
   const redisUrl = process.env["REDIS_URL"];
   if (!redisUrl) {
-    console.error("REDIS_URL is required to run the execution worker");
+    logger.error("REDIS_URL is required to run the execution worker");
     process.exit(1);
   }
+
+  // Create shared Redis for guardrail state
+  const { default: IORedis } = await import("ioredis");
+  const sharedRedis = new IORedis(redisUrl);
 
   // Create storage
   let storage: StorageContext;
@@ -36,7 +42,7 @@ async function main() {
 
   const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
   const guardrailState = createGuardrailState();
-  const guardrailStateStore = createGuardrailStateStore();
+  const guardrailStateStore = createGuardrailStateStore(sharedRedis);
 
   // Register cartridges
   const adsCartridge = new AdsSpendCartridge();
@@ -63,13 +69,15 @@ async function main() {
     orchestrator,
     storage,
     concurrency: parseInt(process.env["WORKER_CONCURRENCY"] ?? "5", 10),
+    logger,
   });
 
-  console.log(`Switchboard execution worker started (concurrency=${worker.opts.concurrency})`);
+  logger.info({ concurrency: worker.opts.concurrency }, "Switchboard execution worker started");
 
   const shutdown = async (signal: string) => {
-    console.log(`Received ${signal}, closing worker...`);
+    logger.info({ signal }, "Received shutdown signal, closing worker");
     await worker.close();
+    await sharedRedis.quit();
     process.exit(0);
   };
 

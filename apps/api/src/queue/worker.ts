@@ -3,35 +3,37 @@ import type { Job, ConnectionOptions } from "bullmq";
 import type { LifecycleOrchestrator, StorageContext } from "@switchboard/core";
 import { EXECUTION_QUEUE_NAME } from "./execution-queue.js";
 import type { ExecutionJobData } from "./execution-queue.js";
+import { createLogger } from "../logger.js";
+import type { Logger } from "../logger.js";
 
 export interface WorkerConfig {
   connection: ConnectionOptions;
   orchestrator: LifecycleOrchestrator;
   storage?: StorageContext;
   concurrency?: number;
+  logger?: Logger;
 }
 
 export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJobData> {
-  const { connection, orchestrator, storage, concurrency = 5 } = config;
+  const { connection, orchestrator, storage, concurrency = 5, logger = createLogger("worker") } = config;
 
   const worker = new Worker<ExecutionJobData>(
     EXECUTION_QUEUE_NAME,
     async (job: Job<ExecutionJobData>) => {
       const { envelopeId, traceId } = job.data;
       const attempt = job.attemptsMade + 1;
-      const tracePrefix = traceId ? `[${traceId}] ` : "";
 
-      console.log(`${tracePrefix}[worker] Executing envelope ${envelopeId} (attempt ${attempt})`);
+      logger.info({ envelopeId, attempt, traceId }, "Executing envelope");
 
       // Pre-flight check on retry: verify envelope is still approved
       if (attempt > 1 && storage) {
         const envelope = await storage.envelopes.getById(envelopeId);
         if (!envelope) {
-          console.warn(`[worker] Envelope ${envelopeId} not found on retry, skipping`);
+          logger.warn({ envelopeId }, "Envelope not found on retry, skipping");
           return { envelopeId, success: false, summary: "Envelope not found on retry" };
         }
         if (envelope.status !== "approved" && envelope.status !== "executing") {
-          console.warn(`[worker] Envelope ${envelopeId} status is ${envelope.status} on retry, skipping`);
+          logger.warn({ envelopeId, status: envelope.status }, "Envelope status changed on retry, skipping");
           return { envelopeId, success: false, summary: `Envelope status changed to ${envelope.status}` };
         }
       }
@@ -47,7 +49,7 @@ export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJob
           throw new Error(`Transient execution failure for ${envelopeId}: ${result.summary}`);
         }
         // Non-transient failure: don't retry, the orchestrator already marked it as failed
-        console.warn(`[worker] Non-transient failure for ${envelopeId}: ${result.summary}`);
+        logger.warn({ envelopeId, summary: result.summary }, "Non-transient execution failure");
       }
 
       return { envelopeId, success: result.success, summary: result.summary };
@@ -59,20 +61,20 @@ export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJob
   );
 
   worker.on("completed", (job) => {
-    console.log(`[worker] Job ${job.id} completed for envelope ${job.data.envelopeId}`);
+    logger.info({ jobId: job.id, envelopeId: job.data.envelopeId }, "Job completed");
   });
 
   worker.on("failed", (job, err) => {
     if (job) {
-      console.error(`[worker] Job ${job.id} failed for envelope ${job.data.envelopeId}: ${err.message}`);
+      logger.error({ jobId: job.id, envelopeId: job.data.envelopeId, err: err.message }, "Job failed");
       if (job.attemptsMade >= (job.opts.attempts ?? 3)) {
-        console.error(`[worker] Job ${job.id} moved to DLQ after ${job.attemptsMade} attempts`);
+        logger.error({ jobId: job.id, attempts: job.attemptsMade }, "Job moved to DLQ");
       }
     }
   });
 
   worker.on("error", (err) => {
-    console.error("[worker] Worker error:", err.message);
+    logger.error({ err: err.message }, "Worker error");
   });
 
   return worker;
