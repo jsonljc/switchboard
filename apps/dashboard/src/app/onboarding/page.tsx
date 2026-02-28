@@ -9,12 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CheckCircle2, ChevronRight, ChevronLeft } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 const steps = ["Business Info", "Spend Limits", "Risk Level", "Confirm"];
 
 export default function OnboardingPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -34,11 +36,12 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Create identity spec
-      await fetch("/api/dashboard/identity", {
-        method: "PUT",
+      const res = await fetch("/api/dashboard/identity", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          principalId: (session as any)?.principalId ?? "",
+          organizationId: (session as any)?.organizationId ?? "",
           name: formData.businessName,
           description: `AI agent for ${formData.businessName}`,
           globalSpendLimits: {
@@ -54,8 +57,17 @@ export default function OnboardingPage() {
             : { none: "none", low: "none", medium: "none", high: "standard", critical: "elevated" },
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create identity");
+      }
       router.push("/");
-    } catch {
+    } catch (err: any) {
+      toast({
+        title: "Setup failed",
+        description: err.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
       setIsSubmitting(false);
     }
   };

@@ -3,8 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
-import { NavBar } from "@/components/layout/nav-bar";
-import { Header } from "@/components/layout/header";
+import { AppShell } from "@/components/layout/app-shell";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -20,20 +20,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <QueryProvider>
-            <div className="min-h-screen">
-              <Header />
-              <NavBar />
-              <main className="pb-20 md:pb-0 md:pl-60">
-                <div className="max-w-4xl mx-auto p-4">
-                  {children}
-                </div>
-              </main>
-              <Toaster />
-            </div>
+            <ErrorBoundary>
+              <AppShell>
+                {children}
+              </AppShell>
+            </ErrorBoundary>
+            <Toaster />
           </QueryProvider>
         </AuthProvider>
       </body>

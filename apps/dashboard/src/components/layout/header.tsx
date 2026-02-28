@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { LogOut, User } from "lucide-react";
+import { ThemeToggle } from "./theme-toggle";
 
 export function Header() {
   const { data: session } = useSession();
@@ -17,9 +18,11 @@ export function Header() {
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">{session.user.email}</span>
             </div>
+            <ThemeToggle />
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-2"
+              aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Sign out</span>

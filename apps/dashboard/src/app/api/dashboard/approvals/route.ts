@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const client = await getApiClient();
+    const id = request.nextUrl.searchParams.get("id");
+    if (id) {
+      const data = await client.getApproval(id);
+      return NextResponse.json(data);
+    }
     const data = await client.listPendingApprovals();
     return NextResponse.json(data);
   } catch (err: any) {

@@ -19,7 +19,7 @@ interface HealthData {
 
 export default function SystemHealthPage() {
   const { status } = useSession();
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: queryKeys.health.deep(),
     queryFn: async (): Promise<HealthData> => {
       const res = await fetch("/api/dashboard/health");
@@ -41,7 +41,7 @@ export default function SystemHealthPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/settings">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" aria-label="Go back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
@@ -52,6 +52,19 @@ export default function SystemHealthPage() {
           </Button>
         </div>
       </div>
+
+      {isError && (
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load health status</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {data && (
         <div className="flex items-center gap-2">

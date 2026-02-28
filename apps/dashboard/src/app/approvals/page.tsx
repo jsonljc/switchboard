@@ -6,17 +6,22 @@ import { redirect } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApprovalCard } from "@/components/approvals/approval-card";
 import { RespondDialog } from "@/components/approvals/respond-dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApprovals } from "@/hooks/use-approvals";
 import { useAudit } from "@/hooks/use-audit";
 import { ActivityItem } from "@/components/activity/activity-item";
 import { queryKeys } from "@/lib/query-keys";
+import { AlertTriangle } from "lucide-react";
+
+const APPROVAL_EVENT_TYPES = ["action.approved", "action.rejected", "action.expired"];
 
 export default function ApprovalsPage() {
   const { data: session, status } = useSession();
-  const { data: approvalsData, isLoading } = useApprovals();
-  const { data: historyData } = useAudit({ eventType: "action.approved", limit: 20 });
+  const { data: approvalsData, isLoading, isError, error, refetch } = useApprovals();
+  const { data: historyData } = useAudit({ limit: 50 });
   const queryClient = useQueryClient();
 
   const [dialog, setDialog] = useState<{
@@ -71,6 +76,29 @@ export default function ApprovalsPage() {
     }
   };
 
+  // Filter history to only show approval-related events
+  const historyEntries = historyData?.entries.filter(
+    (e) => APPROVAL_EVENT_TYPES.includes(e.eventType)
+  ) ?? [];
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Approvals</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load approvals</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Approvals</h1>
@@ -106,10 +134,10 @@ export default function ApprovalsPage() {
 
         <TabsContent value="history" className="mt-4">
           <div className="space-y-1">
-            {historyData?.entries.map((entry) => (
+            {historyEntries.map((entry) => (
               <ActivityItem key={entry.id} entry={entry} />
             ))}
-            {historyData?.entries.length === 0 && (
+            {historyEntries.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <p>No approval history</p>
               </div>

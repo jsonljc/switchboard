@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,8 +27,15 @@ const riskBadgeVariant = (risk: string) => {
 };
 
 export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
-  const countdown = formatCountdown(approval.expiresAt);
+  const [countdown, setCountdown] = useState(() => formatCountdown(approval.expiresAt));
   const isExpired = countdown === "expired";
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(formatCountdown(approval.expiresAt));
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [approval.expiresAt]);
 
   return (
     <Card className={isExpired ? "opacity-60" : ""}>

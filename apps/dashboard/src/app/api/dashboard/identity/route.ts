@@ -13,6 +13,17 @@ export async function GET() {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const client = await getApiClient();
+    const body = await request.json();
+    const data = await client.createIdentitySpec(body);
+    return NextResponse.json(data);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const client = await getApiClient();

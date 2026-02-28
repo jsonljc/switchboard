@@ -7,15 +7,17 @@ import { SpendLimitsForm } from "@/components/settings/spend-limits-form";
 import { RiskToleranceSettings } from "@/components/settings/risk-tolerance";
 import { ForbiddenList } from "@/components/settings/forbidden-list";
 import { GovernanceMode } from "@/components/settings/governance-mode";
+import { SimulatePreview } from "@/components/settings/simulate-preview";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useIdentity, useUpdateIdentity } from "@/hooks/use-identity";
 import { useToast } from "@/components/ui/use-toast";
-import { Server } from "lucide-react";
+import { Server, AlertTriangle } from "lucide-react";
 
 export default function SettingsPage() {
-  const { status } = useSession();
-  const { data, isLoading } = useIdentity();
+  const { data: session, status } = useSession();
+  const { data, isLoading, isError, error, refetch } = useIdentity();
   const updateIdentity = useUpdateIdentity();
   const { toast } = useToast();
 
@@ -33,6 +35,24 @@ export default function SettingsPage() {
       }
     );
   };
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load settings</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -81,6 +101,8 @@ export default function SettingsPage() {
             onSave={(mode) => handleSave("governanceProfile", mode)}
             isLoading={updateIdentity.isPending}
           />
+
+          <SimulatePreview principalId={(session as any)?.principalId ?? ""} />
         </>
       )}
 
