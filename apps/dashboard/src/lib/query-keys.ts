@@ -26,4 +26,8 @@ export const queryKeys = {
     all: ["spend"] as const,
     summary: () => ["spend", "summary"] as const,
   },
+  cartridges: {
+    all: ["cartridges"] as const,
+    list: () => ["cartridges", "list"] as const,
+  },
 };

@@ -7,6 +7,8 @@ import {
   Activity,
   ShieldCheck,
   FileText,
+  FlaskConical,
+  Box,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,9 @@ const navItems = [
   { href: "/", label: "Home", icon: Home },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/simulate", label: "Simulate", icon: FlaskConical },
   { href: "/policies", label: "Policies", icon: FileText },
+  { href: "/cartridges", label: "Cartridges", icon: Box },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
