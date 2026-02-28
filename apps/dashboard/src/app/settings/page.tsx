@@ -7,7 +7,7 @@ import { SpendLimitsForm } from "@/components/settings/spend-limits-form";
 import { RiskToleranceSettings } from "@/components/settings/risk-tolerance";
 import { ForbiddenList } from "@/components/settings/forbidden-list";
 import { GovernanceMode } from "@/components/settings/governance-mode";
-import { SimulatePreview } from "@/components/settings/simulate-preview";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Server, AlertTriangle } from "lucide-react";
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const { data, isLoading, isError, error, refetch } = useIdentity();
   const updateIdentity = useUpdateIdentity();
   const { toast } = useToast();
@@ -101,8 +101,6 @@ export default function SettingsPage() {
             onSave={(mode) => handleSave("governanceProfile", mode)}
             isLoading={updateIdentity.isPending}
           />
-
-          <SimulatePreview principalId={(session as any)?.principalId ?? ""} />
         </>
       )}
 
