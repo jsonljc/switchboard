@@ -33,6 +33,7 @@ import {
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
 import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -198,6 +199,14 @@ export async function buildServer() {
   const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
   storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
   await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
+
+  // Register payments cartridge
+  const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
+    secretKey: process.env["STRIPE_SECRET_KEY"] ?? "mock-key-dev-only",
+    requireCredentials: process.env.NODE_ENV === "production",
+  });
+  storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
+  await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
 
   let queue: Queue | null = null;
   let worker: Worker | null = null;

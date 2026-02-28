@@ -62,6 +62,9 @@ importers:
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@switchboard/payments':
+        specifier: workspace:*
+        version: link:../../cartridges/payments
       '@switchboard/quant-trading':
         specifier: workspace:*
         version: link:../../cartridges/quant-trading
@@ -293,6 +296,22 @@ importers:
         version: 2.1.9(@types/node@20.19.33)
 
   cartridges/ads-spend:
+    dependencies:
+      '@switchboard/cartridge-sdk':
+        specifier: workspace:*
+        version: link:../../packages/cartridge-sdk
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.33)
+
+  cartridges/payments:
     dependencies:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
