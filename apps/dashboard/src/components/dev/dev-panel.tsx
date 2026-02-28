@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/activity", label: "Activity" },
   { href: "/approvals", label: "Approvals" },
+  { href: "/policies", label: "Policies" },
   { href: "/settings", label: "Settings" },
   { href: "/settings/system", label: "System Health" },
   { href: "/onboarding", label: "Onboarding" },

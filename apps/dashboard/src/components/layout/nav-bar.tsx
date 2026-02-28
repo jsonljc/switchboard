@@ -6,6 +6,7 @@ import {
   Home,
   Activity,
   ShieldCheck,
+  FileText,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const navItems = [
   { href: "/", label: "Home", icon: Home },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/policies", label: "Policies", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
