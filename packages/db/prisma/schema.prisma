@@ -290,6 +290,7 @@ model DashboardUser {
   organizationId  String
   principalId     String
   apiKeyEncrypted String
+  apiKeyHash      String?   @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sessions        DashboardSession[]
@@ -311,4 +312,17 @@ model DashboardVerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model OrganizationConfig {
+  id                 String   @id // orgId
+  name               String
+  runtimeType        String   @default("http") // openclaw, mcp, http, managed
+  runtimeConfig      Json     @default("{}")
+  governanceProfile  String   @default("guarded") // observe, guarded, strict, locked
+  onboardingComplete Boolean  @default(false)
+  managedChannels    String[] @default([])
+  provisioningStatus String   @default("pending")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

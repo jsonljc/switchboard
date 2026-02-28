@@ -134,6 +134,10 @@ export type { ReadOperation, ReadResult } from "./read-adapter.js";
 export { HttpExecutionAdapter } from "./runtime-adapters/http-adapter.js";
 export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapter.js";
 
+// Integration guide generator
+export { generateIntegrationGuide } from "./runtime-adapters/integration-guide.js";
+export type { IntegrationGuide, IntegrationStep, IntegrationGuideParams } from "./runtime-adapters/integration-guide.js";
+
 // Governance profiles (per-org posture)
 export {
   profileToPosture,

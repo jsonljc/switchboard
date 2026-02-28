@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaClient } from "@prisma/client";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
 import { encryptApiKey } from "./crypto";
 
 const prisma = new PrismaClient();
@@ -37,6 +37,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           organizationId: orgId,
           principalId,
           apiKeyEncrypted: encryptApiKey(apiKey),
+          apiKeyHash: createHash("sha256").update(apiKey).digest("hex"),
         },
       });
 

@@ -30,4 +30,12 @@ export const queryKeys = {
     all: ["cartridges"] as const,
     list: () => ["cartridges", "list"] as const,
   },
+  connections: {
+    all: ["connections"] as const,
+    list: () => ["connections", "list"] as const,
+  },
+  orgConfig: {
+    all: ["orgConfig"] as const,
+    current: () => ["orgConfig", "current"] as const,
+  },
 };

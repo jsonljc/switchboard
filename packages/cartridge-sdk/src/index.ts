@@ -9,3 +9,5 @@ export { validateManifest, validateCartridge } from "./validation.js";
 export type { ValidationResult, ValidationIssue } from "./validation.js";
 export { CartridgeTestHarness } from "./test-harness.js";
 export type { HarnessReport, HarnessStepResult, HarnessOptions } from "./test-harness.js";
+export { SERVICE_REGISTRY, getServiceById, getServiceByCartridge } from "./service-registry.js";
+export type { ServiceRegistryEntry } from "./service-registry.js";

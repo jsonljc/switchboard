@@ -13,6 +13,13 @@ interface HashedKeyEntry {
   metadata?: ApiKeyMetadata;
 }
 
+interface DbKeyCache {
+  metadata: ApiKeyMetadata;
+  expiresAt: number;
+}
+
+const DB_KEY_TTL_MS = 60_000; // 60s cache TTL
+
 function hashKey(key: string): Buffer {
   return crypto.createHash("sha256").update(key).digest();
 }
@@ -23,6 +30,10 @@ function hashKey(key: string): Buffer {
  * Keys are SHA-256 hashed on load. Incoming keys are hashed and compared
  * using timing-safe comparison to prevent timing attacks.
  *
+ * Supports two auth sources:
+ * 1. Static env-var keys (fast path, no DB hit)
+ * 2. Dashboard-generated keys (DB fallback with 60s in-memory cache)
+ *
  * Supports SIGHUP-based hot reload: sending SIGHUP re-reads API_KEYS and
  * API_KEY_METADATA environment variables and replaces the key set atomically.
  *
@@ -31,8 +42,12 @@ function hashKey(key: string): Buffer {
 const authPlugin: FastifyPluginAsync = async (app) => {
   let keyEntries = loadHashedKeys();
 
-  // If no keys configured, skip auth entirely (development mode)
-  if (keyEntries.length === 0) {
+  // In-memory cache for DB-validated keys (keyed by hex hash)
+  const dbKeyCache = new Map<string, DbKeyCache>();
+
+  // If no keys configured and no DB, skip auth entirely (development mode)
+  const hasDb = !!app.prisma;
+  if (keyEntries.length === 0 && !hasDb) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "API_KEYS environment variable is required in production. " +
@@ -75,9 +90,11 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Invalid Authorization format, expected: Bearer <key>", statusCode: 401 });
     }
 
-    const incomingHash = hashKey(match[1]);
-    let matchedEntry: HashedKeyEntry | undefined;
+    const incomingKey = match[1];
+    const incomingHash = hashKey(incomingKey);
 
+    // Fast path: check static env-var keys first
+    let matchedEntry: HashedKeyEntry | undefined;
     for (const entry of keyEntries) {
       if (entry.hash.length === incomingHash.length && crypto.timingSafeEqual(entry.hash, incomingHash)) {
         matchedEntry = entry;
@@ -85,15 +102,51 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       }
     }
 
-    if (!matchedEntry) {
-      return reply.code(401).send({ error: "Invalid API key", statusCode: 401 });
+    if (matchedEntry) {
+      if (matchedEntry.metadata) {
+        request.organizationIdFromAuth = matchedEntry.metadata.organizationId;
+        request.runtimeIdFromAuth = matchedEntry.metadata.runtimeId;
+        request.principalIdFromAuth = matchedEntry.metadata.principalId;
+      }
+      return;
     }
 
-    if (matchedEntry.metadata) {
-      request.organizationIdFromAuth = matchedEntry.metadata.organizationId;
-      request.runtimeIdFromAuth = matchedEntry.metadata.runtimeId;
-      request.principalIdFromAuth = matchedEntry.metadata.principalId;
+    // DB fallback: check dashboard-generated keys
+    if (app.prisma) {
+      const hashHex = incomingHash.toString("hex");
+
+      // Check in-memory cache first
+      const cached = dbKeyCache.get(hashHex);
+      if (cached && cached.expiresAt > Date.now()) {
+        request.organizationIdFromAuth = cached.metadata.organizationId;
+        request.principalIdFromAuth = cached.metadata.principalId;
+        return;
+      }
+
+      // Query DB
+      try {
+        const user = await app.prisma.dashboardUser.findFirst({
+          where: { apiKeyHash: hashHex },
+          select: { organizationId: true, principalId: true },
+        });
+
+        if (user) {
+          const metadata: ApiKeyMetadata = {
+            organizationId: user.organizationId,
+            principalId: user.principalId,
+          };
+          // Cache the result
+          dbKeyCache.set(hashHex, { metadata, expiresAt: Date.now() + DB_KEY_TTL_MS });
+          request.organizationIdFromAuth = metadata.organizationId;
+          request.principalIdFromAuth = metadata.principalId;
+          return;
+        }
+      } catch (err) {
+        app.log.warn({ err }, "DB key lookup failed, falling through to 401");
+      }
     }
+
+    return reply.code(401).send({ error: "Invalid API key", statusCode: 401 });
   });
 };
 

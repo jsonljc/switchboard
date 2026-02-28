@@ -15,6 +15,8 @@ import { simulateRoutes } from "./routes/simulate.js";
 import { healthRoutes } from "./routes/health.js";
 import { interpretersRoutes } from "./routes/interpreters.js";
 import { cartridgesRoutes } from "./routes/cartridges.js";
+import { connectionsRoutes } from "./routes/connections.js";
+import { organizationsRoutes } from "./routes/organizations.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -53,6 +55,7 @@ declare module "fastify" {
     redis: Redis | null;
     executionQueue: Queue | null;
     executionWorker: Worker | null;
+    prisma: import("@switchboard/db").PrismaClient | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -148,20 +151,20 @@ export async function buildServer() {
   // Create storage and orchestrator — with degraded mode fallback
   let storage: StorageContext;
   let ledgerStorage: LedgerStorage;
-  let prisma: { $queryRaw: (query: TemplateStringsArray) => Promise<unknown>; $disconnect: () => Promise<void> } | null = null;
+  let prismaClient: import("@switchboard/db").PrismaClient | null = null;
 
   if (process.env["DATABASE_URL"]) {
     try {
       const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-      prisma = getDb();
-      await prisma.$queryRaw`SELECT 1`; // verify connectivity
-      storage = createPrismaStorage(prisma as Parameters<typeof createPrismaStorage>[0]);
-      ledgerStorage = new PrismaLedgerStorage(prisma as ConstructorParameters<typeof PrismaLedgerStorage>[0]);
+      prismaClient = getDb() as import("@switchboard/db").PrismaClient;
+      await prismaClient.$queryRaw`SELECT 1`; // verify connectivity
+      storage = createPrismaStorage(prismaClient as Parameters<typeof createPrismaStorage>[0]);
+      ledgerStorage = new PrismaLedgerStorage(prismaClient as ConstructorParameters<typeof PrismaLedgerStorage>[0]);
     } catch (err) {
       app.log.error({ err }, "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)");
       storage = createInMemoryStorage();
       ledgerStorage = new InMemoryLedgerStorage();
-      prisma = null;
+      prismaClient = null;
     }
   } else {
     storage = createInMemoryStorage();
@@ -185,9 +188,32 @@ export async function buildServer() {
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
+  // --- Cartridge credential resolution: DB first, env-var fallback ---
+  let adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
+  let adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
+  let stripeSecretKey = process.env["STRIPE_SECRET_KEY"];
+
+  if (prismaClient) {
+    try {
+      const { PrismaConnectionStore } = await import("@switchboard/db");
+      const connStore = new PrismaConnectionStore(prismaClient);
+
+      const adsCon = await connStore.getByService("meta-ads");
+      if (adsCon) {
+        adsAccessToken = (adsCon.credentials as Record<string, string>).accessToken ?? adsAccessToken;
+        adsAccountId = (adsCon.credentials as Record<string, string>).adAccountId ?? adsAccountId;
+      }
+
+      const stripeCon = await connStore.getByService("stripe");
+      if (stripeCon) {
+        stripeSecretKey = (stripeCon.credentials as Record<string, string>).secretKey ?? stripeSecretKey;
+      }
+    } catch (err) {
+      app.log.warn({ err }, "Failed to load cartridge credentials from DB, using env vars");
+    }
+  }
+
   // Register ads-spend cartridge
-  const adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
-  const adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
   const { cartridge: adsCartridge, interceptors } = await bootstrapAdsSpendCartridge({
     accessToken: adsAccessToken ?? "mock-token-dev-only",
     adAccountId: adsAccountId ?? "act_mock_dev_only",
@@ -203,7 +229,7 @@ export async function buildServer() {
 
   // Register payments cartridge
   const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
-    secretKey: process.env["STRIPE_SECRET_KEY"] ?? "mock-key-dev-only",
+    secretKey: stripeSecretKey ?? "mock-key-dev-only",
     requireCredentials: process.env.NODE_ENV === "production",
   });
   storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
@@ -262,6 +288,7 @@ export async function buildServer() {
   app.decorate("redis", redis);
   app.decorate("executionQueue", queue);
   app.decorate("executionWorker", worker);
+  app.decorate("prisma", prismaClient);
 
   // Resource cleanup on close — order: worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
@@ -277,8 +304,8 @@ export async function buildServer() {
     if (redis) {
       await redis.quit();
     }
-    if (prisma) {
-      await prisma.$disconnect();
+    if (prismaClient) {
+      await prismaClient.$disconnect();
     }
   });
 
@@ -298,9 +325,9 @@ export async function buildServer() {
       ]);
 
     // DB check
-    if (prisma) {
+    if (prismaClient) {
       try {
-        await timeout(prisma.$queryRaw`SELECT 1`, 3000);
+        await timeout(prismaClient.$queryRaw`SELECT 1`, 3000);
         checks["database"] = "ok";
       } catch {
         checks["database"] = "unreachable";
@@ -340,6 +367,8 @@ export async function buildServer() {
   await app.register(healthRoutes, { prefix: "/api/health" });
   await app.register(interpretersRoutes, { prefix: "/api/interpreters" });
   await app.register(cartridgesRoutes, { prefix: "/api/cartridges" });
+  await app.register(connectionsRoutes, { prefix: "/api/connections" });
+  await app.register(organizationsRoutes, { prefix: "/api/organizations" });
 
   return app;
 }

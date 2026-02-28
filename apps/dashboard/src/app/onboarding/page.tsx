@@ -3,15 +3,39 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect, useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CheckCircle2, ChevronRight, ChevronLeft } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { WizardShell } from "@/components/onboarding/wizard-shell";
+import { StepBusiness } from "@/components/onboarding/step-business";
+import { StepRuntime } from "@/components/onboarding/step-runtime";
+import { StepGovernance } from "@/components/onboarding/step-governance";
+import { StepCartridge } from "@/components/onboarding/step-cartridge";
+import { StepConnection } from "@/components/onboarding/step-connection";
+import { StepComplete } from "@/components/onboarding/step-complete";
 
-const steps = ["Business Info", "Spend Limits", "Risk Level", "Confirm"];
+// Governance profile presets (mirrors @switchboard/core governance-presets.ts)
+const PROFILE_PRESETS: Record<string, {
+  riskTolerance: Record<string, string>;
+  spendLimits: Record<string, number | null>;
+}> = {
+  observe: {
+    riskTolerance: { none: "none", low: "none", medium: "none", high: "none", critical: "none" },
+    spendLimits: { daily: null, weekly: null, monthly: null, perAction: null },
+  },
+  guarded: {
+    riskTolerance: { none: "none", low: "none", medium: "standard", high: "elevated", critical: "mandatory" },
+    spendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
+  },
+  strict: {
+    riskTolerance: { none: "none", low: "standard", medium: "elevated", high: "mandatory", critical: "mandatory" },
+    spendLimits: { daily: 5000, weekly: 20000, monthly: 50000, perAction: 1000 },
+  },
+  locked: {
+    riskTolerance: { none: "mandatory", low: "mandatory", medium: "mandatory", high: "mandatory", critical: "mandatory" },
+    spendLimits: { daily: 0, weekly: 0, monthly: 0, perAction: 0 },
+  },
+};
+
+const TOTAL_STEPS = 6;
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
@@ -19,48 +43,101 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    businessName: "",
-    dailyLimit: "",
-    weeklyLimit: "",
-    monthlyLimit: "",
-    riskLevel: "moderate",
-  });
+
+  const [businessName, setBusinessName] = useState("");
+  const [runtimeType, setRuntimeType] = useState("http");
+  const [governanceProfile, setGovernanceProfile] = useState("guarded");
+  const [cartridgeId, setCartridgeId] = useState("");
+  const [connectionId, setConnectionId] = useState<string | null>(null);
 
   if (status === "unauthenticated") redirect("/login");
 
-  const updateField = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const organizationId = (session as any)?.organizationId ?? "";
+  const principalId = (session as any)?.principalId ?? "";
+
+  // Incremental persistence: save each step's data independently
+  const saveStep = async (stepIndex: number) => {
+    try {
+      if (stepIndex === 0 && businessName) {
+        await fetch("/api/dashboard/organizations", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: businessName }),
+        });
+      } else if (stepIndex === 1) {
+        await fetch("/api/dashboard/organizations", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runtimeType }),
+        });
+      } else if (stepIndex === 2) {
+        await fetch("/api/dashboard/organizations", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ governanceProfile }),
+        });
+      }
+    } catch {
+      // Silently continue — data will be saved on complete
+    }
   };
 
-  const handleSubmit = async () => {
+  const handleNext = async () => {
+    await saveStep(step);
+    setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
+  };
+
+  const handleBack = () => {
+    setStep((s) => Math.max(s - 1, 0));
+  };
+
+  const canProceed = (() => {
+    switch (step) {
+      case 0: return businessName.trim().length > 0;
+      case 1: return runtimeType !== "";
+      case 2: return governanceProfile !== "";
+      case 3: return cartridgeId !== "";
+      case 4: return true; // Connection step is skippable
+      case 5: return true;
+      default: return false;
+    }
+  })();
+
+  const handleComplete = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/dashboard/identity", {
-        method: "POST",
+      // 1. Finalize org config
+      await fetch("/api/dashboard/organizations", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          principalId: (session as any)?.principalId ?? "",
-          organizationId: (session as any)?.organizationId ?? "",
-          name: formData.businessName,
-          description: `AI agent for ${formData.businessName}`,
-          globalSpendLimits: {
-            daily: formData.dailyLimit ? Number(formData.dailyLimit) : null,
-            weekly: formData.weeklyLimit ? Number(formData.weeklyLimit) : null,
-            monthly: formData.monthlyLimit ? Number(formData.monthlyLimit) : null,
-            perAction: null,
-          },
-          riskTolerance: formData.riskLevel === "conservative"
-            ? { none: "none", low: "none", medium: "standard", high: "elevated", critical: "mandatory" }
-            : formData.riskLevel === "aggressive"
-            ? { none: "none", low: "none", medium: "none", high: "none", critical: "standard" }
-            : { none: "none", low: "none", medium: "none", high: "standard", critical: "elevated" },
+          name: businessName,
+          runtimeType,
+          governanceProfile,
+          onboardingComplete: true,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create identity");
+
+      // 2. Create IdentitySpec with governance profile preset
+      const preset = PROFILE_PRESETS[governanceProfile];
+      if (preset) {
+        await fetch("/api/dashboard/identity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            principalId,
+            organizationId,
+            name: businessName,
+            description: `AI agent for ${businessName}`,
+            riskTolerance: preset.riskTolerance,
+            globalSpendLimits: preset.spendLimits,
+            cartridgeSpendLimits: {},
+            forbiddenBehaviors: [],
+            trustBehaviors: [],
+          }),
+        });
       }
+
       router.push("/");
     } catch (err: any) {
       toast({
@@ -73,147 +150,42 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Get Started</CardTitle>
-          <CardDescription>
-            Step {step + 1} of {steps.length}: {steps[step]}
-          </CardDescription>
-          <div className="flex gap-1 mt-2">
-            {steps.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1 flex-1 rounded-full ${
-                  i <= step ? "bg-primary" : "bg-muted"
-                }`}
-              />
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {step === 0 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="businessName">Business Name</Label>
-                <Input
-                  id="businessName"
-                  placeholder="Your business name"
-                  value={formData.businessName}
-                  onChange={(e) => updateField("businessName", e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="dailyLimit">Daily Spend Limit ($)</Label>
-                <Input
-                  id="dailyLimit"
-                  type="number"
-                  placeholder="e.g. 100"
-                  value={formData.dailyLimit}
-                  onChange={(e) => updateField("dailyLimit", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="weeklyLimit">Weekly Spend Limit ($)</Label>
-                <Input
-                  id="weeklyLimit"
-                  type="number"
-                  placeholder="e.g. 500"
-                  value={formData.weeklyLimit}
-                  onChange={(e) => updateField("weeklyLimit", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="monthlyLimit">Monthly Spend Limit ($)</Label>
-                <Input
-                  id="monthlyLimit"
-                  type="number"
-                  placeholder="e.g. 2000"
-                  value={formData.monthlyLimit}
-                  onChange={(e) => updateField("monthlyLimit", e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <RadioGroup
-              value={formData.riskLevel}
-              onValueChange={(v) => updateField("riskLevel", v)}
-              className="space-y-3"
-            >
-              {[
-                { value: "conservative", label: "Conservative", desc: "Approve most actions manually" },
-                { value: "moderate", label: "Moderate", desc: "Auto-approve low/medium risk" },
-                { value: "aggressive", label: "Aggressive", desc: "Only approve critical actions" },
-              ].map((opt) => (
-                <div key={opt.value} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <RadioGroupItem value={opt.value} id={opt.value} className="mt-0.5" />
-                  <Label htmlFor={opt.value} className="cursor-pointer">
-                    <span className="font-medium">{opt.label}</span>
-                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Business: {formData.businessName || "Not set"}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span className="text-sm">
-                  Limits: ${formData.dailyLimit || "\u221E"}/day, ${formData.weeklyLimit || "\u221E"}/week, ${formData.monthlyLimit || "\u221E"}/month
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Risk level: {formData.riskLevel}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2 mt-6">
-            {step > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setStep(step - 1)}
-                className="flex-1 min-h-[44px]"
-              >
-                <ChevronLeft className="mr-1 h-4 w-4" />
-                Back
-              </Button>
-            )}
-            {step < steps.length - 1 ? (
-              <Button
-                onClick={() => setStep(step + 1)}
-                className="flex-1 min-h-[44px]"
-                disabled={step === 0 && !formData.businessName}
-              >
-                Next
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSubmit}
-                className="flex-1 min-h-[44px]"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Setting up..." : "Complete Setup"}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <WizardShell
+      step={step}
+      onNext={handleNext}
+      onBack={handleBack}
+      canProceed={canProceed}
+      isSubmitting={isSubmitting}
+      isLastStep={step === TOTAL_STEPS - 1}
+      onComplete={handleComplete}
+    >
+      {step === 0 && (
+        <StepBusiness businessName={businessName} onChange={setBusinessName} />
+      )}
+      {step === 1 && (
+        <StepRuntime selected={runtimeType} onChange={setRuntimeType} />
+      )}
+      {step === 2 && (
+        <StepGovernance selected={governanceProfile} onChange={setGovernanceProfile} />
+      )}
+      {step === 3 && (
+        <StepCartridge selected={cartridgeId} onChange={setCartridgeId} />
+      )}
+      {step === 4 && (
+        <StepConnection
+          cartridgeId={cartridgeId}
+          onConnectionCreated={setConnectionId}
+        />
+      )}
+      {step === 5 && (
+        <StepComplete
+          businessName={businessName}
+          runtimeType={runtimeType}
+          governanceProfile={governanceProfile}
+          cartridgeId={cartridgeId}
+          organizationId={organizationId}
+        />
+      )}
+    </WizardShell>
   );
 }
