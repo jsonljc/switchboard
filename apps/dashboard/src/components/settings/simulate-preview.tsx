@@ -6,26 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FlaskConical } from "lucide-react";
+import type { SimulateResult } from "@/lib/api-client";
 
 interface SimulatePreviewProps {
   principalId: string;
 }
 
-interface SimulateResult {
-  decision: string;
-  riskScore: { rawScore: number; category: string };
-}
-
 const decisionBadgeVariant = (decision: string) => {
-  if (decision === "allow" || decision === "execute") return "default" as const;
-  if (decision === "deny" || decision === "block") return "destructive" as const;
+  if (decision === "allow") return "default" as const;
+  if (decision === "deny") return "destructive" as const;
   return "secondary" as const;
 };
 
 const decisionLabel = (decision: string) => {
-  if (decision === "allow" || decision === "execute") return "Allowed";
-  if (decision === "deny" || decision === "block") return "Denied";
-  if (decision === "require_approval") return "Requires Approval";
+  if (decision === "allow") return "Allowed";
+  if (decision === "deny") return "Denied";
+  if (decision === "modify") return "Modified";
   return decision;
 };
 
@@ -90,11 +86,11 @@ export function SimulatePreview({ principalId }: SimulatePreviewProps) {
               With these settings, a <strong>$50 budget change</strong> would be:
             </p>
             <div className="flex items-center gap-2">
-              <Badge variant={decisionBadgeVariant(result.decision)}>
-                {decisionLabel(result.decision)}
+              <Badge variant={decisionBadgeVariant(result.decisionTrace.finalDecision)}>
+                {decisionLabel(result.decisionTrace.finalDecision)}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                Risk: {result.riskScore.category} ({Math.round(result.riskScore.rawScore * 100)}%)
+                Risk: {result.decisionTrace.computedRiskScore.category} ({Math.round(result.decisionTrace.computedRiskScore.rawScore)}%)
               </span>
             </div>
           </div>

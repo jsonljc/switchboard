@@ -1,4 +1,4 @@
-import type { IdentitySpec, AuditEntry, Policy } from "@switchboard/schemas";
+import type { IdentitySpec, AuditEntry, Policy, CartridgeManifest } from "@switchboard/schemas";
 
 export interface PendingApproval {
   id: string;
@@ -36,9 +36,29 @@ export interface HealthCheck {
 }
 
 export interface SimulateResult {
-  decision: string;
-  riskScore: { rawScore: number; category: string };
-  trace: unknown;
+  decisionTrace: {
+    actionId: string;
+    envelopeId: string;
+    checks: Array<{
+      checkCode: string;
+      checkData: Record<string, unknown>;
+      humanDetail: string;
+      matched: boolean;
+      effect: string;
+    }>;
+    computedRiskScore: {
+      rawScore: number;
+      category: string;
+      factors: Array<{ factor: string; weight: number; contribution: number; detail: string }>;
+    };
+    finalDecision: string;
+    approvalRequired: string;
+    explanation: string;
+    evaluatedAt: string;
+  };
+  wouldExecute: boolean;
+  approvalRequired: string;
+  explanation: string;
 }
 
 export class SwitchboardClient {
@@ -152,5 +172,10 @@ export class SwitchboardClient {
 
   async deepHealthCheck() {
     return this.request<HealthCheck>("/api/health/deep");
+  }
+
+  // Cartridges
+  async listCartridges() {
+    return this.request<{ cartridges: CartridgeManifest[] }>("/api/cartridges");
   }
 }

@@ -14,6 +14,7 @@ import { identityRoutes } from "./routes/identity.js";
 import { simulateRoutes } from "./routes/simulate.js";
 import { healthRoutes } from "./routes/health.js";
 import { interpretersRoutes } from "./routes/interpreters.js";
+import { cartridgesRoutes } from "./routes/cartridges.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -338,6 +339,7 @@ export async function buildServer() {
   await app.register(simulateRoutes, { prefix: "/api/simulate" });
   await app.register(healthRoutes, { prefix: "/api/health" });
   await app.register(interpretersRoutes, { prefix: "/api/interpreters" });
+  await app.register(cartridgesRoutes, { prefix: "/api/cartridges" });
 
   return app;
 }
