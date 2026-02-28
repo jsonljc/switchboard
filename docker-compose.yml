@@ -16,6 +16,9 @@ services:
       - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
       - REDIS_URL=redis://redis:6379
+      - CHAT_PUBLIC_URL=${CHAT_PUBLIC_URL:-http://chat:3001}
+      - CHAT_INTERNAL_URL=http://chat:3001
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +44,9 @@ services:
       - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
       - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
+      - SWITCHBOARD_API_URL=http://api:3000
+      - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

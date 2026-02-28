@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 
-const stepLabels = [
+const DEFAULT_STEP_LABELS = [
   "About your business",
   "How does your AI connect?",
   "How much oversight?",
@@ -16,6 +16,7 @@ const stepLabels = [
 
 interface WizardShellProps {
   step: number;
+  stepLabels?: string[];
   onNext: () => void;
   onBack: () => void;
   canProceed: boolean;
@@ -27,6 +28,7 @@ interface WizardShellProps {
 
 export function WizardShell({
   step,
+  stepLabels = DEFAULT_STEP_LABELS,
   onNext,
   onBack,
   canProceed,
@@ -92,5 +94,3 @@ export function WizardShell({
     </div>
   );
 }
-
-export { stepLabels };

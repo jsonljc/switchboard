@@ -13,12 +13,23 @@ interface IntegrationGuide {
   steps: Array<{ title: string; description: string; code?: string; language?: string }>;
 }
 
+interface ProvisionResult {
+  channels: Array<{
+    channel: string;
+    botUsername?: string;
+    webhookUrl?: string;
+    status: string;
+    note?: string;
+  }>;
+}
+
 interface StepCompleteProps {
   businessName: string;
   runtimeType: string;
   governanceProfile: string;
   cartridgeId: string;
   organizationId: string;
+  provisionResult?: ProvisionResult | null;
 }
 
 export function StepComplete({
@@ -27,6 +38,7 @@ export function StepComplete({
   governanceProfile,
   cartridgeId,
   organizationId,
+  provisionResult,
 }: StepCompleteProps) {
   const [guide, setGuide] = useState<IntegrationGuide | null>(null);
   const [guideRuntime, setGuideRuntime] = useState(runtimeType);
@@ -35,22 +47,6 @@ export function StepComplete({
   const { toast } = useToast();
 
   useEffect(() => {
-    async function fetchGuide() {
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/dashboard/organizations?runtimeType=${guideRuntime}`);
-        if (!res.ok) throw new Error("Failed to fetch guide");
-        const data = await res.json();
-        // The organizations GET endpoint returns org config, but integration guide
-        // is on a separate endpoint. Use the static guide generator for now.
-        setGuide(null);
-      } catch {
-        setGuide(null);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    // Generate guide client-side from static data
     setGuide(generateClientGuide(guideRuntime, organizationId));
     setIsLoading(false);
   }, [guideRuntime, organizationId]);
@@ -84,6 +80,8 @@ export function StepComplete({
     }
   };
 
+  const isManaged = runtimeType === "managed";
+
   return (
     <div className="space-y-6">
       <div className="space-y-3">
@@ -105,24 +103,69 @@ export function StepComplete({
         </div>
       </div>
 
-      <div className="border-t pt-4">
-        <h3 className="text-sm font-medium mb-3">Integration Guide</h3>
-        <StepIntegration
-          guide={guide}
-          isLoading={isLoading}
-          runtimeType={guideRuntime}
-          onRuntimeChange={setGuideRuntime}
-        />
-      </div>
+      {isManaged && provisionResult ? (
+        <div className="border-t pt-4 space-y-4">
+          <h3 className="text-sm font-medium">Channel Status</h3>
+          {provisionResult.channels.map((ch) => (
+            <div key={ch.channel} className="p-3 rounded-lg border space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-sm capitalize">{ch.channel}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  ch.status === "active"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-yellow-100 text-yellow-700"
+                }`}>
+                  {ch.status}
+                </span>
+              </div>
+              {ch.botUsername && (
+                <p className="text-xs text-muted-foreground">Bot: {ch.botUsername}</p>
+              )}
+              {ch.webhookUrl && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Webhook URL:</p>
+                  <code className="text-xs bg-muted p-2 rounded block break-all">{ch.webhookUrl}</code>
+                  {ch.note && (
+                    <p className="text-xs text-muted-foreground">{ch.note}</p>
+                  )}
+                </div>
+              )}
+              {ch.channel === "telegram" && ch.status === "active" && (
+                <p className="text-xs text-muted-foreground">
+                  Open Telegram and message {ch.botUsername ?? "your bot"} to test it.
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : isManaged ? (
+        <div className="border-t pt-4">
+          <p className="text-sm text-muted-foreground">
+            Your channels will be provisioned when you complete setup.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium mb-3">Integration Guide</h3>
+            <StepIntegration
+              guide={guide}
+              isLoading={isLoading}
+              runtimeType={guideRuntime}
+              onRuntimeChange={setGuideRuntime}
+            />
+          </div>
 
-      <Button
-        variant="outline"
-        onClick={handleSimulate}
-        disabled={simulating}
-        className="w-full min-h-[44px]"
-      >
-        {simulating ? "Running simulation..." : "Run Test Simulation"}
-      </Button>
+          <Button
+            variant="outline"
+            onClick={handleSimulate}
+            disabled={simulating}
+            className="w-full min-h-[44px]"
+          >
+            {simulating ? "Running simulation..." : "Run Test Simulation"}
+          </Button>
+        </>
+      )}
     </div>
   );
 }
@@ -181,6 +224,20 @@ function generateClientGuide(runtimeType: string, organizationId: string): Integ
               },
             },
           }, null, 2),
+        },
+      ],
+    };
+  }
+
+  if (runtimeType === "managed") {
+    return {
+      runtimeType: "managed",
+      title: "Managed Integration",
+      description: "Switchboard manages the channels for you. No code required.",
+      steps: [
+        {
+          title: "Channels provisioned",
+          description: "Your messaging channels are set up and ready to use. Check the Channel Status section above for details.",
         },
       ],
     };

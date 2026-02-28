@@ -1,7 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-
 const runtimes = [
   {
     value: "openclaw",
@@ -26,7 +24,6 @@ const runtimes = [
     label: "Set it up for me",
     description: "We'll host a chat interface with messaging integrations.",
     icon: "message-circle",
-    comingSoon: true,
   },
 ];
 
@@ -44,22 +41,14 @@ export function StepRuntime({ selected, onChange }: StepRuntimeProps) {
       {runtimes.map((runtime) => (
         <button
           key={runtime.value}
-          onClick={() => !runtime.comingSoon && onChange(runtime.value)}
-          disabled={runtime.comingSoon}
+          onClick={() => onChange(runtime.value)}
           className={`w-full text-left p-4 rounded-lg border transition-colors ${
             selected === runtime.value
               ? "border-primary bg-primary/5"
-              : runtime.comingSoon
-              ? "border-muted opacity-60 cursor-not-allowed"
               : "border-border hover:border-primary/50 hover:bg-muted/50"
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-sm">{runtime.label}</span>
-            {runtime.comingSoon && (
-              <Badge variant="secondary" className="text-xs">Coming soon</Badge>
-            )}
-          </div>
+          <span className="font-medium text-sm">{runtime.label}</span>
           <p className="text-xs text-muted-foreground mt-1">{runtime.description}</p>
         </button>
       ))}

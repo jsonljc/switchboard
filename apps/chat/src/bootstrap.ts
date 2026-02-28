@@ -28,6 +28,7 @@ import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchbo
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
+import type { ChannelAdapter } from "./adapters/adapter.js";
 
 /** Configuration for clinic mode (LLM interpreter + read tools). */
 export interface ClinicConfig {
@@ -256,4 +257,55 @@ export async function createChatRuntime(
   };
 
   return { runtime, cleanup };
+}
+
+/**
+ * Create a lightweight managed runtime for provisioned channels.
+ * Uses ApiOrchestratorAdapter — no local storage, cartridges, or orchestrator.
+ * The API server handles all governance, policies, and audit.
+ */
+export async function createManagedRuntime(config: {
+  adapter: ChannelAdapter;
+  apiUrl: string;
+  apiKey?: string;
+}): Promise<ChatRuntime> {
+  const apiAdapter = new ApiOrchestratorAdapter({
+    baseUrl: config.apiUrl,
+    apiKey: config.apiKey,
+  });
+
+  const interpreter = new RuleBasedInterpreter();
+  const interpreterRegistry = new InterpreterRegistry();
+  interpreterRegistry.register("rule-based", interpreter, 1000);
+  interpreterRegistry.setDefaultFallbackChain(["rule-based"]);
+
+  return new ChatRuntime({
+    adapter: config.adapter,
+    interpreter,
+    interpreterRegistry,
+    orchestrator: apiAdapter,
+    availableActions: [
+      "ads.campaign.pause",
+      "ads.campaign.resume",
+      "ads.budget.adjust",
+      "trading.order.market_buy",
+      "trading.order.market_sell",
+      "trading.order.limit_buy",
+      "trading.order.limit_sell",
+      "trading.order.cancel",
+      "trading.position.close",
+      "trading.portfolio.rebalance",
+      "trading.risk.set_stop_loss",
+      "payments.invoice.create",
+      "payments.invoice.void",
+      "payments.charge.create",
+      "payments.refund.create",
+      "payments.subscription.cancel",
+      "payments.subscription.modify",
+      "payments.link.create",
+      "payments.link.deactivate",
+      "payments.credit.apply",
+      "payments.batch.invoice",
+    ],
+  });
 }

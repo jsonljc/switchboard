@@ -315,14 +315,34 @@ model DashboardVerificationToken {
 }
 
 model OrganizationConfig {
-  id                 String   @id // orgId
-  name               String
-  runtimeType        String   @default("http") // openclaw, mcp, http, managed
-  runtimeConfig      Json     @default("{}")
-  governanceProfile  String   @default("guarded") // observe, guarded, strict, locked
-  onboardingComplete Boolean  @default(false)
-  managedChannels    String[] @default([])
-  provisioningStatus String   @default("pending")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                   String   @id // orgId
+  name                 String
+  runtimeType          String   @default("http") // openclaw, mcp, http, managed
+  runtimeConfig        Json     @default("{}")
+  governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
+  selectedCartridgeId  String?
+  onboardingComplete   Boolean  @default(false)
+  managedChannels      String[] @default([])
+  provisioningStatus   String   @default("pending")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model ManagedChannel {
+  id                String    @id @default(uuid())
+  organizationId    String
+  channel           String    // "telegram" | "slack"
+  connectionId      String    // FK to Connection.id (encrypted bot token)
+  botUsername        String?   // display name, e.g. "@MyCompanyBot"
+  webhookPath       String    @unique  // "/webhook/managed/<uuid>"
+  webhookRegistered Boolean   @default(false)
+  status            String    @default("provisioning") // provisioning | active | error | disabled
+  statusDetail      String?
+  lastHealthCheck   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([organizationId, channel])
+  @@index([organizationId])
+  @@index([status])
 }

@@ -226,4 +226,16 @@ export class SwitchboardClient {
     const qs = runtimeType ? `?runtimeType=${runtimeType}` : "";
     return this.request<{ guide: unknown }>(`/api/organizations/${orgId}/integration${qs}`);
   }
+
+  // Managed Provisioning
+  async provision(orgId: string, body: { channels: Array<{ channel: string; botToken: string; webhookSecret?: string; signingSecret?: string }> }) {
+    return this.request<{ channels: Array<{ channel: string; botUsername?: string; webhookUrl?: string; status: string; note?: string }>; provisioningStatus: string }>(`/api/organizations/${orgId}/provision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  async getManagedChannels(orgId: string) {
+    return this.request<{ channels: Array<{ id: string; channel: string; botUsername: string | null; webhookPath: string; webhookRegistered: boolean; status: string; statusDetail: string | null; lastHealthCheck: string | null; createdAt: string }> }>(`/api/organizations/${orgId}/channels`);
+  }
 }
