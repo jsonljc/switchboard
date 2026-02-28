@@ -9,14 +9,22 @@ import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
 
 const commonForbiddenBehaviors = [
+  // Payments
+  "Never issue refunds without approval",
+  "Never charge more than $1,000 in one action",
+  "Never cancel subscriptions without approval",
+  "Never batch-invoice more than 20 customers",
+  "Never apply credits over $500",
+  // Ads
   "Never delete campaigns",
   "Never delete ad groups",
   "Never delete ads",
+  "Never create campaigns without approval",
+  "Never modify targeting to exclude protected categories",
+  // Generic
   "Never spend over $500 in one action",
   "Never modify billing settings",
   "Never change account access",
-  "Never create campaigns without approval",
-  "Never modify targeting to exclude protected categories",
 ];
 
 interface ForbiddenListProps {

@@ -46,7 +46,7 @@ function LoginForm() {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Switchboard</CardTitle>
           <CardDescription>
-            Sign in to manage your AI ad agents
+            Sign in to manage your AI agents
           </CardDescription>
         </CardHeader>
         <CardContent>

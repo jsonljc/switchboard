@@ -185,7 +185,7 @@ export class ChatRuntime {
     const guard = guardInterpreterOutput(rawResult);
     if (!guard.valid || !guard.data) {
       console.error("Interpreter output failed schema guard:", guard.errors);
-      const uncertainReply = composeUncertainReply();
+      const uncertainReply = composeUncertainReply(this.availableActions);
       await this.adapter.sendTextReply(threadId, uncertainReply);
       await this.recordAssistantMessage(threadId, uncertainReply);
       return;
@@ -218,7 +218,7 @@ export class ChatRuntime {
 
     // If clarification needed
     if (result.needsClarification || result.confidence < 0.5) {
-      const question = result.clarificationQuestion ?? composeUncertainReply();
+      const question = result.clarificationQuestion ?? composeUncertainReply(this.availableActions);
       conversation = transitionConversation(conversation, {
         type: "set_clarifying",
         question,
@@ -230,7 +230,7 @@ export class ChatRuntime {
 
     // If no proposals, uncertain
     if (result.proposals.length === 0) {
-      await this.adapter.sendTextReply(threadId, composeUncertainReply());
+      await this.adapter.sendTextReply(threadId, composeUncertainReply(this.availableActions));
       return;
     }
 

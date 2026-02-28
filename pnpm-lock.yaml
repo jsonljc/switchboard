@@ -120,6 +120,9 @@ importers:
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@switchboard/payments':
+        specifier: workspace:*
+        version: link:../../cartridges/payments
       '@switchboard/quant-trading':
         specifier: workspace:*
         version: link:../../cartridges/quant-trading

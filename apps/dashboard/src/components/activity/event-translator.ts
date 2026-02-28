@@ -15,6 +15,32 @@ const eventTranslations: Record<string, (entry: {
     const actionType = (snap.actionType as string) ?? e.entityType;
     const amount = snap.dollarsAtRisk as number | undefined;
 
+    // Payment-specific translations (check before generic patterns)
+    if (actionType.includes("refund")) {
+      return `AI issued a ${amount ? `$${amount} ` : ""}refund`;
+    }
+    if (actionType.includes("charge.create")) {
+      return `AI charged ${amount ? `$${amount}` : "a customer"}`;
+    }
+    if (actionType.includes("invoice")) {
+      return `AI created a ${amount ? `$${amount} ` : ""}invoice`;
+    }
+    if (actionType.includes("subscription.cancel")) {
+      return `AI cancelled a subscription`;
+    }
+    if (actionType.includes("subscription.modify")) {
+      return `AI modified a subscription`;
+    }
+    if (actionType.includes("credit")) {
+      return `AI applied a ${amount ? `$${amount} ` : ""}credit`;
+    }
+    if (actionType.includes("batch")) {
+      return `AI sent batch invoices${amount ? ` ($${amount} total)` : ""}`;
+    }
+    if (actionType.includes("link.create")) {
+      return `AI created a ${amount ? `$${amount} ` : ""}payment link`;
+    }
+
     if (actionType.includes("setBudget") || actionType.includes("budget")) {
       return `AI set your daily budget to ${amount ? `$${amount}` : "a new value"}`;
     }

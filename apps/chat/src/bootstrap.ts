@@ -24,6 +24,8 @@ import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
+import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
 
@@ -107,11 +109,23 @@ export async function createChatRuntime(
     storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
     await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
 
+    // Register payments cartridge
+    const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
+      secretKey: process.env["STRIPE_SECRET_KEY"] ?? "mock-key",
+      requireCredentials: process.env.NODE_ENV === "production",
+    });
+    storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
+    await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
+
+    // Wire approval notifier so approvers get Telegram DMs for any action needing approval
+    const approvalNotifier = botToken ? new TelegramApprovalNotifier(botToken) : undefined;
+
     orchestrator = new OrchestratorClass({
       storage,
       ledger,
       guardrailState,
       guardrailStateStore,
+      approvalNotifier,
     });
   }
 
@@ -222,6 +236,16 @@ export async function createChatRuntime(
       "trading.position.close",
       "trading.portfolio.rebalance",
       "trading.risk.set_stop_loss",
+      "payments.invoice.create",
+      "payments.invoice.void",
+      "payments.charge.create",
+      "payments.refund.create",
+      "payments.subscription.cancel",
+      "payments.subscription.modify",
+      "payments.link.create",
+      "payments.link.deactivate",
+      "payments.credit.apply",
+      "payments.batch.invoice",
     ],
   });
 

@@ -89,6 +89,54 @@ export class RuleBasedInterpreter implements Interpreter {
           budgetChange: -parseFloat(match[2] ?? "0"),
         }),
       },
+      // Payment patterns
+      {
+        regex: /refund\s+\$?(\d+(?:\.\d+)?)\s+(?:for\s+)?(?:charge\s+)?(\S+)/i,
+        actionType: "payments.refund.create",
+        extractParams: (match) => ({
+          amount: parseFloat(match[1] ?? "0"),
+          chargeId: match[2]?.trim(),
+        }),
+      },
+      {
+        regex: /charge\s+(\S+)\s+\$?(\d+(?:\.\d+)?)/i,
+        actionType: "payments.charge.create",
+        extractParams: (match) => ({
+          entityId: match[1]?.trim(),
+          amount: parseFloat(match[2] ?? "0"),
+        }),
+      },
+      {
+        regex: /invoice\s+(\S+)\s+\$?(\d+(?:\.\d+)?)\s*(?:for\s+)?(.+)?/i,
+        actionType: "payments.invoice.create",
+        extractParams: (match) => ({
+          entityId: match[1]?.trim(),
+          amount: parseFloat(match[2] ?? "0"),
+          description: match[3]?.trim() ?? undefined,
+        }),
+      },
+      {
+        regex: /cancel\s+(?:subscription\s+)?(\S+)/i,
+        actionType: "payments.subscription.cancel",
+        extractParams: (match) => ({
+          subscriptionId: match[1]?.trim(),
+        }),
+      },
+      {
+        regex: /(?:apply|give|add)\s+\$?(\d+(?:\.\d+)?)\s+credit\s+(?:to\s+)?(\S+)/i,
+        actionType: "payments.credit.apply",
+        extractParams: (match) => ({
+          amount: parseFloat(match[1] ?? "0"),
+          entityId: match[2]?.trim(),
+        }),
+      },
+      {
+        regex: /(?:create|generate)\s+(?:a\s+)?payment\s+link\s+(?:for\s+)?\$?(\d+(?:\.\d+)?)/i,
+        actionType: "payments.link.create",
+        extractParams: (match) => ({
+          amount: parseFloat(match[1] ?? "0"),
+        }),
+      },
     ];
   }
 
@@ -152,13 +200,25 @@ export class RuleBasedInterpreter implements Interpreter {
       }
     }
 
-    // No match - ask for clarification
+    // No match - build dynamic clarification based on available actions
+    const capabilities: string[] = [];
+    if (availableActions.some((a) => a.startsWith("ads."))) {
+      capabilities.push("pause/resume campaigns, adjust budgets");
+    }
+    if (availableActions.some((a) => a.startsWith("payments."))) {
+      capabilities.push("refunds, charges, invoices, subscriptions, credits, payment links");
+    }
+    if (availableActions.some((a) => a.startsWith("trading."))) {
+      capabilities.push("market/limit orders, position management");
+    }
+    const capList = capabilities.length > 0 ? capabilities.join("; ") : "various actions";
+
     return {
       proposals: [],
       needsClarification: true,
       clarificationQuestion:
         "I'm not sure what you're asking me to do. Could you clarify?\n" +
-        "I can help with: pause/resume campaigns, adjust budgets.\n" +
+        `I can help with: ${capList}.\n` +
         "Reply with what you'd like, or type 'help' for the full list.",
       confidence: 0,
       rawResponse: text,
