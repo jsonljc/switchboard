@@ -7,7 +7,7 @@ import { startHealthChecker } from "./managed/health-checker.js";
 async function main() {
   const app = Fastify({ logger: true });
 
-  const { runtime, cleanup } = await createChatRuntime();
+  const { runtime, cleanup, failedMessageStore } = await createChatRuntime();
 
   // Rate limit config for webhook ingress
   const rateLimitConfig = {
@@ -32,6 +32,7 @@ async function main() {
       const { getDb } = await import("@switchboard/db");
       const prisma = getDb();
       registry = new RuntimeRegistry();
+      if (failedMessageStore) registry.setFailedMessageStore(failedMessageStore);
       await registry.loadAll(prisma);
       app.log.info(`Loaded ${registry.size} managed runtimes from database`);
       stopHealthChecker = startHealthChecker(prisma);
@@ -95,8 +96,39 @@ async function main() {
       return reply.code(200).send({ ok: true });
     } catch (err) {
       app.log.error(err, "Error handling webhook");
+      failedMessageStore?.record({
+        channel: "telegram",
+        rawPayload: request.body as Record<string, unknown>,
+        stage: "unknown",
+        errorMessage: err instanceof Error ? err.message : String(err),
+        errorStack: err instanceof Error ? err.stack : undefined,
+      }).catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
       return reply.code(200).send({ ok: true }); // Always 200 for Telegram
     }
+  });
+
+  // --- WhatsApp webhook verification (GET) ---
+  app.get("/webhook/managed/:webhookId", async (request, reply) => {
+    if (!registry) {
+      return reply.code(404).send({ error: "Managed channels not configured" });
+    }
+
+    const { webhookId } = request.params as { webhookId: string };
+    const webhookPath = `/webhook/managed/${webhookId}`;
+    const entry = registry.getByWebhookPath(webhookPath);
+
+    if (!entry) {
+      return reply.code(404).send("Not found");
+    }
+
+    const managedAdapter = entry.runtime.getAdapter();
+    if (managedAdapter.handleVerification) {
+      const query = request.query as Record<string, string | undefined>;
+      const result = managedAdapter.handleVerification(query);
+      return reply.code(result.status).send(result.body);
+    }
+
+    return reply.code(200).send("OK");
   });
 
   // --- Managed channel webhook endpoint (multi-tenant) ---
@@ -151,6 +183,15 @@ async function main() {
       return reply.code(200).send({ ok: true });
     } catch (err) {
       app.log.error(err, "Error handling managed webhook");
+      failedMessageStore?.record({
+        channel: entry.channel,
+        webhookPath,
+        organizationId: entry.orgId,
+        rawPayload: request.body as Record<string, unknown>,
+        stage: "unknown",
+        errorMessage: err instanceof Error ? err.message : String(err),
+        errorStack: err instanceof Error ? err.stack : undefined,
+      }).catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
       return reply.code(200).send({ ok: true }); // Always 200 to prevent platform retries
     }
   });

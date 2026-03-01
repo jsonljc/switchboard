@@ -29,6 +29,7 @@ import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
 import type { ChannelAdapter } from "./adapters/adapter.js";
+import { FailedMessageStore } from "./dlq/failed-message-store.js";
 
 /** Configuration for clinic mode (LLM interpreter + read tools). */
 export interface ClinicConfig {
@@ -41,6 +42,7 @@ export interface ClinicConfig {
 export interface ChatBootstrapResult {
   runtime: ChatRuntime;
   cleanup: () => void;
+  failedMessageStore: FailedMessageStore | null;
 }
 
 export async function createChatRuntime(
@@ -64,6 +66,13 @@ export async function createChatRuntime(
 
   let orchestrator = config?.orchestrator;
   let storage: StorageContext | undefined = config?.storage;
+
+  // Instantiate DLQ store when a database is available
+  let failedMessageStore: FailedMessageStore | null = null;
+  if (process.env["DATABASE_URL"]) {
+    const { getDb } = await import("@switchboard/db");
+    failedMessageStore = new FailedMessageStore(getDb());
+  }
 
   // Optional: single choke point via Switchboard API (propose/execute/approvals over HTTP)
   const apiUrl = process.env["SWITCHBOARD_API_URL"];
@@ -225,6 +234,7 @@ export async function createChatRuntime(
     orchestrator,
     storage,
     readAdapter,
+    failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? [
       "ads.campaign.pause",
       "ads.campaign.resume",
@@ -256,7 +266,7 @@ export async function createChatRuntime(
     }
   };
 
-  return { runtime, cleanup };
+  return { runtime, cleanup, failedMessageStore };
 }
 
 /**
@@ -268,6 +278,7 @@ export async function createManagedRuntime(config: {
   adapter: ChannelAdapter;
   apiUrl: string;
   apiKey?: string;
+  failedMessageStore?: FailedMessageStore;
 }): Promise<ChatRuntime> {
   const apiAdapter = new ApiOrchestratorAdapter({
     baseUrl: config.apiUrl,
@@ -284,6 +295,7 @@ export async function createManagedRuntime(config: {
     interpreter,
     interpreterRegistry,
     orchestrator: apiAdapter,
+    failedMessageStore: config.failedMessageStore,
     availableActions: [
       "ads.campaign.pause",
       "ads.campaign.resume",

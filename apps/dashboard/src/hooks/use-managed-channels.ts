@@ -34,9 +34,14 @@ export function useProvision() {
     mutationFn: async (body: {
       channels: Array<{
         channel: string;
-        botToken: string;
+        botToken?: string;
         webhookSecret?: string;
         signingSecret?: string;
+        // WhatsApp-specific fields
+        token?: string;
+        phoneNumberId?: string;
+        appSecret?: string;
+        verifyToken?: string;
       }>;
     }) => {
       const res = await fetch("/api/dashboard/organizations/provision", {

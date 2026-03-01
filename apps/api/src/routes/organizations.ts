@@ -140,10 +140,15 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
 
     const body = request.body as {
       channels: Array<{
-        channel: "telegram" | "slack";
-        botToken: string;
+        channel: "telegram" | "slack" | "whatsapp";
+        botToken?: string;
         webhookSecret?: string;
         signingSecret?: string;
+        // WhatsApp-specific fields
+        token?: string;
+        phoneNumberId?: string;
+        appSecret?: string;
+        verifyToken?: string;
       }>;
     };
 
@@ -165,12 +170,19 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
     }> = [];
 
     for (const ch of body.channels) {
-      const validChannels = ["telegram", "slack"];
+      const validChannels = ["telegram", "slack", "whatsapp"];
       if (!validChannels.includes(ch.channel)) {
         return reply.code(400).send({ error: `Invalid channel: ${ch.channel}`, statusCode: 400 });
       }
 
-      if (!ch.botToken) {
+      if (ch.channel === "whatsapp") {
+        if (!ch.token) {
+          return reply.code(400).send({ error: "Token is required for WhatsApp", statusCode: 400 });
+        }
+        if (!ch.phoneNumberId) {
+          return reply.code(400).send({ error: "Phone Number ID is required for WhatsApp", statusCode: 400 });
+        }
+      } else if (!ch.botToken) {
         return reply.code(400).send({ error: `Bot token is required for ${ch.channel}`, statusCode: 400 });
       }
 
@@ -232,14 +244,44 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
             statusCode: 400,
           });
         }
+      } else if (ch.channel === "whatsapp") {
+        try {
+          const res = await fetch(`https://graph.facebook.com/v17.0/${ch.phoneNumberId}`, {
+            headers: { Authorization: `Bearer ${ch.token}` },
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) {
+            return reply.code(400).send({
+              error: `Invalid WhatsApp credentials: API returned ${res.status}`,
+              statusCode: 400,
+            });
+          }
+          const data = (await res.json()) as { verified_name?: string; display_phone_number?: string };
+          botUsername = data.verified_name ?? data.display_phone_number ?? undefined;
+        } catch (err) {
+          return reply.code(400).send({
+            error: `Failed to validate WhatsApp credentials: ${err instanceof Error ? err.message : "unknown error"}`,
+            statusCode: 400,
+          });
+        }
       }
 
       // 2. Store credentials
       const connectionId = randomUUID();
       const serviceId = `${ch.channel}-bot`;
-      const credentials: Record<string, unknown> = { botToken: ch.botToken };
-      if (ch.webhookSecret) credentials["webhookSecret"] = ch.webhookSecret;
-      if (ch.signingSecret) credentials["signingSecret"] = ch.signingSecret;
+      let credentials: Record<string, unknown>;
+      if (ch.channel === "whatsapp") {
+        credentials = {
+          token: ch.token,
+          phoneNumberId: ch.phoneNumberId,
+        };
+        if (ch.appSecret) credentials["appSecret"] = ch.appSecret;
+        if (ch.verifyToken) credentials["verifyToken"] = ch.verifyToken;
+      } else {
+        credentials = { botToken: ch.botToken };
+        if (ch.webhookSecret) credentials["webhookSecret"] = ch.webhookSecret;
+        if (ch.signingSecret) credentials["signingSecret"] = ch.signingSecret;
+      }
 
       await connectionStore.save({
         id: connectionId,
@@ -336,6 +378,11 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
       if (ch.channel === "slack") {
         result.webhookUrl = `${chatPublicUrl}${webhookPath}`;
         result.note = "Set this as your Slack app's Event Subscriptions Request URL";
+      }
+
+      if (ch.channel === "whatsapp") {
+        result.webhookUrl = `${chatPublicUrl}${webhookPath}`;
+        result.note = "Set this URL as your WhatsApp webhook callback URL in the Meta App Dashboard. The verify token is the one you provided during provisioning.";
       }
 
       results.push(result);

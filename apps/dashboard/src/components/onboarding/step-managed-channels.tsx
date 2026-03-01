@@ -34,6 +34,23 @@ const CHANNEL_OPTIONS = [
       { key: "signingSecret", label: "Signing Secret", placeholder: "Your app's signing secret", required: true },
     ],
   },
+  {
+    value: "whatsapp",
+    label: "WhatsApp",
+    description: "Connect a WhatsApp Business account to your organization.",
+    instructions: [
+      "Go to developers.facebook.com and create a WhatsApp Business app",
+      "Under API Setup, copy the access token and Phone Number ID",
+      "Optionally copy the App Secret from Basic Settings for webhook signature verification",
+      "After provisioning, set the provided webhook URL in the Meta App Dashboard",
+    ],
+    fields: [
+      { key: "token", label: "Access Token", placeholder: "Your WhatsApp Cloud API access token", required: true },
+      { key: "phoneNumberId", label: "Phone Number ID", placeholder: "e.g. 123456789012345", required: true },
+      { key: "appSecret", label: "App Secret (optional)", placeholder: "For webhook signature verification", required: false },
+      { key: "verifyToken", label: "Verify Token (optional)", placeholder: "For webhook subscription verification", required: false },
+    ],
+  },
 ];
 
 interface StepManagedChannelsProps {

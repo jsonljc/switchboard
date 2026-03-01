@@ -7,6 +7,7 @@ import type {
   ProposeResult,
   ApprovalResponse,
 } from "@switchboard/core";
+import { withRetry } from "@switchboard/core";
 import type { ActionEnvelope, DecisionTrace, ApprovalRequest } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
@@ -134,6 +135,38 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     return h;
   }
 
+  /**
+   * Wrap fetch with retry logic: retries on network errors, 5xx, and 429.
+   * Does NOT retry 4xx (business logic: 422=clarification, 404=not found).
+   */
+  private fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    return withRetry(
+      async () => {
+        const res = await fetch(url, init);
+        if (res.status === 429 || res.status >= 500) {
+          throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+        }
+        return res;
+      },
+      {
+        maxAttempts: 3,
+        baseDelayMs: 500,
+        shouldRetry: (err: unknown) => {
+          if (err && typeof err === "object" && "status" in err) {
+            const status = (err as { status: number }).status;
+            // Retry 5xx and 429; do NOT retry 4xx
+            return status === 429 || status >= 500;
+          }
+          // Network errors — always retry
+          return true;
+        },
+        onRetry: (err, attempt) => {
+          console.warn(`[ApiOrchestratorAdapter] Retry attempt ${attempt} for ${url}:`, err);
+        },
+      },
+    );
+  }
+
   async resolveAndPropose(params: Parameters<RuntimeOrchestrator["resolveAndPropose"]>[0]): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }
@@ -154,7 +187,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
       emergencyOverride: params.emergencyOverride ?? false,
     };
 
-    const res = await fetch(`${this.base()}/api/execute`, {
+    const res = await this.fetchWithRetry(`${this.base()}/api/execute`, {
       method: "POST",
       headers: this.headers(idempotencyKey),
       body: JSON.stringify(body),
@@ -234,7 +267,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
       executedCache.delete(envelopeId);
       return cached;
     }
-    const res = await fetch(`${this.base()}/api/actions/${envelopeId}/execute`, {
+    const res = await this.fetchWithRetry(`${this.base()}/api/actions/${envelopeId}/execute`, {
       method: "POST",
       headers: this.headers(),
     });
@@ -253,7 +286,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     bindingHash: string;
     patchValue?: Record<string, unknown>;
   }): Promise<ApprovalResponse> {
-    const res = await fetch(`${this.base()}/api/approvals/${params.approvalId}/respond`, {
+    const res = await this.fetchWithRetry(`${this.base()}/api/approvals/${params.approvalId}/respond`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({
@@ -280,7 +313,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
   }
 
   async requestUndo(envelopeId: string): Promise<ProposeResult> {
-    const res = await fetch(`${this.base()}/api/actions/${envelopeId}/undo`, {
+    const res = await this.fetchWithRetry(`${this.base()}/api/actions/${envelopeId}/undo`, {
       method: "POST",
       headers: this.headers(),
     });

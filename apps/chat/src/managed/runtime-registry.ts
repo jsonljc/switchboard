@@ -4,7 +4,9 @@ import type { ChannelAdapter } from "../adapters/adapter.js";
 import { createManagedRuntime } from "../bootstrap.js";
 import { TelegramAdapter } from "../adapters/telegram.js";
 import { SlackAdapter } from "../adapters/slack.js";
+import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 import { PrismaConnectionStore } from "@switchboard/db";
+import type { FailedMessageStore } from "../dlq/failed-message-store.js";
 
 interface ManagedRuntimeEntry {
   runtime: ChatRuntime;
@@ -26,6 +28,11 @@ export interface ManagedChannelRecord {
 
 export class RuntimeRegistry {
   private runtimes = new Map<string, ManagedRuntimeEntry>();
+  private failedMessageStore: FailedMessageStore | null = null;
+
+  setFailedMessageStore(store: FailedMessageStore): void {
+    this.failedMessageStore = store;
+  }
 
   async loadAll(prisma: PrismaClient): Promise<void> {
     const channels = await prisma.managedChannel.findMany({
@@ -57,15 +64,14 @@ export class RuntimeRegistry {
       throw new Error(`Connection ${managedChannel.connectionId} not found`);
     }
 
-    const botToken = connection.credentials["botToken"] as string;
-    if (!botToken) {
-      throw new Error("Connection missing botToken credential");
-    }
-
     const orgId = managedChannel.organizationId;
 
     let adapter: ChannelAdapter;
     if (managedChannel.channel === "telegram") {
+      const botToken = connection.credentials["botToken"] as string;
+      if (!botToken) {
+        throw new Error("Connection missing botToken credential");
+      }
       const webhookSecret = connection.credentials["webhookSecret"] as string | undefined;
       adapter = new TelegramAdapter(
         botToken,
@@ -73,10 +79,29 @@ export class RuntimeRegistry {
         webhookSecret,
       );
     } else if (managedChannel.channel === "slack") {
+      const botToken = connection.credentials["botToken"] as string;
+      if (!botToken) {
+        throw new Error("Connection missing botToken credential");
+      }
       const signingSecret = connection.credentials["signingSecret"] as string | undefined;
       const slackAdapter = new SlackAdapter(botToken, signingSecret);
       // Wrap with a fixed org resolver for managed channels
       adapter = Object.assign(slackAdapter, {
+        resolveOrganizationId: async () => orgId,
+      });
+    } else if (managedChannel.channel === "whatsapp") {
+      const token = connection.credentials["token"] as string;
+      if (!token) {
+        throw new Error("Connection missing token credential for WhatsApp");
+      }
+      const phoneNumberId = connection.credentials["phoneNumberId"] as string;
+      if (!phoneNumberId) {
+        throw new Error("Connection missing phoneNumberId credential for WhatsApp");
+      }
+      const appSecret = connection.credentials["appSecret"] as string | undefined;
+      const verifyToken = connection.credentials["verifyToken"] as string | undefined;
+      const whatsappAdapter = new WhatsAppAdapter({ token, phoneNumberId, appSecret, verifyToken });
+      adapter = Object.assign(whatsappAdapter, {
         resolveOrganizationId: async () => orgId,
       });
     } else {
@@ -92,6 +117,7 @@ export class RuntimeRegistry {
       adapter,
       apiUrl,
       apiKey: process.env["SWITCHBOARD_API_KEY"],
+      failedMessageStore: this.failedMessageStore ?? undefined,
     });
 
     this.runtimes.set(managedChannel.webhookPath, {

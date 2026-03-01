@@ -18,13 +18,15 @@ import { useOrgConfig } from "@/hooks/use-org-config";
 import { useToast } from "@/components/ui/use-toast";
 import { Trash2, Plus, Loader2 } from "lucide-react";
 
-const ALL_CHANNELS = ["telegram", "slack"] as const;
+const ALL_CHANNELS = ["telegram", "slack", "whatsapp"] as const;
 
 const channelInstructions: Record<string, string> = {
   telegram:
     "Create a bot via @BotFather on Telegram. Copy the bot token and optionally set a webhook secret.",
   slack:
     "Create a Slack app at api.slack.com/apps, enable Event Subscriptions, and copy the Bot Token + Signing Secret.",
+  whatsapp:
+    "Create a WhatsApp Business app in the Meta Developer Dashboard. Copy the access token and Phone Number ID from the API Setup page.",
 };
 
 function statusBadge(status: string) {
@@ -61,6 +63,10 @@ export function ChannelManagement() {
   const [botToken, setBotToken] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [signingSecret, setSigningSecret] = useState("");
+  const [waToken, setWaToken] = useState("");
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState("");
+  const [waAppSecret, setWaAppSecret] = useState("");
+  const [waVerifyToken, setWaVerifyToken] = useState("");
 
   const config = orgData?.config;
   const channels = channelsData?.channels ?? [];
@@ -102,10 +108,47 @@ export function ChannelManagement() {
     setBotToken("");
     setWebhookSecret("");
     setSigningSecret("");
+    setWaToken("");
+    setWaPhoneNumberId("");
+    setWaAppSecret("");
+    setWaVerifyToken("");
   };
 
   const handleProvision = () => {
-    if (!selectedChannel || !botToken) return;
+    if (!selectedChannel) return;
+
+    if (selectedChannel === "whatsapp") {
+      if (!waToken || !waPhoneNumberId) return;
+      const channelPayload: {
+        channel: string;
+        token: string;
+        phoneNumberId: string;
+        appSecret?: string;
+        verifyToken?: string;
+      } = {
+        channel: "whatsapp",
+        token: waToken,
+        phoneNumberId: waPhoneNumberId,
+      };
+      if (waAppSecret) channelPayload.appSecret = waAppSecret;
+      if (waVerifyToken) channelPayload.verifyToken = waVerifyToken;
+
+      provision.mutate(
+        { channels: [channelPayload] },
+        {
+          onSuccess: () => {
+            toast({ title: "Channel provisioned", description: "WhatsApp is now active." });
+            resetForm();
+          },
+          onError: (err) => {
+            toast({ title: "Provisioning failed", description: err.message, variant: "destructive" });
+          },
+        },
+      );
+      return;
+    }
+
+    if (!botToken) return;
 
     const channelPayload: {
       channel: string;
@@ -227,16 +270,18 @@ export function ChannelManagement() {
               </p>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="bot-token">Bot Token</Label>
-              <Input
-                id="bot-token"
-                type="password"
-                value={botToken}
-                onChange={(e) => setBotToken(e.target.value)}
-                placeholder="Paste your bot token"
-              />
-            </div>
+            {selectedChannel && selectedChannel !== "whatsapp" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="bot-token">Bot Token</Label>
+                <Input
+                  id="bot-token"
+                  type="password"
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  placeholder="Paste your bot token"
+                />
+              </div>
+            )}
 
             {selectedChannel === "telegram" && (
               <div className="space-y-1.5">
@@ -264,12 +309,56 @@ export function ChannelManagement() {
               </div>
             )}
 
+            {selectedChannel === "whatsapp" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-token">Access Token</Label>
+                  <Input
+                    id="wa-token"
+                    type="password"
+                    value={waToken}
+                    onChange={(e) => setWaToken(e.target.value)}
+                    placeholder="WhatsApp Cloud API access token"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-phone-number-id">Phone Number ID</Label>
+                  <Input
+                    id="wa-phone-number-id"
+                    value={waPhoneNumberId}
+                    onChange={(e) => setWaPhoneNumberId(e.target.value)}
+                    placeholder="e.g. 123456789012345"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-app-secret">App Secret (optional)</Label>
+                  <Input
+                    id="wa-app-secret"
+                    type="password"
+                    value={waAppSecret}
+                    onChange={(e) => setWaAppSecret(e.target.value)}
+                    placeholder="For webhook signature verification"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-verify-token">Verify Token (optional)</Label>
+                  <Input
+                    id="wa-verify-token"
+                    type="password"
+                    value={waVerifyToken}
+                    onChange={(e) => setWaVerifyToken(e.target.value)}
+                    placeholder="For webhook subscription verification"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="flex gap-2">
               <Button
                 className="flex-1"
                 disabled={
                   !selectedChannel ||
-                  !botToken ||
+                  (selectedChannel === "whatsapp" ? (!waToken || !waPhoneNumberId) : !botToken) ||
                   (selectedChannel === "slack" && !signingSecret) ||
                   provision.isPending
                 }

@@ -17,6 +17,7 @@ import { interpretersRoutes } from "./routes/interpreters.js";
 import { cartridgesRoutes } from "./routes/cartridges.js";
 import { connectionsRoutes } from "./routes/connections.js";
 import { organizationsRoutes } from "./routes/organizations.js";
+import { dlqRoutes } from "./routes/dlq.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -369,6 +370,7 @@ export async function buildServer() {
   await app.register(cartridgesRoutes, { prefix: "/api/cartridges" });
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
   await app.register(organizationsRoutes, { prefix: "/api/organizations" });
+  await app.register(dlqRoutes, { prefix: "/api/dlq" });
 
   return app;
 }

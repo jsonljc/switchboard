@@ -5,6 +5,8 @@ export interface ChannelAdapter {
   parseIncomingMessage(rawPayload: unknown): IncomingMessage | null;
   resolveOrganizationId?(principalId: string): Promise<string | null>;
   verifyRequest?(rawBody: string, headers: Record<string, string | undefined>): boolean;
+  /** Handle webhook subscription verification (e.g. WhatsApp hub.challenge). */
+  handleVerification?(query: Record<string, string | undefined>): { status: number; body: string };
   sendTextReply(threadId: string, text: string): Promise<void>;
   sendApprovalCard(threadId: string, card: ApprovalCardPayload): Promise<void>;
   sendResultCard(threadId: string, card: ResultCardPayload): Promise<void>;

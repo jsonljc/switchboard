@@ -346,3 +346,22 @@ model ManagedChannel {
   @@index([organizationId])
   @@index([status])
 }
+
+model FailedMessage {
+  id             String    @id @default(uuid())
+  channel        String
+  webhookPath    String?
+  organizationId String?
+  rawPayload     Json
+  stage          String    // parse, interpret, propose, execute, unknown
+  errorMessage   String
+  errorStack     String?
+  status         String    @default("pending") // pending, exhausted, resolved
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([organizationId])
+  @@index([createdAt])
+}

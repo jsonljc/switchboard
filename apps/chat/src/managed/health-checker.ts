@@ -27,20 +27,38 @@ export function startHealthChecker(prisma: PrismaClient): () => void {
             continue;
           }
 
-          const botToken = connection.credentials["botToken"] as string;
-          if (!botToken) {
-            await prisma.managedChannel.update({
-              where: { id: channel.id },
-              data: { status: "error", statusDetail: "Missing bot token", lastHealthCheck: new Date() },
-            });
-            continue;
-          }
-
           let healthy = false;
           if (channel.channel === "telegram") {
+            const botToken = connection.credentials["botToken"] as string;
+            if (!botToken) {
+              await prisma.managedChannel.update({
+                where: { id: channel.id },
+                data: { status: "error", statusDetail: "Missing bot token", lastHealthCheck: new Date() },
+              });
+              continue;
+            }
             healthy = await checkTelegram(botToken);
           } else if (channel.channel === "slack") {
+            const botToken = connection.credentials["botToken"] as string;
+            if (!botToken) {
+              await prisma.managedChannel.update({
+                where: { id: channel.id },
+                data: { status: "error", statusDetail: "Missing bot token", lastHealthCheck: new Date() },
+              });
+              continue;
+            }
             healthy = await checkSlack(botToken);
+          } else if (channel.channel === "whatsapp") {
+            const token = connection.credentials["token"] as string;
+            const phoneNumberId = connection.credentials["phoneNumberId"] as string;
+            if (!token || !phoneNumberId) {
+              await prisma.managedChannel.update({
+                where: { id: channel.id },
+                data: { status: "error", statusDetail: "Missing WhatsApp credentials", lastHealthCheck: new Date() },
+              });
+              continue;
+            }
+            healthy = await checkWhatsApp(token, phoneNumberId);
           }
 
           await prisma.managedChannel.update({
@@ -96,6 +114,18 @@ async function checkSlack(botToken: string): Promise<boolean> {
     if (!res.ok) return false;
     const data = (await res.json()) as { ok: boolean };
     return data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkWhatsApp(token: string, phoneNumberId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    return res.ok;
   } catch {
     return false;
   }

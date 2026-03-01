@@ -21,6 +21,7 @@ import type {
 import { inferCartridgeId } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
+import type { FailedMessageStore } from "./dlq/failed-message-store.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
@@ -33,6 +34,8 @@ export interface ChatRuntimeConfig {
   storage?: StorageContext;
   /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
   readAdapter?: CartridgeReadAdapterType;
+  /** Optional DLQ store for recording failed messages. */
+  failedMessageStore?: FailedMessageStore;
 }
 
 export class ChatRuntime {
@@ -43,6 +46,7 @@ export class ChatRuntime {
   private availableActions: string[];
   private storage: StorageContext | null;
   private readAdapter: CartridgeReadAdapterType | null;
+  private failedMessageStore: FailedMessageStore | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -58,6 +62,7 @@ export class ChatRuntime {
     this.availableActions = config.availableActions;
     this.storage = config.storage ?? null;
     this.readAdapter = config.readAdapter ?? null;
+    this.failedMessageStore = config.failedMessageStore ?? null;
   }
 
   getAdapter(): ChannelAdapter {
@@ -305,6 +310,14 @@ export class ChatRuntime {
         }
       } catch (err) {
         console.error("Proposal processing error:", err);
+        this.failedMessageStore?.record({
+          channel: message.channel,
+          organizationId: message.organizationId ?? undefined,
+          rawPayload: rawPayload as Record<string, unknown>,
+          stage: "propose",
+          errorMessage: safeErrorMessage(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+        }).catch((dlqErr) => console.error("DLQ record error:", dlqErr));
         await this.adapter.sendTextReply(
           threadId,
           `Error processing request: ${safeErrorMessage(err)}`,
@@ -368,6 +381,13 @@ export class ChatRuntime {
       await this.recordAssistantMessage(threadId, executeResult.summary);
     } catch (err) {
       console.error("Execution error:", err);
+      this.failedMessageStore?.record({
+        channel: this.adapter.channel,
+        rawPayload: { envelopeId: result.envelope.id },
+        stage: "execute",
+        errorMessage: safeErrorMessage(err),
+        errorStack: err instanceof Error ? err.stack : undefined,
+      }).catch((dlqErr) => console.error("DLQ record error:", dlqErr));
       const errText = `Execution failed: ${safeErrorMessage(err)}`;
       await this.adapter.sendTextReply(threadId, errText);
       await this.recordAssistantMessage(threadId, errText);
