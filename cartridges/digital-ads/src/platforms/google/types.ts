@@ -8,6 +8,7 @@ export interface GoogleAdsRow {
     id: string;
     name: string;
     status: string;
+    advertisingChannelType?: string;
   };
   adGroup?: {
     id: string;

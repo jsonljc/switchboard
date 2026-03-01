@@ -7,7 +7,37 @@ import { startHealthChecker } from "./managed/health-checker.js";
 async function main() {
   const app = Fastify({ logger: true });
 
+  // Parse application/x-www-form-urlencoded (Slack interactive payloads)
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (req, body, done) => {
+      try {
+        (req as unknown as Record<string, unknown>).rawBody = body;
+        const params = new URLSearchParams(body as string);
+        const payload = params.get("payload");
+        done(null, payload ? JSON.parse(payload) : Object.fromEntries(params));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   const { runtime, cleanup, failedMessageStore } = await createChatRuntime();
+
+  // Initialize Redis-backed security store if Redis is available
+  if (process.env["REDIS_URL"]) {
+    try {
+      const Redis = (await import("ioredis")).default;
+      const { RedisSecurityStore } = await import("./adapters/redis-security-store.js");
+      const { initSecurityStore } = await import("./adapters/security.js");
+      const redisClient = new Redis(process.env["REDIS_URL"]);
+      initSecurityStore(new RedisSecurityStore(redisClient as never));
+      console.log("Redis security store initialized");
+    } catch (err) {
+      console.warn("Failed to initialize Redis security store, using in-memory fallback:", err);
+    }
+  }
 
   // Rate limit config for webhook ingress
   const rateLimitConfig = {
@@ -76,7 +106,7 @@ async function main() {
 
     // Rate limit by source IP
     const sourceIp = request.ip;
-    if (!checkIngressRateLimit(sourceIp, rateLimitConfig)) {
+    if (!await checkIngressRateLimit(sourceIp, rateLimitConfig)) {
       app.log.warn({ ip: sourceIp }, "Webhook rate limit exceeded");
       return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
     }
@@ -86,7 +116,7 @@ async function main() {
     const msg = payload["message"] as Record<string, unknown> | undefined;
     const cb = payload["callback_query"] as Record<string, unknown> | undefined;
     const nonceId = msg ? String(msg["message_id"]) : cb ? String(cb["id"]) : null;
-    if (nonceId && !checkNonce(nonceId, rateLimitConfig.windowMs)) {
+    if (nonceId && !await checkNonce(nonceId, rateLimitConfig.windowMs)) {
       app.log.warn({ nonceId }, "Duplicate webhook message, skipping");
       return reply.code(200).send({ ok: true });
     }
@@ -156,7 +186,7 @@ async function main() {
     // Verify request signature
     const managedAdapter = entry.runtime.getAdapter();
     if (managedAdapter.verifyRequest) {
-      const rawBody = JSON.stringify(request.body);
+      const rawBody = (request as unknown as Record<string, unknown>).rawBody as string ?? JSON.stringify(request.body);
       const headers = request.headers as Record<string, string | undefined>;
       if (!managedAdapter.verifyRequest(rawBody, headers)) {
         app.log.warn({ webhookPath }, "Managed webhook request failed signature verification");
@@ -166,14 +196,14 @@ async function main() {
 
     // Rate limit by source IP
     const sourceIp = request.ip;
-    if (!checkIngressRateLimit(sourceIp, rateLimitConfig)) {
+    if (!await checkIngressRateLimit(sourceIp, rateLimitConfig)) {
       app.log.warn({ ip: sourceIp, webhookPath }, "Managed webhook rate limit exceeded");
       return reply.code(200).send({ ok: true });
     }
 
     // Nonce dedup
     const messageId = managedAdapter.extractMessageId(request.body);
-    if (messageId && !checkNonce(`managed_${webhookId}_${messageId}`, rateLimitConfig.windowMs)) {
+    if (messageId && !await checkNonce(`managed_${webhookId}_${messageId}`, rateLimitConfig.windowMs)) {
       app.log.warn({ messageId, webhookPath }, "Duplicate managed webhook message, skipping");
       return reply.code(200).send({ ok: true });
     }

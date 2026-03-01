@@ -126,6 +126,26 @@ export class SlackAdapter implements ChannelAdapter {
   parseIncomingMessage(rawPayload: unknown): IncomingMessage | null {
     const payload = rawPayload as Record<string, unknown>;
 
+    // Handle block_actions (Slack interactive components)
+    if (payload["type"] === "block_actions") {
+      const actions = payload["actions"] as Array<Record<string, unknown>> | undefined;
+      const user = payload["user"] as Record<string, unknown> | undefined;
+      const channel = payload["channel"] as Record<string, unknown> | undefined;
+      if (!actions?.length || !user || !channel) return null;
+      const action = actions[0]!;
+      return {
+        id: `slack_action_${action["action_id"] ?? Date.now()}`,
+        channel: "slack",
+        channelMessageId: String(action["action_id"] ?? Date.now()),
+        threadId: String(channel["id"]),
+        principalId: String(user["id"]),
+        organizationId: (payload["team"] as Record<string, unknown>)?.["id"] as string ?? null,
+        text: (action["value"] as string) ?? "",
+        attachments: [],
+        timestamp: new Date(),
+      };
+    }
+
     // Slack Events API: event wrapper
     const event = payload["event"] as Record<string, unknown> | undefined;
     if (!event) return null;
@@ -206,6 +226,12 @@ export class SlackAdapter implements ChannelAdapter {
 
   extractMessageId(rawPayload: unknown): string | null {
     const payload = rawPayload as Record<string, unknown>;
+
+    if (payload["type"] === "block_actions") {
+      const actions = payload["actions"] as Array<Record<string, unknown>> | undefined;
+      return actions?.[0] ? String(actions[0]["action_id"] ?? Date.now()) : null;
+    }
+
     const event = payload["event"] as Record<string, unknown> | undefined;
     if (event) {
       return String(event["client_msg_id"] ?? event["ts"]);

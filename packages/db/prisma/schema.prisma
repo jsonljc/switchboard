@@ -135,6 +135,7 @@ model ConversationState {
   pendingProposalIds    String[]
   pendingApprovalIds    String[]
   clarificationQuestion String?
+  messages              Json     @default("[]")
   lastActivityAt        DateTime @default(now())
   expiresAt             DateTime
 

@@ -369,4 +369,44 @@ describe("analyzeFunnel", () => {
     expect(atcToPurchase.economicImpact).toBeDefined();
     // Previous ATC count was 50, so that should be the baseline
   });
+
+  it("adds conversion lag finding when current period ends today", () => {
+    const today = new Date().toISOString().split("T")[0]!;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0]!;
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0]!;
+
+    const current = makeSnapshot();
+    const previous = makeSnapshot();
+
+    const result = analyzeFunnel({
+      funnel: COMMERCE_FUNNEL,
+      current,
+      previous,
+      periods: {
+        current: { since: sevenDaysAgo, until: today },
+        previous: { since: fourteenDaysAgo, until: sevenDaysAgo },
+      },
+    });
+
+    const lagFinding = result.findings.find((f) => f.stage === "conversion_lag");
+    expect(lagFinding).toBeDefined();
+    expect(lagFinding!.severity).toBe("info");
+    expect(lagFinding!.message).toContain("Conversion lag warning");
+    expect(lagFinding!.recommendation).toContain("Re-check in 2-3 days");
+  });
+
+  it("does not add conversion lag finding when period ended 7+ days ago", () => {
+    const current = makeSnapshot();
+    const previous = makeSnapshot();
+
+    const result = analyzeFunnel({
+      funnel: COMMERCE_FUNNEL,
+      current,
+      previous,
+      periods: PERIODS, // ends 2024-01-14, well in the past
+    });
+
+    const lagFinding = result.findings.find((f) => f.stage === "conversion_lag");
+    expect(lagFinding).toBeUndefined();
+  });
 });
