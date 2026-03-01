@@ -81,4 +81,75 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.code(200).send({ message: updated });
   });
+
+  // POST /api/dlq/messages/:id/retry — increment retry count; exhausts after maxRetries
+  app.post("/messages/:id/retry", {
+    schema: {
+      description: "Record a retry attempt on a failed message. Transitions to 'exhausted' when maxRetries is reached.",
+      tags: ["DLQ"],
+    },
+  }, async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const { id } = request.params as { id: string };
+    const body = request.body as { errorMessage?: string } | undefined;
+
+    const existing = await app.prisma.failedMessage.findUnique({ where: { id } });
+    if (!existing) {
+      return reply.code(404).send({ error: "Failed message not found", statusCode: 404 });
+    }
+
+    if (existing.status !== "pending") {
+      return reply.code(409).send({ error: `Cannot retry message with status '${existing.status}'`, statusCode: 409 });
+    }
+
+    const nextCount = existing.retryCount + 1;
+    const exhausted = nextCount >= existing.maxRetries;
+
+    const updated = await app.prisma.failedMessage.update({
+      where: { id },
+      data: {
+        retryCount: nextCount,
+        errorMessage: body?.errorMessage ?? existing.errorMessage,
+        status: exhausted ? "exhausted" : "pending",
+      },
+    });
+
+    return reply.code(200).send({ message: updated, exhausted });
+  });
+
+  // POST /api/dlq/sweep — transition all over-limit pending messages to exhausted
+  app.post("/sweep", {
+    schema: {
+      description: "Sweep pending messages that have exceeded maxRetries and mark them exhausted.",
+      tags: ["DLQ"],
+    },
+  }, async (_request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    // Find pending messages where retryCount >= maxRetries
+    const overdue = await app.prisma.failedMessage.findMany({
+      where: { status: "pending" },
+      select: { id: true, retryCount: true, maxRetries: true },
+    });
+
+    const ids = overdue
+      .filter((m) => m.retryCount >= m.maxRetries)
+      .map((m) => m.id);
+
+    if (ids.length === 0) {
+      return reply.code(200).send({ swept: 0 });
+    }
+
+    const result = await app.prisma.failedMessage.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "exhausted" },
+    });
+
+    return reply.code(200).send({ swept: result.count });
+  });
 };

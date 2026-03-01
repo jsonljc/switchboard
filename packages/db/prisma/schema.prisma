@@ -331,7 +331,7 @@ model OrganizationConfig {
 model ManagedChannel {
   id                String    @id @default(uuid())
   organizationId    String
-  channel           String    // "telegram" | "slack"
+  channel           String    // "telegram" | "slack" | "whatsapp"
   connectionId      String    // FK to Connection.id (encrypted bot token)
   botUsername        String?   // display name, e.g. "@MyCompanyBot"
   webhookPath       String    @unique  // "/webhook/managed/<uuid>"
@@ -356,6 +356,8 @@ model FailedMessage {
   stage          String    // parse, interpret, propose, execute, unknown
   errorMessage   String
   errorStack     String?
+  retryCount     Int       @default(0)
+  maxRetries     Int       @default(5)
   status         String    @default("pending") // pending, exhausted, resolved
   resolvedAt     DateTime?
   createdAt      DateTime  @default(now())

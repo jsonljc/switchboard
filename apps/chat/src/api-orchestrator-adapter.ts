@@ -269,7 +269,7 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     }
     const res = await this.fetchWithRetry(`${this.base()}/api/actions/${envelopeId}/execute`, {
       method: "POST",
-      headers: this.headers(),
+      headers: this.headers(`execute_${envelopeId}`),
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string };
