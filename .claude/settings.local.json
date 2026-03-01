@@ -21,7 +21,9 @@
       "Bash(git -C /Users/jasonljc/switchboard push)",
       "Bash(git -C /Users/jasonljc/switchboard add .claude/settings.local.json)",
       "Bash(git -C:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(open https://github.com/jsonljc/switchboard/pull/31)",
+      "Bash(npx prisma:*)"
     ]
   }
 }
