@@ -238,4 +238,10 @@ export class SwitchboardClient {
   async getManagedChannels(orgId: string) {
     return this.request<{ channels: Array<{ id: string; channel: string; botUsername: string | null; webhookPath: string; webhookRegistered: boolean; status: string; statusDetail: string | null; lastHealthCheck: string | null; createdAt: string }> }>(`/api/organizations/${orgId}/channels`);
   }
+
+  async deleteChannel(orgId: string, channelId: string) {
+    return this.request<{ deleted: boolean }>(`/api/organizations/${orgId}/channels/${channelId}`, {
+      method: "DELETE",
+    });
+  }
 }

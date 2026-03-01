@@ -7,6 +7,7 @@ import { SpendLimitsForm } from "@/components/settings/spend-limits-form";
 import { RiskToleranceSettings } from "@/components/settings/risk-tolerance";
 import { ForbiddenList } from "@/components/settings/forbidden-list";
 import { GovernanceMode } from "@/components/settings/governance-mode";
+import { ChannelManagement } from "@/components/settings/channel-management";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -101,6 +102,8 @@ export default function SettingsPage() {
             onSave={(mode) => handleSave("governanceProfile", mode)}
             isLoading={updateIdentity.isPending}
           />
+
+          <ChannelManagement />
         </>
       )}
 

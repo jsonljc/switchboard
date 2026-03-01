@@ -56,3 +56,23 @@ export function useProvision() {
     },
   });
 }
+
+export function useDeleteChannel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const res = await fetch(`/api/dashboard/organizations/channels/${channelId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to delete channel");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.channels.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orgConfig.all });
+    },
+  });
+}

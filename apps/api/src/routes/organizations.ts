@@ -357,6 +357,62 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // DELETE /api/organizations/:orgId/channels/:channelId — remove a managed channel
+  app.delete("/:orgId/channels/:channelId", {
+    schema: {
+      description: "Delete a managed channel and its associated connection.",
+      tags: ["Organizations"],
+    },
+  }, async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const { orgId, channelId } = request.params as { orgId: string; channelId: string };
+
+    if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+    }
+
+    const managedChannel = await app.prisma.managedChannel.findUnique({
+      where: { id: channelId },
+    });
+
+    if (!managedChannel || managedChannel.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Channel not found", statusCode: 404 });
+    }
+
+    // Delete the managed channel
+    await app.prisma.managedChannel.delete({ where: { id: channelId } });
+
+    // Delete the associated connection
+    if (managedChannel.connectionId) {
+      const connectionStore = await getConnectionStore(app.prisma);
+      try {
+        await connectionStore.delete(managedChannel.connectionId);
+      } catch {
+        // Connection may already be deleted
+      }
+    }
+
+    // Update managedChannels array in org config
+    const remaining = await app.prisma.managedChannel.findMany({
+      where: { organizationId: orgId },
+      select: { channel: true },
+    });
+    const remainingNames = remaining.map((r) => r.channel);
+
+    await app.prisma.organizationConfig.update({
+      where: { id: orgId },
+      data: {
+        managedChannels: remainingNames,
+        ...(remainingNames.length === 0 && { provisioningStatus: "inactive" }),
+      },
+    });
+
+    return reply.code(200).send({ deleted: true });
+  });
+
   // GET /api/organizations/:orgId/channels — list managed channels
   app.get("/:orgId/channels", {
     schema: {
