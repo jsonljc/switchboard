@@ -19,7 +19,7 @@
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
-    "@switchboard/ads-spend": "workspace:*",
+    "@switchboard/digital-ads": "workspace:*",
     "@switchboard/quant-trading": "workspace:*",
     "@switchboard/payments": "workspace:*",
     "fastify": "^5.2.0",

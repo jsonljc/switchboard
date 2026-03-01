@@ -23,10 +23,10 @@ describe("API Lifecycle (End-to-End)", () => {
       method: "POST",
       url: "/api/actions/propose",
       payload: {
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_lifecycle" },
         principalId: "default",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       },
     });
 
@@ -99,10 +99,10 @@ describe("API Lifecycle (End-to-End)", () => {
       method: "POST",
       url: "/api/actions/propose",
       payload: {
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_undo" },
         principalId: "default",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       },
     });
 

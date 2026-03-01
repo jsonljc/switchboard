@@ -23,10 +23,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 
@@ -71,7 +71,7 @@ describe("Actions API", () => {
         },
         globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
         cartridgeSpendLimits: {},
-        forbiddenBehaviors: ["ads.campaign.pause"],
+        forbiddenBehaviors: ["digital-ads.campaign.pause"],
         trustBehaviors: [],
         delegatedApprovers: [],
         createdAt: new Date(),
@@ -82,10 +82,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 
@@ -112,7 +112,7 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
         },
       });
@@ -129,10 +129,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
       const envelopeId = proposeRes.json().envelope.id;
@@ -170,10 +170,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 
@@ -196,10 +196,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 
@@ -231,10 +231,10 @@ describe("Actions API", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
       const envelopeId = proposeRes.json().envelope.id;
@@ -273,11 +273,11 @@ describe("Actions API", () => {
         url: "/api/actions/batch",
         payload: {
           proposals: [
-            { actionType: "ads.campaign.pause", parameters: { campaignId: "camp_1" } },
-            { actionType: "ads.campaign.pause", parameters: { campaignId: "camp_2" } },
+            { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_1" } },
+            { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_2" } },
           ],
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 

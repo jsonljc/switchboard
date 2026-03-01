@@ -126,7 +126,7 @@ describe("Identity API", () => {
           priority: 10,
           active: true,
           conditions: {},
-          overrides: { forbiddenBehaviors: ["ads.budget.adjust"] },
+          overrides: { forbiddenBehaviors: ["digital-ads.campaign.adjust_budget"] },
         },
       });
 

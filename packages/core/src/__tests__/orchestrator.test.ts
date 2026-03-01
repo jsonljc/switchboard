@@ -51,7 +51,7 @@ describe("LifecycleOrchestrator", () => {
     ledger = new AuditLedger(ledgerStorage);
     guardrailState = createGuardrailState();
 
-    cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
+    cartridge = new TestCartridge(createTestManifest({ id: "digital-ads" }));
     cartridge.onExecute((_actionType, params) => ({
       success: true,
       summary: `Executed ${_actionType}`,
@@ -62,7 +62,7 @@ describe("LifecycleOrchestrator", () => {
       undoRecipe: {
         originalActionId: (params["_actionId"] as string) ?? "unknown",
         originalEnvelopeId: (params["_envelopeId"] as string) ?? "unknown",
-        reverseActionType: "ads.campaign.resume",
+        reverseActionType: "digital-ads.campaign.resume",
         reverseParameters: { campaignId: params["campaignId"] },
         undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         undoRiskCategory: "medium",
@@ -70,15 +70,15 @@ describe("LifecycleOrchestrator", () => {
       },
     }));
 
-    storage.cartridges.register("ads-spend", cartridge);
+    storage.cartridges.register("digital-ads", cartridge);
 
     // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
     await storage.policies.save({
       id: "default-allow-ads",
-      name: "Default allow ads-spend",
-      description: "Allow all ads-spend actions",
+      name: "Default allow digital-ads",
+      description: "Allow all digital-ads actions",
       organizationId: null,
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       priority: 100,
       active: true,
       rule: { composition: "AND", conditions: [], children: [] },
@@ -120,15 +120,15 @@ describe("LifecycleOrchestrator", () => {
       // Update identity to forbid this action
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          forbiddenBehaviors: ["ads.campaign.pause"],
+          forbiddenBehaviors: ["digital-ads.campaign.pause"],
         }),
       );
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.denied).toBe(true);
@@ -140,15 +140,15 @@ describe("LifecycleOrchestrator", () => {
     it("should auto-allow trusted behaviors", async () => {
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          trustBehaviors: ["ads.campaign.pause"],
+          trustBehaviors: ["digital-ads.campaign.pause"],
         }),
       );
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.denied).toBe(false);
@@ -169,10 +169,10 @@ describe("LifecycleOrchestrator", () => {
 
       // Identity requires standard approval for medium risk (default)
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.denied).toBe(false);
@@ -183,14 +183,14 @@ describe("LifecycleOrchestrator", () => {
 
     it("should save envelope and record audit", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Verify envelope was saved
@@ -214,10 +214,10 @@ describe("LifecycleOrchestrator", () => {
     it("should throw for unknown principal", async () => {
       await expect(
         orchestrator.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: {},
           principalId: "unknown_user",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         }),
       ).rejects.toThrow("Identity spec not found");
     });
@@ -244,10 +244,10 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -285,10 +285,10 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       const response = await orchestrator.respondToApproval({
@@ -312,10 +312,10 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await expect(
@@ -339,7 +339,7 @@ describe("LifecycleOrchestrator", () => {
       // Forbid the action type so patched parameters get denied on re-evaluation
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          forbiddenBehaviors: ["ads.campaign.pause"],
+          forbiddenBehaviors: ["digital-ads.campaign.pause"],
           riskTolerance: {
             none: "none",
             low: "none",
@@ -354,10 +354,10 @@ describe("LifecycleOrchestrator", () => {
       await storage.identity.saveSpec(makeIdentitySpec());
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -365,7 +365,7 @@ describe("LifecycleOrchestrator", () => {
       // Now forbid the behavior before patching
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          forbiddenBehaviors: ["ads.campaign.pause"],
+          forbiddenBehaviors: ["digital-ads.campaign.pause"],
         }),
       );
 
@@ -391,10 +391,10 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Manually expire the approval by setting expiresAt in the past
@@ -438,14 +438,14 @@ describe("LifecycleOrchestrator", () => {
   describe("executeApproved()", () => {
     it("should execute an approved envelope", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.envelope.status).toBe("approved");
@@ -461,14 +461,14 @@ describe("LifecycleOrchestrator", () => {
 
     it("should fail for non-approved envelope", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ forbiddenBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ forbiddenBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await expect(
@@ -480,15 +480,15 @@ describe("LifecycleOrchestrator", () => {
   describe("requestUndo()", () => {
     it("should create a governed undo proposal", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause", "ads.campaign.resume"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"] }),
       );
 
       // Execute an action
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await orchestrator.executeApproved(proposeResult.envelope.id);
@@ -498,14 +498,14 @@ describe("LifecycleOrchestrator", () => {
 
       expect(undoResult.envelope.parentEnvelopeId).toBe(proposeResult.envelope.id);
       // The undo uses the reverse action type from the recipe
-      expect(undoResult.envelope.proposals[0]?.actionType).toBe("ads.campaign.resume");
+      expect(undoResult.envelope.proposals[0]?.actionType).toBe("digital-ads.campaign.resume");
 
       // Verify action.undo_requested audit entry exists
       const allEntries = ledgerStorage.getAll();
       const undoEntry = allEntries.find((e) => e.eventType === "action.undo_requested");
       expect(undoEntry).toBeDefined();
       expect(undoEntry?.snapshot["originalEnvelopeId"]).toBe(proposeResult.envelope.id);
-      expect(undoEntry?.snapshot["reverseActionType"]).toBe("ads.campaign.resume");
+      expect(undoEntry?.snapshot["reverseActionType"]).toBe("digital-ads.campaign.resume");
     });
 
     it("should throw if no undo recipe available", async () => {
@@ -521,14 +521,14 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await orchestrator.executeApproved(proposeResult.envelope.id);
@@ -542,10 +542,10 @@ describe("LifecycleOrchestrator", () => {
   describe("simulate()", () => {
     it("should return simulation result without side effects", async () => {
       const result = await orchestrator.simulate({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.decisionTrace).toBeDefined();
@@ -583,10 +583,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orchestrator.resolveAndPropose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignRef: "Summer Sale" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         entityRefs: [{ inputRef: "Summer Sale", entityType: "campaign" }],
       });
 
@@ -598,7 +598,7 @@ describe("LifecycleOrchestrator", () => {
 
     it("should resolve and propose when entity is clear", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const cartridgeWithResolve = cartridge as TestCartridge & {
@@ -616,10 +616,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orchestrator.resolveAndPropose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignRef: "Summer Sale" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         entityRefs: [{ inputRef: "Summer Sale", entityType: "campaign" }],
       });
 
@@ -633,14 +633,14 @@ describe("LifecycleOrchestrator", () => {
 
     it("should propose directly when no entity refs", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const result = await orchestrator.resolveAndPropose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         entityRefs: [],
       });
 
@@ -660,10 +660,10 @@ describe("LifecycleOrchestrator", () => {
 
       // Step 1: Propose
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
       expect(proposeResult.envelope.status).toBe("pending_approval");
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -685,7 +685,7 @@ describe("LifecycleOrchestrator", () => {
 
       // Step 4: The undo also needs approval (medium risk)
       // Depending on the undo recipe's risk, it may or may not need approval.
-      // In our test setup, the undo uses "ads.campaign.resume" which goes through
+      // In our test setup, the undo uses "digital-ads.campaign.resume" which goes through
       // the same risk evaluation
       if (undoResult.approvalRequest) {
         // Step 5: Approve undo
@@ -711,7 +711,7 @@ describe("LifecycleOrchestrator", () => {
   describe("Guardrail state mutations", () => {
     it("should increment rate limit counters after execution", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       cartridge.onGuardrails({
@@ -721,15 +721,15 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await orchestrator.executeApproved(result.envelope.id);
 
-      const scopeKey = "user:ads.campaign.pause";
+      const scopeKey = "user:digital-ads.campaign.pause";
       const entry = guardrailState.actionCounts.get(scopeKey);
       expect(entry).toBeDefined();
       expect(entry!.count).toBe(1);
@@ -737,20 +737,20 @@ describe("LifecycleOrchestrator", () => {
 
     it("should set cooldown timestamp after execution", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
         protectedEntities: [],
       });
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1", entityId: "ent_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await orchestrator.executeApproved(result.envelope.id);
@@ -763,7 +763,7 @@ describe("LifecycleOrchestrator", () => {
 
     it("should deny when rate limit is exceeded", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       cartridge.onGuardrails({
@@ -775,20 +775,20 @@ describe("LifecycleOrchestrator", () => {
       // Execute twice to fill the rate limit
       for (let i = 0; i < 2; i++) {
         const result = await orchestrator.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: `camp_${i}` },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         });
         await orchestrator.executeApproved(result.envelope.id);
       }
 
       // Third proposal should be denied
       const denied = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_3" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(denied.denied).toBe(true);
@@ -797,30 +797,30 @@ describe("LifecycleOrchestrator", () => {
 
     it("should deny when cooldown is active", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
         protectedEntities: [],
       });
 
       // Execute once
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1", entityId: "ent_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
       await orchestrator.executeApproved(result.envelope.id);
 
       // Second proposal for same entity should be denied due to cooldown
       const denied = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1", entityId: "ent_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(denied.denied).toBe(true);
@@ -831,7 +831,7 @@ describe("LifecycleOrchestrator", () => {
   describe("Guardrail state persistence", () => {
     it("should persist rate limit counts to store after execution", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const stateStore = new InMemoryGuardrailStateStore();
@@ -849,23 +849,23 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await persistOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await persistOrch.executeApproved(result.envelope.id);
 
       // Verify the store has the entry
-      const stored = await stateStore.getRateLimits(["user:ads.campaign.pause"]);
+      const stored = await stateStore.getRateLimits(["user:digital-ads.campaign.pause"]);
       expect(stored.size).toBe(1);
-      expect(stored.get("user:ads.campaign.pause")?.count).toBe(1);
+      expect(stored.get("user:digital-ads.campaign.pause")?.count).toBe(1);
     });
 
     it("should persist cooldown timestamps to store after execution", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const stateStore = new InMemoryGuardrailStateStore();
@@ -878,15 +878,15 @@ describe("LifecycleOrchestrator", () => {
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
         protectedEntities: [],
       });
 
       const result = await persistOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1", entityId: "ent_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await persistOrch.executeApproved(result.envelope.id);
@@ -898,7 +898,7 @@ describe("LifecycleOrchestrator", () => {
 
     it("should hydrate state — new orchestrator instance sees prior counts", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const stateStore = new InMemoryGuardrailStateStore();
@@ -918,10 +918,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orch1.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
       await orch1.executeApproved(result.envelope.id);
 
@@ -936,21 +936,21 @@ describe("LifecycleOrchestrator", () => {
 
       // Propose triggers hydration — the rate limit count should be visible
       const result2 = await orch2.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_2" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // The action should succeed (not denied) but the count should reflect prior execution
       expect(result2.denied).toBe(false);
       // After hydration, the in-memory state should have the prior count
-      expect(freshGuardrailState.actionCounts.get("user:ads.campaign.pause")?.count).toBe(1);
+      expect(freshGuardrailState.actionCounts.get("user:digital-ads.campaign.pause")?.count).toBe(1);
     });
 
     it("should deny rate-limited action across orchestrator restarts", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       const stateStore = new InMemoryGuardrailStateStore();
@@ -971,10 +971,10 @@ describe("LifecycleOrchestrator", () => {
 
       for (let i = 0; i < 2; i++) {
         const result = await orch1.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: `camp_${i}` },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         });
         await orch1.executeApproved(result.envelope.id);
       }
@@ -988,10 +988,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const denied = await orch2.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_3" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(denied.denied).toBe(true);
@@ -1035,10 +1035,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await authOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -1088,10 +1088,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await authOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       const response = await authOrchestrator.respondToApproval({
@@ -1157,10 +1157,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await authOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Approve as delegate
@@ -1200,10 +1200,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await noApproverOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Should be denied because no approvers are configured
@@ -1239,15 +1239,15 @@ describe("LifecycleOrchestrator", () => {
 
       // Simulate enough successes to earn trust (score >= 80 + >= 10 successes)
       for (let i = 0; i < 25; i++) {
-        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
       }
 
       // Now propose — should be auto-approved because competence adds to trust behaviors
       const result = await competenceOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Agent has earned trust, so action should be approved without manual approval
@@ -1265,20 +1265,20 @@ describe("LifecycleOrchestrator", () => {
     it("should reduce competence on failed execution", async () => {
       // Build up trust
       for (let i = 0; i < 25; i++) {
-        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
       }
 
       // Verify trusted
-      const adj1 = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      const adj1 = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
       expect(adj1!.shouldTrust).toBe(true);
       const scoreBeforeFailures = adj1!.score;
 
       // Record multiple failures to lose trust
       for (let i = 0; i < 5; i++) {
-        await competenceTracker.recordFailure("user_1", "ads.campaign.pause");
+        await competenceTracker.recordFailure("user_1", "digital-ads.campaign.pause");
       }
 
-      const adj2 = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      const adj2 = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
       expect(adj2!.score).toBeLessThan(scoreBeforeFailures);
       expect(adj2!.shouldTrust).toBe(false);
     });
@@ -1286,22 +1286,22 @@ describe("LifecycleOrchestrator", () => {
     it("should record rollback against original action type on undo", async () => {
       // Build up enough competence to avoid escalation (score >= 40)
       for (let i = 0; i < 15; i++) {
-        await competenceTracker.recordSuccess("user_1", "ads.campaign.pause");
+        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
       }
 
       // Also trust the behavior so the action auto-approves
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause", "ads.campaign.resume"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"] }),
       );
 
-      const adjBefore = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      const adjBefore = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
 
       // Execute an action
       const result = await competenceOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Execute it
@@ -1311,7 +1311,7 @@ describe("LifecycleOrchestrator", () => {
       await competenceOrchestrator.requestUndo(result.envelope.id);
 
       // The rollback should have been recorded against the original action type
-      const adjAfter = await competenceTracker.getAdjustment("user_1", "ads.campaign.pause");
+      const adjAfter = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
       // Score should have gone up from the execution success (+3 + streak), then down from rollback (-15)
       // Net change from adjBefore: +success points + streak bonus - 15
       expect(adjAfter!.record.rollbackCount).toBe(1);
@@ -1321,10 +1321,10 @@ describe("LifecycleOrchestrator", () => {
     it("should work without competenceTracker (backward compat)", async () => {
       // Use the original orchestrator (no competence tracker)
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.denied).toBe(false);
@@ -1408,10 +1408,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await chainOrchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -1447,26 +1447,26 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["ads.campaign.pause"] }),
+        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause"] }),
       );
 
       // Execute several actions to build up composite risk context
       for (let i = 0; i < 5; i++) {
         const result = await orchestrator.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: `camp_${i}`, entityId: `ent_${i}` },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         });
         await orchestrator.executeApproved(result.envelope.id);
       }
 
       // The next proposal should have composite context information
       const nextResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_final", entityId: "ent_final" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Composite risk check should be present in the trace
@@ -1482,7 +1482,7 @@ describe("LifecycleOrchestrator", () => {
       // Set daily limit of $3000, perAction $2000
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          trustBehaviors: ["ads.budget.adjust"],
+          trustBehaviors: ["digital-ads.campaign.adjust_budget"],
           globalSpendLimits: { daily: 3000, weekly: null, monthly: null, perAction: 2000 },
         }),
       );
@@ -1490,10 +1490,10 @@ describe("LifecycleOrchestrator", () => {
       // Execute two $1500 actions (total $3000 — at the limit)
       for (let i = 0; i < 2; i++) {
         const result = await orchestrator.propose({
-          actionType: "ads.budget.adjust",
+          actionType: "digital-ads.campaign.adjust_budget",
           parameters: { campaignId: `camp_${i}`, amount: 1500 },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         });
         expect(result.denied).toBe(false);
         await orchestrator.executeApproved(result.envelope.id);
@@ -1501,10 +1501,10 @@ describe("LifecycleOrchestrator", () => {
 
       // Third action of $500 should be denied ($3000 + $500 = $3500 > $3000 daily)
       const denied = await orchestrator.propose({
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         parameters: { campaignId: "camp_final", amount: 500 },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(denied.denied).toBe(true);
@@ -1518,27 +1518,27 @@ describe("LifecycleOrchestrator", () => {
     it("should allow when within daily spend limit", async () => {
       await storage.identity.saveSpec(
         makeIdentitySpec({
-          trustBehaviors: ["ads.budget.adjust"],
+          trustBehaviors: ["digital-ads.campaign.adjust_budget"],
           globalSpendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
         }),
       );
 
       // Execute one $2000 action
       const first = await orchestrator.propose({
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         parameters: { campaignId: "camp_1", amount: 2000 },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
       expect(first.denied).toBe(false);
       await orchestrator.executeApproved(first.envelope.id);
 
       // Second $3000 action should succeed ($2000 + $3000 = $5000 < $10000)
       const second = await orchestrator.propose({
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         parameters: { campaignId: "camp_2", amount: 3000 },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(second.denied).toBe(false);
@@ -1581,10 +1581,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await selfApprovalOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -1609,10 +1609,10 @@ describe("LifecycleOrchestrator", () => {
       }));
 
       const proposeResult = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Approve as admin_1 (different principal) — should succeed
@@ -1659,10 +1659,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await selfApprovalOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       const response = await selfApprovalOrch.respondToApproval({
@@ -1688,10 +1688,10 @@ describe("LifecycleOrchestrator", () => {
 
       await expect(
         orchestrator.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           emergencyOverride: true,
         }),
       ).rejects.toThrow("Emergency override requires admin or emergency_responder role");
@@ -1707,10 +1707,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         emergencyOverride: true,
       });
 
@@ -1728,10 +1728,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         emergencyOverride: true,
       });
 
@@ -1767,10 +1767,10 @@ describe("LifecycleOrchestrator", () => {
       // Approve 3 proposals (at the limit)
       for (let i = 0; i < 3; i++) {
         const proposeResult = await rateLimitedOrch.propose({
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: `camp_${i}` },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         });
 
         await rateLimitedOrch.respondToApproval({
@@ -1783,10 +1783,10 @@ describe("LifecycleOrchestrator", () => {
 
       // 4th approval should be rate limited
       const proposeResult = await rateLimitedOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_4" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       await expect(
@@ -1835,10 +1835,10 @@ describe("LifecycleOrchestrator", () => {
       });
 
       const proposeResult = await patchOrch.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(proposeResult.approvalRequest).not.toBeNull();
@@ -1862,7 +1862,7 @@ describe("LifecycleOrchestrator", () => {
       const profileStore = new InMemoryGovernanceProfileStore();
       await profileStore.setConfig("org_restricted", {
         profile: "enforce" as any,
-        blockedActionTypes: ["ads.campaign.delete"],
+        blockedActionTypes: ["digital-ads.campaign.delete"],
       });
 
       const restrictedOrch = new LifecycleOrchestrator({
@@ -1874,10 +1874,10 @@ describe("LifecycleOrchestrator", () => {
 
       // This should return a structured denial, not throw
       const result = await restrictedOrch.propose({
-        actionType: "ads.campaign.delete",
+        actionType: "digital-ads.campaign.delete",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         organizationId: "org_restricted",
       });
 
@@ -1909,16 +1909,16 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_2" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 
@@ -1962,10 +1962,10 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 
@@ -1989,16 +1989,16 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_2" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 
@@ -2037,16 +2037,16 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_2" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 
@@ -2109,22 +2109,22 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_2" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_3" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 
@@ -2161,10 +2161,10 @@ describe("LifecycleOrchestrator", () => {
 
       const proposals = [
         {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_1" },
           principalId: "user_1",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       ];
 

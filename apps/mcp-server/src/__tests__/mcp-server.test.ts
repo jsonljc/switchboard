@@ -13,7 +13,7 @@ import {
 } from "@switchboard/core";
 import type { StorageContext } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
-import { DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { handleSideEffectTool } from "../tools/side-effect.js";
 import { handleReadTool } from "../tools/read.js";
 import type { ReadToolDeps } from "../tools/read.js";
@@ -39,15 +39,15 @@ async function buildTestContext(): Promise<TestContext> {
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
-  // TestCartridge with ads-spend manifest
+  // TestCartridge with digital-ads manifest
   const cartridge = new TestCartridge(
     createTestManifest({
-      id: "ads-spend",
+      id: "digital-ads",
       actions: [
-        { actionType: "ads.campaign.pause", name: "Pause Campaign", description: "Pause", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "ads.campaign.resume", name: "Resume Campaign", description: "Resume", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "ads.budget.adjust", name: "Adjust Budget", description: "Budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
-        { actionType: "ads.targeting.modify", name: "Modify Targeting", description: "Targeting", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: false },
+        { actionType: "digital-ads.campaign.pause", name: "Pause Campaign", description: "Pause", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+        { actionType: "digital-ads.campaign.resume", name: "Resume Campaign", description: "Resume", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+        { actionType: "digital-ads.budget.adjust", name: "Adjust Budget", description: "Budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
+        { actionType: "digital-ads.targeting.modify", name: "Modify Targeting", description: "Targeting", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: false },
       ],
     }),
   );
@@ -84,8 +84,8 @@ async function buildTestContext(): Promise<TestContext> {
     status: "resolved" as const,
   });
 
-  storage.cartridges.register("ads-spend", cartridge);
-  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+  storage.cartridges.register("digital-ads", cartridge);
+  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Save principal for test actor
   await storage.identity.savePrincipal({
@@ -208,7 +208,7 @@ describe("MCP Server", () => {
 
       const envelope = await ctx.storage.envelopes.getById(result.envelopeId);
       expect(envelope).not.toBeNull();
-      expect(envelope!.proposals[0]!.actionType).toBe("ads.campaign.pause");
+      expect(envelope!.proposals[0]!.actionType).toBe("digital-ads.campaign.pause");
     });
 
     it("rejects invalid input", async () => {
@@ -273,7 +273,7 @@ describe("MCP Server", () => {
 
       const result = await handleReadTool(
         "simulate_action",
-        { actionType: "ads.campaign.pause", parameters: { campaignId: "camp_123" } },
+        { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_123" } },
         ctx.auth,
         ctx.readDeps,
       ) as { decision: string; riskScore: number; riskCategory: string; approvalRequired: string };
@@ -339,7 +339,7 @@ describe("MCP Server", () => {
 
       expect(result.id).toBe(execResult.envelopeId);
       expect(result.status).toBeDefined();
-      expect(result.actionType).toBe("ads.campaign.pause");
+      expect(result.actionType).toBe("digital-ads.campaign.pause");
     });
 
     it("get_action_status throws for non-existent envelope", async () => {
@@ -370,12 +370,12 @@ describe("MCP Server", () => {
         name: "Deny Test",
         description: "Deny all targeting modifications",
         organizationId: null,
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         priority: 0,
         active: true,
         rule: {
           composition: "AND" as const,
-          conditions: [{ field: "actionType", operator: "eq" as const, value: "ads.targeting.modify" }],
+          conditions: [{ field: "actionType", operator: "eq" as const, value: "digital-ads.targeting.modify" }],
         },
         effect: "deny" as const,
         effectParams: undefined,

@@ -20,7 +20,7 @@ function createMockReadAdapter(
 }
 
 const DEFAULT_DEPS = {
-  cartridgeId: "ads-spend",
+  cartridgeId: "digital-ads",
   actorId: "user_1",
   organizationId: null as string | null,
 };

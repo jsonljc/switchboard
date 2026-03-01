@@ -150,7 +150,7 @@ describe("Governance Profiles", () => {
       ledger = new AuditLedger(ledgerStorage);
       guardrailState = createGuardrailState();
 
-      cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
+      cartridge = new TestCartridge(createTestManifest({ id: "digital-ads" }));
       cartridge.onExecute((_actionType, params) => ({
         success: true,
         summary: `Executed ${_actionType}`,
@@ -161,15 +161,15 @@ describe("Governance Profiles", () => {
         undoRecipe: null,
       }));
 
-      storage.cartridges.register("ads-spend", cartridge);
+      storage.cartridges.register("digital-ads", cartridge);
 
       // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
       await storage.policies.save({
         id: "default-allow-ads",
-        name: "Default allow ads-spend",
-        description: "Allow all ads-spend actions",
+        name: "Default allow digital-ads",
+        description: "Allow all digital-ads actions",
         organizationId: null,
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         priority: 100,
         active: true,
         rule: { composition: "AND", conditions: [], children: [] },
@@ -199,15 +199,15 @@ describe("Governance Profiles", () => {
       await storage.identity.saveSpec(
         makeIdentitySpec({
           governanceProfile: "observe",
-          forbiddenBehaviors: ["ads.campaign.pause"],
+          forbiddenBehaviors: ["digital-ads.campaign.pause"],
         }),
       );
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Observe mode auto-approves even for forbidden behaviors
@@ -229,10 +229,10 @@ describe("Governance Profiles", () => {
       );
 
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       // Observe: auto-approved even though risk is high
@@ -247,10 +247,10 @@ describe("Governance Profiles", () => {
 
       // Low-risk action should still require approval in locked mode
       const result = await orchestrator.propose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_1" },
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       });
 
       expect(result.envelope.status).toBe("pending_approval");

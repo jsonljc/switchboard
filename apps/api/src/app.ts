@@ -35,7 +35,7 @@ import {
   setMetrics,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
-import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
@@ -214,14 +214,14 @@ export async function buildServer() {
     }
   }
 
-  // Register ads-spend cartridge
-  const { cartridge: adsCartridge, interceptors } = await bootstrapAdsSpendCartridge({
+  // Register digital-ads cartridge
+  const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
     accessToken: adsAccessToken ?? "mock-token-dev-only",
     adAccountId: adsAccountId ?? "act_mock_dev_only",
     requireCredentials: process.env.NODE_ENV === "production",
   });
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
-  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Register quant-trading cartridge
   const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();

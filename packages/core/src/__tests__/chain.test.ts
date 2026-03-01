@@ -106,24 +106,24 @@ describe("Delegation Chain Resolution", () => {
 
   it("scope narrowing across chain", () => {
     const delegations: DelegationRule[] = [
-      makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "ads.*", maxChainDepth: 5 }),
-      makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "ads.budget.*", maxChainDepth: 5 }),
+      makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "digital-ads.*", maxChainDepth: 5 }),
+      makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "digital-ads.campaign.*", maxChainDepth: 5 }),
     ];
-    const result = resolveDelegationChain("A", ["C"], delegations, { requiredScope: "ads.budget.adjust" });
+    const result = resolveDelegationChain("A", ["C"], delegations, { requiredScope: "digital-ads.campaign.adjust_budget" });
     expect(result.authorized).toBe(true);
-    expect(result.effectiveScope).toBe("ads.budget.*");
+    expect(result.effectiveScope).toBe("digital-ads.campaign.*");
   });
 
   it("scope widening is prevented — keeps narrower scope", () => {
     const delegations: DelegationRule[] = [
-      makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "ads.budget.*", maxChainDepth: 5 }),
-      makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "ads.*", maxChainDepth: 5 }),
+      makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "digital-ads.campaign.*", maxChainDepth: 5 }),
+      makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "digital-ads.*", maxChainDepth: 5 }),
     ];
-    // B→C tries to widen from "ads.budget.*" to "ads.*" but narrowScope keeps "ads.budget.*"
+    // B→C tries to widen from "digital-ads.campaign.*" to "digital-ads.*" but narrowScope keeps "digital-ads.campaign.*"
     const result = resolveDelegationChain("A", ["C"], delegations);
     expect(result.authorized).toBe(true);
-    // Effective scope stays narrowed at "ads.budget.*"
-    expect(result.effectiveScope).toBe("ads.budget.*");
+    // Effective scope stays narrowed at "digital-ads.campaign.*"
+    expect(result.effectiveScope).toBe("digital-ads.campaign.*");
   });
 
   it("no valid path returns unauthorized result", () => {
@@ -147,23 +147,23 @@ describe("Delegation Chain Resolution", () => {
 
 describe("narrowScope", () => {
   it("wildcard defers to specific", () => {
-    expect(narrowScope("*", "ads.*")).toBe("ads.*");
-    expect(narrowScope("ads.*", "*")).toBe("ads.*");
+    expect(narrowScope("*", "digital-ads.*")).toBe("digital-ads.*");
+    expect(narrowScope("digital-ads.*", "*")).toBe("digital-ads.*");
   });
 
   it("equal scopes remain equal", () => {
-    expect(narrowScope("ads.budget.adjust", "ads.budget.adjust")).toBe("ads.budget.adjust");
+    expect(narrowScope("digital-ads.campaign.adjust_budget", "digital-ads.campaign.adjust_budget")).toBe("digital-ads.campaign.adjust_budget");
   });
 
   it("narrows from broader to narrower", () => {
-    expect(narrowScope("ads.*", "ads.budget.*")).toBe("ads.budget.*");
+    expect(narrowScope("digital-ads.*", "digital-ads.budget.*")).toBe("digital-ads.budget.*");
   });
 
   it("returns null for incompatible scopes", () => {
-    expect(narrowScope("ads.*", "billing.*")).toBeNull();
+    expect(narrowScope("digital-ads.*", "billing.*")).toBeNull();
   });
 
   it("widening keeps the narrower scope", () => {
-    expect(narrowScope("ads.budget.*", "ads.*")).toBe("ads.budget.*");
+    expect(narrowScope("digital-ads.budget.*", "digital-ads.*")).toBe("digital-ads.budget.*");
   });
 });

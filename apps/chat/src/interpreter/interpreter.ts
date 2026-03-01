@@ -53,21 +53,21 @@ export class RuleBasedInterpreter implements Interpreter {
     this.patterns = [
       {
         regex: /pause\s+(?:campaign\s+)?['"]?(.+?)['"]?\s*$/i,
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
         }),
       },
       {
         regex: /resume\s+(?:campaign\s+)?['"']?(.+?)['"']?\s*$/i,
-        actionType: "ads.campaign.resume",
+        actionType: "digital-ads.campaign.resume",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
         }),
       },
       {
         regex: /(?:set|change|adjust|update)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
           newBudget: parseFloat(match[2] ?? "0"),
@@ -75,7 +75,7 @@ export class RuleBasedInterpreter implements Interpreter {
       },
       {
         regex: /(?:increase|raise)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
           budgetChange: parseFloat(match[2] ?? "0"),
@@ -83,7 +83,7 @@ export class RuleBasedInterpreter implements Interpreter {
       },
       {
         regex: /(?:decrease|lower|reduce)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
-        actionType: "ads.budget.adjust",
+        actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
           budgetChange: -parseFloat(match[2] ?? "0"),
@@ -202,7 +202,7 @@ export class RuleBasedInterpreter implements Interpreter {
 
     // No match - build dynamic clarification based on available actions
     const capabilities: string[] = [];
-    if (availableActions.some((a) => a.startsWith("ads."))) {
+    if (availableActions.some((a) => a.startsWith("digital-ads."))) {
       capabilities.push("pause/resume campaigns, adjust budgets");
     }
     if (availableActions.some((a) => a.startsWith("payments."))) {

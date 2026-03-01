@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@switchboard/ads-spend": "workspace:*",
+    "@switchboard/digital-ads": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*",

@@ -30,7 +30,7 @@ export const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
       { key: "accessToken", label: "Access Token", type: "password", placeholder: "EAA..." },
       { key: "adAccountId", label: "Ad Account ID", type: "text", placeholder: "act_123456789" },
     ],
-    cartridgeId: "ads-spend",
+    cartridgeId: "digital-ads",
     description: "Manage ad campaigns, budgets, and audience targeting.",
   },
   {

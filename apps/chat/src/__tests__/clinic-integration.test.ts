@@ -176,7 +176,7 @@ describe("Clinic Integration", () => {
     const ledger = new AuditLedger(ledgerStorage);
     const guardrailState = createGuardrailState();
 
-    const cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
+    const cartridge = new TestCartridge(createTestManifest({ id: "digital-ads" }));
     cartridge.onRiskInput(() => ({
       baseRisk: "high" as const,
       exposure: { dollarsAtRisk: 500, blastRadius: 1 },
@@ -193,7 +193,7 @@ describe("Clinic Integration", () => {
       undoRecipe: {
         originalActionId: (params["_actionId"] as string) ?? "unknown",
         originalEnvelopeId: (params["_envelopeId"] as string) ?? "unknown",
-        reverseActionType: "ads.campaign.resume",
+        reverseActionType: "digital-ads.campaign.resume",
         reverseParameters: { campaignId: params["campaignId"] },
         undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         undoRiskCategory: "medium",
@@ -216,15 +216,15 @@ describe("Clinic Integration", () => {
       status: "resolved" as const,
     });
 
-    storage.cartridges.register("ads-spend", cartridge);
+    storage.cartridges.register("digital-ads", cartridge);
 
     // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
     await storage.policies.save({
       id: "default-allow-ads",
-      name: "Default allow ads-spend",
-      description: "Allow all ads-spend actions",
+      name: "Default allow digital-ads",
+      description: "Allow all digital-ads actions",
       organizationId: null,
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       priority: 100,
       active: true,
       rule: { composition: "AND", conditions: [], children: [] },
@@ -285,7 +285,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
+        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
         readAdapter,
       });
 
@@ -321,7 +321,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
         readAdapter,
       });
 
@@ -353,7 +353,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
         readAdapter,
       });
 
@@ -385,7 +385,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
       });
 
       adapter.setNextMessage(makeMessage("how are my campaigns?"));
@@ -419,7 +419,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
         readAdapter,
       });
 
@@ -441,7 +441,7 @@ describe("Clinic Integration", () => {
       mockInterpreter.setNextResult({
         proposals: [{
           id: "prop_test_1",
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignRef: "Summer Sale" },
           evidence: "Clinic intent: pause",
           confidence: 0.95,
@@ -457,7 +457,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
+        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
       });
 
       adapter.setNextMessage(makeMessage("pause Summer Sale"));
@@ -487,7 +487,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
       });
 
       adapter.setNextMessage(makeMessage("what's the weather?"));
@@ -508,7 +508,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: ruleInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
+        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
         // No readAdapter
       });
 
@@ -526,7 +526,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: ruleInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
       });
 
       adapter.setNextMessage(makeMessage("what is the weather"));
@@ -542,7 +542,7 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: ruleInterpreter,
         orchestrator,
-        availableActions: ["ads.campaign.pause"],
+        availableActions: ["digital-ads.campaign.pause"],
       });
 
       adapter.setNextMessage(makeMessage("help"));

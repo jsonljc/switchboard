@@ -20,10 +20,10 @@ describe("Audit API", () => {
       method: "POST",
       url: "/api/actions/propose",
       payload: {
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_123" },
         principalId: "default",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
       },
     });
     return res.json();

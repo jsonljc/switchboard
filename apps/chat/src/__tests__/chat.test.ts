@@ -21,9 +21,9 @@ import { buildApprovalCard } from "../composer/approval-card.js";
 // ---------------------------------------------------------------------------
 describe("RuleBasedInterpreter", () => {
   const allActions = [
-    "ads.campaign.pause",
-    "ads.campaign.resume",
-    "ads.budget.adjust",
+    "digital-ads.campaign.pause",
+    "digital-ads.campaign.resume",
+    "digital-ads.campaign.adjust_budget",
     "system.undo",
   ];
 
@@ -36,7 +36,7 @@ describe("RuleBasedInterpreter", () => {
   it('parses "pause Summer Sale" -> ads.campaign.pause proposal', async () => {
     const result = await interpreter.interpret("pause Summer Sale", {}, allActions);
     expect(result.proposals).toHaveLength(1);
-    expect(result.proposals[0]!.actionType).toBe("ads.campaign.pause");
+    expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.pause");
     expect(result.proposals[0]!.parameters).toEqual({ campaignRef: "Summer Sale" });
     expect(result.needsClarification).toBe(false);
   });
@@ -44,7 +44,7 @@ describe("RuleBasedInterpreter", () => {
   it('parses "resume campaign X" -> ads.campaign.resume proposal', async () => {
     const result = await interpreter.interpret("resume campaign X", {}, allActions);
     expect(result.proposals).toHaveLength(1);
-    expect(result.proposals[0]!.actionType).toBe("ads.campaign.resume");
+    expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.resume");
     expect(result.proposals[0]!.parameters).toEqual({ campaignRef: "X" });
     expect(result.needsClarification).toBe(false);
   });
@@ -56,7 +56,7 @@ describe("RuleBasedInterpreter", () => {
       allActions,
     );
     expect(result.proposals).toHaveLength(1);
-    expect(result.proposals[0]!.actionType).toBe("ads.budget.adjust");
+    expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
       campaignRef: "Campaign A",
       newBudget: 800,
@@ -70,7 +70,7 @@ describe("RuleBasedInterpreter", () => {
       allActions,
     );
     expect(result.proposals).toHaveLength(1);
-    expect(result.proposals[0]!.actionType).toBe("ads.budget.adjust");
+    expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
       campaignRef: "X",
       budgetChange: 200,
@@ -84,7 +84,7 @@ describe("RuleBasedInterpreter", () => {
       allActions,
     );
     expect(result.proposals).toHaveLength(1);
-    expect(result.proposals[0]!.actionType).toBe("ads.budget.adjust");
+    expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
       campaignRef: "X",
       budgetChange: -100,
@@ -131,7 +131,7 @@ describe("RuleBasedInterpreter", () => {
 
   it("returns needsClarification when action type is not in availableActions", async () => {
     const result = await interpreter.interpret("pause Summer Sale", {}, [
-      "ads.budget.adjust",
+      "digital-ads.campaign.adjust_budget",
     ]);
     expect(result.proposals).toHaveLength(0);
     expect(result.needsClarification).toBe(true);
@@ -147,7 +147,7 @@ describe("guardInterpreterOutput", () => {
       proposals: [
         {
           id: "prop_1",
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignRef: "Test" },
           evidence: "Matched",
           confidence: 0.85,

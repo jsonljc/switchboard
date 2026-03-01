@@ -12,7 +12,7 @@ import {
   ExecutionService,
   CartridgeReadAdapter,
 } from "@switchboard/core";
-import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { SwitchboardMcpServer } from "./server.js";
 
 async function main() {
@@ -27,13 +27,13 @@ async function main() {
   // ── Cartridge registration ───────────────────────────────────────────
   const adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
   const adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
-  const { cartridge: adsCartridge, interceptors } = await bootstrapAdsSpendCartridge({
+  const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
     accessToken: adsAccessToken ?? "mock-token-dev-only",
     adAccountId: adsAccountId ?? "act_mock_dev_only",
     requireCredentials: process.env.NODE_ENV === "production",
   });
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
-  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // ── Orchestrator + services ──────────────────────────────────────────
   const orchestrator = new LifecycleOrchestrator({

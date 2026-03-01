@@ -6,9 +6,9 @@ import type { LLMConfig, LLMResponse } from "../interpreter/llm-base.js";
 import type { ClinicContext } from "../clinic/types.js";
 
 const ALL_ACTIONS = [
-  "ads.campaign.pause",
-  "ads.campaign.resume",
-  "ads.budget.adjust",
+  "digital-ads.campaign.pause",
+  "digital-ads.campaign.resume",
+  "digital-ads.campaign.adjust_budget",
   "system.undo",
 ];
 
@@ -160,7 +160,7 @@ describe("ClinicInterpreter", () => {
       );
 
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.campaign.pause");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.pause");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Summer Sale");
       expect(result.readIntent).toBeUndefined();
       expect(result.needsClarification).toBe(false);
@@ -181,7 +181,7 @@ describe("ClinicInterpreter", () => {
       );
 
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.campaign.resume");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.resume");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Winter Promo");
     });
 
@@ -200,7 +200,7 @@ describe("ClinicInterpreter", () => {
       );
 
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.budget.adjust");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Summer Sale");
       expect(result.proposals[0]!.parameters["newBudget"]).toBe(500);
     });
@@ -216,7 +216,7 @@ describe("ClinicInterpreter", () => {
       const result = await interpreter.interpret(
         "pause Summer Sale",
         {},
-        ["ads.budget.adjust"], // pause not available
+        ["digital-ads.campaign.adjust_budget"], // pause not available
       );
 
       expect(result.proposals).toHaveLength(0);
@@ -358,7 +358,7 @@ describe("ClinicInterpreter", () => {
       // Regex fallback should match "pause" pattern
       expect(result.rawResponse).toContain("[FALLBACK_REGEX]");
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.campaign.pause");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.pause");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Summer Sale");
     });
 
@@ -471,7 +471,7 @@ describe("ClinicInterpreter", () => {
         ALL_ACTIONS,
       );
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.campaign.resume");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.resume");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Winter Promo");
     });
 
@@ -482,7 +482,7 @@ describe("ClinicInterpreter", () => {
         ALL_ACTIONS,
       );
       expect(result.proposals).toHaveLength(1);
-      expect(result.proposals[0]!.actionType).toBe("ads.budget.adjust");
+      expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Summer Sale");
       expect(result.proposals[0]!.parameters["newBudget"]).toBe(500);
     });

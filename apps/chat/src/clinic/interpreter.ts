@@ -17,9 +17,9 @@ import type { ModelRouter } from "./model-router.js";
 
 /** Maps write intents to cartridge action types. */
 const INTENT_TO_ACTION: Record<string, string> = {
-  [AllowedIntent.PAUSE]: "ads.campaign.pause",
-  [AllowedIntent.RESUME]: "ads.campaign.resume",
-  [AllowedIntent.ADJUST_BUDGET]: "ads.budget.adjust",
+  [AllowedIntent.PAUSE]: "digital-ads.campaign.pause",
+  [AllowedIntent.RESUME]: "digital-ads.campaign.resume",
+  [AllowedIntent.ADJUST_BUDGET]: "digital-ads.campaign.adjust_budget",
 };
 
 /** All valid intent values for validation. */

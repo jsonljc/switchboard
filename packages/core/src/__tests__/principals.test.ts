@@ -86,30 +86,30 @@ describe("Identity Principals — canActAs", () => {
   it("scope wildcard '*' matches any action", () => {
     const principal = makePrincipal({ id: "user-1" });
     const delegation = makeDelegation({ scope: "*" });
-    expect(canActAs(principal, "target-user", [delegation], "ads.budget.adjust")).toBe(true);
+    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
   });
 
   it("exact scope match works", () => {
     const principal = makePrincipal({ id: "user-1" });
-    const delegation = makeDelegation({ scope: "ads.budget.adjust" });
-    expect(canActAs(principal, "target-user", [delegation], "ads.budget.adjust")).toBe(true);
+    const delegation = makeDelegation({ scope: "digital-ads.campaign.adjust_budget" });
+    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
   });
 
   it("exact scope mismatch is rejected", () => {
     const principal = makePrincipal({ id: "user-1" });
-    const delegation = makeDelegation({ scope: "ads.budget.adjust" });
-    expect(canActAs(principal, "target-user", [delegation], "ads.campaign.pause")).toBe(false);
+    const delegation = makeDelegation({ scope: "digital-ads.campaign.adjust_budget" });
+    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.pause")).toBe(false);
   });
 
-  it("prefix wildcard 'ads.*' matches 'ads.budget.adjust'", () => {
+  it("prefix wildcard 'digital-ads.*' matches 'digital-ads.campaign.adjust_budget'", () => {
     const principal = makePrincipal({ id: "user-1" });
-    const delegation = makeDelegation({ scope: "ads.*" });
-    expect(canActAs(principal, "target-user", [delegation], "ads.budget.adjust")).toBe(true);
+    const delegation = makeDelegation({ scope: "digital-ads.*" });
+    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
   });
 
-  it("prefix wildcard 'ads.*' does not match 'other.action'", () => {
+  it("prefix wildcard 'digital-ads.*' does not match 'other.action'", () => {
     const principal = makePrincipal({ id: "user-1" });
-    const delegation = makeDelegation({ scope: "ads.*" });
+    const delegation = makeDelegation({ scope: "digital-ads.*" });
     expect(canActAs(principal, "target-user", [delegation], "other.action")).toBe(false);
   });
 

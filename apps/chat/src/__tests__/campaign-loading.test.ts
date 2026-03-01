@@ -44,9 +44,9 @@ class PromptCapturingInterpreter extends ClinicInterpreter {
 }
 
 const ALL_ACTIONS = [
-  "ads.campaign.pause",
-  "ads.campaign.resume",
-  "ads.budget.adjust",
+  "digital-ads.campaign.pause",
+  "digital-ads.campaign.resume",
+  "digital-ads.campaign.adjust_budget",
 ];
 
 describe("Campaign name loading and prompt grounding", () => {

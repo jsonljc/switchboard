@@ -110,7 +110,7 @@ describe("ChatRuntime Integration", () => {
     const ledger = new AuditLedger(ledgerStorage);
     const guardrailState = createGuardrailState();
 
-    cartridge = new TestCartridge(createTestManifest({ id: "ads-spend" }));
+    cartridge = new TestCartridge(createTestManifest({ id: "digital-ads" }));
 
     // Set up cartridge to return high base risk, which computes to
     // "medium" risk category (score ~56), triggering standard approval
@@ -131,7 +131,7 @@ describe("ChatRuntime Integration", () => {
       undoRecipe: {
         originalActionId: (params["_actionId"] as string) ?? "unknown",
         originalEnvelopeId: (params["_envelopeId"] as string) ?? "unknown",
-        reverseActionType: "ads.campaign.resume",
+        reverseActionType: "digital-ads.campaign.resume",
         reverseParameters: { campaignId: params["campaignId"] },
         undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         undoRiskCategory: "medium",
@@ -155,15 +155,15 @@ describe("ChatRuntime Integration", () => {
       status: "resolved" as const,
     });
 
-    storage.cartridges.register("ads-spend", cartridge);
+    storage.cartridges.register("digital-ads", cartridge);
 
     // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
     await storage.policies.save({
       id: "default-allow-ads",
-      name: "Default allow ads-spend",
-      description: "Allow all ads-spend actions",
+      name: "Default allow digital-ads",
+      description: "Allow all digital-ads actions",
       organizationId: null,
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       priority: 100,
       active: true,
       rule: { composition: "AND", conditions: [], children: [] },
@@ -204,7 +204,7 @@ describe("ChatRuntime Integration", () => {
       adapter,
       interpreter: new RuleBasedInterpreter(),
       orchestrator,
-      availableActions: ["ads.campaign.pause", "ads.campaign.resume", "ads.budget.adjust"],
+      availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
     });
 
     // Clean up thread state
@@ -272,7 +272,7 @@ describe("ChatRuntime Integration", () => {
     // Update identity to forbid this action
     await storage.identity.saveSpec(
       makeIdentitySpec({
-        forbiddenBehaviors: ["ads.campaign.pause"],
+        forbiddenBehaviors: ["digital-ads.campaign.pause"],
       }),
     );
 
