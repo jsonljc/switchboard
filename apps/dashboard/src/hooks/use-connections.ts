@@ -64,6 +64,7 @@ export function useDeleteConnection() {
 }
 
 export function useTestConnection() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/dashboard/connections/${id}/test`, { method: "POST" });
@@ -72,6 +73,30 @@ export function useTestConnection() {
         throw new Error(data.error || "Failed to test connection");
       }
       return res.json() as Promise<{ healthy: boolean; detail?: string }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
+    },
+  });
+}
+
+export function useUpdateConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; serviceName?: string; authType?: string; credentials?: Record<string, unknown>; scopes?: string[] }) => {
+      const res = await fetch(`/api/dashboard/connections/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update connection");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.connections.all });
     },
   });
 }

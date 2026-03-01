@@ -61,6 +61,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   const reloadHandler = () => {
     const newEntries = loadHashedKeys();
     keyEntries = newEntries;
+    dbKeyCache.clear();
     app.log.info({ keyCount: newEntries.length }, "API keys reloaded via SIGHUP");
   };
   process.on("SIGHUP", reloadHandler);
@@ -122,10 +123,14 @@ const authPlugin: FastifyPluginAsync = async (app) => {
         request.principalIdFromAuth = cached.metadata.principalId;
         return;
       }
+      // Evict expired entry
+      if (cached) {
+        dbKeyCache.delete(hashHex);
+      }
 
       // Query DB
       try {
-        const user = await app.prisma.dashboardUser.findFirst({
+        const user = await app.prisma.dashboardUser.findUnique({
           where: { apiKeyHash: hashHex },
           select: { organizationId: true, principalId: true },
         });

@@ -30,6 +30,7 @@ const runtimeTabs = [
   { value: "openclaw", label: "OpenClaw" },
   { value: "mcp", label: "MCP (Claude/Cursor)" },
   { value: "http", label: "HTTP API" },
+  { value: "managed", label: "Managed" },
 ];
 
 export function StepIntegration({ guide, isLoading, runtimeType, onRuntimeChange }: StepIntegrationProps) {

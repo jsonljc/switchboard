@@ -1,5 +1,19 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
+import type { PrismaConnectionStore as PrismaConnectionStoreType } from "@switchboard/db";
+
+let _storeModule: { PrismaConnectionStore: typeof PrismaConnectionStoreType } | null = null;
+async function getConnectionStore(prisma: any): Promise<InstanceType<typeof PrismaConnectionStoreType>> {
+  if (!_storeModule) {
+    _storeModule = await import("@switchboard/db") as any;
+  }
+  return new _storeModule!.PrismaConnectionStore(prisma);
+}
+
+function redactCredentials(connection: Record<string, any>): Record<string, any> {
+  const { credentials: _, ...rest } = connection;
+  return { ...rest, credentials: "***" };
+}
 
 export const connectionsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/connections — create a new connection (org-scoped)
@@ -11,6 +25,11 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
   }, async (request, reply) => {
     if (!app.prisma) {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const organizationId = request.organizationIdFromAuth;
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
     }
 
     const body = request.body as {
@@ -25,9 +44,7 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "serviceId, serviceName, authType, and credentials are required", statusCode: 400 });
     }
 
-    const organizationId = request.organizationIdFromAuth ?? null;
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
+    const store = await getConnectionStore(app.prisma);
 
     const connection = {
       id: randomUUID(),
@@ -44,7 +61,7 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
 
     await store.save(connection);
     return reply.code(201).send({
-      connection: { ...connection, credentials: "***" },
+      connection: redactCredentials(connection),
     });
   });
 
@@ -60,12 +77,15 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const organizationId = request.organizationIdFromAuth;
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
+    }
+
+    const store = await getConnectionStore(app.prisma);
     const connections = await store.list(organizationId);
 
     return reply.code(200).send({
-      connections: connections.map((c) => ({ ...c, credentials: "***" })),
+      connections: connections.map(redactCredentials),
     });
   });
 
@@ -80,21 +100,20 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
+    const organizationId = request.organizationIdFromAuth;
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
+    }
+
     const { id } = request.params as { id: string };
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
+    const store = await getConnectionStore(app.prisma);
     const connection = await store.getById(id);
 
-    if (!connection) {
+    if (!connection || connection.organizationId !== organizationId) {
       return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
     }
 
-    // Scope check
-    if (request.organizationIdFromAuth && connection.organizationId !== request.organizationIdFromAuth) {
-      return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
-    }
-
-    return reply.code(200).send({ connection: { ...connection, credentials: "***" } });
+    return reply.code(200).send({ connection: redactCredentials(connection) });
   });
 
   // PUT /api/connections/:id — update connection via save() (upsert)
@@ -108,6 +127,11 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
+    const organizationId = request.organizationIdFromAuth;
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
+    }
+
     const { id } = request.params as { id: string };
     const body = request.body as {
       serviceName?: string;
@@ -116,15 +140,10 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       scopes?: string[];
     };
 
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
+    const store = await getConnectionStore(app.prisma);
     const existing = await store.getById(id);
 
-    if (!existing) {
-      return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
-    }
-
-    if (request.organizationIdFromAuth && existing.organizationId !== request.organizationIdFromAuth) {
+    if (!existing || existing.organizationId !== organizationId) {
       return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
     }
 
@@ -150,16 +169,16 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
-    const { id } = request.params as { id: string };
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
-    const existing = await store.getById(id);
-
-    if (!existing) {
-      return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
+    const organizationId = request.organizationIdFromAuth;
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
     }
 
-    if (request.organizationIdFromAuth && existing.organizationId !== request.organizationIdFromAuth) {
+    const { id } = request.params as { id: string };
+    const store = await getConnectionStore(app.prisma);
+    const existing = await store.getById(id);
+
+    if (!existing || existing.organizationId !== organizationId) {
       return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
     }
 
@@ -178,16 +197,16 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
-    const { id } = request.params as { id: string };
-    const { PrismaConnectionStore } = await import("@switchboard/db");
-    const store = new PrismaConnectionStore(app.prisma);
-    const connection = await store.getById(id);
-
-    if (!connection) {
-      return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
+    const organizationId = request.organizationIdFromAuth;
+    if (!organizationId) {
+      return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
     }
 
-    if (request.organizationIdFromAuth && connection.organizationId !== request.organizationIdFromAuth) {
+    const { id } = request.params as { id: string };
+    const store = await getConnectionStore(app.prisma);
+    const connection = await store.getById(id);
+
+    if (!connection || connection.organizationId !== organizationId) {
       return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
     }
 
@@ -204,7 +223,7 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         // Found a matching cartridge — check if it has healthCheck
         if (typeof (cartridge as any).healthCheck === "function") {
           try {
-            await (cartridge as any).healthCheck();
+            await (cartridge as any).healthCheck(connection.credentials);
             healthResult = { healthy: true };
           } catch (err: any) {
             healthResult = { healthy: false, detail: err.message };
