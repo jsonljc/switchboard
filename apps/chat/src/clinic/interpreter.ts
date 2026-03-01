@@ -7,6 +7,8 @@ import {
   AllowedIntent,
   READ_INTENTS,
   WRITE_INTENTS,
+  DIAGNOSTIC_INTENTS,
+  DIAGNOSTIC_INTENT_TO_ACTION,
 } from "./types.js";
 import type {
   ClassifyResult,
@@ -83,6 +85,32 @@ const FALLBACK_PATTERNS: Array<{
     intent: AllowedIntent.REVERT,
     extractSlots: () => ({}),
   },
+  // Diagnostic fallback patterns
+  {
+    regex: /diagnose\s+(?:my\s+)?funnel/i,
+    intent: AllowedIntent.DIAGNOSE_FUNNEL,
+    extractSlots: () => ({}),
+  },
+  {
+    regex: /(?:how\s+are|what's\s+wrong\s+with|analyze)\s+(?:my\s+)?(?:ads?|campaigns?|funnel|performance)/i,
+    intent: AllowedIntent.DIAGNOSE_FUNNEL,
+    extractSlots: () => ({}),
+  },
+  {
+    regex: /(?:portfolio|cross.?platform)\s+(?:analysis|diagnostic|report)/i,
+    intent: AllowedIntent.DIAGNOSE_PORTFOLIO,
+    extractSlots: () => ({}),
+  },
+  {
+    regex: /(?:snapshot|raw\s+metrics|show\s+(?:me\s+)?(?:my\s+)?metrics)/i,
+    intent: AllowedIntent.FETCH_SNAPSHOT,
+    extractSlots: () => ({}),
+  },
+  {
+    regex: /(?:campaign|ad\s*set)\s+structure\s+(?:analysis|check|review)/i,
+    intent: AllowedIntent.ANALYZE_STRUCTURE,
+    extractSlots: () => ({}),
+  },
 ];
 
 const SYSTEM_PROMPT = `You are a clinic ad operations classifier. Your ONLY job is to classify the user's message into one of these intents and extract relevant parameters.
@@ -99,6 +127,10 @@ Intents:
 - adjust_budget: user wants to change a campaign's budget (increase, decrease, set to specific amount)
 - kill_switch: user wants to stop ALL campaigns immediately (emergency)
 - revert: user wants to undo the last action
+- diagnose_funnel: user wants a diagnostic analysis of their ad funnel (e.g. "diagnose my funnel", "what's wrong with my ads")
+- diagnose_portfolio: user wants cross-platform portfolio analysis (e.g. "portfolio analysis", "cross-platform report")
+- fetch_snapshot: user wants raw metrics/snapshot data (e.g. "show me my metrics", "snapshot")
+- analyze_structure: user wants campaign structure analysis (e.g. "analyze campaign structure", "check ad set structure")
 - unknown: the message is not related to ad management
 
 Known campaigns for this clinic:
@@ -281,7 +313,8 @@ export class ClinicInterpreter extends LLMInterpreter {
           "- Campaign performance reports\n" +
           "- Pausing or resuming campaigns\n" +
           "- Adjusting budgets\n" +
-          "- Getting more leads\n\n" +
+          "- Getting more leads\n" +
+          "- Funnel diagnostics and portfolio analysis\n\n" +
           "What would you like to do?",
         confidence,
       };
@@ -324,6 +357,38 @@ export class ClinicInterpreter extends LLMInterpreter {
           actionType: "system.kill_switch",
           parameters: {},
           evidence: "Emergency kill switch requested",
+          confidence,
+          originatingMessageId: "",
+        }],
+        needsClarification: false,
+        clarificationQuestion: null,
+        confidence,
+      };
+    }
+
+    // Diagnostic intents → ActionProposal (auto-approve via low risk)
+    if (DIAGNOSTIC_INTENTS.has(intent)) {
+      const actionType = DIAGNOSTIC_INTENT_TO_ACTION[intent];
+      if (!actionType || !availableActions.includes(actionType)) {
+        return {
+          proposals: [],
+          needsClarification: true,
+          clarificationQuestion: "That diagnostic action is not available right now.",
+          confidence: 0.3,
+        };
+      }
+
+      return {
+        proposals: [{
+          id: `prop_${randomUUID()}`,
+          actionType,
+          parameters: {
+            platform: "meta",
+            entityId: this.clinicContext.adAccountId,
+            vertical: (slots["vertical"] as string) ?? "commerce",
+            periodDays: (slots["periodDays"] as number) ?? 7,
+          },
+          evidence: `Diagnostic intent: ${intent}`,
           confidence,
           originatingMessageId: "",
         }],

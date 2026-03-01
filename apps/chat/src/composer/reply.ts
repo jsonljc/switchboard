@@ -52,7 +52,7 @@ export function composeExecutionResult(
 export function composeHelpMessage(availableActions: string[]): string {
   const sections: string[] = [];
 
-  const hasAds = availableActions.some((a) => a.startsWith("ads."));
+  const hasAds = availableActions.some((a) => a.startsWith("digital-ads."));
   const hasPayments = availableActions.some((a) => a.startsWith("payments."));
   const hasTrading = availableActions.some((a) => a.startsWith("trading."));
 
@@ -62,6 +62,14 @@ export function composeHelpMessage(availableActions: string[]): string {
       `- "pause Summer Sale"\n` +
       `- "resume Brand Awareness"\n` +
       `- "set budget for Retargeting to $800"`,
+    );
+    sections.push(
+      `Diagnostics:\n` +
+      `- "diagnose my funnel"\n` +
+      `- "how are my ads doing?"\n` +
+      `- "portfolio analysis"\n` +
+      `- "analyze campaign structure"\n` +
+      `- "show me my metrics"`,
     );
   }
   if (hasPayments) {
@@ -98,8 +106,8 @@ export function composeUncertainReply(availableActions?: string[]): string {
   if (!availableActions || availableActions.length === 0) {
     capabilities.push("various actions");
   } else {
-    if (availableActions.some((a) => a.startsWith("ads."))) {
-      capabilities.push("pause/resume campaigns, adjust budgets");
+    if (availableActions.some((a) => a.startsWith("digital-ads."))) {
+      capabilities.push("pause/resume campaigns, adjust budgets, diagnostics");
     }
     if (availableActions.some((a) => a.startsWith("payments."))) {
       capabilities.push("refunds, charges, invoices, subscriptions");
