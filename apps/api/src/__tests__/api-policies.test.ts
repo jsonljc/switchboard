@@ -23,12 +23,12 @@ describe("Policies API", () => {
           name: "Test Policy",
           description: "A test policy",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 1,
           active: true,
           rule: {
             composition: "AND",
-            conditions: [{ field: "actionType", operator: "eq", value: "ads.campaign.pause" }],
+            conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.campaign.pause" }],
           },
           effect: "require_approval",
         },
@@ -65,10 +65,10 @@ describe("Policies API", () => {
           name: "Extra Policy",
           description: "Second policy for listing test",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 50,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
           effect: "require_approval",
         },
       });
@@ -84,7 +84,7 @@ describe("Policies API", () => {
     });
 
     it("should filter by cartridgeId", async () => {
-      // Create policies for ads-spend
+      // Create policies for digital-ads
       await app.inject({
         method: "POST",
         url: "/api/policies",
@@ -92,24 +92,24 @@ describe("Policies API", () => {
           name: "Filter Test Policy",
           description: "For cartridgeId filter test",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 50,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
           effect: "require_approval",
         },
       });
 
       const res = await app.inject({
         method: "GET",
-        url: "/api/policies?cartridgeId=ads-spend",
+        url: "/api/policies?cartridgeId=digital-ads",
       });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.policies.length).toBeGreaterThanOrEqual(2);
       for (const policy of body.policies) {
-        expect(policy.cartridgeId).toBe("ads-spend");
+        expect(policy.cartridgeId).toBe("digital-ads");
       }
     });
   });
@@ -124,10 +124,10 @@ describe("Policies API", () => {
           name: "Lookup Test Policy",
           description: "For GET by id test",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 10,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
           effect: "require_approval",
         },
       });
@@ -163,10 +163,10 @@ describe("Policies API", () => {
           name: "Original Policy Name",
           description: "For update test",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 10,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "ads.budget.adjust" }] },
+          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
           effect: "require_approval",
         },
       });
@@ -196,7 +196,7 @@ describe("Policies API", () => {
           name: "To Delete",
           description: "Will be deleted",
           organizationId: null,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           priority: 1,
           active: true,
           rule: {

@@ -20,10 +20,10 @@ describe("Simulate API", () => {
         method: "POST",
         url: "/api/simulate",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 
@@ -37,10 +37,10 @@ describe("Simulate API", () => {
         method: "POST",
         url: "/api/simulate",
         payload: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
         },
       });
 

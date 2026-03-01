@@ -120,7 +120,7 @@ export async function handleReadTool(
     case "get_campaign": {
       const parsed = GetCampaignInputSchema.parse(args);
       const result = await deps.readAdapter.query({
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         operation: "getCampaign",
         parameters: { campaignId: parsed.campaignId },
         actorId: auth.actorId,
@@ -132,7 +132,7 @@ export async function handleReadTool(
     case "search_campaigns": {
       const parsed = SearchCampaignsInputSchema.parse(args);
       const result = await deps.readAdapter.query({
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         operation: "searchCampaigns",
         parameters: { query: parsed.query, limit: parsed.limit },
         actorId: auth.actorId,

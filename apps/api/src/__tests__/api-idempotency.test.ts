@@ -16,10 +16,10 @@ describe("Idempotency Middleware", () => {
   });
 
   const proposePayload = {
-    actionType: "ads.campaign.pause",
+    actionType: "digital-ads.campaign.pause",
     parameters: { campaignId: "camp_123" },
     principalId: "default",
-    cartridgeId: "ads-spend",
+    cartridgeId: "digital-ads",
   };
 
   it("returns cached response for duplicate POST with same Idempotency-Key", async () => {

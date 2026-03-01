@@ -50,9 +50,6 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.5
         version: 5.2.5
-      '@switchboard/ads-spend':
-        specifier: workspace:*
-        version: link:../../cartridges/ads-spend
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -62,6 +59,9 @@ importers:
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@switchboard/digital-ads':
+        specifier: workspace:*
+        version: link:../../cartridges/digital-ads
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
@@ -108,9 +108,6 @@ importers:
 
   apps/chat:
     dependencies:
-      '@switchboard/ads-spend':
-        specifier: workspace:*
-        version: link:../../cartridges/ads-spend
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -120,6 +117,9 @@ importers:
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@switchboard/digital-ads':
+        specifier: workspace:*
+        version: link:../../cartridges/digital-ads
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
@@ -272,15 +272,15 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.26.0(zod@3.25.76)
-      '@switchboard/ads-spend':
-        specifier: workspace:*
-        version: link:../../cartridges/ads-spend
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
       '@switchboard/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@switchboard/digital-ads':
+        specifier: workspace:*
+        version: link:../../cartridges/digital-ads
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -298,7 +298,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.33)
 
-  cartridges/ads-spend:
+  cartridges/digital-ads:
     dependencies:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*

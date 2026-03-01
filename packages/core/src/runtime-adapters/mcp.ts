@@ -37,10 +37,10 @@ export interface McpToolResponse {
 
 /** Maps an MCP tool name to the corresponding actionType. */
 const TOOL_TO_ACTION: Record<string, string> = {
-  pause_campaign: "ads.campaign.pause",
-  resume_campaign: "ads.campaign.resume",
-  adjust_budget: "ads.budget.adjust",
-  modify_targeting: "ads.targeting.modify",
+  pause_campaign: "digital-ads.campaign.pause",
+  resume_campaign: "digital-ads.campaign.resume",
+  adjust_budget: "digital-ads.campaign.adjust_budget",
+  modify_targeting: "digital-ads.targeting.modify",
 };
 
 /**

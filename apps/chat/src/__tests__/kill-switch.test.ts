@@ -99,7 +99,7 @@ describe("Kill switch flow", () => {
     ];
     const readAdapter = createMockReadAdapter(campaigns);
     const result = await readAdapter.query({
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       operation: "searchCampaigns",
       parameters: { query: "" },
       actorId: "user_1",

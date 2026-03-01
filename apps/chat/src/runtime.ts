@@ -206,7 +206,7 @@ export class ChatRuntime {
       try {
         const readResult = await handleReadIntent(result.readIntent as import("./clinic/types.js").ReadIntentDescriptor, {
           readAdapter: this.readAdapter,
-          cartridgeId: "ads-spend",
+          cartridgeId: "digital-ads",
           actorId: message.principalId,
           organizationId: message.organizationId,
         });
@@ -282,7 +282,7 @@ export class ChatRuntime {
       const cartridgeId = inferCartridgeId(
         proposal.actionType,
         this.storage?.cartridges ?? undefined,
-      ) ?? "ads-spend";
+      ) ?? "digital-ads";
 
       try {
         const proposeResult = await this.orchestrator.resolveAndPropose({
@@ -484,7 +484,7 @@ export class ChatRuntime {
     try {
       // Query all campaigns
       const queryResult = await this.readAdapter.query({
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         operation: "searchCampaigns",
         parameters: { query: "" },
         actorId: principalId,
@@ -510,10 +510,10 @@ export class ChatRuntime {
       for (const campaign of activeCampaigns) {
         try {
           const proposeResult = await this.orchestrator.resolveAndPropose({
-            actionType: "ads.campaign.pause",
+            actionType: "digital-ads.campaign.pause",
             parameters: { campaignId: campaign.id, entityId: campaign.id },
             principalId,
-            cartridgeId: "ads-spend",
+            cartridgeId: "digital-ads",
             entityRefs: [],
             message: `Emergency kill switch: pause ${campaign.name}`,
             organizationId,

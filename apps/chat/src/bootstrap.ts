@@ -22,7 +22,7 @@ import {
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
-import { bootstrapAdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
@@ -106,13 +106,13 @@ export async function createChatRuntime(
     const guardrailState = createGuardrailState();
     const guardrailStateStore = createGuardrailStateStore();
 
-    // Register ads-spend cartridge
-    const { cartridge: adsCartridge, interceptors } = await bootstrapAdsSpendCartridge({
+    // Register digital-ads cartridge
+    const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
       accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
       adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
     });
-    storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge, interceptors));
-    await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+    storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+    await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
     // Register quant-trading cartridge
     const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
@@ -186,7 +186,7 @@ export async function createChatRuntime(
 
     // Load campaign names for LLM context grounding
     if (storage) {
-      const cartridge = storage.cartridges.get("ads-spend");
+      const cartridge = storage.cartridges.get("digital-ads");
       if (cartridge) {
         const loadCampaignNames = async () => {
           try {
@@ -236,9 +236,17 @@ export async function createChatRuntime(
     readAdapter,
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? [
-      "ads.campaign.pause",
-      "ads.campaign.resume",
-      "ads.budget.adjust",
+      "digital-ads.campaign.pause",
+      "digital-ads.campaign.resume",
+      "digital-ads.campaign.adjust_budget",
+      "digital-ads.adset.pause",
+      "digital-ads.adset.resume",
+      "digital-ads.adset.adjust_budget",
+      "digital-ads.targeting.modify",
+      "digital-ads.funnel.diagnose",
+      "digital-ads.portfolio.diagnose",
+      "digital-ads.snapshot.fetch",
+      "digital-ads.structure.analyze",
       "trading.order.market_buy",
       "trading.order.market_sell",
       "trading.order.limit_buy",
@@ -297,9 +305,13 @@ export async function createManagedRuntime(config: {
     orchestrator: apiAdapter,
     failedMessageStore: config.failedMessageStore,
     availableActions: [
-      "ads.campaign.pause",
-      "ads.campaign.resume",
-      "ads.budget.adjust",
+      "digital-ads.campaign.pause",
+      "digital-ads.campaign.resume",
+      "digital-ads.campaign.adjust_budget",
+      "digital-ads.adset.pause",
+      "digital-ads.adset.resume",
+      "digital-ads.adset.adjust_budget",
+      "digital-ads.targeting.modify",
       "trading.order.market_buy",
       "trading.order.market_sell",
       "trading.order.limit_buy",

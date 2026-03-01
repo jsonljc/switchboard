@@ -58,11 +58,11 @@ export async function buildTestServer(): Promise<TestContext> {
 
   // Create and configure TestCartridge
   const cartridge = new TestCartridge(createTestManifest({
-    id: "ads-spend",
+    id: "digital-ads",
     actions: [
-      { actionType: "ads.campaign.pause", name: "Pause Campaign", description: "Pause a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-      { actionType: "ads.campaign.resume", name: "Resume Campaign", description: "Resume a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-      { actionType: "ads.budget.adjust", name: "Adjust Budget", description: "Adjust budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
+      { actionType: "digital-ads.campaign.pause", name: "Pause Campaign", description: "Pause a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+      { actionType: "digital-ads.campaign.resume", name: "Resume Campaign", description: "Resume a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
+      { actionType: "digital-ads.budget.adjust", name: "Adjust Budget", description: "Adjust budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
     ],
   }));
 
@@ -85,7 +85,7 @@ export async function buildTestServer(): Promise<TestContext> {
     undoRecipe: {
       originalActionId: (params["_actionId"] as string) ?? "unknown",
       originalEnvelopeId: (params["_envelopeId"] as string) ?? "unknown",
-      reverseActionType: "ads.campaign.resume",
+      reverseActionType: "digital-ads.campaign.resume",
       reverseParameters: { campaignId: params["campaignId"] },
       undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       undoRiskCategory: "medium",
@@ -109,15 +109,15 @@ export async function buildTestServer(): Promise<TestContext> {
     status: "resolved" as const,
   });
 
-  storage.cartridges.register("ads-spend", cartridge);
+  storage.cartridges.register("digital-ads", cartridge);
 
   // Seed a default allow policy (policy engine now defaults to deny when no policy matches)
   await storage.policies.save({
     id: "default-allow-ads",
-    name: "Default allow ads-spend",
-    description: "Allow all ads-spend actions",
+    name: "Default allow digital-ads",
+    description: "Allow all digital-ads actions",
     organizationId: null,
-    cartridgeId: "ads-spend",
+    cartridgeId: "digital-ads",
     priority: 100,
     active: true,
     rule: { composition: "AND", conditions: [], children: [] },

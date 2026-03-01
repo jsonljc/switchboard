@@ -13,10 +13,10 @@ import type { CartridgeConnectionConfig } from "../index.js";
 // ---------------------------------------------------------------------------
 describe("ActionBuilder", () => {
   it("builds a simple proposal with actionType", () => {
-    const builder = new ActionBuilder("ads.campaign.pause");
+    const builder = new ActionBuilder("digital-ads.campaign.pause");
     const proposal = builder.build();
 
-    expect(proposal.actionType).toBe("ads.campaign.pause");
+    expect(proposal.actionType).toBe("digital-ads.campaign.pause");
     expect(proposal.id).toMatch(/^proposal_/);
     expect(proposal.parameters).toEqual({});
     expect(proposal.confidence).toBe(1.0);
@@ -25,7 +25,7 @@ describe("ActionBuilder", () => {
   });
 
   it("builds with parameters", () => {
-    const proposal = new ActionBuilder("ads.budget.adjust")
+    const proposal = new ActionBuilder("digital-ads.campaign.adjust_budget")
       .parameter("campaignId", "camp_123")
       .parameter("newBudget", 500)
       .build();
@@ -37,7 +37,7 @@ describe("ActionBuilder", () => {
   });
 
   it("builds with evidence and confidence", () => {
-    const proposal = new ActionBuilder("ads.campaign.pause")
+    const proposal = new ActionBuilder("digital-ads.campaign.pause")
       .evidence("User explicitly requested pause")
       .confidence(0.85)
       .build();
@@ -47,7 +47,7 @@ describe("ActionBuilder", () => {
   });
 
   it("supports fluent chaining", () => {
-    const proposal = new ActionBuilder("ads.targeting.modify")
+    const proposal = new ActionBuilder("digital-ads.targeting.modify")
       .parameter("adSetId", "adset_1")
       .parameters({ targeting: { age_min: 25 } })
       .evidence("Based on performance data")
@@ -55,7 +55,7 @@ describe("ActionBuilder", () => {
       .originatingMessage("msg_abc")
       .build();
 
-    expect(proposal.actionType).toBe("ads.targeting.modify");
+    expect(proposal.actionType).toBe("digital-ads.targeting.modify");
     expect(proposal.parameters).toEqual({
       adSetId: "adset_1",
       targeting: { age_min: 25 },
@@ -66,11 +66,11 @@ describe("ActionBuilder", () => {
   });
 
   it("exposes an action() factory function", () => {
-    const proposal = action("ads.campaign.resume")
+    const proposal = action("digital-ads.campaign.resume")
       .parameter("campaignId", "camp_456")
       .build();
 
-    expect(proposal.actionType).toBe("ads.campaign.resume");
+    expect(proposal.actionType).toBe("digital-ads.campaign.resume");
     expect(proposal.parameters).toEqual({ campaignId: "camp_456" });
   });
 });

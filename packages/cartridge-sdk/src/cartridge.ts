@@ -15,6 +15,8 @@ export interface ExecuteResult {
   partialFailures: Array<{ step: string; error: string }>;
   durationMs: number;
   undoRecipe: UndoRecipe | null;
+  /** Structured result data (e.g. diagnostic payloads) that passes through governance. */
+  data?: unknown;
 }
 
 export interface CartridgeContext {

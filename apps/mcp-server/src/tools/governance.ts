@@ -133,18 +133,18 @@ export async function handleGovernanceTool(
       const failures: Array<{ campaignId: string; error: string }> = [];
 
       try {
-        const cartridge = deps.storage.cartridges.get("ads-spend");
+        const cartridge = deps.storage.cartridges.get("digital-ads");
         if (cartridge?.searchCampaigns) {
           const campaigns = await cartridge.searchCampaigns("*");
           for (const campaign of campaigns) {
             if (campaign.status === "ACTIVE") {
               try {
                 const proposeResult = await deps.orchestrator.propose({
-                  actionType: "ads.campaign.pause",
+                  actionType: "digital-ads.campaign.pause",
                   parameters: { campaignId: campaign.id },
                   principalId: auth.actorId,
                   organizationId: orgId,
-                  cartridgeId: "ads-spend",
+                  cartridgeId: "digital-ads",
                   message: `Emergency halt: ${parsed.reason ?? "no reason provided"}`,
                   emergencyOverride: true,
                 });

@@ -9,7 +9,7 @@ import {
   GuardedCartridge,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage } from "@switchboard/core";
-import { AdsSpendCartridge, DEFAULT_ADS_POLICIES } from "@switchboard/ads-spend";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { createGuardrailStateStore } from "../guardrail-state/index.js";
 import { createExecutionWorker } from "./worker.js";
 import { createLogger } from "../logger.js";
@@ -45,17 +45,13 @@ async function main() {
   const guardrailStateStore = createGuardrailStateStore(sharedRedis);
 
   // Register cartridges
-  const adsCartridge = new AdsSpendCartridge();
-  await adsCartridge.initialize({
-    principalId: "system",
-    organizationId: null,
-    connectionCredentials: {
-      accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
-      adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
-    },
+  const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
+    accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
+    adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+    requireCredentials: process.env.NODE_ENV === "production",
   });
-  storage.cartridges.register("ads-spend", new GuardedCartridge(adsCartridge));
-  await seedDefaultStorage(storage, DEFAULT_ADS_POLICIES);
+  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   const orchestrator = new LifecycleOrchestrator({
     storage,

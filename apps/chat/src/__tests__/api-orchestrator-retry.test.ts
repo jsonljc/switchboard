@@ -29,10 +29,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: { campaignId: "camp_1" },
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause campaign",
     });
@@ -64,10 +64,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: {},
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause",
     });
@@ -98,10 +98,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: {},
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause",
     });
@@ -122,10 +122,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: {},
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause",
     });
@@ -146,10 +146,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: {},
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause",
     });
@@ -167,10 +167,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     await expect(
       adapter.resolveAndPropose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: {},
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         entityRefs: [],
         message: "pause",
       }),
@@ -202,10 +202,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
     const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
     const result = await adapter.resolveAndPropose({
-      actionType: "ads.campaign.pause",
+      actionType: "digital-ads.campaign.pause",
       parameters: {},
       principalId: "user_1",
-      cartridgeId: "ads-spend",
+      cartridgeId: "digital-ads",
       entityRefs: [],
       message: "pause",
     });
@@ -253,10 +253,10 @@ describe("ApiOrchestratorAdapter retry logic", () => {
 
       const adapter = new ApiOrchestratorAdapter({ baseUrl: "http://localhost:3000" });
       await adapter.resolveAndPropose({
-        actionType: "ads.campaign.pause",
+        actionType: "digital-ads.campaign.pause",
         parameters: {},
         principalId: "user_1",
-        cartridgeId: "ads-spend",
+        cartridgeId: "digital-ads",
         entityRefs: [],
         message: "pause",
       });

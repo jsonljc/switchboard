@@ -23,7 +23,7 @@ describe("Execute API (POST /api/execute)", () => {
       payload: {
         actorId: "default",
         action: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           sideEffect: true,
         },
@@ -52,7 +52,7 @@ describe("Execute API (POST /api/execute)", () => {
       globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
       cartridgeSpendLimits: {},
       forbiddenBehaviors: [],
-      trustBehaviors: ["ads.campaign.pause"],
+      trustBehaviors: ["digital-ads.campaign.pause"],
       delegatedApprovers: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -65,7 +65,7 @@ describe("Execute API (POST /api/execute)", () => {
       payload: {
         actorId: "default",
         action: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           sideEffect: true,
         },
@@ -97,7 +97,7 @@ describe("Execute API (POST /api/execute)", () => {
       },
       globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
       cartridgeSpendLimits: {},
-      forbiddenBehaviors: ["ads.campaign.pause"],
+      forbiddenBehaviors: ["digital-ads.campaign.pause"],
       trustBehaviors: [],
       delegatedApprovers: [],
       createdAt: new Date(),
@@ -111,7 +111,7 @@ describe("Execute API (POST /api/execute)", () => {
       payload: {
         actorId: "default",
         action: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           sideEffect: true,
         },
@@ -154,7 +154,7 @@ describe("Execute API (POST /api/execute)", () => {
       payload: {
         actorId: "default",
         action: {
-          actionType: "ads.campaign.pause",
+          actionType: "digital-ads.campaign.pause",
           parameters: {},
           // missing required sideEffect
         },

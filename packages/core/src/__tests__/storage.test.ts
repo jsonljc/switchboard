@@ -188,11 +188,11 @@ describe("InMemoryPolicyStore", () => {
   });
 
   it("should filter by cartridgeId", async () => {
-    await store.save(makePolicy({ id: "p_a", cartridgeId: "ads-spend", active: true }));
+    await store.save(makePolicy({ id: "p_a", cartridgeId: "digital-ads", active: true }));
     await store.save(makePolicy({ id: "p_b", cartridgeId: "other", active: true }));
     await store.save(makePolicy({ id: "p_c", cartridgeId: null, active: true }));
 
-    const filtered = await store.listActive({ cartridgeId: "ads-spend" });
+    const filtered = await store.listActive({ cartridgeId: "digital-ads" });
     // Should include p_a (matches cartridge) and p_c (null = global)
     expect(filtered).toHaveLength(2);
     const ids = filtered.map((p) => p.id);
