@@ -14,6 +14,10 @@ export enum AllowedIntent {
   ADJUST_BUDGET = "adjust_budget",
   KILL_SWITCH = "kill_switch",
   REVERT = "revert",
+  DIAGNOSE_FUNNEL = "diagnose_funnel",
+  DIAGNOSE_PORTFOLIO = "diagnose_portfolio",
+  FETCH_SNAPSHOT = "fetch_snapshot",
+  ANALYZE_STRUCTURE = "analyze_structure",
   UNKNOWN = "unknown",
 }
 
@@ -33,6 +37,22 @@ export const WRITE_INTENTS = new Set<AllowedIntent>([
   AllowedIntent.KILL_SWITCH,
   AllowedIntent.REVERT,
 ]);
+
+/** Diagnostic intents — produce proposals (auto-approve via low risk) for audit logging. */
+export const DIAGNOSTIC_INTENTS = new Set<AllowedIntent>([
+  AllowedIntent.DIAGNOSE_FUNNEL,
+  AllowedIntent.DIAGNOSE_PORTFOLIO,
+  AllowedIntent.FETCH_SNAPSHOT,
+  AllowedIntent.ANALYZE_STRUCTURE,
+]);
+
+/** Maps diagnostic intents to cartridge action types. */
+export const DIAGNOSTIC_INTENT_TO_ACTION: Record<string, string> = {
+  [AllowedIntent.DIAGNOSE_FUNNEL]: "digital-ads.funnel.diagnose",
+  [AllowedIntent.DIAGNOSE_PORTFOLIO]: "digital-ads.portfolio.diagnose",
+  [AllowedIntent.FETCH_SNAPSHOT]: "digital-ads.snapshot.fetch",
+  [AllowedIntent.ANALYZE_STRUCTURE]: "digital-ads.structure.analyze",
+};
 
 /** Structured classification result produced by the LLM. */
 export interface ClassifyResult {

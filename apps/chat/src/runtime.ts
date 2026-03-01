@@ -12,6 +12,7 @@ import {
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
+import { formatDiagnosticResult, isDiagnosticAction } from "./formatters/diagnostic-formatter.js";
 import type {
   RuntimeOrchestrator,
   ProposeResult,
@@ -366,6 +367,15 @@ export class ChatRuntime {
     try {
       const executeResult = await this.orchestrator.executeApproved(result.envelope.id);
       await this.trackLastExecuted(threadId, result.envelope.id);
+
+      // Diagnostic actions → formatted text reply (not result card)
+      const actionType = result.envelope.proposals[0]?.actionType ?? "";
+      if (isDiagnosticAction(actionType) && executeResult.data) {
+        const formatted = formatDiagnosticResult(actionType, executeResult.data);
+        await this.adapter.sendTextReply(threadId, formatted);
+        await this.recordAssistantMessage(threadId, formatted);
+        return;
+      }
 
       const undoRecipe = executeResult.undoRecipe as UndoRecipe | null;
 

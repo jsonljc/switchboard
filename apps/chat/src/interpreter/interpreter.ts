@@ -41,6 +41,14 @@ export function validateInterpreterOutput(raw: unknown): InterpreterResult | nul
   };
 }
 
+export interface RuleBasedInterpreterConfig {
+  diagnosticDefaults?: {
+    platform?: string;
+    entityId?: string;
+    vertical?: string;
+  };
+}
+
 // Rule-based interpreter (no LLM dependency for v1)
 export class RuleBasedInterpreter implements Interpreter {
   private patterns: Array<{
@@ -49,8 +57,61 @@ export class RuleBasedInterpreter implements Interpreter {
     extractParams: (match: RegExpMatchArray, text: string) => Record<string, unknown>;
   }>;
 
-  constructor() {
+  constructor(config?: RuleBasedInterpreterConfig) {
+    const diagDefaults = config?.diagnosticDefaults;
     this.patterns = [
+      // Diagnostic patterns (before payment patterns so they match first)
+      {
+        regex: /(?:diagnose|analyze)\s+(?:my\s+)?funnel/i,
+        actionType: "digital-ads.funnel.diagnose",
+        extractParams: () => ({
+          platform: diagDefaults?.platform ?? "meta",
+          entityId: diagDefaults?.entityId ?? "",
+          vertical: diagDefaults?.vertical ?? "commerce",
+          periodDays: 7,
+        }),
+      },
+      {
+        regex: /(?:how\s+are|what's\s+wrong\s+with)\s+(?:my\s+)?(?:ads?|campaigns?|performance)/i,
+        actionType: "digital-ads.funnel.diagnose",
+        extractParams: () => ({
+          platform: diagDefaults?.platform ?? "meta",
+          entityId: diagDefaults?.entityId ?? "",
+          vertical: diagDefaults?.vertical ?? "commerce",
+          periodDays: 7,
+        }),
+      },
+      {
+        regex: /(?:portfolio|cross.?platform)\s+(?:analysis|report)/i,
+        actionType: "digital-ads.portfolio.diagnose",
+        extractParams: () => ({
+          platform: diagDefaults?.platform ?? "meta",
+          entityId: diagDefaults?.entityId ?? "",
+          vertical: diagDefaults?.vertical ?? "commerce",
+          periodDays: 7,
+        }),
+      },
+      {
+        regex: /(?:fetch|get|show)\s+(?:my\s+)?(?:snapshot|metrics)/i,
+        actionType: "digital-ads.snapshot.fetch",
+        extractParams: () => ({
+          platform: diagDefaults?.platform ?? "meta",
+          entityId: diagDefaults?.entityId ?? "",
+          vertical: diagDefaults?.vertical ?? "commerce",
+          periodDays: 7,
+        }),
+      },
+      {
+        regex: /(?:analyze|check)\s+(?:my\s+)?(?:campaign|ad)\s+structure/i,
+        actionType: "digital-ads.structure.analyze",
+        extractParams: () => ({
+          platform: diagDefaults?.platform ?? "meta",
+          entityId: diagDefaults?.entityId ?? "",
+          vertical: diagDefaults?.vertical ?? "commerce",
+          periodDays: 7,
+        }),
+      },
+      // Ads write patterns
       {
         regex: /pause\s+(?:campaign\s+)?['"]?(.+?)['"]?\s*$/i,
         actionType: "digital-ads.campaign.pause",
@@ -203,7 +264,7 @@ export class RuleBasedInterpreter implements Interpreter {
     // No match - build dynamic clarification based on available actions
     const capabilities: string[] = [];
     if (availableActions.some((a) => a.startsWith("digital-ads."))) {
-      capabilities.push("pause/resume campaigns, adjust budgets");
+      capabilities.push("pause/resume campaigns, adjust budgets, diagnostics");
     }
     if (availableActions.some((a) => a.startsWith("payments."))) {
       capabilities.push("refunds, charges, invoices, subscriptions, credits, payment links");

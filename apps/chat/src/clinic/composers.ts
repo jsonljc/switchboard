@@ -177,6 +177,12 @@ export function composeClinicHelp(): string {
     "Reports\n" +
     "  \"How are my campaigns doing?\"\n" +
     "  \"What's the status of [campaign]?\"\n\n" +
+    "Diagnostics\n" +
+    "  \"Diagnose my funnel\"\n" +
+    "  \"How are my ads doing?\"\n" +
+    "  \"Portfolio analysis\"\n" +
+    "  \"Analyze campaign structure\"\n" +
+    "  \"Show me my metrics\"\n\n" +
     "Optimize\n" +
     "  \"I want more patient leads\"\n" +
     "  \"Reduce my ad costs\"\n\n" +

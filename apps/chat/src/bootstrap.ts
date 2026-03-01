@@ -210,12 +210,22 @@ export async function createChatRuntime(
   }
 
   if (!interpreter) {
-    interpreter = new RuleBasedInterpreter();
+    interpreter = new RuleBasedInterpreter({
+      diagnosticDefaults: {
+        platform: "meta",
+        entityId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      },
+    });
   }
 
   // Build interpreter registry — always register the rule-based interpreter as a fallback
   const interpreterRegistry = new InterpreterRegistry();
-  const ruleBasedInterpreter = new RuleBasedInterpreter();
+  const ruleBasedInterpreter = new RuleBasedInterpreter({
+    diagnosticDefaults: {
+      platform: "meta",
+      entityId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+    },
+  });
   interpreterRegistry.register("rule-based", ruleBasedInterpreter, 1000);
 
   // Register the primary interpreter under a descriptive name
@@ -293,7 +303,9 @@ export async function createManagedRuntime(config: {
     apiKey: config.apiKey,
   });
 
-  const interpreter = new RuleBasedInterpreter();
+  const interpreter = new RuleBasedInterpreter({
+    diagnosticDefaults: { platform: "meta" },
+  });
   const interpreterRegistry = new InterpreterRegistry();
   interpreterRegistry.register("rule-based", interpreter, 1000);
   interpreterRegistry.setDefaultFallbackChain(["rule-based"]);
@@ -312,6 +324,10 @@ export async function createManagedRuntime(config: {
       "digital-ads.adset.resume",
       "digital-ads.adset.adjust_budget",
       "digital-ads.targeting.modify",
+      "digital-ads.funnel.diagnose",
+      "digital-ads.portfolio.diagnose",
+      "digital-ads.snapshot.fetch",
+      "digital-ads.structure.analyze",
       "trading.order.market_buy",
       "trading.order.market_sell",
       "trading.order.limit_buy",
