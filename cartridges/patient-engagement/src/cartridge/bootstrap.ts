@@ -38,7 +38,7 @@ export async function bootstrapPatientEngagementCartridge(
   const useMocks = !config.requireCredentials;
 
   const calendar = config.calendarApiKey && config.calendarId
-    ? new GoogleCalendarProvider({ apiKey: config.calendarApiKey, calendarId: config.calendarId })
+    ? new GoogleCalendarProvider({ accessToken: config.calendarApiKey, calendarId: config.calendarId })
     : useMocks ? new MockCalendarProvider() : new MockCalendarProvider();
 
   const sms = config.twilioAccountSid && config.twilioAuthToken && config.twilioPhoneNumber
@@ -51,7 +51,8 @@ export async function bootstrapPatientEngagementCartridge(
 
   const review = config.googleBusinessApiKey && config.googleBusinessLocationId
     ? new GoogleReviewsProvider({
-        apiKey: config.googleBusinessApiKey,
+        accessToken: config.googleBusinessApiKey,
+        accountId: config.googleBusinessLocationId,
         locationId: config.googleBusinessLocationId,
       })
     : useMocks ? new MockReviewProvider() : new MockReviewProvider();

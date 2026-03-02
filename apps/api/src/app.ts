@@ -24,6 +24,9 @@ import { scheduledReportsRoutes } from "./routes/scheduled-reports.js";
 import { crmRoutes } from "./routes/crm.js";
 import { competenceRoutes } from "./routes/competence.js";
 import { webhooksRoutes } from "./routes/webhooks.js";
+import { inboundWebhooksRoutes } from "./routes/inbound-webhooks.js";
+import { inboundMessagesRoutes } from "./routes/inbound-messages.js";
+import { smbRoutes } from "./routes/smb.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import apiVersionPlugin from "./versioning.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -41,8 +44,11 @@ import {
   ExecutionService,
   setMetrics,
   CompositeNotifier,
+  InMemoryTierStore,
+  SmbActivityLog,
+  InMemorySmbActivityLogStorage,
 } from "@switchboard/core";
-import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier } from "@switchboard/core";
+import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier, TierStore } from "@switchboard/core";
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
@@ -53,6 +59,7 @@ import { startChainVerificationJob } from "./jobs/chain-verification.js";
 import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
 import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
 import { startTokenRefreshJob } from "./jobs/token-refresh.js";
+import { startCadenceRunner } from "./jobs/cadence-runner.js";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import type { Queue, Worker } from "bullmq";
@@ -65,6 +72,8 @@ declare module "fastify" {
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
     executionService: ExecutionService;
+    tierStore: TierStore;
+    smbActivityLog: SmbActivityLog;
     redis: Redis | null;
     executionQueue: Queue | null;
     executionWorker: Worker | null;
@@ -290,6 +299,19 @@ export async function buildServer() {
     : approvalNotifiers.length === 1 ? approvalNotifiers[0]
     : undefined;
 
+  // SMB tier store and activity log
+  let tierStore: TierStore | undefined;
+  let smbActivityLog: SmbActivityLog | undefined;
+  if (prismaClient) {
+    const { PrismaTierStore } = await import("@switchboard/db");
+    const { PrismaSmbActivityLogStorage } = await import("@switchboard/db");
+    tierStore = new PrismaTierStore(prismaClient);
+    smbActivityLog = new SmbActivityLog(new PrismaSmbActivityLogStorage(prismaClient));
+  } else {
+    tierStore = new InMemoryTierStore();
+    smbActivityLog = new SmbActivityLog(new InMemorySmbActivityLogStorage());
+  }
+
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -300,6 +322,8 @@ export async function buildServer() {
     executionMode,
     onEnqueue,
     approvalNotifier,
+    tierStore,
+    smbActivityLog,
   });
 
   // Start worker in-process when queue mode is active
@@ -329,6 +353,13 @@ export async function buildServer() {
     ? startTokenRefreshJob({ prisma: prismaClient, logger: app.log })
     : () => {};
 
+  // Start cadence cron runner (evaluates pending cadences on schedule)
+  const stopCadenceRunner = startCadenceRunner({
+    storageContext: storage,
+    intervalMs: 60_000,
+    logger: app.log,
+  });
+
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
@@ -336,6 +367,8 @@ export async function buildServer() {
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
   app.decorate("executionService", executionService);
+  app.decorate("tierStore", tierStore);
+  app.decorate("smbActivityLog", smbActivityLog);
   app.decorate("redis", redis);
   app.decorate("executionQueue", queue);
   app.decorate("executionWorker", worker);
@@ -348,6 +381,7 @@ export async function buildServer() {
     stopDiagnosticScanner();
     stopScheduledReports();
     stopTokenRefresh();
+    stopCadenceRunner();
 
     if (worker) {
       await worker.close();
@@ -431,6 +465,9 @@ export async function buildServer() {
   await app.register(crmRoutes, { prefix: "/api/crm" });
   await app.register(competenceRoutes, { prefix: "/api/competence" });
   await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
+  await app.register(inboundWebhooksRoutes, { prefix: "/api/inbound" });
+  await app.register(inboundMessagesRoutes, { prefix: "/api/messages" });
+  await app.register(smbRoutes, { prefix: "/api/smb" });
 
   return app;
 }
