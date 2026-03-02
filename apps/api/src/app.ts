@@ -54,6 +54,7 @@ import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier, Tier
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
+import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -109,10 +110,13 @@ export async function buildServer() {
   // CORS — restrict origins in production, allow all in development
   const allowedOrigins = process.env["CORS_ORIGIN"];
   if (process.env.NODE_ENV === "production" && !allowedOrigins) {
-    throw new Error("CORS_ORIGIN must be set in production (e.g. 'https://app.example.com')");
+    app.log.warn(
+      "CORS_ORIGIN is not set in production. Cross-origin requests will be rejected. " +
+      "Set CORS_ORIGIN to a comma-separated list of allowed origins (e.g. 'https://app.example.com').",
+    );
   }
   await app.register(cors, {
-    origin: allowedOrigins ? allowedOrigins.split(",") : true,
+    origin: allowedOrigins ? allowedOrigins.split(",") : process.env.NODE_ENV === "production" ? false : true,
   });
 
   // Rate limiting
@@ -176,8 +180,14 @@ export async function buildServer() {
   // Wire Prometheus metrics before orchestrator creation
   setMetrics(createPromMetrics());
 
-  // Warn if credential encryption key is missing when DB is configured
+  // Credential encryption key check — hard-fail in production, warn otherwise
   if (process.env["DATABASE_URL"] && !process.env["CREDENTIALS_ENCRYPTION_KEY"]) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "CREDENTIALS_ENCRYPTION_KEY is required in production when DATABASE_URL is set. " +
+        "Set it to a strong random secret (min 32 chars).",
+      );
+    }
     app.log.warn(
       "CREDENTIALS_ENCRYPTION_KEY is not set but DATABASE_URL is configured. " +
       "Connection credential storage/retrieval will fail. " +
@@ -280,6 +290,11 @@ export async function buildServer() {
   });
   storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
   await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
+
+  // Register CRM cartridge (built-in, no external credentials needed)
+  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
+  storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
+  await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
   let queue: Queue | null = null;
   let worker: Worker | null = null;

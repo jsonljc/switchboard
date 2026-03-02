@@ -556,6 +556,8 @@ export class HubSpotCrmProvider implements CrmProvider {
           "crm.activity.list",
           "crm.activity.log",
           "crm.pipeline.status",
+          "crm.pipeline.diagnose",
+          "crm.activity.analyze",
         ],
       };
     } catch (err) {

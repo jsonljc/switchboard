@@ -100,7 +100,9 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   async searchCampaigns(query: string): Promise<CampaignInfo[]> {
     let gaql = `SELECT campaign.id, campaign.name, campaign.status, campaign.campaign_budget, campaign.start_date, campaign.end_date, campaign.advertising_channel_type FROM campaign WHERE campaign.status != 'REMOVED'`;
     if (query) {
-      gaql += ` AND campaign.name LIKE '%${query}%'`;
+      // Sanitize: escape single quotes and backslashes to prevent GAQL injection
+      const sanitized = query.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      gaql += ` AND campaign.name LIKE '%${sanitized}%'`;
     }
     const rows = await this.search(gaql);
     return rows.map((r) => this.parseCampaign(r));

@@ -21,8 +21,8 @@ describe("CrmCartridge", () => {
       expect(cartridge.manifest.id).toBe("crm");
     });
 
-    it("should define 8 actions", () => {
-      expect(cartridge.manifest.actions).toHaveLength(8);
+    it("should define 10 actions", () => {
+      expect(cartridge.manifest.actions).toHaveLength(10);
     });
 
     it("should have correct action types", () => {
@@ -346,7 +346,7 @@ describe("CrmCartridge", () => {
     it("should return connected status", async () => {
       const health = await cartridge.healthCheck();
       expect(health.status).toBe("connected");
-      expect(health.capabilities.length).toBe(8);
+      expect(health.capabilities.length).toBe(10);
     });
   });
 

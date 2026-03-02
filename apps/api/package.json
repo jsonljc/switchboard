@@ -28,6 +28,7 @@
     "@switchboard/quant-trading": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
+    "@switchboard/crm": "workspace:*",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "bullmq": "^5.34.0",
