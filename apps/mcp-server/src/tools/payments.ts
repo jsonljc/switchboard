@@ -20,6 +20,7 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
       },
       required: ["customerId", "amount"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
   {
     name: "create_refund",
@@ -33,6 +34,7 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
       },
       required: ["chargeId", "amount"],
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
   {
     name: "get_charge",
@@ -44,6 +46,7 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
       },
       required: ["chargeId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "cancel_subscription",
@@ -56,11 +59,19 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
       },
       required: ["subscriptionId"],
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
 ];
 
 export const PAYMENTS_SIDE_EFFECT_TOOLS = new Set(["create_invoice", "create_refund", "cancel_subscription"]);
 export const PAYMENTS_READ_TOOLS = new Set(["get_charge"]);
+
+/** Maps payments side-effect tool names to their actionTypes. */
+export const PAYMENTS_ACTION_TYPE_MAP: Record<string, string> = {
+  create_invoice: "payments.invoice.create",
+  create_refund: "payments.refund.create",
+  cancel_subscription: "payments.subscription.cancel",
+};
 
 export async function handlePaymentsSideEffectTool(
   toolName: string,
@@ -68,13 +79,7 @@ export async function handlePaymentsSideEffectTool(
   auth: McpAuthContext,
   executionService: ExecutionService,
 ): Promise<McpToolResponse> {
-  const actionTypeMap: Record<string, string> = {
-    create_invoice: "payments.invoice.create",
-    create_refund: "payments.refund.create",
-    cancel_subscription: "payments.subscription.cancel",
-  };
-
-  const actionType = actionTypeMap[toolName];
+  const actionType = PAYMENTS_ACTION_TYPE_MAP[toolName];
   if (!actionType) throw new Error(`Unknown payments side-effect tool: ${toolName}`);
 
   return mcpExecute(

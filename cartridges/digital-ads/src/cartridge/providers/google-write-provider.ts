@@ -14,34 +14,7 @@ import type {
   CreateAdSetParams,
   CreateAdParams,
 } from "../types.js";
-
-/** Simple circuit breaker for API calls. */
-class SimpleCircuitBreaker {
-  private failures = 0;
-  private lastFailure = 0;
-  private readonly threshold: number;
-  private readonly resetMs: number;
-
-  constructor(config: { failureThreshold: number; resetTimeoutMs: number }) {
-    this.threshold = config.failureThreshold;
-    this.resetMs = config.resetTimeoutMs;
-  }
-
-  async call<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.failures >= this.threshold && Date.now() - this.lastFailure < this.resetMs) {
-      throw new Error("Circuit breaker open");
-    }
-    try {
-      const result = await fn();
-      this.failures = 0;
-      return result;
-    } catch (err) {
-      this.failures++;
-      this.lastFailure = Date.now();
-      throw err;
-    }
-  }
-}
+import { CircuitBreaker } from "@switchboard/core";
 
 export interface GoogleAdsWriteConfig {
   /** OAuth2 access token */
@@ -62,7 +35,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   private readonly customerId: string;
   private readonly developerToken: string;
   private readonly loginCustomerId?: string;
-  private readonly circuitBreaker: SimpleCircuitBreaker;
+  private readonly circuitBreaker: CircuitBreaker;
 
   constructor(config: GoogleAdsWriteConfig) {
     const apiVersion = config.apiVersion ?? "v17";
@@ -71,7 +44,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     this.customerId = config.customerId;
     this.developerToken = config.developerToken;
     this.loginCustomerId = config.loginCustomerId;
-    this.circuitBreaker = new SimpleCircuitBreaker({
+    this.circuitBreaker = new CircuitBreaker({
       failureThreshold: 3,
       resetTimeoutMs: 60_000,
     });
@@ -177,7 +150,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     const budgetMicros = Math.round(params.dailyBudget * 1_000_000);
 
     // First create the campaign budget
-    const budgetRes = await this.circuitBreaker.call(async () => {
+    const budgetRes = await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/campaignBudgets:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -198,7 +171,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     const budgetResourceName = (budgetRes as { results: Array<{ resourceName: string }> }).results[0]?.resourceName;
 
     // Then create the campaign
-    const campaignRes = await this.circuitBreaker.call(async () => {
+    const campaignRes = await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/campaigns:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -223,7 +196,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async createAdSet(params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
-    const res = await this.circuitBreaker.call(async () => {
+    const res = await this.circuitBreaker.execute(async () => {
       const r = await fetch(`${this.baseUrl}/adGroups:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -248,7 +221,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async createAd(params: CreateAdParams): Promise<{ id: string; success: boolean }> {
-    const res = await this.circuitBreaker.call(async () => {
+    const res = await this.circuitBreaker.execute(async () => {
       const r = await fetch(`${this.baseUrl}/adGroupAds:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -294,7 +267,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   // ── Private helpers ──
 
   private async search(gaql: string): Promise<Record<string, unknown>[]> {
-    return this.circuitBreaker.call(async () => {
+    return this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/googleAds:search`, {
         method: "POST",
         headers: this.headers(),
@@ -307,7 +280,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   private async mutateCampaign(campaignId: string, updates: Record<string, unknown>): Promise<void> {
-    await this.circuitBreaker.call(async () => {
+    await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/campaigns:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -332,7 +305,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     const budgetResource = (rows[0] as { campaign?: { campaign_budget?: string } })?.campaign?.campaign_budget;
     if (!budgetResource) throw new Error(`Budget not found for campaign ${campaignId}`);
 
-    await this.circuitBreaker.call(async () => {
+    await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/campaignBudgets:mutate`, {
         method: "POST",
         headers: this.headers(),
@@ -351,7 +324,7 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   private async mutateAdGroup(adGroupId: string, updates: Record<string, unknown>): Promise<void> {
-    await this.circuitBreaker.call(async () => {
+    await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/adGroups:mutate`, {
         method: "POST",
         headers: this.headers(),

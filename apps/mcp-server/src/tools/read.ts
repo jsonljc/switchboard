@@ -25,6 +25,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       },
       required: ["campaignId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "search_campaigns",
@@ -37,6 +38,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       },
       required: ["query"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "simulate_action",
@@ -56,6 +58,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       },
       required: ["actionType", "parameters"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_approval_status",
@@ -67,6 +70,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       },
       required: ["approvalId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "list_pending_approvals",
@@ -77,6 +81,7 @@ export const readToolDefinitions: ToolDefinition[] = [
         limit: { type: "number", description: "Max results to return (default: 20)" },
       },
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_action_status",
@@ -90,6 +95,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       },
       required: ["envelopeId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_session_status",
@@ -100,6 +106,7 @@ export const readToolDefinitions: ToolDefinition[] = [
       type: "object",
       properties: {},
     },
+    annotations: { readOnlyHint: true, openWorldHint: false },
   },
 ];
 

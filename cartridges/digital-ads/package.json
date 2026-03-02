@@ -20,6 +20,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*"
   },

@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["**/*.test.ts"],
+    exclude: ["**/node_modules/**", "apps/dashboard/**"],
     passWithNoTests: true,
     pool: "forks",
     coverage: {

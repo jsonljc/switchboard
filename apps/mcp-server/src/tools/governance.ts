@@ -39,6 +39,7 @@ export const governanceToolDefinitions: ToolDefinition[] = [
       },
       required: ["envelopeId"],
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
   {
     name: "emergency_halt",
@@ -51,6 +52,7 @@ export const governanceToolDefinitions: ToolDefinition[] = [
         reason: { type: "string", description: "Reason for the emergency halt" },
       },
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
   {
     name: "get_audit_trail",
@@ -68,6 +70,7 @@ export const governanceToolDefinitions: ToolDefinition[] = [
         limit: { type: "number", description: "Max entries to return (default: 50, max: 200)" },
       },
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_governance_status",
@@ -80,6 +83,7 @@ export const governanceToolDefinitions: ToolDefinition[] = [
         organizationId: { type: "string", description: "Organization ID (default: current org)" },
       },
     },
+    annotations: { readOnlyHint: true, openWorldHint: false },
   },
 ];
 
