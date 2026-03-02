@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { SecurityStore } from "./security-store.js";
 
 export interface ChannelSecurityConfig {
   signatureHeader: string;
@@ -13,9 +14,15 @@ export interface ChannelSecurityConfig {
   };
 }
 
-// In-memory stores for dev; in production, use Redis
+// In-memory stores for dev; in production, use Redis via initSecurityStore()
 const processedMessages = new Map<string, number>();
 const rateLimitCounters = new Map<string, { count: number; windowStart: number }>();
+
+let securityStore: SecurityStore | null = null;
+
+export function initSecurityStore(store: SecurityStore): void {
+  securityStore = store;
+}
 
 export function verifySignature(
   body: string,
@@ -54,7 +61,11 @@ export function checkTimestamp(
   return Math.abs(Date.now() - timestamp) <= maxDriftMs;
 }
 
-export function checkNonce(messageId: string, driftWindowMs: number): boolean {
+export async function checkNonce(messageId: string, driftWindowMs: number): Promise<boolean> {
+  if (securityStore) {
+    return securityStore.checkNonce(messageId, driftWindowMs);
+  }
+
   const existing = processedMessages.get(messageId);
   if (existing && Date.now() - existing < driftWindowMs) {
     return false; // Already processed
@@ -71,10 +82,14 @@ export function checkNonce(messageId: string, driftWindowMs: number): boolean {
   return true;
 }
 
-export function checkIngressRateLimit(
+export async function checkIngressRateLimit(
   sourceKey: string,
   config: { windowMs: number; maxRequests: number },
-): boolean {
+): Promise<boolean> {
+  if (securityStore) {
+    return securityStore.checkRateLimit(sourceKey, config.maxRequests, config.windowMs);
+  }
+
   const now = Date.now();
   const entry = rateLimitCounters.get(sourceKey);
 
@@ -111,13 +126,13 @@ export async function verifyChannelWebhook(
 
   // 3. Nonce dedup
   if (config.nonceTracking && messageId) {
-    if (!checkNonce(messageId, config.maxTimestampDriftMs)) {
+    if (!await checkNonce(messageId, config.maxTimestampDriftMs)) {
       return { allowed: false, reason: "Duplicate message" };
     }
   }
 
   // 4. Ingress rate limit
-  if (!checkIngressRateLimit(sourceIp, config.ingressRateLimit)) {
+  if (!await checkIngressRateLimit(sourceIp, config.ingressRateLimit)) {
     return { allowed: false, reason: "Rate limit exceeded" };
   }
 

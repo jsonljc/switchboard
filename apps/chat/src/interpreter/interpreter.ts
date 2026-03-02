@@ -198,6 +198,67 @@ export class RuleBasedInterpreter implements Interpreter {
           amount: parseFloat(match[1] ?? "0"),
         }),
       },
+      // CRM patterns
+      {
+        regex: /(?:search|find|look\s*up)\s+(?:contacts?\s+)?(?:for\s+)?['"]?(.+?)['"]?\s*$/i,
+        actionType: "crm.contact.search",
+        extractParams: (match) => ({ query: match[1]?.trim() }),
+      },
+      {
+        regex: /(?:list|show|get)\s+(?:my\s+)?deals?(?:\s+(?:for|in)\s+(.+))?/i,
+        actionType: "crm.deal.list",
+        extractParams: (match) => (match[1] ? { pipeline: match[1]?.trim() } : {}),
+      },
+      {
+        regex: /(?:list|show|get)\s+(?:my\s+)?(?:recent\s+)?activit(?:y|ies)(?:\s+(?:for|with)\s+(\S+))?/i,
+        actionType: "crm.activity.list",
+        extractParams: (match) => (match[1] ? { contactId: match[1]?.trim() } : {}),
+      },
+      {
+        regex: /(?:pipeline|funnel)\s+(?:status|report|overview)/i,
+        actionType: "crm.pipeline.status",
+        extractParams: () => ({}),
+      },
+      {
+        regex: /(?:create|add|new)\s+contact\s+(.+)/i,
+        actionType: "crm.contact.create",
+        extractParams: (_match, text) => {
+          const emailMatch = text.match(/[\w.-]+@[\w.-]+/);
+          const nameMatch = text.match(/(?:named?|for)\s+['"]?([^'"@]+?)['"]?(?:\s+|$)/i);
+          return {
+            email: emailMatch?.[0] ?? "",
+            firstName: nameMatch?.[1]?.split(/\s+/)[0] ?? "",
+            lastName: nameMatch?.[1]?.split(/\s+/).slice(1).join(" ") ?? "",
+          };
+        },
+      },
+      {
+        regex: /(?:update|edit|change)\s+contact\s+(\S+)\s+(?:set\s+)?(.+)/i,
+        actionType: "crm.contact.update",
+        extractParams: (match) => ({
+          contactId: match[1]?.trim(),
+          data: { raw: match[2]?.trim() },
+        }),
+      },
+      {
+        regex: /(?:create|add|new)\s+deal\s+['"]?(.+?)['"]?\s+(?:for\s+)?\$?(\d+(?:\.\d+)?)/i,
+        actionType: "crm.deal.create",
+        extractParams: (match) => ({
+          name: match[1]?.trim(),
+          amount: parseFloat(match[2] ?? "0"),
+        }),
+      },
+      {
+        regex: /(?:log|add)\s+(?:a\s+)?(?:note|call|meeting|email|task)\s+(?:for\s+|to\s+|about\s+)?(.+)/i,
+        actionType: "crm.activity.log",
+        extractParams: (match, text) => {
+          const typeMatch = text.match(/\b(note|call|meeting|email|task)\b/i);
+          return {
+            type: typeMatch?.[1]?.toLowerCase() ?? "note",
+            body: match[1]?.trim(),
+          };
+        },
+      },
     ];
   }
 
@@ -271,6 +332,9 @@ export class RuleBasedInterpreter implements Interpreter {
     }
     if (availableActions.some((a) => a.startsWith("trading."))) {
       capabilities.push("market/limit orders, position management");
+    }
+    if (availableActions.some((a) => a.startsWith("crm."))) {
+      capabilities.push("contact search, deal management, activity logging, pipeline status");
     }
     const capList = capabilities.length > 0 ? capabilities.join("; ") : "various actions";
 

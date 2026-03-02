@@ -135,6 +135,7 @@ model ConversationState {
   pendingProposalIds    String[]
   pendingApprovalIds    String[]
   clarificationQuestion String?
+  messages              Json     @default("[]")
   lastActivityAt        DateTime @default(now())
   expiresAt             DateTime
 
@@ -365,5 +366,73 @@ model FailedMessage {
 
   @@index([status])
   @@index([organizationId])
+  @@index([createdAt])
+}
+
+// ── CRM models (built-in unified inbox) ──
+
+model CrmContact {
+  id             String    @id @default(uuid())
+  externalId     String?   // e.g., Telegram user ID
+  channel        String?   // telegram, email, web
+  email          String?
+  firstName      String?
+  lastName       String?
+  company        String?
+  phone          String?
+  tags           String[]  @default([])
+  status         String    @default("active") // active, archived
+  organizationId String?
+  properties     Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  deals          CrmDeal[]
+  activities     CrmActivity[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([externalId])
+  @@index([status])
+}
+
+model CrmDeal {
+  id             String    @id @default(uuid())
+  name           String
+  stage          String    @default("lead")
+  pipeline       String    @default("default")
+  amount         Float?
+  closeDate      DateTime?
+  contactId      String?
+  organizationId String?
+  properties     Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  contact        CrmContact? @relation(fields: [contactId], references: [id])
+  activities     CrmActivity[]
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([pipeline, stage])
+}
+
+model CrmActivity {
+  id             String    @id @default(uuid())
+  type           String    // note, email, call, meeting, task, message
+  subject        String?
+  body           String?
+  contactId      String?
+  dealId         String?
+  organizationId String?
+  createdAt      DateTime  @default(now())
+
+  contact        CrmContact? @relation(fields: [contactId], references: [id])
+  deal           CrmDeal?    @relation(fields: [dealId], references: [id])
+
+  @@index([contactId])
+  @@index([dealId])
+  @@index([organizationId])
+  @@index([type])
   @@index([createdAt])
 }

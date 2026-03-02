@@ -16,6 +16,7 @@ import {
   computeDropoffEconomicImpact,
   buildElasticityRanking,
 } from "./economic-impact.js";
+import { assessConversionLag } from "./conversion-lag.js";
 
 // ---------------------------------------------------------------------------
 // Generic Funnel Walker
@@ -113,6 +114,26 @@ export function analyzeFunnel(options: FunnelWalkerOptions): DiagnosticResult {
     bottleneck,
     primaryKPI
   );
+
+  // Conversion lag assessment
+  const periodDays = Math.round(
+    (new Date(periods.current.until).getTime() - new Date(periods.current.since).getTime()) /
+    (1000 * 60 * 60 * 24)
+  ) + 1;
+  const lagAssessment = assessConversionLag(
+    periods.current.until,
+    periods.previous.until,
+    new Date(),
+    periodDays,
+  );
+  if (lagAssessment.lagIsSignificant) {
+    findings.push({
+      severity: "info",
+      stage: "conversion_lag",
+      message: `Conversion lag warning: current period is ${(lagAssessment.currentMaturity * 100).toFixed(0)}% mature vs ${(lagAssessment.previousMaturity * 100).toFixed(0)}% for previous. Reported drops may partially reflect attribution delay.`,
+      recommendation: "Re-check in 2-3 days when current period data matures, or compare against a period that ended 4+ days ago.",
+    });
+  }
 
   if (advisors) {
     for (const advisor of advisors) {

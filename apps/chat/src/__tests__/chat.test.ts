@@ -243,32 +243,32 @@ describe("Channel Security", () => {
   });
 
   describe("checkNonce", () => {
-    it("accepts a fresh nonce", () => {
+    it("accepts a fresh nonce", async () => {
       const nonce = `nonce_${Date.now()}_${Math.random()}`;
-      expect(checkNonce(nonce, 60_000)).toBe(true);
+      expect(await checkNonce(nonce, 60_000)).toBe(true);
     });
 
-    it("rejects a duplicate nonce on second call", () => {
+    it("rejects a duplicate nonce on second call", async () => {
       const nonce = `dup_nonce_${Date.now()}`;
-      expect(checkNonce(nonce, 60_000)).toBe(true);
-      expect(checkNonce(nonce, 60_000)).toBe(false);
+      expect(await checkNonce(nonce, 60_000)).toBe(true);
+      expect(await checkNonce(nonce, 60_000)).toBe(false);
     });
   });
 
   describe("checkIngressRateLimit", () => {
-    it("allows requests within the rate limit", () => {
+    it("allows requests within the rate limit", async () => {
       const key = `rate_ok_${Date.now()}`;
       const config = { windowMs: 60_000, maxRequests: 5 };
-      expect(checkIngressRateLimit(key, config)).toBe(true);
-      expect(checkIngressRateLimit(key, config)).toBe(true);
+      expect(await checkIngressRateLimit(key, config)).toBe(true);
+      expect(await checkIngressRateLimit(key, config)).toBe(true);
     });
 
-    it("rejects requests exceeding the rate limit", () => {
+    it("rejects requests exceeding the rate limit", async () => {
       const key = `rate_exceeded_${Date.now()}`;
       const config = { windowMs: 60_000, maxRequests: 2 };
-      expect(checkIngressRateLimit(key, config)).toBe(true);
-      expect(checkIngressRateLimit(key, config)).toBe(true);
-      expect(checkIngressRateLimit(key, config)).toBe(false);
+      expect(await checkIngressRateLimit(key, config)).toBe(true);
+      expect(await checkIngressRateLimit(key, config)).toBe(true);
+      expect(await checkIngressRateLimit(key, config)).toBe(false);
     });
   });
 });

@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@switchboard/db";
-import type { ConversationStateData } from "./state.js";
+import type { ConversationStateData, ConversationMessage } from "./state.js";
 import type { ConversationStore } from "./store.js";
 import type { ConversationStatus } from "@switchboard/schemas";
 
@@ -27,6 +27,7 @@ export class PrismaConversationStore implements ConversationStore {
         pendingProposalIds: state.pendingProposalIds,
         pendingApprovalIds: state.pendingApprovalIds,
         clarificationQuestion: state.clarificationQuestion,
+        messages: JSON.stringify(state.messages),
         lastActivityAt: state.lastActivityAt,
         expiresAt: state.expiresAt,
       },
@@ -36,6 +37,7 @@ export class PrismaConversationStore implements ConversationStore {
         pendingProposalIds: state.pendingProposalIds,
         pendingApprovalIds: state.pendingApprovalIds,
         clarificationQuestion: state.clarificationQuestion,
+        messages: JSON.stringify(state.messages),
         lastActivityAt: state.lastActivityAt,
         expiresAt: state.expiresAt,
       },
@@ -58,6 +60,16 @@ export class PrismaConversationStore implements ConversationStore {
   }
 }
 
+function parseMessages(raw: unknown): ConversationMessage[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as ConversationMessage[];
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw) as ConversationMessage[]; }
+    catch { return []; }
+  }
+  return [];
+}
+
 function toConversationStateData(row: {
   id: string;
   threadId: string;
@@ -68,6 +80,7 @@ function toConversationStateData(row: {
   pendingProposalIds: string[];
   pendingApprovalIds: string[];
   clarificationQuestion: string | null;
+  messages: unknown;
   lastActivityAt: Date;
   expiresAt: Date;
 }): ConversationStateData {
@@ -81,7 +94,7 @@ function toConversationStateData(row: {
     pendingProposalIds: row.pendingProposalIds,
     pendingApprovalIds: row.pendingApprovalIds,
     clarificationQuestion: row.clarificationQuestion,
-    messages: [],
+    messages: parseMessages(row.messages),
     lastActivityAt: row.lastActivityAt,
     expiresAt: row.expiresAt,
   };

@@ -213,11 +213,13 @@ export class GoogleAdsClient extends AbstractPlatformClient {
         resourceName = "ad_group_ad";
         break;
       default:
-        resourceName = "customer";
+        resourceName = "campaign"; // Query at campaign level for channel breakdown
         break;
     }
 
-    return `SELECT ${metrics} FROM ${resourceName} WHERE segments.date BETWEEN '${timeRange.since}' AND '${timeRange.until}'`;
+    const extraFields = (resourceName === "campaign")
+      ? ", campaign.advertising_channel_type" : "";
+    return `SELECT ${metrics}${extraFields} FROM ${resourceName} WHERE segments.date BETWEEN '${timeRange.since}' AND '${timeRange.until}'`;
   }
 
   private async executeQuery(
@@ -305,15 +307,26 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     let totalConversionsValue = 0;
     let totalAllConversions = 0;
 
+    // Channel aggregation
+    const channelSpend: Record<string, number> = {};
+    const channelConversions: Record<string, number> = {};
+
     for (const row of rows) {
       const m = row.metrics;
       totalImpressions += parseInt(m.impressions ?? "0", 10);
       totalClicks += parseInt(m.clicks ?? "0", 10);
       // Google reports cost in micros (1/1,000,000 of currency unit)
-      totalSpend += parseInt(m.costMicros ?? "0", 10) / 1_000_000;
+      const rowSpend = parseInt(m.costMicros ?? "0", 10) / 1_000_000;
+      totalSpend += rowSpend;
       totalConversions += m.conversions ?? 0;
       totalConversionsValue += m.conversionsValue ?? 0;
       totalAllConversions += m.allConversions ?? 0;
+
+      const channelType = normalizeChannelType(row.campaign?.advertisingChannelType);
+      if (channelType) {
+        channelSpend[channelType] = (channelSpend[channelType] ?? 0) + rowSpend;
+        channelConversions[channelType] = (channelConversions[channelType] ?? 0) + (m.conversions ?? 0);
+      }
     }
 
     // Build stage metrics from the funnel schema
@@ -368,6 +381,11 @@ export class GoogleAdsClient extends AbstractPlatformClient {
       topLevel.roas = totalConversionsValue / totalSpend;
     }
 
+    for (const [channel, spend] of Object.entries(channelSpend)) {
+      topLevel[`channel_spend_${channel}`] = spend;
+      topLevel[`channel_conversions_${channel}`] = channelConversions[channel] ?? 0;
+    }
+
     return {
       entityId,
       entityLevel,
@@ -399,4 +417,17 @@ export class GoogleAdsClient extends AbstractPlatformClient {
       topLevel: {},
     };
   }
+}
+
+function normalizeChannelType(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const map: Record<string, string> = {
+    SEARCH: "search",
+    SHOPPING: "shopping",
+    DISPLAY: "display",
+    VIDEO: "video",
+    PERFORMANCE_MAX: "performance_max",
+    DISCOVERY: "discovery",
+  };
+  return map[raw] ?? null;
 }

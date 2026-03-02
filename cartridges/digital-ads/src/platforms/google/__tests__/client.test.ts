@@ -257,6 +257,41 @@ describe("GoogleAdsClient", () => {
       expect(snap.topLevel.cost_per_conversion).toBeUndefined();
       expect(snap.topLevel.roas).toBeUndefined();
     });
+
+    it("populates channel_spend_* and channel_conversions_* when rows have advertisingChannelType", async () => {
+      const client = makeClient();
+      const rowsWithChannels: GoogleAdsRow[] = [
+        {
+          campaign: { id: "1", name: "Search Campaign", status: "ENABLED", advertisingChannelType: "SEARCH" },
+          metrics: { impressions: "5000", clicks: "200", costMicros: "25000000", conversions: 10, conversionsValue: 500, allConversions: 12 },
+        },
+        {
+          campaign: { id: "2", name: "Shopping Campaign", status: "ENABLED", advertisingChannelType: "SHOPPING" },
+          metrics: { impressions: "3000", clicks: "100", costMicros: "15000000", conversions: 8, conversionsValue: 400, allConversions: 10 },
+        },
+        {
+          campaign: { id: "3", name: "Another Search", status: "ENABLED", advertisingChannelType: "SEARCH" },
+          metrics: { impressions: "2000", clicks: "50", costMicros: "10000000", conversions: 5, conversionsValue: 250, allConversions: 6 },
+        },
+      ];
+
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(okResponse(searchStreamResponse(rowsWithChannels)));
+
+      const snap = await client.fetchSnapshot(CUSTOMER_ID, "account", TIME_RANGE, commerceFunnel);
+
+      // Search: $25 + $10 = $35 spend, 10 + 5 = 15 conversions
+      expect(snap.topLevel.channel_spend_search).toBeCloseTo(35);
+      expect(snap.topLevel.channel_conversions_search).toBe(15);
+
+      // Shopping: $15 spend, 8 conversions
+      expect(snap.topLevel.channel_spend_shopping).toBeCloseTo(15);
+      expect(snap.topLevel.channel_conversions_shopping).toBe(8);
+
+      // No display channel
+      expect(snap.topLevel.channel_spend_display).toBeUndefined();
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -306,7 +341,7 @@ describe("GoogleAdsClient", () => {
         ["campaign", "campaign"],
         ["adset", "ad_group"],
         ["ad", "ad_group_ad"],
-        ["account", "customer"],
+        ["account", "campaign"], // account-level queries campaign for channel breakdown
       ] as const) {
         // Fresh client per iteration so OAuth token state doesn't interfere
         const client = makeClient();
@@ -323,6 +358,18 @@ describe("GoogleAdsClient", () => {
           `WHERE segments.date BETWEEN '${TIME_RANGE.since}' AND '${TIME_RANGE.until}'`,
         );
       }
+    });
+
+    it("includes campaign.advertising_channel_type in campaign-level queries", async () => {
+      const client = makeClient();
+      fetchMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(okResponse(searchStreamResponse([])));
+
+      await client.fetchSnapshot(CUSTOMER_ID, "account", TIME_RANGE, commerceFunnel);
+
+      const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+      expect(body.query).toContain("campaign.advertising_channel_type");
     });
 
     it("retries on UNAVAILABLE status", async () => {

@@ -45,6 +45,14 @@ export const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
     cartridgeId: "quant-trading",
     description: "Execute trades, manage portfolios, and access market data.",
   },
+  {
+    serviceId: "crm-builtin",
+    displayName: "Built-in CRM",
+    authType: "api_key",
+    requiredFields: [],
+    cartridgeId: "crm",
+    description: "Built-in unified inbox — manage contacts, deals, and activities.",
+  },
 ];
 
 export function getServiceById(serviceId: string): ServiceRegistryEntry | undefined {

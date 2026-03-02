@@ -10,7 +10,8 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
-COPY cartridges/ads-spend/package.json cartridges/ads-spend/
+COPY cartridges/digital-ads/package.json cartridges/digital-ads/
+COPY cartridges/crm/package.json cartridges/crm/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 
@@ -44,8 +45,11 @@ COPY --from=build /app/packages/db/prisma/ packages/db/prisma/
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
 
-COPY --from=build /app/cartridges/ads-spend/package.json cartridges/ads-spend/package.json
-COPY --from=build /app/cartridges/ads-spend/dist/ cartridges/ads-spend/dist/
+COPY --from=build /app/cartridges/digital-ads/package.json cartridges/digital-ads/package.json
+COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
+
+COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
+COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
 
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
@@ -74,8 +78,11 @@ COPY --from=build /app/packages/core/dist/ packages/core/dist/
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
 
-COPY --from=build /app/cartridges/ads-spend/package.json cartridges/ads-spend/package.json
-COPY --from=build /app/cartridges/ads-spend/dist/ cartridges/ads-spend/dist/
+COPY --from=build /app/cartridges/digital-ads/package.json cartridges/digital-ads/package.json
+COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
+
+COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
+COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
 
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
