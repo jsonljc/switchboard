@@ -190,3 +190,6 @@ jobs:
 
       - name: Verify Docker build (Dashboard)
         run: docker build --target dashboard -t switchboard-dashboard:ci .
+
+      - name: Verify Docker build (MCP Server)
+        run: docker build --target mcp-server -t switchboard-mcp-server:ci .
