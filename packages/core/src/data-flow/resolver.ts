@@ -1,5 +1,14 @@
 import type { StepExecutionResult } from "./types.js";
-import type { EntityGraphService } from "../entity-graph/service.js";
+
+/** Minimal interface for entity graph resolution (full impl lives in entity-graph module). */
+export interface EntityGraphService {
+  resolveToCartridge(
+    sourceRef: { cartridgeId: string; entityType: string; entityId: string },
+    targetCartridgeId: string,
+    targetEntityType: string,
+    organizationId: string,
+  ): Promise<string | null>;
+}
 
 export class BindingResolutionError extends Error {
   constructor(

@@ -1,7 +1,16 @@
 import type { CrossCartridgeContext, CrossCartridgeEnricher, EnrichmentMapping } from "./types.js";
-import type { EntityGraphService } from "../entity-graph/service.js";
 import type { CartridgeRegistry } from "../storage/interfaces.js";
 import { DEFAULT_ENRICHMENT_MAPPINGS } from "./mappings.js";
+
+/** Minimal interface for entity graph resolution (full impl lives in entity-graph module). */
+export interface EntityGraphService {
+  resolveToCartridge(
+    sourceRef: { cartridgeId: string; entityType: string; entityId: string },
+    targetCartridgeId: string,
+    targetEntityType: string,
+    organizationId: string,
+  ): Promise<string | null>;
+}
 
 export interface DefaultCrossCartridgeEnricherConfig {
   entityGraphService: EntityGraphService;

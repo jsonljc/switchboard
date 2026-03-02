@@ -174,17 +174,9 @@ export type { CircuitBreakerConfig, CircuitBreakerState } from "./utils/circuit-
 export { paginationParams, paginate } from "./utils/pagination.js";
 export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";
 
-// Entity Graph (cross-cartridge entity resolution)
-export { EntityGraphService, InMemoryEntityMappingStore } from "./entity-graph/index.js";
-export type { EntityMappingStore, EntityRef, EntityMapping, CrossCartridgeEntityResolution } from "./entity-graph/index.js";
-
 // Cross-Cartridge Enrichment
 export { DefaultCrossCartridgeEnricher, DEFAULT_ENRICHMENT_MAPPINGS } from "./enrichment/index.js";
 export type { CrossCartridgeContext, EnrichmentMapping, CrossCartridgeEnricher, DefaultCrossCartridgeEnricherConfig } from "./enrichment/index.js";
-
-// Event Bus (cross-cartridge event-driven reactions)
-export { InMemoryEventBus, InMemoryEventReactionStore, EventReactionProcessor, resolveTemplate } from "./event-bus/index.js";
-export type { DomainEvent, EventReaction, EventBus, EventSubscription, EventReactionStore, ReactionOrchestrator, EventReactionProcessorConfig } from "./event-bus/index.js";
 
 // Data-Flow Plan Execution (multi-step cross-cartridge plans with binding resolution)
 export { DataFlowExecutor, resolveBindings, BindingResolutionError, evaluateCondition } from "./data-flow/index.js";
@@ -221,25 +213,11 @@ export { CapabilityRegistry } from "./capability/index.js";
 export { GoalParser, PlanGraphBuilder, PLAN_TEMPLATES } from "./planning/index.js";
 export type { PlanTemplate, PlanStepTemplate, PlanningContext } from "./planning/index.js";
 
-// Secrets vault (AES-256-GCM encryption for credentials)
-export { EncryptedVault } from "./secrets/index.js";
-export type { SecretsVault } from "./secrets/index.js";
-
 // Idempotency guard (request deduplication)
 export { IdempotencyGuard, InMemoryIdempotencyStore } from "./idempotency/guard.js";
 export type { IdempotencyStore } from "./idempotency/guard.js";
 
-// Undo execution engine
-export { UndoExecutionEngine } from "./undo/index.js";
-export type { UndoExecutionContext, UndoResult } from "./undo/index.js";
+// Credential resolution (per-org connection credentials at execution time)
+export { NoOpCredentialResolver } from "./credentials/resolver.js";
+export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
 
-// Capacity alignment
-export { CapacityAligner } from "./capacity/alignment.js";
-export type { CapacitySignal, CapacityDataSource } from "./capacity/alignment.js";
-export { startCapacityAlignmentJob } from "./capacity/job.js";
-
-// Attribution (ad click → lead → appointment → revenue)
-export { AttributionTracker } from "./attribution/tracker.js";
-export type { AttributionEvent, AttributionPath } from "./attribution/tracker.js";
-export { AttributionReporter } from "./attribution/reporter.js";
-export type { AttributionReport, ChannelMetrics, CampaignMetrics } from "./attribution/reporter.js";

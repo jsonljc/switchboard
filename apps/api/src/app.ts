@@ -27,6 +27,8 @@ import { webhooksRoutes } from "./routes/webhooks.js";
 import { inboundWebhooksRoutes } from "./routes/inbound-webhooks.js";
 import { inboundMessagesRoutes } from "./routes/inbound-messages.js";
 import { smbRoutes } from "./routes/smb.js";
+import { governanceRoutes } from "./routes/governance.js";
+import { campaignsRoutes } from "./routes/campaigns.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import apiVersionPlugin from "./versioning.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -48,7 +50,7 @@ import {
   SmbActivityLog,
   InMemorySmbActivityLogStorage,
 } from "@switchboard/core";
-import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier, TierStore } from "@switchboard/core";
+import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier, TierStore, GovernanceProfileStore } from "@switchboard/core";
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
@@ -78,6 +80,7 @@ declare module "fastify" {
     executionQueue: Queue | null;
     executionWorker: Worker | null;
     prisma: import("@switchboard/db").PrismaClient | null;
+    governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -173,6 +176,15 @@ export async function buildServer() {
   // Wire Prometheus metrics before orchestrator creation
   setMetrics(createPromMetrics());
 
+  // Warn if credential encryption key is missing when DB is configured
+  if (process.env["DATABASE_URL"] && !process.env["CREDENTIALS_ENCRYPTION_KEY"]) {
+    app.log.warn(
+      "CREDENTIALS_ENCRYPTION_KEY is not set but DATABASE_URL is configured. " +
+      "Connection credential storage/retrieval will fail. " +
+      "Set CREDENTIALS_ENCRYPTION_KEY to a strong random secret (min 32 chars).",
+    );
+  }
+
   // Create storage and orchestrator — with degraded mode fallback
   let storage: StorageContext;
   let ledgerStorage: LedgerStorage;
@@ -211,7 +223,15 @@ export async function buildServer() {
 
   const guardrailStateStore = createGuardrailStateStore(redis ?? undefined);
   const policyCache = new InMemoryPolicyCache();
-  const governanceProfileStore = new InMemoryGovernanceProfileStore();
+
+  // Governance profile store: Prisma-backed when DB available, in-memory fallback
+  let governanceProfileStore: GovernanceProfileStore;
+  if (prismaClient) {
+    const { PrismaGovernanceProfileStore } = await import("@switchboard/db");
+    governanceProfileStore = new PrismaGovernanceProfileStore(prismaClient);
+  } else {
+    governanceProfileStore = new InMemoryGovernanceProfileStore();
+  }
 
   // --- Cartridge credential resolution: DB first, env-var fallback ---
   let adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
@@ -324,6 +344,12 @@ export async function buildServer() {
     approvalNotifier,
     tierStore,
     smbActivityLog,
+    credentialResolver: prismaClient
+      ? await (async () => {
+          const { PrismaCredentialResolver, PrismaConnectionStore } = await import("@switchboard/db");
+          return new PrismaCredentialResolver(new PrismaConnectionStore(prismaClient));
+        })()
+      : undefined,
   });
 
   // Start worker in-process when queue mode is active
@@ -373,6 +399,7 @@ export async function buildServer() {
   app.decorate("executionQueue", queue);
   app.decorate("executionWorker", worker);
   app.decorate("prisma", prismaClient);
+  app.decorate("governanceProfileStore", governanceProfileStore);
 
   // Resource cleanup on close — order: worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
@@ -468,6 +495,8 @@ export async function buildServer() {
   await app.register(inboundWebhooksRoutes, { prefix: "/api/inbound" });
   await app.register(inboundMessagesRoutes, { prefix: "/api/messages" });
   await app.register(smbRoutes, { prefix: "/api/smb" });
+  await app.register(governanceRoutes, { prefix: "/api/governance" });
+  await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
 
   return app;
 }

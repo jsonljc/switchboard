@@ -4,9 +4,6 @@ import { z } from "zod";
 import type {
   ExecutionService,
   CartridgeReadAdapter,
-  LifecycleOrchestrator,
-  StorageContext,
-  AuditLedger,
   GovernanceProfileStore,
 } from "@switchboard/core";
 import { resolveAuth, loadMcpApiKeys } from "./auth.js";
@@ -30,12 +27,41 @@ import { PAYMENTS_SIDE_EFFECT_TOOLS, PAYMENTS_READ_TOOLS } from "./tools/payment
 import type { ReadToolDeps } from "./tools/index.js";
 import type { GovernanceToolDeps } from "./tools/index.js";
 
+/**
+ * Minimal orchestrator interface — satisfied by both LifecycleOrchestrator
+ * and the API-backed proxy from api-governance-adapter.ts.
+ */
+export interface MinimalOrchestrator {
+  simulate: (...args: any[]) => Promise<any>;
+  requestUndo: (...args: any[]) => Promise<any>;
+  executeApproved: (...args: any[]) => Promise<any>;
+  propose: (...args: any[]) => Promise<any>;
+}
+
+/**
+ * Minimal storage interface — satisfied by both StorageContext
+ * and the API-backed proxy from api-governance-adapter.ts.
+ */
+export interface MinimalStorage {
+  approvals: { getById: (...args: any[]) => Promise<any>; listPending: (...args: any[]) => Promise<any> };
+  envelopes: { getById: (...args: any[]) => Promise<any> };
+  cartridges: { get: (id: string) => any; list: () => string[] };
+}
+
+/**
+ * Minimal ledger interface — satisfied by both AuditLedger
+ * and the API-backed proxy from api-governance-adapter.ts.
+ */
+export interface MinimalLedger {
+  query: (...args: any[]) => Promise<any>;
+}
+
 export interface SwitchboardMcpServerOptions {
   executionService: ExecutionService;
-  readAdapter: CartridgeReadAdapter;
-  orchestrator: LifecycleOrchestrator;
-  storage: StorageContext;
-  ledger: AuditLedger;
+  readAdapter: CartridgeReadAdapter | { query: (...args: any[]) => Promise<any> };
+  orchestrator: MinimalOrchestrator;
+  storage: MinimalStorage;
+  ledger: MinimalLedger;
   governanceProfileStore: GovernanceProfileStore;
 }
 
@@ -51,17 +77,17 @@ export class SwitchboardMcpServer {
     this.executionService = options.executionService;
     this.sessionGuard = SessionGuard.fromEnv();
     this.readDeps = {
-      readAdapter: options.readAdapter,
-      orchestrator: options.orchestrator,
-      storage: options.storage,
+      readAdapter: options.readAdapter as CartridgeReadAdapter,
+      orchestrator: options.orchestrator as any,
+      storage: options.storage as any,
       sessionGuard: this.sessionGuard,
     };
     this.governanceDeps = {
-      orchestrator: options.orchestrator,
-      readAdapter: options.readAdapter,
+      orchestrator: options.orchestrator as any,
+      readAdapter: options.readAdapter as CartridgeReadAdapter,
       governanceProfileStore: options.governanceProfileStore,
-      ledger: options.ledger,
-      storage: options.storage,
+      ledger: options.ledger as any,
+      storage: options.storage as any,
     };
     this.apiKeys = loadMcpApiKeys();
 

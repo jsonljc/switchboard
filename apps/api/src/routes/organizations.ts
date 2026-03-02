@@ -157,6 +157,14 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const connectionStore = await getConnectionStore(app.prisma);
+
+    if (!process.env["CREDENTIALS_ENCRYPTION_KEY"]) {
+      return reply.code(503).send({
+        error: "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+        statusCode: 503,
+      });
+    }
+
     const chatPublicUrl = process.env["CHAT_PUBLIC_URL"] ?? "http://localhost:3001";
     const chatInternalUrl = process.env["CHAT_INTERNAL_URL"] ?? "http://localhost:3001";
     const internalSecret = process.env["INTERNAL_API_SECRET"];

@@ -24,7 +24,7 @@ export function getDb(): PrismaClient {
 export { PrismaClient };
 export type { Prisma } from "@prisma/client";
 
-export { createPrismaStorage, PrismaLedgerStorage, PrismaConnectionStore } from "./storage/index.js";
+export { createPrismaStorage, PrismaLedgerStorage, PrismaConnectionStore, PrismaGovernanceProfileStore, PrismaCredentialResolver } from "./storage/index.js";
 export { PrismaCrmProvider } from "./storage/prisma-crm-provider.js";
 export { PrismaTierStore } from "./prisma-tier-store.js";
 export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";

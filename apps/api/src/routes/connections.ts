@@ -15,6 +15,10 @@ function redactCredentials(connection: Record<string, any>): Record<string, any>
   return { ...rest, credentials: "***" };
 }
 
+function hasEncryptionKey(): boolean {
+  return !!process.env["CREDENTIALS_ENCRYPTION_KEY"];
+}
+
 export const connectionsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/connections — create a new connection (org-scoped)
   app.post("/", {
@@ -45,6 +49,13 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const store = await getConnectionStore(app.prisma);
+
+    if (!hasEncryptionKey()) {
+      return reply.code(503).send({
+        error: "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+        statusCode: 503,
+      });
+    }
 
     const connection = {
       id: randomUUID(),
@@ -82,7 +93,18 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const store = await getConnectionStore(app.prisma);
-    const connections = await store.list(organizationId);
+    let connections;
+    try {
+      connections = await store.list(organizationId);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("CREDENTIALS_ENCRYPTION_KEY")) {
+        return reply.code(503).send({
+          error: "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+          statusCode: 503,
+        });
+      }
+      throw err;
+    }
 
     return reply.code(200).send({
       connections: connections.map(redactCredentials),
@@ -107,7 +129,18 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
 
     const { id } = request.params as { id: string };
     const store = await getConnectionStore(app.prisma);
-    const connection = await store.getById(id);
+    let connection;
+    try {
+      connection = await store.getById(id);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("CREDENTIALS_ENCRYPTION_KEY")) {
+        return reply.code(503).send({
+          error: "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+          statusCode: 503,
+        });
+      }
+      throw err;
+    }
 
     if (!connection || connection.organizationId !== organizationId) {
       return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
@@ -139,6 +172,13 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       credentials?: Record<string, unknown>;
       scopes?: string[];
     };
+
+    if (!hasEncryptionKey()) {
+      return reply.code(503).send({
+        error: "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+        statusCode: 503,
+      });
+    }
 
     const store = await getConnectionStore(app.prisma);
     const existing = await store.getById(id);

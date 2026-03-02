@@ -28,8 +28,6 @@ export * from "./mcp.js";
 export * from "./organization-tier.js";
 
 // Cross-cartridge integration
-export * from "./entity-graph.js";
-export * from "./event-bus.js";
 export * from "./data-flow.js";
 
 // Capability descriptors (executor routing, step types)

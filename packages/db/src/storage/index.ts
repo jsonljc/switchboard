@@ -6,6 +6,6 @@ export { PrismaLedgerStorage } from "./prisma-ledger-storage.js";
 export { PrismaCompetenceStore } from "./prisma-competence-store.js";
 export { PrismaRiskPostureStore } from "./prisma-risk-posture-store.js";
 export { PrismaConnectionStore } from "./prisma-connection-store.js";
-export { PrismaEntityGraphStore } from "./prisma-entity-graph-store.js";
-export { PrismaEventReactionStore } from "./prisma-reaction-store.js";
+export { PrismaGovernanceProfileStore } from "./prisma-governance-profile-store.js";
+export { PrismaCredentialResolver } from "./prisma-credential-resolver.js";
 export { createPrismaStorage } from "./factory.js";

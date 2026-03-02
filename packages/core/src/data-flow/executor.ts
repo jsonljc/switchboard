@@ -1,5 +1,5 @@
 import type { DataFlowPlan, StepExecutionResult } from "./types.js";
-import type { EntityGraphService } from "../entity-graph/service.js";
+import type { EntityGraphService } from "./resolver.js";
 import { resolveBindings, BindingResolutionError } from "./resolver.js";
 import { evaluateCondition } from "./condition.js";
 

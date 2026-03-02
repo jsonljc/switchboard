@@ -53,9 +53,27 @@ import { beginExecution, endExecution, GuardedCartridge } from "../execution-gua
 import { getTracer } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
 import type { CrossCartridgeEnricher } from "../enrichment/types.js";
-import type { EventBus, DomainEvent } from "../event-bus/types.js";
-import type { EventReactionProcessor } from "../event-bus/processor.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
+
+/** Minimal interfaces for event bus integration (full impl was in event-bus module). */
+interface DomainEvent {
+  id: string;
+  eventType: string;
+  sourceCartridgeId: string;
+  organizationId: string;
+  principalId: string;
+  payload: Record<string, unknown>;
+  envelopeId: string;
+  traceId: string;
+  emittedAt: Date;
+}
+interface EventBus {
+  publish(event: DomainEvent): Promise<void>;
+}
+interface EventReactionProcessor {
+  process(event: DomainEvent): Promise<void>;
+}
+
 import type { TierStore } from "../smb/tier-resolver.js";
 import type { SmbActivityLog } from "../smb/activity-log.js";
 import { smbPropose } from "../smb/pipeline.js";
@@ -96,6 +114,8 @@ export interface OrchestratorConfig {
   tierStore?: TierStore;
   /** SMB activity log — used instead of AuditLedger for SMB orgs. */
   smbActivityLog?: SmbActivityLog;
+  /** Credential resolver for org-scoped connection credentials at execution time. */
+  credentialResolver?: import("../credentials/resolver.js").ConnectionCredentialResolver;
 }
 
 export interface ProposeResult {
@@ -145,6 +165,7 @@ export class LifecycleOrchestrator {
   private dataFlowExecutor: DataFlowExecutor | null;
   private tierStore: TierStore | null;
   private smbActivityLog: SmbActivityLog | null;
+  private credentialResolver: import("../credentials/resolver.js").ConnectionCredentialResolver | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -168,6 +189,27 @@ export class LifecycleOrchestrator {
     this.dataFlowExecutor = config.dataFlowExecutor ?? null;
     this.tierStore = config.tierStore ?? null;
     this.smbActivityLog = config.smbActivityLog ?? null;
+    this.credentialResolver = config.credentialResolver ?? null;
+  }
+
+  /**
+   * Build the context object passed to cartridge methods (enrichContext, captureSnapshot, execute).
+   * Resolves org-scoped credentials via the credential resolver when available.
+   */
+  private async buildCartridgeContext(
+    cartridgeId: string,
+    principalId: string,
+    organizationId: string | null,
+  ): Promise<{ principalId: string; organizationId: string | null; connectionCredentials: Record<string, unknown> }> {
+    let connectionCredentials: Record<string, unknown> = {};
+    if (this.credentialResolver && organizationId) {
+      try {
+        connectionCredentials = await this.credentialResolver.resolve(cartridgeId, organizationId);
+      } catch {
+        // Fall back to empty credentials if resolution fails
+      }
+    }
+    return { principalId, organizationId, connectionCredentials };
   }
 
   async propose(params: {
@@ -331,11 +373,7 @@ export class LifecycleOrchestrator {
       enriched = await cartridge.enrichContext(
         params.actionType,
         params.parameters,
-        {
-          principalId: params.principalId,
-          organizationId: params.organizationId ?? null,
-          connectionCredentials: {},
-        },
+        await this.buildCartridgeContext(params.cartridgeId, params.principalId, params.organizationId ?? null),
       );
     } catch (err) {
       console.warn(
@@ -1393,6 +1431,7 @@ export class LifecycleOrchestrator {
         // Re-evaluate patched parameters through the policy engine
         const principalId = (originalProposal.parameters["_principalId"] as string) ?? "";
         const cartridgeId = (originalProposal.parameters["_cartridgeId"] as string) ?? "";
+        const patchOrgId = (originalProposal.parameters["_organizationId"] as string) ?? null;
         const identitySpec = await this.storage.identity.getSpecByPrincipalId(principalId);
         if (identitySpec) {
           const overlays = await this.storage.identity.listOverlaysBySpecId(identitySpec.id);
@@ -1405,11 +1444,7 @@ export class LifecycleOrchestrator {
               enriched = await cartridge.enrichContext(
                 originalProposal.actionType,
                 patchedParams,
-                {
-                  principalId,
-                  organizationId: null,
-                  connectionCredentials: {},
-                },
+                await this.buildCartridgeContext(cartridgeId, principalId, patchOrgId),
               );
             } catch (err) {
               console.warn(
@@ -1444,7 +1479,7 @@ export class LifecycleOrchestrator {
               parameters: patchedParams,
               cartridgeId,
               principalId,
-              organizationId: null,
+              organizationId: patchOrgId,
               riskCategory: riskInput.baseRisk,
               metadata: { ...enriched, envelopeId: envelope.id },
             };
@@ -1579,6 +1614,9 @@ export class LifecycleOrchestrator {
     });
 
     // Capture pre-mutation snapshot (read-only, no execution token needed)
+    const execPrincipalId = envelope.proposals[0]?.parameters["_principalId"] as string ?? "";
+    const execOrgId = (envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+    const execCartridgeId = storedCartridgeId ?? inferredCartridgeId ?? "";
     let preMutationSnapshot: Record<string, unknown> | undefined;
     try {
       if (cartridge.captureSnapshot) {
@@ -1587,11 +1625,7 @@ export class LifecycleOrchestrator {
           Object.fromEntries(
             Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
           ),
-          {
-            principalId: envelope.proposals[0]?.parameters["_principalId"] as string ?? "",
-            organizationId: null,
-            connectionCredentials: {},
-          },
+          await this.buildCartridgeContext(execCartridgeId, execPrincipalId, execOrgId),
         );
 
         if (preMutationSnapshot && Object.keys(preMutationSnapshot).length > 0) {
@@ -1633,11 +1667,7 @@ export class LifecycleOrchestrator {
       executeResult = await cartridge.execute(
         proposal.actionType,
         execParams,
-        {
-          principalId: envelope.proposals[0]?.parameters["_principalId"] as string ?? "",
-          organizationId: null,
-          connectionCredentials: {},
-        },
+        await this.buildCartridgeContext(execCartridgeId, execPrincipalId, execOrgId),
       );
     } catch (err) {
       executeResult = {
@@ -1887,6 +1917,7 @@ export class LifecycleOrchestrator {
     parameters: Record<string, unknown>;
     principalId: string;
     cartridgeId: string;
+    organizationId?: string | null;
   }): Promise<SimulationResult> {
     // Same as propose steps 1-8 but uses simulate()
     const identitySpec = await this.storage.identity.getSpecByPrincipalId(params.principalId);
@@ -1918,11 +1949,7 @@ export class LifecycleOrchestrator {
     const enriched = await cartridge.enrichContext(
       params.actionType,
       params.parameters,
-      {
-        principalId: params.principalId,
-        organizationId: null,
-        connectionCredentials: {},
-      },
+      await this.buildCartridgeContext(params.cartridgeId, params.principalId, params.organizationId ?? null),
     );
 
     const riskInput = await cartridge.getRiskInput(
@@ -1974,7 +2001,7 @@ export class LifecycleOrchestrator {
       parameters: params.parameters,
       cartridgeId: params.cartridgeId,
       principalId: params.principalId,
-      organizationId: null,
+      organizationId: params.organizationId ?? null,
       riskCategory: riskInput.baseRisk,
       metadata: { ...enriched, envelopeId: "simulation" },
     };
