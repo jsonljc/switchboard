@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@switchboard/schemas": "workspace:*",
-    "@switchboard/cartridge-sdk": "workspace:*"
+    "@switchboard/cartridge-sdk": "workspace:*",
+    "@switchboard/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

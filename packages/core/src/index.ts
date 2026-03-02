@@ -88,6 +88,17 @@ export type { Tracer, Span } from "./telemetry/index.js";
 export { getMetrics, setMetrics, createInMemoryMetrics } from "./telemetry/index.js";
 export type { SwitchboardMetrics, Counter, Histogram } from "./telemetry/index.js";
 
+// LLM Cost Table
+export {
+  LLM_COST_TABLE,
+  DEFAULT_MODEL_ID,
+  computeTokenCostUSD,
+  usdToTokenBudget,
+  getModelCost,
+  listModelCosts,
+} from "./telemetry/llm-costs.js";
+export type { ModelCostEntry } from "./telemetry/llm-costs.js";
+
 // Execution Guard
 export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
 
@@ -178,3 +189,27 @@ export type { DomainEvent, EventReaction, EventBus, EventSubscription, EventReac
 // Data-Flow Plan Execution (multi-step cross-cartridge plans with binding resolution)
 export { DataFlowExecutor, resolveBindings, BindingResolutionError, evaluateCondition } from "./data-flow/index.js";
 export type { DataFlowStep, DataFlowPlan, StepExecutionResult, DataFlowOrchestrator, DataFlowExecutorConfig, DataFlowExecutionResult, BindingContext } from "./data-flow/index.js";
+
+// SMB governance (simplified pipeline for SMB-tier organizations)
+export {
+  smbEvaluate,
+  smbCategorizeRisk,
+  smbApprovalRequired,
+  smbRouteApproval,
+  smbBindingHash,
+  smbCreateApprovalRequest,
+  SmbActivityLog,
+  InMemorySmbActivityLogStorage,
+  smbPropose,
+  InMemoryTierStore,
+} from "./smb/index.js";
+export type {
+  SmbEvaluationContext,
+  SmbApprovalRouting,
+  ActivityLogEntry,
+  ActivityLogQuery,
+  ActivityLogStorage,
+  ActivityResult,
+  SmbPipelineContext,
+  TierStore,
+} from "./smb/index.js";

@@ -1,60 +1,77 @@
 // ---------------------------------------------------------------------------
-// Google Reviews Provider — Google Business Profile API
+// Google Reviews Provider — Real Google Business Profile API integration
 // ---------------------------------------------------------------------------
 
 import type { ReviewPlatformProvider } from "../provider.js";
 import type { ReviewDetails } from "../../../core/types.js";
 import type { PlatformHealth } from "../../types.js";
+import { withRetry, CircuitBreaker } from "@switchboard/core";
 
 export interface GoogleReviewsConfig {
-  apiKey: string;
+  /** OAuth2 access token for Google Business Profile API */
+  accessToken: string;
+  /** Google Business Profile account ID (e.g. "accounts/123456789") */
+  accountId: string;
+  /** Google Business Profile location ID (e.g. "locations/987654321") */
   locationId: string;
 }
 
-class CircuitBreaker {
-  private failures = 0;
-  private lastFailureAt = 0;
-  private readonly threshold: number;
-  private readonly resetTimeMs: number;
+const GBP_BASE = "https://mybusiness.googleapis.com/v4";
 
-  constructor(threshold = 5, resetTimeMs = 60_000) {
-    this.threshold = threshold;
-    this.resetTimeMs = resetTimeMs;
-  }
-
-  get isOpen(): boolean {
-    if (this.failures >= this.threshold) {
-      if (Date.now() - this.lastFailureAt > this.resetTimeMs) {
-        this.failures = 0;
-        return false;
-      }
-      return true;
-    }
-    return false;
-  }
-
-  recordSuccess(): void { this.failures = 0; }
-  recordFailure(): void { this.failures++; this.lastFailureAt = Date.now(); }
-}
-
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1000): Promise<T> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, attempt)));
-    }
-  }
-  throw new Error("withRetry exhausted");
-}
-
+/**
+ * Real Google Reviews provider using the Google Business Profile API.
+ * All calls wrapped with retry + circuit breaker.
+ *
+ * API Reference: https://developers.google.com/my-business/reference/rest
+ */
 export class GoogleReviewsProvider implements ReviewPlatformProvider {
   readonly platform = "google" as const;
-  private readonly breaker = new CircuitBreaker();
+  private readonly config: GoogleReviewsConfig;
+  private readonly breaker: CircuitBreaker;
 
-  constructor(_config: GoogleReviewsConfig) {
-    // Config will be used when real API integration is implemented
+  constructor(config: GoogleReviewsConfig) {
+    this.config = config;
+    this.breaker = new CircuitBreaker({
+      failureThreshold: 5,
+      resetTimeoutMs: 30_000,
+      halfOpenMaxAttempts: 3,
+    });
+  }
+
+  private async call<T>(fn: () => Promise<T>): Promise<T> {
+    return this.breaker.execute(() =>
+      withRetry(fn, {
+        maxAttempts: 3,
+        shouldRetry: (err: unknown) => {
+          if (err instanceof Error) {
+            const msg = err.message;
+            return (
+              msg.includes("429") ||
+              msg.includes("503") ||
+              msg.includes("ETIMEDOUT") ||
+              msg.includes("ECONNRESET")
+            );
+          }
+          return false;
+        },
+      }),
+    );
+  }
+
+  private authHeaders(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.config.accessToken}`,
+      "Content-Type": "application/json",
+    };
+  }
+
+  private locationPath(locationId?: string): string {
+    const loc = locationId || this.config.locationId;
+    const account = this.config.accountId;
+    // Handle both full path and bare ID
+    const accountPath = account.startsWith("accounts/") ? account : `accounts/${account}`;
+    const locationPath = loc.startsWith("locations/") ? loc : `locations/${loc}`;
+    return `${accountPath}/${locationPath}`;
   }
 
   async sendReviewRequest(
@@ -62,20 +79,153 @@ export class GoogleReviewsProvider implements ReviewPlatformProvider {
     _locationId: string,
     _message: string,
   ): Promise<{ requestId: string; status: string }> {
-    if (this.breaker.isOpen) throw new Error("Circuit breaker open — Google Reviews unavailable");
+    // Google doesn't have a direct "request review" API.
+    // Generate a review link for the location using the Place ID.
+    const requestId = `greview-req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    return withRetry(async () => {
-      try {
-        // Google doesn't have a direct review request API.
-        // In practice, this generates a review link for the location.
-        const requestId = `greview-${Date.now()}`;
-        this.breaker.recordSuccess();
-        return { requestId, status: "link_generated" };
-      } catch (err) {
-        this.breaker.recordFailure();
-        throw err;
+    return {
+      requestId,
+      status: "link_generated",
+    };
+  }
+
+  async respondToReview(
+    reviewId: string,
+    locationId: string,
+    responseText: string,
+  ): Promise<{ success: boolean }> {
+    return this.call(async () => {
+      const path = this.locationPath(locationId);
+      // Review name format: accounts/{id}/locations/{id}/reviews/{id}
+      const reviewPath = reviewId.includes("/")
+        ? reviewId
+        : `${path}/reviews/${reviewId}`;
+
+      const response = await fetch(
+        `${GBP_BASE}/${reviewPath}/reply`,
+        {
+          method: "PUT",
+          headers: this.authHeaders(),
+          body: JSON.stringify({ comment: responseText }),
+        },
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+          `Google Business Profile API error ${response.status}: ${errorBody}`,
+        );
       }
+
+      return { success: true };
     });
+  }
+
+  async getReviews(locationId: string, limit: number): Promise<ReviewDetails[]> {
+    return this.call(async () => {
+      const path = this.locationPath(locationId);
+      const url = new URL(`${GBP_BASE}/${path}/reviews`);
+      url.searchParams.set("pageSize", String(Math.min(limit, 50)));
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: this.authHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(
+          `Google Business Profile API error ${response.status}: ${errorBody}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        reviews?: Array<{
+          reviewId: string;
+          reviewer: { displayName: string };
+          starRating: string;
+          comment: string;
+          createTime: string;
+          reviewReply?: {
+            comment: string;
+            updateTime: string;
+          };
+        }>;
+      };
+
+      if (!data.reviews) {
+        return [];
+      }
+
+      const starMap: Record<string, number> = {
+        ONE: 1,
+        TWO: 2,
+        THREE: 3,
+        FOUR: 4,
+        FIVE: 5,
+      };
+
+      return data.reviews.map((review) => ({
+        reviewId: review.reviewId,
+        platform: "google" as const,
+        patientId: null,
+        rating: starMap[review.starRating] ?? 0,
+        text: review.comment ?? "",
+        createdAt: new Date(review.createTime),
+        respondedAt: review.reviewReply
+          ? new Date(review.reviewReply.updateTime)
+          : null,
+        responseText: review.reviewReply?.comment ?? null,
+      }));
+    });
+  }
+
+  async checkHealth(): Promise<PlatformHealth> {
+    const start = Date.now();
+    try {
+      const path = this.locationPath();
+      const response = await fetch(`${GBP_BASE}/${path}`, {
+        method: "GET",
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      if (!response.ok) {
+        return {
+          status: "disconnected",
+          latencyMs: Date.now() - start,
+          error: `Google Business Profile returned ${response.status}`,
+        };
+      }
+
+      return {
+        status: "connected",
+        latencyMs: Date.now() - start,
+        error: null,
+      };
+    } catch (err) {
+      return {
+        status: "disconnected",
+        latencyMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+}
+
+/**
+ * Mock Google Reviews provider for development/testing.
+ */
+export class MockGoogleReviewsProvider implements ReviewPlatformProvider {
+  readonly platform = "mock" as const;
+
+  async sendReviewRequest(
+    _patientId: string,
+    _locationId: string,
+    _message: string,
+  ): Promise<{ requestId: string; status: string }> {
+    const requestId = `greview-mock-${Date.now()}`;
+    return { requestId, status: "link_generated" };
   }
 
   async respondToReview(
@@ -83,39 +233,32 @@ export class GoogleReviewsProvider implements ReviewPlatformProvider {
     _locationId: string,
     _responseText: string,
   ): Promise<{ success: boolean }> {
-    if (this.breaker.isOpen) throw new Error("Circuit breaker open — Google Reviews unavailable");
-
-    return withRetry(async () => {
-      try {
-        // PUT accounts/{accountId}/locations/{locationId}/reviews/{reviewId}/reply
-        this.breaker.recordSuccess();
-        return { success: true };
-      } catch (err) {
-        this.breaker.recordFailure();
-        throw err;
-      }
-    });
+    return { success: true };
   }
 
   async getReviews(_locationId: string, _limit: number): Promise<ReviewDetails[]> {
-    if (this.breaker.isOpen) throw new Error("Circuit breaker open — Google Reviews unavailable");
-
-    return withRetry(async () => {
-      try {
-        // GET accounts/{accountId}/locations/{locationId}/reviews
-        this.breaker.recordSuccess();
-        return [];
-      } catch (err) {
-        this.breaker.recordFailure();
-        throw err;
-      }
-    });
+    return [];
   }
 
   async checkHealth(): Promise<PlatformHealth> {
-    if (this.breaker.isOpen) {
-      return { status: "disconnected", latencyMs: 0, error: "Circuit breaker open" };
-    }
-    return { status: "connected", latencyMs: 0, error: null };
+    return { status: "connected", latencyMs: 1, error: null };
   }
+}
+
+/**
+ * Factory: auto-detect real Google Business Profile credentials.
+ */
+export function createGoogleReviewsProvider(config: GoogleReviewsConfig): ReviewPlatformProvider {
+  const isReal =
+    config.accessToken &&
+    config.accessToken.length >= 20 &&
+    !config.accessToken.includes("mock") &&
+    config.accountId &&
+    config.locationId;
+
+  if (isReal) {
+    return new GoogleReviewsProvider(config);
+  }
+
+  return new MockGoogleReviewsProvider();
 }

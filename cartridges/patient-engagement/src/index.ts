@@ -79,6 +79,10 @@ export { ConsentGate } from "./cartridge/interceptors/consent-gate.js";
 // Conversation engine
 export { createConversationState, executeNextStep, interpolate } from "./conversation/engine.js";
 export type { ConversationFlowDefinition, ConversationState, FlowStep } from "./conversation/types.js";
+export { ConversationRouter } from "./conversation/router.js";
+export type { InboundMessage, RouterResponse, ConversationRouterConfig } from "./conversation/router.js";
+export { InMemorySessionStore, RedisSessionStore } from "./conversation/session-store.js";
+export type { ConversationSession, ConversationSessionStore } from "./conversation/session-store.js";
 
 // Cadence engine
 export { evaluateCadenceStep } from "./cadence/engine.js";
