@@ -13,10 +13,9 @@ function makeProposal(overrides?: Partial<ActionProposal>): ActionProposal {
     id: "prop_test",
     actionType: "digital-ads.campaign.pause",
     parameters: {},
-    source: "user",
-    interpreterName: null,
+    evidence: "test",
     confidence: 1,
-    createdAt: new Date(),
+    originatingMessageId: "",
     ...overrides,
   };
 }

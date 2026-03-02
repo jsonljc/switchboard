@@ -55,7 +55,7 @@ describe("TierStore & Orchestrator Tier Routing", () => {
     smbActivityLog = new SmbActivityLog(activityStorage);
 
     cartridge = new TestCartridge(createTestManifest({ id: "digital-ads" }));
-    cartridge.onExecute((_actionType, params) => ({
+    cartridge.onExecute((_actionType, _params) => ({
       success: true,
       summary: `Executed ${_actionType}`,
       externalRefs: {},

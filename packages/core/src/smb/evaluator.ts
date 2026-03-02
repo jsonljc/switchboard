@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   DecisionTrace,
   RiskCategory,
@@ -8,7 +7,7 @@ import type {
   GovernanceProfile,
 } from "@switchboard/schemas";
 import type { SmbOrgConfig } from "@switchboard/schemas";
-import type { GuardrailState, SpendLookup } from "../engine/policy-engine.js";
+import type { GuardrailState } from "../engine/policy-engine.js";
 import {
   createTraceBuilder,
   addCheck,
@@ -266,10 +265,10 @@ export function smbEvaluate(
     rawScore,
     category: riskCategory,
     factors: [{
-      name: "smb_simple_risk",
-      value: rawScore,
+      factor: "smb_simple_risk",
       weight: 1,
-      source: "smb_evaluator",
+      contribution: rawScore,
+      detail: `SMB risk categorization: ${riskCategory}`,
     }],
   };
 
