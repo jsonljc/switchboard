@@ -92,7 +92,6 @@ describe("smbCreateApprovalRequest", () => {
   it("should set 24h expiry", () => {
     const config = makeSmbConfig();
     const trace = makeDecisionTrace();
-    const before = Date.now();
 
     const request = smbCreateApprovalRequest({
       envelopeId: "env_1",
