@@ -114,6 +114,9 @@ importers:
       '@switchboard/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@switchboard/crm':
+        specifier: workspace:*
+        version: link:../../cartridges/crm
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -291,6 +294,22 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.33)
+
+  cartridges/crm:
+    dependencies:
+      '@switchboard/cartridge-sdk':
+        specifier: workspace:*
+        version: link:../../packages/cartridge-sdk
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+    devDependencies:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

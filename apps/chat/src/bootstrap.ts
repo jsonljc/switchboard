@@ -25,6 +25,7 @@ import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
+import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
@@ -126,6 +127,11 @@ export async function createChatRuntime(
     });
     storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
     await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
+
+    // Register CRM cartridge (built-in, no external credentials needed)
+    const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
+    storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
+    await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
     // Wire approval notifier so approvers get Telegram DMs for any action needing approval
     const approvalNotifier = botToken ? new TelegramApprovalNotifier(botToken) : undefined;
@@ -275,6 +281,14 @@ export async function createChatRuntime(
       "payments.link.deactivate",
       "payments.credit.apply",
       "payments.batch.invoice",
+      "crm.contact.search",
+      "crm.contact.create",
+      "crm.contact.update",
+      "crm.deal.list",
+      "crm.deal.create",
+      "crm.activity.list",
+      "crm.activity.log",
+      "crm.pipeline.status",
     ],
   });
 
@@ -346,6 +360,14 @@ export async function createManagedRuntime(config: {
       "payments.link.deactivate",
       "payments.credit.apply",
       "payments.batch.invoice",
+      "crm.contact.search",
+      "crm.contact.create",
+      "crm.contact.update",
+      "crm.deal.list",
+      "crm.deal.create",
+      "crm.activity.list",
+      "crm.activity.log",
+      "crm.pipeline.status",
     ],
   });
 }
