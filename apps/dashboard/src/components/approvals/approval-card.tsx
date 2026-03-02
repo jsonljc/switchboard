@@ -31,10 +31,18 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   const isExpired = countdown === "expired";
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const getInterval = () => {
+      const remaining = new Date(approval.expiresAt).getTime() - Date.now();
+      return remaining < 5 * 60 * 1000 ? 5_000 : 30_000;
+    };
+
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
       setCountdown(formatCountdown(approval.expiresAt));
-    }, 30_000);
-    return () => clearInterval(timer);
+      timer = setTimeout(tick, getInterval());
+    };
+    timer = setTimeout(tick, getInterval());
+    return () => clearTimeout(timer);
   }, [approval.expiresAt]);
 
   return (

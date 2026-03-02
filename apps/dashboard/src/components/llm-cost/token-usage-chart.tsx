@@ -38,12 +38,12 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
             <AreaChart data={formattedData}>
               <defs>
                 <linearGradient id="promptGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(262, 83%, 58%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(262, 83%, 58%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="completionGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(173, 58%, 39%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(173, 58%, 39%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -72,7 +72,7 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
                 type="monotone"
                 dataKey="promptTokens"
                 stackId="1"
-                stroke="hsl(262, 83%, 58%)"
+                stroke="hsl(var(--chart-1))"
                 fill="url(#promptGradient)"
                 strokeWidth={2}
               />
@@ -80,7 +80,7 @@ export function TokenUsageChart({ data }: TokenUsageChartProps) {
                 type="monotone"
                 dataKey="completionTokens"
                 stackId="1"
-                stroke="hsl(173, 58%, 39%)"
+                stroke="hsl(var(--chart-2))"
                 fill="url(#completionGradient)"
                 strokeWidth={2}
               />

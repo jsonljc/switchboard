@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { useCompetenceRecords, useCompetencePolicies } from "@/hooks/use-competence";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
+import { AlertTriangle } from "lucide-react";
 
 function ScoreBar({ score }: { score: number }) {
   const pct = Math.round(score * 100);
@@ -19,11 +26,32 @@ function ScoreBar({ score }: { score: number }) {
 }
 
 export default function CompetencePage() {
+  const { status } = useSession();
   const [principalFilter, setPrincipalFilter] = useState("");
-  const { data: records = [], isLoading } = useCompetenceRecords(
+
+  if (status === "unauthenticated") redirect("/login");
+  const { data: records = [], isLoading, isError, error, refetch } = useCompetenceRecords(
     principalFilter || undefined,
   );
   const { data: policies = [] } = useCompetencePolicies();
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Competence Tracking</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load competence data</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -35,12 +63,12 @@ export default function CompetencePage() {
       </div>
 
       <div className="flex gap-4">
-        <input
+        <Input
           type="text"
           placeholder="Filter by principal ID..."
           value={principalFilter}
           onChange={(e) => setPrincipalFilter(e.target.value)}
-          className="px-3 py-2 border rounded-md text-sm w-64"
+          className="w-64"
         />
       </div>
 
@@ -48,7 +76,11 @@ export default function CompetencePage() {
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-4">Competence Records</h2>
           {isLoading ? (
-            <div className="text-muted-foreground text-center py-8">Loading...</div>
+            <div className="space-y-3">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+            </div>
           ) : records.length === 0 ? (
             <div className="text-muted-foreground text-center py-8">No records found.</div>
           ) : (

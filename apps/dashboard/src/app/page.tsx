@@ -135,7 +135,7 @@ export default function HomePage() {
           <TokenUsageCard
             title="Today"
             tokens={tokenUsage?.daily?.totalTokens ?? 0}
-            budget={100_000}
+            budget={null}
           />
           <TokenUsageCard
             title="This Week"

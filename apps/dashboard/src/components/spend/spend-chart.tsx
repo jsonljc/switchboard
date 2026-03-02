@@ -38,8 +38,8 @@ export function SpendChart({ data }: SpendChartProps) {
             <AreaChart data={formattedData}>
               <defs>
                 <linearGradient id="spendGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(221.2, 83.2%, 53.3%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(221.2, 83.2%, 53.3%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -64,7 +64,7 @@ export function SpendChart({ data }: SpendChartProps) {
               <Area
                 type="monotone"
                 dataKey="amount"
-                stroke="hsl(221.2, 83.2%, 53.3%)"
+                stroke="hsl(var(--primary))"
                 fill="url(#spendGradient)"
                 strokeWidth={2}
               />

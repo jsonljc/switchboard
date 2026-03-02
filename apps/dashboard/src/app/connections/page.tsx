@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,7 +29,7 @@ import {
   useDeleteConnection,
   useTestConnection,
 } from "@/hooks/use-connections";
-import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 const serviceOptions = [
   { id: "meta-ads", name: "Meta Ads" },
@@ -54,7 +57,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function ConnectionsPage() {
+  const { status } = useSession();
   const [formOpen, setFormOpen] = useState(false);
+
+  if (status === "unauthenticated") redirect("/login");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { healthy: boolean; detail?: string } | null>>({});
 
@@ -65,7 +71,7 @@ export default function ConnectionsPage() {
   const [credKey, setCredKey] = useState("");
   const [credValue, setCredValue] = useState("");
 
-  const { data: connections = [], isLoading } = useConnections();
+  const { data: connections = [], isLoading, isError, error, refetch } = useConnections();
   const createConnection = useCreateConnection();
   const deleteConnection = useDeleteConnection();
   const testConnection = useTestConnection();
@@ -128,8 +134,23 @@ export default function ConnectionsPage() {
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="text-muted-foreground text-center py-12">Loading connections...</div>
+      {isError ? (
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load connections</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-48" />
+          ))}
+        </div>
       ) : connectionList.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Plug className="h-12 w-12 mx-auto mb-4 opacity-30" />
