@@ -77,7 +77,7 @@ export default function OnboardingPage() {
   const [runtimeType, setRuntimeType] = useState("http");
   const [governanceProfile, setGovernanceProfile] = useState("guarded");
   const [cartridgeId, setCartridgeId] = useState("");
-  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [_connectionId, setConnectionId] = useState<string | null>(null);
 
   // Managed channel state
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);

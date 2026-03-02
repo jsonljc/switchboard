@@ -1,3 +1,4 @@
+import { withRetry } from "@switchboard/core";
 import type { Logger } from "../logger.js";
 
 export interface ProactiveNotification {
@@ -21,6 +22,18 @@ interface ChannelCredentials {
   whatsapp?: { token: string; phoneNumberId: string };
 }
 
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("enotfound")) return true;
+  }
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status: number }).status;
+    return status === 429 || (status >= 500 && status <= 503);
+  }
+  return false;
+}
+
 export async function sendProactiveNotification(
   notification: ProactiveNotification,
   credentials: ChannelCredentials,
@@ -34,7 +47,10 @@ export async function sendProactiveNotification(
         switch (channel) {
           case "slack":
             if (credentials.slack) {
-              await sendSlackMessage(credentials.slack.botToken, recipient, notification);
+              await withRetry(
+                () => sendSlackMessage(credentials.slack!.botToken, recipient, notification),
+                { maxAttempts: 3, shouldRetry: isRetryableError },
+              );
               results.push({ channel, recipient, success: true });
             } else {
               results.push({ channel, recipient, success: false, error: "No Slack credentials" });
@@ -43,7 +59,10 @@ export async function sendProactiveNotification(
 
           case "telegram":
             if (credentials.telegram) {
-              await sendTelegramMessage(credentials.telegram.botToken, recipient, notification);
+              await withRetry(
+                () => sendTelegramMessage(credentials.telegram!.botToken, recipient, notification),
+                { maxAttempts: 3, shouldRetry: isRetryableError },
+              );
               results.push({ channel, recipient, success: true });
             } else {
               results.push({ channel, recipient, success: false, error: "No Telegram credentials" });
@@ -52,7 +71,10 @@ export async function sendProactiveNotification(
 
           case "whatsapp":
             if (credentials.whatsapp) {
-              await sendWhatsAppMessage(credentials.whatsapp, recipient, notification);
+              await withRetry(
+                () => sendWhatsAppMessage(credentials.whatsapp!, recipient, notification),
+                { maxAttempts: 3, shouldRetry: isRetryableError },
+              );
               results.push({ channel, recipient, success: true });
             } else {
               results.push({ channel, recipient, success: false, error: "No WhatsApp credentials" });

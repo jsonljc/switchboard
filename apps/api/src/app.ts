@@ -21,7 +21,11 @@ import { dlqRoutes } from "./routes/dlq.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { alertsRoutes } from "./routes/alerts.js";
 import { scheduledReportsRoutes } from "./routes/scheduled-reports.js";
+import { crmRoutes } from "./routes/crm.js";
+import { competenceRoutes } from "./routes/competence.js";
+import { webhooksRoutes } from "./routes/webhooks.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import apiVersionPlugin from "./versioning.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
   LifecycleOrchestrator,
@@ -48,6 +52,8 @@ import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
 import { startChainVerificationJob } from "./jobs/chain-verification.js";
 import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
 import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
+import { startTokenRefreshJob } from "./jobs/token-refresh.js";
+import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
@@ -75,6 +81,9 @@ declare module "fastify" {
 }
 
 export async function buildServer() {
+  // Initialize OpenTelemetry before Fastify starts (must be first)
+  await initTelemetry();
+
   const app = Fastify({
     logger: true,
     bodyLimit: 1_048_576, // 1 MB explicit body size limit
@@ -316,6 +325,9 @@ export async function buildServer() {
   const stopScheduledReports = prismaClient
     ? startScheduledReportJob({ prisma: prismaClient, storageContext: storage, logger: app.log })
     : () => {};
+  const stopTokenRefresh = prismaClient
+    ? startTokenRefreshJob({ prisma: prismaClient, logger: app.log })
+    : () => {};
 
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
@@ -335,6 +347,7 @@ export async function buildServer() {
     stopChainVerify();
     stopDiagnosticScanner();
     stopScheduledReports();
+    stopTokenRefresh();
 
     if (worker) {
       await worker.close();
@@ -352,6 +365,7 @@ export async function buildServer() {
 
   // Register middleware (idempotency picks up shared redis via app.redis)
   await app.register(authMiddleware);
+  await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
 
   // Live health check — pings configured backends
@@ -414,6 +428,9 @@ export async function buildServer() {
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
   await app.register(alertsRoutes, { prefix: "/api/alerts" });
   await app.register(scheduledReportsRoutes, { prefix: "/api/scheduled-reports" });
+  await app.register(crmRoutes, { prefix: "/api/crm" });
+  await app.register(competenceRoutes, { prefix: "/api/competence" });
+  await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
 
   return app;
 }

@@ -12,6 +12,7 @@ export interface SwitchboardMetrics {
   executionsTotal: Counter;
   executionsSuccess: Counter;
   executionsFailed: Counter;
+  circuitBreakerTrips: Counter;
   proposalLatencyMs: Histogram;
   approvalLatencyMs: Histogram;
   executionLatencyMs: Histogram;
@@ -68,6 +69,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     executionsTotal: new InMemoryCounter(),
     executionsSuccess: new InMemoryCounter(),
     executionsFailed: new InMemoryCounter(),
+    circuitBreakerTrips: new InMemoryCounter(),
     proposalLatencyMs: new InMemoryHistogram(),
     approvalLatencyMs: new InMemoryHistogram(),
     executionLatencyMs: new InMemoryHistogram(),

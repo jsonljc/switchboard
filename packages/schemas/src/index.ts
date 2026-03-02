@@ -23,3 +23,8 @@ export * from "./governance-profile.js";
 
 // MCP tool schemas
 export * from "./mcp.js";
+
+// Cross-cartridge integration
+export * from "./entity-graph.js";
+export * from "./event-bus.js";
+export * from "./data-flow.js";

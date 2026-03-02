@@ -14,11 +14,18 @@ import {
 import type { StorageContext } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import { DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
-import { handleSideEffectTool } from "../tools/side-effect.js";
-import { handleReadTool } from "../tools/read.js";
+import {
+  toolDefinitions,
+  SIDE_EFFECT_TOOLS,
+  READ_TOOLS,
+  GOVERNANCE_TOOLS,
+  handleSideEffectTool,
+  handleReadTool,
+} from "../tools/index.js";
 import type { ReadToolDeps } from "../tools/read.js";
 import type { McpAuthContext } from "../auth.js";
 import { resolveAuth, loadMcpApiKeys } from "../auth.js";
+import { SessionGuard } from "../session-guard.js";
 
 // ── Test Harness ───────────────────────────────────────────────────────
 
@@ -452,6 +459,120 @@ describe("MCP Server", () => {
           delete process.env["MCP_API_KEYS"];
         }
       }
+    });
+  });
+
+  // ── Tool Registration ──────────────────────────────────────────────────
+
+  describe("Tool Registration", () => {
+    it("exports all tool definitions", () => {
+      expect(toolDefinitions.length).toBeGreaterThanOrEqual(15);
+
+      // Verify each definition has required fields
+      for (const def of toolDefinitions) {
+        expect(def.name).toBeTruthy();
+        expect(def.description).toBeTruthy();
+        expect(def.inputSchema).toBeDefined();
+      }
+    });
+
+    it("has no duplicate tool names", () => {
+      const names = toolDefinitions.map((t) => t.name);
+      const uniqueNames = new Set(names);
+      expect(uniqueNames.size).toBe(names.length);
+    });
+
+    it("categorizes all tools into side-effect, read, or governance sets", () => {
+      const allCategorized = new Set([
+        ...SIDE_EFFECT_TOOLS,
+        ...READ_TOOLS,
+        ...GOVERNANCE_TOOLS,
+      ]);
+
+      for (const def of toolDefinitions) {
+        expect(allCategorized.has(def.name)).toBe(true);
+      }
+    });
+
+    it("includes CRM and payments tools", () => {
+      const allNames = new Set(toolDefinitions.map((t) => t.name));
+      // CRM tools
+      expect(allNames.has("search_contacts")).toBe(true);
+      expect(allNames.has("get_contact")).toBe(true);
+      // Payments tools
+      expect(allNames.has("create_invoice")).toBe(true);
+      expect(allNames.has("create_refund")).toBe(true);
+    });
+  });
+
+  // ── Session Guard ──────────────────────────────────────────────────────
+
+  describe("Session Guard", () => {
+    it("allows calls within limits", () => {
+      const guard = new SessionGuard({ maxCalls: 5, maxMutations: 3 });
+      const check = guard.checkCall("pause_campaign", { campaignId: "c1" }, true);
+      expect(check.allowed).toBe(true);
+    });
+
+    it("blocks calls after total limit exceeded", () => {
+      const guard = new SessionGuard({ maxCalls: 2 });
+      guard.recordCall("a", {}, false);
+      guard.recordCall("b", {}, false);
+      const check = guard.checkCall("c", {}, false);
+      expect(check.allowed).toBe(false);
+      expect(check.reason).toContain("call limit");
+    });
+
+    it("blocks mutations after mutation limit exceeded", () => {
+      const guard = new SessionGuard({ maxMutations: 1 });
+      guard.recordCall("a", {}, true);
+      const check = guard.checkCall("b", {}, true);
+      expect(check.allowed).toBe(false);
+      expect(check.reason).toContain("mutation limit");
+    });
+
+    it("blocks duplicate mutations within dedup window", () => {
+      const guard = new SessionGuard({ duplicateWindowMs: 10_000 });
+      guard.recordCall("pause_campaign", { campaignId: "c1" }, true);
+      const check = guard.checkCall("pause_campaign", { campaignId: "c1" }, true);
+      expect(check.allowed).toBe(false);
+      expect(check.reason).toContain("Duplicate");
+    });
+
+    it("blocks when dollar exposure limit exceeded", () => {
+      const guard = new SessionGuard({ maxDollars: 100 });
+      guard.recordCall("adjust_budget", { newBudget: 80 }, true);
+      const check = guard.checkCall("adjust_budget", { newBudget: 50 }, true);
+      expect(check.allowed).toBe(false);
+      expect(check.reason).toContain("dollar exposure");
+    });
+
+    it("activates escalation after threshold", () => {
+      const guard = new SessionGuard({ escalationThreshold: 2 });
+      expect(guard.escalationActive).toBe(false);
+      guard.recordCall("a", {}, true);
+      guard.recordCall("b", {}, true);
+      expect(guard.escalationActive).toBe(true);
+    });
+
+    it("getStatus returns current session state", () => {
+      const guard = new SessionGuard({ maxCalls: 100, maxMutations: 50 });
+      guard.recordCall("test", {}, false);
+      guard.recordCall("test2", { newBudget: 500 }, true);
+
+      const status = guard.getStatus();
+      expect(status.callCount).toBe(2);
+      expect(status.mutationCount).toBe(1);
+      expect(status.totalDollarsAtRisk).toBe(500);
+      expect(status.maxCalls).toBe(100);
+      expect(status.maxMutations).toBe(50);
+    });
+
+    it("fromEnv creates guard with defaults", () => {
+      const guard = SessionGuard.fromEnv();
+      const status = guard.getStatus();
+      expect(status.maxCalls).toBe(200);
+      expect(status.maxMutations).toBe(50);
     });
   });
 });

@@ -56,4 +56,14 @@ export const queryKeys = {
     all: ["scheduledReports"] as const,
     list: () => ["scheduledReports", "list"] as const,
   },
+  competence: {
+    all: ["competence"] as const,
+    records: (principalId?: string) => ["competence", "records", principalId] as const,
+    policies: () => ["competence", "policies"] as const,
+  },
+  dlq: {
+    all: ["dlq"] as const,
+    list: (status?: string) => ["dlq", "list", status] as const,
+    stats: () => ["dlq", "stats"] as const,
+  },
 };

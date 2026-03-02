@@ -42,6 +42,7 @@ export function createPromMetrics(): SwitchboardMetrics {
     executionsTotal: new PromCounter("switchboard_executions_total", "Total executions", COUNTER_LABELS),
     executionsSuccess: new PromCounter("switchboard_executions_success_total", "Successful executions", COUNTER_LABELS),
     executionsFailed: new PromCounter("switchboard_executions_failed_total", "Failed executions", COUNTER_LABELS),
+    circuitBreakerTrips: new PromCounter("switchboard_circuit_breaker_trips_total", "Circuit breaker trips to open state", ["service"]),
     proposalLatencyMs: new PromHistogram("switchboard_proposal_latency_ms", "Proposal latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
     approvalLatencyMs: new PromHistogram("switchboard_approval_latency_ms", "Approval latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
     executionLatencyMs: new PromHistogram("switchboard_execution_latency_ms", "Execution latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),

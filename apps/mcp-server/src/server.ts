@@ -20,7 +20,13 @@ import {
   handleSideEffectTool,
   handleReadTool,
   handleGovernanceTool,
+  handleCrmSideEffectTool,
+  handleCrmReadTool,
+  handlePaymentsSideEffectTool,
+  handlePaymentsReadTool,
 } from "./tools/index.js";
+import { CRM_SIDE_EFFECT_TOOLS, CRM_READ_TOOLS } from "./tools/crm.js";
+import { PAYMENTS_SIDE_EFFECT_TOOLS, PAYMENTS_READ_TOOLS } from "./tools/payments.js";
 import type { ReadToolDeps } from "./tools/index.js";
 import type { GovernanceToolDeps } from "./tools/index.js";
 
@@ -132,7 +138,25 @@ export class SwitchboardMcpServer {
     try {
       let result: unknown;
 
-      if (SIDE_EFFECT_TOOLS.has(toolName)) {
+      if (CRM_SIDE_EFFECT_TOOLS.has(toolName)) {
+        result = await handleCrmSideEffectTool(
+          toolName,
+          args,
+          auth,
+          this.executionService,
+        );
+      } else if (CRM_READ_TOOLS.has(toolName)) {
+        result = await handleCrmReadTool(toolName, args, auth, this.readDeps);
+      } else if (PAYMENTS_SIDE_EFFECT_TOOLS.has(toolName)) {
+        result = await handlePaymentsSideEffectTool(
+          toolName,
+          args,
+          auth,
+          this.executionService,
+        );
+      } else if (PAYMENTS_READ_TOOLS.has(toolName)) {
+        result = await handlePaymentsReadTool(toolName, args, auth, this.readDeps);
+      } else if (SIDE_EFFECT_TOOLS.has(toolName)) {
         result = await handleSideEffectTool(
           toolName,
           args,

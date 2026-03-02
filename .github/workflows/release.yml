@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: switchboard
+          POSTGRES_PASSWORD: switchboard
+          POSTGRES_DB: switchboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U switchboard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @switchboard/db exec prisma generate
+
+      - name: Run database migrations
+        run: pnpm --filter @switchboard/db exec prisma migrate deploy
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set version tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        run: |
+          docker build --target api \
+            -t ghcr.io/${{ github.repository }}/api:${{ steps.version.outputs.tag }} \
+            -t ghcr.io/${{ github.repository }}/api:latest .
+          docker push ghcr.io/${{ github.repository }}/api:${{ steps.version.outputs.tag }}
+          docker push ghcr.io/${{ github.repository }}/api:latest
+
+      - name: Build and push Chat image
+        run: |
+          docker build --target chat \
+            -t ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }} \
+            -t ghcr.io/${{ github.repository }}/chat:latest .
+          docker push ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }}
+          docker push ghcr.io/${{ github.repository }}/chat:latest
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+            git log --oneline "$PREV_TAG"..HEAD >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "changelog=Initial release" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## Changes
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Docker Images
+            - `ghcr.io/${{ github.repository }}/api:${{ steps.version.outputs.tag }}`
+            - `ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }}`

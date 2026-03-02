@@ -82,10 +82,27 @@ export class ClaudeInterpreter extends LLMInterpreter {
 
   protected buildPrompt(
     text: string,
-    _conversationContext: Record<string, unknown>,
+    conversationContext: Record<string, unknown>,
     availableActions: string[],
   ): string {
     const system = SYSTEM_PROMPT.replace("{ACTIONS}", availableActions.join(", "));
-    return `${system}\n\nUser message: ${text}`;
+
+    // Include recent conversation history for multi-turn context
+    const recentMessages = conversationContext["recentMessages"] as
+      Array<{ role: string; text: string }> | undefined;
+
+    let historyBlock = "";
+    if (recentMessages && recentMessages.length > 1) {
+      // Exclude the last message (it's the current user message)
+      const priorMessages = recentMessages.slice(0, -1);
+      if (priorMessages.length > 0) {
+        const formatted = priorMessages
+          .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
+          .join("\n");
+        historyBlock = `\n\nConversation history (for context — resolve references like "it", "that", "the same" using this):\n${formatted}\n`;
+      }
+    }
+
+    return `${system}${historyBlock}\n\nUser message: ${text}`;
   }
 }

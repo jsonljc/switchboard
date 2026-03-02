@@ -352,12 +352,12 @@ describe("CrmCartridge", () => {
 
   describe("CartridgeTestHarness", () => {
     it("should pass all harness steps", async () => {
-      const harness = new CartridgeTestHarness(cartridge);
-      const report = await harness.run({
+      const harness = new CartridgeTestHarness(cartridge, {
         context: ctx,
-        testActionType: "crm.contact.search",
-        testParameters: { query: "alice" },
+        actionType: "crm.contact.search",
+        parameters: { query: "alice" },
       });
+      const report = await harness.run();
       expect(report.passed).toBe(true);
       for (const step of report.steps) {
         expect(step.passed).toBe(true);

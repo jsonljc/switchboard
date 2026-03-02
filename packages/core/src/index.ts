@@ -154,3 +154,27 @@ export type { PolicyCache } from "./policy-cache.js";
 // Retry utility
 export { withRetry } from "./utils/retry.js";
 export type { RetryOptions } from "./utils/retry.js";
+
+// Circuit breaker
+export { CircuitBreaker, CircuitBreakerOpenError } from "./utils/circuit-breaker.js";
+export type { CircuitBreakerConfig, CircuitBreakerState } from "./utils/circuit-breaker.js";
+
+// Pagination
+export { paginationParams, paginate } from "./utils/pagination.js";
+export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";
+
+// Entity Graph (cross-cartridge entity resolution)
+export { EntityGraphService, InMemoryEntityMappingStore } from "./entity-graph/index.js";
+export type { EntityMappingStore, EntityRef, EntityMapping, CrossCartridgeEntityResolution } from "./entity-graph/index.js";
+
+// Cross-Cartridge Enrichment
+export { DefaultCrossCartridgeEnricher, DEFAULT_ENRICHMENT_MAPPINGS } from "./enrichment/index.js";
+export type { CrossCartridgeContext, EnrichmentMapping, CrossCartridgeEnricher, DefaultCrossCartridgeEnricherConfig } from "./enrichment/index.js";
+
+// Event Bus (cross-cartridge event-driven reactions)
+export { InMemoryEventBus, InMemoryEventReactionStore, EventReactionProcessor, resolveTemplate } from "./event-bus/index.js";
+export type { DomainEvent, EventReaction, EventBus, EventSubscription, EventReactionStore, ReactionOrchestrator, EventReactionProcessorConfig } from "./event-bus/index.js";
+
+// Data-Flow Plan Execution (multi-step cross-cartridge plans with binding resolution)
+export { DataFlowExecutor, resolveBindings, BindingResolutionError, evaluateCondition } from "./data-flow/index.js";
+export type { DataFlowStep, DataFlowPlan, StepExecutionResult, DataFlowOrchestrator, DataFlowExecutorConfig, DataFlowExecutionResult, BindingContext } from "./data-flow/index.js";

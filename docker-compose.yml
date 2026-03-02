@@ -9,16 +9,19 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production
-      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3002}
       - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
       - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
       - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
       - REDIS_URL=redis://redis:6379
       - CHAT_PUBLIC_URL=${CHAT_PUBLIC_URL:-http://chat:3001}
       - CHAT_INTERNAL_URL=http://chat:3001
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=switchboard-api
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +54,43 @@ services:
       postgres:
         condition: service_healthy
 
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3002}:3002"
+    environment:
+      - PORT=3002
+      - NODE_ENV=production
+      - SWITCHBOARD_API_URL=http://api:3000
+      - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  mcp-server:
+    build:
+      context: .
+      target: mcp-server
+    environment:
+      - NODE_ENV=production
+      - SWITCHBOARD_API_URL=http://api:3000
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - MCP_API_KEYS=${MCP_API_KEYS:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    # MCP server uses stdio transport; no ports exposed.
+    # Attach via `docker compose exec mcp-server node apps/mcp-server/dist/main.js`
+    stdin_open: true
+
   postgres:
     image: postgres:16-alpine
     ports:
@@ -78,6 +118,17 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # Optional: Jaeger for distributed tracing (enable OTEL_EXPORTER_OTLP_ENDPOINT)
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    profiles:
+      - tracing
 
 volumes:
   postgres_data:
