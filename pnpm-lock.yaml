@@ -299,9 +299,21 @@ importers:
       '@switchboard/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@switchboard/crm':
+        specifier: workspace:*
+        version: link:../../cartridges/crm
       '@switchboard/digital-ads':
         specifier: workspace:*
         version: link:../../cartridges/digital-ads
+      '@switchboard/patient-engagement':
+        specifier: workspace:*
+        version: link:../../cartridges/patient-engagement
+      '@switchboard/payments':
+        specifier: workspace:*
+        version: link:../../cartridges/payments
+      '@switchboard/quant-trading':
+        specifier: workspace:*
+        version: link:../../cartridges/quant-trading
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -343,6 +355,9 @@ importers:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

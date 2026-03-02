@@ -72,11 +72,12 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   });
 
   app.addHook("preHandler", async (request, reply) => {
-    // Skip auth for health check, metrics, and docs
+    // Skip auth for health check, metrics, and docs (Swagger UI)
     if (
       request.url === "/health" ||
       request.url === "/metrics" ||
-      request.url.startsWith("/docs")
+      request.url === "/docs" ||
+      request.url.startsWith("/docs/")
     ) {
       return;
     }

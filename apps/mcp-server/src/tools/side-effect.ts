@@ -7,12 +7,14 @@ import {
   AdjustBudgetInputSchema,
   ModifyTargetingInputSchema,
 } from "@switchboard/schemas";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { McpAuthContext } from "../auth.js";
 
 export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations?: ToolAnnotations;
 }
 
 export const sideEffectToolDefinitions: ToolDefinition[] = [
@@ -30,6 +32,7 @@ export const sideEffectToolDefinitions: ToolDefinition[] = [
       },
       required: ["campaignId"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
   {
     name: "resume_campaign",
@@ -42,6 +45,7 @@ export const sideEffectToolDefinitions: ToolDefinition[] = [
       },
       required: ["campaignId"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
   {
     name: "adjust_budget",
@@ -57,6 +61,7 @@ export const sideEffectToolDefinitions: ToolDefinition[] = [
       },
       required: ["campaignId", "newBudget"],
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
   {
     name: "modify_targeting",
@@ -75,6 +80,7 @@ export const sideEffectToolDefinitions: ToolDefinition[] = [
       },
       required: ["adSetId", "targeting"],
     },
+    annotations: { destructiveHint: true, openWorldHint: true },
   },
 ];
 
@@ -112,3 +118,11 @@ export async function handleSideEffectTool(
     executionService,
   );
 }
+
+/** Maps side-effect tool names to their actionTypes. */
+export const SIDE_EFFECT_ACTION_TYPE_MAP: Record<string, string> = {
+  pause_campaign: "digital-ads.campaign.pause",
+  resume_campaign: "digital-ads.campaign.resume",
+  adjust_budget: "digital-ads.campaign.adjust_budget",
+  modify_targeting: "digital-ads.targeting.modify",
+};

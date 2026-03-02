@@ -1,21 +1,23 @@
 import { PrismaClient } from "@prisma/client";
-import { createCipheriv, createHash } from "crypto";
+import { createCipheriv, createHash, randomBytes } from "crypto";
 
 const prisma = new PrismaClient();
 
-// ── Deterministic encryption for dev seed data ──
+// ── Encryption for dev seed data ──
+// WARNING: This key is for dev seeding only. Never use a static key in production.
 const DEV_ENCRYPTION_KEY = Buffer.from(
   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "hex",
 );
-const DEV_IV = Buffer.from("00112233445566778899aabbccddeeff", "hex");
 
 function encryptApiKey(apiKey: string): string {
-  const cipher = createCipheriv("aes-256-gcm", DEV_ENCRYPTION_KEY, DEV_IV);
+  // AES-256-GCM requires a unique IV per encryption — use random bytes
+  const iv = randomBytes(16);
+  const cipher = createCipheriv("aes-256-gcm", DEV_ENCRYPTION_KEY, iv);
   let encrypted = cipher.update(apiKey, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
-  return `${DEV_IV.toString("hex")}:${authTag}:${encrypted}`;
+  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
 }
 
 function sha256(input: string): string {

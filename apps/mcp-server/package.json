@@ -14,6 +14,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@switchboard/digital-ads": "workspace:*",
+    "@switchboard/quant-trading": "workspace:*",
+    "@switchboard/payments": "workspace:*",
+    "@switchboard/crm": "workspace:*",
+    "@switchboard/patient-engagement": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*",

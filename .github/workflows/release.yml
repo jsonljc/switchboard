@@ -85,6 +85,14 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }}
           docker push ghcr.io/${{ github.repository }}/chat:latest
 
+      - name: Build and push Dashboard image
+        run: |
+          docker build --target dashboard \
+            -t ghcr.io/${{ github.repository }}/dashboard:${{ steps.version.outputs.tag }} \
+            -t ghcr.io/${{ github.repository }}/dashboard:latest .
+          docker push ghcr.io/${{ github.repository }}/dashboard:${{ steps.version.outputs.tag }}
+          docker push ghcr.io/${{ github.repository }}/dashboard:latest
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -107,3 +115,4 @@ jobs:
             ## Docker Images
             - `ghcr.io/${{ github.repository }}/api:${{ steps.version.outputs.tag }}`
             - `ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }}`
+            - `ghcr.io/${{ github.repository }}/dashboard:${{ steps.version.outputs.tag }}`
