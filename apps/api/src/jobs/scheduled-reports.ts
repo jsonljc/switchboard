@@ -1,0 +1,146 @@
+import type { StorageContext } from "@switchboard/core";
+import type { PrismaClient } from "@switchboard/db";
+import { sendProactiveNotification } from "../alerts/notifier.js";
+import { createLogger } from "../logger.js";
+import type { Logger } from "../logger.js";
+
+export interface ScheduledReportJobConfig {
+  prisma: PrismaClient;
+  storageContext: StorageContext;
+  intervalMs?: number;
+  logger?: Logger;
+}
+
+/**
+ * Periodically checks for due scheduled reports, runs diagnostics,
+ * formats the summary, and delivers via configured channels.
+ * Returns a cleanup function that stops the interval.
+ */
+export function startScheduledReportJob(config: ScheduledReportJobConfig): () => void {
+  const {
+    prisma,
+    storageContext,
+    intervalMs = 60_000,
+    logger = createLogger("scheduled-reports"),
+  } = config;
+
+  let stopped = false;
+  let inFlightPromise: Promise<void> | null = null;
+
+  const scan = async () => {
+    if (stopped) return;
+    try {
+      const now = new Date();
+
+      // Find due reports
+      const dueReports = await (prisma as any).scheduledReport.findMany({
+        where: {
+          enabled: true,
+          nextRunAt: { lte: now },
+        },
+      });
+
+      if (dueReports.length === 0) return;
+
+      // Resolve channel credentials from env vars
+      const channelCredentials = {
+        slack: process.env["SLACK_BOT_TOKEN"]
+          ? { botToken: process.env["SLACK_BOT_TOKEN"] }
+          : undefined,
+        telegram: process.env["TELEGRAM_BOT_TOKEN"]
+          ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
+          : undefined,
+        whatsapp: process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+          ? { token: process.env["WHATSAPP_TOKEN"], phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"] }
+          : undefined,
+      };
+
+      for (const report of dueReports) {
+        if (stopped) break;
+
+        try {
+          const cartridge = storageContext.cartridges.get("digital-ads");
+          if (!cartridge) {
+            logger.warn({ reportId: report.id }, "digital-ads cartridge not available");
+            continue;
+          }
+
+          // Run the appropriate diagnostic
+          const actionId = report.reportType === "portfolio"
+            ? "digital-ads.portfolio.diagnose"
+            : "digital-ads.funnel.diagnose";
+
+          const execResult = await cartridge.execute(actionId, {
+            platform: report.platform ?? "meta",
+            vertical: report.vertical,
+            entityId: "act_default",
+          }, { principalId: "system", organizationId: report.organizationId, connectionCredentials: {} });
+
+          // Format the result
+          let body = "No diagnostic data available.";
+          if (execResult?.data) {
+            try {
+              const { formatDiagnostic } = await import("@switchboard/digital-ads");
+              body = formatDiagnostic(execResult.data as any);
+            } catch {
+              body = JSON.stringify(execResult.data, null, 2).slice(0, 2000);
+            }
+          }
+
+          // Send notifications
+          await sendProactiveNotification(
+            {
+              title: `Scheduled Report: ${report.name}`,
+              body,
+              severity: "info",
+              channels: report.deliveryChannels,
+              recipients: report.deliveryTargets,
+            },
+            channelCredentials,
+            logger as any,
+          );
+
+          // Compute next run
+          let nextRunAt: Date | null = null;
+          try {
+            const CronParser = require("cron-parser");
+            const interval = CronParser.parseExpression(report.cronExpression, {
+              currentDate: new Date(),
+              tz: report.timezone,
+            });
+            nextRunAt = interval.next().toDate();
+          } catch {
+            logger.warn({ reportId: report.id }, "Failed to compute next run time");
+          }
+
+          // Update report
+          await (prisma as any).scheduledReport.update({
+            where: { id: report.id },
+            data: {
+              lastRunAt: now,
+              nextRunAt,
+            },
+          });
+
+          logger.info({ reportId: report.id, reportName: report.name }, "Scheduled report delivered");
+        } catch (err) {
+          logger.error({ err, reportId: report.id } as any, "Failed to run scheduled report");
+        }
+      }
+    } catch (err) {
+      logger.error({ err } as any, "Error in scheduled report job");
+    }
+  };
+
+  const timer = setInterval(() => {
+    inFlightPromise = scan();
+  }, intervalMs);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    if (inFlightPromise) {
+      inFlightPromise.catch(() => {});
+    }
+  };
+}

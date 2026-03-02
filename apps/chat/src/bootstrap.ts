@@ -27,6 +27,8 @@ import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switc
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
+import { SlackApprovalNotifier } from "./notifications/slack-notifier.js";
+import { WhatsAppApprovalNotifier } from "./notifications/whatsapp-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
 import type { ChannelAdapter } from "./adapters/adapter.js";
@@ -134,8 +136,22 @@ export async function createChatRuntime(
     storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
     await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
-    // Wire approval notifier so approvers get Telegram DMs for any action needing approval
-    const approvalNotifier = botToken ? new TelegramApprovalNotifier(botToken) : undefined;
+    // Wire approval notifiers — fan out to all configured channels
+    const notifiers: import("@switchboard/core").ApprovalNotifier[] = [];
+    if (botToken) notifiers.push(new TelegramApprovalNotifier(botToken));
+    const slackBotToken = process.env["SLACK_BOT_TOKEN"];
+    if (slackBotToken) notifiers.push(new SlackApprovalNotifier(slackBotToken));
+    const waToken = process.env["WHATSAPP_TOKEN"];
+    const waPhoneId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    if (waToken && waPhoneId) notifiers.push(new WhatsAppApprovalNotifier({ token: waToken, phoneNumberId: waPhoneId }));
+
+    let approvalNotifier: import("@switchboard/core").ApprovalNotifier | undefined;
+    if (notifiers.length > 1) {
+      const { CompositeNotifier } = await import("@switchboard/core");
+      approvalNotifier = new CompositeNotifier(notifiers);
+    } else if (notifiers.length === 1) {
+      approvalNotifier = notifiers[0];
+    }
 
     orchestrator = new OrchestratorClass({
       storage,

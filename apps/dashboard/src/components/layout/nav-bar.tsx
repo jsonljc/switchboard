@@ -10,6 +10,8 @@ import {
   FlaskConical,
   Box,
   Settings,
+  Bell,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
@@ -20,6 +22,8 @@ const navItems = [
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
   { href: "/simulate", label: "Simulate", icon: FlaskConical },
   { href: "/policies", label: "Policies", icon: FileText },
+  { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/scheduled-reports", label: "Reports", icon: Calendar },
   { href: "/cartridges", label: "Cartridges", icon: Box },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

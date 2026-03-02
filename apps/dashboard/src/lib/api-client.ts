@@ -1,5 +1,78 @@
 import type { IdentitySpec, AuditEntry, Policy, CartridgeManifest } from "@switchboard/schemas";
 
+export interface AlertRule {
+  id: string;
+  organizationId: string;
+  name: string;
+  enabled: boolean;
+  metricPath: string;
+  operator: string;
+  threshold: number;
+  platform: string | null;
+  vertical: string;
+  notifyChannels: string[];
+  notifyRecipients: string[];
+  cooldownMinutes: number;
+  lastTriggeredAt: string | null;
+  snoozedUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAlertInput {
+  name: string;
+  metricPath: string;
+  operator: string;
+  threshold: number;
+  platform?: string | null;
+  vertical?: string;
+  notifyChannels?: string[];
+  notifyRecipients?: string[];
+  cooldownMinutes?: number;
+  enabled?: boolean;
+}
+
+export interface AlertHistoryEntry {
+  id: string;
+  alertRuleId: string;
+  organizationId: string;
+  triggeredAt: string;
+  metricValue: number;
+  threshold: number;
+  findingsSummary: string;
+  notificationsSent: Array<{ channel: string; recipient: string; success: boolean }>;
+}
+
+export interface ScheduledReportEntry {
+  id: string;
+  organizationId: string;
+  name: string;
+  enabled: boolean;
+  cronExpression: string;
+  timezone: string;
+  reportType: string;
+  platform: string | null;
+  vertical: string;
+  deliveryChannels: string[];
+  deliveryTargets: string[];
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateScheduledReportInput {
+  name: string;
+  cronExpression: string;
+  timezone?: string;
+  reportType: "funnel" | "portfolio";
+  platform?: string | null;
+  vertical?: string;
+  deliveryChannels?: string[];
+  deliveryTargets?: string[];
+  enabled?: boolean;
+}
+
 export interface PendingApproval {
   id: string;
   summary: string;
@@ -265,5 +338,70 @@ export class SwitchboardClient {
       trend: Array<{ date: string; promptTokens: number; completionTokens: number; totalTokens: number }>;
       orgId: string;
     }>(`/api/token-usage/trend${qs ? `?${qs}` : ""}`);
+  }
+
+  // Alerts
+  async listAlerts() {
+    return this.request<{ rules: AlertRule[] }>("/api/alerts");
+  }
+
+  async createAlert(data: CreateAlertInput) {
+    return this.request<{ rule: AlertRule }>("/api/alerts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAlert(id: string, data: Partial<CreateAlertInput> & { enabled?: boolean; snoozedUntil?: string | null }) {
+    return this.request<{ rule: AlertRule }>(`/api/alerts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAlert(id: string) {
+    return this.request<{ id: string; deleted: boolean }>(`/api/alerts/${id}`, { method: "DELETE" });
+  }
+
+  async getAlertHistory(id: string) {
+    return this.request<{ history: AlertHistoryEntry[] }>(`/api/alerts/${id}/history`);
+  }
+
+  async testAlert(id: string) {
+    return this.request<{ evaluation: { triggered: boolean; metricValue: number; threshold: number; description: string } }>(`/api/alerts/${id}/test`, { method: "POST" });
+  }
+
+  async snoozeAlert(id: string, durationMinutes: number) {
+    return this.request<{ rule: AlertRule }>(`/api/alerts/${id}/snooze`, {
+      method: "POST",
+      body: JSON.stringify({ durationMinutes }),
+    });
+  }
+
+  // Scheduled Reports
+  async listScheduledReports() {
+    return this.request<{ reports: ScheduledReportEntry[] }>("/api/scheduled-reports");
+  }
+
+  async createScheduledReport(data: CreateScheduledReportInput) {
+    return this.request<{ report: ScheduledReportEntry }>("/api/scheduled-reports", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateScheduledReport(id: string, data: Partial<CreateScheduledReportInput> & { enabled?: boolean }) {
+    return this.request<{ report: ScheduledReportEntry }>(`/api/scheduled-reports/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteScheduledReport(id: string) {
+    return this.request<{ id: string; deleted: boolean }>(`/api/scheduled-reports/${id}`, { method: "DELETE" });
+  }
+
+  async runScheduledReport(id: string) {
+    return this.request<{ success: boolean; data: unknown }>(`/api/scheduled-reports/${id}/run`, { method: "POST" });
   }
 }
