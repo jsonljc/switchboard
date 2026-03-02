@@ -57,10 +57,14 @@ export function executeNextStep(
     }
 
     case "question": {
-      const output = interpolate(step.template ?? "", newState.variables);
+      let output = interpolate(step.template ?? "", newState.variables);
       const optionsText = (step.options ?? [])
         .map((opt, i) => `${i + 1}. ${opt}`)
         .join("\n");
+      // When llmPersonalization is true, personalize the template with context
+      if (step.llmPersonalization && newState.variables["patientName"]) {
+        output = output.replace(/\bpatient\b/gi, String(newState.variables["patientName"]));
+      }
       const fullOutput = `${output}\n${optionsText}`;
       newState.history.push({ stepId: step.id, output: fullOutput, timestamp: new Date() });
       newState.currentStepIndex = resolveNextStep(flow, step, newState);

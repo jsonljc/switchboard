@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { redirect, useSearchParams } from "next/navigation";
 import { ActivityItem } from "@/components/activity/activity-item";
 import { ActivityDetail } from "@/components/activity/activity-detail";
 import { ActivityFilters } from "@/components/activity/activity-filters";
@@ -15,7 +15,12 @@ import { AlertTriangle } from "lucide-react";
 
 export default function ActivityPage() {
   const { status } = useSession();
-  const [filter, setFilter] = useState<string | undefined>(undefined);
+  const searchParams = useSearchParams();
+
+  const filterParam = searchParams.get("filter");
+  const initialFilter = filterParam === "denied" ? "action.denied" : undefined;
+
+  const [filter, setFilter] = useState<string | undefined>(initialFilter);
   const { data, isLoading, isError, error, refetch } = useAudit({ eventType: filter, limit: 50 });
   const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
 

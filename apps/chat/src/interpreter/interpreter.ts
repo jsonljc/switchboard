@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ActionProposal } from "@switchboard/schemas";
 import { ActionProposalSchema } from "@switchboard/schemas";
+import type { GoalBrief } from "@switchboard/schemas";
 import { z } from "zod";
 import type { ReadIntentDescriptor } from "../clinic/types.js";
 
@@ -12,6 +13,8 @@ export interface InterpreterResult {
   rawResponse: string;
   /** Set by clinic interpreter for read-only intents (performance reports, status checks). */
   readIntent?: ReadIntentDescriptor | null;
+  /** Structured goal brief for plan decomposition. */
+  goalBrief?: GoalBrief | null;
 }
 
 export interface Interpreter {

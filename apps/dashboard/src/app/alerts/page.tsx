@@ -1,18 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertRuleCard } from "@/components/alerts/alert-rule-card";
 import { AlertRuleForm } from "@/components/alerts/alert-rule-form";
 import { AlertHistoryList } from "@/components/alerts/alert-history-list";
 import { useAlerts, useCreateAlert, useUpdateAlert, useDeleteAlert, useAlertHistory } from "@/hooks/use-alerts";
-import { Plus } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, AlertTriangle } from "lucide-react";
 
 export default function AlertsPage() {
+  const { status } = useSession();
   const [formOpen, setFormOpen] = useState(false);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
-  const { data: alerts, isLoading } = useAlerts();
+  const { data: alerts, isLoading, isError, error, refetch } = useAlerts();
+
+  if (status === "unauthenticated") redirect("/login");
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Alerts</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load alerts</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   const { data: history, isLoading: historyLoading } = useAlertHistory(selectedAlertId);
   const createAlert = useCreateAlert();
   const updateAlert = useUpdateAlert();

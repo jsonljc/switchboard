@@ -18,6 +18,8 @@ import type {
   ProposeResult,
   StorageContext,
   CartridgeReadAdapter as CartridgeReadAdapterType,
+  CapabilityRegistry,
+  PlanGraphBuilder,
 } from "@switchboard/core";
 import { inferCartridgeId } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
@@ -39,6 +41,10 @@ export interface ChatRuntimeConfig {
   failedMessageStore?: FailedMessageStore;
   /** Number of recent messages to include as conversation context for interpreters (default: 5). */
   maxContextMessages?: number;
+  /** Capability registry for enriching available actions with metadata. */
+  capabilityRegistry?: CapabilityRegistry;
+  /** Plan graph builder for converting goals to multi-step plans. */
+  planGraphBuilder?: PlanGraphBuilder;
 }
 
 export class ChatRuntime {
@@ -51,6 +57,8 @@ export class ChatRuntime {
   private readAdapter: CartridgeReadAdapterType | null;
   private failedMessageStore: FailedMessageStore | null;
   private maxContextMessages: number;
+  private capabilityRegistry: CapabilityRegistry | null;
+  private planGraphBuilder: PlanGraphBuilder | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -68,6 +76,8 @@ export class ChatRuntime {
     this.readAdapter = config.readAdapter ?? null;
     this.failedMessageStore = config.failedMessageStore ?? null;
     this.maxContextMessages = config.maxContextMessages ?? 5;
+    this.capabilityRegistry = config.capabilityRegistry ?? null;
+    this.planGraphBuilder = config.planGraphBuilder ?? null;
   }
 
   getAdapter(): ChannelAdapter {
@@ -242,6 +252,44 @@ export class ChatRuntime {
     if (result.proposals.length === 0) {
       await this.adapter.sendTextReply(threadId, composeUncertainReply(this.availableActions));
       return;
+    }
+
+    // If a goalBrief is present and decomposable, try to build and execute a plan
+    if (result.goalBrief?.decomposable && this.planGraphBuilder && this.capabilityRegistry) {
+      try {
+        const capabilities = this.capabilityRegistry.enrichAvailableActions(this.availableActions);
+        const plan = this.planGraphBuilder.buildPlan(
+          result.goalBrief,
+          capabilities,
+          {
+            principalId: message.principalId,
+            organizationId: message.organizationId ?? undefined,
+            cartridgeId: "digital-ads",
+          },
+        );
+
+        if (plan && plan.steps.length > 0) {
+          const orch = this.orchestrator as unknown as { executePlan?: (plan: unknown, context: { principalId: string; organizationId?: string }) => Promise<{ overallOutcome: string; stepResults: Array<{ stepIndex: number; outcome: string }> }> };
+          if (orch.executePlan) {
+            const planResult = await orch.executePlan(plan, {
+              principalId: message.principalId,
+              organizationId: message.organizationId ?? undefined,
+            });
+
+            const summaryParts = planResult.stepResults.map((sr: { stepIndex: number; outcome: string }) => {
+              const outcomeLabel = sr.outcome === "executed" ? "Done" : sr.outcome;
+              return `Step ${sr.stepIndex + 1}: ${outcomeLabel}`;
+            });
+            const summaryText = `Plan "${plan.summary}" — ${planResult.overallOutcome}\n${summaryParts.join("\n")}`;
+            await this.adapter.sendTextReply(threadId, summaryText);
+            await this.recordAssistantMessage(threadId, summaryText);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[Runtime] Plan execution failed, falling through to proposal flow:", err);
+        // Fall through to single-proposal flow
+      }
     }
 
     // Handle undo command

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ActionPlanStrategySchema, ActionPlanApprovalModeSchema } from "./action-plan.js";
+import { StepTypeSchema } from "./capability.js";
 
 export const DataFlowStepSchema = z.object({
   index: z.number().int().nonnegative(),
@@ -7,6 +8,8 @@ export const DataFlowStepSchema = z.object({
   actionType: z.string(),
   parameters: z.record(z.string(), z.unknown()),
   condition: z.string().nullable(),
+  /** Semantic step type for plan decomposition and model routing */
+  stepType: StepTypeSchema.optional(),
 });
 export type DataFlowStep = z.infer<typeof DataFlowStepSchema>;
 

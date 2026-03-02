@@ -26,6 +26,10 @@ export interface ActionDefinition {
   baseRiskCategory: "none" | "low" | "medium" | "high" | "critical";
   /** Whether the action is reversible */
   reversible: boolean;
+  /** Optional executor hint for capability registry */
+  executorHint?: string;
+  /** Optional step type for plan decomposition */
+  stepType?: string;
 }
 
 export interface CartridgeManifest {
@@ -324,7 +328,35 @@ export interface MetaAdsWriteProvider {
   resumeAdSet(adSetId: string): Promise<{ success: boolean; previousStatus: string }>;
   updateAdSetBudget(adSetId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }>;
   updateTargeting(adSetId: string, targetingSpec: Record<string, unknown>): Promise<{ success: boolean }>;
+  createCampaign?(params: CreateCampaignParams): Promise<{ id: string; success: boolean }>;
+  createAdSet?(params: CreateAdSetParams): Promise<{ id: string; success: boolean }>;
+  createAd?(params: CreateAdParams): Promise<{ id: string; success: boolean }>;
   healthCheck(): Promise<ConnectionHealth>;
+}
+
+export interface CreateCampaignParams {
+  name: string;
+  objective: string;
+  dailyBudget: number;
+  status?: string;
+  specialAdCategories?: string[];
+}
+
+export interface CreateAdSetParams {
+  campaignId: string;
+  name: string;
+  dailyBudget: number;
+  targeting: Record<string, unknown>;
+  optimizationGoal?: string;
+  billingEvent?: string;
+  status?: string;
+}
+
+export interface CreateAdParams {
+  adSetId: string;
+  name: string;
+  creative: Record<string, unknown>;
+  status?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,9 +393,12 @@ export type WriteActionType =
   | "digital-ads.campaign.pause"
   | "digital-ads.campaign.resume"
   | "digital-ads.campaign.adjust_budget"
+  | "digital-ads.campaign.create"
   | "digital-ads.adset.pause"
   | "digital-ads.adset.resume"
   | "digital-ads.adset.adjust_budget"
+  | "digital-ads.adset.create"
+  | "digital-ads.ad.create"
   | "digital-ads.targeting.modify";
 
 export type ActionType = ReadActionType | WriteActionType;

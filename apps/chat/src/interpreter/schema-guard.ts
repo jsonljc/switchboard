@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ActionProposalSchema } from "@switchboard/schemas";
+import { ActionProposalSchema, GoalBriefSchema } from "@switchboard/schemas";
 
 const ReadIntentSchema = z
   .object({
@@ -16,6 +16,7 @@ const InterpreterOutputSchema = z.object({
   clarificationQuestion: z.string().nullable(),
   confidence: z.number().min(0).max(1),
   readIntent: ReadIntentSchema,
+  goalBrief: GoalBriefSchema.nullable().optional(),
 });
 
 export function guardInterpreterOutput(raw: unknown): {

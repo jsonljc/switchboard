@@ -18,6 +18,8 @@ import {
   DEFAULT_REDACTION_CONFIG,
   GuardedCartridge,
   CartridgeReadAdapter,
+  CapabilityRegistry,
+  PlanGraphBuilder,
 } from "@switchboard/core";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
@@ -268,6 +270,18 @@ export async function createChatRuntime(
     interpreter !== ruleBasedInterpreter ? ["primary", "rule-based"] : ["rule-based"],
   );
 
+  // Build capability registry from registered cartridge manifests
+  const capabilityRegistry = new CapabilityRegistry();
+  if (storage) {
+    for (const cartridgeId of storage.cartridges.list()) {
+      const cartridge = storage.cartridges.get(cartridgeId);
+      if (cartridge) {
+        capabilityRegistry.populateFromManifest(cartridge.manifest.actions);
+      }
+    }
+  }
+  const planGraphBuilder = new PlanGraphBuilder();
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -275,6 +289,8 @@ export async function createChatRuntime(
     orchestrator,
     storage,
     readAdapter,
+    capabilityRegistry,
+    planGraphBuilder,
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? [
       "digital-ads.campaign.pause",
@@ -314,6 +330,8 @@ export async function createChatRuntime(
       "crm.activity.list",
       "crm.activity.log",
       "crm.pipeline.status",
+      "crm.pipeline.diagnose",
+      "crm.activity.analyze",
     ],
   });
 

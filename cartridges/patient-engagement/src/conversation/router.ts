@@ -5,6 +5,7 @@
 import type { ConversationFlowDefinition } from "./types.js";
 import type { ConversationSession, ConversationSessionStore } from "./session-store.js";
 import { createConversationState, executeNextStep } from "./engine.js";
+import { ConversationNLPAdapter } from "./nlp-adapter.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -65,12 +66,14 @@ export class ConversationRouter {
   private readonly flows: Map<string, ConversationFlowDefinition>;
   private readonly defaultFlowId: string;
   private readonly sessionTimeoutMs: number;
+  private readonly nlpAdapter: ConversationNLPAdapter;
 
   constructor(config: ConversationRouterConfig) {
     this.sessionStore = config.sessionStore;
     this.flows = config.flows;
     this.defaultFlowId = config.defaultFlowId;
     this.sessionTimeoutMs = config.sessionTimeoutMs ?? 30 * 60 * 1000; // 30 minutes
+    this.nlpAdapter = new ConversationNLPAdapter();
   }
 
   /**
@@ -104,14 +107,33 @@ export class ConversationRouter {
       patientPhone: message.from,
     };
 
-    // Try to interpret the message as a question response (numbered option)
-    const optionMatch = message.body.trim().match(/^(\d+)$/);
-    if (optionMatch) {
-      state.variables["selectedOption"] = parseInt(optionMatch[1]!, 10);
+    // Use NLP adapter to interpret the message before falling back to numeric matching
+    const flow = this.flows.get(session.flowId);
+    if (flow) {
+      const currentStep = flow.steps[state.currentStepIndex] ?? null;
+      const nlpResult = this.nlpAdapter.processMessage(message.body, currentStep);
+
+      // Set extracted variables
+      Object.assign(state.variables, nlpResult.extractedVariables);
+
+      // If NLP resolved an option, set it
+      if (nlpResult.resolvedOptionIndex !== null) {
+        state.variables["selectedOption"] = nlpResult.resolvedOptionIndex;
+      }
+
+      // Handle escalation requests
+      if (nlpResult.classification.intent === "escalation_request") {
+        state.variables["escalationRequested"] = true;
+      }
+    } else {
+      // Fallback: try to interpret the message as a question response (numbered option)
+      const optionMatch = message.body.trim().match(/^(\d+)$/);
+      if (optionMatch) {
+        state.variables["selectedOption"] = parseInt(optionMatch[1]!, 10);
+      }
     }
 
     // Step 4: Execute the next step(s) in the conversation
-    const flow = this.flows.get(session.flowId);
     if (!flow) {
       return {
         handled: false,

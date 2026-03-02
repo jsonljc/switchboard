@@ -1,16 +1,40 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportCard } from "@/components/scheduled-reports/report-card";
 import { ReportForm } from "@/components/scheduled-reports/report-form";
 import { useScheduledReports, useCreateReport, useUpdateReport, useDeleteReport, useRunReport } from "@/hooks/use-scheduled-reports";
-import { Plus } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, AlertTriangle } from "lucide-react";
 
 export default function ScheduledReportsPage() {
+  const { status } = useSession();
   const [formOpen, setFormOpen] = useState(false);
-  const { data: reports, isLoading } = useScheduledReports();
+  const { data: reports, isLoading, isError, error, refetch } = useScheduledReports();
+
+  if (status === "unauthenticated") redirect("/login");
+
+  if (isError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Scheduled Reports</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load reports</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   const createReport = useCreateReport();
   const updateReport = useUpdateReport();
   const deleteReport = useDeleteReport();

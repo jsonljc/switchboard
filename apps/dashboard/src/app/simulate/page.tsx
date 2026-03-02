@@ -21,7 +21,7 @@ export default function SimulatePage() {
 
   if (authStatus === "unauthenticated") redirect("/login");
 
-  const principalId = (session?.user as any)?.principalId ?? "agent-001";
+  const principalId = session?.principalId ?? "principal_dev";
 
   const handleSubmit = async (data: {
     actionType: string;

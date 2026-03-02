@@ -35,7 +35,9 @@ export class RedisModelRouter implements ModelRouter {
       const usage = await this.getTodayUsage(orgId);
       return usage < this.config.dailyTokenBudget;
     } catch {
-      return true; // fail-open
+      // Fail-closed: on Redis error, deny LLM usage to prevent unbounded spend
+      console.warn("[RedisModelRouter] Redis error in shouldUseLLM — failing closed (denying LLM)");
+      return false;
     }
   }
 

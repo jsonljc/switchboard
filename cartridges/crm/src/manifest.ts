@@ -149,6 +149,34 @@ export const CRM_MANIFEST: CartridgeManifest = {
       baseRiskCategory: "low",
       reversible: false,
     },
+    // Advisor actions (read-only diagnostics)
+    {
+      actionType: "crm.pipeline.diagnose",
+      name: "Diagnose Pipeline Health",
+      description: "Analyze pipeline velocity, stage conversion rates, stalled deals, and concentration risk",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          pipelineId: { type: "string", description: "Pipeline ID (defaults to main pipeline)" },
+        },
+      },
+      baseRiskCategory: "low",
+      reversible: false,
+    },
+    {
+      actionType: "crm.activity.analyze",
+      name: "Analyze Activity Cadence",
+      description: "Identify dormant contacts, overdue follow-ups, unengaged leads, and activity trends",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          daysSinceDormant: { type: "number", description: "Days of inactivity before a contact is considered dormant (default: 30)" },
+          daysSinceFollowup: { type: "number", description: "Days since last activity before a follow-up is overdue (default: 7)" },
+        },
+      },
+      baseRiskCategory: "low",
+      reversible: false,
+    },
   ],
   requiredConnections: [],
   defaultPolicies: ["crm-default"],

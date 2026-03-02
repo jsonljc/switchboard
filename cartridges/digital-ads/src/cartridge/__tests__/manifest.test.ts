@@ -25,8 +25,8 @@ describe("CartridgeManifest", () => {
     ]);
   });
 
-  it("defines exactly 13 actions (6 read + 7 write)", () => {
-    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(13);
+  it("defines exactly 16 actions (6 read + 10 write)", () => {
+    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(16);
   });
 
   it("has correct read action types", () => {
@@ -44,9 +44,12 @@ describe("CartridgeManifest", () => {
     expect(actionTypes).toContain("digital-ads.campaign.pause");
     expect(actionTypes).toContain("digital-ads.campaign.resume");
     expect(actionTypes).toContain("digital-ads.campaign.adjust_budget");
+    expect(actionTypes).toContain("digital-ads.campaign.create");
     expect(actionTypes).toContain("digital-ads.adset.pause");
     expect(actionTypes).toContain("digital-ads.adset.resume");
     expect(actionTypes).toContain("digital-ads.adset.adjust_budget");
+    expect(actionTypes).toContain("digital-ads.adset.create");
+    expect(actionTypes).toContain("digital-ads.ad.create");
     expect(actionTypes).toContain("digital-ads.targeting.modify");
   });
 

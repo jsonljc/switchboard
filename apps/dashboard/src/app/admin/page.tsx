@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Save, AlertTriangle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface OrgConfig {
   id: string;
@@ -31,23 +34,32 @@ interface OrgConfig {
 }
 
 const governanceProfiles = [
-  { value: "permissive", label: "Permissive", description: "Minimal guardrails, auto-approve most actions" },
+  { value: "observe", label: "Observe", description: "Log-only mode, no enforcement — ideal for onboarding" },
   { value: "guarded", label: "Guarded", description: "Standard guardrails with risk-based approvals" },
   { value: "strict", label: "Strict", description: "All side effects require approval" },
+  { value: "locked", label: "Locked", description: "No autonomous actions allowed — human-in-the-loop only" },
 ];
 
 export default function AdminPage() {
+  const { status } = useSession();
   const [config, setConfig] = useState<OrgConfig | null>(null);
+
+  if (status === "unauthenticated") redirect("/login");
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [name, setName] = useState("");
   const [governanceProfile, setGovernanceProfile] = useState("guarded");
   const [runtimeType, setRuntimeType] = useState("embedded");
 
   useEffect(() => {
-    fetch("/api/dashboard/admin")
-      .then((res) => res.json())
+    fetch("/api/dashboard/organizations")
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load (${res.status})`);
+        return res.json();
+      })
       .then((data) => {
         if (data.config) {
           setConfig(data.config);
@@ -57,13 +69,16 @@ export default function AdminPage() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setFetchError(err.message);
+        setLoading(false);
+      });
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetch("/api/dashboard/admin", {
+      await fetch("/api/dashboard/organizations", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, governanceProfile, runtimeType }),
@@ -75,7 +90,33 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Organization Settings</h1>
+        <Card className="border-destructive">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-destructive mb-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">Failed to load settings</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{fetchError}</p>
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -197,8 +238,21 @@ export default function AdminPage() {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => setResetConfirm(false)}>
-              Confirm Reset
+            <Button
+              variant="destructive"
+              disabled={resetting}
+              onClick={async () => {
+                setResetting(true);
+                try {
+                  await fetch("/api/dashboard/organizations/reset", { method: "POST" });
+                  setResetConfirm(false);
+                  window.location.reload();
+                } finally {
+                  setResetting(false);
+                }
+              }}
+            >
+              {resetting ? "Resetting..." : "Confirm Reset"}
             </Button>
           </DialogFooter>
         </DialogContent>
