@@ -5,6 +5,7 @@ import type {
   ExecutionService,
   CartridgeReadAdapter,
   GovernanceProfileStore,
+  CartridgeRegistry,
 } from "@switchboard/core";
 import { resolveAuth, loadMcpApiKeys } from "./auth.js";
 import type { McpAuthContext } from "./auth.js";
@@ -14,6 +15,7 @@ import {
   SIDE_EFFECT_TOOLS,
   READ_TOOLS,
   GOVERNANCE_TOOLS,
+  MANUAL_ACTION_TYPES,
   handleSideEffectTool,
   handleReadTool,
   handleGovernanceTool,
@@ -26,16 +28,31 @@ import { CRM_SIDE_EFFECT_TOOLS, CRM_READ_TOOLS } from "./tools/crm.js";
 import { PAYMENTS_SIDE_EFFECT_TOOLS, PAYMENTS_READ_TOOLS } from "./tools/payments.js";
 import type { ReadToolDeps } from "./tools/index.js";
 import type { GovernanceToolDeps } from "./tools/index.js";
+import { generateToolsFromRegistry } from "./auto-register.js";
+import type { AutoRegisteredTool } from "./auto-register.js";
 
 /**
  * Minimal orchestrator interface — satisfied by both LifecycleOrchestrator
  * and the API-backed proxy from api-governance-adapter.ts.
  */
 export interface MinimalOrchestrator {
-  simulate: (...args: any[]) => Promise<any>;
-  requestUndo: (...args: any[]) => Promise<any>;
-  executeApproved: (...args: any[]) => Promise<any>;
-  propose: (...args: any[]) => Promise<any>;
+  simulate(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    cartridgeId?: string;
+  }): Promise<unknown>;
+  requestUndo(envelopeId: string): Promise<unknown>;
+  executeApproved(envelopeId: string): Promise<unknown>;
+  propose(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId?: string | null;
+    cartridgeId?: string;
+    message?: string;
+    emergencyOverride?: boolean;
+  }): Promise<{ denied: boolean; envelope: { id: string } }>;
 }
 
 /**
@@ -43,9 +60,17 @@ export interface MinimalOrchestrator {
  * and the API-backed proxy from api-governance-adapter.ts.
  */
 export interface MinimalStorage {
-  approvals: { getById: (...args: any[]) => Promise<any>; listPending: (...args: any[]) => Promise<any> };
-  envelopes: { getById: (...args: any[]) => Promise<any> };
-  cartridges: { get: (id: string) => any; list: () => string[] };
+  approvals: {
+    getById(id: string): Promise<unknown>;
+    listPending(organizationId?: string): Promise<unknown>;
+  };
+  envelopes: {
+    getById(id: string): Promise<unknown>;
+  };
+  cartridges: {
+    get(id: string): unknown;
+    list(): string[];
+  };
 }
 
 /**
@@ -53,16 +78,17 @@ export interface MinimalStorage {
  * and the API-backed proxy from api-governance-adapter.ts.
  */
 export interface MinimalLedger {
-  query: (...args: any[]) => Promise<any>;
+  query(filter: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface SwitchboardMcpServerOptions {
   executionService: ExecutionService;
-  readAdapter: CartridgeReadAdapter | { query: (...args: any[]) => Promise<any> };
+  readAdapter: CartridgeReadAdapter | { query(params: any): Promise<unknown> };
   orchestrator: MinimalOrchestrator;
   storage: MinimalStorage;
   ledger: MinimalLedger;
   governanceProfileStore: GovernanceProfileStore;
+  cartridgeRegistry?: CartridgeRegistry;
 }
 
 export class SwitchboardMcpServer {
@@ -72,6 +98,8 @@ export class SwitchboardMcpServer {
   private governanceDeps: GovernanceToolDeps;
   private apiKeys: ReturnType<typeof loadMcpApiKeys>;
   private sessionGuard: SessionGuard;
+  private autoRegisteredMap: Map<string, string> = new Map();
+  private allSideEffectTools: Set<string>;
 
   constructor(options: SwitchboardMcpServerOptions) {
     this.executionService = options.executionService;
@@ -91,12 +119,15 @@ export class SwitchboardMcpServer {
     };
     this.apiKeys = loadMcpApiKeys();
 
+    // Start with manual side-effect tools
+    this.allSideEffectTools = new Set(SIDE_EFFECT_TOOLS);
+
     this.mcpServer = new McpServer({
       name: "switchboard",
       version: "0.1.0",
     });
 
-    this.registerTools();
+    this.registerTools(options.cartridgeRegistry);
   }
 
   private getAuth(): McpAuthContext {
@@ -106,34 +137,57 @@ export class SwitchboardMcpServer {
     return resolveAuth(key, this.apiKeys);
   }
 
-  private registerTools(): void {
-    for (const def of toolDefinitions) {
-      // Build a Zod schema from the JSON Schema input definition
-      // We use z.object({}).passthrough() as a base since MCP SDK
-      // will do its own validation from the inputSchema
-      this.mcpServer.tool(
+  private registerTools(cartridgeRegistry?: CartridgeRegistry): void {
+    // Auto-generate tools from cartridge registry if available
+    let autoTools: AutoRegisteredTool[] = [];
+    if (cartridgeRegistry) {
+      autoTools = generateToolsFromRegistry(cartridgeRegistry, MANUAL_ACTION_TYPES);
+
+      // Mark auto-registered mutations in the side-effect set
+      for (const tool of autoTools) {
+        this.autoRegisteredMap.set(tool.name, tool.actionType);
+        this.allSideEffectTools.add(tool.name);
+      }
+
+      if (autoTools.length > 0) {
+        console.error(
+          `[mcp-server] Auto-registered ${autoTools.length} tools from cartridge manifests`,
+        );
+      }
+    }
+
+    // Register all tools (manual + auto) using registerTool() API
+    const allDefs = [...toolDefinitions, ...autoTools];
+    for (const def of allDefs) {
+      this.mcpServer.registerTool(
         def.name,
-        def.description,
-        def.inputSchema.properties
-          ? Object.fromEntries(
-              Object.entries(def.inputSchema.properties as Record<string, { type: string; description?: string }>).map(
-                ([key, prop]) => {
-                  let schema: z.ZodTypeAny;
-                  switch (prop.type) {
-                    case "number":
-                      schema = z.number().optional();
-                      break;
-                    case "object":
-                      schema = z.record(z.string(), z.unknown()).optional();
-                      break;
-                    default:
-                      schema = z.string().optional();
-                  }
-                  return [key, schema];
-                },
-              ),
-            )
-          : {},
+        {
+          description: def.description,
+          inputSchema: def.inputSchema.properties
+            ? Object.fromEntries(
+                Object.entries(def.inputSchema.properties as Record<string, { type: string; description?: string }>).map(
+                  ([key, prop]) => {
+                    let schema: z.ZodTypeAny;
+                    switch (prop.type) {
+                      case "number":
+                        schema = z.number().optional();
+                        break;
+                      case "object":
+                        schema = z.record(z.string(), z.unknown()).optional();
+                        break;
+                      case "array":
+                        schema = z.array(z.unknown()).optional();
+                        break;
+                      default:
+                        schema = z.string().optional();
+                    }
+                    return [key, schema];
+                  },
+                ),
+              )
+            : {},
+          annotations: def.annotations,
+        },
         async (args) => {
           return this.handleToolCall(def.name, args as Record<string, unknown>);
         },
@@ -146,7 +200,7 @@ export class SwitchboardMcpServer {
     args: Record<string, unknown>,
   ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
     const auth = this.getAuth();
-    const isMutation = SIDE_EFFECT_TOOLS.has(toolName);
+    const isMutation = this.allSideEffectTools.has(toolName);
 
     // Session guard: check limits before dispatch
     const check = this.sessionGuard.checkCall(toolName, args, isMutation);
@@ -164,7 +218,29 @@ export class SwitchboardMcpServer {
     try {
       let result: unknown;
 
-      if (CRM_SIDE_EFFECT_TOOLS.has(toolName)) {
+      // Auto-registered tools: dispatch through ExecutionService.execute()
+      const autoActionType = this.autoRegisteredMap.get(toolName);
+      if (autoActionType) {
+        const response = await this.executionService.execute({
+          actorId: auth.actorId,
+          organizationId: auth.organizationId ?? null,
+          requestedAction: {
+            actionType: autoActionType,
+            parameters: args,
+            sideEffect: true,
+          },
+          message: `MCP tool call: ${toolName}`,
+        });
+        result = {
+          outcome: response.outcome,
+          envelopeId: response.envelopeId,
+          traceId: response.traceId,
+          summary: response.executionResult?.summary,
+          approvalId: response.approvalId,
+          deniedExplanation: response.deniedExplanation,
+          governanceNote: response.governanceNote,
+        };
+      } else if (CRM_SIDE_EFFECT_TOOLS.has(toolName)) {
         result = await handleCrmSideEffectTool(
           toolName,
           args,

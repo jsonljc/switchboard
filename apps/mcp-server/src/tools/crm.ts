@@ -17,6 +17,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["query"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_contact",
@@ -28,6 +29,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["contactId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "create_contact",
@@ -43,6 +45,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["email"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
   {
     name: "get_pipeline_status",
@@ -53,6 +56,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
         pipeline: { type: "string", description: "Pipeline name (default: 'default')" },
       },
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "get_deal",
@@ -64,6 +68,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["dealId"],
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "create_deal",
@@ -79,6 +84,7 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["name"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
   {
     name: "log_activity",
@@ -94,11 +100,19 @@ export const crmToolDefinitions: ToolDefinition[] = [
       },
       required: ["type"],
     },
+    annotations: { destructiveHint: false, openWorldHint: true },
   },
 ];
 
 export const CRM_SIDE_EFFECT_TOOLS = new Set(["create_contact", "create_deal", "log_activity"]);
 export const CRM_READ_TOOLS = new Set(["search_contacts", "get_contact", "get_pipeline_status", "get_deal"]);
+
+/** Maps CRM side-effect tool names to their actionTypes. */
+export const CRM_ACTION_TYPE_MAP: Record<string, string> = {
+  create_contact: "crm.contact.create",
+  create_deal: "crm.deal.create",
+  log_activity: "crm.activity.log",
+};
 
 export async function handleCrmSideEffectTool(
   toolName: string,
@@ -106,13 +120,7 @@ export async function handleCrmSideEffectTool(
   auth: McpAuthContext,
   executionService: ExecutionService,
 ): Promise<McpToolResponse> {
-  const actionTypeMap: Record<string, string> = {
-    create_contact: "crm.contact.create",
-    create_deal: "crm.deal.create",
-    log_activity: "crm.activity.log",
-  };
-
-  const actionType = actionTypeMap[toolName];
+  const actionType = CRM_ACTION_TYPE_MAP[toolName];
   if (!actionType) throw new Error(`Unknown CRM side-effect tool: ${toolName}`);
 
   return mcpExecute(

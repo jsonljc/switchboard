@@ -13,6 +13,10 @@ import {
   CartridgeReadAdapter,
 } from "@switchboard/core";
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
+import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
+import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
+import { bootstrapPatientEngagementCartridge, DEFAULT_PATIENT_ENGAGEMENT_POLICIES } from "@switchboard/patient-engagement";
 import { SwitchboardMcpServer } from "./server.js";
 import { McpApiClient } from "./api-client.js";
 import { ApiReadAdapter } from "./adapters/api-read-adapter.js";
@@ -115,6 +119,33 @@ async function main() {
   storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
+  // Register quant-trading cartridge
+  const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
+  storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
+  await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
+
+  // Register payments cartridge
+  const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
+    secretKey: process.env["STRIPE_SECRET_KEY"] ?? "mock-key-dev-only",
+    requireCredentials: process.env.NODE_ENV === "production",
+  });
+  storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
+  await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
+
+  // Register CRM cartridge (built-in, no external credentials needed)
+  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
+  storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
+  await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
+
+  // Register patient-engagement cartridge (mock providers for dev)
+  const { cartridge: peCartridge, interceptors: peInterceptors } =
+    await bootstrapPatientEngagementCartridge();
+  storage.cartridges.register(
+    "patient-engagement",
+    new GuardedCartridge(peCartridge, peInterceptors),
+  );
+  await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+
   // ── Orchestrator + services ──────────────────────────────────────────
   const orchestrator = new LifecycleOrchestrator({
     storage,
@@ -135,6 +166,7 @@ async function main() {
     storage,
     ledger,
     governanceProfileStore,
+    cartridgeRegistry: storage.cartridges,
   });
 
   // Graceful shutdown

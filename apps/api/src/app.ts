@@ -63,6 +63,7 @@ import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
 import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
 import { startTokenRefreshJob } from "./jobs/token-refresh.js";
 import { startCadenceRunner } from "./jobs/cadence-runner.js";
+import { startTtlCleanupJob } from "./jobs/ttl-cleanup.js";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import type { Queue, Worker } from "bullmq";
@@ -269,10 +270,11 @@ export async function buildServer() {
   }
 
   // Register digital-ads cartridge
+  const isProd = process.env.NODE_ENV === "production";
   const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
-    accessToken: adsAccessToken ?? "mock-token-dev-only",
-    adAccountId: adsAccountId ?? "act_mock_dev_only",
-    requireCredentials: process.env.NODE_ENV === "production",
+    accessToken: adsAccessToken ?? (isProd ? "" : "mock-token-dev-only"),
+    adAccountId: adsAccountId ?? (isProd ? "" : "act_mock_dev_only"),
+    requireCredentials: isProd,
     cacheStore: createSnapshotCacheStore(redis ?? undefined),
   });
   storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
@@ -285,8 +287,8 @@ export async function buildServer() {
 
   // Register payments cartridge
   const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
-    secretKey: stripeSecretKey ?? "mock-key-dev-only",
-    requireCredentials: process.env.NODE_ENV === "production",
+    secretKey: stripeSecretKey ?? (isProd ? "" : "mock-key-dev-only"),
+    requireCredentials: isProd,
   });
   storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
   await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
@@ -393,6 +395,9 @@ export async function buildServer() {
   const stopTokenRefresh = prismaClient
     ? startTokenRefreshJob({ prisma: prismaClient, logger: app.log })
     : () => {};
+  const stopTtlCleanup = prismaClient
+    ? startTtlCleanupJob({ prisma: prismaClient, logger: app.log })
+    : () => {};
 
   // Start cadence cron runner (evaluates pending cadences on schedule)
   const stopCadenceRunner = startCadenceRunner({
@@ -423,6 +428,7 @@ export async function buildServer() {
     stopDiagnosticScanner();
     stopScheduledReports();
     stopTokenRefresh();
+    stopTtlCleanup();
     stopCadenceRunner();
 
     if (worker) {

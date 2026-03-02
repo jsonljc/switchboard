@@ -14,34 +14,7 @@ import type {
   CreateAdSetParams,
   CreateAdParams,
 } from "../types.js";
-
-/** Simple circuit breaker for API calls. */
-class SimpleCircuitBreaker {
-  private failures = 0;
-  private lastFailure = 0;
-  private readonly threshold: number;
-  private readonly resetMs: number;
-
-  constructor(config: { failureThreshold: number; resetTimeoutMs: number }) {
-    this.threshold = config.failureThreshold;
-    this.resetMs = config.resetTimeoutMs;
-  }
-
-  async call<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.failures >= this.threshold && Date.now() - this.lastFailure < this.resetMs) {
-      throw new Error("Circuit breaker open");
-    }
-    try {
-      const result = await fn();
-      this.failures = 0;
-      return result;
-    } catch (err) {
-      this.failures++;
-      this.lastFailure = Date.now();
-      throw err;
-    }
-  }
-}
+import { CircuitBreaker } from "@switchboard/core";
 
 export interface TikTokAdsWriteConfig {
   /** TikTok Marketing API access token */
@@ -56,14 +29,14 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
   private readonly baseUrl: string;
   private readonly accessToken: string;
   private readonly advertiserId: string;
-  private readonly circuitBreaker: SimpleCircuitBreaker;
+  private readonly circuitBreaker: CircuitBreaker;
 
   constructor(config: TikTokAdsWriteConfig) {
     const apiVersion = config.apiVersion ?? "v1.3";
     this.baseUrl = `https://business-api.tiktok.com/open_api/${apiVersion}`;
     this.accessToken = config.accessToken;
     this.advertiserId = config.advertiserId;
-    this.circuitBreaker = new SimpleCircuitBreaker({
+    this.circuitBreaker = new CircuitBreaker({
       failureThreshold: 3,
       resetTimeoutMs: 60_000,
     });
@@ -259,7 +232,7 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     path: string,
     params: Record<string, string>,
   ): Promise<{ code: number; message: string; data: Record<string, unknown> | null }> {
-    return this.circuitBreaker.call(async () => {
+    return this.circuitBreaker.execute(async () => {
       const url = new URL(`${this.baseUrl}${path}`);
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.set(key, value);
@@ -276,7 +249,7 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     path: string,
     body: Record<string, unknown>,
   ): Promise<{ code: number; message: string; data: Record<string, unknown> | null }> {
-    return this.circuitBreaker.call(async () => {
+    return this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}${path}`, {
         method: "POST",
         headers: this.headers(),

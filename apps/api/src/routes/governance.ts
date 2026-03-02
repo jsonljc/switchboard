@@ -9,6 +9,18 @@ declare module "fastify" {
   }
 }
 
+/** Cartridge that supports campaign search/pause via the governance emergency halt. */
+interface EmergencyHaltCapableCartridge {
+  searchCampaigns(query: string): Promise<Array<{ id: string; status: string; [key: string]: unknown }>>;
+}
+
+function isEmergencyHaltCapable(cartridge: unknown): cartridge is EmergencyHaltCapableCartridge {
+  return (
+    cartridge != null &&
+    typeof (cartridge as EmergencyHaltCapableCartridge).searchCampaigns === "function"
+  );
+}
+
 export const governanceRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/governance/:orgId/status
   app.get("/:orgId/status", {
@@ -83,8 +95,8 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (cartridge?.searchCampaigns) {
-        const campaigns = await cartridge.searchCampaigns("*");
+      if (isEmergencyHaltCapable(cartridge)) {
+        const campaigns = await cartridge.searchCampaigns("");
         for (const campaign of campaigns) {
           if (campaign.status === "ACTIVE") {
             try {
