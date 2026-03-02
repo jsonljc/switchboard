@@ -19,6 +19,8 @@ import { connectionsRoutes } from "./routes/connections.js";
 import { organizationsRoutes } from "./routes/organizations.js";
 import { dlqRoutes } from "./routes/dlq.js";
 import { tokenUsageRoutes } from "./routes/token-usage.js";
+import { alertsRoutes } from "./routes/alerts.js";
+import { scheduledReportsRoutes } from "./routes/scheduled-reports.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -34,8 +36,9 @@ import {
   InMemoryGovernanceProfileStore,
   ExecutionService,
   setMetrics,
+  CompositeNotifier,
 } from "@switchboard/core";
-import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
+import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier } from "@switchboard/core";
 import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
@@ -43,6 +46,8 @@ import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
 import { startChainVerificationJob } from "./jobs/chain-verification.js";
+import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
+import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
@@ -254,6 +259,28 @@ export async function buildServer() {
     };
   }
 
+  // Wire approval notifiers from env vars
+  const approvalNotifiers: ApprovalNotifier[] = [];
+  if (process.env["TELEGRAM_BOT_TOKEN"]) {
+    const { TelegramApprovalNotifier } = await import("./notifications/telegram-notifier.js");
+    approvalNotifiers.push(new TelegramApprovalNotifier(process.env["TELEGRAM_BOT_TOKEN"]));
+  }
+  if (process.env["SLACK_BOT_TOKEN"]) {
+    const { SlackApprovalNotifier } = await import("./notifications/slack-notifier.js");
+    approvalNotifiers.push(new SlackApprovalNotifier(process.env["SLACK_BOT_TOKEN"]));
+  }
+  if (process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]) {
+    const { WhatsAppApprovalNotifier } = await import("./notifications/whatsapp-notifier.js");
+    approvalNotifiers.push(new WhatsAppApprovalNotifier({
+      token: process.env["WHATSAPP_TOKEN"],
+      phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+    }));
+  }
+  const approvalNotifier: ApprovalNotifier | undefined =
+    approvalNotifiers.length > 1 ? new CompositeNotifier(approvalNotifiers)
+    : approvalNotifiers.length === 1 ? approvalNotifiers[0]
+    : undefined;
+
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -263,6 +290,7 @@ export async function buildServer() {
     governanceProfileStore,
     executionMode,
     onEnqueue,
+    approvalNotifier,
   });
 
   // Start worker in-process when queue mode is active
@@ -281,6 +309,14 @@ export async function buildServer() {
   // Start daily audit chain verification job
   const stopChainVerify = startChainVerificationJob({ ledger, logger: app.log });
 
+  // Start diagnostic scanner + scheduled report jobs (require DB)
+  const stopDiagnosticScanner = prismaClient
+    ? startDiagnosticScanner({ prisma: prismaClient, storageContext: storage, logger: app.log })
+    : () => {};
+  const stopScheduledReports = prismaClient
+    ? startScheduledReportJob({ prisma: prismaClient, storageContext: storage, logger: app.log })
+    : () => {};
+
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
@@ -297,6 +333,8 @@ export async function buildServer() {
   app.addHook("onClose", async () => {
     stopExpiryJob();
     stopChainVerify();
+    stopDiagnosticScanner();
+    stopScheduledReports();
 
     if (worker) {
       await worker.close();
@@ -374,6 +412,8 @@ export async function buildServer() {
   await app.register(organizationsRoutes, { prefix: "/api/organizations" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
+  await app.register(alertsRoutes, { prefix: "/api/alerts" });
+  await app.register(scheduledReportsRoutes, { prefix: "/api/scheduled-reports" });
 
   return app;
 }

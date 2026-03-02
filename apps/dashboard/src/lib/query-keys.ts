@@ -47,4 +47,13 @@ export const queryKeys = {
     all: ["orgConfig"] as const,
     current: () => ["orgConfig", "current"] as const,
   },
+  alerts: {
+    all: ["alerts"] as const,
+    list: () => ["alerts", "list"] as const,
+    history: (id: string) => ["alerts", "history", id] as const,
+  },
+  scheduledReports: {
+    all: ["scheduledReports"] as const,
+    list: () => ["scheduledReports", "list"] as const,
+  },
 };

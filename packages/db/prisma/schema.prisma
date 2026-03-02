@@ -436,3 +436,61 @@ model CrmActivity {
   @@index([type])
   @@index([createdAt])
 }
+
+// ── Proactive alerts + scheduled reports ──
+
+model AlertRule {
+  id               String    @id @default(uuid())
+  organizationId   String
+  name             String
+  enabled          Boolean   @default(true)
+  metricPath       String    // "primaryKPI.current", "spend.current", "findings.critical.count"
+  operator         String    // gt, gte, lt, lte, eq, pctChange_gt, pctChange_lt
+  threshold        Float
+  platform         String?   // null = all, or "meta"|"google"|"tiktok"
+  vertical         String    @default("commerce")
+  notifyChannels   String[]  // ["slack","telegram","whatsapp"]
+  notifyRecipients String[]  // user/channel IDs
+  cooldownMinutes  Int       @default(60)
+  lastTriggeredAt  DateTime?
+  snoozedUntil     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([organizationId, enabled])
+}
+
+model ScheduledReport {
+  id               String    @id @default(uuid())
+  organizationId   String
+  name             String
+  enabled          Boolean   @default(true)
+  cronExpression   String    // "0 9 * * 1" = Mon 9am
+  timezone         String    @default("UTC")
+  reportType       String    // "funnel" | "portfolio"
+  platform         String?
+  vertical         String    @default("commerce")
+  deliveryChannels String[]
+  deliveryTargets  String[]
+  lastRunAt        DateTime?
+  nextRunAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@index([organizationId])
+}
+
+model AlertHistory {
+  id                String   @id @default(uuid())
+  alertRuleId       String
+  organizationId    String
+  triggeredAt       DateTime @default(now())
+  metricValue       Float
+  threshold         Float
+  findingsSummary   String
+  notificationsSent Json     // [{ channel, recipient, success }]
+
+  @@index([alertRuleId])
+  @@index([organizationId, triggeredAt])
+}
