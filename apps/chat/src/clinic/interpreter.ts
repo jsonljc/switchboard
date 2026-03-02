@@ -3,6 +3,7 @@ import { LLMInterpreter } from "../interpreter/llm-base.js";
 import type { LLMConfig, LLMResponse } from "../interpreter/llm-base.js";
 import type { InterpreterResult } from "../interpreter/interpreter.js";
 import { detectPromptInjection } from "../interpreter/injection-detector.js";
+import type { GoalBrief } from "@switchboard/schemas";
 import {
   AllowedIntent,
   READ_INTENTS,
@@ -339,12 +340,14 @@ export class ClinicInterpreter extends LLMInterpreter {
     // Read intents → readIntent descriptor, no proposals
     if (READ_INTENTS.has(intent)) {
       const readIntent: ReadIntentDescriptor = { intent, slots, confidence };
+      const goalBrief = this.intentToGoalBrief(intent, slots);
       return {
         proposals: [],
         needsClarification: false,
         clarificationQuestion: null,
         confidence,
         readIntent,
+        goalBrief,
       };
     }
 
@@ -455,6 +458,95 @@ export class ClinicInterpreter extends LLMInterpreter {
       clarificationQuestion: "I'm not sure what you're asking. Could you rephrase?",
       confidence: 0,
     };
+  }
+
+  /**
+   * Map a classified intent + slots to a structured GoalBrief.
+   * Returns null for intents that don't map to decomposable goals.
+   */
+  private intentToGoalBrief(
+    intent: AllowedIntent,
+    slots: Record<string, unknown>,
+  ): GoalBrief | null {
+    const id = `goal_${randomUUID()}`;
+    const entityRefs: Record<string, string> = {};
+    if (slots["campaignRef"]) entityRefs["campaign"] = String(slots["campaignRef"]);
+
+    switch (intent) {
+      case AllowedIntent.REPORT_PERFORMANCE:
+        return {
+          id,
+          type: "report",
+          objective: "Report on campaign performance",
+          constraints: [],
+          successMetrics: [],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      case AllowedIntent.MORE_LEADS:
+        return {
+          id,
+          type: "optimize",
+          objective: "Increase patient lead volume",
+          constraints: slots["maxCpl"] ? [{
+            field: "cpl",
+            operator: "lte",
+            value: Number(slots["maxCpl"]),
+            unit: "USD",
+          }] : [],
+          successMetrics: [{ name: "leads", direction: "increase" }],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      case AllowedIntent.REDUCE_COST:
+        return {
+          id,
+          type: "optimize",
+          objective: "Reduce ad spend or cost per lead",
+          constraints: [],
+          successMetrics: [{ name: "cpl", direction: "decrease" }],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      case AllowedIntent.CHECK_STATUS:
+        return {
+          id,
+          type: "report",
+          objective: "Check current campaign status",
+          constraints: [],
+          successMetrics: [],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      case AllowedIntent.DIAGNOSE_FUNNEL:
+        return {
+          id,
+          type: "investigate",
+          objective: "Diagnose ad funnel performance issues",
+          constraints: [],
+          successMetrics: [],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      case AllowedIntent.DIAGNOSE_PORTFOLIO:
+        return {
+          id,
+          type: "investigate",
+          objective: "Analyze cross-platform portfolio performance",
+          constraints: [],
+          successMetrics: [],
+          decomposable: true,
+          entityRefs,
+          slots,
+        };
+      default:
+        return null;
+    }
   }
 
   /** Regex-based fallback when LLM budget is exceeded. */

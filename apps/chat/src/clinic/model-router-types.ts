@@ -21,5 +21,7 @@ export interface ModelRouter {
   getUsageSummary(orgId: string, period: "daily" | "weekly" | "monthly"): Promise<TokenUsageSummary>;
   /** Get estimated USD cost for today (null if not tracked) */
   getTodayCostUSD?(orgId?: string): Promise<number>;
+  /** Select optimal model for a given task type (tiered routing) */
+  selectModel?(taskType: import("@switchboard/schemas").StepType): string;
   readonly clinicId: string;
 }

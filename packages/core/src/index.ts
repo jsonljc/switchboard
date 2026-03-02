@@ -103,7 +103,7 @@ export type { ModelCostEntry } from "./telemetry/llm-costs.js";
 export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
 
 // Notifications
-export { NoopNotifier, CompositeNotifier, buildApprovalNotification } from "./notifications/index.js";
+export { NoopNotifier, CompositeNotifier, buildApprovalNotification, EmailApprovalNotifier, WebhookApprovalNotifier } from "./notifications/index.js";
 export type { ApprovalNotifier, ApprovalNotification } from "./notifications/index.js";
 
 // Guardrail State Store
@@ -213,3 +213,33 @@ export type {
   SmbPipelineContext,
   TierStore,
 } from "./smb/index.js";
+
+// Capability Registry (executor routing, step types)
+export { CapabilityRegistry } from "./capability/index.js";
+
+// Planning (goal parsing, plan graph building)
+export { GoalParser, PlanGraphBuilder, PLAN_TEMPLATES } from "./planning/index.js";
+export type { PlanTemplate, PlanStepTemplate, PlanningContext } from "./planning/index.js";
+
+// Secrets vault (AES-256-GCM encryption for credentials)
+export { EncryptedVault } from "./secrets/index.js";
+export type { SecretsVault } from "./secrets/index.js";
+
+// Idempotency guard (request deduplication)
+export { IdempotencyGuard, InMemoryIdempotencyStore } from "./idempotency/guard.js";
+export type { IdempotencyStore } from "./idempotency/guard.js";
+
+// Undo execution engine
+export { UndoExecutionEngine } from "./undo/index.js";
+export type { UndoExecutionContext, UndoResult } from "./undo/index.js";
+
+// Capacity alignment
+export { CapacityAligner } from "./capacity/alignment.js";
+export type { CapacitySignal, CapacityDataSource } from "./capacity/alignment.js";
+export { startCapacityAlignmentJob } from "./capacity/job.js";
+
+// Attribution (ad click → lead → appointment → revenue)
+export { AttributionTracker } from "./attribution/tracker.js";
+export type { AttributionEvent, AttributionPath } from "./attribution/tracker.js";
+export { AttributionReporter } from "./attribution/reporter.js";
+export type { AttributionReport, ChannelMetrics, CampaignMetrics } from "./attribution/reporter.js";

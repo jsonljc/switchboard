@@ -520,3 +520,51 @@ model AlertHistory {
   @@index([alertRuleId])
   @@index([organizationId, triggeredAt])
 }
+
+// ── Entity Graph (cross-cartridge entity resolution) ──
+
+model EntityMapping {
+  id             String   @id @default(uuid())
+  organizationId String
+  label          String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  refs EntityMappingRef[]
+
+  @@index([organizationId])
+}
+
+model EntityMappingRef {
+  id          String @id @default(uuid())
+  mappingId   String
+  cartridgeId String
+  entityType  String
+  entityId    String
+
+  mapping EntityMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
+
+  @@unique([mappingId, cartridgeId, entityType, entityId])
+  @@index([cartridgeId, entityType, entityId])
+  @@index([mappingId])
+}
+
+// ── Event Reactions (cross-cartridge event-driven automation) ──
+
+model EventReaction {
+  id               String   @id @default(uuid())
+  name             String
+  eventTypePattern String
+  organizationId   String
+  targetAction     Json     // { cartridgeId, actionType, parameterTemplate }
+  condition        Json?    // optional condition record
+  enabled          Boolean  @default(true)
+  priority         Int      @default(0)
+  actorId          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([organizationId, enabled])
+  @@index([eventTypePattern])
+}

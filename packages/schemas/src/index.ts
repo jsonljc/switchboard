@@ -31,3 +31,9 @@ export * from "./organization-tier.js";
 export * from "./entity-graph.js";
 export * from "./event-bus.js";
 export * from "./data-flow.js";
+
+// Capability descriptors (executor routing, step types)
+export * from "./capability.js";
+
+// Goal brief (structured goal decomposition)
+export * from "./goal-brief.js";

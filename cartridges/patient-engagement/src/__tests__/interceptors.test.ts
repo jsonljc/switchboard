@@ -128,11 +128,15 @@ describe("MedicalClaimFilter", () => {
 describe("ConsentGate", () => {
   const gate = new ConsentGate();
 
-  it("should allow when consent is active", async () => {
+  it("should allow when consent is active via context", async () => {
+    const contextWithConsent: CartridgeContext = {
+      ...mockContext,
+      connectionCredentials: { consentStatus: "active" },
+    };
     const result = await gate.beforeExecute!(
       "patient-engagement.reminder.send",
-      { consentStatus: "active" },
-      mockContext,
+      {},
+      contextWithConsent,
     );
     expect(result.proceed).toBe(true);
   });

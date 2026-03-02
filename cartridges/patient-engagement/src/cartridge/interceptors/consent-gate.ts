@@ -27,20 +27,16 @@ export class ConsentGate implements CartridgeInterceptor {
       return { proceed: true, parameters };
     }
 
-    // Check consent status from context
+    // Only trust consent from verified context (identity spec trustBehaviors),
+    // never from user-supplied parameters to prevent consent bypass.
     const consentStatus = (context.connectionCredentials as Record<string, unknown>)
       .consentStatus as string | undefined;
 
-    // Also check parameters for consent override
-    const paramConsent = parameters.consentStatus as string | undefined;
-
-    const effectiveConsent = paramConsent ?? consentStatus;
-
-    if (effectiveConsent !== "active") {
+    if (consentStatus !== "active") {
       return {
         proceed: false,
         parameters,
-        reason: `Consent is "${effectiveConsent ?? "unknown"}" — active consent required for ${actionType}`,
+        reason: `Consent is "${consentStatus ?? "unknown"}" — active consent required for ${actionType}. Consent must be verified through identity context, not request parameters.`,
       };
     }
 

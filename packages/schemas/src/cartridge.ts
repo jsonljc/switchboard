@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RiskCategorySchema } from "./risk.js";
+import { ExecutorTypeSchema, StepTypeSchema } from "./capability.js";
 
 export const ActionDefinitionSchema = z.object({
   actionType: z.string(),
@@ -8,6 +9,10 @@ export const ActionDefinitionSchema = z.object({
   parametersSchema: z.record(z.string(), z.unknown()),
   baseRiskCategory: RiskCategorySchema,
   reversible: z.boolean(),
+  /** Optional hint for executor routing (deterministic, l1-llm, l2-llm, l3-llm, human) */
+  executorHint: ExecutorTypeSchema.optional(),
+  /** Optional semantic step type for plan decomposition */
+  stepType: StepTypeSchema.optional(),
 });
 export type ActionDefinition = z.infer<typeof ActionDefinitionSchema>;
 

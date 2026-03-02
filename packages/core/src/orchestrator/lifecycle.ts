@@ -1776,6 +1776,24 @@ export class LifecycleOrchestrator {
     return executeResult;
   }
 
+  /**
+   * Execute a DataFlowPlan — thin facade over the configured DataFlowExecutor.
+   * Provides a public entry point for the runtime to execute plans built by PlanGraphBuilder.
+   */
+  async executePlan(
+    plan: import("@switchboard/schemas").DataFlowPlan,
+    context: {
+      principalId: string;
+      organizationId?: string;
+      traceId?: string;
+    },
+  ): Promise<import("../data-flow/executor.js").DataFlowExecutionResult> {
+    if (!this.dataFlowExecutor) {
+      throw new Error("DataFlowExecutor not configured — cannot execute plans");
+    }
+    return this.dataFlowExecutor.execute(plan, context);
+  }
+
   async requestUndo(envelopeId: string): Promise<ProposeResult> {
     // 1. Load original envelope
     const envelope = await this.storage.envelopes.getById(envelopeId);
