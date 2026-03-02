@@ -59,7 +59,6 @@ import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { TierStore } from "../smb/tier-resolver.js";
 import type { SmbActivityLog } from "../smb/activity-log.js";
 import { smbPropose } from "../smb/pipeline.js";
-import { smbBindingHash } from "../smb/approval.js";
 
 export type ExecutionMode = "inline" | "queue";
 
@@ -2308,7 +2307,7 @@ export class LifecycleOrchestrator {
     };
   }
 
-  private async isSmbOrg(organizationId: string | null): Promise<boolean> {
+  private async isSmbOrg(organizationId: string | null | undefined): Promise<boolean> {
     if (!this.tierStore || !organizationId) return false;
     const tier = await this.tierStore.getTier(organizationId);
     return tier === "smb";

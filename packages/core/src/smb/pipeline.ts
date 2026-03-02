@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type {
   ActionEnvelope,
   ActionProposal,
-  DecisionTrace,
   ApprovalRequest,
   GuardrailConfig,
 } from "@switchboard/schemas";
@@ -14,7 +13,7 @@ import type { ApprovalNotifier } from "../notifications/notifier.js";
 import type { SmbActivityLog } from "./activity-log.js";
 import type { ProposeResult } from "../orchestrator/lifecycle.js";
 import { smbEvaluate } from "./evaluator.js";
-import { smbRouteApproval, smbCreateApprovalRequest } from "./approval.js";
+import { smbCreateApprovalRequest } from "./approval.js";
 import { createApprovalState } from "../approval/state-machine.js";
 import { buildApprovalNotification } from "../notifications/notifier.js";
 import { buildActionSummary } from "../orchestrator/summary-builder.js";
@@ -72,7 +71,11 @@ export async function smbPropose(
   // 2. Enrich context (same as enterprise, with try/catch fallback)
   let enrichedParams = { ...params.parameters };
   try {
-    const enriched = await cartridge.enrichContext(params.actionType, params.parameters);
+    const enriched = await cartridge.enrichContext(params.actionType, params.parameters, {
+      principalId: params.principalId,
+      organizationId: params.organizationId ?? null,
+      connectionCredentials: {},
+    });
     if (enriched) {
       enrichedParams = { ...enrichedParams, ...enriched };
     }
@@ -89,16 +92,30 @@ export async function smbPropose(
   }
 
   // Hydrate guardrail state from external store if available
-  if (ctx.guardrailStateStore) {
+  if (ctx.guardrailStateStore && guardrails) {
     try {
-      const stored = await ctx.guardrailStateStore.load(params.cartridgeId);
-      if (stored) {
-        for (const [key, value] of stored.actionCounts.entries()) {
-          ctx.guardrailState.actionCounts.set(key, value);
+      const scopeKeys: string[] = [];
+      for (const rl of guardrails.rateLimits) {
+        scopeKeys.push(rl.scope === "global" ? "global" : `${rl.scope}:${params.actionType}`);
+      }
+      const entityKeys: string[] = [];
+      for (const cd of guardrails.cooldowns) {
+        if (cd.actionType === params.actionType || cd.actionType === "*") {
+          const entityId = (params.parameters["entityId"] as string) ?? "unknown";
+          entityKeys.push(`${cd.scope}:${entityId}`);
         }
-        for (const [key, value] of stored.lastActionTimes.entries()) {
-          ctx.guardrailState.lastActionTimes.set(key, value);
-        }
+      }
+
+      const [rateLimits, cooldowns] = await Promise.all([
+        scopeKeys.length > 0 ? ctx.guardrailStateStore.getRateLimits(scopeKeys) : Promise.resolve(new Map<string, { count: number; windowStart: number }>()),
+        entityKeys.length > 0 ? ctx.guardrailStateStore.getCooldowns(entityKeys) : Promise.resolve(new Map<string, number>()),
+      ]);
+
+      for (const [key, entry] of rateLimits) {
+        ctx.guardrailState.actionCounts.set(key, entry);
+      }
+      for (const [key, timestamp] of cooldowns) {
+        ctx.guardrailState.lastActionTimes.set(key, timestamp);
       }
     } catch {
       // Guardrail state hydration failure is non-fatal
@@ -108,13 +125,14 @@ export async function smbPropose(
   // 4. Compute daily spend — query today's executed envelopes
   let dailySpend = 0;
   try {
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
     const envelopes = await storage.envelopes.list({
       status: "executed",
-      after: todayStart,
+      organizationId: params.organizationId ?? undefined,
     });
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
     for (const env of envelopes) {
+      if (env.createdAt < todayStart) continue;
       for (const p of env.proposals) {
         const amount = typeof p.parameters["amount"] === "number"
           ? p.parameters["amount"]
@@ -133,10 +151,9 @@ export async function smbPropose(
     id: proposalId,
     actionType: params.actionType,
     parameters: enrichedParams,
-    source: "user",
-    interpreterName: null,
-    confidence: 1,
-    createdAt: now,
+    evidence: params.message ?? `Proposed ${params.actionType}`,
+    confidence: 1.0,
+    originatingMessageId: "",
   };
 
   // 5. Evaluate
@@ -182,8 +199,6 @@ export async function smbPropose(
     envelope.status = "denied";
   } else if (decisionTrace.approvalRequired !== "none") {
     // Route to single approver
-    const routing = smbRouteApproval(orgConfig, true);
-
     const summary = buildActionSummary(
       params.actionType,
       params.parameters,

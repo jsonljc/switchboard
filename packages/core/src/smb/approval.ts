@@ -2,7 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import type { ApprovalRequest, DecisionTrace } from "@switchboard/schemas";
 import type { SmbOrgConfig } from "@switchboard/schemas";
 import { canonicalizeSync } from "../audit/canonical-json.js";
-import { buildApprovalNotification } from "../notifications/notifier.js";
 
 /** 24 hours in milliseconds */
 const SMB_APPROVAL_EXPIRY_MS = 24 * 60 * 60 * 1000;
