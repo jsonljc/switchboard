@@ -56,6 +56,10 @@ import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { EventBus, DomainEvent } from "../event-bus/types.js";
 import type { EventReactionProcessor } from "../event-bus/processor.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
+import type { TierStore } from "../smb/tier-resolver.js";
+import type { SmbActivityLog } from "../smb/activity-log.js";
+import { smbPropose } from "../smb/pipeline.js";
+import { smbBindingHash } from "../smb/approval.js";
 
 export type ExecutionMode = "inline" | "queue";
 
@@ -89,6 +93,10 @@ export interface OrchestratorConfig {
   eventReactionProcessor?: EventReactionProcessor;
   /** Data-flow executor for multi-step plans with binding resolution. */
   dataFlowExecutor?: DataFlowExecutor;
+  /** Tier store for SMB vs Enterprise routing. When set, enables SMB governance pipeline. */
+  tierStore?: TierStore;
+  /** SMB activity log — used instead of AuditLedger for SMB orgs. */
+  smbActivityLog?: SmbActivityLog;
 }
 
 export interface ProposeResult {
@@ -136,6 +144,8 @@ export class LifecycleOrchestrator {
   private eventBus: EventBus | null;
   private eventReactionProcessor: EventReactionProcessor | null;
   private dataFlowExecutor: DataFlowExecutor | null;
+  private tierStore: TierStore | null;
+  private smbActivityLog: SmbActivityLog | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -157,6 +167,8 @@ export class LifecycleOrchestrator {
     this.eventBus = config.eventBus ?? null;
     this.eventReactionProcessor = config.eventReactionProcessor ?? null;
     this.dataFlowExecutor = config.dataFlowExecutor ?? null;
+    this.tierStore = config.tierStore ?? null;
+    this.smbActivityLog = config.smbActivityLog ?? null;
   }
 
   async propose(params: {
@@ -197,6 +209,24 @@ export class LifecycleOrchestrator {
     traceId?: string;
     emergencyOverride?: boolean;
   }, span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>, proposeStart: number): Promise<ProposeResult> {
+    // SMB tier branching: if tierStore is configured and org is SMB, use simplified pipeline
+    if (this.tierStore && params.organizationId) {
+      const tier = await this.tierStore.getTier(params.organizationId);
+      if (tier === "smb") {
+        const smbConfig = await this.tierStore.getSmbConfig(params.organizationId);
+        if (smbConfig && this.smbActivityLog) {
+          return smbPropose(params, {
+            storage: this.storage,
+            activityLog: this.smbActivityLog,
+            guardrailState: this.guardrailState,
+            guardrailStateStore: this.guardrailStateStore ?? null,
+            orgConfig: smbConfig,
+            approvalNotifier: this.approvalNotifier,
+          });
+        }
+      }
+    }
+
     // 1. Look up IdentitySpec + overlays
     const identitySpec = await this.storage.identity.getSpecByPrincipalId(params.principalId);
     if (!identitySpec) {
@@ -1165,15 +1195,30 @@ export class LifecycleOrchestrator {
 
     // 3. Validate binding hash for approve/patch
     if (params.action === "approve" || params.action === "patch") {
-      const a = Buffer.from(params.bindingHash);
-      const b = Buffer.from(approval.request.bindingHash);
-      if (a.length !== b.length || !timingSafeEqual(a, b)) {
-        throw new Error("Binding hash mismatch: action parameters may have changed (stale approval)");
+      const isSmbOrg = await this.isSmbOrg(approval.organizationId);
+      if (isSmbOrg) {
+        // SMB: simple string compare (no timing-safe needed for simplified binding)
+        if (params.bindingHash !== approval.request.bindingHash) {
+          throw new Error("Binding hash mismatch: action parameters may have changed (stale approval)");
+        }
+      } else {
+        const a = Buffer.from(params.bindingHash);
+        const b = Buffer.from(approval.request.bindingHash);
+        if (a.length !== b.length || !timingSafeEqual(a, b)) {
+          throw new Error("Binding hash mismatch: action parameters may have changed (stale approval)");
+        }
       }
     }
 
     // 4. Authorization check (only when approvers are configured)
-    if (approval.request.approvers.length > 0) {
+    const isSmbOrgForAuth = await this.isSmbOrg(approval.organizationId);
+    if (isSmbOrgForAuth) {
+      // SMB: just verify respondedBy is the org owner
+      const smbConfig = this.tierStore ? await this.tierStore.getSmbConfig(approval.organizationId ?? "") : null;
+      if (smbConfig && params.respondedBy !== smbConfig.ownerId) {
+        throw new Error(`Principal ${params.respondedBy} is not the organization owner`);
+      }
+    } else if (approval.request.approvers.length > 0) {
       const principal = await this.storage.identity.getPrincipal(params.respondedBy);
       if (!principal) {
         throw new Error(`Principal not found: ${params.respondedBy}`);
@@ -1262,23 +1307,39 @@ export class LifecycleOrchestrator {
         envelope.status = "approved";
         await this.storage.envelopes.update(envelope.id, { status: "approved" });
 
-        await this.ledger.record({
-          eventType: "action.approved",
-          actorType: "user",
-          actorId: params.respondedBy,
-          entityType: "action",
-          entityId: approval.request.actionId,
-          riskCategory: approval.request.riskCategory as RiskCategory,
-          summary: newState.quorum
-            ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
-            : `Action approved by ${params.respondedBy}`,
-          snapshot: {
-            approvalId: params.approvalId,
-            quorum: newState.quorum ?? null,
-          },
-          envelopeId: envelope.id,
-          traceId: envelope.traceId,
-        });
+        // Record audit: use SMB activity log for SMB orgs, enterprise ledger otherwise
+        const isSmbForAudit = await this.isSmbOrg(approval.organizationId);
+        if (isSmbForAudit && this.smbActivityLog) {
+          await this.smbActivityLog.record({
+            actorId: params.respondedBy,
+            actorType: "user",
+            actionType: "approval.approved",
+            result: "approved",
+            amount: null,
+            summary: `Action approved by ${params.respondedBy}`,
+            snapshot: { approvalId: params.approvalId },
+            envelopeId: envelope.id,
+            organizationId: approval.organizationId ?? "",
+          });
+        } else {
+          await this.ledger.record({
+            eventType: "action.approved",
+            actorType: "user",
+            actorId: params.respondedBy,
+            entityType: "action",
+            entityId: approval.request.actionId,
+            riskCategory: approval.request.riskCategory as RiskCategory,
+            summary: newState.quorum
+              ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
+              : `Action approved by ${params.respondedBy}`,
+            snapshot: {
+              approvalId: params.approvalId,
+              quorum: newState.quorum ?? null,
+            },
+            envelopeId: envelope.id,
+            traceId: envelope.traceId,
+          });
+        }
 
         // Execute after approval: inline or enqueue
         if (this.executionMode === "queue" && this.onEnqueue) {
@@ -2245,6 +2306,12 @@ export class LifecycleOrchestrator {
       distinctTargetEntities: targetEntities.size,
       distinctCartridges: cartridges.size,
     };
+  }
+
+  private async isSmbOrg(organizationId: string | null): Promise<boolean> {
+    if (!this.tierStore || !organizationId) return false;
+    const tier = await this.tierStore.getTier(organizationId);
+    return tier === "smb";
   }
 }
 

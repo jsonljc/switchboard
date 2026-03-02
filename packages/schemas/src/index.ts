@@ -24,6 +24,9 @@ export * from "./governance-profile.js";
 // MCP tool schemas
 export * from "./mcp.js";
 
+// Organization tier (SMB vs Enterprise)
+export * from "./organization-tier.js";
+
 // Cross-cartridge integration
 export * from "./entity-graph.js";
 export * from "./event-bus.js";

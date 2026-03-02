@@ -321,12 +321,38 @@ model OrganizationConfig {
   runtimeType          String   @default("http") // openclaw, mcp, http, managed
   runtimeConfig        Json     @default("{}")
   governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
+  tier                 String   @default("smb") // smb, enterprise
+  smbOwnerId           String?
+  smbPerActionLimit    Float?
+  smbDailyLimit        Float?
+  smbAllowedActions    String[] @default([])
+  smbBlockedActions    String[] @default([])
   selectedCartridgeId  String?
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+model SmbActivityLogEntry {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  actorId         String
+  actorType       String   // user, agent, system
+  actionType      String
+  result          String   // allowed, denied, pending_approval, approved, rejected, executed, failed
+  amount          Float?
+  summary         String
+  snapshot        Json     @default("{}")
+  envelopeId      String?
+  organizationId  String
+  redactionApplied Boolean @default(false)
+  redactedFields  String[] @default([])
+
+  @@index([organizationId, timestamp])
+  @@index([actorId])
+  @@index([envelopeId])
 }
 
 model ManagedChannel {
