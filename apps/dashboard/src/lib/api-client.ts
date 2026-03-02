@@ -244,4 +244,26 @@ export class SwitchboardClient {
       method: "DELETE",
     });
   }
+
+  // Token Usage
+  async getTokenUsage(params?: { period?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.period) searchParams.set("period", params.period);
+    const qs = searchParams.toString();
+    return this.request<{
+      usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+      period: string;
+      orgId: string;
+    }>(`/api/token-usage${qs ? `?${qs}` : ""}`);
+  }
+
+  async getTokenUsageTrend(params?: { days?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.days) searchParams.set("days", String(params.days));
+    const qs = searchParams.toString();
+    return this.request<{
+      trend: Array<{ date: string; promptTokens: number; completionTokens: number; totalTokens: number }>;
+      orgId: string;
+    }>(`/api/token-usage/trend${qs ? `?${qs}` : ""}`);
+  }
 }

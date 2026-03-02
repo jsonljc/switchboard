@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ClinicInterpreter } from "../clinic/interpreter.js";
 import { AllowedIntent } from "../clinic/types.js";
-import { ModelRouter } from "../clinic/model-router.js";
+import { InMemoryModelRouter } from "../clinic/model-router.js";
+import type { ModelRouter } from "../clinic/model-router-types.js";
 import type { LLMConfig, LLMResponse } from "../interpreter/llm-base.js";
 import type { ClinicContext } from "../clinic/types.js";
 
@@ -329,7 +330,7 @@ describe("ClinicInterpreter", () => {
   // ---------------------------------------------------------------------------
   describe("ModelRouter fallback", () => {
     it("falls back to regex when budget exceeded", async () => {
-      const router = new ModelRouter({
+      const router = new InMemoryModelRouter({
         dailyTokenBudget: 100,
         clinicId: "clinic_1",
       });
@@ -363,7 +364,7 @@ describe("ClinicInterpreter", () => {
     });
 
     it("falls back to no-match message for unrecognized input when budget exceeded", async () => {
-      const router = new ModelRouter({
+      const router = new InMemoryModelRouter({
         dailyTokenBudget: 100,
         clinicId: "clinic_1",
       });
@@ -388,7 +389,7 @@ describe("ClinicInterpreter", () => {
     });
 
     it("uses LLM when budget is not exceeded", async () => {
-      const router = new ModelRouter({
+      const router = new InMemoryModelRouter({
         dailyTokenBudget: 100000,
         clinicId: "clinic_1",
       });
@@ -451,7 +452,7 @@ describe("ClinicInterpreter", () => {
     let interpreterFallback: TestableClinicInterpreter;
 
     beforeEach(() => {
-      routerExhausted = new ModelRouter({
+      routerExhausted = new InMemoryModelRouter({
         dailyTokenBudget: 10,
         clinicId: "clinic_1",
       });

@@ -26,6 +26,11 @@ export const queryKeys = {
     all: ["spend"] as const,
     summary: () => ["spend", "summary"] as const,
   },
+  tokenUsage: {
+    all: ["tokenUsage"] as const,
+    summary: (period?: string) => ["tokenUsage", "summary", period] as const,
+    trend: (days?: number) => ["tokenUsage", "trend", days] as const,
+  },
   cartridges: {
     all: ["cartridges"] as const,
     list: () => ["cartridges", "list"] as const,

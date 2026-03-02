@@ -22,7 +22,7 @@ import {
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
@@ -111,6 +111,7 @@ export async function createChatRuntime(
     const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
       accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
       adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      cacheStore: createSnapshotCacheStore(),
     });
     storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
     await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
@@ -161,15 +162,23 @@ export async function createChatRuntime(
 
   if (isClinicMode && !interpreter) {
     const { ClinicInterpreter } = await import("./clinic/interpreter.js");
-    const { ModelRouter } = await import("./clinic/model-router.js");
+    const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
     const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
     const adAccountId = clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
 
-    const modelRouter = new ModelRouter({
+    // Create Redis client for model router if REDIS_URL is available
+    let chatRedis: import("ioredis").default | undefined;
+    const chatRedisUrl = process.env["REDIS_URL"];
+    if (chatRedisUrl) {
+      const { default: IORedis } = await import("ioredis");
+      chatRedis = new IORedis(chatRedisUrl);
+    }
+
+    const modelRouter = createModelRouter({
       dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
       clinicId: adAccountId,
-    });
+    }, chatRedis);
 
     const clinicInterpreter = new ClinicInterpreter(
       {

@@ -5,11 +5,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SpendCard } from "@/components/spend/spend-card";
 import { SpendChart } from "@/components/spend/spend-chart";
+import { TokenUsageCard } from "@/components/llm-cost/token-usage-card";
+import { TokenUsageChart } from "@/components/llm-cost/token-usage-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSpend } from "@/hooks/use-spend";
+import { useTokenUsage } from "@/hooks/use-token-usage";
 import { useIdentity } from "@/hooks/use-identity";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useQuery } from "@tanstack/react-query";
@@ -21,6 +24,7 @@ export default function HomePage() {
   const { data: spend, isLoading: spendLoading, isError: spendError, refetch: refetchSpend } = useSpend();
   const { data: identity, isLoading: identityLoading, isError: identityError, refetch: refetchIdentity } = useIdentity();
   const pendingCount = useApprovalCount();
+  const { data: tokenUsage, isLoading: tokenUsageLoading } = useTokenUsage();
   const { data: healthData } = useQuery({
     queryKey: queryKeys.health.deep(),
     queryFn: async () => {
@@ -116,6 +120,40 @@ export default function HomePage() {
         <Skeleton className="h-[280px]" />
       ) : (
         <SpendChart data={spend?.dailyTrend ?? []} />
+      )}
+
+      {/* LLM Usage */}
+      <h2 className="text-lg font-semibold mt-2">LLM Usage</h2>
+      {tokenUsageLoading ? (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <TokenUsageCard
+            title="Today"
+            tokens={tokenUsage?.daily?.totalTokens ?? 0}
+            budget={100_000}
+          />
+          <TokenUsageCard
+            title="This Week"
+            tokens={tokenUsage?.weekly?.totalTokens ?? 0}
+            budget={null}
+          />
+          <TokenUsageCard
+            title="This Month"
+            tokens={tokenUsage?.monthly?.totalTokens ?? 0}
+            budget={null}
+          />
+        </div>
+      )}
+
+      {tokenUsageLoading ? (
+        <Skeleton className="h-[280px]" />
+      ) : (
+        <TokenUsageChart data={tokenUsage?.trend ?? []} />
       )}
 
       {/* Quick stats */}

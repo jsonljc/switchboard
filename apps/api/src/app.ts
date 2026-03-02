@@ -18,6 +18,7 @@ import { cartridgesRoutes } from "./routes/cartridges.js";
 import { connectionsRoutes } from "./routes/connections.js";
 import { organizationsRoutes } from "./routes/organizations.js";
 import { dlqRoutes } from "./routes/dlq.js";
+import { tokenUsageRoutes } from "./routes/token-usage.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -35,7 +36,7 @@ import {
   setMetrics,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage, PolicyCache } from "@switchboard/core";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
+import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
 import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
@@ -219,6 +220,7 @@ export async function buildServer() {
     accessToken: adsAccessToken ?? "mock-token-dev-only",
     adAccountId: adsAccountId ?? "act_mock_dev_only",
     requireCredentials: process.env.NODE_ENV === "production",
+    cacheStore: createSnapshotCacheStore(redis ?? undefined),
   });
   storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
@@ -371,6 +373,7 @@ export async function buildServer() {
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
   await app.register(organizationsRoutes, { prefix: "/api/organizations" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
+  await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
 
   return app;
 }

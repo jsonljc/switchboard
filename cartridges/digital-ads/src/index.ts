@@ -203,3 +203,9 @@ export {
   MockMetaAdsWriteProvider,
   createMetaAdsWriteProvider,
 } from "./cartridge/providers/meta-write-provider.js";
+
+// Platform API response cache
+export { CachedPlatformClient } from "./platforms/cache/cached-client.js";
+export { createSnapshotCacheStore } from "./platforms/cache/index.js";
+export type { SnapshotCacheStore } from "./platforms/cache/types.js";
+export type { RedisLike } from "./platforms/cache/redis-cache.js";

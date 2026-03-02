@@ -15,8 +15,13 @@ import {
 } from "./providers/meta-write-provider.js";
 import { PostMutationVerifier } from "./interceptors/verification.js";
 import type { CartridgeInterceptor } from "@switchboard/cartridge-sdk";
-import type { PlatformType } from "../platforms/types.js";
+import type { PlatformType, PlatformClient, PlatformCredentials } from "../platforms/types.js";
 import type { MetricSnapshot } from "../core/types.js";
+import type { EntityLevel } from "../core/types.js";
+import type { PlatformHealth } from "./types.js";
+import type { AdPlatformProvider } from "./providers/provider.js";
+import type { SnapshotCacheStore } from "../platforms/cache/types.js";
+import { CachedPlatformClient } from "../platforms/cache/cached-client.js";
 
 export interface BootstrapDigitalAdsConfig {
   /** Meta Graph API access token */
@@ -29,11 +34,50 @@ export interface BootstrapDigitalAdsConfig {
   useMocks?: boolean;
   /** Mock snapshots for diagnostic providers */
   mockSnapshots?: Partial<Record<PlatformType, Partial<MetricSnapshot>>>;
+  /** Optional cache store for snapshot caching */
+  cacheStore?: SnapshotCacheStore;
 }
 
 export interface BootstrapDigitalAdsResult {
   cartridge: DigitalAdsCartridge;
   interceptors: CartridgeInterceptor[];
+}
+
+/**
+ * Wraps a provider so that createClient() and connect() return CachedPlatformClient instances.
+ */
+class CachingProviderWrapper implements AdPlatformProvider {
+  constructor(
+    private inner: AdPlatformProvider,
+    private cacheStore: SnapshotCacheStore,
+  ) {}
+
+  get platform(): PlatformType {
+    return this.inner.platform;
+  }
+
+  async connect(credentials: PlatformCredentials, entityId: string): Promise<{
+    client: PlatformClient;
+    accountName: string;
+    entityLevels: EntityLevel[];
+  }> {
+    const result = await this.inner.connect(credentials, entityId);
+    return {
+      ...result,
+      client: new CachedPlatformClient(result.client, this.cacheStore),
+    };
+  }
+
+  checkHealth(credentials: PlatformCredentials, entityId: string): Promise<PlatformHealth> {
+    return this.inner.checkHealth(credentials, entityId);
+  }
+
+  createClient(credentials: PlatformCredentials): PlatformClient {
+    return new CachedPlatformClient(
+      this.inner.createClient(credentials),
+      this.cacheStore,
+    );
+  }
 }
 
 /**
@@ -67,17 +111,20 @@ export async function bootstrapDigitalAdsCartridge(
 
   const cartridge = new DigitalAdsCartridge();
 
+  const wrapProvider = (provider: AdPlatformProvider): AdPlatformProvider =>
+    config.cacheStore ? new CachingProviderWrapper(provider, config.cacheStore) : provider;
+
   // Register diagnostic providers
   if (config.useMocks) {
     const platforms: PlatformType[] = ["meta", "google", "tiktok"];
     for (const platform of platforms) {
       const snapshot = config.mockSnapshots?.[platform];
-      cartridge.registerProvider(new MockProvider(platform, snapshot));
+      cartridge.registerProvider(wrapProvider(new MockProvider(platform, snapshot)));
     }
   } else {
-    cartridge.registerProvider(new MetaProvider());
-    cartridge.registerProvider(new GoogleProvider());
-    cartridge.registerProvider(new TikTokProvider());
+    cartridge.registerProvider(wrapProvider(new MetaProvider()));
+    cartridge.registerProvider(wrapProvider(new GoogleProvider()));
+    cartridge.registerProvider(wrapProvider(new TikTokProvider()));
   }
 
   // Register write provider

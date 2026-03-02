@@ -15,7 +15,7 @@ import type {
   ClinicContext,
   ReadIntentDescriptor,
 } from "./types.js";
-import type { ModelRouter } from "./model-router.js";
+import type { ModelRouter } from "./model-router-types.js";
 
 /** Maps write intents to cartridge action types. */
 const INTENT_TO_ACTION: Record<string, string> = {
@@ -194,7 +194,7 @@ export class ClinicInterpreter extends LLMInterpreter {
     availableActions: string[],
   ): Promise<InterpreterResult> {
     // Check model budget — fall back to regex if exceeded
-    if (this.modelRouter && !this.modelRouter.shouldUseLLM()) {
+    if (this.modelRouter && !(await this.modelRouter.shouldUseLLM())) {
       return this.fallbackInterpret(text, availableActions);
     }
 
@@ -212,7 +212,7 @@ export class ClinicInterpreter extends LLMInterpreter {
       // Estimate tokens: ~4 chars per token for input, actual from response
       const estimatedInputTokens = Math.ceil(text.length / 4) + 200; // +200 for system prompt
       const estimatedOutputTokens = Math.ceil(result.rawResponse.length / 4);
-      this.modelRouter.recordUsage(estimatedInputTokens, estimatedOutputTokens);
+      await this.modelRouter.recordUsage(estimatedInputTokens, estimatedOutputTokens);
     }
 
     return result;
