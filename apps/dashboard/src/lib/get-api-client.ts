@@ -3,7 +3,8 @@ import { decryptApiKey } from "./crypto";
 import { SwitchboardClient } from "./api-client";
 import { requireSession } from "./session";
 
-const prisma = new PrismaClient();
+const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
+const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new PrismaClient());
 
 export async function getApiClient(): Promise<SwitchboardClient> {
   const session = await requireSession();

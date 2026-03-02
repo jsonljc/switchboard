@@ -93,6 +93,14 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/dashboard:${{ steps.version.outputs.tag }}
           docker push ghcr.io/${{ github.repository }}/dashboard:latest
 
+      - name: Build and push MCP Server image
+        run: |
+          docker build --target mcp-server \
+            -t ghcr.io/${{ github.repository }}/mcp-server:${{ steps.version.outputs.tag }} \
+            -t ghcr.io/${{ github.repository }}/mcp-server:latest .
+          docker push ghcr.io/${{ github.repository }}/mcp-server:${{ steps.version.outputs.tag }}
+          docker push ghcr.io/${{ github.repository }}/mcp-server:latest
+
       - name: Generate changelog
         id: changelog
         run: |
@@ -116,3 +124,4 @@ jobs:
             - `ghcr.io/${{ github.repository }}/api:${{ steps.version.outputs.tag }}`
             - `ghcr.io/${{ github.repository }}/chat:${{ steps.version.outputs.tag }}`
             - `ghcr.io/${{ github.repository }}/dashboard:${{ steps.version.outputs.tag }}`
+            - `ghcr.io/${{ github.repository }}/mcp-server:${{ steps.version.outputs.tag }}`
