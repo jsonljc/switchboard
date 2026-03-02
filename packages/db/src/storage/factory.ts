@@ -6,8 +6,6 @@ import { PrismaPolicyStore } from "./prisma-policy-store.js";
 import { PrismaIdentityStore } from "./prisma-identity-store.js";
 import { PrismaApprovalStore } from "./prisma-approval-store.js";
 import { PrismaCompetenceStore } from "./prisma-competence-store.js";
-import { PrismaEntityGraphStore } from "./prisma-entity-graph-store.js";
-import { PrismaEventReactionStore } from "./prisma-reaction-store.js";
 
 export function createPrismaStorage(prisma: PrismaClient): StorageContext {
   return {
@@ -17,7 +15,5 @@ export function createPrismaStorage(prisma: PrismaClient): StorageContext {
     approvals: new PrismaApprovalStore(prisma),
     cartridges: new InMemoryCartridgeRegistry(),
     competence: new PrismaCompetenceStore(prisma),
-    entityGraph: new PrismaEntityGraphStore(prisma),
-    eventReactions: new PrismaEventReactionStore(prisma),
   };
 }

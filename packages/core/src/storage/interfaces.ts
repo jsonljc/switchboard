@@ -11,8 +11,6 @@ import type {
 } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge, CartridgeInterceptor } from "@switchboard/cartridge-sdk";
-import type { EntityMappingStore } from "../entity-graph/store.js";
-import type { EventReactionStore } from "../event-bus/reaction-store.js";
 
 export interface EnvelopeStore {
   save(envelope: ActionEnvelope): Promise<void>;
@@ -95,6 +93,4 @@ export interface StorageContext {
   approvals: ApprovalStore;
   cartridges: CartridgeRegistry;
   competence: CompetenceStore;
-  entityGraph?: EntityMappingStore;
-  eventReactions?: EventReactionStore;
 }
