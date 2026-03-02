@@ -52,6 +52,10 @@ import { buildActionSummary } from "./summary-builder.js";
 import { beginExecution, endExecution, GuardedCartridge } from "../execution-guard.js";
 import { getTracer } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
+import type { CrossCartridgeEnricher } from "../enrichment/types.js";
+import type { EventBus, DomainEvent } from "../event-bus/types.js";
+import type { EventReactionProcessor } from "../event-bus/processor.js";
+import type { DataFlowExecutor } from "../data-flow/executor.js";
 
 export type ExecutionMode = "inline" | "queue";
 
@@ -77,6 +81,14 @@ export interface OrchestratorConfig {
   selfApprovalAllowed?: boolean;
   /** Maximum approval responses per principal in a sliding window. */
   approvalRateLimit?: { maxApprovals: number; windowMs: number };
+  /** Cross-cartridge context enricher — injects data from other cartridges into governance context. */
+  crossCartridgeEnricher?: CrossCartridgeEnricher;
+  /** Event bus for publishing domain events after successful execution. */
+  eventBus?: EventBus;
+  /** Event reaction processor for triggering governed actions from events. */
+  eventReactionProcessor?: EventReactionProcessor;
+  /** Data-flow executor for multi-step plans with binding resolution. */
+  dataFlowExecutor?: DataFlowExecutor;
 }
 
 export interface ProposeResult {
@@ -120,6 +132,10 @@ export class LifecycleOrchestrator {
   private selfApprovalAllowed: boolean;
   private approvalRateLimit: { maxApprovals: number; windowMs: number } | null;
   private approvalResponseTimes = new Map<string, number[]>();
+  private crossCartridgeEnricher: CrossCartridgeEnricher | null;
+  private eventBus: EventBus | null;
+  private eventReactionProcessor: EventReactionProcessor | null;
+  private dataFlowExecutor: DataFlowExecutor | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -137,6 +153,10 @@ export class LifecycleOrchestrator {
     this.approvalNotifier = config.approvalNotifier ?? null;
     this.selfApprovalAllowed = config.selfApprovalAllowed ?? false;
     this.approvalRateLimit = config.approvalRateLimit ?? null;
+    this.crossCartridgeEnricher = config.crossCartridgeEnricher ?? null;
+    this.eventBus = config.eventBus ?? null;
+    this.eventReactionProcessor = config.eventReactionProcessor ?? null;
+    this.dataFlowExecutor = config.dataFlowExecutor ?? null;
   }
 
   async propose(params: {
@@ -292,6 +312,26 @@ export class LifecycleOrchestrator {
       console.warn(
         `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+
+    // 3c. Cross-cartridge enrichment (optional, fail-safe)
+    if (this.crossCartridgeEnricher && params.organizationId) {
+      try {
+        const crossCartridgeContext = await this.crossCartridgeEnricher.enrich({
+          targetCartridgeId: params.cartridgeId,
+          actionType: params.actionType,
+          parameters: params.parameters,
+          organizationId: params.organizationId,
+          principalId: params.principalId,
+        });
+        if (Object.keys(crossCartridgeContext).length > 0) {
+          enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
+        }
+      } catch (err) {
+        console.warn(
+          `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     // 4. Get risk input from cartridge (include enriched signals)
@@ -655,6 +695,40 @@ export class LifecycleOrchestrator {
     /** The umbrella envelope for single_approval mode. */
     planEnvelope?: ActionEnvelope;
   }> {
+    // Data-flow delegation: if plan has dataFlowSteps and executor is configured, use it
+    if (plan.dataFlowSteps && plan.dataFlowSteps.length > 0 && this.dataFlowExecutor) {
+      const firstProposal = proposals[0];
+      const dataFlowResult = await this.dataFlowExecutor.execute(
+        {
+          id: plan.id,
+          envelopeId: plan.envelopeId,
+          strategy: plan.strategy,
+          approvalMode: plan.approvalMode,
+          summary: plan.summary,
+          steps: plan.dataFlowSteps,
+          deferredBindings: true,
+        },
+        {
+          principalId: firstProposal?.principalId ?? "system",
+          organizationId: firstProposal?.organizationId,
+          traceId: `trace_${randomUUID()}`,
+        },
+      );
+
+      // Map data-flow results back to the expected format
+      const planDecision = dataFlowResult.overallOutcome === "completed"
+        ? "allow" as const
+        : dataFlowResult.overallOutcome === "partial"
+          ? "partial" as const
+          : "deny" as const;
+
+      return {
+        planDecision,
+        results: [],
+        explanation: `Data-flow plan ${dataFlowResult.overallOutcome}: ${dataFlowResult.stepResults.length} steps processed`,
+      };
+    }
+
     // Evaluate each proposal independently first
     const results: ProposeResult[] = [];
     const decisionTraces: DecisionTrace[] = [];
@@ -1599,6 +1673,46 @@ export class LifecycleOrchestrator {
     execSpan.setStatus(executeResult.success ? "OK" : "ERROR", executeResult.summary);
     execSpan.end();
 
+    // 7. Emit domain event after successful execution (event bus integration)
+    if (executeResult.success && this.eventBus) {
+      try {
+        const eventType = deriveEventType(proposal.actionType);
+        const domainEvent: DomainEvent = {
+          id: `evt_${randomUUID()}`,
+          eventType,
+          sourceCartridgeId: storedCartridgeId ?? inferredCartridgeId ?? "",
+          organizationId: (envelope.proposals[0]?.parameters["_organizationId"] as string) ?? "",
+          principalId: (envelope.proposals[0]?.parameters["_principalId"] as string) ?? "",
+          payload: {
+            ...executeResult.externalRefs,
+            success: executeResult.success,
+            summary: executeResult.summary,
+            actionType: proposal.actionType,
+            parameters: Object.fromEntries(
+              Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
+            ),
+            ...(executeResult as unknown as Record<string, unknown>).data !== undefined
+              ? { data: (executeResult as unknown as Record<string, unknown>).data }
+              : {},
+          },
+          envelopeId: envelope.id,
+          traceId: envelope.traceId ?? `trace_${randomUUID()}`,
+          emittedAt: new Date(),
+        };
+
+        await this.eventBus.publish(domainEvent);
+
+        // Process reactions if configured
+        if (this.eventReactionProcessor) {
+          await this.eventReactionProcessor.process(domainEvent);
+        }
+      } catch (err) {
+        console.warn(
+          `[orchestrator] Event emission/reaction failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     return executeResult;
   }
 
@@ -2166,4 +2280,29 @@ export function inferCartridgeId(
   }
 
   return null;
+}
+
+/**
+ * Derive a past-tense event type from an action type.
+ * E.g., "payments.invoice.create" → "payments.invoice.created"
+ *       "crm.activity.log" → "crm.activity.logged"
+ */
+function deriveEventType(actionType: string): string {
+  const parts = actionType.split(".");
+  const verb = parts[parts.length - 1];
+  if (!verb) return actionType;
+
+  let pastTense: string;
+  if (verb.endsWith("e")) {
+    pastTense = verb + "d";
+  } else if (verb === "log") {
+    pastTense = "logged";
+  } else if (verb === "get" || verb === "set" || verb === "put") {
+    pastTense = verb;
+  } else {
+    pastTense = verb + "ed";
+  }
+
+  parts[parts.length - 1] = pastTense;
+  return parts.join(".");
 }

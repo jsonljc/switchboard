@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DataFlowStepSchema } from "./data-flow.js";
 
 export const ActionPlanStrategySchema = z.enum(["atomic", "best_effort", "sequential"]);
 export type ActionPlanStrategy = z.infer<typeof ActionPlanStrategySchema>;
@@ -13,5 +14,6 @@ export const ActionPlanSchema = z.object({
   approvalMode: ActionPlanApprovalModeSchema,
   summary: z.string().nullable(),
   proposalOrder: z.array(z.string()),
+  dataFlowSteps: z.array(DataFlowStepSchema).optional(),
 });
 export type ActionPlan = z.infer<typeof ActionPlanSchema>;

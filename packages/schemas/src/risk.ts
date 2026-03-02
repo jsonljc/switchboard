@@ -42,6 +42,7 @@ export const CompositeRiskContextSchema = z.object({
   cumulativeExposure: z.number().nonnegative(),
   distinctTargetEntities: z.number().int().nonnegative(),
   distinctCartridges: z.number().int().nonnegative(),
+  crossCartridgeEntityCorrelations: z.record(z.string(), z.unknown()).optional(),
 });
 export type CompositeRiskContext = z.infer<typeof CompositeRiskContextSchema>;
 
