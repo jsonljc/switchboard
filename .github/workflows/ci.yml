@@ -10,6 +10,24 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: switchboard
+          POSTGRES_PASSWORD: switchboard
+          POSTGRES_DB: switchboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U switchboard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +41,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm --filter @switchboard/db exec prisma generate
+
+      - name: Run database migrations
+        run: pnpm --filter @switchboard/db exec prisma migrate deploy
+
       - name: Build
         run: pnpm build
 
@@ -34,3 +58,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Verify Docker build (API)
+        run: docker build --target api -t switchboard-api:ci .
+
+      - name: Verify Docker build (Chat)
+        run: docker build --target chat -t switchboard-chat:ci .

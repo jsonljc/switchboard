@@ -404,4 +404,73 @@ export class SwitchboardClient {
   async runScheduledReport(id: string) {
     return this.request<{ success: boolean; data: unknown }>(`/api/scheduled-reports/${id}/run`, { method: "POST" });
   }
+
+  // DLQ
+  async listDlqMessages(status?: string, limit?: number) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return this.request<{ messages: unknown[] }>(`/api/dlq/messages${qs ? `?${qs}` : ""}`);
+  }
+
+  async getDlqStats() {
+    return this.request<{ stats: { pending: number; exhausted: number; resolved: number; total: number } }>("/api/dlq/stats");
+  }
+
+  async retryDlqMessage(id: string) {
+    return this.request<{ message: unknown; exhausted: boolean }>(`/api/dlq/messages/${id}/retry`, { method: "POST" });
+  }
+
+  async resolveDlqMessage(id: string) {
+    return this.request<{ message: unknown }>(`/api/dlq/messages/${id}/resolve`, { method: "POST" });
+  }
+
+  // Competence
+  async listCompetenceRecords(principalId?: string) {
+    const qs = principalId ? `?principalId=${principalId}` : "";
+    return this.request<{ records: unknown[] }>(`/api/competence/records${qs}`);
+  }
+
+  async listCompetencePolicies() {
+    return this.request<{ policies: unknown[] }>("/api/competence/policies");
+  }
+
+  async createCompetencePolicy(data: Record<string, unknown>) {
+    return this.request<{ policy: unknown }>("/api/competence/policies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCompetencePolicy(id: string, data: Record<string, unknown>) {
+    return this.request<{ policy: unknown }>(`/api/competence/policies/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCompetencePolicy(id: string) {
+    return this.request<{ id: string; deleted: boolean }>(`/api/competence/policies/${id}`, { method: "DELETE" });
+  }
+
+  // Webhooks
+  async listWebhooks() {
+    return this.request<{ webhooks: unknown[] }>("/api/webhooks");
+  }
+
+  async createWebhook(data: Record<string, unknown>) {
+    return this.request<{ webhook: unknown }>("/api/webhooks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteWebhook(id: string) {
+    return this.request<{ id: string; deleted: boolean }>(`/api/webhooks/${id}`, { method: "DELETE" });
+  }
+
+  async testWebhook(id: string) {
+    return this.request<{ success: boolean }>(`/api/webhooks/${id}/test`, { method: "POST" });
+  }
 }

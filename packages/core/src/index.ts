@@ -154,3 +154,11 @@ export type { PolicyCache } from "./policy-cache.js";
 // Retry utility
 export { withRetry } from "./utils/retry.js";
 export type { RetryOptions } from "./utils/retry.js";
+
+// Circuit breaker
+export { CircuitBreaker, CircuitBreakerOpenError } from "./utils/circuit-breaker.js";
+export type { CircuitBreakerConfig, CircuitBreakerState } from "./utils/circuit-breaker.js";
+
+// Pagination
+export { paginationParams, paginate } from "./utils/pagination.js";
+export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";

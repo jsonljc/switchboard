@@ -258,7 +258,7 @@ export class ClinicInterpreter extends LLMInterpreter {
 
   protected buildPrompt(
     text: string,
-    _conversationContext: Record<string, unknown>,
+    conversationContext: Record<string, unknown>,
     _availableActions: string[],
   ): string {
     const campaignNames = this.clinicContext.campaignNames?.length
@@ -269,8 +269,24 @@ export class ClinicInterpreter extends LLMInterpreter {
       .replace("{CAMPAIGN_NAMES}", campaignNames)
       .replace("{AD_ACCOUNT_ID}", this.clinicContext.adAccountId);
 
+    // Include recent conversation history for multi-turn context
+    const recentMessages = conversationContext["recentMessages"] as
+      Array<{ role: string; text: string }> | undefined;
+
+    let historyBlock = "";
+    if (recentMessages && recentMessages.length > 1) {
+      // Exclude the last message (it's the current user message)
+      const priorMessages = recentMessages.slice(0, -1);
+      if (priorMessages.length > 0) {
+        const formatted = priorMessages
+          .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
+          .join("\n");
+        historyBlock = `\nRecent conversation (resolve references like "it", "that", "the same campaign" using this):\n${formatted}\n`;
+      }
+    }
+
     // Structural separation: user text in a clearly delimited block
-    return `${system}\n\n<user_message>\n${text}\n</user_message>`;
+    return `${system}${historyBlock}\n<user_message>\n${text}\n</user_message>`;
   }
 
   protected parseStructuredOutput(

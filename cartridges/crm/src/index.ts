@@ -410,5 +410,5 @@ export { DEFAULT_CRM_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_CRM_POLICIES } from "./defaults/policies.js";
 export { bootstrapCrmCartridge } from "./bootstrap.js";
 export type { BootstrapCrmConfig, BootstrapCrmResult } from "./bootstrap.js";
-export type { CrmProvider } from "./providers/crm-provider.js";
+export type { CrmProvider, CrmContact, CrmDeal, CrmActivity, CrmPipelineStage } from "./providers/crm-provider.js";
 export { InMemoryCrmProvider } from "./providers/mock.js";

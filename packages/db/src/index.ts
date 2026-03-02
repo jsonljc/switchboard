@@ -25,4 +25,7 @@ export { PrismaClient };
 export type { Prisma } from "@prisma/client";
 
 export { createPrismaStorage, PrismaLedgerStorage, PrismaConnectionStore } from "./storage/index.js";
+export { PrismaCrmProvider } from "./storage/prisma-crm-provider.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
+export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
+export type { TokenRefreshResult } from "./oauth/token-refresh.js";

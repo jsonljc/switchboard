@@ -2,13 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { dlqRoutes } from "../routes/dlq.js";
 
-// Re-declare for test context
-declare module "fastify" {
-  interface FastifyInstance {
-    prisma: any;
-  }
-}
-
 function buildDlqTestServer() {
   const app = Fastify({ logger: false });
   const mockPrisma = {
@@ -21,7 +14,7 @@ function buildDlqTestServer() {
       updateMany: vi.fn(),
     },
   };
-  app.decorate("prisma", mockPrisma);
+  app.decorate("prisma", mockPrisma as any);
   app.register(dlqRoutes, { prefix: "/api/dlq" });
   return { app, mockPrisma };
 }

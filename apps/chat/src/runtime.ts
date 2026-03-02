@@ -37,6 +37,8 @@ export interface ChatRuntimeConfig {
   readAdapter?: CartridgeReadAdapterType;
   /** Optional DLQ store for recording failed messages. */
   failedMessageStore?: FailedMessageStore;
+  /** Number of recent messages to include as conversation context for interpreters (default: 5). */
+  maxContextMessages?: number;
 }
 
 export class ChatRuntime {
@@ -48,6 +50,7 @@ export class ChatRuntime {
   private storage: StorageContext | null;
   private readAdapter: CartridgeReadAdapterType | null;
   private failedMessageStore: FailedMessageStore | null;
+  private maxContextMessages: number;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -64,6 +67,7 @@ export class ChatRuntime {
     this.storage = config.storage ?? null;
     this.readAdapter = config.readAdapter ?? null;
     this.failedMessageStore = config.failedMessageStore ?? null;
+    this.maxContextMessages = config.maxContextMessages ?? 5;
   }
 
   getAdapter(): ChannelAdapter {
@@ -164,7 +168,7 @@ export class ChatRuntime {
     // Interpret the message — use registry if available, else single interpreter
     // Include recent messages for conversation continuity
     const recentMessages = conversation.messages
-      .slice(-5)
+      .slice(-this.maxContextMessages)
       .map((m) => ({ role: m.role, text: m.text }));
     const conversationContext: Record<string, unknown> = {
       conversation,
