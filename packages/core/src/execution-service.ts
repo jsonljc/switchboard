@@ -23,7 +23,15 @@ export class ExecutionService implements RuntimeAdapter {
   }
 
   async execute(request: RuntimeExecuteRequest): Promise<RuntimeExecuteResponse> {
-    const { requestedAction, actorId, organizationId, entityRefs, message, traceId } = request;
+    const {
+      requestedAction,
+      actorId,
+      organizationId,
+      entityRefs,
+      message,
+      traceId,
+      idempotencyKey,
+    } = request;
 
     const cartridgeId = inferCartridgeId(
       requestedAction.actionType,
@@ -42,6 +50,7 @@ export class ExecutionService implements RuntimeAdapter {
       entityRefs: entityRefs ?? [],
       message,
       traceId,
+      idempotencyKey,
     });
 
     if ("needsClarification" in result) {

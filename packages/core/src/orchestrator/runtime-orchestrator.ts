@@ -21,6 +21,8 @@ export interface RuntimeOrchestrator {
     traceId?: string;
     /** When true, bypass governance (approval, rate limits, cooldowns) while preserving full audit trail. */
     emergencyOverride?: boolean;
+    /** Optional idempotency key for deduplication at orchestrator level. */
+    idempotencyKey?: string;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

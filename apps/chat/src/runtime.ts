@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
@@ -323,6 +324,12 @@ export class ChatRuntime {
         "digital-ads";
 
       try {
+        const idempotencyKey = createHash("sha256")
+          .update(message.principalId)
+          .update(message.id)
+          .update(proposal.actionType)
+          .digest("hex");
+
         const proposeResult = await this.orchestrator.resolveAndPropose({
           actionType: proposal.actionType,
           parameters: proposal.parameters,
@@ -331,6 +338,7 @@ export class ChatRuntime {
           entityRefs,
           message: message.text,
           organizationId: message.organizationId,
+          idempotencyKey,
         });
 
         // Handle different outcomes
@@ -560,6 +568,12 @@ export class ChatRuntime {
       const failures: string[] = [];
       for (const campaign of activeCampaigns) {
         try {
+          const killSwitchIdempotencyKey = createHash("sha256")
+            .update(principalId)
+            .update("kill-switch")
+            .update(campaign.id)
+            .digest("hex");
+
           const proposeResult = await this.orchestrator.resolveAndPropose({
             actionType: "digital-ads.campaign.pause",
             parameters: { campaignId: campaign.id, entityId: campaign.id },
@@ -569,6 +583,7 @@ export class ChatRuntime {
             message: `Emergency kill switch: pause ${campaign.name}`,
             organizationId,
             emergencyOverride: true,
+            idempotencyKey: killSwitchIdempotencyKey,
           });
 
           if (!("needsClarification" in proposeResult) && !("notFound" in proposeResult)) {

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type {
   ExecutionService,
@@ -227,6 +228,11 @@ export class SwitchboardMcpServer {
       // Auto-registered tools: dispatch through ExecutionService.execute()
       const autoActionType = this.autoRegisteredMap.get(toolName);
       if (autoActionType) {
+        const idempotencyKey = createHash("sha256")
+          .update(auth.actorId)
+          .update(autoActionType)
+          .update(JSON.stringify(args, Object.keys(args).sort()))
+          .digest("hex");
         const response = await this.executionService.execute({
           actorId: auth.actorId,
           organizationId: auth.organizationId ?? null,
@@ -236,6 +242,7 @@ export class SwitchboardMcpServer {
             sideEffect: true,
           },
           message: `MCP tool call: ${toolName}`,
+          idempotencyKey,
         });
         result = {
           outcome: response.outcome,

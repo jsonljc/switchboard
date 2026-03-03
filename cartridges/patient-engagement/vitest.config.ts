@@ -11,11 +11,11 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "json-summary", "html"],
       thresholds: {
-        // Target: 80/70/75/80 — current coverage: ~41/63/73/41
-        statements: 40,
+        // Target: 80/70/75/80 — current coverage: ~60/77/81/60
+        statements: 60,
         branches: 60,
         functions: 70,
-        lines: 40,
+        lines: 60,
       },
     },
   },
