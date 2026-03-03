@@ -1,0 +1,6 @@
+[allowlist]
+  description = "Switchboard allowlist"
+  paths = [
+    '''\.env\.example$''',
+    '''pnpm-lock\.yaml$''',
+  ]

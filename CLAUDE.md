@@ -61,7 +61,11 @@ pnpm db:seed             # Seed database
 
 - Every new module or feature **must** include tests
 - Run `pnpm test` and `pnpm typecheck` before committing
-- Coverage thresholds are enforced: statements 60%, branches 50%, functions 55%, lines 60%
+- Global coverage thresholds: statements 60%, branches 50%, functions 55%, lines 60%
+- **Sensitive packages have elevated thresholds** (per-package `vitest.config.ts`):
+  - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
+  - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)
+  - `cartridges/patient-engagement`: 40/60/70/40 (target: 80/70/75/80)
 - Test files use the pattern `*.test.ts` and are co-located with source files
 
 ## Commit Message Format
@@ -101,3 +105,19 @@ Husky runs these hooks automatically:
 
 - **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files)
 - **commit-msg**: commitlint (validates conventional commit format)
+
+## Branch Protection
+
+`main` branch is protected via GitHub API:
+
+- **Required status checks**: typecheck, lint, test, security (must pass before merge)
+- **Strict mode**: branches must be up-to-date with `main` before merging
+- **PRs required**: direct pushes to `main` are blocked
+- **Enforced for admins**: no bypass, even for repo owners
+
+## Security Scanning
+
+- **Gitleaks**: scans git history for hardcoded secrets (API keys, tokens, passwords) in CI
+- **CodeQL**: weekly SAST scanning for OWASP Top 10 vulnerabilities (SQL injection, XSS, etc.)
+- **pnpm audit**: dependency CVE scanning on every CI run
+- **CODEOWNERS**: `.github/CODEOWNERS` defines ownership for sensitive paths
