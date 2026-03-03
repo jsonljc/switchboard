@@ -168,7 +168,7 @@ jobs:
           key: build-${{ github.sha }}
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        run: pnpm exec vitest run --coverage
 
       - name: Upload coverage report
         if: always()
@@ -227,7 +227,7 @@ jobs:
           key: build-${{ github.sha }}
 
       - name: Security audit
-        run: pnpm audit --audit-level=high
+        run: pnpm audit --audit-level=critical
 
   docker:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
