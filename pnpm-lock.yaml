@@ -147,6 +147,9 @@ importers:
       '@switchboard/digital-ads':
         specifier: workspace:*
         version: link:../../cartridges/digital-ads
+      '@switchboard/patient-engagement':
+        specifier: workspace:*
+        version: link:../../cartridges/patient-engagement
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
