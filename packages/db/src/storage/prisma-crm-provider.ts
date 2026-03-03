@@ -5,8 +5,8 @@ import type {
   CrmDeal,
   CrmActivity,
   CrmPipelineStage,
-} from "@switchboard/crm";
-import type { ConnectionHealth } from "@switchboard/schemas";
+  ConnectionHealth,
+} from "@switchboard/schemas";
 
 export class PrismaCrmProvider implements CrmProvider {
   constructor(

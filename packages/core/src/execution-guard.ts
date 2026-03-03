@@ -144,12 +144,6 @@ export class GuardedCartridge implements Cartridge {
     return this.inner.healthCheck();
   }
 
-  async searchCampaigns(
-    query: string,
-  ): Promise<Array<{ id: string; name: string; status: string }>> {
-    return this.inner.searchCampaigns?.(query) ?? [];
-  }
-
   async resolveEntity(
     inputRef: string,
     entityType: string,

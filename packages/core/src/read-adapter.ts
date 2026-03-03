@@ -8,7 +8,7 @@ import type { AuditLedger } from "./audit/ledger.js";
 export interface ReadOperation {
   /** Which cartridge to target. */
   cartridgeId: string;
-  /** The provider method to invoke (e.g. "getCampaign", "searchCampaigns"). */
+  /** The provider method to invoke (e.g. "getCampaign"). */
   operation: string;
   /** Arguments passed to the provider method. */
   parameters: Record<string, unknown>;
@@ -61,12 +61,8 @@ export class CartridgeReadAdapter {
         break;
       }
       case "searchCampaigns": {
-        // Prefer cartridge.searchCampaigns() which returns campaign info
-        if (cartridge.searchCampaigns) {
-          const query = (op.parameters["query"] as string) ?? "";
-          data = await cartridge.searchCampaigns(query);
-        } else if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
-          // Fallback to resolveEntity for backward compatibility
+        // Use resolveEntity for campaign search (searchCampaigns removed from Cartridge interface)
+        if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
           const query = (op.parameters["query"] as string) ?? "";
           const results = await (
             cartridge as {
@@ -78,6 +74,15 @@ export class CartridgeReadAdapter {
             }
           ).resolveEntity(query, "campaign", { principalId: op.actorId });
           data = results;
+        } else if (
+          "searchCampaigns" in cartridge &&
+          typeof (cartridge as Record<string, unknown>)["searchCampaigns"] === "function"
+        ) {
+          // Backward compat: cartridge may still have searchCampaigns on the concrete class
+          const query = (op.parameters["query"] as string) ?? "";
+          data = await (
+            cartridge as { searchCampaigns: (q: string) => Promise<unknown> }
+          ).searchCampaigns(query);
         } else {
           data = [];
         }

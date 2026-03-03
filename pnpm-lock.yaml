@@ -495,9 +495,6 @@ importers:
       '@switchboard/core':
         specifier: workspace:*
         version: link:../core
-      '@switchboard/crm':
-        specifier: workspace:*
-        version: link:../../cartridges/crm
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../schemas

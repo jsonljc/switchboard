@@ -35,3 +35,9 @@ export * from "./capability.js";
 
 // Goal brief (structured goal decomposition)
 export * from "./goal-brief.js";
+
+// CRM provider types (shared contract for CRM implementations)
+export * from "./crm-provider.js";
+
+// Skin manifests (vertical deployment configuration)
+export * from "./skin.js";
