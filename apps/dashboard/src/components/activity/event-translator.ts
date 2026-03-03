@@ -3,13 +3,16 @@
  * Maps eventType + entityType + snapshot into human-readable summaries.
  */
 
-const eventTranslations: Record<string, (entry: {
-  eventType: string;
-  entityType: string;
-  entityId: string;
-  summary: string;
-  snapshot: Record<string, unknown>;
-}) => string> = {
+const eventTranslations: Record<
+  string,
+  (entry: {
+    eventType: string;
+    entityType: string;
+    entityId: string;
+    summary: string;
+    snapshot: Record<string, unknown>;
+  }) => string
+> = {
   "action.executed": (e) => {
     const snap = e.snapshot;
     const actionType = (snap.actionType as string) ?? e.entityType;
@@ -139,9 +142,16 @@ export function translateEvent(entry: {
   return entry.summary || entry.eventType.replace(/\./g, " ");
 }
 
-export function getEventIcon(eventType: string): "success" | "denied" | "pending" | "info" | "warning" {
+export function getEventIcon(
+  eventType: string,
+): "success" | "denied" | "pending" | "info" | "warning" {
   if (eventType.includes("executed") || eventType.includes("approved")) return "success";
-  if (eventType.includes("denied") || eventType.includes("rejected") || eventType.includes("failed")) return "denied";
+  if (
+    eventType.includes("denied") ||
+    eventType.includes("rejected") ||
+    eventType.includes("failed")
+  )
+    return "denied";
   if (eventType.includes("proposed") || eventType.includes("queued")) return "pending";
   if (eventType.includes("degraded") || eventType.includes("expired")) return "warning";
   return "info";
@@ -149,8 +159,19 @@ export function getEventIcon(eventType: string): "success" | "denied" | "pending
 
 export function getEventFilterCategory(eventType: string): string {
   if (eventType.startsWith("action.executed")) return "Executed";
-  if (eventType.startsWith("action.denied") || eventType.startsWith("action.rejected")) return "Denied";
-  if (eventType.startsWith("action.approved") || eventType.startsWith("action.proposed") || eventType.includes("approval")) return "Approvals";
-  if (eventType.startsWith("policy.") || eventType.startsWith("identity.") || eventType.startsWith("connection.")) return "Settings";
+  if (eventType.startsWith("action.denied") || eventType.startsWith("action.rejected"))
+    return "Denied";
+  if (
+    eventType.startsWith("action.approved") ||
+    eventType.startsWith("action.proposed") ||
+    eventType.includes("approval")
+  )
+    return "Approvals";
+  if (
+    eventType.startsWith("policy.") ||
+    eventType.startsWith("identity.") ||
+    eventType.startsWith("connection.")
+  )
+    return "Settings";
   return "All";
 }

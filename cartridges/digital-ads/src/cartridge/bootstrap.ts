@@ -10,9 +10,7 @@ import { MetaProvider } from "./providers/meta-provider.js";
 import { GoogleProvider } from "./providers/google-provider.js";
 import { TikTokProvider } from "./providers/tiktok-provider.js";
 import { MockProvider } from "./providers/mock-provider.js";
-import {
-  createMetaAdsWriteProvider,
-} from "./providers/meta-write-provider.js";
+import { createMetaAdsWriteProvider } from "./providers/meta-write-provider.js";
 import { PostMutationVerifier } from "./interceptors/verification.js";
 import type { CartridgeInterceptor } from "@switchboard/cartridge-sdk";
 import type { PlatformType, PlatformClient, PlatformCredentials } from "../platforms/types.js";
@@ -56,7 +54,10 @@ class CachingProviderWrapper implements AdPlatformProvider {
     return this.inner.platform;
   }
 
-  async connect(credentials: PlatformCredentials, entityId: string): Promise<{
+  async connect(
+    credentials: PlatformCredentials,
+    entityId: string,
+  ): Promise<{
     client: PlatformClient;
     accountName: string;
     entityLevels: EntityLevel[];
@@ -73,10 +74,7 @@ class CachingProviderWrapper implements AdPlatformProvider {
   }
 
   createClient(credentials: PlatformCredentials): PlatformClient {
-    return new CachedPlatformClient(
-      this.inner.createClient(credentials),
-      this.cacheStore,
-    );
+    return new CachedPlatformClient(this.inner.createClient(credentials), this.cacheStore);
   }
 }
 
@@ -98,14 +96,10 @@ export async function bootstrapDigitalAdsCartridge(
 ): Promise<BootstrapDigitalAdsResult> {
   if (config.requireCredentials) {
     if (!config.accessToken || config.accessToken === "mock-token") {
-      throw new Error(
-        "Digital Ads cartridge requires a valid META_ADS_ACCESS_TOKEN",
-      );
+      throw new Error("Digital Ads cartridge requires a valid META_ADS_ACCESS_TOKEN");
     }
     if (!config.adAccountId || config.adAccountId === "act_mock_dev_only") {
-      throw new Error(
-        "Digital Ads cartridge requires a valid META_ADS_ACCOUNT_ID",
-      );
+      throw new Error("Digital Ads cartridge requires a valid META_ADS_ACCOUNT_ID");
     }
   }
 
@@ -147,9 +141,7 @@ export async function bootstrapDigitalAdsCartridge(
   });
 
   // Create interceptors
-  const interceptors: CartridgeInterceptor[] = [
-    new PostMutationVerifier(writeProvider),
-  ];
+  const interceptors: CartridgeInterceptor[] = [new PostMutationVerifier(writeProvider)];
 
   return { cartridge, interceptors };
 }

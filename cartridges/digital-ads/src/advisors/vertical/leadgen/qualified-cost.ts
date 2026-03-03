@@ -18,23 +18,17 @@ export const qualifiedCostAdvisor: FindingAdvisor = (
   stageAnalysis: StageDiagnostic[],
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
-  previous: MetricSnapshot
+  previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
 
-  const qualifiedStage = stageAnalysis.find(
-    (s) => s.stageName === "qualified_lead"
-  );
+  const qualifiedStage = stageAnalysis.find((s) => s.stageName === "qualified_lead");
   if (!qualifiedStage) return findings;
 
   const currentCPQL =
-    qualifiedStage.currentValue > 0
-      ? current.spend / qualifiedStage.currentValue
-      : 0;
+    qualifiedStage.currentValue > 0 ? current.spend / qualifiedStage.currentValue : 0;
   const previousCPQL =
-    qualifiedStage.previousValue > 0
-      ? previous.spend / qualifiedStage.previousValue
-      : 0;
+    qualifiedStage.previousValue > 0 ? previous.spend / qualifiedStage.previousValue : 0;
 
   if (currentCPQL === 0 || previousCPQL === 0) return findings;
 
@@ -43,13 +37,9 @@ export const qualifiedCostAdvisor: FindingAdvisor = (
   // Also check how CPL moved for comparison
   const leadStage = stageAnalysis.find((s) => s.stageName === "lead");
   const currentCPL =
-    leadStage && leadStage.currentValue > 0
-      ? current.spend / leadStage.currentValue
-      : 0;
+    leadStage && leadStage.currentValue > 0 ? current.spend / leadStage.currentValue : 0;
   const previousCPL =
-    leadStage && leadStage.previousValue > 0
-      ? previous.spend / leadStage.previousValue
-      : 0;
+    leadStage && leadStage.previousValue > 0 ? previous.spend / leadStage.previousValue : 0;
   const cplChange = previousCPL > 0 ? percentChange(currentCPL, previousCPL) : 0;
 
   // Flag when CPQL is rising significantly faster than CPL

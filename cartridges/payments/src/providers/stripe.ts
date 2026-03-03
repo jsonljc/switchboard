@@ -95,15 +95,38 @@ export interface StripeProvider {
   getSubscription(id: string): Promise<StripeSubscription>;
 
   // Write methods
-  createInvoice(customerId: string, amountCents: number, description: string): Promise<StripeInvoice>;
+  createInvoice(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeInvoice>;
   voidInvoice(invoiceId: string): Promise<StripeInvoice>;
-  createCharge(customerId: string, amountCents: number, currency: string, description: string): Promise<StripeCharge>;
+  createCharge(
+    customerId: string,
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripeCharge>;
   createRefund(chargeId: string, amountCents: number, reason: string): Promise<StripeRefund>;
-  cancelSubscription(subscriptionId: string, cancelAtPeriodEnd: boolean): Promise<StripeSubscription>;
-  modifySubscription(subscriptionId: string, changes: Record<string, unknown>): Promise<StripeSubscription>;
-  createPaymentLink(amountCents: number, currency: string, description: string): Promise<StripePaymentLink>;
+  cancelSubscription(
+    subscriptionId: string,
+    cancelAtPeriodEnd: boolean,
+  ): Promise<StripeSubscription>;
+  modifySubscription(
+    subscriptionId: string,
+    changes: Record<string, unknown>,
+  ): Promise<StripeSubscription>;
+  createPaymentLink(
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripePaymentLink>;
   deactivatePaymentLink(linkId: string): Promise<StripePaymentLink>;
-  applyCredit(customerId: string, amountCents: number, description: string): Promise<StripeBalanceTransaction>;
+  applyCredit(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeBalanceTransaction>;
 
   healthCheck(): Promise<ConnectionHealth>;
 }
@@ -259,9 +282,7 @@ const SEED_SUBSCRIPTIONS: StripeSubscription[] = [
     currentPeriodStart: new Date(Date.now() - 15 * 86400000).toISOString(),
     currentPeriodEnd: new Date(Date.now() + 15 * 86400000).toISOString(),
     cancelAtPeriodEnd: false,
-    items: [
-      { priceId: "price_pro", quantity: 1, unitAmount: 4900, interval: "month" },
-    ],
+    items: [{ priceId: "price_pro", quantity: 1, unitAmount: 4900, interval: "month" }],
     startDate: new Date(Date.now() - 180 * 86400000).toISOString(),
   },
 ];
@@ -283,7 +304,8 @@ export class MockStripeProvider implements StripeProvider {
     for (const c of SEED_CHARGES) this.charges.set(c.id, { ...c });
     for (const r of SEED_REFUNDS) this.refunds.set(r.id, { ...r });
     for (const d of SEED_DISPUTES) this.disputes.set(d.id, { ...d });
-    for (const s of SEED_SUBSCRIPTIONS) this.subscriptions.set(s.id, { ...s, items: s.items.map(item => ({ ...item })) });
+    for (const s of SEED_SUBSCRIPTIONS)
+      this.subscriptions.set(s.id, { ...s, items: s.items.map((item) => ({ ...item })) });
   }
 
   private genId(prefix: string): string {
@@ -341,7 +363,11 @@ export class MockStripeProvider implements StripeProvider {
     return { ...sub };
   }
 
-  async createInvoice(customerId: string, amountCents: number, description: string): Promise<StripeInvoice> {
+  async createInvoice(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeInvoice> {
     const invoice: StripeInvoice = {
       id: this.genId("in"),
       customerId,
@@ -357,13 +383,24 @@ export class MockStripeProvider implements StripeProvider {
   async voidInvoice(invoiceId: string): Promise<StripeInvoice> {
     const invoice = this.invoices.get(invoiceId);
     if (!invoice) {
-      return { id: invoiceId, customerId: "cus_unknown", amount: 0, status: "void", createdAt: new Date().toISOString() };
+      return {
+        id: invoiceId,
+        customerId: "cus_unknown",
+        amount: 0,
+        status: "void",
+        createdAt: new Date().toISOString(),
+      };
     }
     invoice.status = "void";
     return { ...invoice };
   }
 
-  async createCharge(customerId: string, amountCents: number, currency: string, description: string): Promise<StripeCharge> {
+  async createCharge(
+    customerId: string,
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripeCharge> {
     const charge: StripeCharge = {
       id: this.genId("ch"),
       amount: amountCents,
@@ -395,7 +432,10 @@ export class MockStripeProvider implements StripeProvider {
     return { ...refund };
   }
 
-  async cancelSubscription(subscriptionId: string, cancelAtPeriodEnd: boolean): Promise<StripeSubscription> {
+  async cancelSubscription(
+    subscriptionId: string,
+    cancelAtPeriodEnd: boolean,
+  ): Promise<StripeSubscription> {
     const sub = this.subscriptions.get(subscriptionId);
     if (!sub) {
       return {
@@ -417,7 +457,10 @@ export class MockStripeProvider implements StripeProvider {
     return { ...sub };
   }
 
-  async modifySubscription(subscriptionId: string, changes: Record<string, unknown>): Promise<StripeSubscription> {
+  async modifySubscription(
+    subscriptionId: string,
+    changes: Record<string, unknown>,
+  ): Promise<StripeSubscription> {
     const sub = this.subscriptions.get(subscriptionId);
     if (!sub) {
       return {
@@ -441,7 +484,11 @@ export class MockStripeProvider implements StripeProvider {
     return { ...sub };
   }
 
-  async createPaymentLink(amountCents: number, currency: string, description: string): Promise<StripePaymentLink> {
+  async createPaymentLink(
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripePaymentLink> {
     const link: StripePaymentLink = {
       id: this.genId("plink"),
       url: `https://pay.stripe.test/${this.nextId}`,
@@ -464,7 +511,11 @@ export class MockStripeProvider implements StripeProvider {
     return { ...link };
   }
 
-  async applyCredit(customerId: string, amountCents: number, description: string): Promise<StripeBalanceTransaction> {
+  async applyCredit(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeBalanceTransaction> {
     const txn: StripeBalanceTransaction = {
       id: this.genId("txn"),
       customerId,

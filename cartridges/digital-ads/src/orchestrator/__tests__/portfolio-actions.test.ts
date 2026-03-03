@@ -7,9 +7,7 @@ import type { DiagnosticResult } from "../../core/types.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeDiagnosticResult(
-  overrides: Partial<DiagnosticResult> = {}
-): DiagnosticResult {
+function makeDiagnosticResult(overrides: Partial<DiagnosticResult> = {}): DiagnosticResult {
   return {
     vertical: "commerce",
     entityId: "act_123",
@@ -49,16 +47,14 @@ function makeDiagnosticResult(
     ],
     dropoffs: [],
     bottleneck: null,
-    findings: [
-      { severity: "critical", stage: "purchase", message: "Test", recommendation: null },
-    ],
+    findings: [{ severity: "critical", stage: "purchase", message: "Test", recommendation: null }],
     ...overrides,
   };
 }
 
 function makePlatformResult(
   platform: "meta" | "google" | "tiktok",
-  result?: DiagnosticResult
+  result?: DiagnosticResult,
 ): PlatformResult {
   return {
     platform,
@@ -82,17 +78,11 @@ describe("generatePortfolioActions", () => {
       platform: "meta",
       elasticity: {
         totalEstimatedRevenueLoss: -2000,
-        impactRanking: [
-          { stage: "purchase", estimatedRevenueDelta: -2000, severity: "critical" },
-        ],
+        impactRanking: [{ stage: "purchase", estimatedRevenueDelta: -2000, severity: "critical" }],
       },
     });
 
-    const actions = generatePortfolioActions(
-      [makePlatformResult("meta", result)],
-      [],
-      []
-    );
+    const actions = generatePortfolioActions([makePlatformResult("meta", result)], [], []);
 
     expect(actions.length).toBeGreaterThanOrEqual(1);
     const bottleneckAction = actions.find((a) => a.action.includes("bottleneck"));
@@ -118,7 +108,7 @@ describe("generatePortfolioActions", () => {
     const actions = generatePortfolioActions(
       [makePlatformResult("meta"), makePlatformResult("google")],
       [],
-      budgetRecs
+      budgetRecs,
     );
 
     const shiftAction = actions.find((a) => a.action.includes("Shift"));
@@ -142,7 +132,7 @@ describe("generatePortfolioActions", () => {
     const actions = generatePortfolioActions(
       [makePlatformResult("meta"), makePlatformResult("google")],
       findings,
-      []
+      [],
     );
 
     const marketAction = actions.find((a) => a.action.includes("Market-wide"));
@@ -155,9 +145,7 @@ describe("generatePortfolioActions", () => {
       platform: "meta",
       elasticity: {
         totalEstimatedRevenueLoss: -5000,
-        impactRanking: [
-          { stage: "purchase", estimatedRevenueDelta: -5000, severity: "critical" },
-        ],
+        impactRanking: [{ stage: "purchase", estimatedRevenueDelta: -5000, severity: "critical" }],
       },
     });
 
@@ -165,21 +153,19 @@ describe("generatePortfolioActions", () => {
       platform: "google",
       elasticity: {
         totalEstimatedRevenueLoss: -1000,
-        impactRanking: [
-          { stage: "purchase", estimatedRevenueDelta: -1000, severity: "warning" },
-        ],
+        impactRanking: [{ stage: "purchase", estimatedRevenueDelta: -1000, severity: "warning" }],
       },
     });
 
     const actions = generatePortfolioActions(
       [makePlatformResult("meta", metaResult), makePlatformResult("google", googleResult)],
       [],
-      []
+      [],
     );
 
     expect(actions.length).toBeGreaterThanOrEqual(2);
     expect(actions[0].estimatedRevenueRecovery).toBeGreaterThan(
-      actions[1].estimatedRevenueRecovery
+      actions[1].estimatedRevenueRecovery,
     );
     expect(actions[0].priority).toBe(1);
     expect(actions[1].priority).toBe(2);
@@ -206,7 +192,7 @@ describe("generatePortfolioActions", () => {
     const actions = generatePortfolioActions(
       [makePlatformResult("meta"), makePlatformResult("google"), makePlatformResult("tiktok")],
       [],
-      budgetRecs
+      budgetRecs,
     );
 
     const lowRisk = actions.find((a) => a.action.includes("5%"));
@@ -220,17 +206,11 @@ describe("generatePortfolioActions", () => {
       platform: "meta",
       elasticity: {
         totalEstimatedRevenueLoss: -5,
-        impactRanking: [
-          { stage: "purchase", estimatedRevenueDelta: -5, severity: "info" },
-        ],
+        impactRanking: [{ stage: "purchase", estimatedRevenueDelta: -5, severity: "info" }],
       },
     });
 
-    const actions = generatePortfolioActions(
-      [makePlatformResult("meta", result)],
-      [],
-      []
-    );
+    const actions = generatePortfolioActions([makePlatformResult("meta", result)], [], []);
 
     // Should skip because revenue loss < $10
     const bottleneckAction = actions.find((a) => a.action.includes("bottleneck"));

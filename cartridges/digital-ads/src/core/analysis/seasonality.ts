@@ -96,7 +96,7 @@ export const SEASONAL_EVENTS: SeasonalEvent[] = [
  */
 export function getActiveSeasonalEvent(
   periodStart: string,
-  periodEnd: string
+  periodEnd: string,
 ): SeasonalEvent | null {
   const startMMDD = periodStart.slice(5); // "YYYY-MM-DD" → "MM-DD"
   const endMMDD = periodEnd.slice(5);
@@ -118,10 +118,7 @@ export function getActiveSeasonalEvent(
  * Get the CPM threshold multiplier for a given date range.
  * Returns 1.0 (no adjustment) when no seasonal event is active.
  */
-export function getSeasonalCPMMultiplier(
-  periodStart: string,
-  periodEnd: string
-): number {
+export function getSeasonalCPMMultiplier(periodStart: string, periodEnd: string): number {
   const event = getActiveSeasonalEvent(periodStart, periodEnd);
   return event?.cpmThresholdMultiplier ?? 1.0;
 }
@@ -130,12 +127,7 @@ export function getSeasonalCPMMultiplier(
  * Check if two MM-DD date ranges overlap.
  * Handles year-boundary wrapping (e.g., 12-26 to 01-05).
  */
-function dateRangesOverlap(
-  aStart: string,
-  aEnd: string,
-  bStart: string,
-  bEnd: string
-): boolean {
+function dateRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   // Convert MM-DD to day-of-year number for comparison
   const a1 = mmddToDay(aStart);
   const a2 = mmddToDay(aEnd);

@@ -142,21 +142,13 @@ describe("ConsentGate", () => {
   });
 
   it("should block when consent is not active", async () => {
-    const result = await gate.beforeExecute!(
-      "patient-engagement.reminder.send",
-      {},
-      mockContext,
-    );
+    const result = await gate.beforeExecute!("patient-engagement.reminder.send", {}, mockContext);
     expect(result.proceed).toBe(false);
     expect(result.reason).toContain("consent");
   });
 
   it("should not gate non-communication actions", async () => {
-    const result = await gate.beforeExecute!(
-      "patient-engagement.lead.score",
-      {},
-      mockContext,
-    );
+    const result = await gate.beforeExecute!("patient-engagement.lead.score", {}, mockContext);
     expect(result.proceed).toBe(true);
   });
 

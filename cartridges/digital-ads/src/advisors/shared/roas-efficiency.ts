@@ -41,8 +41,7 @@ function extractROAS(snapshot: MetricSnapshot): number | null {
   if (tl.roas && tl.roas > 0) return tl.roas;
 
   // Fallback: compute from revenue / spend
-  const revenue =
-    tl.conversions_value ?? tl.complete_payment_value ?? tl.purchase_value ?? 0;
+  const revenue = tl.conversions_value ?? tl.complete_payment_value ?? tl.purchase_value ?? 0;
   const spend = snapshot.spend;
   if (spend > 0 && revenue > 0) return revenue / spend;
 
@@ -54,15 +53,13 @@ export interface ROASEfficiencyOptions {
   targetROAS?: number;
 }
 
-export function createROASEfficiencyAdvisor(
-  options?: ROASEfficiencyOptions
-): FindingAdvisor {
+export function createROASEfficiencyAdvisor(options?: ROASEfficiencyOptions): FindingAdvisor {
   return (
     _stageAnalysis: StageDiagnostic[],
     _dropoffs: FunnelDropoff[],
     current: MetricSnapshot,
     previous: MetricSnapshot,
-    _context?: DiagnosticContext
+    _context?: DiagnosticContext,
   ): Finding[] => {
     const findings: Finding[] = [];
 
@@ -78,12 +75,14 @@ export function createROASEfficiencyAdvisor(
 
       if (roasChange < -15) {
         // Check if CPA is also worsening, or if this is an AOV-driven issue
-        const currentCPA = current.topLevel.cost_per_conversion
-          ?? current.topLevel.cost_per_complete_payment
-          ?? null;
-        const previousCPA = previous.topLevel.cost_per_conversion
-          ?? previous.topLevel.cost_per_complete_payment
-          ?? null;
+        const currentCPA =
+          current.topLevel.cost_per_conversion ??
+          current.topLevel.cost_per_complete_payment ??
+          null;
+        const previousCPA =
+          previous.topLevel.cost_per_conversion ??
+          previous.topLevel.cost_per_complete_payment ??
+          null;
 
         let cpaChange: number | null = null;
         if (currentCPA !== null && previousCPA !== null && previousCPA > 0) {
@@ -91,7 +90,7 @@ export function createROASEfficiencyAdvisor(
         }
 
         const isAOVIssue = cpaChange !== null && Math.abs(cpaChange) < 10;
-        const severity = roasChange < -30 ? "critical" as const : "warning" as const;
+        const severity = roasChange < -30 ? ("critical" as const) : ("warning" as const);
 
         findings.push({
           severity,
@@ -118,7 +117,7 @@ export function createROASEfficiencyAdvisor(
       const target = options.targetROAS;
       if (currentROAS < target) {
         const shortfall = ((target - currentROAS) / target) * 100;
-        const severity = shortfall > 30 ? "critical" as const : "warning" as const;
+        const severity = shortfall > 30 ? ("critical" as const) : ("warning" as const);
 
         findings.push({
           severity,
@@ -137,5 +136,4 @@ export function createROASEfficiencyAdvisor(
 }
 
 /** Default ROAS efficiency advisor (no target ROAS) */
-export const roasEfficiencyAdvisor: FindingAdvisor =
-  createROASEfficiencyAdvisor();
+export const roasEfficiencyAdvisor: FindingAdvisor = createROASEfficiencyAdvisor();

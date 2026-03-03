@@ -105,7 +105,12 @@ export const crmToolDefinitions: ToolDefinition[] = [
 ];
 
 export const CRM_SIDE_EFFECT_TOOLS = new Set(["create_contact", "create_deal", "log_activity"]);
-export const CRM_READ_TOOLS = new Set(["search_contacts", "get_contact", "get_pipeline_status", "get_deal"]);
+export const CRM_READ_TOOLS = new Set([
+  "search_contacts",
+  "get_contact",
+  "get_pipeline_status",
+  "get_deal",
+]);
 
 /** Maps CRM side-effect tool names to their actionTypes. */
 export const CRM_ACTION_TYPE_MAP: Record<string, string> = {

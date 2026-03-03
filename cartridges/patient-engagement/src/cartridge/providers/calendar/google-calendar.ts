@@ -83,14 +83,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
         },
       };
 
-      const response = await fetch(
-        `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events`,
-        {
-          method: "POST",
-          headers: this.authHeaders(),
-          body: JSON.stringify(event),
-        },
-      );
+      const response = await fetch(`${GCAL_BASE}/calendars/${encodeURIComponent(calId)}/events`, {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify(event),
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -220,8 +217,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         >;
       };
 
-      const busyPeriods =
-        freebusyData.calendars[calId]?.busy ?? [];
+      const busyPeriods = freebusyData.calendars[calId]?.busy ?? [];
 
       // Step 2: Compute available slots by subtracting busy periods
       // Work hours: 9 AM - 5 PM, slot duration as specified
@@ -234,7 +230,10 @@ export class GoogleCalendarProvider implements CalendarProvider {
         // Only consider working hours (9 AM - 5 PM)
         if (hour >= 9 && hour < 17) {
           const slotEnd = new Date(current.getTime() + durationMs);
-          if (slotEnd.getHours() <= 17 || (slotEnd.getHours() === 17 && slotEnd.getMinutes() === 0)) {
+          if (
+            slotEnd.getHours() <= 17 ||
+            (slotEnd.getHours() === 17 && slotEnd.getMinutes() === 0)
+          ) {
             const isBusy = busyPeriods.some((busy) => {
               const busyStart = new Date(busy.start).getTime();
               const busyEnd = new Date(busy.end).getTime();
@@ -266,14 +265,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
     const start = Date.now();
     try {
       const calId = this.config.calendarId || "primary";
-      const response = await fetch(
-        `${GCAL_BASE}/calendars/${encodeURIComponent(calId)}`,
-        {
-          method: "GET",
-          headers: this.authHeaders(),
-          signal: AbortSignal.timeout(5_000),
-        },
-      );
+      const response = await fetch(`${GCAL_BASE}/calendars/${encodeURIComponent(calId)}`, {
+        method: "GET",
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(5_000),
+      });
 
       if (!response.ok) {
         return {
@@ -368,9 +364,7 @@ export class MockGoogleCalendarProvider implements CalendarProvider {
  */
 export function createGoogleCalendarProvider(config: GoogleCalendarConfig): CalendarProvider {
   const isReal =
-    config.accessToken &&
-    config.accessToken.length >= 20 &&
-    !config.accessToken.includes("mock");
+    config.accessToken && config.accessToken.length >= 20 && !config.accessToken.includes("mock");
 
   if (isReal) {
     return new GoogleCalendarProvider(config);

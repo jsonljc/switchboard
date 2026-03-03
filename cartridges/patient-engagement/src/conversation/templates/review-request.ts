@@ -13,12 +13,14 @@ export const reviewRequestFlow: ConversationFlowDefinition = {
     {
       id: "intro",
       type: "message",
-      template: "Hi {{patientName}}! We hope you're enjoying the results of your {{treatmentType}} at {{clinicName}}.",
+      template:
+        "Hi {{patientName}}! We hope you're enjoying the results of your {{treatmentType}} at {{clinicName}}.",
     },
     {
       id: "ask",
       type: "message",
-      template: "Your feedback helps others find great care. Would you take a moment to share your experience?",
+      template:
+        "Your feedback helps others find great care. Would you take a moment to share your experience?",
     },
     {
       id: "link",

@@ -11,11 +11,7 @@ import type { DailyBreakdown } from "../../types.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeDaily(
-  date: string,
-  conversions: number,
-  dayOfWeek = 0
-): DailyBreakdown {
+function makeDaily(date: string, conversions: number, dayOfWeek = 0): DailyBreakdown {
   return {
     date,
     dayOfWeek,
@@ -56,10 +52,10 @@ describe("assessConversionLag", () => {
   it("detects significant lag when current period just ended", () => {
     const referenceDate = new Date("2024-01-15");
     const result = assessConversionLag(
-      "2024-01-15",  // Current ended today (most immature)
-      "2024-01-07",  // Previous ended 8 days ago (fully mature)
+      "2024-01-15", // Current ended today (most immature)
+      "2024-01-07", // Previous ended 8 days ago (fully mature)
       referenceDate,
-      7
+      7,
     );
 
     expect(result.previousMaturity).toBe(1.0);
@@ -71,10 +67,10 @@ describe("assessConversionLag", () => {
   it("reports no significant lag when both periods are mature", () => {
     const referenceDate = new Date("2024-01-15");
     const result = assessConversionLag(
-      "2024-01-07",  // Current ended 8 days ago
-      "2024-01-01",  // Previous ended 14 days ago
+      "2024-01-07", // Current ended 8 days ago
+      "2024-01-01", // Previous ended 14 days ago
       referenceDate,
-      7
+      7,
     );
 
     expect(result.currentMaturity).toBe(1.0);
@@ -105,10 +101,7 @@ describe("adjustForConversionLag", () => {
 
   it("does not modify fully mature days", () => {
     const referenceDate = new Date("2024-01-15");
-    const dailyData: DailyBreakdown[] = [
-      makeDaily("2024-01-10", 50),
-      makeDaily("2024-01-09", 45),
-    ];
+    const dailyData: DailyBreakdown[] = [makeDaily("2024-01-10", 50), makeDaily("2024-01-09", 45)];
 
     const adjusted = adjustForConversionLag(dailyData, referenceDate);
     expect(adjusted[0].conversions).toBe(50);
@@ -132,10 +125,7 @@ describe("estimateConversionDeficit", () => {
 
   it("returns 0 for fully mature data", () => {
     const referenceDate = new Date("2024-01-15");
-    const dailyData: DailyBreakdown[] = [
-      makeDaily("2024-01-10", 50),
-      makeDaily("2024-01-09", 45),
-    ];
+    const dailyData: DailyBreakdown[] = [makeDaily("2024-01-10", 50), makeDaily("2024-01-09", 45)];
 
     const deficit = estimateConversionDeficit(dailyData, referenceDate);
     expect(deficit).toBe(0);

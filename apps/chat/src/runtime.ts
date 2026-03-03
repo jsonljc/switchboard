@@ -4,11 +4,7 @@ import type { InterpreterRegistry } from "./interpreter/registry.js";
 import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
 import { getThread, setThread } from "./conversation/threads.js";
-import {
-  composeHelpMessage,
-  composeUncertainReply,
-  composeDenialReply,
-} from "./composer/reply.js";
+import { composeHelpMessage, composeUncertainReply, composeDenialReply } from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
@@ -165,7 +161,11 @@ export class ChatRuntime {
     }
 
     // Handle callback queries (approval button taps)
-    if (message.text.startsWith("{") && message.text.includes('"action"') && message.text.includes('"approvalId"')) {
+    if (
+      message.text.startsWith("{") &&
+      message.text.includes('"action"') &&
+      message.text.includes('"approvalId"')
+    ) {
       // Dismiss the button loading spinner in Telegram
       const cbqId = this.extractCallbackQueryId(rawPayload);
       if (cbqId && this.adapter.answerCallbackQuery) {
@@ -219,19 +219,19 @@ export class ChatRuntime {
         return;
       }
       try {
-        const readResult = await handleReadIntent(result.readIntent as import("./clinic/types.js").ReadIntentDescriptor, {
-          readAdapter: this.readAdapter,
-          cartridgeId: "digital-ads",
-          actorId: message.principalId,
-          organizationId: message.organizationId,
-        });
+        const readResult = await handleReadIntent(
+          result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
+          {
+            readAdapter: this.readAdapter,
+            cartridgeId: "digital-ads",
+            actorId: message.principalId,
+            organizationId: message.organizationId,
+          },
+        );
         await this.adapter.sendTextReply(threadId, readResult.text);
       } catch (err) {
         console.error("Read intent error:", err);
-        await this.adapter.sendTextReply(
-          threadId,
-          `Error reading data: ${safeErrorMessage(err)}`,
-        );
+        await this.adapter.sendTextReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
       }
       return;
     }
@@ -258,28 +258,34 @@ export class ChatRuntime {
     if (result.goalBrief?.decomposable && this.planGraphBuilder && this.capabilityRegistry) {
       try {
         const capabilities = this.capabilityRegistry.enrichAvailableActions(this.availableActions);
-        const plan = this.planGraphBuilder.buildPlan(
-          result.goalBrief,
-          capabilities,
-          {
-            principalId: message.principalId,
-            organizationId: message.organizationId ?? undefined,
-            cartridgeId: "digital-ads",
-          },
-        );
+        const plan = this.planGraphBuilder.buildPlan(result.goalBrief, capabilities, {
+          principalId: message.principalId,
+          organizationId: message.organizationId ?? undefined,
+          cartridgeId: "digital-ads",
+        });
 
         if (plan && plan.steps.length > 0) {
-          const orch = this.orchestrator as unknown as { executePlan?: (plan: unknown, context: { principalId: string; organizationId?: string }) => Promise<{ overallOutcome: string; stepResults: Array<{ stepIndex: number; outcome: string }> }> };
+          const orch = this.orchestrator as unknown as {
+            executePlan?: (
+              plan: unknown,
+              context: { principalId: string; organizationId?: string },
+            ) => Promise<{
+              overallOutcome: string;
+              stepResults: Array<{ stepIndex: number; outcome: string }>;
+            }>;
+          };
           if (orch.executePlan) {
             const planResult = await orch.executePlan(plan, {
               principalId: message.principalId,
               organizationId: message.organizationId ?? undefined,
             });
 
-            const summaryParts = planResult.stepResults.map((sr: { stepIndex: number; outcome: string }) => {
-              const outcomeLabel = sr.outcome === "executed" ? "Done" : sr.outcome;
-              return `Step ${sr.stepIndex + 1}: ${outcomeLabel}`;
-            });
+            const summaryParts = planResult.stepResults.map(
+              (sr: { stepIndex: number; outcome: string }) => {
+                const outcomeLabel = sr.outcome === "executed" ? "Done" : sr.outcome;
+                return `Step ${sr.stepIndex + 1}: ${outcomeLabel}`;
+              },
+            );
             const summaryText = `Plan "${plan.summary}" — ${planResult.overallOutcome}\n${summaryParts.join("\n")}`;
             await this.adapter.sendTextReply(threadId, summaryText);
             await this.recordAssistantMessage(threadId, summaryText);
@@ -332,10 +338,9 @@ export class ChatRuntime {
       }
 
       // Infer cartridge from action type
-      const cartridgeId = inferCartridgeId(
-        proposal.actionType,
-        this.storage?.cartridges ?? undefined,
-      ) ?? "digital-ads";
+      const cartridgeId =
+        inferCartridgeId(proposal.actionType, this.storage?.cartridges ?? undefined) ??
+        "digital-ads";
 
       try {
         const proposeResult = await this.orchestrator.resolveAndPropose({
@@ -363,14 +368,16 @@ export class ChatRuntime {
         }
       } catch (err) {
         console.error("Proposal processing error:", err);
-        this.failedMessageStore?.record({
-          channel: message.channel,
-          organizationId: message.organizationId ?? undefined,
-          rawPayload: rawPayload as Record<string, unknown>,
-          stage: "propose",
-          errorMessage: safeErrorMessage(err),
-          errorStack: err instanceof Error ? err.stack : undefined,
-        }).catch((dlqErr) => console.error("DLQ record error:", dlqErr));
+        this.failedMessageStore
+          ?.record({
+            channel: message.channel,
+            organizationId: message.organizationId ?? undefined,
+            rawPayload: rawPayload as Record<string, unknown>,
+            stage: "propose",
+            errorMessage: safeErrorMessage(err),
+            errorStack: err instanceof Error ? err.stack : undefined,
+          })
+          .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
         await this.adapter.sendTextReply(
           threadId,
           `Error processing request: ${safeErrorMessage(err)}`,
@@ -411,7 +418,10 @@ export class ChatRuntime {
         result.approvalRequest.bindingHash,
       );
       await this.adapter.sendApprovalCard(threadId, card);
-      await this.recordAssistantMessage(threadId, `[Approval Required] ${result.approvalRequest.summary}`);
+      await this.recordAssistantMessage(
+        threadId,
+        `[Approval Required] ${result.approvalRequest.summary}`,
+      );
       return;
     }
 
@@ -443,13 +453,15 @@ export class ChatRuntime {
       await this.recordAssistantMessage(threadId, executeResult.summary);
     } catch (err) {
       console.error("Execution error:", err);
-      this.failedMessageStore?.record({
-        channel: this.adapter.channel,
-        rawPayload: { envelopeId: result.envelope.id },
-        stage: "execute",
-        errorMessage: safeErrorMessage(err),
-        errorStack: err instanceof Error ? err.stack : undefined,
-      }).catch((dlqErr) => console.error("DLQ record error:", dlqErr));
+      this.failedMessageStore
+        ?.record({
+          channel: this.adapter.channel,
+          rawPayload: { envelopeId: result.envelope.id },
+          stage: "execute",
+          errorMessage: safeErrorMessage(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+        })
+        .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
       const errText = `Execution failed: ${safeErrorMessage(err)}`;
       await this.adapter.sendTextReply(threadId, errText);
       await this.recordAssistantMessage(threadId, errText);
@@ -507,10 +519,7 @@ export class ChatRuntime {
       }
     } catch (err) {
       console.error("Approval callback error:", err);
-      await this.adapter.sendTextReply(
-        threadId,
-        `Error: ${safeErrorMessage(err)}`,
-      );
+      await this.adapter.sendTextReply(threadId, `Error: ${safeErrorMessage(err)}`);
     }
   }
 
@@ -526,10 +535,7 @@ export class ChatRuntime {
       await this.handleProposeResult(threadId, undoResult, principalId);
     } catch (err) {
       console.error("Undo error:", err);
-      await this.adapter.sendTextReply(
-        threadId,
-        `Cannot undo: ${safeErrorMessage(err)}`,
-      );
+      await this.adapter.sendTextReply(threadId, `Cannot undo: ${safeErrorMessage(err)}`);
     }
   }
 
@@ -539,7 +545,10 @@ export class ChatRuntime {
     organizationId: string | null,
   ): Promise<void> {
     if (!this.readAdapter) {
-      await this.adapter.sendTextReply(threadId, "Cannot execute kill switch: read adapter not configured.");
+      await this.adapter.sendTextReply(
+        threadId,
+        "Cannot execute kill switch: read adapter not configured.",
+      );
       return;
     }
 
@@ -599,10 +608,7 @@ export class ChatRuntime {
       }
     } catch (err) {
       console.error("Kill switch error:", err);
-      await this.adapter.sendTextReply(
-        threadId,
-        `Kill switch error: ${safeErrorMessage(err)}`,
-      );
+      await this.adapter.sendTextReply(threadId, `Kill switch error: ${safeErrorMessage(err)}`);
     }
   }
 

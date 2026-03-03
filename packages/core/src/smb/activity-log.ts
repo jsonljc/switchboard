@@ -52,9 +52,7 @@ export class InMemorySmbActivityLogStorage implements ActivityLogStorage {
   }
 
   async query(filter: ActivityLogQuery): Promise<ActivityLogEntry[]> {
-    let results = this.entries.filter(
-      (e) => e.organizationId === filter.organizationId,
-    );
+    let results = this.entries.filter((e) => e.organizationId === filter.organizationId);
 
     if (filter.actorId) {
       results = results.filter((e) => e.actorId === filter.actorId);

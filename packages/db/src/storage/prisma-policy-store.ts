@@ -3,7 +3,11 @@ import type { Policy } from "@switchboard/schemas";
 import type { PolicyStore } from "@switchboard/core";
 
 export interface PrismaPolicyStoreOptions {
-  redis?: { get: (key: string) => Promise<string | null>; set: (key: string, value: string, mode: string, ttl: number) => Promise<unknown>; del: (key: string) => Promise<unknown> };
+  redis?: {
+    get: (key: string) => Promise<string | null>;
+    set: (key: string, value: string, mode: string, ttl: number) => Promise<unknown>;
+    del: (key: string) => Promise<unknown>;
+  };
   cacheTtlSeconds?: number;
 }
 
@@ -13,7 +17,10 @@ export class PrismaPolicyStore implements PolicyStore {
   private redis?: PrismaPolicyStoreOptions["redis"];
   private cacheTtlSeconds: number;
 
-  constructor(private prisma: PrismaClient, options?: PrismaPolicyStoreOptions) {
+  constructor(
+    private prisma: PrismaClient,
+    options?: PrismaPolicyStoreOptions,
+  ) {
     this.redis = options?.redis;
     this.cacheTtlSeconds = options?.cacheTtlSeconds ?? 60;
   }
@@ -48,7 +55,7 @@ export class PrismaPolicyStore implements PolicyStore {
         active: policy.active,
         rule: policy.rule as object,
         effect: policy.effect,
-        effectParams: policy.effectParams as object ?? undefined,
+        effectParams: (policy.effectParams as object) ?? undefined,
         approvalRequirement: policy.approvalRequirement ?? null,
         riskCategoryOverride: policy.riskCategoryOverride ?? null,
         createdAt: policy.createdAt,
@@ -63,7 +70,7 @@ export class PrismaPolicyStore implements PolicyStore {
         active: policy.active,
         rule: policy.rule as object,
         effect: policy.effect,
-        effectParams: policy.effectParams as object ?? undefined,
+        effectParams: (policy.effectParams as object) ?? undefined,
         approvalRequirement: policy.approvalRequirement ?? null,
         riskCategoryOverride: policy.riskCategoryOverride ?? null,
         updatedAt: policy.updatedAt,
@@ -90,8 +97,10 @@ export class PrismaPolicyStore implements PolicyStore {
     if (data.rule !== undefined) updateData["rule"] = data.rule as object;
     if (data.effect !== undefined) updateData["effect"] = data.effect;
     if (data.effectParams !== undefined) updateData["effectParams"] = data.effectParams as object;
-    if (data.approvalRequirement !== undefined) updateData["approvalRequirement"] = data.approvalRequirement;
-    if (data.riskCategoryOverride !== undefined) updateData["riskCategoryOverride"] = data.riskCategoryOverride;
+    if (data.approvalRequirement !== undefined)
+      updateData["approvalRequirement"] = data.approvalRequirement;
+    if (data.riskCategoryOverride !== undefined)
+      updateData["riskCategoryOverride"] = data.riskCategoryOverride;
 
     await this.prisma.policy.update({ where: { id }, data: updateData });
     await this.invalidateCache();
@@ -107,7 +116,10 @@ export class PrismaPolicyStore implements PolicyStore {
     }
   }
 
-  async listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]> {
+  async listActive(filter?: {
+    cartridgeId?: string;
+    organizationId?: string | null;
+  }): Promise<Policy[]> {
     // Check Redis cache first
     if (this.redis) {
       try {
@@ -129,26 +141,17 @@ export class PrismaPolicyStore implements PolicyStore {
     const where: Record<string, unknown> = { active: true };
 
     if (filter?.cartridgeId) {
-      where["OR"] = [
-        { cartridgeId: null },
-        { cartridgeId: filter.cartridgeId },
-      ];
+      where["OR"] = [{ cartridgeId: null }, { cartridgeId: filter.cartridgeId }];
     }
 
     // Scope to global policies + org-specific policies when org is provided
     if (filter?.organizationId !== undefined) {
-      const orgCondition = [
-        { organizationId: null },
-        { organizationId: filter.organizationId },
-      ];
+      const orgCondition = [{ organizationId: null }, { organizationId: filter.organizationId }];
       if (where["OR"]) {
         // Combine with existing cartridgeId OR using AND
         const cartridgeOr = where["OR"];
         delete where["OR"];
-        where["AND"] = [
-          { OR: cartridgeOr },
-          { OR: orgCondition },
-        ];
+        where["AND"] = [{ OR: cartridgeOr }, { OR: orgCondition }];
       } else {
         where["OR"] = orgCondition;
       }

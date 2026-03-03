@@ -7,9 +7,7 @@ import type { DiagnosticResult } from "../../core/types.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeDiagnosticResult(
-  overrides: Partial<DiagnosticResult> = {}
-): DiagnosticResult {
+function makeDiagnosticResult(overrides: Partial<DiagnosticResult> = {}): DiagnosticResult {
   return {
     vertical: "commerce",
     entityId: "act_123",
@@ -46,7 +44,7 @@ function makeDiagnosticResult(
 
 function makePlatformResult(
   platform: "meta" | "google" | "tiktok",
-  resultOverrides: Partial<DiagnosticResult> = {}
+  resultOverrides: Partial<DiagnosticResult> = {},
 ): PlatformResult {
   return {
     platform,
@@ -61,9 +59,7 @@ function makePlatformResult(
 
 describe("correlate", () => {
   it("returns empty results with fewer than 2 successful platforms", () => {
-    const result = correlate([
-      makePlatformResult("meta"),
-    ]);
+    const result = correlate([makePlatformResult("meta")]);
 
     expect(result.findings).toHaveLength(0);
     expect(result.budgetRecommendations).toHaveLength(0);
@@ -88,7 +84,7 @@ describe("correlate", () => {
           {
             stageName: "awareness",
             metric: "impressions",
-            currentValue: 5000,  // was 10000 → CPM doubled
+            currentValue: 5000, // was 10000 → CPM doubled
             previousValue: 10000,
             delta: -5000,
             deltaPercent: -50,
@@ -103,7 +99,7 @@ describe("correlate", () => {
           {
             stageName: "awareness",
             metric: "impressions",
-            currentValue: 8000,  // was 16000
+            currentValue: 8000, // was 16000
             previousValue: 16000,
             delta: -8000,
             deltaPercent: -50,
@@ -114,9 +110,7 @@ describe("correlate", () => {
       }),
     ]);
 
-    const cpmFinding = result.findings.find(
-      (f) => f.signal === "market_wide_cpm_increase"
-    );
+    const cpmFinding = result.findings.find((f) => f.signal === "market_wide_cpm_increase");
     expect(cpmFinding).toBeDefined();
     expect(cpmFinding!.severity).toBe("critical");
     expect(cpmFinding!.platforms).toContain("meta");
@@ -158,9 +152,7 @@ describe("correlate", () => {
       }),
     ]);
 
-    const cpmFinding = result.findings.find(
-      (f) => f.signal === "market_wide_cpm_increase"
-    );
+    const cpmFinding = result.findings.find((f) => f.signal === "market_wide_cpm_increase");
     expect(cpmFinding).toBeUndefined();
   });
 
@@ -200,7 +192,7 @@ describe("correlate", () => {
       makePlatformResult("meta", {
         primaryKPI: {
           name: "purchase",
-          current: 80,   // cost up 60% → worsening
+          current: 80, // cost up 60% → worsening
           previous: 50,
           deltaPercent: 60,
           severity: "critical",
@@ -209,7 +201,7 @@ describe("correlate", () => {
       makePlatformResult("google", {
         primaryKPI: {
           name: "purchase",
-          current: 30,   // cost down 40% → improving
+          current: 30, // cost down 40% → improving
           previous: 50,
           deltaPercent: -40,
           severity: "healthy",
@@ -217,9 +209,7 @@ describe("correlate", () => {
       }),
     ]);
 
-    const conflictFinding = result.findings.find(
-      (f) => f.signal === "platform_conflict"
-    );
+    const conflictFinding = result.findings.find((f) => f.signal === "platform_conflict");
     expect(conflictFinding).toBeDefined();
     expect(conflictFinding!.severity).toBe("warning");
 

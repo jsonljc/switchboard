@@ -12,30 +12,40 @@ export function resolveAgent(
   agents: Map<AgentType, AgentModule>,
 ): AgentModule | null {
   // Route by action type prefix
-  if (actionType.startsWith("patient-engagement.lead.") ||
-      actionType === "patient-engagement.conversation.handle_objection") {
+  if (
+    actionType.startsWith("patient-engagement.lead.") ||
+    actionType === "patient-engagement.conversation.handle_objection"
+  ) {
     return agents.get("intake") ?? null;
   }
 
-  if (actionType.startsWith("patient-engagement.appointment.") ||
-      actionType.startsWith("patient-engagement.reminder.")) {
+  if (
+    actionType.startsWith("patient-engagement.appointment.") ||
+    actionType.startsWith("patient-engagement.reminder.")
+  ) {
     return agents.get("scheduling") ?? null;
   }
 
-  if (actionType.startsWith("patient-engagement.treatment.") ||
-      actionType.startsWith("patient-engagement.review.")) {
+  if (
+    actionType.startsWith("patient-engagement.treatment.") ||
+    actionType.startsWith("patient-engagement.review.")
+  ) {
     return agents.get("followup") ?? null;
   }
 
-  if (actionType.startsWith("patient-engagement.cadence.") ||
-      actionType === "patient-engagement.journey.update_stage") {
+  if (
+    actionType.startsWith("patient-engagement.cadence.") ||
+    actionType === "patient-engagement.journey.update_stage"
+  ) {
     return agents.get("retention") ?? null;
   }
 
   // Direct actions (no agent routing)
-  if (actionType.startsWith("patient-engagement.pipeline.") ||
-      actionType.startsWith("patient-engagement.patient.") ||
-      actionType === "patient-engagement.conversation.escalate") {
+  if (
+    actionType.startsWith("patient-engagement.pipeline.") ||
+    actionType.startsWith("patient-engagement.patient.") ||
+    actionType === "patient-engagement.conversation.escalate"
+  ) {
     return null;
   }
 

@@ -86,25 +86,33 @@ describe("Identity Principals — canActAs", () => {
   it("scope wildcard '*' matches any action", () => {
     const principal = makePrincipal({ id: "user-1" });
     const delegation = makeDelegation({ scope: "*" });
-    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
+    expect(
+      canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget"),
+    ).toBe(true);
   });
 
   it("exact scope match works", () => {
     const principal = makePrincipal({ id: "user-1" });
     const delegation = makeDelegation({ scope: "digital-ads.campaign.adjust_budget" });
-    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
+    expect(
+      canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget"),
+    ).toBe(true);
   });
 
   it("exact scope mismatch is rejected", () => {
     const principal = makePrincipal({ id: "user-1" });
     const delegation = makeDelegation({ scope: "digital-ads.campaign.adjust_budget" });
-    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.pause")).toBe(false);
+    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.pause")).toBe(
+      false,
+    );
   });
 
   it("prefix wildcard 'digital-ads.*' matches 'digital-ads.campaign.adjust_budget'", () => {
     const principal = makePrincipal({ id: "user-1" });
     const delegation = makeDelegation({ scope: "digital-ads.*" });
-    expect(canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget")).toBe(true);
+    expect(
+      canActAs(principal, "target-user", [delegation], "digital-ads.campaign.adjust_budget"),
+    ).toBe(true);
   });
 
   it("prefix wildcard 'digital-ads.*' does not match 'other.action'", () => {
@@ -135,25 +143,19 @@ describe("Identity Principals — resolveApprovers", () => {
   });
 
   it("returns fallback approver when no valid approvers found", () => {
-    const principals: Principal[] = [
-      makePrincipal({ id: "user-1", roles: ["requester"] }),
-    ];
+    const principals: Principal[] = [makePrincipal({ id: "user-1", roles: ["requester"] })];
     const result = resolveApprovers(["user-1"], "fallback-admin", principals);
     expect(result).toEqual(["fallback-admin"]);
   });
 
   it("returns empty array when no valid approvers and no fallback", () => {
-    const principals: Principal[] = [
-      makePrincipal({ id: "user-1", roles: ["requester"] }),
-    ];
+    const principals: Principal[] = [makePrincipal({ id: "user-1", roles: ["requester"] })];
     const result = resolveApprovers(["user-1"], null, principals);
     expect(result).toEqual([]);
   });
 
   it("ignores approverIds not present in principals list", () => {
-    const principals: Principal[] = [
-      makePrincipal({ id: "admin-1", roles: ["approver"] }),
-    ];
+    const principals: Principal[] = [makePrincipal({ id: "admin-1", roles: ["approver"] })];
     const result = resolveApprovers(["admin-1", "missing-user"], null, principals);
     expect(result).toEqual(["admin-1"]);
   });

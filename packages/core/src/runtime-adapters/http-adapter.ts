@@ -52,7 +52,11 @@ export class HttpExecutionAdapter implements RuntimeAdapter {
       const errBody = await res.text();
       let message = `Switchboard API error ${res.status}: ${res.statusText}`;
       try {
-        const json = JSON.parse(errBody) as { error?: string; question?: string; explanation?: string };
+        const json = JSON.parse(errBody) as {
+          error?: string;
+          question?: string;
+          explanation?: string;
+        };
         message = json.error ?? json.question ?? json.explanation ?? message;
       } catch {
         if (errBody) message += ` — ${errBody.slice(0, 200)}`;

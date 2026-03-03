@@ -29,19 +29,23 @@ export class GoalParser {
             /(?:keeping|under|below|less\s+than)\s+(?:\$)?(\d+(?:\.\d+)?)/i,
           );
           if (constraintMatch) {
-            return [{
-              field: "cpl",
-              operator: "lte" as const,
-              value: parseFloat(constraintMatch[1]!),
-              unit: "USD",
-            }];
+            return [
+              {
+                field: "cpl",
+                operator: "lte" as const,
+                value: parseFloat(constraintMatch[1]!),
+                unit: "USD",
+              },
+            ];
           }
           return [];
         },
-        extractMetrics: (m) => [{
-          name: m[1]?.trim().toLowerCase().replace(/s$/, "") ?? "leads",
-          direction: "increase" as const,
-        }],
+        extractMetrics: (m) => [
+          {
+            name: m[1]?.trim().toLowerCase().replace(/s$/, "") ?? "leads",
+            direction: "increase" as const,
+          },
+        ],
         decomposable: true,
       },
       {
@@ -49,15 +53,18 @@ export class GoalParser {
         type: "optimize",
         extractObjective: (m) => `Maximize ${m[1]?.trim()}`,
         extractConstraints: () => [],
-        extractMetrics: (m) => [{
-          name: m[1]?.trim().toLowerCase() ?? "performance",
-          direction: "increase" as const,
-        }],
+        extractMetrics: (m) => [
+          {
+            name: m[1]?.trim().toLowerCase() ?? "performance",
+            direction: "increase" as const,
+          },
+        ],
         decomposable: true,
       },
       // Investigate patterns
       {
-        regex: /(?:why\s+is|why\s+are|what'?s?\s+wrong\s+with|what\s+happened\s+(?:to|with))\s+(.+)/i,
+        regex:
+          /(?:why\s+is|why\s+are|what'?s?\s+wrong\s+with|what\s+happened\s+(?:to|with))\s+(.+)/i,
         type: "investigate",
         extractObjective: (m) => `Investigate: ${m[1]?.trim()}`,
         extractConstraints: () => [],
@@ -90,7 +97,8 @@ export class GoalParser {
         decomposable: false,
       },
       {
-        regex: /(?:set|change|adjust)\s+(?:the\s+)?budget\s+(?:for\s+)?(.+?)\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex:
+          /(?:set|change|adjust)\s+(?:the\s+)?budget\s+(?:for\s+)?(.+?)\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
         type: "execute",
         extractObjective: (m) => `Set budget for ${m[1]?.trim()} to $${m[2]}`,
         extractConstraints: () => [],
@@ -116,20 +124,25 @@ export class GoalParser {
       },
       // Maintain patterns
       {
-        regex: /(?:keep|maintain|ensure)\s+(.+?)\s+(?:under|below|above|at)\s+(?:\$)?(\d+(?:\.\d+)?)/i,
+        regex:
+          /(?:keep|maintain|ensure)\s+(.+?)\s+(?:under|below|above|at)\s+(?:\$)?(\d+(?:\.\d+)?)/i,
         type: "maintain",
         extractObjective: (m) => `Maintain ${m[1]?.trim()} target $${m[2]}`,
-        extractConstraints: (m) => [{
-          field: m[1]?.trim().toLowerCase().replace(/\s+/g, "_") ?? "metric",
-          operator: "lte" as const,
-          value: parseFloat(m[2]!),
-          unit: "USD",
-        }],
-        extractMetrics: (m) => [{
-          name: m[1]?.trim().toLowerCase() ?? "metric",
-          direction: "maintain" as const,
-          targetValue: parseFloat(m[2]!),
-        }],
+        extractConstraints: (m) => [
+          {
+            field: m[1]?.trim().toLowerCase().replace(/\s+/g, "_") ?? "metric",
+            operator: "lte" as const,
+            value: parseFloat(m[2]!),
+            unit: "USD",
+          },
+        ],
+        extractMetrics: (m) => [
+          {
+            name: m[1]?.trim().toLowerCase() ?? "metric",
+            direction: "maintain" as const,
+            targetValue: parseFloat(m[2]!),
+          },
+        ],
         decomposable: true,
       },
     ];

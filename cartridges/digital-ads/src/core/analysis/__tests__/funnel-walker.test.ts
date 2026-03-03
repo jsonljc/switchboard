@@ -161,16 +161,16 @@ describe("analyzeFunnel", () => {
       stages: {
         impressions: { count: 10000, cost: null },
         inline_link_clicks: { count: 1000, cost: 1.0 }, // 10% CTR
-        add_to_cart: { count: 100, cost: null },          // 10% click→ATC
-        purchase: { count: 25, cost: 40 },                // 25% ATC→purchase
+        add_to_cart: { count: 100, cost: null }, // 10% click→ATC
+        purchase: { count: 25, cost: 40 }, // 25% ATC→purchase
       },
     });
     const previous = makeSnapshot({
       stages: {
         impressions: { count: 10000, cost: null },
-        inline_link_clicks: { count: 500, cost: 2.0 },  // 5% CTR
-        add_to_cart: { count: 50, cost: null },           // 10% click→ATC
-        purchase: { count: 20, cost: 50 },                // 40% ATC→purchase
+        inline_link_clicks: { count: 500, cost: 2.0 }, // 5% CTR
+        add_to_cart: { count: 50, cost: null }, // 10% click→ATC
+        purchase: { count: 20, cost: 50 }, // 40% ATC→purchase
       },
     });
 
@@ -197,9 +197,7 @@ describe("analyzeFunnel", () => {
       subEntities: [],
     };
 
-    const mockAdvisor: FindingAdvisor = (
-      _stages, _dropoffs, _curr, _prev, ctx
-    ): Finding[] => {
+    const mockAdvisor: FindingAdvisor = (_stages, _dropoffs, _curr, _prev, ctx): Finding[] => {
       // Verify context is passed through
       expect(ctx).toBe(mockContext);
       return [
@@ -332,7 +330,7 @@ describe("analyzeFunnel", () => {
       stages: {
         impressions: { count: 10000, cost: null },
         inline_link_clicks: { count: 500, cost: 2.0 },
-        add_to_cart: { count: 40, cost: null },     // ATC dropped
+        add_to_cart: { count: 40, cost: null }, // ATC dropped
         purchase: { count: 15, cost: 66.67 },
       },
     });
@@ -340,7 +338,7 @@ describe("analyzeFunnel", () => {
       stages: {
         impressions: { count: 10000, cost: null },
         inline_link_clicks: { count: 500, cost: 2.0 },
-        add_to_cart: { count: 50, cost: null },     // ATC was higher
+        add_to_cart: { count: 50, cost: null }, // ATC was higher
         purchase: { count: 20, cost: 50 },
       },
     });
@@ -364,7 +362,7 @@ describe("analyzeFunnel", () => {
     // Each dropoff should use its own from-stage count, not the bottom-of-funnel count
     // The ATC→purchase dropoff should use ATC count (50) as baseline, not purchase count (20)
     const atcToPurchase = result.dropoffs.find(
-      (d) => d.fromStage === "ATC" && d.toStage === "purchase"
+      (d) => d.fromStage === "ATC" && d.toStage === "purchase",
     )!;
     expect(atcToPurchase.economicImpact).toBeDefined();
     // Previous ATC count was 50, so that should be the baseline

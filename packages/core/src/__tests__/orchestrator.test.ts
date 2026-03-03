@@ -471,16 +471,18 @@ describe("LifecycleOrchestrator", () => {
         cartridgeId: "digital-ads",
       });
 
-      await expect(
-        orchestrator.executeApproved(proposeResult.envelope.id),
-      ).rejects.toThrow('envelope status is denied, expected "approved"');
+      await expect(orchestrator.executeApproved(proposeResult.envelope.id)).rejects.toThrow(
+        'envelope status is denied, expected "approved"',
+      );
     });
   });
 
   describe("requestUndo()", () => {
     it("should create a governed undo proposal", async () => {
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"] }),
+        makeIdentitySpec({
+          trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"],
+        }),
       );
 
       // Execute an action
@@ -533,9 +535,9 @@ describe("LifecycleOrchestrator", () => {
 
       await orchestrator.executeApproved(proposeResult.envelope.id);
 
-      await expect(
-        orchestrator.requestUndo(proposeResult.envelope.id),
-      ).rejects.toThrow("No undo recipe available");
+      await expect(orchestrator.requestUndo(proposeResult.envelope.id)).rejects.toThrow(
+        "No undo recipe available",
+      );
     });
   });
 
@@ -566,7 +568,11 @@ describe("LifecycleOrchestrator", () => {
     it("should return clarification for ambiguous entity", async () => {
       // Add resolveEntity to the cartridge
       const cartridgeWithResolve = cartridge as TestCartridge & {
-        resolveEntity: (inputRef: string, entityType: string, context: Record<string, unknown>) => Promise<unknown>;
+        resolveEntity: (
+          inputRef: string,
+          entityType: string,
+          context: Record<string, unknown>,
+        ) => Promise<unknown>;
       };
       cartridgeWithResolve.resolveEntity = async (inputRef: string, entityType: string) => ({
         id: `resolve_${Date.now()}`,
@@ -602,7 +608,11 @@ describe("LifecycleOrchestrator", () => {
       );
 
       const cartridgeWithResolve = cartridge as TestCartridge & {
-        resolveEntity: (inputRef: string, entityType: string, context: Record<string, unknown>) => Promise<unknown>;
+        resolveEntity: (
+          inputRef: string,
+          entityType: string,
+          context: Record<string, unknown>,
+        ) => Promise<unknown>;
       };
       cartridgeWithResolve.resolveEntity = async (inputRef: string, entityType: string) => ({
         id: `resolve_${Date.now()}`,
@@ -742,7 +752,9 @@ describe("LifecycleOrchestrator", () => {
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [
+          { actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" },
+        ],
         protectedEntities: [],
       });
 
@@ -802,7 +814,9 @@ describe("LifecycleOrchestrator", () => {
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [
+          { actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" },
+        ],
         protectedEntities: [],
       });
 
@@ -878,7 +892,9 @@ describe("LifecycleOrchestrator", () => {
 
       cartridge.onGuardrails({
         rateLimits: [],
-        cooldowns: [{ actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" }],
+        cooldowns: [
+          { actionType: "digital-ads.campaign.pause", cooldownMs: 60_000, scope: "entity" },
+        ],
         protectedEntities: [],
       });
 
@@ -945,7 +961,9 @@ describe("LifecycleOrchestrator", () => {
       // The action should succeed (not denied) but the count should reflect prior execution
       expect(result2.denied).toBe(false);
       // After hydration, the in-memory state should have the prior count
-      expect(freshGuardrailState.actionCounts.get("user:digital-ads.campaign.pause")?.count).toBe(1);
+      expect(freshGuardrailState.actionCounts.get("user:digital-ads.campaign.pause")?.count).toBe(
+        1,
+      );
     });
 
     it("should deny rate-limited action across orchestrator restarts", async () => {
@@ -1291,10 +1309,15 @@ describe("LifecycleOrchestrator", () => {
 
       // Also trust the behavior so the action auto-approves
       await storage.identity.saveSpec(
-        makeIdentitySpec({ trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"] }),
+        makeIdentitySpec({
+          trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"],
+        }),
       );
 
-      const adjBefore = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
+      const adjBefore = await competenceTracker.getAdjustment(
+        "user_1",
+        "digital-ads.campaign.pause",
+      );
 
       // Execute an action
       const result = await competenceOrchestrator.propose({
@@ -1311,7 +1334,10 @@ describe("LifecycleOrchestrator", () => {
       await competenceOrchestrator.requestUndo(result.envelope.id);
 
       // The rollback should have been recorded against the original action type
-      const adjAfter = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
+      const adjAfter = await competenceTracker.getAdjustment(
+        "user_1",
+        "digital-ads.campaign.pause",
+      );
       // Score should have gone up from the execution success (+3 + streak), then down from rollback (-15)
       // Net change from adjBefore: +success points + streak bonus - 15
       expect(adjAfter!.record.rollbackCount).toBe(1);

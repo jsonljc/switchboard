@@ -23,7 +23,7 @@ export const placementEfficiencyAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.placementBreakdowns || context.placementBreakdowns.length === 0) {
     return [];
@@ -43,9 +43,8 @@ export const placementEfficiencyAdvisor: FindingAdvisor = (
 
   for (const placement of placements) {
     const spendShare = placement.spend / totalSpend;
-    const placementCPA = placement.conversions > 0
-      ? placement.spend / placement.conversions
-      : Infinity;
+    const placementCPA =
+      placement.conversions > 0 ? placement.spend / placement.conversions : Infinity;
 
     // Flag: >10% of spend but CPA >2x average
     if (spendShare > 0.1 && placementCPA > avgCPA * 2) {
@@ -59,8 +58,7 @@ export const placementEfficiencyAdvisor: FindingAdvisor = (
         severity: spendShare > 0.15 ? "critical" : "warning",
         stage: "placement",
         message: `Placement "${placement.placement}" has $${placement.spend.toFixed(2)} spend (${(spendShare * 100).toFixed(1)}% of total) with zero conversions.`,
-        recommendation:
-          `Consider excluding "${placement.placement}" or significantly reducing its allocation. Zero-conversion placements are burning budget without contributing to your KPI.`,
+        recommendation: `Consider excluding "${placement.placement}" or significantly reducing its allocation. Zero-conversion placements are burning budget without contributing to your KPI.`,
       });
     }
   }

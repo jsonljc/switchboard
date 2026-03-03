@@ -50,9 +50,13 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
         telegram: process.env["TELEGRAM_BOT_TOKEN"]
           ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
           : undefined,
-        whatsapp: process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
-          ? { token: process.env["WHATSAPP_TOKEN"], phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"] }
-          : undefined,
+        whatsapp:
+          process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+            ? {
+                token: process.env["WHATSAPP_TOKEN"],
+                phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+              }
+            : undefined,
       };
 
       for (const report of dueReports) {
@@ -66,15 +70,24 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
           }
 
           // Run the appropriate diagnostic
-          const actionId = report.reportType === "portfolio"
-            ? "digital-ads.portfolio.diagnose"
-            : "digital-ads.funnel.diagnose";
+          const actionId =
+            report.reportType === "portfolio"
+              ? "digital-ads.portfolio.diagnose"
+              : "digital-ads.funnel.diagnose";
 
-          const execResult = await cartridge.execute(actionId, {
-            platform: report.platform ?? "meta",
-            vertical: report.vertical,
-            entityId: "act_default",
-          }, { principalId: "system", organizationId: report.organizationId, connectionCredentials: {} });
+          const execResult = await cartridge.execute(
+            actionId,
+            {
+              platform: report.platform ?? "meta",
+              vertical: report.vertical,
+              entityId: "act_default",
+            },
+            {
+              principalId: "system",
+              organizationId: report.organizationId,
+              connectionCredentials: {},
+            },
+          );
 
           // Format the result
           let body = "No diagnostic data available.";
@@ -103,6 +116,7 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
           // Compute next run
           let nextRunAt: Date | null = null;
           try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
             const CronParser = require("cron-parser");
             const interval = CronParser.parseExpression(report.cronExpression, {
               currentDate: new Date(),
@@ -122,7 +136,10 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
             },
           });
 
-          logger.info({ reportId: report.id, reportName: report.name }, "Scheduled report delivered");
+          logger.info(
+            { reportId: report.id, reportName: report.name },
+            "Scheduled report delivered",
+          );
         } catch (err) {
           logger.error({ err, reportId: report.id } as any, "Failed to run scheduled report");
         }

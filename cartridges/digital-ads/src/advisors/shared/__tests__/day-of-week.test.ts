@@ -22,7 +22,7 @@ function makeDaily(
   date: string,
   dayOfWeek: number,
   spend: number,
-  conversions: number
+  conversions: number,
 ): DailyBreakdown {
   return {
     date,
@@ -47,14 +47,8 @@ describe("dayOfWeekAdvisor", () => {
   });
 
   it("returns no findings when spend change is negligible", () => {
-    const current = [
-      makeDaily("2024-01-08", 1, 100, 10),
-      makeDaily("2024-01-09", 2, 100, 10),
-    ];
-    const previous = [
-      makeDaily("2024-01-01", 1, 98, 10),
-      makeDaily("2024-01-02", 2, 98, 10),
-    ];
+    const current = [makeDaily("2024-01-08", 1, 100, 10), makeDaily("2024-01-09", 2, 100, 10)];
+    const previous = [makeDaily("2024-01-01", 1, 98, 10), makeDaily("2024-01-02", 2, 98, 10)];
     const context: DiagnosticContext = {
       dailyBreakdowns: current,
       previousDailyBreakdowns: previous,
@@ -72,7 +66,7 @@ describe("dayOfWeekAdvisor", () => {
       makeDaily("2024-01-12", 5, 100, 10),
     ];
     const previous = [
-      makeDaily("2024-01-01", 1, 50, 5),   // Monday was much lower
+      makeDaily("2024-01-01", 1, 50, 5), // Monday was much lower
       makeDaily("2024-01-02", 2, 100, 10),
       makeDaily("2024-01-03", 3, 100, 10),
       makeDaily("2024-01-04", 4, 100, 10),
@@ -88,13 +82,13 @@ describe("dayOfWeekAdvisor", () => {
 
   it("detects weekend vs weekday CPA disparity", () => {
     const current = [
-      makeDaily("2024-01-08", 1, 100, 20),  // Weekday: CPA $5
+      makeDaily("2024-01-08", 1, 100, 20), // Weekday: CPA $5
       makeDaily("2024-01-09", 2, 100, 20),
       makeDaily("2024-01-10", 3, 100, 20),
       makeDaily("2024-01-11", 4, 100, 20),
       makeDaily("2024-01-12", 5, 100, 20),
-      makeDaily("2024-01-13", 6, 200, 5),  // Saturday: CPA $40
-      makeDaily("2024-01-14", 0, 200, 5),  // Sunday: CPA $40
+      makeDaily("2024-01-13", 6, 200, 5), // Saturday: CPA $40
+      makeDaily("2024-01-14", 0, 200, 5), // Sunday: CPA $40
     ];
     const previous = [
       makeDaily("2024-01-01", 1, 80, 16),

@@ -23,13 +23,13 @@ import type { DiagnosticResult } from "../core/types.js";
 export function generatePortfolioActions(
   platformResults: PlatformResult[],
   findings: CrossPlatformFinding[],
-  budgetRecs: BudgetRecommendation[]
+  budgetRecs: BudgetRecommendation[],
 ): PortfolioAction[] {
   const actions: PortfolioAction[] = [];
 
   const successfulResults = platformResults.filter(
     (r): r is PlatformResult & { result: DiagnosticResult } =>
-      r.status === "success" && r.result !== undefined
+      r.status === "success" && r.result !== undefined,
   );
 
   // Action 1: Platform-level elasticity-based actions
@@ -59,7 +59,8 @@ export function generatePortfolioActions(
   // Action 2: Budget reallocation actions
   for (const rec of budgetRecs) {
     const shiftPercent = rec.suggestedShiftPercent ?? estimateShiftPercent(rec, successfulResults);
-    const revenueRecovery = rec.estimatedKPIImprovement ?? estimateRevenueRecovery(rec, successfulResults);
+    const revenueRecovery =
+      rec.estimatedKPIImprovement ?? estimateRevenueRecovery(rec, successfulResults);
     const riskLevel = computeRiskLevel(shiftPercent);
 
     actions.push({
@@ -130,7 +131,7 @@ function computeConfidence(result: DiagnosticResult): number {
  */
 function estimateShiftPercent(
   rec: BudgetRecommendation,
-  results: Array<PlatformResult & { result: DiagnosticResult }>
+  results: Array<PlatformResult & { result: DiagnosticResult }>,
 ): number {
   const fromResult = results.find((r) => r.platform === rec.from);
   const toResult = results.find((r) => r.platform === rec.to);
@@ -149,7 +150,7 @@ function estimateShiftPercent(
  */
 function estimateRevenueRecovery(
   rec: BudgetRecommendation,
-  results: Array<PlatformResult & { result: DiagnosticResult }>
+  results: Array<PlatformResult & { result: DiagnosticResult }>,
 ): number {
   const toResult = results.find((r) => r.platform === rec.to);
   if (!toResult) return 0;

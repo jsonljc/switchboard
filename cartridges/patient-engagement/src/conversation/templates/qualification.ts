@@ -13,7 +13,8 @@ export const qualificationFlow: ConversationFlowDefinition = {
     {
       id: "greeting",
       type: "message",
-      template: "Hi {{patientName}}! Thank you for your interest in {{treatmentInterest}} at {{clinicName}}. I'd love to help you get started.",
+      template:
+        "Hi {{patientName}}! Thank you for your interest in {{treatmentInterest}} at {{clinicName}}. I'd love to help you get started.",
     },
     {
       id: "timeline_question",
@@ -36,7 +37,8 @@ export const qualificationFlow: ConversationFlowDefinition = {
     {
       id: "score_lead",
       type: "score",
-      template: "Thank you for sharing that information, {{patientName}}. Let me find the best options for you.",
+      template:
+        "Thank you for sharing that information, {{patientName}}. Let me find the best options for you.",
     },
     {
       id: "qualify_branch",
@@ -49,13 +51,15 @@ export const qualificationFlow: ConversationFlowDefinition = {
     {
       id: "qualified_response",
       type: "message",
-      template: "Great news! Based on your needs, I'd recommend scheduling a consultation. We have availability this week.",
+      template:
+        "Great news! Based on your needs, I'd recommend scheduling a consultation. We have availability this week.",
       nextStepId: "book_action",
     },
     {
       id: "nurture_response",
       type: "message",
-      template: "I'd be happy to send you more information about {{treatmentInterest}}. In the meantime, feel free to ask any questions.",
+      template:
+        "I'd be happy to send you more information about {{treatmentInterest}}. In the meantime, feel free to ask any questions.",
     },
     {
       id: "book_action",

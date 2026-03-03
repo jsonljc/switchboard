@@ -1,8 +1,4 @@
-import type {
-  ActionPlan,
-  DecisionTrace,
-  FinalDecision,
-} from "@switchboard/schemas";
+import type { ActionPlan, DecisionTrace, FinalDecision } from "@switchboard/schemas";
 
 export interface PlanEvaluationResult {
   planDecision: "allow" | "deny" | "partial";
@@ -10,10 +6,7 @@ export interface PlanEvaluationResult {
   explanation: string;
 }
 
-export function evaluatePlan(
-  plan: ActionPlan,
-  decisions: DecisionTrace[],
-): PlanEvaluationResult {
+export function evaluatePlan(plan: ActionPlan, decisions: DecisionTrace[]): PlanEvaluationResult {
   const perProposal = new Map<string, FinalDecision>();
   for (const d of decisions) {
     perProposal.set(d.actionId, d.finalDecision);
@@ -44,8 +37,7 @@ function evaluateAtomic(
     return {
       planDecision: "deny",
       perProposal: allDenied,
-      explanation:
-        "Atomic plan: one or more actions were denied, so the entire plan is denied.",
+      explanation: "Atomic plan: one or more actions were denied, so the entire plan is denied.",
     };
   }
 
@@ -61,9 +53,7 @@ function evaluateBestEffort(
   perProposal: Map<string, FinalDecision>,
 ): PlanEvaluationResult {
   const anyDenied = Array.from(perProposal.values()).some((d) => d === "deny");
-  const anyAllowed = Array.from(perProposal.values()).some(
-    (d) => d === "allow" || d === "modify",
-  );
+  const anyAllowed = Array.from(perProposal.values()).some((d) => d === "allow" || d === "modify");
 
   let planDecision: "allow" | "deny" | "partial";
   if (!anyAllowed) {
@@ -99,9 +89,7 @@ function evaluateSequential(
     }
   }
 
-  const anyDenied = Array.from(updatedProposals.values()).some(
-    (d) => d === "deny",
-  );
+  const anyDenied = Array.from(updatedProposals.values()).some((d) => d === "deny");
   const anyAllowed = Array.from(updatedProposals.values()).some(
     (d) => d === "allow" || d === "modify",
   );

@@ -60,10 +60,7 @@ export const DEFAULT_DIGITAL_ADS_POLICIES: Policy[] = [
         {
           field: "actionType",
           operator: "in",
-          value: [
-            "digital-ads.campaign.adjust_budget",
-            "digital-ads.adset.adjust_budget",
-          ],
+          value: ["digital-ads.campaign.adjust_budget", "digital-ads.adset.adjust_budget"],
         },
         { field: "parameters.newBudget", operator: "gt", value: 5000 },
       ],
@@ -119,10 +116,7 @@ export const DEFAULT_DIGITAL_ADS_POLICIES: Policy[] = [
         {
           field: "actionType",
           operator: "in",
-          value: [
-            "digital-ads.campaign.adjust_budget",
-            "digital-ads.adset.adjust_budget",
-          ],
+          value: ["digital-ads.campaign.adjust_budget", "digital-ads.adset.adjust_budget"],
         },
       ],
     },

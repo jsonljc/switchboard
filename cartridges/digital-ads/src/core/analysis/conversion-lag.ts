@@ -1,6 +1,4 @@
-import type {
-  DailyBreakdown,
-} from "../types.js";
+import type { DailyBreakdown } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Conversion Lag Adjustment
@@ -46,11 +44,11 @@ const DEFAULT_MATURITY_FACTORS: Record<number, number> = {
 export function computePeriodMaturity(
   periodEnd: string,
   referenceDate: Date,
-  periodDays: number
+  periodDays: number,
 ): number {
   const endDate = new Date(periodEnd);
   const daysSinceEnd = Math.floor(
-    (referenceDate.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24)
+    (referenceDate.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   if (daysSinceEnd >= 4) {
@@ -88,23 +86,15 @@ export function assessConversionLag(
   currentPeriodEnd: string,
   previousPeriodEnd: string,
   referenceDate: Date,
-  periodDays: number
+  periodDays: number,
 ): {
   currentMaturity: number;
   previousMaturity: number;
   lagIsSignificant: boolean;
   maturityGap: number;
 } {
-  const currentMaturity = computePeriodMaturity(
-    currentPeriodEnd,
-    referenceDate,
-    periodDays
-  );
-  const previousMaturity = computePeriodMaturity(
-    previousPeriodEnd,
-    referenceDate,
-    periodDays
-  );
+  const currentMaturity = computePeriodMaturity(currentPeriodEnd, referenceDate, periodDays);
+  const previousMaturity = computePeriodMaturity(previousPeriodEnd, referenceDate, periodDays);
   const maturityGap = previousMaturity - currentMaturity;
 
   return {
@@ -129,12 +119,12 @@ export function assessConversionLag(
  */
 export function adjustForConversionLag(
   dailyBreakdowns: DailyBreakdown[],
-  referenceDate: Date
+  referenceDate: Date,
 ): DailyBreakdown[] {
   return dailyBreakdowns.map((day) => {
     const dayDate = new Date(day.date);
     const daysAgo = Math.floor(
-      (referenceDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24)
+      (referenceDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24),
     );
 
     const maturityFactor = DEFAULT_MATURITY_FACTORS[daysAgo] ?? 1.0;
@@ -144,9 +134,8 @@ export function adjustForConversionLag(
     }
 
     // Inflate conversions to estimate mature count
-    const adjustedConversions = maturityFactor > 0
-      ? Math.round(day.conversions / maturityFactor)
-      : day.conversions;
+    const adjustedConversions =
+      maturityFactor > 0 ? Math.round(day.conversions / maturityFactor) : day.conversions;
 
     return {
       ...day,
@@ -167,14 +156,14 @@ export function adjustForConversionLag(
  */
 export function estimateConversionDeficit(
   dailyBreakdowns: DailyBreakdown[],
-  referenceDate: Date
+  referenceDate: Date,
 ): number {
   let deficit = 0;
 
   for (const day of dailyBreakdowns) {
     const dayDate = new Date(day.date);
     const daysAgo = Math.floor(
-      (referenceDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24)
+      (referenceDate.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24),
     );
 
     const maturityFactor = DEFAULT_MATURITY_FACTORS[daysAgo] ?? 1.0;

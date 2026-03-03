@@ -15,10 +15,18 @@ export interface TokenUsageSummary {
 
 export interface ModelRouter {
   shouldUseLLM(orgId?: string): Promise<boolean>;
-  recordUsage(promptTokens: number, completionTokens: number, orgId?: string, modelId?: string): Promise<void>;
+  recordUsage(
+    promptTokens: number,
+    completionTokens: number,
+    orgId?: string,
+    modelId?: string,
+  ): Promise<void>;
   getTodayUsage(orgId?: string): Promise<number>;
   getRemainingBudget(orgId?: string): Promise<number>;
-  getUsageSummary(orgId: string, period: "daily" | "weekly" | "monthly"): Promise<TokenUsageSummary>;
+  getUsageSummary(
+    orgId: string,
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<TokenUsageSummary>;
   /** Get estimated USD cost for today (null if not tracked) */
   getTodayCostUSD?(orgId?: string): Promise<number>;
   /** Select optimal model for a given task type (tiered routing) */

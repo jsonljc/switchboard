@@ -25,10 +25,7 @@ export class ActivityCadenceAdvisor {
   private dormantThresholdDays: number;
   private followupThresholdDays: number;
 
-  constructor(config?: {
-    dormantThresholdDays?: number;
-    followupThresholdDays?: number;
-  }) {
+  constructor(config?: { dormantThresholdDays?: number; followupThresholdDays?: number }) {
     this.dormantThresholdDays = config?.dormantThresholdDays ?? 30;
     this.followupThresholdDays = config?.followupThresholdDays ?? 7;
   }
@@ -98,7 +95,8 @@ export class ActivityCadenceAdvisor {
         description: `${overdueContacts.length} contacts need follow-up (last activity ${this.followupThresholdDays}-${this.dormantThresholdDays} days ago).`,
         metric: overdueContacts.length,
         affectedContactIds: overdueContacts.map((c) => c.id),
-        recommendation: "Schedule follow-up calls or emails for overdue contacts to maintain engagement.",
+        recommendation:
+          "Schedule follow-up calls or emails for overdue contacts to maintain engagement.",
       });
     }
 
@@ -119,7 +117,8 @@ export class ActivityCadenceAdvisor {
         description: `${unengagedLeads.length} contacts were created in the last 14 days but have never been contacted.`,
         metric: unengagedLeads.length,
         affectedContactIds: unengagedLeads.map((c) => c.id),
-        recommendation: "Speed to lead matters — contact new leads within 24 hours for best conversion rates.",
+        recommendation:
+          "Speed to lead matters — contact new leads within 24 hours for best conversion rates.",
       });
     }
 
@@ -158,7 +157,8 @@ export class ActivityCadenceAdvisor {
         description: `Activity dropped ${declinePct.toFixed(0)}% week-over-week (${thisWeek} this week vs ${lastWeek} last week).`,
         metric: declinePct,
         affectedContactIds: [],
-        recommendation: "Team activity is declining. Review workload distribution and ensure outreach cadences are being maintained.",
+        recommendation:
+          "Team activity is declining. Review workload distribution and ensure outreach cadences are being maintained.",
       };
     }
 

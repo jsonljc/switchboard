@@ -35,10 +35,7 @@ import {
 } from "./structural/index.js";
 
 // Vertical-specific advisors
-import {
-  productPageAdvisor,
-  checkoutFrictionAdvisor,
-} from "./vertical/commerce/index.js";
+import { productPageAdvisor, checkoutFrictionAdvisor } from "./vertical/commerce/index.js";
 import {
   leadQualityAdvisor,
   formConversionAdvisor,
@@ -70,10 +67,7 @@ import {
  * - Meta + leadgen → 5 advisors (2 shared + 3 vertical)
  * - TikTok + commerce → 4 advisors (2 shared + 2 vertical)
  */
-export function resolveAdvisors(
-  platform: PlatformType,
-  vertical: VerticalType
-): FindingAdvisor[] {
+export function resolveAdvisors(platform: PlatformType, vertical: VerticalType): FindingAdvisor[] {
   const advisors: FindingAdvisor[] = [];
 
   // 1. Shared advisors (all platforms)

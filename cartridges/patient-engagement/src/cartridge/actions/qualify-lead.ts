@@ -6,9 +6,7 @@ import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import { computeLeadScore } from "../../core/scoring/lead-score.js";
 import type { LeadScoreInput } from "../../core/types.js";
 
-export async function executeQualifyLead(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeQualifyLead(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
 

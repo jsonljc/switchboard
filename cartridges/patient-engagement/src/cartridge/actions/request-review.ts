@@ -12,7 +12,8 @@ export async function executeRequestReview(
 ): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
-  const message = (params.message as string) ?? "We'd love your feedback! Please leave us a review.";
+  const message =
+    (params.message as string) ?? "We'd love your feedback! Please leave us a review.";
 
   try {
     const result = await review.sendReviewRequest(patientId, locationId, message);

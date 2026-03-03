@@ -26,7 +26,7 @@ function makeContext(ctrValues: number[]): DiagnosticContext {
       makeSnapshot(ctr, {
         periodStart: `2024-01-${String(7 - i * 7).padStart(2, "0")}`,
         periodEnd: `2024-01-${String(13 - i * 7).padStart(2, "0")}`,
-      })
+      }),
     ),
   };
 }
@@ -37,25 +37,15 @@ function makeContext(ctrValues: number[]): DiagnosticContext {
 
 describe("creativeExhaustionAdvisor", () => {
   it("returns no findings when no historical snapshots", () => {
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      makeSnapshot(5),
-      makeSnapshot(6),
-      undefined
-    );
+    const findings = creativeExhaustionAdvisor([], [], makeSnapshot(5), makeSnapshot(6), undefined);
 
     expect(findings).toHaveLength(0);
   });
 
   it("returns no findings with fewer than 3 historical snapshots", () => {
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      makeSnapshot(5),
-      makeSnapshot(6),
-      { historicalSnapshots: [makeSnapshot(5.5), makeSnapshot(6)] }
-    );
+    const findings = creativeExhaustionAdvisor([], [], makeSnapshot(5), makeSnapshot(6), {
+      historicalSnapshots: [makeSnapshot(5.5), makeSnapshot(6)],
+    });
 
     expect(findings).toHaveLength(0);
   });
@@ -68,13 +58,7 @@ describe("creativeExhaustionAdvisor", () => {
     const current = makeSnapshot(4.0);
     const context = makeContext([4.2, 4.5, 5.0]);
 
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      current,
-      makeSnapshot(4.2),
-      context
-    );
+    const findings = creativeExhaustionAdvisor([], [], current, makeSnapshot(4.2), context);
 
     expect(findings).toHaveLength(1);
     expect(findings[0].severity).toBe("warning");
@@ -90,13 +74,7 @@ describe("creativeExhaustionAdvisor", () => {
     const current = makeSnapshot(2.0);
     const context = makeContext([3.0, 3.5, 3.8]);
 
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      current,
-      makeSnapshot(3.0),
-      context
-    );
+    const findings = creativeExhaustionAdvisor([], [], current, makeSnapshot(3.0), context);
 
     expect(findings).toHaveLength(1);
     expect(findings[0].severity).toBe("critical");
@@ -109,13 +87,7 @@ describe("creativeExhaustionAdvisor", () => {
     const current = makeSnapshot(4.0);
     const context = makeContext([5.0, 3.0, 4.5]);
 
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      current,
-      makeSnapshot(5.0),
-      context
-    );
+    const findings = creativeExhaustionAdvisor([], [], current, makeSnapshot(5.0), context);
 
     expect(findings).toHaveLength(0);
   });
@@ -124,13 +96,7 @@ describe("creativeExhaustionAdvisor", () => {
     const current = makeSnapshot(5.0);
     const context = makeContext([4.0, 3.5, 3.0]);
 
-    const findings = creativeExhaustionAdvisor(
-      [],
-      [],
-      current,
-      makeSnapshot(4.0),
-      context
-    );
+    const findings = creativeExhaustionAdvisor([], [], current, makeSnapshot(4.0), context);
 
     expect(findings).toHaveLength(0);
   });

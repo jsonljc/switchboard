@@ -1,9 +1,4 @@
-import type {
-  StageDiagnostic,
-  FunnelDropoff,
-  MetricSnapshot,
-  Finding,
-} from "../../core/types.js";
+import type { StageDiagnostic, FunnelDropoff, MetricSnapshot, Finding } from "../../core/types.js";
 import type { FindingAdvisor } from "../../core/analysis/funnel-walker.js";
 import { percentChange } from "../../core/analysis/significance.js";
 
@@ -22,7 +17,7 @@ export interface AuctionCompetitionOptions {
 }
 
 export function createAuctionCompetitionAdvisor(
-  options?: AuctionCompetitionOptions
+  options?: AuctionCompetitionOptions,
 ): FindingAdvisor {
   const defaultRecommendation =
     "Check if this coincides with a seasonal competition spike (BFCM, Q4, etc). Consider broadening audience targeting to access cheaper inventory. If using interest-based targeting, the audience may be oversaturated.";
@@ -31,7 +26,7 @@ export function createAuctionCompetitionAdvisor(
     _stageAnalysis: StageDiagnostic[],
     _dropoffs: FunnelDropoff[],
     current: MetricSnapshot,
-    previous: MetricSnapshot
+    previous: MetricSnapshot,
   ): Finding[] => {
     const findings: Finding[] = [];
     const currentCPM = current.topLevel.cpm ?? 0;
@@ -55,12 +50,10 @@ export function createAuctionCompetitionAdvisor(
 }
 
 /** Default auction competition advisor (commerce-style recommendation) */
-export const auctionCompetitionAdvisor: FindingAdvisor =
-  createAuctionCompetitionAdvisor();
+export const auctionCompetitionAdvisor: FindingAdvisor = createAuctionCompetitionAdvisor();
 
 /** Leadgen-specific auction competition advisor */
-export const leadgenAuctionCompetitionAdvisor: FindingAdvisor =
-  createAuctionCompetitionAdvisor({
-    recommendation:
-      "Leadgen audiences (especially B2B) tend to be narrow, making them sensitive to auction pressure. Consider broadening your audience, or shifting budget to lower-competition placements (Reels, Stories). Check if the spike coincides with seasonal advertiser surges.",
-  });
+export const leadgenAuctionCompetitionAdvisor: FindingAdvisor = createAuctionCompetitionAdvisor({
+  recommendation:
+    "Leadgen audiences (especially B2B) tend to be narrow, making them sensitive to auction pressure. Consider broadening your audience, or shifting budget to lower-competition placements (Reels, Stories). Check if the spike coincides with seasonal advertiser surges.",
+});

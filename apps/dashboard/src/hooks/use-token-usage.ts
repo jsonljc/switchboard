@@ -32,9 +32,15 @@ async function fetchTokenUsage(): Promise<TokenUsageData> {
   ]);
 
   const [dailyData, weeklyData, monthlyData, trendData] = await Promise.all([
-    dailyRes.ok ? dailyRes.json() : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
-    weeklyRes.ok ? weeklyRes.json() : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
-    monthlyRes.ok ? monthlyRes.json() : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
+    dailyRes.ok
+      ? dailyRes.json()
+      : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
+    weeklyRes.ok
+      ? weeklyRes.json()
+      : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
+    monthlyRes.ok
+      ? monthlyRes.json()
+      : { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
     trendRes.ok ? trendRes.json() : { trend: [] },
   ]);
 

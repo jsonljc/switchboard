@@ -31,9 +31,7 @@ export function smbRouteApproval(
  * Compute a simplified binding hash for SMB (just envelope ID hash, not full tamper-evident binding).
  */
 export function smbBindingHash(envelopeId: string): string {
-  return createHash("sha256")
-    .update(canonicalizeSync({ envelopeId }))
-    .digest("hex");
+  return createHash("sha256").update(canonicalizeSync({ envelopeId })).digest("hex");
 }
 
 /**

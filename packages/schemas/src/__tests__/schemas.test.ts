@@ -283,9 +283,7 @@ describe("PolicySchema", () => {
             ],
           },
           {
-            conditions: [
-              { field: "principal.type", operator: "eq", value: "agent" },
-            ],
+            conditions: [{ field: "principal.type", operator: "eq", value: "agent" }],
           },
         ],
       },
@@ -457,9 +455,7 @@ describe("ResolvedEntitySchema", () => {
     resolvedId: "org_acme",
     resolvedName: "Acme Corp",
     confidence: 0.95,
-    alternatives: [
-      { id: "org_acme2", name: "Acme LLC", score: 0.6 },
-    ],
+    alternatives: [{ id: "org_acme2", name: "Acme LLC", score: 0.6 }],
     status: "resolved",
   };
 
@@ -537,9 +533,7 @@ describe("AuditEntrySchema", () => {
     visibilityLevel: "org",
     summary: "Action executed successfully",
     snapshot: { before: {}, after: {} },
-    evidencePointers: [
-      { type: "inline", hash: "sha256:abc123", storageRef: null },
-    ],
+    evidencePointers: [{ type: "inline", hash: "sha256:abc123", storageRef: null }],
     redactionApplied: false,
     redactedFields: [],
     chainHashVersion: 1,
@@ -566,9 +560,7 @@ describe("AuditEntrySchema", () => {
   it("rejects an invalid evidence pointer type", () => {
     const result = AuditEntrySchema.safeParse({
       ...validAuditEntry,
-      evidencePointers: [
-        { type: "external", hash: "sha256:abc", storageRef: null },
-      ],
+      evidencePointers: [{ type: "external", hash: "sha256:abc", storageRef: null }],
     });
     expect(result.success).toBe(false);
   });

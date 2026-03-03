@@ -19,7 +19,14 @@ describe("resolveAdvisors", () => {
   });
 
   it("should return same count for all clinic types", () => {
-    const types = ["dental", "dermatology", "aesthetics", "orthodontics", "general", "specialty"] as const;
+    const types = [
+      "dental",
+      "dermatology",
+      "aesthetics",
+      "orthodontics",
+      "general",
+      "specialty",
+    ] as const;
     for (const type of types) {
       const advisors = resolveAdvisors(type);
       expect(advisors.length).toBe(24);

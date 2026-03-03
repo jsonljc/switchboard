@@ -9,7 +9,10 @@ import { percentChange } from "../../core/analysis/significance.js";
  * Conversion Rate — consultation-to-treatment conversion.
  */
 export const conversionRateAdvisor: JourneyFindingAdvisor = (
-  _stageAnalysis, dropoffs, _current, _previous,
+  _stageAnalysis,
+  dropoffs,
+  _current,
+  _previous,
 ) => {
   const convDropoff = dropoffs.find(
     (d) => d.fromStage === "Consultation Completed" && d.toStage === "Treatment Proposed",
@@ -18,12 +21,15 @@ export const conversionRateAdvisor: JourneyFindingAdvisor = (
   if (!convDropoff) return [];
 
   if (convDropoff.currentRate < 0.5 && convDropoff.deltaPercent < -10) {
-    return [{
-      severity: "warning",
-      stage: "conversion_rate",
-      message: `Consultation-to-treatment conversion is ${(convDropoff.currentRate * 100).toFixed(1)}% (down ${convDropoff.deltaPercent.toFixed(1)}% PoP).`,
-      recommendation: "Review consultation scripts. Train staff on treatment presentation techniques.",
-    }];
+    return [
+      {
+        severity: "warning",
+        stage: "conversion_rate",
+        message: `Consultation-to-treatment conversion is ${(convDropoff.currentRate * 100).toFixed(1)}% (down ${convDropoff.deltaPercent.toFixed(1)}% PoP).`,
+        recommendation:
+          "Review consultation scripts. Train staff on treatment presentation techniques.",
+      },
+    ];
   }
 
   return [];
@@ -33,7 +39,10 @@ export const conversionRateAdvisor: JourneyFindingAdvisor = (
  * ATV Trends — average treatment value trends.
  */
 export const atvTrendAdvisor: JourneyFindingAdvisor = (
-  _stageAnalysis, _dropoffs, current, previous,
+  _stageAnalysis,
+  _dropoffs,
+  current,
+  previous,
 ) => {
   const currentATV = current.aggregates.averageTreatmentValue;
   const previousATV = previous.aggregates.averageTreatmentValue;
@@ -43,21 +52,26 @@ export const atvTrendAdvisor: JourneyFindingAdvisor = (
   const delta = percentChange(currentATV, previousATV);
 
   if (delta < -15) {
-    return [{
-      severity: "warning",
-      stage: "atv_trend",
-      message: `Average treatment value dropped ${delta.toFixed(1)}% ($${previousATV.toFixed(0)} → $${currentATV.toFixed(0)}).`,
-      recommendation: "Review treatment mix. Consider bundling services or introducing premium packages.",
-    }];
+    return [
+      {
+        severity: "warning",
+        stage: "atv_trend",
+        message: `Average treatment value dropped ${delta.toFixed(1)}% ($${previousATV.toFixed(0)} → $${currentATV.toFixed(0)}).`,
+        recommendation:
+          "Review treatment mix. Consider bundling services or introducing premium packages.",
+      },
+    ];
   }
 
   if (delta > 20) {
-    return [{
-      severity: "healthy",
-      stage: "atv_trend",
-      message: `Average treatment value increased ${delta.toFixed(1)}% ($${previousATV.toFixed(0)} → $${currentATV.toFixed(0)}).`,
-      recommendation: null,
-    }];
+    return [
+      {
+        severity: "healthy",
+        stage: "atv_trend",
+        message: `Average treatment value increased ${delta.toFixed(1)}% ($${previousATV.toFixed(0)} → $${currentATV.toFixed(0)}).`,
+        recommendation: null,
+      },
+    ];
   }
 
   return [];
@@ -67,7 +81,10 @@ export const atvTrendAdvisor: JourneyFindingAdvisor = (
  * Upsell Success — treatment acceptance beyond initial proposal.
  */
 export const upsellAdvisor: JourneyFindingAdvisor = (
-  _stageAnalysis, dropoffs, _current, _previous,
+  _stageAnalysis,
+  dropoffs,
+  _current,
+  _previous,
 ) => {
   const propToAccept = dropoffs.find(
     (d) => d.fromStage === "Treatment Proposed" && d.toStage === "Treatment Accepted",
@@ -76,21 +93,26 @@ export const upsellAdvisor: JourneyFindingAdvisor = (
   if (!propToAccept) return [];
 
   if (propToAccept.currentRate > 0.8) {
-    return [{
-      severity: "healthy",
-      stage: "upsell",
-      message: `Treatment acceptance rate is ${(propToAccept.currentRate * 100).toFixed(1)}% — strong proposal-to-acceptance conversion.`,
-      recommendation: null,
-    }];
+    return [
+      {
+        severity: "healthy",
+        stage: "upsell",
+        message: `Treatment acceptance rate is ${(propToAccept.currentRate * 100).toFixed(1)}% — strong proposal-to-acceptance conversion.`,
+        recommendation: null,
+      },
+    ];
   }
 
   if (propToAccept.currentRate < 0.5) {
-    return [{
-      severity: "warning",
-      stage: "upsell",
-      message: `Treatment acceptance rate is only ${(propToAccept.currentRate * 100).toFixed(1)}%.`,
-      recommendation: "Review pricing transparency. Offer financing options. Improve treatment plan presentations.",
-    }];
+    return [
+      {
+        severity: "warning",
+        stage: "upsell",
+        message: `Treatment acceptance rate is only ${(propToAccept.currentRate * 100).toFixed(1)}%.`,
+        recommendation:
+          "Review pricing transparency. Offer financing options. Improve treatment plan presentations.",
+      },
+    ];
   }
 
   return [];
@@ -100,7 +122,10 @@ export const upsellAdvisor: JourneyFindingAdvisor = (
  * LTV Cohort Trend — tracks lifetime value trends across patient cohorts.
  */
 export const ltvTrendAdvisor: JourneyFindingAdvisor = (
-  _stageAnalysis, _dropoffs, current, previous,
+  _stageAnalysis,
+  _dropoffs,
+  current,
+  previous,
 ) => {
   const currentRevenue = current.aggregates.totalRevenue;
   const previousRevenue = previous.aggregates.totalRevenue;
@@ -114,12 +139,15 @@ export const ltvTrendAdvisor: JourneyFindingAdvisor = (
   const delta = percentChange(currentRevenuePerPatient, previousRevenuePerPatient);
 
   if (delta < -20) {
-    return [{
-      severity: "warning",
-      stage: "ltv_trend",
-      message: `Revenue per patient dropped ${delta.toFixed(1)}% ($${previousRevenuePerPatient.toFixed(0)} → $${currentRevenuePerPatient.toFixed(0)}).`,
-      recommendation: "Analyze patient cohort retention. Implement win-back campaigns for dormant patients.",
-    }];
+    return [
+      {
+        severity: "warning",
+        stage: "ltv_trend",
+        message: `Revenue per patient dropped ${delta.toFixed(1)}% ($${previousRevenuePerPatient.toFixed(0)} → $${currentRevenuePerPatient.toFixed(0)}).`,
+        recommendation:
+          "Analyze patient cohort retention. Implement win-back campaigns for dormant patients.",
+      },
+    ];
   }
 
   return [];

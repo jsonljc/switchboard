@@ -6,7 +6,11 @@ import type {
   VisibilityLevel,
   ActorType,
 } from "@switchboard/schemas";
-import { computeAuditHash, computeAuditHashSync, verifyChain as verifyChainIntegrity } from "./canonical-hash.js";
+import {
+  computeAuditHash,
+  computeAuditHashSync,
+  verifyChain as verifyChainIntegrity,
+} from "./canonical-hash.js";
 import type { AuditHashInput } from "./canonical-hash.js";
 import { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./redaction.js";
 import type { RedactionConfig } from "./redaction.js";
@@ -23,7 +27,9 @@ export interface LedgerStorage {
    * Prevents race conditions on previousEntryHash in multi-instance deployments.
    * If not implemented, AuditLedger falls back to non-atomic getLatest() + append().
    */
-  appendAtomic?(buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>): Promise<AuditEntry>;
+  appendAtomic?(
+    buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+  ): Promise<AuditEntry>;
 }
 
 export interface AuditQueryFilter {
@@ -46,7 +52,10 @@ export class AuditLedger {
   private storage: LedgerStorage;
   private redactionConfig: RedactionConfig | undefined;
 
-  constructor(storage: LedgerStorage, redactionConfig: RedactionConfig | undefined = DEFAULT_REDACTION_CONFIG) {
+  constructor(
+    storage: LedgerStorage,
+    redactionConfig: RedactionConfig | undefined = DEFAULT_REDACTION_CONFIG,
+  ) {
     this.storage = storage;
     this.redactionConfig = redactionConfig;
   }
@@ -82,21 +91,24 @@ export class AuditLedger {
     return entry;
   }
 
-  private async buildEntry(params: {
-    eventType: AuditEventType;
-    actorType: ActorType;
-    actorId: string;
-    entityType: string;
-    entityId: string;
-    riskCategory: RiskCategory;
-    summary: string;
-    snapshot: Record<string, unknown>;
-    evidence?: unknown[];
-    envelopeId?: string;
-    organizationId?: string;
-    visibilityLevel?: VisibilityLevel;
-    traceId?: string | null;
-  }, previousEntryHash: string | null): Promise<AuditEntry> {
+  private async buildEntry(
+    params: {
+      eventType: AuditEventType;
+      actorType: ActorType;
+      actorId: string;
+      entityType: string;
+      entityId: string;
+      riskCategory: RiskCategory;
+      summary: string;
+      snapshot: Record<string, unknown>;
+      evidence?: unknown[];
+      envelopeId?: string;
+      organizationId?: string;
+      visibilityLevel?: VisibilityLevel;
+      traceId?: string | null;
+    },
+    previousEntryHash: string | null,
+  ): Promise<AuditEntry> {
     // Redact snapshot
     const redactionResult = this.redactionConfig
       ? redactSnapshot(params.snapshot, this.redactionConfig)
@@ -177,7 +189,8 @@ export class AuditLedger {
       schemaVersion: entry.schemaVersion,
       id: entry.id,
       eventType: entry.eventType,
-      timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : String(entry.timestamp),
+      timestamp:
+        entry.timestamp instanceof Date ? entry.timestamp.toISOString() : String(entry.timestamp),
       actorType: entry.actorType,
       actorId: entry.actorId,
       entityType: entry.entityType,
@@ -203,11 +216,14 @@ export class AuditLedger {
     chainBrokenAt: number | null;
     hashMismatches: Array<{ index: number; entryId: string; expected: string; actual: string }>;
   }> {
-    const sorted = [...entries].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
+    const sorted = [...entries].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-    const hashMismatches: Array<{ index: number; entryId: string; expected: string; actual: string }> = [];
+    const hashMismatches: Array<{
+      index: number;
+      entryId: string;
+      expected: string;
+      actual: string;
+    }> = [];
     let chainBrokenAt: number | null = null;
 
     for (let i = 0; i < sorted.length; i++) {

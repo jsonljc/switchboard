@@ -104,9 +104,7 @@ describe("buildTrailingPeriods", () => {
       const nextEnd = new Date(periods[i + 1].until);
       // The day before the current period's start should equal the next period's end
       currentStart.setDate(currentStart.getDate() - 1);
-      expect(currentStart.toISOString().slice(0, 10)).toBe(
-        nextEnd.toISOString().slice(0, 10)
-      );
+      expect(currentStart.toISOString().slice(0, 10)).toBe(nextEnd.toISOString().slice(0, 10));
     }
   });
 

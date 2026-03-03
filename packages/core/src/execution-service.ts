@@ -15,7 +15,10 @@ import type {
 export class ExecutionService implements RuntimeAdapter {
   private storage: StorageContext | null;
 
-  constructor(private orchestrator: LifecycleOrchestrator, storage?: StorageContext) {
+  constructor(
+    private orchestrator: LifecycleOrchestrator,
+    storage?: StorageContext,
+  ) {
     this.storage = storage ?? null;
   }
 
@@ -27,9 +30,7 @@ export class ExecutionService implements RuntimeAdapter {
       this.storage?.cartridges ?? undefined,
     );
     if (!cartridgeId) {
-      throw new Error(
-        `Cannot infer cartridgeId from actionType: ${requestedAction.actionType}`,
-      );
+      throw new Error(`Cannot infer cartridgeId from actionType: ${requestedAction.actionType}`);
     }
 
     const result = await this.orchestrator.resolveAndPropose({

@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { attributionAwarenessAdvisor } from "../attribution-awareness.js";
-import type {
-  MetricSnapshot,
-  StageDiagnostic,
-  DiagnosticContext,
-} from "../../../core/types.js";
+import type { MetricSnapshot, StageDiagnostic, DiagnosticContext } from "../../../core/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,15 +51,17 @@ describe("attributionAwarenessAdvisor", () => {
   });
 
   it("flags explicit attribution window change with large stage changes", () => {
-    const stages = [
-      makeStage({ deltaPercent: -50, isSignificant: true }),
-    ];
+    const stages = [makeStage({ deltaPercent: -50, isSignificant: true })];
     const context: DiagnosticContext = {
       attributionWindow: 7,
       previousAttributionWindow: 28,
     };
     const findings = attributionAwarenessAdvisor(
-      stages, [], makeSnapshot(), makeSnapshot(), context
+      stages,
+      [],
+      makeSnapshot(),
+      makeSnapshot(),
+      context,
     );
 
     expect(findings).toHaveLength(1);
@@ -73,15 +71,17 @@ describe("attributionAwarenessAdvisor", () => {
   });
 
   it("flags explicit window change as warning when no large stage changes", () => {
-    const stages = [
-      makeStage({ deltaPercent: 5, isSignificant: false }),
-    ];
+    const stages = [makeStage({ deltaPercent: 5, isSignificant: false })];
     const context: DiagnosticContext = {
       attributionWindow: 28,
       previousAttributionWindow: 7,
     };
     const findings = attributionAwarenessAdvisor(
-      stages, [], makeSnapshot(), makeSnapshot(), context
+      stages,
+      [],
+      makeSnapshot(),
+      makeSnapshot(),
+      context,
     );
 
     expect(findings).toHaveLength(1);
@@ -94,9 +94,7 @@ describe("attributionAwarenessAdvisor", () => {
       attributionWindow: 7,
       previousAttributionWindow: 7,
     };
-    const findings = attributionAwarenessAdvisor(
-      [], [], makeSnapshot(), makeSnapshot(), context
-    );
+    const findings = attributionAwarenessAdvisor([], [], makeSnapshot(), makeSnapshot(), context);
     expect(findings).toHaveLength(0);
   });
 

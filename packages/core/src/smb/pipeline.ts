@@ -107,8 +107,12 @@ export async function smbPropose(
       }
 
       const [rateLimits, cooldowns] = await Promise.all([
-        scopeKeys.length > 0 ? ctx.guardrailStateStore.getRateLimits(scopeKeys) : Promise.resolve(new Map<string, { count: number; windowStart: number }>()),
-        entityKeys.length > 0 ? ctx.guardrailStateStore.getCooldowns(entityKeys) : Promise.resolve(new Map<string, number>()),
+        scopeKeys.length > 0
+          ? ctx.guardrailStateStore.getRateLimits(scopeKeys)
+          : Promise.resolve(new Map<string, { count: number; windowStart: number }>()),
+        entityKeys.length > 0
+          ? ctx.guardrailStateStore.getCooldowns(entityKeys)
+          : Promise.resolve(new Map<string, number>()),
       ]);
 
       for (const [key, entry] of rateLimits) {
@@ -134,11 +138,12 @@ export async function smbPropose(
     for (const env of envelopes) {
       if (env.createdAt < todayStart) continue;
       for (const p of env.proposals) {
-        const amount = typeof p.parameters["amount"] === "number"
-          ? p.parameters["amount"]
-          : typeof p.parameters["budgetChange"] === "number"
-            ? p.parameters["budgetChange"]
-            : 0;
+        const amount =
+          typeof p.parameters["amount"] === "number"
+            ? p.parameters["amount"]
+            : typeof p.parameters["budgetChange"] === "number"
+              ? p.parameters["budgetChange"]
+              : 0;
         dailySpend += Math.abs(amount);
       }
     }
@@ -194,16 +199,13 @@ export async function smbPropose(
 
   if (isObserveMode) {
     envelope.status = "approved";
-    governanceNote = "Auto-approved (observe mode): SMB governance evaluation ran but approval requirement was bypassed.";
+    governanceNote =
+      "Auto-approved (observe mode): SMB governance evaluation ran but approval requirement was bypassed.";
   } else if (decisionTrace.finalDecision === "deny") {
     envelope.status = "denied";
   } else if (decisionTrace.approvalRequired !== "none") {
     // Route to single approver
-    const summary = buildActionSummary(
-      params.actionType,
-      params.parameters,
-      params.principalId,
-    );
+    const summary = buildActionSummary(params.actionType, params.parameters, params.principalId);
 
     approvalRequest = smbCreateApprovalRequest({
       envelopeId: envelope.id,
@@ -246,16 +248,20 @@ export async function smbPropose(
   await storage.envelopes.save(envelope);
 
   // Extract spend amount for activity log
-  const spendAmount = typeof params.parameters["amount"] === "number"
-    ? params.parameters["amount"]
-    : typeof params.parameters["budgetChange"] === "number"
-      ? params.parameters["budgetChange"]
-      : null;
+  const spendAmount =
+    typeof params.parameters["amount"] === "number"
+      ? params.parameters["amount"]
+      : typeof params.parameters["budgetChange"] === "number"
+        ? params.parameters["budgetChange"]
+        : null;
 
   // 9. Record activity log
-  const activityResult = envelope.status === "denied" ? "denied" as const
-    : envelope.status === "pending_approval" ? "pending_approval" as const
-    : "allowed" as const;
+  const activityResult =
+    envelope.status === "denied"
+      ? ("denied" as const)
+      : envelope.status === "pending_approval"
+        ? ("pending_approval" as const)
+        : ("allowed" as const);
 
   await activityLog.record({
     actorId: params.principalId,

@@ -23,7 +23,7 @@ describe("digital-ads.snapshot.fetch", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
     return cartridge;
   }
@@ -39,7 +39,7 @@ describe("digital-ads.snapshot.fetch", () => {
         vertical: "commerce",
         timeRange: { since: "2024-01-08", until: "2024-01-14" },
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -67,7 +67,7 @@ describe("digital-ads.snapshot.fetch", () => {
         vertical: "commerce",
         timeRange: { since: "2024-01-08", until: "2024-01-14" },
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);
@@ -93,7 +93,7 @@ describe("digital-ads.snapshot.fetch", () => {
         connectionCredentials: {
           meta: { platform: "meta", accessToken: "ctx_token" },
         },
-      }
+      },
     );
 
     expect(result.success).toBe(true);
@@ -110,7 +110,7 @@ describe("digital-ads.snapshot.fetch", () => {
         vertical: "commerce",
         timeRange: { since: "2024-01-08", until: "2024-01-14" },
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.rollbackAvailable).toBe(false);

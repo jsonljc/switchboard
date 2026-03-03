@@ -14,7 +14,7 @@ import type {
 
 export async function executeHealthCheck(
   params: HealthCheckParams,
-  providers: Map<string, AdPlatformProvider>
+  providers: Map<string, AdPlatformProvider>,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
@@ -44,9 +44,7 @@ export async function executeHealthCheck(
     };
   });
 
-  const connectedCount = platformHealth.filter(
-    (h) => h.status === "connected"
-  ).length;
+  const connectedCount = platformHealth.filter((h) => h.status === "connected").length;
   const totalCount = platformHealth.length;
 
   let overall: HealthCheckResult["overall"];

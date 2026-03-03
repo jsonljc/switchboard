@@ -15,12 +15,11 @@ export function createCrmProvider(options?: CrmProviderOptions): CrmProvider {
   if (options?.hubspotAccessToken) {
     const token = options.hubspotAccessToken;
     // HubSpot private app tokens start with "pat-" and are 40+ chars
-    const isReal =
-      (token.startsWith("pat-") || token.startsWith("CL")) && token.length >= 20;
+    const isReal = (token.startsWith("pat-") || token.startsWith("CL")) && token.length >= 20;
 
     if (isReal) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
         const { HubSpotCrmProvider } = require("./hubspot.js");
         return new HubSpotCrmProvider({
           accessToken: token,
@@ -37,7 +36,7 @@ export function createCrmProvider(options?: CrmProviderOptions): CrmProvider {
     // Dynamic import to avoid circular dependency at module load time.
     // The PrismaCrmProvider is in @switchboard/db.
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
       const { PrismaCrmProvider } = require("@switchboard/db");
       return new PrismaCrmProvider(options.prisma, options.organizationId);
     } catch {

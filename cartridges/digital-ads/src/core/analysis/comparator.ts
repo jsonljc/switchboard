@@ -12,10 +12,7 @@ import type { TimeRange, ComparisonPeriods } from "../types.js";
  *   current:  2024-01-08 to 2024-01-14
  *   previous: 2024-01-01 to 2024-01-07
  */
-export function buildComparisonPeriods(
-  referenceDate: Date,
-  periodDays: number
-): ComparisonPeriods {
+export function buildComparisonPeriods(referenceDate: Date, periodDays: number): ComparisonPeriods {
   const currentEnd = new Date(referenceDate);
   const currentStart = new Date(referenceDate);
   currentStart.setDate(currentStart.getDate() - periodDays + 1);
@@ -44,7 +41,7 @@ export function buildComparisonPeriods(
 export function buildTrailingPeriods(
   referenceDate: Date,
   periodDays: number,
-  count: number
+  count: number,
 ): TimeRange[] {
   const periods: TimeRange[] = [];
   let end = new Date(referenceDate);

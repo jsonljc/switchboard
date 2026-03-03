@@ -1,23 +1,12 @@
 // SMB governance — simplified pipeline for SMB-tier organizations
 
-export {
-  smbEvaluate,
-  smbCategorizeRisk,
-  smbApprovalRequired,
-} from "./evaluator.js";
+export { smbEvaluate, smbCategorizeRisk, smbApprovalRequired } from "./evaluator.js";
 export type { SmbEvaluationContext } from "./evaluator.js";
 
-export {
-  smbRouteApproval,
-  smbBindingHash,
-  smbCreateApprovalRequest,
-} from "./approval.js";
+export { smbRouteApproval, smbBindingHash, smbCreateApprovalRequest } from "./approval.js";
 export type { SmbApprovalRouting } from "./approval.js";
 
-export {
-  SmbActivityLog,
-  InMemorySmbActivityLogStorage,
-} from "./activity-log.js";
+export { SmbActivityLog, InMemorySmbActivityLogStorage } from "./activity-log.js";
 export type {
   ActivityLogEntry,
   ActivityLogQuery,

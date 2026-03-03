@@ -303,9 +303,9 @@ describe("handleReadIntent", () => {
         confidence: 0.9,
       };
 
-      await expect(
-        handleReadIntent(intent, { readAdapter, ...DEFAULT_DEPS }),
-      ).rejects.toThrow("API connection failed");
+      await expect(handleReadIntent(intent, { readAdapter, ...DEFAULT_DEPS })).rejects.toThrow(
+        "API connection failed",
+      );
     });
   });
 });

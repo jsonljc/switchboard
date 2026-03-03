@@ -3,11 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, it, expect } from "vitest";
-import {
-  createConversationState,
-  executeNextStep,
-  interpolate,
-} from "../conversation/engine.js";
+import { createConversationState, executeNextStep, interpolate } from "../conversation/engine.js";
 import type { ConversationFlowDefinition } from "../conversation/types.js";
 
 const simpleFlow: ConversationFlowDefinition = {
@@ -66,7 +62,7 @@ describe("conversation engine", () => {
   });
 
   it("should execute question steps with options", () => {
-    let state = createConversationState(simpleFlow, { patientName: "Alice" });
+    const state = createConversationState(simpleFlow, { patientName: "Alice" });
     // Execute greeting
     const result1 = executeNextStep(simpleFlow, state);
     // Execute question

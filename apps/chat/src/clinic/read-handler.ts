@@ -90,7 +90,7 @@ export async function handleReadIntent(
 
     default:
       return {
-        text: "I don't know how to handle that request. Type \"help\" for available commands.",
+        text: 'I don\'t know how to handle that request. Type "help" for available commands.',
         traceId: "",
       };
   }

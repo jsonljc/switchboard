@@ -2,11 +2,7 @@
 // Treatment Affinity — Deterministic cross-sell matrix
 // ---------------------------------------------------------------------------
 
-import type {
-  TreatmentType,
-  TreatmentAffinityInput,
-  TreatmentAffinityResult,
-} from "../types.js";
+import type { TreatmentType, TreatmentAffinityInput, TreatmentAffinityResult } from "../types.js";
 
 /**
  * Base affinity matrix: source treatment → target treatment → affinity (0-1).
@@ -41,9 +37,7 @@ const AGE_MODIFIERS: Partial<Record<string, Partial<Record<TreatmentType, number
 /**
  * Compute deterministic treatment affinities for cross-sell recommendations.
  */
-export function computeTreatmentAffinity(
-  input: TreatmentAffinityInput,
-): TreatmentAffinityResult {
+export function computeTreatmentAffinity(input: TreatmentAffinityInput): TreatmentAffinityResult {
   const baseAffinities = AFFINITY_MATRIX[input.currentTreatment] ?? {};
   const ageModifiers = AGE_MODIFIERS[input.ageRange] ?? {};
 

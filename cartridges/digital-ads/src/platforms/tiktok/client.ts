@@ -1,8 +1,4 @@
-import type {
-  TikTokApiConfig,
-  TikTokReportResponse,
-  TikTokReportRow,
-} from "./types.js";
+import type { TikTokApiConfig, TikTokReportResponse, TikTokReportRow } from "./types.js";
 import type {
   EntityLevel,
   FunnelSchema,
@@ -108,7 +104,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<MetricSnapshot> {
     const rows = await this.fetchReport(entityId, entityLevel, timeRange);
 
@@ -127,7 +123,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     entityId: string,
     _entityLevel: EntityLevel,
     timeRange: TimeRange,
-    _funnel: FunnelSchema
+    _funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]> {
     const requestBody = {
       advertiser_id: entityId,
@@ -189,7 +185,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
   private async fetchReport(
     entityId: string,
     entityLevel: EntityLevel,
-    timeRange: TimeRange
+    timeRange: TimeRange,
   ): Promise<TikTokReportRow[]> {
     const dataLevel = this.getReportDataLevel(entityLevel);
 
@@ -226,9 +222,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     return allRows;
   }
 
-  private async requestWithRetry(
-    body: Record<string, unknown>
-  ): Promise<TikTokReportResponse> {
+  private async requestWithRetry(body: Record<string, unknown>): Promise<TikTokReportResponse> {
     const url = `${TIKTOK_API_BASE}/report/integrated/get/`;
     let lastError: Error | null = null;
 
@@ -258,18 +252,13 @@ export class TikTokAdsClient extends AbstractPlatformClient {
         }
 
         // Retry on rate limiting (code 40100) and transient errors
-        if (
-          (data.code === 40100 || data.code >= 50000) &&
-          attempt < this.config.maxRetries
-        ) {
+        if ((data.code === 40100 || data.code >= 50000) && attempt < this.config.maxRetries) {
           const backoff = Math.pow(2, attempt) * 1000;
           await new Promise((resolve) => setTimeout(resolve, backoff));
           continue;
         }
 
-        throw new Error(
-          `TikTok API error ${data.code}: ${data.message}`
-        );
+        throw new Error(`TikTok API error ${data.code}: ${data.message}`);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (attempt < this.config.maxRetries) {
@@ -292,7 +281,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     let totalSpend = 0;
     let totalImpressions = 0;
@@ -392,7 +381,7 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     const stages: Record<string, StageMetrics> = {};
     for (const stage of funnel.stages) {

@@ -37,7 +37,8 @@ function validateAmount(
   if (typeof value !== "number" || isNaN(value)) return "amount must be a number";
   if (!allowNegative && value <= 0) return "amount must be positive";
   if (value === 0) return "amount must be non-zero";
-  if (Math.abs(value) > MAX_AMOUNT_DOLLARS) return `amount exceeds maximum of $${MAX_AMOUNT_DOLLARS}`;
+  if (Math.abs(value) > MAX_AMOUNT_DOLLARS)
+    return `amount exceeds maximum of $${MAX_AMOUNT_DOLLARS}`;
   return null;
 }
 
@@ -98,9 +99,7 @@ export class PaymentsCartridge implements Cartridge {
         ? Math.floor((Date.now() - new Date(lastCharge.createdAt).getTime()) / 86400000)
         : null;
       const refundRate =
-        history.charges.length > 0
-          ? history.refunds.length / history.charges.length
-          : 0;
+        history.charges.length > 0 ? history.refunds.length / history.charges.length : 0;
       const customerCreatedMs = customer.created * 1000;
 
       // For subscription-related actions, look up subscription tenure
@@ -166,7 +165,11 @@ export class PaymentsCartridge implements Cartridge {
         const amountErr = validateAmount(amount);
         if (amountErr) return amountError(start, amountErr);
         const amountNum = amount as number;
-        const invoice = await provider.createInvoice(entityId, Math.round(amountNum * 100), description);
+        const invoice = await provider.createInvoice(
+          entityId,
+          Math.round(amountNum * 100),
+          description,
+        );
         void currency;
         return {
           success: true,
@@ -188,7 +191,12 @@ export class PaymentsCartridge implements Cartridge {
         const chargeAmountErr = validateAmount(amount);
         if (chargeAmountErr) return amountError(start, chargeAmountErr);
         const chargeAmount = amount as number;
-        const charge = await provider.createCharge(entityId, Math.round(chargeAmount * 100), currency, description);
+        const charge = await provider.createCharge(
+          entityId,
+          Math.round(chargeAmount * 100),
+          currency,
+          description,
+        );
         return {
           success: true,
           summary: `Charge ${charge.id} of $${chargeAmount} ${currency.toUpperCase()} to customer ${entityId}`,
@@ -208,7 +216,11 @@ export class PaymentsCartridge implements Cartridge {
         const refundAmountErr = validateAmount(amount);
         if (refundAmountErr) return amountError(start, refundAmountErr);
         const refundAmount = amount as number;
-        const refund = await provider.createRefund(chargeId, Math.round(refundAmount * 100), reason);
+        const refund = await provider.createRefund(
+          chargeId,
+          Math.round(refundAmount * 100),
+          reason,
+        );
         return {
           success: true,
           summary: `Refund ${refund.id} of $${refundAmount} issued for charge ${chargeId}`,
@@ -278,7 +290,12 @@ export class PaymentsCartridge implements Cartridge {
           rollbackAvailable: true,
           partialFailures: [],
           durationMs: Date.now() - start,
-          undoRecipe: buildSubscriptionModifyUndoRecipe(subscriptionId, previousChanges, envelopeId, actionId),
+          undoRecipe: buildSubscriptionModifyUndoRecipe(
+            subscriptionId,
+            previousChanges,
+            envelopeId,
+            actionId,
+          ),
         };
       }
 
@@ -289,7 +306,11 @@ export class PaymentsCartridge implements Cartridge {
         const linkAmountErr = validateAmount(amount);
         if (linkAmountErr) return amountError(start, linkAmountErr);
         const linkAmount = amount as number;
-        const link = await provider.createPaymentLink(Math.round(linkAmount * 100), currency, description);
+        const link = await provider.createPaymentLink(
+          Math.round(linkAmount * 100),
+          currency,
+          description,
+        );
         return {
           success: true,
           summary: `Payment link ${link.id} created for $${linkAmount}: ${link.url}`,
@@ -311,7 +332,9 @@ export class PaymentsCartridge implements Cartridge {
             summary: "Missing or invalid parameters: entityId, amount (non-zero number required)",
             externalRefs: {},
             rollbackAvailable: false,
-            partialFailures: [{ step: "validate", error: "entityId and a non-zero numeric amount are required" }],
+            partialFailures: [
+              { step: "validate", error: "entityId and a non-zero numeric amount are required" },
+            ],
             durationMs: Date.now() - start,
             undoRecipe: null,
           };
@@ -328,17 +351,26 @@ export class PaymentsCartridge implements Cartridge {
           rollbackAvailable: !isDebit,
           partialFailures: [],
           durationMs: Date.now() - start,
-          undoRecipe: isDebit ? null : buildCreditUndoRecipe(entityId, amount, envelopeId, actionId),
+          undoRecipe: isDebit
+            ? null
+            : buildCreditUndoRecipe(entityId, amount, envelopeId, actionId),
         };
       }
 
       case "payments.batch.invoice": {
-        const invoices = parameters["invoices"] as Array<{ entityId: string; amount: number; description?: string }>;
+        const invoices = parameters["invoices"] as Array<{
+          entityId: string;
+          amount: number;
+          description?: string;
+        }>;
         if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
           return amountError(start, "invoices array is required and must not be empty");
         }
         if (invoices.length > MAX_BATCH_SIZE) {
-          return amountError(start, `Batch size ${invoices.length} exceeds maximum of ${MAX_BATCH_SIZE}`);
+          return amountError(
+            start,
+            `Batch size ${invoices.length} exceeds maximum of ${MAX_BATCH_SIZE}`,
+          );
         }
         // Validate each invoice entry
         for (let i = 0; i < invoices.length; i++) {
@@ -565,7 +597,10 @@ export class PaymentsCartridge implements Cartridge {
       }
 
       // Capture subscription state before cancel/modify
-      if (actionType === "payments.subscription.cancel" || actionType === "payments.subscription.modify") {
+      if (
+        actionType === "payments.subscription.cancel" ||
+        actionType === "payments.subscription.modify"
+      ) {
         const subscriptionId = parameters["subscriptionId"] as string | undefined;
         if (subscriptionId) {
           const sub = await provider.getSubscription(subscriptionId);

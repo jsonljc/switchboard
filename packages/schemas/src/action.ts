@@ -3,10 +3,18 @@ import { RiskCategorySchema } from "./risk.js";
 import { ApprovalRequirementSchema } from "./identity-spec.js";
 
 export const ActionStatusSchema = z.enum([
-  "proposed", "enriching", "evaluating",
-  "pending_approval", "approved", "queued",
-  "executing", "executed", "failed",
-  "denied", "expired", "cancelled",
+  "proposed",
+  "enriching",
+  "evaluating",
+  "pending_approval",
+  "approved",
+  "queued",
+  "executing",
+  "executed",
+  "failed",
+  "denied",
+  "expired",
+  "cancelled",
 ]);
 export type ActionStatus = z.infer<typeof ActionStatusSchema>;
 

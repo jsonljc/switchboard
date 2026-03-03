@@ -40,10 +40,7 @@ describe("McpApiClient", () => {
     // Use a GET call to verify the URL is constructed without double slashes
     client.get("/health");
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.example.com/health",
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith("https://api.example.com/health", expect.any(Object));
   });
 
   // ── idempotencyKey ─────────────────────────────────────────────────
@@ -122,7 +119,7 @@ describe("McpApiClient", () => {
 
     await client.get("/test");
 
-    const calledHeaders = mockFetch.mock.calls[0][1].headers;
+    const calledHeaders = mockFetch.mock.calls[0]![1].headers;
     expect(calledHeaders["Content-Type"]).toBe("application/json");
   });
 
@@ -132,7 +129,7 @@ describe("McpApiClient", () => {
 
     await client.get("/test");
 
-    const calledHeaders = mockFetch.mock.calls[0][1].headers;
+    const calledHeaders = mockFetch.mock.calls[0]![1].headers;
     expect(calledHeaders["Authorization"]).toBe("Bearer secret-key");
   });
 
@@ -142,7 +139,7 @@ describe("McpApiClient", () => {
 
     await client.get("/test");
 
-    const calledHeaders = mockFetch.mock.calls[0][1].headers;
+    const calledHeaders = mockFetch.mock.calls[0]![1].headers;
     expect(calledHeaders["Authorization"]).toBeUndefined();
   });
 

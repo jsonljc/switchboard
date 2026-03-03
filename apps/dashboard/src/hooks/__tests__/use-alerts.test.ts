@@ -23,8 +23,22 @@ describe("useAlerts", () => {
 
   it("fetches alert rules and returns them", async () => {
     const rules = [
-      { id: "a1", name: "High CPA", enabled: true, metricPath: "primaryKPI.current", operator: "gt", threshold: 50 },
-      { id: "a2", name: "Low Spend", enabled: false, metricPath: "spend.current", operator: "lt", threshold: 10 },
+      {
+        id: "a1",
+        name: "High CPA",
+        enabled: true,
+        metricPath: "primaryKPI.current",
+        operator: "gt",
+        threshold: 50,
+      },
+      {
+        id: "a2",
+        name: "Low Spend",
+        enabled: false,
+        metricPath: "spend.current",
+        operator: "lt",
+        threshold: 10,
+      },
     ];
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -59,7 +73,13 @@ describe("useAlertHistory", () => {
 
   it("fetches alert history for a given ID", async () => {
     const history = [
-      { id: "h1", alertRuleId: "a1", triggeredAt: "2025-01-01T00:00:00Z", metricValue: 100, threshold: 50 },
+      {
+        id: "h1",
+        alertRuleId: "a1",
+        triggeredAt: "2025-01-01T00:00:00Z",
+        metricValue: 100,
+        threshold: 50,
+      },
     ];
     mockFetch.mockResolvedValueOnce({
       ok: true,

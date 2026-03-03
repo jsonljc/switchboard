@@ -55,7 +55,10 @@ export function useCreateAlert() {
 export function useUpdateAlert() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & Partial<CreateAlertInput> & { enabled?: boolean }) => {
+    mutationFn: async ({
+      id,
+      ...data
+    }: { id: string } & Partial<CreateAlertInput> & { enabled?: boolean }) => {
       const res = await fetch(`/api/dashboard/alerts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

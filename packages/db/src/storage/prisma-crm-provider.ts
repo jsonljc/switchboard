@@ -93,7 +93,14 @@ export class PrismaCrmProvider implements CrmProvider {
       _sum: { amount: true },
     });
 
-    const stageOrder = ["lead", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"];
+    const stageOrder = [
+      "lead",
+      "qualified",
+      "proposal",
+      "negotiation",
+      "closed_won",
+      "closed_lost",
+    ];
     return groups
       .map((g, i) => ({
         id: g.stage,
@@ -131,10 +138,7 @@ export class PrismaCrmProvider implements CrmProvider {
     return toContact(row);
   }
 
-  async updateContact(
-    contactId: string,
-    data: Record<string, unknown>,
-  ): Promise<CrmContact> {
+  async updateContact(contactId: string, data: Record<string, unknown>): Promise<CrmContact> {
     const updateData: Record<string, unknown> = {};
     if (data["email"] !== undefined) updateData["email"] = data["email"];
     if (data["firstName"] !== undefined) updateData["firstName"] = data["firstName"];

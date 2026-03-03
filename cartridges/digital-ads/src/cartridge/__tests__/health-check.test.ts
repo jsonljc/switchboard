@@ -44,7 +44,7 @@ describe("digital-ads.health.check", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -86,7 +86,7 @@ describe("digital-ads.health.check", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const health = result.data as HealthCheckResult;
@@ -126,7 +126,7 @@ describe("digital-ads.health.check", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);
@@ -149,7 +149,7 @@ describe("digital-ads.health.check", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const health = result.data as HealthCheckResult;
@@ -169,7 +169,7 @@ describe("digital-ads.health.check", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const health = await cartridge.healthCheck();
@@ -205,7 +205,7 @@ describe("digital-ads.health.check", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.rollbackAvailable).toBe(false);

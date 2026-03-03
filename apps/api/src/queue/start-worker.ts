@@ -9,7 +9,10 @@ import {
   GuardedCartridge,
 } from "@switchboard/core";
 import type { StorageContext, LedgerStorage } from "@switchboard/core";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
+import {
+  bootstrapDigitalAdsCartridge,
+  DEFAULT_DIGITAL_ADS_POLICIES,
+} from "@switchboard/digital-ads";
 import { createGuardrailStateStore } from "../guardrail-state/index.js";
 import { createExecutionWorker } from "./worker.js";
 import { createLogger } from "../logger.js";
@@ -50,7 +53,10 @@ async function main() {
     adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
     requireCredentials: process.env.NODE_ENV === "production",
   });
-  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  storage.cartridges.register(
+    "digital-ads",
+    new GuardedCartridge(adsCartridge as any, interceptors),
+  );
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   const orchestrator = new LifecycleOrchestrator({

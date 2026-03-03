@@ -13,10 +13,7 @@ import { executeSendReminder } from "../../cartridge/actions/send-reminder.js";
 
 export class SchedulingAgent implements AgentModule {
   readonly type = "scheduling" as const;
-  readonly stages: JourneyStageId[] = [
-    "consultation_booked",
-    "treatment_scheduled",
-  ];
+  readonly stages: JourneyStageId[] = ["consultation_booked", "treatment_scheduled"];
 
   constructor(
     private readonly calendar: CalendarProvider,

@@ -89,7 +89,8 @@ export class ClaudeInterpreter extends LLMInterpreter {
 
     // Include recent conversation history for multi-turn context
     const recentMessages = conversationContext["recentMessages"] as
-      Array<{ role: string; text: string }> | undefined;
+      | Array<{ role: string; text: string }>
+      | undefined;
 
     let historyBlock = "";
     if (recentMessages && recentMessages.length > 1) {

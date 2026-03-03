@@ -1,4 +1,9 @@
-import type { Cartridge, CartridgeContext, CartridgeInterceptor, ExecuteResult } from "@switchboard/cartridge-sdk";
+import type {
+  Cartridge,
+  CartridgeContext,
+  CartridgeInterceptor,
+  ExecuteResult,
+} from "@switchboard/cartridge-sdk";
 
 /**
  * Runtime guard that wraps a Cartridge and only allows execute() when
@@ -31,7 +36,10 @@ export class GuardedCartridge implements Cartridge {
   private requiredToken: symbol | null = null;
   private interceptors: CartridgeInterceptor[];
 
-  constructor(private inner: Cartridge, interceptors?: CartridgeInterceptor[]) {
+  constructor(
+    private inner: Cartridge,
+    interceptors?: CartridgeInterceptor[],
+  ) {
     this.interceptors = interceptors ?? [];
   }
 
@@ -82,7 +90,7 @@ export class GuardedCartridge implements Cartridge {
     if (!this.requiredToken || !activeTokens.has(this.requiredToken)) {
       throw new Error(
         "Cartridge.execute() called outside of orchestrator executeApproved(). " +
-        "Direct execution is forbidden — all actions must go through the governance pipeline.",
+          "Direct execution is forbidden — all actions must go through the governance pipeline.",
       );
     }
 
@@ -97,7 +105,9 @@ export class GuardedCartridge implements Cartridge {
             summary: result.reason ?? "Blocked by pre-execution interceptor",
             externalRefs: {},
             rollbackAvailable: false,
-            partialFailures: [{ step: "interceptor.beforeExecute", error: result.reason ?? "Blocked" }],
+            partialFailures: [
+              { step: "interceptor.beforeExecute", error: result.reason ?? "Blocked" },
+            ],
             durationMs: 0,
             undoRecipe: null,
           };
@@ -134,7 +144,9 @@ export class GuardedCartridge implements Cartridge {
     return this.inner.healthCheck();
   }
 
-  async searchCampaigns(query: string): Promise<Array<{ id: string; name: string; status: string }>> {
+  async searchCampaigns(
+    query: string,
+  ): Promise<Array<{ id: string; name: string; status: string }>> {
     return this.inner.searchCampaigns?.(query) ?? [];
   }
 

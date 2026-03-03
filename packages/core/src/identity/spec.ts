@@ -155,36 +155,29 @@ function approvalIndex(req: string): number {
   return APPROVAL_ORDER.indexOf(req as (typeof APPROVAL_ORDER)[number]);
 }
 
-function mergeRiskToleranceRestrictive(
-  base: RiskTolerance,
-  overlay: RiskTolerance,
-): RiskTolerance {
+function mergeRiskToleranceRestrictive(base: RiskTolerance, overlay: RiskTolerance): RiskTolerance {
   return {
     none: APPROVAL_ORDER[Math.max(approvalIndex(base.none), approvalIndex(overlay.none))]!,
     low: APPROVAL_ORDER[Math.max(approvalIndex(base.low), approvalIndex(overlay.low))]!,
     medium: APPROVAL_ORDER[Math.max(approvalIndex(base.medium), approvalIndex(overlay.medium))]!,
     high: APPROVAL_ORDER[Math.max(approvalIndex(base.high), approvalIndex(overlay.high))]!,
-    critical: APPROVAL_ORDER[Math.max(approvalIndex(base.critical), approvalIndex(overlay.critical))]!,
+    critical:
+      APPROVAL_ORDER[Math.max(approvalIndex(base.critical), approvalIndex(overlay.critical))]!,
   };
 }
 
-function mergeRiskTolerancePermissive(
-  base: RiskTolerance,
-  overlay: RiskTolerance,
-): RiskTolerance {
+function mergeRiskTolerancePermissive(base: RiskTolerance, overlay: RiskTolerance): RiskTolerance {
   return {
     none: APPROVAL_ORDER[Math.min(approvalIndex(base.none), approvalIndex(overlay.none))]!,
     low: APPROVAL_ORDER[Math.min(approvalIndex(base.low), approvalIndex(overlay.low))]!,
     medium: APPROVAL_ORDER[Math.min(approvalIndex(base.medium), approvalIndex(overlay.medium))]!,
     high: APPROVAL_ORDER[Math.min(approvalIndex(base.high), approvalIndex(overlay.high))]!,
-    critical: APPROVAL_ORDER[Math.min(approvalIndex(base.critical), approvalIndex(overlay.critical))]!,
+    critical:
+      APPROVAL_ORDER[Math.min(approvalIndex(base.critical), approvalIndex(overlay.critical))]!,
   };
 }
 
-function mergeSpendLimitsRestrictive(
-  base: SpendLimits,
-  overlay: SpendLimits,
-): SpendLimits {
+function mergeSpendLimitsRestrictive(base: SpendLimits, overlay: SpendLimits): SpendLimits {
   return {
     daily: minNullable(base.daily, overlay.daily),
     weekly: minNullable(base.weekly, overlay.weekly),
@@ -193,10 +186,7 @@ function mergeSpendLimitsRestrictive(
   };
 }
 
-function mergeSpendLimitsPermissive(
-  base: SpendLimits,
-  overlay: SpendLimits,
-): SpendLimits {
+function mergeSpendLimitsPermissive(base: SpendLimits, overlay: SpendLimits): SpendLimits {
   return {
     daily: maxNullable(base.daily, overlay.daily),
     weekly: maxNullable(base.weekly, overlay.weekly),

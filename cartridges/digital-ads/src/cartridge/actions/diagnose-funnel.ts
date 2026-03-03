@@ -6,11 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AdPlatformProvider } from "../providers/provider.js";
-import type {
-  DiagnoseFunnelParams,
-  ExecuteResult,
-  SessionState,
-} from "../types.js";
+import type { DiagnoseFunnelParams, ExecuteResult, SessionState } from "../types.js";
 import type { DiagnosticResult } from "../../core/types.js";
 import { analyzeFunnel } from "../../core/analysis/funnel-walker.js";
 import { buildComparisonPeriods } from "../../core/analysis/comparator.js";
@@ -23,23 +19,20 @@ export async function executeDiagnoseFunnel(
   params: DiagnoseFunnelParams,
   provider: AdPlatformProvider,
   session: SessionState,
-  credentials?: import("../../platforms/types.js").PlatformCredentials
+  credentials?: import("../../platforms/types.js").PlatformCredentials,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
   try {
     // Resolve credentials from session or params
-    const creds =
-      credentials ?? session.connections.get(params.platform)?.credentials;
+    const creds = credentials ?? session.connections.get(params.platform)?.credentials;
     if (!creds) {
       return {
         success: false,
         summary: `No credentials available for ${params.platform}. Use platform.connect first.`,
         externalRefs: { platform: params.platform, entityId: params.entityId },
         rollbackAvailable: false,
-        partialFailures: [
-          { step: "resolve_credentials", error: "No credentials found" },
-        ],
+        partialFailures: [{ step: "resolve_credentials", error: "No credentials found" }],
         durationMs: Date.now() - start,
         undoRecipe: null,
       };
@@ -69,7 +62,7 @@ export async function executeDiagnoseFunnel(
       entityLevel,
       periods.current,
       periods.previous,
-      funnel
+      funnel,
     );
 
     // Build diagnostic context
@@ -100,12 +93,8 @@ export async function executeDiagnoseFunnel(
     result.platform = params.platform;
 
     // Build summary
-    const criticalCount = result.findings.filter(
-      (f) => f.severity === "critical"
-    ).length;
-    const warningCount = result.findings.filter(
-      (f) => f.severity === "warning"
-    ).length;
+    const criticalCount = result.findings.filter((f) => f.severity === "critical").length;
+    const warningCount = result.findings.filter((f) => f.severity === "warning").length;
 
     return {
       success: true,

@@ -322,12 +322,21 @@ export interface MetaAdsWriteProvider {
   searchCampaigns(query: string): Promise<CampaignInfo[]>;
   pauseCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }>;
   resumeCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }>;
-  updateBudget(campaignId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }>;
+  updateBudget(
+    campaignId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }>;
   getAdSet(adSetId: string): Promise<AdSetInfo>;
   pauseAdSet(adSetId: string): Promise<{ success: boolean; previousStatus: string }>;
   resumeAdSet(adSetId: string): Promise<{ success: boolean; previousStatus: string }>;
-  updateAdSetBudget(adSetId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }>;
-  updateTargeting(adSetId: string, targetingSpec: Record<string, unknown>): Promise<{ success: boolean }>;
+  updateAdSetBudget(
+    adSetId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }>;
+  updateTargeting(
+    adSetId: string,
+    targetingSpec: Record<string, unknown>,
+  ): Promise<{ success: boolean }>;
   createCampaign?(params: CreateCampaignParams): Promise<{ id: string; success: boolean }>;
   createAdSet?(params: CreateAdSetParams): Promise<{ id: string; success: boolean }>;
   createAd?(params: CreateAdParams): Promise<{ id: string; success: boolean }>;
@@ -368,7 +377,7 @@ export interface CartridgeInterceptor {
   before?(
     actionType: string,
     params: Record<string, unknown>,
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
   ): Promise<void>;
   after?(actionType: string, result: ExecuteResult): Promise<void>;
 }
@@ -413,21 +422,21 @@ export interface Cartridge {
   enrichContext(
     actionType: string,
     parameters: Record<string, unknown>,
-    context: CartridgeContext
+    context: CartridgeContext,
   ): Promise<Record<string, unknown>>;
 
   /** Execute an action */
   execute(
     actionType: string,
     parameters: Record<string, unknown>,
-    context: CartridgeContext
+    context: CartridgeContext,
   ): Promise<ExecuteResult>;
 
   /** Get risk input for an action */
   getRiskInput(
     actionType: string,
     parameters: Record<string, unknown>,
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
   ): Promise<RiskInput>;
 
   /** Get guardrail configuration */
@@ -440,7 +449,7 @@ export interface Cartridge {
   captureSnapshot?(
     actionType: string,
     parameters: Record<string, unknown>,
-    context: CartridgeContext
+    context: CartridgeContext,
   ): Promise<Record<string, unknown>>;
 
   /** Search campaigns by query (optional, for entity resolution) */
@@ -450,7 +459,7 @@ export interface Cartridge {
   resolveEntity?(
     inputRef: string,
     entityType: string,
-    context: Record<string, unknown>
+    context: Record<string, unknown>,
   ): Promise<unknown>;
 }
 
@@ -468,9 +477,7 @@ const MANIFEST_ID_REGEX = /^[a-z][a-z0-9-]*$/;
 const VERSION_REGEX = /^\d+\.\d+\.\d+$/;
 const ACTION_TYPE_REGEX = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9_]*){1,4}$/;
 
-export function validateManifest(
-  manifest: CartridgeManifest
-): ManifestValidationError[] {
+export function validateManifest(manifest: CartridgeManifest): ManifestValidationError[] {
   const errors: ManifestValidationError[] = [];
 
   if (!manifest.id || typeof manifest.id !== "string") {

@@ -57,14 +57,37 @@ export async function buildTestServer(): Promise<TestContext> {
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
   // Create and configure TestCartridge
-  const cartridge = new TestCartridge(createTestManifest({
-    id: "digital-ads",
-    actions: [
-      { actionType: "digital-ads.campaign.pause", name: "Pause Campaign", description: "Pause a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-      { actionType: "digital-ads.campaign.resume", name: "Resume Campaign", description: "Resume a campaign", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-      { actionType: "digital-ads.budget.adjust", name: "Adjust Budget", description: "Adjust budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
-    ],
-  }));
+  const cartridge = new TestCartridge(
+    createTestManifest({
+      id: "digital-ads",
+      actions: [
+        {
+          actionType: "digital-ads.campaign.pause",
+          name: "Pause Campaign",
+          description: "Pause a campaign",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.campaign.resume",
+          name: "Resume Campaign",
+          description: "Resume a campaign",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.budget.adjust",
+          name: "Adjust Budget",
+          description: "Adjust budget",
+          parametersSchema: {},
+          baseRiskCategory: "high" as const,
+          reversible: true,
+        },
+      ],
+    }),
+  );
 
   // Default: high base risk → "medium" risk category (score ~56) → standard approval
   cartridge.onRiskInput(() => ({
@@ -95,10 +118,7 @@ export async function buildTestServer(): Promise<TestContext> {
 
   // Add resolveEntity to cartridge
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (cartridge as any).resolveEntity = async (
-    inputRef: string,
-    entityType: string,
-  ) => ({
+  (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
     id: `resolve_${Date.now()}`,
     inputRef,
     resolvedType: entityType,

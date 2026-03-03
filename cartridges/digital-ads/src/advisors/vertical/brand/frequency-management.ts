@@ -26,7 +26,7 @@ export const frequencyManagementAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -37,9 +37,7 @@ export const frequencyManagementAdvisor: FindingAdvisor = (
   if (currentFrequency === 0) return findings;
 
   const frequencyChange =
-    previousFrequency > 0
-      ? percentChange(currentFrequency, previousFrequency)
-      : 0;
+    previousFrequency > 0 ? percentChange(currentFrequency, previousFrequency) : 0;
 
   // Too high: frequency > 7 — ad blindness and potential negative sentiment
   if (currentFrequency > 7) {

@@ -27,7 +27,7 @@ import type {
 export function computeStageEconomicImpact(
   stage: StageDiagnostic,
   averageOrderValue: number,
-  isBottomOfFunnel: boolean
+  isBottomOfFunnel: boolean,
 ): EconomicImpact {
   const conversionDelta = stage.currentValue - stage.previousValue;
 
@@ -44,9 +44,7 @@ export function computeStageEconomicImpact(
 
   const previousRevenue = stage.previousValue * averageOrderValue * (isBottomOfFunnel ? 1 : 0.1);
   const revenueImpactPercent =
-    previousRevenue !== 0
-      ? (estimatedRevenueDelta / Math.abs(previousRevenue)) * 100
-      : 0;
+    previousRevenue !== 0 ? (estimatedRevenueDelta / Math.abs(previousRevenue)) * 100 : 0;
 
   return {
     estimatedRevenueDelta,
@@ -65,7 +63,7 @@ export function computeStageEconomicImpact(
 export function computeDropoffEconomicImpact(
   dropoff: FunnelDropoff,
   expectedConversions: number,
-  averageOrderValue: number
+  averageOrderValue: number,
 ): EconomicImpact {
   // The rate delta tells us what fraction of flow was lost at this transition
   const rateDelta = dropoff.currentRate - dropoff.previousRate;
@@ -74,9 +72,7 @@ export function computeDropoffEconomicImpact(
 
   const previousRevenue = expectedConversions * averageOrderValue;
   const revenueImpactPercent =
-    previousRevenue !== 0
-      ? (estimatedRevenueDelta / Math.abs(previousRevenue)) * 100
-      : 0;
+    previousRevenue !== 0 ? (estimatedRevenueDelta / Math.abs(previousRevenue)) * 100 : 0;
 
   return {
     estimatedRevenueDelta,
@@ -90,19 +86,16 @@ export function computeDropoffEconomicImpact(
  * Only includes stages with negative revenue impact (losses).
  */
 export function buildElasticityRanking(
-  stageAnalysis: StageDiagnostic[]
+  stageAnalysis: StageDiagnostic[],
 ): NonNullable<DiagnosticResult["elasticity"]> {
   const losses = stageAnalysis
     .filter(
-      (s) =>
-        s.economicImpact &&
-        s.economicImpact.estimatedRevenueDelta < 0 &&
-        s.isSignificant
+      (s) => s.economicImpact && s.economicImpact.estimatedRevenueDelta < 0 && s.isSignificant,
     )
     .sort(
       (a, b) =>
         (a.economicImpact?.estimatedRevenueDelta ?? 0) -
-        (b.economicImpact?.estimatedRevenueDelta ?? 0)
+        (b.economicImpact?.estimatedRevenueDelta ?? 0),
     );
 
   const impactRanking: Array<{
@@ -117,7 +110,7 @@ export function buildElasticityRanking(
 
   const totalEstimatedRevenueLoss = impactRanking.reduce(
     (sum, entry) => sum + entry.estimatedRevenueDelta,
-    0
+    0,
   );
 
   return { totalEstimatedRevenueLoss, impactRanking };

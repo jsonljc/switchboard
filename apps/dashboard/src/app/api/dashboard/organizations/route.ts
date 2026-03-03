@@ -9,7 +9,10 @@ export async function GET() {
     const data = await client.getOrgConfig(session.organizationId);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -21,6 +24,9 @@ export async function PUT(request: NextRequest) {
     const data = await client.updateOrgConfig(session.organizationId, body);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

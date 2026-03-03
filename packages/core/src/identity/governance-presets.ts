@@ -1,8 +1,4 @@
-import type {
-  GovernanceProfile,
-  RiskTolerance,
-  SpendLimits,
-} from "@switchboard/schemas";
+import type { GovernanceProfile, RiskTolerance, SpendLimits } from "@switchboard/schemas";
 
 export interface GovernanceProfilePreset {
   riskTolerance: RiskTolerance;

@@ -23,7 +23,8 @@ export const consultationReminderCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "Hi {{patientName}}, this is a reminder about your consultation on {{appointmentDate}}. Reply CONFIRM to confirm or call us to reschedule.",
+        message:
+          "Hi {{patientName}}, this is a reminder about your consultation on {{appointmentDate}}. Reply CONFIRM to confirm or call us to reschedule.",
       },
       delayMs: 0, // Immediately on booking
       messageTemplate: "Booking confirmation",
@@ -34,7 +35,8 @@ export const consultationReminderCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, your consultation is tomorrow at {{appointmentTime}}. We look forward to seeing you!",
+        message:
+          "{{patientName}}, your consultation is tomorrow at {{appointmentTime}}. We look forward to seeing you!",
       },
       delayMs: DAY * -1, // This is computed relative to appointment, but for cadence we use 24hr before
       messageTemplate: "24-hour reminder",
@@ -46,7 +48,8 @@ export const consultationReminderCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, your consultation starts in 2 hours at {{appointmentTime}}. See you soon!",
+        message:
+          "{{patientName}}, your consultation starts in 2 hours at {{appointmentTime}}. See you soon!",
       },
       delayMs: 2 * HOUR, // 2 hours before (computed from appointment time)
       messageTemplate: "2-hour reminder",
@@ -70,7 +73,8 @@ export const noShowRebookCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "Hi {{patientName}}, we missed you at your appointment today. Would you like to reschedule? We'd love to find a time that works better for you.",
+        message:
+          "Hi {{patientName}}, we missed you at your appointment today. Would you like to reschedule? We'd love to find a time that works better for you.",
       },
       delayMs: 2 * HOUR, // 2 hours after no-show
     },
@@ -80,7 +84,8 @@ export const noShowRebookCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, just a friendly follow-up — we have availability this week if you'd like to reschedule your consultation. Reply or call us anytime.",
+        message:
+          "{{patientName}}, just a friendly follow-up — we have availability this week if you'd like to reschedule your consultation. Reply or call us anytime.",
       },
       delayMs: 2 * DAY, // 2 days later
       condition: { variable: "rebooked", operator: "neq", value: true },
@@ -103,7 +108,8 @@ export const postTreatmentCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "Hi {{patientName}}, hope you're feeling great after your {{treatmentType}} today! If you have any questions, don't hesitate to reach out.",
+        message:
+          "Hi {{patientName}}, hope you're feeling great after your {{treatmentType}} today! If you have any questions, don't hesitate to reach out.",
       },
       delayMs: 4 * HOUR, // 4 hours after treatment
     },
@@ -113,7 +119,8 @@ export const postTreatmentCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, it's been 3 days since your {{treatmentType}}. How are you feeling? Everything looking good?",
+        message:
+          "{{patientName}}, it's been 3 days since your {{treatmentType}}. How are you feeling? Everything looking good?",
       },
       delayMs: 3 * DAY,
     },
@@ -123,7 +130,8 @@ export const postTreatmentCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, we'd love to hear about your experience! Would you mind leaving us a quick review?",
+        message:
+          "{{patientName}}, we'd love to hear about your experience! Would you mind leaving us a quick review?",
       },
       delayMs: 7 * DAY,
       condition: { variable: "satisfaction", operator: "gt", value: 3 },
@@ -157,7 +165,8 @@ export const reviewRequestCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, we'd really appreciate your review! It only takes a minute and helps us serve you better.",
+        message:
+          "{{patientName}}, we'd really appreciate your review! It only takes a minute and helps us serve you better.",
       },
       delayMs: 14 * DAY, // 2 weeks after treatment
       condition: { variable: "hasReviewed", operator: "neq", value: true },
@@ -180,7 +189,8 @@ export const dormantWinBackCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "Hi {{patientName}}, we haven't seen you in a while at {{clinicName}}. We'd love to welcome you back! Reply to schedule a visit.",
+        message:
+          "Hi {{patientName}}, we haven't seen you in a while at {{clinicName}}. We'd love to welcome you back! Reply to schedule a visit.",
       },
       delayMs: 0,
     },
@@ -190,7 +200,8 @@ export const dormantWinBackCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, we have some exciting new treatments that might interest you. Would you like to learn more?",
+        message:
+          "{{patientName}}, we have some exciting new treatments that might interest you. Would you like to learn more?",
       },
       delayMs: 7 * DAY,
       condition: { variable: "responded", operator: "neq", value: true },
@@ -201,7 +212,8 @@ export const dormantWinBackCadence: CadenceDefinition = {
       parameters: {
         patientId: "{{patientId}}",
         phoneNumber: "{{phoneNumber}}",
-        message: "{{patientName}}, this is our last check-in for now. We're here whenever you're ready. Call or text anytime!",
+        message:
+          "{{patientName}}, this is our last check-in for now. We're here whenever you're ready. Call or text anytime!",
       },
       delayMs: 21 * DAY,
       condition: { variable: "responded", operator: "neq", value: true },

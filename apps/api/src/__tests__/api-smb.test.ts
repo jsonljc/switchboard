@@ -23,7 +23,7 @@ describe("SMB API", () => {
     app = Fastify({ logger: false });
 
     app.decorate("tierStore", mockTierStore);
-    app.decorate("smbActivityLog", mockSmbActivityLog);
+    app.decorate("smbActivityLog", mockSmbActivityLog as any);
 
     // Default: organizationIdFromAuth matches the org in the URL
     app.decorateRequest("organizationIdFromAuth", undefined);

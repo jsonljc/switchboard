@@ -79,8 +79,14 @@ export class HubSpotCrmProvider implements CrmProvider {
           query,
           limit: Math.min(limit, 100),
           properties: [
-            "email", "firstname", "lastname", "company", "phone",
-            "hs_lead_status", "createdate", "lastmodifieddate",
+            "email",
+            "firstname",
+            "lastname",
+            "company",
+            "phone",
+            "hs_lead_status",
+            "createdate",
+            "lastmodifieddate",
           ],
         }),
       });
@@ -131,9 +137,15 @@ export class HubSpotCrmProvider implements CrmProvider {
     });
   }
 
-  async listDeals(filters?: { contactId?: string; pipeline?: string; stage?: string }): Promise<CrmDeal[]> {
+  async listDeals(filters?: {
+    contactId?: string;
+    pipeline?: string;
+    stage?: string;
+  }): Promise<CrmDeal[]> {
     return this.call(async () => {
-      const filterGroups: Array<{ filters: Array<{ propertyName: string; operator: string; value: string }> }> = [];
+      const filterGroups: Array<{
+        filters: Array<{ propertyName: string; operator: string; value: string }>;
+      }> = [];
       const innerFilters: Array<{ propertyName: string; operator: string; value: string }> = [];
 
       if (filters?.pipeline) {
@@ -186,7 +198,11 @@ export class HubSpotCrmProvider implements CrmProvider {
     });
   }
 
-  async listActivities(filters?: { contactId?: string; dealId?: string; type?: string }): Promise<CrmActivity[]> {
+  async listActivities(filters?: {
+    contactId?: string;
+    dealId?: string;
+    type?: string;
+  }): Promise<CrmActivity[]> {
     return this.call(async () => {
       // HubSpot uses "engagements" for activities (notes, emails, calls, meetings, tasks)
       const hsType = filters?.type ? this.mapActivityTypeToHubSpot(filters.type) : undefined;
@@ -232,13 +248,10 @@ export class HubSpotCrmProvider implements CrmProvider {
   async getPipelineStatus(pipelineId?: string): Promise<CrmPipelineStage[]> {
     return this.call(async () => {
       const pipeline = pipelineId ?? this.config.pipelineId ?? "default";
-      const response = await fetch(
-        `${HUBSPOT_BASE}/crm/v3/pipelines/deals/${pipeline}`,
-        {
-          method: "GET",
-          headers: this.authHeaders(),
-        },
-      );
+      const response = await fetch(`${HUBSPOT_BASE}/crm/v3/pipelines/deals/${pipeline}`, {
+        method: "GET",
+        headers: this.authHeaders(),
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -260,12 +273,14 @@ export class HubSpotCrmProvider implements CrmProvider {
           method: "POST",
           headers: this.authHeaders(),
           body: JSON.stringify({
-            filterGroups: [{
-              filters: [
-                { propertyName: "dealstage", operator: "EQ", value: stage.id },
-                { propertyName: "pipeline", operator: "EQ", value: pipeline },
-              ],
-            }],
+            filterGroups: [
+              {
+                filters: [
+                  { propertyName: "dealstage", operator: "EQ", value: stage.id },
+                  { propertyName: "pipeline", operator: "EQ", value: pipeline },
+                ],
+              },
+            ],
             limit: 0,
             properties: ["amount"],
           }),
@@ -280,10 +295,11 @@ export class HubSpotCrmProvider implements CrmProvider {
             results: Array<{ properties: Record<string, string | null> }>;
           };
           dealCount = countData.total ?? 0;
-          totalValue = countData.results?.reduce(
-            (sum, r) => sum + (parseFloat(r.properties["amount"] ?? "0") || 0),
-            0,
-          ) ?? 0;
+          totalValue =
+            countData.results?.reduce(
+              (sum, r) => sum + (parseFloat(r.properties["amount"] ?? "0") || 0),
+              0,
+            ) ?? 0;
         }
 
         stages.push({
@@ -351,14 +367,11 @@ export class HubSpotCrmProvider implements CrmProvider {
       if (data["company"]) properties["company"] = data["company"];
       if (data["phone"]) properties["phone"] = data["phone"];
 
-      const response = await fetch(
-        `${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}`,
-        {
-          method: "PATCH",
-          headers: this.authHeaders(),
-          body: JSON.stringify({ properties }),
-        },
-      );
+      const response = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: this.authHeaders(),
+        body: JSON.stringify({ properties }),
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -378,13 +391,10 @@ export class HubSpotCrmProvider implements CrmProvider {
 
   async archiveContact(contactId: string): Promise<void> {
     return this.call(async () => {
-      const response = await fetch(
-        `${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}`,
-        {
-          method: "DELETE",
-          headers: this.authHeaders(),
-        },
-      );
+      const response = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/${contactId}`, {
+        method: "DELETE",
+        headers: this.authHeaders(),
+      });
 
       if (!response.ok && response.status !== 404) {
         const errorBody = await response.text();
@@ -442,13 +452,10 @@ export class HubSpotCrmProvider implements CrmProvider {
 
   async archiveDeal(dealId: string): Promise<void> {
     return this.call(async () => {
-      const response = await fetch(
-        `${HUBSPOT_BASE}/crm/v3/objects/deals/${dealId}`,
-        {
-          method: "DELETE",
-          headers: this.authHeaders(),
-        },
-      );
+      const response = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/deals/${dealId}`, {
+        method: "DELETE",
+        headers: this.authHeaders(),
+      });
 
       if (!response.ok && response.status !== 404) {
         const errorBody = await response.text();

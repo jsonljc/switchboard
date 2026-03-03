@@ -35,8 +35,7 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           entityId: {
             type: "string",
-            description:
-              'The ad account or entity ID (e.g. "act_123456789")',
+            description: 'The ad account or entity ID (e.g. "act_123456789")',
           },
         },
       },
@@ -73,8 +72,7 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           periodDays: {
             type: "number",
-            description:
-              "Number of days per comparison period (default: 7 = WoW)",
+            description: "Number of days per comparison period (default: 7 = WoW)",
           },
           referenceDate: {
             type: "string",
@@ -83,8 +81,7 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           enableStructuralAnalysis: {
             type: "boolean",
-            description:
-              "Enable ad set fragmentation and structure analysis (default: false)",
+            description: "Enable ad set fragmentation and structure analysis (default: false)",
           },
           enableHistoricalTrends: {
             type: "boolean",
@@ -187,11 +184,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
             properties: {
               since: {
                 type: "string",
-                description: 'Start date (YYYY-MM-DD)',
+                description: "Start date (YYYY-MM-DD)",
               },
               until: {
                 type: "string",
-                description: 'End date (YYYY-MM-DD)',
+                description: "End date (YYYY-MM-DD)",
               },
             },
           },
@@ -352,7 +349,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.targeting.modify",
       name: "Modify Targeting",
-      description: "Modify targeting parameters for a Meta ad set. Irreversible — triggers learning phase reset.",
+      description:
+        "Modify targeting parameters for a Meta ad set. Irreversible — triggers learning phase reset.",
       parametersSchema: {
         type: "object",
         required: ["adSetId", "targeting"],
@@ -378,10 +376,28 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["name", "objective", "dailyBudget"],
         properties: {
           name: { type: "string", description: "Campaign name" },
-          objective: { type: "string", enum: ["OUTCOME_LEADS", "OUTCOME_SALES", "OUTCOME_AWARENESS", "OUTCOME_TRAFFIC", "OUTCOME_ENGAGEMENT"], description: "Campaign objective" },
+          objective: {
+            type: "string",
+            enum: [
+              "OUTCOME_LEADS",
+              "OUTCOME_SALES",
+              "OUTCOME_AWARENESS",
+              "OUTCOME_TRAFFIC",
+              "OUTCOME_ENGAGEMENT",
+            ],
+            description: "Campaign objective",
+          },
           dailyBudget: { type: "number", description: "Daily budget in dollars" },
-          status: { type: "string", enum: ["ACTIVE", "PAUSED"], description: "Initial status (default: PAUSED)" },
-          specialAdCategories: { type: "array", items: { type: "string" }, description: "Special ad categories (e.g., HOUSING, CREDIT, EMPLOYMENT)" },
+          status: {
+            type: "string",
+            enum: ["ACTIVE", "PAUSED"],
+            description: "Initial status (default: PAUSED)",
+          },
+          specialAdCategories: {
+            type: "array",
+            items: { type: "string" },
+            description: "Special ad categories (e.g., HOUSING, CREDIT, EMPLOYMENT)",
+          },
         },
       },
       baseRiskCategory: "high",
@@ -392,7 +408,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.adset.create",
       name: "Create Ad Set",
-      description: "Create a new ad set within an existing campaign. Requires campaign ID, targeting, and budget.",
+      description:
+        "Create a new ad set within an existing campaign. Requires campaign ID, targeting, and budget.",
       parametersSchema: {
         type: "object",
         required: ["campaignId", "name", "dailyBudget", "targeting"],
@@ -401,9 +418,16 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           name: { type: "string", description: "Ad set name" },
           dailyBudget: { type: "number", description: "Daily budget in dollars" },
           targeting: { type: "object", description: "Targeting specification" },
-          optimizationGoal: { type: "string", description: "Optimization goal (e.g., LEAD_GENERATION, CONVERSIONS)" },
+          optimizationGoal: {
+            type: "string",
+            description: "Optimization goal (e.g., LEAD_GENERATION, CONVERSIONS)",
+          },
           billingEvent: { type: "string", description: "Billing event (default: IMPRESSIONS)" },
-          status: { type: "string", enum: ["ACTIVE", "PAUSED"], description: "Initial status (default: PAUSED)" },
+          status: {
+            type: "string",
+            enum: ["ACTIVE", "PAUSED"],
+            description: "Initial status (default: PAUSED)",
+          },
         },
       },
       baseRiskCategory: "high",
@@ -414,15 +438,23 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.ad.create",
       name: "Create Ad",
-      description: "Create a new ad within an existing ad set. Requires ad set ID, creative, and ad name.",
+      description:
+        "Create a new ad within an existing ad set. Requires ad set ID, creative, and ad name.",
       parametersSchema: {
         type: "object",
         required: ["adSetId", "name", "creative"],
         properties: {
           adSetId: { type: "string", description: "Parent ad set ID" },
           name: { type: "string", description: "Ad name" },
-          creative: { type: "object", description: "Ad creative specification (title, body, imageUrl, callToAction)" },
-          status: { type: "string", enum: ["ACTIVE", "PAUSED"], description: "Initial status (default: PAUSED)" },
+          creative: {
+            type: "object",
+            description: "Ad creative specification (title, body, imageUrl, callToAction)",
+          },
+          status: {
+            type: "string",
+            enum: ["ACTIVE", "PAUSED"],
+            description: "Initial status (default: PAUSED)",
+          },
         },
       },
       baseRiskCategory: "critical",

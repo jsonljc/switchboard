@@ -102,13 +102,18 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     try {
       const { evaluateAlertRule } = await import("../alerts/evaluator.js");
       const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge) return reply.code(400).send({ error: "digital-ads cartridge not registered" });
+      if (!cartridge)
+        return reply.code(400).send({ error: "digital-ads cartridge not registered" });
 
-      const result = await cartridge.execute("digital-ads.funnel.diagnose", {
-        platform: rule.platform ?? "meta",
-        vertical: rule.vertical,
-        entityId: "act_default",
-      }, { principalId: "system", organizationId: orgId, connectionCredentials: {} });
+      const result = await cartridge.execute(
+        "digital-ads.funnel.diagnose",
+        {
+          platform: rule.platform ?? "meta",
+          vertical: rule.vertical,
+          entityId: "act_default",
+        },
+        { principalId: "system", organizationId: orgId, connectionCredentials: {} },
+      );
 
       if (!result?.data) {
         return reply.send({ triggered: false, error: "No diagnostic data returned" });

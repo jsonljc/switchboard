@@ -46,7 +46,7 @@ describe("digital-ads.portfolio.diagnose", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -92,7 +92,7 @@ describe("digital-ads.portfolio.diagnose", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     // Should still succeed since at least one platform worked
@@ -118,7 +118,7 @@ describe("digital-ads.portfolio.diagnose", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.rollbackAvailable).toBe(false);

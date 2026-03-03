@@ -2,18 +2,16 @@
  * Adapter that implements the orchestrator interface by calling the Switchboard HTTP API.
  * Use when SWITCHBOARD_API_URL is set so Chat uses a single choke point (the API) for propose/execute/approvals.
  */
-import type {
-  RuntimeOrchestrator,
-  ProposeResult,
-  ApprovalResponse,
-} from "@switchboard/core";
+import type { RuntimeOrchestrator, ProposeResult, ApprovalResponse } from "@switchboard/core";
 import { withRetry } from "@switchboard/core";
 import type { ActionEnvelope, DecisionTrace, ApprovalRequest } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
 const RISK_CATEGORIES = ["none", "low", "medium", "high", "critical"] as const;
 function riskCategory(c: string): (typeof RISK_CATEGORIES)[number] {
-  return RISK_CATEGORIES.includes(c as (typeof RISK_CATEGORIES)[number]) ? (c as (typeof RISK_CATEGORIES)[number]) : "low";
+  return RISK_CATEGORIES.includes(c as (typeof RISK_CATEGORIES)[number])
+    ? (c as (typeof RISK_CATEGORIES)[number])
+    : "low";
 }
 
 function minimalComputedRiskScore(category: string): DecisionTrace["computedRiskScore"] {
@@ -167,7 +165,9 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     );
   }
 
-  async resolveAndPropose(params: Parameters<RuntimeOrchestrator["resolveAndPropose"]>[0]): Promise<
+  async resolveAndPropose(
+    params: Parameters<RuntimeOrchestrator["resolveAndPropose"]>[0],
+  ): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }
     | { notFound: true; explanation: string }
@@ -211,7 +211,13 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
       envelopeId: string;
       traceId: string;
       approvalId?: string;
-      approvalRequest?: { id: string; summary: string; riskCategory: string; bindingHash: string; expiresAt: string };
+      approvalRequest?: {
+        id: string;
+        summary: string;
+        riskCategory: string;
+        bindingHash: string;
+        expiresAt: string;
+      };
       executionResult?: ExecuteResult;
       deniedExplanation?: string;
     };
@@ -286,16 +292,19 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     bindingHash: string;
     patchValue?: Record<string, unknown>;
   }): Promise<ApprovalResponse> {
-    const res = await this.fetchWithRetry(`${this.base()}/api/approvals/${params.approvalId}/respond`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({
-        action: params.action,
-        respondedBy: params.respondedBy,
-        bindingHash: params.bindingHash,
-        patchValue: params.patchValue,
-      }),
-    });
+    const res = await this.fetchWithRetry(
+      `${this.base()}/api/approvals/${params.approvalId}/respond`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          action: params.action,
+          respondedBy: params.respondedBy,
+          bindingHash: params.bindingHash,
+          patchValue: params.patchValue,
+        }),
+      },
+    );
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(err.error ?? `Respond failed: ${res.status}`);

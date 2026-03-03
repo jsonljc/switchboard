@@ -5,10 +5,7 @@
 // enrichment to prevent PII leakage to external services.
 // ---------------------------------------------------------------------------
 
-import type {
-  CartridgeInterceptor,
-  CartridgeContext,
-} from "@switchboard/cartridge-sdk";
+import type { CartridgeInterceptor, CartridgeContext } from "@switchboard/cartridge-sdk";
 
 /** Patterns that match common PHI fields */
 const PHI_FIELD_PATTERNS = [

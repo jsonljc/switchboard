@@ -8,13 +8,7 @@ import { z } from "zod";
  * - l3-llm: Expensive LLM (Opus) — complex reasoning, multi-step planning
  * - human: Requires human intervention
  */
-export const ExecutorTypeSchema = z.enum([
-  "deterministic",
-  "l1-llm",
-  "l2-llm",
-  "l3-llm",
-  "human",
-]);
+export const ExecutorTypeSchema = z.enum(["deterministic", "l1-llm", "l2-llm", "l3-llm", "human"]);
 export type ExecutorType = z.infer<typeof ExecutorTypeSchema>;
 
 /**
@@ -22,14 +16,14 @@ export type ExecutorType = z.infer<typeof ExecutorTypeSchema>;
  * Used for plan decomposition and model routing.
  */
 export const StepTypeSchema = z.enum([
-  "FETCH",       // Read/query data from external source
-  "COMPUTE",     // Run deterministic analysis on data
-  "SUMMARIZE",   // Generate human-readable summary
-  "DECIDE",      // Make a decision (LLM reasoning)
-  "ASK_HUMAN",   // Prompt for human input
-  "APPROVAL",    // Submit for governance approval
-  "EXECUTE",     // Mutate external state
-  "LOG",         // Record audit/telemetry
+  "FETCH", // Read/query data from external source
+  "COMPUTE", // Run deterministic analysis on data
+  "SUMMARIZE", // Generate human-readable summary
+  "DECIDE", // Make a decision (LLM reasoning)
+  "ASK_HUMAN", // Prompt for human input
+  "APPROVAL", // Submit for governance approval
+  "EXECUTE", // Mutate external state
+  "LOG", // Record audit/telemetry
 ]);
 export type StepType = z.infer<typeof StepTypeSchema>;
 

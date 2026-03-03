@@ -43,7 +43,7 @@ describe("bootstrapDigitalAdsCartridge", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
     expect(result.success).toBe(true);
   });
@@ -125,7 +125,7 @@ describe("bootstrapDigitalAdsCartridge", () => {
         connectionCredentials: {
           meta: { platform: "meta", accessToken: "test" },
         },
-      }
+      },
     );
     expect(result.success).toBe(true);
   });
@@ -150,7 +150,7 @@ describe("enrichContext", () => {
     const enriched = await cartridge.enrichContext(
       "digital-ads.funnel.diagnose",
       { platform: "meta", vertical: "commerce" },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(enriched.resolvedFunnel).toBeDefined();
@@ -168,7 +168,7 @@ describe("enrichContext", () => {
           { platform: "google", entityId: "g_1" },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const resolved = enriched.resolvedPlatforms as Array<{ platform: string }>;
@@ -188,7 +188,7 @@ describe("enrichContext", () => {
         vertical: "commerce",
         timeRange: { since: "2024-01-14", until: "2024-01-08" },
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(enriched.validationError).toBeDefined();
@@ -205,7 +205,7 @@ describe("enrichContext", () => {
         vertical: "commerce",
         timeRange: { since: "2024-01-08" },
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(enriched.validationError).toBeDefined();
@@ -217,10 +217,16 @@ describe("enrichContext", () => {
       "digital-ads.platform.connect",
       {
         platform: "meta",
-        credentials: { platform: "google", clientId: "c", clientSecret: "s", refreshToken: "r", developerToken: "d" },
+        credentials: {
+          platform: "google",
+          clientId: "c",
+          clientSecret: "s",
+          refreshToken: "r",
+          developerToken: "d",
+        },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(enriched.validationError).toBeDefined();
@@ -238,7 +244,7 @@ describe("enrichContext", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     // Execute with validationError already in context (orchestrator would set this)
@@ -253,7 +259,7 @@ describe("enrichContext", () => {
       {
         ...defaultCtx,
         validationError: "timeRange.since must be before timeRange.until",
-      }
+      },
     );
 
     expect(result.success).toBe(false);
@@ -274,7 +280,7 @@ describe("captureSnapshot", () => {
     const snapshot = await cartridge.captureSnapshot(
       "digital-ads.funnel.diagnose",
       { entityId: "act_123" },
-      defaultCtx
+      defaultCtx,
     );
 
     // Read-only actions return empty snapshot
@@ -293,7 +299,7 @@ describe("getRiskInput", () => {
     const risk = await cartridge.getRiskInput(
       "digital-ads.platform.connect",
       { platform: "meta" },
-      defaultCtx
+      defaultCtx,
     );
     expect(risk.baseRisk).toBe("none");
     expect(risk.exposure.dollarsAtRisk).toBe(0);
@@ -304,18 +310,14 @@ describe("getRiskInput", () => {
     const risk = await cartridge.getRiskInput(
       "digital-ads.funnel.diagnose",
       { platform: "meta", entityId: "act_123" },
-      defaultCtx
+      defaultCtx,
     );
     expect(risk.baseRisk).toBe("low");
     expect(risk.exposure.blastRadius).toBe(1);
   });
 
   it("returns none risk for health.check", async () => {
-    const risk = await cartridge.getRiskInput(
-      "digital-ads.health.check",
-      {},
-      defaultCtx
-    );
+    const risk = await cartridge.getRiskInput("digital-ads.health.check", {}, defaultCtx);
     expect(risk.baseRisk).toBe("none");
   });
 
@@ -323,13 +325,9 @@ describe("getRiskInput", () => {
     const risk = await cartridge.getRiskInput(
       "digital-ads.portfolio.diagnose",
       {
-        platforms: [
-          { platform: "meta" },
-          { platform: "google" },
-          { platform: "tiktok" },
-        ],
+        platforms: [{ platform: "meta" }, { platform: "google" }, { platform: "tiktok" }],
       },
-      defaultCtx
+      defaultCtx,
     );
     expect(risk.exposure.blastRadius).toBe(3);
   });
@@ -340,7 +338,7 @@ describe("getRiskInput", () => {
       {
         platforms: [{ platform: "meta" }, { platform: "google" }],
       },
-      defaultCtx
+      defaultCtx,
     );
     expect(risk.exposure.blastRadius).toBe(2);
   });
@@ -367,7 +365,7 @@ describe("getRiskInput", () => {
     const risk = await cartridge.getRiskInput(
       "digital-ads.funnel.diagnose",
       { platform: "meta", entityId: "act_123" },
-      defaultCtx
+      defaultCtx,
     );
     expect(typeof risk.exposure.blastRadius).toBe("number");
   });
@@ -427,7 +425,7 @@ describe("cartridge.healthCheck()", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const health = await cartridge.healthCheck();
@@ -468,7 +466,7 @@ describe("cross-platform flows", () => {
         },
         entityId: "google_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const result = await cartridge.execute(
@@ -478,7 +476,7 @@ describe("cross-platform flows", () => {
         entityId: "google_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -500,7 +498,7 @@ describe("cross-platform flows", () => {
         },
         entityId: "tt_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const result = await cartridge.execute(
@@ -510,7 +508,7 @@ describe("cross-platform flows", () => {
         entityId: "tt_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -554,7 +552,7 @@ describe("cross-platform flows", () => {
           },
         ],
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -580,7 +578,7 @@ describe("initialize", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
     expect(cartridge.getSession().connections.size).toBe(1);
 

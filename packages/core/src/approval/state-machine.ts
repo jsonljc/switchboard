@@ -1,12 +1,7 @@
 import type { ApprovalRequirement, RiskCategory } from "@switchboard/schemas";
 import type { ResolvedIdentity } from "../identity/spec.js";
 
-export type ApprovalStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "expired"
-  | "patched";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired" | "patched";
 
 export interface QuorumEntry {
   approverId: string;
@@ -43,7 +38,10 @@ export function determineApprovalRequirement(
   return identity.effectiveRiskTolerance[riskCategory];
 }
 
-export function createApprovalState(expiresAt: Date, quorum?: { required: number } | null): ApprovalState {
+export function createApprovalState(
+  expiresAt: Date,
+  quorum?: { required: number } | null,
+): ApprovalState {
   return {
     status: "pending",
     respondedBy: null,

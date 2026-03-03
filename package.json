@@ -11,15 +11,30 @@
     "test:integration": "turbo test:integration",
     "clean": "turbo clean",
     "typecheck": "turbo typecheck",
+    "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"cartridges/*/src/**/*.ts\"",
     "db:generate": "pnpm --filter @switchboard/db generate",
     "db:migrate": "pnpm --filter @switchboard/db migrate",
-    "db:seed": "pnpm --filter @switchboard/db seed"
+    "db:seed": "pnpm --filter @switchboard/db seed",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@commitlint/cli": "^19",
+    "@commitlint/config-conventional": "^19",
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^7",
     "@typescript-eslint/parser": "^7",
     "eslint": "^8.56.0",
+    "husky": "^9",
+    "lint-staged": "^15",
     "prettier": "^3.2.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.0",

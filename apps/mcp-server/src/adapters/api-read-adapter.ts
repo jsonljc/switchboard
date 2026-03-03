@@ -23,7 +23,9 @@ export class ApiReadAdapter {
     switch (op.operation) {
       case "getCampaign": {
         const campaignId = op.parameters.campaignId as string;
-        const { data } = await this.client.get<{ campaign: unknown }>(`/api/campaigns/${encodeURIComponent(campaignId)}`);
+        const { data } = await this.client.get<{ campaign: unknown }>(
+          `/api/campaigns/${encodeURIComponent(campaignId)}`,
+        );
         return (data as { campaign: unknown }).campaign ?? data;
       }
 
@@ -32,7 +34,9 @@ export class ApiReadAdapter {
         const limit = op.parameters.limit as number | undefined;
         const params = new URLSearchParams({ query });
         if (limit) params.set("limit", String(limit));
-        const { data } = await this.client.get<{ campaigns: unknown[] }>(`/api/campaigns/search?${params.toString()}`);
+        const { data } = await this.client.get<{ campaigns: unknown[] }>(
+          `/api/campaigns/search?${params.toString()}`,
+        );
         return data;
       }
 

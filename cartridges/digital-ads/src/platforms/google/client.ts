@@ -97,7 +97,7 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<MetricSnapshot> {
     const customerId = entityId.replace(/-/g, "");
 
@@ -120,7 +120,7 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     entityId: string,
     _entityLevel: EntityLevel,
     timeRange: TimeRange,
-    _funnel: FunnelSchema
+    _funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]> {
     const customerId = entityId.replace(/-/g, "");
     const query = `SELECT ad_group.id, ad_group.status, metrics.cost_micros, metrics.conversions FROM ad_group WHERE segments.date BETWEEN '${timeRange.since}' AND '${timeRange.until}' AND ad_group.status = 'ENABLED'`;
@@ -217,15 +217,11 @@ export class GoogleAdsClient extends AbstractPlatformClient {
         break;
     }
 
-    const extraFields = (resourceName === "campaign")
-      ? ", campaign.advertising_channel_type" : "";
+    const extraFields = resourceName === "campaign" ? ", campaign.advertising_channel_type" : "";
     return `SELECT ${metrics}${extraFields} FROM ${resourceName} WHERE segments.date BETWEEN '${timeRange.since}' AND '${timeRange.until}'`;
   }
 
-  private async executeQuery(
-    customerId: string,
-    query: string
-  ): Promise<GoogleAdsRow[]> {
+  private async executeQuery(customerId: string, query: string): Promise<GoogleAdsRow[]> {
     const accessToken = await this.ensureAccessToken();
     const url = `${GOOGLE_ADS_BASE_URL}/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`;
 
@@ -274,7 +270,7 @@ export class GoogleAdsClient extends AbstractPlatformClient {
         }
 
         throw new Error(
-          `Google Ads API error ${body.error?.code}: ${body.error?.message ?? res.statusText}`
+          `Google Ads API error ${body.error?.code}: ${body.error?.message ?? res.statusText}`,
         );
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
@@ -298,7 +294,7 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     let totalSpend = 0;
     let totalImpressions = 0;
@@ -325,7 +321,8 @@ export class GoogleAdsClient extends AbstractPlatformClient {
       const channelType = normalizeChannelType(row.campaign?.advertisingChannelType);
       if (channelType) {
         channelSpend[channelType] = (channelSpend[channelType] ?? 0) + rowSpend;
-        channelConversions[channelType] = (channelConversions[channelType] ?? 0) + (m.conversions ?? 0);
+        channelConversions[channelType] =
+          (channelConversions[channelType] ?? 0) + (m.conversions ?? 0);
       }
     }
 
@@ -401,7 +398,7 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     const stages: Record<string, StageMetrics> = {};
     for (const stage of funnel.stages) {

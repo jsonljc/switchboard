@@ -20,12 +20,12 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
       create: {
         id: envelope.id,
         version: envelope.version,
-        incomingMessage: envelope.incomingMessage as object ?? undefined,
+        incomingMessage: (envelope.incomingMessage as object) ?? undefined,
         conversationId: envelope.conversationId,
         organizationId,
         proposals: envelope.proposals as object[],
         resolvedEntities: envelope.resolvedEntities as object[],
-        plan: envelope.plan as object ?? undefined,
+        plan: (envelope.plan as object) ?? undefined,
         decisions: envelope.decisions as object[],
         approvalRequests: envelope.approvalRequests as object[],
         executionResults: envelope.executionResults as object[],
@@ -38,12 +38,12 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
       },
       update: {
         version: envelope.version,
-        incomingMessage: envelope.incomingMessage as object ?? undefined,
+        incomingMessage: (envelope.incomingMessage as object) ?? undefined,
         conversationId: envelope.conversationId,
         organizationId,
         proposals: envelope.proposals as object[],
         resolvedEntities: envelope.resolvedEntities as object[],
-        plan: envelope.plan as object ?? undefined,
+        plan: (envelope.plan as object) ?? undefined,
         decisions: envelope.decisions as object[],
         approvalRequests: envelope.approvalRequests as object[],
         executionResults: envelope.executionResults as object[],
@@ -66,14 +66,18 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
     const data: Record<string, unknown> = { updatedAt: new Date() };
 
     if (updates.version !== undefined) data["version"] = updates.version;
-    if (updates.incomingMessage !== undefined) data["incomingMessage"] = updates.incomingMessage as object;
+    if (updates.incomingMessage !== undefined)
+      data["incomingMessage"] = updates.incomingMessage as object;
     if (updates.conversationId !== undefined) data["conversationId"] = updates.conversationId;
     if (updates.proposals !== undefined) data["proposals"] = updates.proposals as object[];
-    if (updates.resolvedEntities !== undefined) data["resolvedEntities"] = updates.resolvedEntities as object[];
+    if (updates.resolvedEntities !== undefined)
+      data["resolvedEntities"] = updates.resolvedEntities as object[];
     if (updates.plan !== undefined) data["plan"] = updates.plan as object;
     if (updates.decisions !== undefined) data["decisions"] = updates.decisions as object[];
-    if (updates.approvalRequests !== undefined) data["approvalRequests"] = updates.approvalRequests as object[];
-    if (updates.executionResults !== undefined) data["executionResults"] = updates.executionResults as object[];
+    if (updates.approvalRequests !== undefined)
+      data["approvalRequests"] = updates.approvalRequests as object[];
+    if (updates.executionResults !== undefined)
+      data["executionResults"] = updates.executionResults as object[];
     if (updates.auditEntryIds !== undefined) data["auditEntryIds"] = updates.auditEntryIds;
     if (updates.status !== undefined) data["status"] = updates.status;
     if (updates.parentEnvelopeId !== undefined) data["parentEnvelopeId"] = updates.parentEnvelopeId;
@@ -103,7 +107,9 @@ export class PrismaEnvelopeStore implements EnvelopeStore {
     if (filter?.principalId) {
       const pid = filter.principalId;
       results = results.filter((e: ActionEnvelope) =>
-        e.proposals.some((p: ActionEnvelope["proposals"][number]) => p.parameters["_principalId"] === pid),
+        e.proposals.some(
+          (p: ActionEnvelope["proposals"][number]) => p.parameters["_principalId"] === pid,
+        ),
       );
     }
 

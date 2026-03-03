@@ -76,16 +76,17 @@ export class WhatsAppAdapter implements ChannelAdapter {
    */
   verifyRequest(rawBody: string, headers: Record<string, string | undefined>): boolean {
     if (!this.appSecret) {
-      console.warn("[WhatsAppAdapter] verifyRequest called without appSecret configured — failing closed");
+      console.warn(
+        "[WhatsAppAdapter] verifyRequest called without appSecret configured — failing closed",
+      );
       return false;
     }
 
     const signature = headers["x-hub-signature-256"];
     if (!signature) return false;
 
-    const expectedSig = "sha256=" + createHmac("sha256", this.appSecret)
-      .update(rawBody)
-      .digest("hex");
+    const expectedSig =
+      "sha256=" + createHmac("sha256", this.appSecret).update(rawBody).digest("hex");
 
     if (signature.length !== expectedSig.length) return false;
     return timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig));
@@ -99,10 +100,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     "hub.verify_token"?: string;
     "hub.challenge"?: string;
   }): { status: number; body: string } {
-    if (
-      query["hub.mode"] === "subscribe" &&
-      query["hub.verify_token"] === this.verifyToken
-    ) {
+    if (query["hub.mode"] === "subscribe" && query["hub.verify_token"] === this.verifyToken) {
       return { status: 200, body: query["hub.challenge"] ?? "" };
     }
     return { status: 403, body: "Verification failed" };
@@ -151,7 +149,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
         const timestamp = msg["timestamp"] as string;
 
         const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
-        const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as string | undefined;
+        const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
+          | string
+          | undefined;
 
         return {
           id: msgId ?? `wa_${Date.now()}`,
@@ -181,7 +181,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     // Extract contact name if available
     const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
-    const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as string | undefined;
+    const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
+      | string
+      | undefined;
 
     return {
       id: msgId ?? `wa_${Date.now()}`,
@@ -240,7 +242,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
       `Risk: ${card.riskCategory}`,
       `Audit: ${card.auditId}`,
       undoNote,
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     await this.sendTextReply(threadId, text);
   }

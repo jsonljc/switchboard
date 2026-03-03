@@ -25,7 +25,7 @@ export const audienceSaturationAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -38,12 +38,9 @@ export const audienceSaturationAdvisor: FindingAdvisor = (
   const currentCTR = current.topLevel.ctr ?? 0;
   const previousCTR = previous.topLevel.ctr ?? 0;
 
-  const ctrChange =
-    previousCTR > 0 ? percentChange(currentCTR, previousCTR) : 0;
+  const ctrChange = previousCTR > 0 ? percentChange(currentCTR, previousCTR) : 0;
   const frequencyChange =
-    previousFrequency > 0
-      ? percentChange(currentFrequency, previousFrequency)
-      : 0;
+    previousFrequency > 0 ? percentChange(currentFrequency, previousFrequency) : 0;
 
   // Tier 1: Critical audience exhaustion — frequency >6
   if (currentFrequency > 6) {
@@ -81,11 +78,7 @@ export const audienceSaturationAdvisor: FindingAdvisor = (
   }
 
   // Tier 4: Low frequency with stable/improving metrics — healthy
-  if (
-    currentFrequency > 0 &&
-    currentFrequency <= 2 &&
-    ctrChange >= -5
-  ) {
+  if (currentFrequency > 0 && currentFrequency <= 2 && ctrChange >= -5) {
     findings.push({
       severity: "healthy",
       stage: "audience",

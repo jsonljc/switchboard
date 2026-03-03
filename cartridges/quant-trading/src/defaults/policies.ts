@@ -24,7 +24,8 @@ export const DEFAULT_TRADING_POLICIES: Policy[] = [
   {
     id: "trading-large-limit-orders",
     name: "Large Limit Orders Require Elevated Approval",
-    description: "Limit orders with notional value (quantity * limitPrice) above $10,000 require elevated approval",
+    description:
+      "Limit orders with notional value (quantity * limitPrice) above $10,000 require elevated approval",
     organizationId: null,
     cartridgeId: "quant-trading",
     priority: 5,
@@ -55,9 +56,7 @@ export const DEFAULT_TRADING_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "trading.order.cancel" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "trading.order.cancel" }],
     },
     effect: "require_approval",
     approvalRequirement: "standard",
@@ -74,9 +73,7 @@ export const DEFAULT_TRADING_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "trading.portfolio.rebalance" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "trading.portfolio.rebalance" }],
     },
     effect: "require_approval",
     approvalRequirement: "mandatory",
@@ -93,9 +90,7 @@ export const DEFAULT_TRADING_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "trading.position.close" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "trading.position.close" }],
     },
     effect: "require_approval",
     approvalRequirement: "mandatory",

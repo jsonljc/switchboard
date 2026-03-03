@@ -2,11 +2,7 @@
 // Provider Interfaces — Calendar, SMS, ReviewPlatform
 // ---------------------------------------------------------------------------
 
-import type {
-  AppointmentDetails,
-  AppointmentSlot,
-  ReviewDetails,
-} from "../../core/types.js";
+import type { AppointmentDetails, AppointmentSlot, ReviewDetails } from "../../core/types.js";
 import type { PlatformHealth } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -92,10 +88,7 @@ export interface ReviewPlatformProvider {
   ): Promise<{ success: boolean }>;
 
   /** Fetch recent reviews */
-  getReviews(
-    locationId: string,
-    limit: number,
-  ): Promise<ReviewDetails[]>;
+  getReviews(locationId: string, limit: number): Promise<ReviewDetails[]>;
 
   /** Health check */
   checkHealth(): Promise<PlatformHealth>;

@@ -316,18 +316,22 @@ describe("TikTokAdsClient", () => {
       fetchMock
         .mockResolvedValueOnce(
           okResponse(
-            reportResponse(
-              [makeRow({ spend: "100", impressions: "5000", clicks: "200" })],
-              { page: 1, page_size: 1, total_number: 2, total_page: 2 },
-            ),
+            reportResponse([makeRow({ spend: "100", impressions: "5000", clicks: "200" })], {
+              page: 1,
+              page_size: 1,
+              total_number: 2,
+              total_page: 2,
+            }),
           ),
         )
         .mockResolvedValueOnce(
           okResponse(
-            reportResponse(
-              [makeRow({ spend: "150", impressions: "6000", clicks: "300" })],
-              { page: 2, page_size: 1, total_number: 2, total_page: 2 },
-            ),
+            reportResponse([makeRow({ spend: "150", impressions: "6000", clicks: "300" })], {
+              page: 2,
+              page_size: 1,
+              total_number: 2,
+              total_page: 2,
+            }),
           ),
         );
 
@@ -367,12 +371,7 @@ describe("TikTokAdsClient", () => {
         .mockResolvedValueOnce(okResponse(apiError(40100, "Rate limit")))
         .mockResolvedValueOnce(okResponse(reportResponse([makeRow()])));
 
-      const promise = client.fetchSnapshot(
-        ADVERTISER_ID,
-        "campaign",
-        TIME_RANGE,
-        commerceFunnel,
-      );
+      const promise = client.fetchSnapshot(ADVERTISER_ID, "campaign", TIME_RANGE, commerceFunnel);
       await vi.advanceTimersByTimeAsync(2000);
       const snap = await promise;
 
@@ -387,12 +386,7 @@ describe("TikTokAdsClient", () => {
         .mockResolvedValueOnce(okResponse(apiError(50001, "Internal server error")))
         .mockResolvedValueOnce(okResponse(reportResponse([makeRow()])));
 
-      const promise = client.fetchSnapshot(
-        ADVERTISER_ID,
-        "campaign",
-        TIME_RANGE,
-        commerceFunnel,
-      );
+      const promise = client.fetchSnapshot(ADVERTISER_ID, "campaign", TIME_RANGE, commerceFunnel);
       await vi.advanceTimersByTimeAsync(2000);
       const snap = await promise;
 

@@ -35,11 +35,7 @@ import { percentChange } from "../../core/analysis/significance.js";
 // ---------------------------------------------------------------------------
 
 /** Bid strategy type — normalized across platforms */
-export type BidStrategy =
-  | "lowest_cost"
-  | "cost_cap"
-  | "target_roas"
-  | "bid_cap";
+export type BidStrategy = "lowest_cost" | "cost_cap" | "target_roas" | "bid_cap";
 
 /**
  * Parse bid strategy from the topLevel snapshot.
@@ -70,28 +66,29 @@ export const bidStrategyAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
   const strategy = parseBidStrategy(current);
   if (!strategy) return findings;
 
-  const spendChange =
-    previous.spend > 0 ? percentChange(current.spend, previous.spend) : 0;
+  const spendChange = previous.spend > 0 ? percentChange(current.spend, previous.spend) : 0;
 
   const currentCPM = current.topLevel.cpm ?? 0;
   const previousCPM = previous.topLevel.cpm ?? 0;
   const cpmChange = previousCPM > 0 ? percentChange(currentCPM, previousCPM) : 0;
 
-  const currentCPA = current.topLevel.cost_per_conversion
-    ?? current.topLevel.cost_per_complete_payment
-    ?? current.topLevel.cost_per_lead
-    ?? 0;
-  const previousCPA = previous.topLevel.cost_per_conversion
-    ?? previous.topLevel.cost_per_complete_payment
-    ?? previous.topLevel.cost_per_lead
-    ?? 0;
+  const currentCPA =
+    current.topLevel.cost_per_conversion ??
+    current.topLevel.cost_per_complete_payment ??
+    current.topLevel.cost_per_lead ??
+    0;
+  const previousCPA =
+    previous.topLevel.cost_per_conversion ??
+    previous.topLevel.cost_per_complete_payment ??
+    previous.topLevel.cost_per_lead ??
+    0;
   const cpaChange = previousCPA > 0 ? percentChange(currentCPA, previousCPA) : 0;
 
   // Find conversion stage for volume analysis
@@ -100,7 +97,7 @@ export const bidStrategyAdvisor: FindingAdvisor = (
       s.metric === "purchase" ||
       s.metric === "conversions" ||
       s.metric === "complete_payment" ||
-      s.metric === "lead"
+      s.metric === "lead",
   );
   const conversionChange = conversionStage?.deltaPercent ?? 0;
 
@@ -130,7 +127,7 @@ function handleLowestCost(
   findings: Finding[],
   cpaChange: number,
   cpmChange: number,
-  conversionChange: number
+  conversionChange: number,
 ): void {
   // Lowest cost: CPA up + impressions/conversions up = buying lower-quality traffic
   if (cpaChange > 20 && conversionChange > 10) {
@@ -160,7 +157,7 @@ function handleCostCap(
   findings: Finding[],
   cpaChange: number,
   spendChange: number,
-  currentCPA: number
+  currentCPA: number,
 ): void {
   // Cost cap: under-delivery + stable CPA = cap is too tight
   if (spendChange < -20 && Math.abs(cpaChange) < 10) {
@@ -190,14 +187,10 @@ function handleTargetROAS(
   findings: Finding[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  conversionChange: number
+  conversionChange: number,
 ): void {
-  const currentROAS = current.topLevel.roas
-    ?? current.topLevel.complete_payment_roas
-    ?? 0;
-  const previousROAS = previous.topLevel.roas
-    ?? previous.topLevel.complete_payment_roas
-    ?? 0;
+  const currentROAS = current.topLevel.roas ?? current.topLevel.complete_payment_roas ?? 0;
+  const previousROAS = previous.topLevel.roas ?? previous.topLevel.complete_payment_roas ?? 0;
   const roasChange = previousROAS > 0 ? percentChange(currentROAS, previousROAS) : 0;
 
   // Target ROAS: conversions down + ROAS stable = algorithm correctly pruning
@@ -224,11 +217,7 @@ function handleTargetROAS(
   }
 }
 
-function handleBidCap(
-  findings: Finding[],
-  spendChange: number,
-  cpmChange: number
-): void {
+function handleBidCap(findings: Finding[], spendChange: number, cpmChange: number): void {
   // Bid cap: severe under-delivery = auction prices exceed the cap
   if (spendChange < -30) {
     findings.push({

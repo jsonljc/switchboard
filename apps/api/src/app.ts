@@ -50,9 +50,23 @@ import {
   SmbActivityLog,
   InMemorySmbActivityLogStorage,
 } from "@switchboard/core";
-import type { StorageContext, LedgerStorage, PolicyCache, ApprovalNotifier, TierStore, GovernanceProfileStore } from "@switchboard/core";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
-import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import type {
+  StorageContext,
+  LedgerStorage,
+  PolicyCache,
+  ApprovalNotifier,
+  TierStore,
+  GovernanceProfileStore,
+} from "@switchboard/core";
+import {
+  bootstrapDigitalAdsCartridge,
+  DEFAULT_DIGITAL_ADS_POLICIES,
+  createSnapshotCacheStore,
+} from "@switchboard/digital-ads";
+import {
+  bootstrapQuantTradingCartridge,
+  DEFAULT_TRADING_POLICIES,
+} from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
@@ -113,11 +127,15 @@ export async function buildServer() {
   if (process.env.NODE_ENV === "production" && !allowedOrigins) {
     app.log.warn(
       "CORS_ORIGIN is not set in production. Cross-origin requests will be rejected. " +
-      "Set CORS_ORIGIN to a comma-separated list of allowed origins (e.g. 'https://app.example.com').",
+        "Set CORS_ORIGIN to a comma-separated list of allowed origins (e.g. 'https://app.example.com').",
     );
   }
   await app.register(cors, {
-    origin: allowedOrigins ? allowedOrigins.split(",") : process.env.NODE_ENV === "production" ? false : true,
+    origin: allowedOrigins
+      ? allowedOrigins.split(",")
+      : process.env.NODE_ENV === "production"
+        ? false
+        : true,
   });
 
   // Rate limiting
@@ -136,8 +154,15 @@ export async function buildServer() {
       },
       tags: [
         { name: "Actions", description: "Propose, execute, undo, and batch actions" },
-        { name: "Execute", description: "Single endpoint: propose + conditional execute (EXECUTED | PENDING_APPROVAL | DENIED)" },
-        { name: "Approvals", description: "Respond to approval requests and list pending approvals" },
+        {
+          name: "Execute",
+          description:
+            "Single endpoint: propose + conditional execute (EXECUTED | PENDING_APPROVAL | DENIED)",
+        },
+        {
+          name: "Approvals",
+          description: "Respond to approval requests and list pending approvals",
+        },
         { name: "Simulate", description: "Dry-run action evaluation without side effects" },
         { name: "Policies", description: "CRUD operations for guardrail policies" },
         { name: "Identity", description: "Manage identity specs and role overlays" },
@@ -203,13 +228,13 @@ export async function buildServer() {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "CREDENTIALS_ENCRYPTION_KEY is required in production when DATABASE_URL is set. " +
-        "Set it to a strong random secret (min 32 chars).",
+          "Set it to a strong random secret (min 32 chars).",
       );
     }
     app.log.warn(
       "CREDENTIALS_ENCRYPTION_KEY is not set but DATABASE_URL is configured. " +
-      "Connection credential storage/retrieval will fail. " +
-      "Set CREDENTIALS_ENCRYPTION_KEY to a strong random secret (min 32 chars).",
+        "Connection credential storage/retrieval will fail. " +
+        "Set CREDENTIALS_ENCRYPTION_KEY to a strong random secret (min 32 chars).",
     );
   }
 
@@ -224,9 +249,14 @@ export async function buildServer() {
       prismaClient = getDb() as import("@switchboard/db").PrismaClient;
       await prismaClient.$queryRaw`SELECT 1`; // verify connectivity
       storage = createPrismaStorage(prismaClient as Parameters<typeof createPrismaStorage>[0]);
-      ledgerStorage = new PrismaLedgerStorage(prismaClient as ConstructorParameters<typeof PrismaLedgerStorage>[0]);
+      ledgerStorage = new PrismaLedgerStorage(
+        prismaClient as ConstructorParameters<typeof PrismaLedgerStorage>[0],
+      );
     } catch (err) {
-      app.log.error({ err }, "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)");
+      app.log.error(
+        { err },
+        "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)",
+      );
       storage = createInMemoryStorage();
       ledgerStorage = new InMemoryLedgerStorage();
       prismaClient = null;
@@ -273,13 +303,15 @@ export async function buildServer() {
 
       const adsCon = await connStore.getByService("meta-ads");
       if (adsCon) {
-        adsAccessToken = (adsCon.credentials as Record<string, string>).accessToken ?? adsAccessToken;
+        adsAccessToken =
+          (adsCon.credentials as Record<string, string>).accessToken ?? adsAccessToken;
         adsAccountId = (adsCon.credentials as Record<string, string>).adAccountId ?? adsAccountId;
       }
 
       const stripeCon = await connStore.getByService("stripe");
       if (stripeCon) {
-        stripeSecretKey = (stripeCon.credentials as Record<string, string>).secretKey ?? stripeSecretKey;
+        stripeSecretKey =
+          (stripeCon.credentials as Record<string, string>).secretKey ?? stripeSecretKey;
       }
     } catch (err) {
       app.log.warn({ err }, "Failed to load cartridge credentials from DB, using env vars");
@@ -294,7 +326,10 @@ export async function buildServer() {
     requireCredentials: isProd,
     cacheStore: createSnapshotCacheStore(redis ?? undefined),
   });
-  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  storage.cartridges.register(
+    "digital-ads",
+    new GuardedCartridge(adsCartridge as any, interceptors),
+  );
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Register quant-trading cartridge
@@ -318,7 +353,7 @@ export async function buildServer() {
   let queue: Queue | null = null;
   let worker: Worker | null = null;
   let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
-  const executionMode = redisUrl ? "queue" as const : "inline" as const;
+  const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
 
   if (redisUrl) {
     const connection = { url: redisUrl };
@@ -343,15 +378,19 @@ export async function buildServer() {
   }
   if (process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]) {
     const { WhatsAppApprovalNotifier } = await import("./notifications/whatsapp-notifier.js");
-    approvalNotifiers.push(new WhatsAppApprovalNotifier({
-      token: process.env["WHATSAPP_TOKEN"],
-      phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
-    }));
+    approvalNotifiers.push(
+      new WhatsAppApprovalNotifier({
+        token: process.env["WHATSAPP_TOKEN"],
+        phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+      }),
+    );
   }
   const approvalNotifier: ApprovalNotifier | undefined =
-    approvalNotifiers.length > 1 ? new CompositeNotifier(approvalNotifiers)
-    : approvalNotifiers.length === 1 ? approvalNotifiers[0]
-    : undefined;
+    approvalNotifiers.length > 1
+      ? new CompositeNotifier(approvalNotifiers)
+      : approvalNotifiers.length === 1
+        ? approvalNotifiers[0]
+        : undefined;
 
   // SMB tier store and activity log
   let tierStore: TierStore | undefined;
@@ -380,7 +419,8 @@ export async function buildServer() {
     smbActivityLog,
     credentialResolver: prismaClient
       ? await (async () => {
-          const { PrismaCredentialResolver, PrismaConnectionStore } = await import("@switchboard/db");
+          const { PrismaCredentialResolver, PrismaConnectionStore } =
+            await import("@switchboard/db");
           return new PrismaCredentialResolver(new PrismaConnectionStore(prismaClient));
         })()
       : undefined,

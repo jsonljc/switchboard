@@ -107,19 +107,16 @@ export class DataFlowExecutor {
       // Resolve bindings
       let resolvedParams: Record<string, unknown>;
       try {
-        resolvedParams = await resolveBindings(
-          step.parameters,
-          step.index,
-          {
-            stepResults,
-            entityGraphService: this.entityGraphService,
-            organizationId: context.organizationId,
-          },
-        );
+        resolvedParams = await resolveBindings(step.parameters, step.index, {
+          stepResults,
+          entityGraphService: this.entityGraphService,
+          organizationId: context.organizationId,
+        });
       } catch (err) {
-        const errorMsg = err instanceof BindingResolutionError
-          ? err.message
-          : `Binding resolution failed: ${err instanceof Error ? err.message : String(err)}`;
+        const errorMsg =
+          err instanceof BindingResolutionError
+            ? err.message
+            : `Binding resolution failed: ${err instanceof Error ? err.message : String(err)}`;
 
         stepResults.push({
           stepIndex: step.index,

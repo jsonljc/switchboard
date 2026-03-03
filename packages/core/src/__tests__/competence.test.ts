@@ -184,10 +184,10 @@ describe("CompetenceTracker", () => {
 
       // Cause failures to drop below 40
       // Each failure is -10, so a few should be enough
-      while (true) {
-        const current = await tracker.getAdjustment("agent_1", "digital-ads.campaign.pause");
-        if (current!.score < 40) break;
+      let current = await tracker.getAdjustment("agent_1", "digital-ads.campaign.pause");
+      while (current!.score >= 40) {
         await tracker.recordFailure("agent_1", "digital-ads.campaign.pause");
+        current = await tracker.getAdjustment("agent_1", "digital-ads.campaign.pause");
       }
 
       const after = await tracker.getAdjustment("agent_1", "digital-ads.campaign.pause");
@@ -326,7 +326,9 @@ describe("applyCompetenceAdjustments", () => {
     };
 
     const result = applyCompetenceAdjustments(identity, [adj]);
-    const count = result.effectiveTrustBehaviors.filter((b) => b === "digital-ads.campaign.pause").length;
+    const count = result.effectiveTrustBehaviors.filter(
+      (b) => b === "digital-ads.campaign.pause",
+    ).length;
     expect(count).toBe(1);
   });
 });

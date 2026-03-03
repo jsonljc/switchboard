@@ -30,9 +30,7 @@ export class CompositeNotifier implements ApprovalNotifier {
   }
 
   async notify(notification: ApprovalNotification): Promise<void> {
-    await Promise.allSettled(
-      this.notifiers.map((n) => n.notify(notification)),
-    );
+    await Promise.allSettled(this.notifiers.map((n) => n.notify(notification)));
   }
 }
 

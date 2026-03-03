@@ -55,7 +55,10 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
       type: "object",
       properties: {
         subscriptionId: { type: "string", description: "The subscription ID to cancel" },
-        cancelAtPeriodEnd: { type: "string", description: "If 'true', cancel at period end instead of immediately" },
+        cancelAtPeriodEnd: {
+          type: "string",
+          description: "If 'true', cancel at period end instead of immediately",
+        },
       },
       required: ["subscriptionId"],
     },
@@ -63,7 +66,11 @@ export const paymentsToolDefinitions: ToolDefinition[] = [
   },
 ];
 
-export const PAYMENTS_SIDE_EFFECT_TOOLS = new Set(["create_invoice", "create_refund", "cancel_subscription"]);
+export const PAYMENTS_SIDE_EFFECT_TOOLS = new Set([
+  "create_invoice",
+  "create_refund",
+  "cancel_subscription",
+]);
 export const PAYMENTS_READ_TOOLS = new Set(["get_charge"]);
 
 /** Maps payments side-effect tool names to their actionTypes. */

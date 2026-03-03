@@ -22,7 +22,7 @@ describe("digital-ads.structure.analyze", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
     return cartridge;
   }
@@ -37,7 +37,7 @@ describe("digital-ads.structure.analyze", () => {
         entityId: "act_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -65,7 +65,7 @@ describe("digital-ads.structure.analyze", () => {
         entityId: "act_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);
@@ -83,7 +83,7 @@ describe("digital-ads.structure.analyze", () => {
         vertical: "commerce",
         periodDays: 14,
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.rollbackAvailable).toBe(false);

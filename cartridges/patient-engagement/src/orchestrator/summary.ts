@@ -18,13 +18,19 @@ export function generateSummary(result: JourneyDiagnosticResult): string {
   // KPI summary
   const kpi = result.primaryKPI;
   const direction = kpi.deltaPercent >= 0 ? "up" : "down";
-  lines.push(`Primary KPI (${kpi.name}): ${kpi.current} (${direction} ${Math.abs(kpi.deltaPercent).toFixed(1)}%)`);
-  lines.push(`Total patients: ${result.totalPatients.current} (was ${result.totalPatients.previous})`);
+  lines.push(
+    `Primary KPI (${kpi.name}): ${kpi.current} (${direction} ${Math.abs(kpi.deltaPercent).toFixed(1)}%)`,
+  );
+  lines.push(
+    `Total patients: ${result.totalPatients.current} (was ${result.totalPatients.previous})`,
+  );
   lines.push("");
 
   // Bottleneck
   if (result.bottleneck) {
-    lines.push(`Bottleneck: ${result.bottleneck.stageName} (${result.bottleneck.deltaPercent.toFixed(1)}%)`);
+    lines.push(
+      `Bottleneck: ${result.bottleneck.stageName} (${result.bottleneck.deltaPercent.toFixed(1)}%)`,
+    );
   } else {
     lines.push("Bottleneck: None detected");
   }
@@ -35,10 +41,14 @@ export function generateSummary(result: JourneyDiagnosticResult): string {
   for (const f of result.findings) {
     counts[f.severity]++;
   }
-  lines.push(`Findings: ${counts.critical} critical, ${counts.warning} warnings, ${counts.info} info, ${counts.healthy} healthy`);
+  lines.push(
+    `Findings: ${counts.critical} critical, ${counts.warning} warnings, ${counts.info} info, ${counts.healthy} healthy`,
+  );
 
   // Top findings
-  const topFindings = result.findings.filter((f) => f.severity === "critical" || f.severity === "warning").slice(0, 5);
+  const topFindings = result.findings
+    .filter((f) => f.severity === "critical" || f.severity === "warning")
+    .slice(0, 5);
   if (topFindings.length > 0) {
     lines.push("");
     lines.push("Top issues:");

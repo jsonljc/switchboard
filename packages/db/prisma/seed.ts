@@ -77,8 +77,7 @@ async function main() {
       id: "default",
       principalId: systemPrincipal.id,
       name: "Default Identity Spec",
-      description:
-        "Default governance identity with conservative risk tolerance",
+      description: "Default governance identity with conservative risk tolerance",
       riskTolerance: {
         none: "none",
         low: "none",
@@ -163,8 +162,7 @@ async function main() {
     {
       id: "policy_spend_approval",
       name: "Require approval for high spend",
-      description:
-        "Actions with estimated spend above $1000 require manual approval",
+      description: "Actions with estimated spend above $1000 require manual approval",
       organizationId: "org_dev",
       priority: 10,
       active: true,
@@ -183,8 +181,7 @@ async function main() {
     {
       id: "policy_block_delete",
       name: "Block destructive actions",
-      description:
-        "Prevent deletion of campaigns or ad sets without elevated approval",
+      description: "Prevent deletion of campaigns or ad sets without elevated approval",
       organizationId: "org_dev",
       priority: 5,
       active: true,
@@ -193,11 +190,7 @@ async function main() {
           {
             field: "actionType",
             operator: "in",
-            value: [
-              "campaign.delete",
-              "adset.delete",
-              "ad.delete",
-            ],
+            value: ["campaign.delete", "adset.delete", "ad.delete"],
           },
         ],
       },
@@ -208,8 +201,7 @@ async function main() {
     {
       id: "policy_allow_read",
       name: "Allow read-only operations",
-      description:
-        "Read and list operations are always allowed without approval",
+      description: "Read and list operations are always allowed without approval",
       organizationId: "org_dev",
       priority: 100,
       active: true,
@@ -261,12 +253,7 @@ async function main() {
       name: "Payments",
       version: "1.0.0",
       manifest: {
-        actions: [
-          "payment.create",
-          "payment.refund",
-          "subscription.create",
-          "subscription.cancel",
-        ],
+        actions: ["payment.create", "payment.refund", "subscription.create", "subscription.cancel"],
         providers: ["stripe"],
       },
     },
@@ -276,13 +263,7 @@ async function main() {
       name: "CRM",
       version: "1.0.0",
       manifest: {
-        actions: [
-          "contact.create",
-          "contact.update",
-          "deal.create",
-          "deal.update",
-          "deal.advance",
-        ],
+        actions: ["contact.create", "contact.update", "deal.create", "deal.update", "deal.advance"],
         providers: ["internal"],
       },
     },
@@ -323,8 +304,7 @@ async function main() {
       entityType: "campaign",
       entityId: "camp_001",
       riskCategory: "medium",
-      summary:
-        "Executed: Created Meta Ads campaign 'Spring Sale 2025' ($500 budget)",
+      summary: "Executed: Created Meta Ads campaign 'Spring Sale 2025' ($500 budget)",
       snapshot: {
         actionType: "campaign.create",
         result: "success",
@@ -356,8 +336,7 @@ async function main() {
       entityType: "campaign",
       entityId: "camp_002",
       riskCategory: "high",
-      summary:
-        "Denied: Budget increase to $5000 exceeds per-action spend limit",
+      summary: "Denied: Budget increase to $5000 exceeds per-action spend limit",
       snapshot: {
         actionType: "campaign.update",
         reason: "spend_limit_exceeded",
@@ -438,10 +417,8 @@ async function main() {
 
   let previousHash: string | null = null;
   for (let i = 0; i < auditEntries.length; i++) {
-    const entry = auditEntries[i];
-    const timestamp = new Date(
-      now.getTime() - entry.daysAgo * 24 * 60 * 60 * 1000 + i * 1000,
-    );
+    const entry = auditEntries[i]!;
+    const timestamp = new Date(now.getTime() - entry.daysAgo * 24 * 60 * 60 * 1000 + i * 1000);
     const entryId = `audit_seed_${String(i + 1).padStart(3, "0")}`;
 
     const hashInput = JSON.stringify({

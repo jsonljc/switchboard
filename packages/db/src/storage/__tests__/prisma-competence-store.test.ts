@@ -110,7 +110,9 @@ describe("PrismaCompetenceStore", () => {
 
       expect(prisma.competenceRecord.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { principalId_actionType: { principalId: "principal_1", actionType: "ad.create" } },
+          where: {
+            principalId_actionType: { principalId: "principal_1", actionType: "ad.create" },
+          },
           create: expect.objectContaining({
             id: "rec_1",
             principalId: "principal_1",
@@ -132,7 +134,7 @@ describe("PrismaCompetenceStore", () => {
 
       const result = await store.listRecords("principal_1");
       expect(result).toHaveLength(1);
-      expect(result[0].actionType).toBe("ad.create");
+      expect(result[0]!.actionType).toBe("ad.create");
       expect(prisma.competenceRecord.findMany).toHaveBeenCalledWith({
         where: { principalId: "principal_1" },
       });
@@ -239,7 +241,7 @@ describe("PrismaCompetenceStore", () => {
 
       const result = await store.listPolicies();
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe("Ad Policy");
+      expect(result[0]!.name).toBe("Ad Policy");
       expect(prisma.competencePolicy.findMany).toHaveBeenCalled();
     });
   });

@@ -44,20 +44,10 @@ export class RedisGuardrailStateStore implements GuardrailStateStore {
   }
 
   async setRateLimit(scopeKey: string, entry: RateLimitEntry, ttlMs: number): Promise<void> {
-    await this.redis.set(
-      `guardrail:rl:${scopeKey}`,
-      JSON.stringify(entry),
-      "PX",
-      ttlMs,
-    );
+    await this.redis.set(`guardrail:rl:${scopeKey}`, JSON.stringify(entry), "PX", ttlMs);
   }
 
   async setCooldown(entityKey: string, timestamp: number, ttlMs: number): Promise<void> {
-    await this.redis.set(
-      `guardrail:cd:${entityKey}`,
-      String(timestamp),
-      "PX",
-      ttlMs,
-    );
+    await this.redis.set(`guardrail:cd:${entityKey}`, String(timestamp), "PX", ttlMs);
   }
 }

@@ -46,9 +46,10 @@ export function startTokenRefreshJob(config: TokenRefreshJobConfig): () => void 
         let creds: Record<string, unknown>;
         try {
           const { decryptCredentials } = await import("@switchboard/db");
-          creds = typeof conn.credentials === "string"
-            ? decryptCredentials(conn.credentials)
-            : conn.credentials as Record<string, unknown>;
+          creds =
+            typeof conn.credentials === "string"
+              ? decryptCredentials(conn.credentials)
+              : (conn.credentials as Record<string, unknown>);
         } catch {
           // Can't decrypt — skip
           continue;
@@ -102,10 +103,7 @@ export function startTokenRefreshJob(config: TokenRefreshJobConfig): () => void 
             });
           }
         } catch (err) {
-          logger.error(
-            { connectionId: conn.id, err },
-            "Unexpected error during token refresh",
-          );
+          logger.error({ connectionId: conn.id, err }, "Unexpected error during token refresh");
         }
       }
     } catch (err) {

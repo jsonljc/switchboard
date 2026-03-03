@@ -53,7 +53,10 @@ export class InMemoryModelRouter implements ModelRouter {
     return Math.max(0, this.config.dailyTokenBudget - (await this.getTodayUsage(orgId)));
   }
 
-  async getUsageSummary(orgId: string, period: "daily" | "weekly" | "monthly"): Promise<TokenUsageSummary> {
+  async getUsageSummary(
+    orgId: string,
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<TokenUsageSummary> {
     const now = new Date();
     let cutoff: Date;
 

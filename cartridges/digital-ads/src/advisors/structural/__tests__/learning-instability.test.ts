@@ -67,7 +67,12 @@ describe("learningInstabilityAdvisor", () => {
 
   it("returns no findings when daysSinceLastEdit is null (e.g., Google)", () => {
     const entities = [
-      makeEntity({ entityId: "adset_1", spend: 500, inLearningPhase: true, daysSinceLastEdit: null }),
+      makeEntity({
+        entityId: "adset_1",
+        spend: 500,
+        inLearningPhase: true,
+        daysSinceLastEdit: null,
+      }),
       makeEntity({ entityId: "adset_2", spend: 500, inLearningPhase: false }),
     ];
     const context: DiagnosticContext = { subEntities: entities };

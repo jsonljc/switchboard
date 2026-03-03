@@ -28,7 +28,13 @@ export function useConnections() {
 export function useCreateConnection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { serviceId: string; serviceName: string; authType: string; credentials: Record<string, unknown>; scopes?: string[] }) => {
+    mutationFn: async (body: {
+      serviceId: string;
+      serviceName: string;
+      authType: string;
+      credentials: Record<string, unknown>;
+      scopes?: string[];
+    }) => {
       const res = await fetch("/api/dashboard/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,7 +89,16 @@ export function useTestConnection() {
 export function useUpdateConnection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...body }: { id: string; serviceName?: string; authType?: string; credentials?: Record<string, unknown>; scopes?: string[] }) => {
+    mutationFn: async ({
+      id,
+      ...body
+    }: {
+      id: string;
+      serviceName?: string;
+      authType?: string;
+      credentials?: Record<string, unknown>;
+      scopes?: string[];
+    }) => {
       const res = await fetch(`/api/dashboard/connections/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

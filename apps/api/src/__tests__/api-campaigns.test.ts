@@ -15,7 +15,7 @@ describe("Campaigns API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { cartridges: mockCartridges });
+    app.decorate("storageContext", { cartridges: mockCartridges } as any);
 
     await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
   });

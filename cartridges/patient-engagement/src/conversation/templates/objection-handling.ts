@@ -13,7 +13,8 @@ export const objectionHandlingFlow: ConversationFlowDefinition = {
     {
       id: "acknowledge",
       type: "message",
-      template: "I completely understand your concern, {{patientName}}. That's a very common question.",
+      template:
+        "I completely understand your concern, {{patientName}}. That's a very common question.",
     },
     {
       id: "respond",

@@ -28,8 +28,8 @@ describe("Governance API", () => {
     app = Fastify({ logger: false });
 
     app.decorate("governanceProfileStore", mockGovernanceProfileStore);
-    app.decorate("storageContext", { cartridges: mockCartridges });
-    app.decorate("orchestrator", mockOrchestrator);
+    app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("orchestrator", mockOrchestrator as any);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -207,9 +207,7 @@ describe("Governance API", () => {
       mockGovernanceProfileStore.set.mockResolvedValue(undefined);
 
       const mockCartridge = {
-        searchCampaigns: vi.fn().mockResolvedValue([
-          { id: "camp_fail", status: "ACTIVE" },
-        ]),
+        searchCampaigns: vi.fn().mockResolvedValue([{ id: "camp_fail", status: "ACTIVE" }]),
       };
       mockCartridges.get.mockReturnValue(mockCartridge);
 
@@ -251,9 +249,7 @@ describe("Governance API", () => {
       mockGovernanceProfileStore.set.mockResolvedValue(undefined);
 
       const mockCartridge = {
-        searchCampaigns: vi.fn().mockResolvedValue([
-          { id: "camp_denied", status: "ACTIVE" },
-        ]),
+        searchCampaigns: vi.fn().mockResolvedValue([{ id: "camp_denied", status: "ACTIVE" }]),
       };
       mockCartridges.get.mockReturnValue(mockCartridge);
 

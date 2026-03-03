@@ -14,7 +14,7 @@ export class TikTokProvider implements AdPlatformProvider {
 
   async connect(
     credentials: PlatformCredentials,
-    entityId: string
+    entityId: string,
   ): Promise<{
     client: PlatformClient;
     accountName: string;
@@ -54,10 +54,7 @@ export class TikTokProvider implements AdPlatformProvider {
     };
   }
 
-  async checkHealth(
-    credentials: PlatformCredentials,
-    entityId: string
-  ): Promise<PlatformHealth> {
+  async checkHealth(credentials: PlatformCredentials, entityId: string): Promise<PlatformHealth> {
     const start = Date.now();
     try {
       await this.connect(credentials, entityId);

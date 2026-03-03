@@ -65,7 +65,8 @@ export abstract class LLMInterpreter implements Interpreter {
       return {
         proposals: [],
         needsClarification: true,
-        clarificationQuestion: "I'm having trouble processing your request right now. Could you try again?",
+        clarificationQuestion:
+          "I'm having trouble processing your request right now. Could you try again?",
         confidence: 0,
         rawResponse: `[LLM_ERROR] ${err instanceof Error ? err.message : String(err)}`,
       };
@@ -127,7 +128,7 @@ export abstract class LLMInterpreter implements Interpreter {
       clarificationQuestion: guard.data.clarificationQuestion,
       confidence: guard.data.confidence,
       rawResponse: llmResponse.text,
-      readIntent: guard.data.readIntent as ReadIntentDescriptor | null | undefined ?? undefined,
+      readIntent: (guard.data.readIntent as ReadIntentDescriptor | null | undefined) ?? undefined,
     };
   }
 
@@ -139,13 +140,9 @@ export abstract class LLMInterpreter implements Interpreter {
     availableActions: string[],
   ): string;
 
-  protected parseStructuredOutput(
-    rawText: string,
-    _availableActions: string[],
-  ): unknown {
+  protected parseStructuredOutput(rawText: string, _availableActions: string[]): unknown {
     // Default: extract JSON from the response
-    const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) ??
-      rawText.match(/\{[\s\S]*\}/);
+    const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) ?? rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("No JSON found in LLM output");
     }

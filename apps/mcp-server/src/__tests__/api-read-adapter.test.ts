@@ -106,12 +106,8 @@ describe("ApiReadAdapter", () => {
 
       const result = await adapter.query(op);
 
-      expect(client.get).toHaveBeenCalledWith(
-        expect.stringContaining("/api/campaigns/search?"),
-      );
-      expect(client.get).toHaveBeenCalledWith(
-        expect.stringContaining("query=summer"),
-      );
+      expect(client.get).toHaveBeenCalledWith(expect.stringContaining("/api/campaigns/search?"));
+      expect(client.get).toHaveBeenCalledWith(expect.stringContaining("query=summer"));
       expect(result).toEqual(searchResult);
     });
 
@@ -130,9 +126,7 @@ describe("ApiReadAdapter", () => {
 
       await adapter.query(op);
 
-      expect(client.get).toHaveBeenCalledWith(
-        expect.stringContaining("limit=5"),
-      );
+      expect(client.get).toHaveBeenCalledWith(expect.stringContaining("limit=5"));
     });
 
     it("omits limit parameter when not provided", async () => {
@@ -150,7 +144,7 @@ describe("ApiReadAdapter", () => {
 
       await adapter.query(op);
 
-      const calledUrl = (client.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      const calledUrl = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
       expect(calledUrl).not.toContain("limit=");
     });
   });
@@ -166,9 +160,7 @@ describe("ApiReadAdapter", () => {
         actorId: "user_1",
       };
 
-      await expect(adapter.query(op)).rejects.toThrow(
-        "Unsupported read operation: deleteCampaign",
-      );
+      await expect(adapter.query(op)).rejects.toThrow("Unsupported read operation: deleteCampaign");
     });
   });
 });

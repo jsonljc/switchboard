@@ -130,7 +130,8 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:set|change|adjust|update)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex:
+          /(?:set|change|adjust|update)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
@@ -138,7 +139,8 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:increase|raise)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex:
+          /(?:increase|raise)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
@@ -146,7 +148,8 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:decrease|lower|reduce)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
+        regex:
+          /(?:decrease|lower|reduce)\s+(?:the\s+)?budget\s+(?:for\s+)?['"']?(.+?)['"']?\s+(?:by\s+)?\$?(\d+(?:\.\d+)?)/i,
         actionType: "digital-ads.campaign.adjust_budget",
         extractParams: (match) => ({
           campaignRef: match[1]?.trim(),
@@ -213,7 +216,8 @@ export class RuleBasedInterpreter implements Interpreter {
         extractParams: (match) => (match[1] ? { pipeline: match[1]?.trim() } : {}),
       },
       {
-        regex: /(?:list|show|get)\s+(?:my\s+)?(?:recent\s+)?activit(?:y|ies)(?:\s+(?:for|with)\s+(\S+))?/i,
+        regex:
+          /(?:list|show|get)\s+(?:my\s+)?(?:recent\s+)?activit(?:y|ies)(?:\s+(?:for|with)\s+(\S+))?/i,
         actionType: "crm.activity.list",
         extractParams: (match) => (match[1] ? { contactId: match[1]?.trim() } : {}),
       },
@@ -252,7 +256,8 @@ export class RuleBasedInterpreter implements Interpreter {
         }),
       },
       {
-        regex: /(?:log|add)\s+(?:a\s+)?(?:note|call|meeting|email|task)\s+(?:for\s+|to\s+|about\s+)?(.+)/i,
+        regex:
+          /(?:log|add)\s+(?:a\s+)?(?:note|call|meeting|email|task)\s+(?:for\s+|to\s+|about\s+)?(.+)/i,
         actionType: "crm.activity.log",
         extractParams: (match, text) => {
           const typeMatch = text.match(/\b(note|call|meeting|email|task)\b/i);

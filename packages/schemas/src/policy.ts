@@ -3,9 +3,19 @@ import { RiskCategorySchema } from "./risk.js";
 import { ApprovalRequirementSchema } from "./identity-spec.js";
 
 export const PolicyConditionOperatorSchema = z.enum([
-  "eq", "neq", "gt", "gte", "lt", "lte",
-  "in", "not_in", "contains", "not_contains",
-  "matches", "exists", "not_exists",
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "in",
+  "not_in",
+  "contains",
+  "not_contains",
+  "matches",
+  "exists",
+  "not_exists",
 ]);
 export type PolicyConditionOperator = z.infer<typeof PolicyConditionOperatorSchema>;
 
@@ -24,7 +34,7 @@ export const PolicyRuleSchema: z.ZodType<any> = z.lazy(() =>
     composition: PolicyCompositionSchema.optional(),
     conditions: z.array(PolicyConditionSchema).optional(),
     children: z.array(PolicyRuleSchema).optional(),
-  })
+  }),
 );
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 

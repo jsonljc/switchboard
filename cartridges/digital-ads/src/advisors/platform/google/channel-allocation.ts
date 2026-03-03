@@ -51,9 +51,7 @@ interface ChannelPerformance {
  * Channels are stored as subEntities with entityId prefixed by channel type
  * or as a channelBreakdowns field on the context.
  */
-function extractChannelBreakdowns(
-  context: DiagnosticContext
-): ChannelPerformance[] | null {
+function extractChannelBreakdowns(context: DiagnosticContext): ChannelPerformance[] | null {
   if (!context.subEntities || context.subEntities.length < 2) return null;
 
   // Attempt to read channel-level breakdowns from sub-entities
@@ -68,9 +66,7 @@ function extractChannelBreakdowns(
  * Google client stores channel-level aggregates as:
  * channel_spend_search, channel_conversions_search, etc.
  */
-function extractChannelsFromTopLevel(
-  snapshot: MetricSnapshot
-): ChannelPerformance[] {
+function extractChannelsFromTopLevel(snapshot: MetricSnapshot): ChannelPerformance[] {
   const channels: GoogleChannelType[] = [
     "search",
     "shopping",
@@ -114,7 +110,7 @@ export const googleChannelAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -127,9 +123,7 @@ export const googleChannelAdvisor: FindingAdvisor = (
   if (channels.length < 2) return findings;
 
   // Find best-performing channel (lowest CPA among channels with conversions)
-  const convertingChannels = channels.filter(
-    (c) => c.conversions > 0 && c.cpa !== Infinity
-  );
+  const convertingChannels = channels.filter((c) => c.conversions > 0 && c.cpa !== Infinity);
   if (convertingChannels.length < 2) return findings;
 
   convertingChannels.sort((a, b) => a.cpa - b.cpa);
@@ -149,15 +143,13 @@ export const googleChannelAdvisor: FindingAdvisor = (
   }
 
   // Flag zero-conversion channels with significant spend
-  const zeroConvChannels = channels.filter(
-    (c) => c.conversions === 0 && c.spendShare > 0.05
-  );
+  const zeroConvChannels = channels.filter((c) => c.conversions === 0 && c.spendShare > 0.05);
 
   if (inefficientChannels.length > 0) {
     const channelList = inefficientChannels
       .map(
         (c) =>
-          `${formatChannelName(c.channel)} (CPA $${c.cpa.toFixed(2)}, ${(c.spendShare * 100).toFixed(1)}% of spend)`
+          `${formatChannelName(c.channel)} (CPA $${c.cpa.toFixed(2)}, ${(c.spendShare * 100).toFixed(1)}% of spend)`,
       )
       .join("; ");
 
@@ -165,8 +157,7 @@ export const googleChannelAdvisor: FindingAdvisor = (
       severity: inefficientSpend / totalSpend > 0.3 ? "critical" : "warning",
       stage: "channel_allocation",
       message: `Channel CPA disparity: ${formatChannelName(bestChannel!.channel)} leads at $${bestChannel!.cpa.toFixed(2)} CPA, while ${inefficientChannels.length} channel(s) have >2x CPA: ${channelList}.`,
-      recommendation:
-        `Consider shifting budget from high-CPA channels to ${formatChannelName(bestChannel!.channel)}. Start with a 10-20% budget shift and monitor for 1-2 weeks. Note that different channels serve different funnel roles — Display/Video drive awareness while Search captures intent. Evaluate holistically before cutting channels entirely.`,
+      recommendation: `Consider shifting budget from high-CPA channels to ${formatChannelName(bestChannel!.channel)}. Start with a 10-20% budget shift and monitor for 1-2 weeks. Note that different channels serve different funnel roles — Display/Video drive awareness while Search captures intent. Evaluate holistically before cutting channels entirely.`,
     });
   }
 
@@ -174,7 +165,7 @@ export const googleChannelAdvisor: FindingAdvisor = (
     const channelList = zeroConvChannels
       .map(
         (c) =>
-          `${formatChannelName(c.channel)} ($${c.spend.toFixed(2)}, ${(c.spendShare * 100).toFixed(1)}% of spend)`
+          `${formatChannelName(c.channel)} ($${c.spend.toFixed(2)}, ${(c.spendShare * 100).toFixed(1)}% of spend)`,
       )
       .join("; ");
 

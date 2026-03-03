@@ -13,7 +13,7 @@ export function computeInvoiceRiskInput(amountDollars: number): RiskInput {
 }
 
 export function computeChargeRiskInput(amountDollars: number): RiskInput {
-  const baseRisk = amountDollars > 1000 ? "critical" as const : "high" as const;
+  const baseRisk = amountDollars > 1000 ? ("critical" as const) : ("high" as const);
   return {
     baseRisk,
     exposure: {
@@ -37,9 +37,7 @@ export function computeRefundRiskInput(amountDollars: number): RiskInput {
   };
 }
 
-export function computeSubscriptionCancelRiskInput(
-  monthlyAmountDollars: number,
-): RiskInput {
+export function computeSubscriptionCancelRiskInput(monthlyAmountDollars: number): RiskInput {
   // dollarsAtRisk = 12 months projected MRR loss
   const projectedLoss = monthlyAmountDollars * 12;
   return {
@@ -53,9 +51,7 @@ export function computeSubscriptionCancelRiskInput(
   };
 }
 
-export function computeSubscriptionModifyRiskInput(
-  annualizedDelta: number,
-): RiskInput {
+export function computeSubscriptionModifyRiskInput(annualizedDelta: number): RiskInput {
   return {
     baseRisk: "medium",
     exposure: {

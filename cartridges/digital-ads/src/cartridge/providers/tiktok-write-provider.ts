@@ -95,7 +95,10 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async updateBudget(campaignId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }> {
+  async updateBudget(
+    campaignId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }> {
     const current = await this.getCampaign(campaignId);
     const previousBudget = current.dailyBudget;
 
@@ -142,7 +145,10 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async updateAdSetBudget(adSetId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }> {
+  async updateAdSetBudget(
+    adSetId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }> {
     const current = await this.getAdSet(adSetId);
     const previousBudget = current.dailyBudget;
 
@@ -155,7 +161,10 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousBudget };
   }
 
-  async updateTargeting(adSetId: string, targetingSpec: Record<string, unknown>): Promise<{ success: boolean }> {
+  async updateTargeting(
+    adSetId: string,
+    targetingSpec: Record<string, unknown>,
+  ): Promise<{ success: boolean }> {
     await this.apiPost("/adgroup/update/", {
       advertiser_id: this.advertiserId,
       adgroup_id: adSetId,
@@ -239,7 +248,11 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
       }
       const res = await fetch(url.toString(), { headers: this.headers() });
       if (!res.ok) throw new Error(`TikTok API error: ${res.status} ${await res.text()}`);
-      const json = (await res.json()) as { code: number; message: string; data: Record<string, unknown> | null };
+      const json = (await res.json()) as {
+        code: number;
+        message: string;
+        data: Record<string, unknown> | null;
+      };
       if (json.code !== 0) throw new Error(`TikTok API error: ${json.code} ${json.message}`);
       return json;
     });
@@ -256,7 +269,11 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`TikTok API error: ${res.status} ${await res.text()}`);
-      const json = (await res.json()) as { code: number; message: string; data: Record<string, unknown> | null };
+      const json = (await res.json()) as {
+        code: number;
+        message: string;
+        data: Record<string, unknown> | null;
+      };
       if (json.code !== 0) throw new Error(`TikTok API error: ${json.code} ${json.message}`);
       return json;
     });

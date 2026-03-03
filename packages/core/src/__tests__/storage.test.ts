@@ -7,12 +7,7 @@ import {
   InMemoryCartridgeRegistry,
   createInMemoryStorage,
 } from "../storage/index.js";
-import type {
-  ActionEnvelope,
-  Policy,
-  IdentitySpec,
-  RoleOverlay,
-} from "@switchboard/schemas";
+import type { ActionEnvelope, Policy, IdentitySpec, RoleOverlay } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { Cartridge } from "@switchboard/cartridge-sdk";
 
@@ -112,9 +107,9 @@ describe("InMemoryEnvelopeStore", () => {
   });
 
   it("should throw when updating non-existent envelope", async () => {
-    await expect(
-      store.update("nonexistent", { status: "approved" }),
-    ).rejects.toThrow("Envelope not found");
+    await expect(store.update("nonexistent", { status: "approved" })).rejects.toThrow(
+      "Envelope not found",
+    );
   });
 
   it("should list with status filter", async () => {

@@ -49,27 +49,43 @@ export function extractMetricValue(path: string, result: Record<string, unknown>
  */
 export function compareValue(value: number, operator: string, threshold: number): boolean {
   switch (operator) {
-    case "gt": return value > threshold;
-    case "gte": return value >= threshold;
-    case "lt": return value < threshold;
-    case "lte": return value <= threshold;
-    case "eq": return value === threshold;
-    case "pctChange_gt": return Math.abs(value) > threshold;
-    case "pctChange_lt": return Math.abs(value) < threshold;
-    default: return false;
+    case "gt":
+      return value > threshold;
+    case "gte":
+      return value >= threshold;
+    case "lt":
+      return value < threshold;
+    case "lte":
+      return value <= threshold;
+    case "eq":
+      return value === threshold;
+    case "pctChange_gt":
+      return Math.abs(value) > threshold;
+    case "pctChange_lt":
+      return Math.abs(value) < threshold;
+    default:
+      return false;
   }
 }
 
 function operatorLabel(operator: string): string {
   switch (operator) {
-    case "gt": return ">";
-    case "gte": return ">=";
-    case "lt": return "<";
-    case "lte": return "<=";
-    case "eq": return "==";
-    case "pctChange_gt": return "|%change| >";
-    case "pctChange_lt": return "|%change| <";
-    default: return operator;
+    case "gt":
+      return ">";
+    case "gte":
+      return ">=";
+    case "lt":
+      return "<";
+    case "lte":
+      return "<=";
+    case "eq":
+      return "==";
+    case "pctChange_gt":
+      return "|%change| >";
+    case "pctChange_lt":
+      return "|%change| <";
+    default:
+      return operator;
   }
 }
 

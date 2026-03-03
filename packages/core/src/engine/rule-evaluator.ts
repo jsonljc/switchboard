@@ -34,7 +34,10 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   return current;
 }
 
-function evaluateCondition(condition: PolicyCondition, context: EvaluationContext): ConditionResult {
+function evaluateCondition(
+  condition: PolicyCondition,
+  context: EvaluationContext,
+): ConditionResult {
   const actual = getNestedValue(context as unknown as Record<string, unknown>, condition.field);
   const expected = condition.value;
   let matched = false;
@@ -65,17 +68,19 @@ function evaluateCondition(condition: PolicyCondition, context: EvaluationContex
       matched = Array.isArray(expected) && !expected.includes(actual);
       break;
     case "contains":
-      matched = typeof actual === "string" && typeof expected === "string" && actual.includes(expected);
+      matched =
+        typeof actual === "string" && typeof expected === "string" && actual.includes(expected);
       break;
     case "not_contains":
-      matched = typeof actual === "string" && typeof expected === "string" && !actual.includes(expected);
+      matched =
+        typeof actual === "string" && typeof expected === "string" && !actual.includes(expected);
       break;
     case "matches":
       if (typeof actual === "string" && typeof expected === "string") {
         // ReDoS protection: reject overly long patterns or inputs
         if (expected.length > 256 || actual.length > 10_000) {
           matched = false;
-        // Reject patterns with nested quantifiers, repeated wildcards, or adjacent unbounded groups
+          // Reject patterns with nested quantifiers, repeated wildcards, or adjacent unbounded groups
         } else if (
           /(\+|\*|\{)\s*\)(\+|\*|\?)/.test(expected) ||
           /(\+|\*)\+/.test(expected) ||
@@ -124,20 +129,15 @@ export function evaluateRule(rule: PolicyRule, context: EvaluationContext): Rule
 
   switch (composition) {
     case "AND":
-      matched =
-        conditionResults.every((r) => r.matched) &&
-        childResults.every((r) => r.matched);
+      matched = conditionResults.every((r) => r.matched) && childResults.every((r) => r.matched);
       break;
     case "OR":
-      matched =
-        conditionResults.some((r) => r.matched) ||
-        childResults.some((r) => r.matched);
+      matched = conditionResults.some((r) => r.matched) || childResults.some((r) => r.matched);
       break;
     case "NOT": {
       // NOT applies to the first child/condition group
       const innerMatched =
-        conditionResults.every((r) => r.matched) &&
-        childResults.every((r) => r.matched);
+        conditionResults.every((r) => r.matched) && childResults.every((r) => r.matched);
       matched = !innerMatched;
       break;
     }

@@ -58,9 +58,7 @@ describe("creativeDiversityAdvisor", () => {
     const findings = creativeDiversityAdvisor([], [], snapshot, snapshot, context);
 
     // No thin portfolio, no dominance, format diversity exists
-    expect(
-      findings.every((f) => f.severity === "healthy" || f.severity === "info")
-    ).toBe(true);
+    expect(findings.every((f) => f.severity === "healthy" || f.severity === "info")).toBe(true);
   });
 
   it("flags ad sets with fewer than 3 active ads", () => {
@@ -74,9 +72,7 @@ describe("creativeDiversityAdvisor", () => {
     const context: DiagnosticContext = { adBreakdowns: ads };
     const findings = creativeDiversityAdvisor([], [], snapshot, snapshot, context);
 
-    const thinFinding = findings.find((f) =>
-      f.message.includes("fewer than 3 active ads")
-    );
+    const thinFinding = findings.find((f) => f.message.includes("fewer than 3 active ads"));
     expect(thinFinding).toBeDefined();
   });
 
@@ -89,9 +85,7 @@ describe("creativeDiversityAdvisor", () => {
     const context: DiagnosticContext = { adBreakdowns: ads };
     const findings = creativeDiversityAdvisor([], [], snapshot, snapshot, context);
 
-    const dominanceFinding = findings.find((f) =>
-      f.message.includes(">80% of spend")
-    );
+    const dominanceFinding = findings.find((f) => f.message.includes(">80% of spend"));
     expect(dominanceFinding).toBeDefined();
   });
 
@@ -102,14 +96,12 @@ describe("creativeDiversityAdvisor", () => {
         adSetId: `adset_${i % 2}`,
         spend: 100,
         format: "image",
-      })
+      }),
     );
     const context: DiagnosticContext = { adBreakdowns: ads };
     const findings = creativeDiversityAdvisor([], [], snapshot, snapshot, context);
 
-    const formatFinding = findings.find((f) =>
-      f.message.includes("same format")
-    );
+    const formatFinding = findings.find((f) => f.message.includes("same format"));
     expect(formatFinding).toBeDefined();
   });
 
@@ -123,9 +115,7 @@ describe("creativeDiversityAdvisor", () => {
     const findings = creativeDiversityAdvisor([], [], snapshot, snapshot, context);
 
     // Only 3 ads, format check requires >= 5
-    const formatFinding = findings.find((f) =>
-      f.message.includes("same format")
-    );
+    const formatFinding = findings.find((f) => f.message.includes("same format"));
     expect(formatFinding).toBeUndefined();
   });
 });

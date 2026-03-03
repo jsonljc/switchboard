@@ -15,7 +15,13 @@ export interface WorkerConfig {
 }
 
 export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJobData> {
-  const { connection, orchestrator, storage, concurrency = 5, logger = createLogger("worker") } = config;
+  const {
+    connection,
+    orchestrator,
+    storage,
+    concurrency = 5,
+    logger = createLogger("worker"),
+  } = config;
 
   const worker = new Worker<ExecutionJobData>(
     EXECUTION_QUEUE_NAME,
@@ -33,8 +39,15 @@ export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJob
           return { envelopeId, success: false, summary: "Envelope not found on retry" };
         }
         if (envelope.status !== "approved" && envelope.status !== "executing") {
-          logger.warn({ envelopeId, status: envelope.status }, "Envelope status changed on retry, skipping");
-          return { envelopeId, success: false, summary: `Envelope status changed to ${envelope.status}` };
+          logger.warn(
+            { envelopeId, status: envelope.status },
+            "Envelope status changed on retry, skipping",
+          );
+          return {
+            envelopeId,
+            success: false,
+            summary: `Envelope status changed to ${envelope.status}`,
+          };
         }
       }
 
@@ -43,7 +56,10 @@ export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJob
       if (!result.success) {
         // Throw to trigger BullMQ retry on transient failures
         const isTransient = result.partialFailures.some(
-          (f) => f.error.includes("ETIMEDOUT") || f.error.includes("ECONNREFUSED") || f.error.includes("rate limit"),
+          (f) =>
+            f.error.includes("ETIMEDOUT") ||
+            f.error.includes("ECONNREFUSED") ||
+            f.error.includes("rate limit"),
         );
         if (isTransient) {
           throw new Error(`Transient execution failure for ${envelopeId}: ${result.summary}`);
@@ -66,7 +82,10 @@ export function createExecutionWorker(config: WorkerConfig): Worker<ExecutionJob
 
   worker.on("failed", (job, err) => {
     if (job) {
-      logger.error({ jobId: job.id, envelopeId: job.data.envelopeId, err: err.message }, "Job failed");
+      logger.error(
+        { jobId: job.id, envelopeId: job.data.envelopeId, err: err.message },
+        "Job failed",
+      );
       if (job.attemptsMade >= (job.opts.attempts ?? 3)) {
         logger.error({ jobId: job.id, attempts: job.attemptsMade }, "Job moved to DLQ");
       }

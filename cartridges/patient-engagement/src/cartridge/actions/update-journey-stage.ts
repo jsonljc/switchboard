@@ -7,9 +7,17 @@ import type { JourneyStageId } from "../../core/types.js";
 import { buildJourneyStageUndoRecipe } from "./undo-recipes.js";
 
 const VALID_STAGES: JourneyStageId[] = [
-  "new_lead", "qualified", "consultation_booked", "consultation_completed",
-  "treatment_proposed", "treatment_accepted", "treatment_scheduled",
-  "treatment_completed", "repeat_patient", "dormant", "lost",
+  "new_lead",
+  "qualified",
+  "consultation_booked",
+  "consultation_completed",
+  "treatment_proposed",
+  "treatment_accepted",
+  "treatment_scheduled",
+  "treatment_completed",
+  "repeat_patient",
+  "dormant",
+  "lost",
 ];
 
 export async function executeUpdateJourneyStage(

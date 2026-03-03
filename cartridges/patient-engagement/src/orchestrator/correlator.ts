@@ -14,8 +14,7 @@ export function detectCorrelations(result: JourneyDiagnosticResult): JourneyFind
   const qualStage = result.stageAnalysis.find((s) => s.stageId === "qualified");
   const bookStage = result.stageAnalysis.find((s) => s.stageId === "consultation_booked");
 
-  if (qualStage && bookStage &&
-      qualStage.deltaPercent < -10 && bookStage.deltaPercent < -10) {
+  if (qualStage && bookStage && qualStage.deltaPercent < -10 && bookStage.deltaPercent < -10) {
     findings.push({
       severity: "warning",
       stage: "cross-stage",
@@ -28,12 +27,17 @@ export function detectCorrelations(result: JourneyDiagnosticResult): JourneyFind
   const proposedStage = result.stageAnalysis.find((s) => s.stageId === "treatment_proposed");
   const acceptedStage = result.stageAnalysis.find((s) => s.stageId === "treatment_accepted");
 
-  if (proposedStage && acceptedStage &&
-      proposedStage.deltaPercent < -15 && Math.abs(acceptedStage.deltaPercent) < 5) {
+  if (
+    proposedStage &&
+    acceptedStage &&
+    proposedStage.deltaPercent < -15 &&
+    Math.abs(acceptedStage.deltaPercent) < 5
+  ) {
     findings.push({
       severity: "info",
       stage: "cross-stage",
-      message: "Treatment proposals dropping while acceptance rate is stable — fewer patients reaching treatment discussion.",
+      message:
+        "Treatment proposals dropping while acceptance rate is stable — fewer patients reaching treatment discussion.",
       recommendation: "Focus on improving consultation-to-proposal conversion.",
     });
   }
@@ -48,13 +52,19 @@ export function detectCorrelations(result: JourneyDiagnosticResult): JourneyFind
       (d) => d.fromStage === "Consultation Booked" && d.toStage === "Consultation Completed",
     );
 
-    if (bookingDropoff && completionDropoff &&
-        bookingDropoff.currentRate < 0.4 && completionDropoff.currentRate < 0.7) {
+    if (
+      bookingDropoff &&
+      completionDropoff &&
+      bookingDropoff.currentRate < 0.4 &&
+      completionDropoff.currentRate < 0.7
+    ) {
       findings.push({
         severity: "warning",
         stage: "cross-stage",
-        message: "Low booking rate combined with low completion rate suggests schedule management friction.",
-        recommendation: "Simplify booking flow, add online scheduling, and implement confirmation reminders.",
+        message:
+          "Low booking rate combined with low completion rate suggests schedule management friction.",
+        recommendation:
+          "Simplify booking flow, add online scheduling, and implement confirmation reminders.",
       });
     }
   }

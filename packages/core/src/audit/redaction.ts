@@ -48,9 +48,7 @@ function redactObject(
   }
 
   if (Array.isArray(obj)) {
-    return obj.map((item, i) =>
-      redactObject(item, config, `${path}[${i}]`, redactedFields),
-    );
+    return obj.map((item, i) => redactObject(item, config, `${path}[${i}]`, redactedFields));
   }
 
   if (typeof obj === "object") {

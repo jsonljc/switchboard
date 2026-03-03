@@ -3,10 +3,7 @@
  * Injected into the orchestrator to replace hardcoded `connectionCredentials: {}`.
  */
 export interface ConnectionCredentialResolver {
-  resolve(
-    cartridgeId: string,
-    organizationId: string | null,
-  ): Promise<Record<string, unknown>>;
+  resolve(cartridgeId: string, organizationId: string | null): Promise<Record<string, unknown>>;
 }
 
 /**

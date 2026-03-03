@@ -55,11 +55,7 @@ export function getCadenceInstance(instanceId: string): CadenceInstance | null {
  * Returns a cleanup function to stop the runner.
  */
 export function startCadenceRunner(config: CadenceRunnerConfig): () => void {
-  const {
-    storageContext,
-    intervalMs = 60_000,
-    logger = createLogger("cadence-runner"),
-  } = config;
+  const { storageContext, intervalMs = 60_000, logger = createLogger("cadence-runner") } = config;
 
   let stopped = false;
   let inFlightPromise: Promise<void> | null = null;
@@ -110,10 +106,7 @@ export function startCadenceRunner(config: CadenceRunnerConfig): () => void {
 
         if (evaluation.completed) {
           completed++;
-          logger.info(
-            { instanceId, cadenceId: instance.cadenceDefinitionId },
-            "Cadence completed",
-          );
+          logger.info({ instanceId, cadenceId: instance.cadenceDefinitionId }, "Cadence completed");
           continue;
         }
 
@@ -130,11 +123,9 @@ export function startCadenceRunner(config: CadenceRunnerConfig): () => void {
             connectionCredentials: {},
           };
           try {
-            await storageContext.cartridges.get("patient-engagement")?.execute(
-              evaluation.actionType,
-              evaluation.parameters,
-              ctx,
-            );
+            await storageContext.cartridges
+              .get("patient-engagement")
+              ?.execute(evaluation.actionType, evaluation.parameters, ctx);
             executed++;
             logger.info(
               {

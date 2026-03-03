@@ -25,7 +25,8 @@ interface ChannelCredentials {
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
-    if (msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("enotfound")) return true;
+    if (msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("enotfound"))
+      return true;
   }
   if (error && typeof error === "object" && "status" in error) {
     const status = (error as { status: number }).status;
@@ -65,7 +66,12 @@ export async function sendProactiveNotification(
               );
               results.push({ channel, recipient, success: true });
             } else {
-              results.push({ channel, recipient, success: false, error: "No Telegram credentials" });
+              results.push({
+                channel,
+                recipient,
+                success: false,
+                error: "No Telegram credentials",
+              });
             }
             break;
 
@@ -77,12 +83,22 @@ export async function sendProactiveNotification(
               );
               results.push({ channel, recipient, success: true });
             } else {
-              results.push({ channel, recipient, success: false, error: "No WhatsApp credentials" });
+              results.push({
+                channel,
+                recipient,
+                success: false,
+                error: "No WhatsApp credentials",
+              });
             }
             break;
 
           default:
-            results.push({ channel, recipient, success: false, error: `Unknown channel: ${channel}` });
+            results.push({
+              channel,
+              recipient,
+              success: false,
+              error: `Unknown channel: ${channel}`,
+            });
         }
       } catch (err: any) {
         logger?.error({ err, channel, recipient }, "Failed to send proactive notification");
@@ -152,22 +168,19 @@ async function sendWhatsAppMessage(
   notification: ProactiveNotification,
 ): Promise<void> {
   const emoji = severityEmoji[notification.severity] ?? "";
-  await fetch(
-    `https://graph.facebook.com/v18.0/${credentials.phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${credentials.token}`,
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: {
-          body: `${emoji} ${notification.title}\n\n${notification.body}`,
-        },
-      }),
+  await fetch(`https://graph.facebook.com/v18.0/${credentials.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${credentials.token}`,
     },
-  );
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: {
+        body: `${emoji} ${notification.title}\n\n${notification.body}`,
+      },
+    }),
+  });
 }

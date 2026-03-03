@@ -60,11 +60,7 @@ export { TikTokAdsClient } from "./platforms/tiktok/client.js";
 export type { TikTokApiConfig } from "./platforms/tiktok/types.js";
 
 // Platform registry
-export {
-  createPlatformClient,
-  resolveFunnel,
-  resolveBenchmarks,
-} from "./platforms/registry.js";
+export { createPlatformClient, resolveFunnel, resolveBenchmarks } from "./platforms/registry.js";
 
 // Platform funnels — Meta
 export { commerceFunnel as metaCommerceFunnel } from "./platforms/meta/funnels/commerce.js";
@@ -133,18 +129,11 @@ export { generateExecutiveSummary } from "./orchestrator/summary.js";
 export { generatePortfolioActions } from "./orchestrator/portfolio-actions.js";
 
 // Config
-export type {
-  AccountConfig,
-  PlatformAccountConfig,
-  RawAccountConfig,
-} from "./config/types.js";
+export type { AccountConfig, PlatformAccountConfig, RawAccountConfig } from "./config/types.js";
 export { loadConfig, buildConfig } from "./config/loader.js";
 
 // Skills
-export {
-  runFunnelDiagnostic,
-  formatDiagnostic,
-} from "./skills/funnel-diagnostic.js";
+export { runFunnelDiagnostic, formatDiagnostic } from "./skills/funnel-diagnostic.js";
 export type { FunnelDiagnosticInput } from "./skills/funnel-diagnostic.js";
 export { formatMultiPlatformDiagnostic } from "./skills/multi-platform-diagnostic.js";
 

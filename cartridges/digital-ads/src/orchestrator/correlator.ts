@@ -1,10 +1,6 @@
 import type { DiagnosticResult } from "../core/types.js";
 import type { PlatformType } from "../platforms/types.js";
-import type {
-  CrossPlatformFinding,
-  BudgetRecommendation,
-  PlatformResult,
-} from "./types.js";
+import type { CrossPlatformFinding, BudgetRecommendation, PlatformResult } from "./types.js";
 import { getActiveSeasonalEvent } from "../core/analysis/seasonality.js";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +18,7 @@ export interface CorrelationResult {
 export function correlate(platformResults: PlatformResult[]): CorrelationResult {
   const successfulResults = platformResults.filter(
     (r): r is PlatformResult & { result: DiagnosticResult } =>
-      r.status === "success" && r.result !== undefined
+      r.status === "success" && r.result !== undefined,
   );
 
   if (successfulResults.length < 2) {
@@ -53,7 +49,7 @@ export function correlate(platformResults: PlatformResult[]): CorrelationResult 
 // (seasonal competition, macro event) rather than an account-specific problem.
 
 function detectMarketWideSignals(
-  results: Array<PlatformResult & { result: DiagnosticResult }>
+  results: Array<PlatformResult & { result: DiagnosticResult }>,
 ): CrossPlatformFinding[] {
   const findings: CrossPlatformFinding[] = [];
 
@@ -61,9 +57,7 @@ function detectMarketWideSignals(
   const cpmChanges: Array<{ platform: PlatformType; change: number }> = [];
 
   for (const pr of results) {
-    const impressionsStage = pr.result.stageAnalysis.find(
-      (s) => s.stageName === "awareness"
-    );
+    const impressionsStage = pr.result.stageAnalysis.find((s) => s.stageName === "awareness");
 
     // Use spend and impressions to compute CPM change
     const currentSpend = pr.result.spend.current;
@@ -82,12 +76,8 @@ function detectMarketWideSignals(
   }
 
   // If all platforms have CPM increases > 15%, it's market-wide
-  if (
-    cpmChanges.length >= 2 &&
-    cpmChanges.every((c) => c.change > 15)
-  ) {
-    const avgChange =
-      cpmChanges.reduce((sum, c) => sum + c.change, 0) / cpmChanges.length;
+  if (cpmChanges.length >= 2 && cpmChanges.every((c) => c.change > 15)) {
+    const avgChange = cpmChanges.reduce((sum, c) => sum + c.change, 0) / cpmChanges.length;
 
     // Check for seasonal events that would explain CPM increases
     const periodStart = results[0]!.result.periods.current.since;
@@ -95,9 +85,7 @@ function detectMarketWideSignals(
     const seasonalEvent = getActiveSeasonalEvent(periodStart, periodEnd);
 
     // Adjust threshold by seasonal multiplier
-    const effectiveThreshold = seasonalEvent
-      ? 15 * seasonalEvent.cpmThresholdMultiplier
-      : 15;
+    const effectiveThreshold = seasonalEvent ? 15 * seasonalEvent.cpmThresholdMultiplier : 15;
 
     // If the CPM increase is within seasonal norms, suppress or downgrade
     if (seasonalEvent && avgChange <= effectiveThreshold) {
@@ -106,8 +94,7 @@ function detectMarketWideSignals(
         severity: "info",
         platforms: cpmChanges.map((c) => c.platform),
         message: `CPMs increased across all platforms (avg +${avgChange.toFixed(1)}%) during ${seasonalEvent.name}. This is within expected seasonal ranges.`,
-        recommendation:
-          `CPM increases during ${seasonalEvent.name} are normal due to heightened advertiser competition. Maintain current strategy unless increases significantly exceed seasonal norms. Focus on conversion rate optimization rather than fighting auction costs.`,
+        recommendation: `CPM increases during ${seasonalEvent.name} are normal due to heightened advertiser competition. Maintain current strategy unless increases significantly exceed seasonal norms. Focus on conversion rate optimization rather than fighting auction costs.`,
         confidenceScore: Math.min(avgChange / 60, 1),
         riskLevel: "low",
       });
@@ -137,7 +124,7 @@ function detectMarketWideSignals(
 // conversions improve, it suggests a halo/cross-platform attribution effect.
 
 function detectHaloEffects(
-  results: Array<PlatformResult & { result: DiagnosticResult }>
+  results: Array<PlatformResult & { result: DiagnosticResult }>,
 ): CrossPlatformFinding[] {
   const findings: CrossPlatformFinding[] = [];
 
@@ -151,8 +138,7 @@ function detectHaloEffects(
       // Check if platform i had increased awareness spend
       const spendChange =
         awarenessResult.result.spend.previous > 0
-          ? ((awarenessResult.result.spend.current -
-              awarenessResult.result.spend.previous) /
+          ? ((awarenessResult.result.spend.current - awarenessResult.result.spend.previous) /
               awarenessResult.result.spend.previous) *
             100
           : 0;
@@ -184,9 +170,10 @@ function detectHaloEffects(
 // When one platform's KPI is improving while another's is worsening,
 // there may be a budget reallocation opportunity.
 
-function detectPlatformConflicts(
-  results: Array<PlatformResult & { result: DiagnosticResult }>
-): { findings: CrossPlatformFinding[]; budgetRecommendations: BudgetRecommendation[] } {
+function detectPlatformConflicts(results: Array<PlatformResult & { result: DiagnosticResult }>): {
+  findings: CrossPlatformFinding[];
+  budgetRecommendations: BudgetRecommendation[];
+} {
   const findings: CrossPlatformFinding[] = [];
   const budgetRecommendations: BudgetRecommendation[] = [];
 
@@ -219,7 +206,7 @@ function detectPlatformConflicts(
         (improving.reduce((sum, p) => sum + Math.abs(p.result.primaryKPI.deltaPercent), 0) +
           worsening.reduce((sum, p) => sum + Math.abs(p.result.primaryKPI.deltaPercent), 0)) /
           100,
-        0.9
+        0.9,
       ),
       riskLevel: "medium",
     });
@@ -231,15 +218,15 @@ function detectPlatformConflicts(
           Math.round(
             (Math.abs(worse.result.primaryKPI.deltaPercent) +
               Math.abs(better.result.primaryKPI.deltaPercent)) /
-              4
+              4,
           ),
-          30
+          30,
         );
         const confidence =
           Math.abs(worse.result.primaryKPI.deltaPercent) > 30 &&
           Math.abs(better.result.primaryKPI.deltaPercent) > 20
-            ? "high" as const
-            : "medium" as const;
+            ? ("high" as const)
+            : ("medium" as const);
 
         budgetRecommendations.push({
           from: worse.platform,

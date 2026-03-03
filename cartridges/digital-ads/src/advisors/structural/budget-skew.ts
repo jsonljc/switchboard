@@ -22,7 +22,7 @@ export const budgetSkewAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.subEntities || context.subEntities.length === 0) {
     return [];

@@ -46,7 +46,10 @@ export const CRM_MANIFEST: CartridgeManifest = {
         properties: {
           contactId: { type: "string", description: "Filter by contact ID" },
           dealId: { type: "string", description: "Filter by deal ID" },
-          type: { type: "string", description: "Filter by activity type (note, email, call, meeting, task)" },
+          type: {
+            type: "string",
+            description: "Filter by activity type (note, email, call, meeting, task)",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -153,7 +156,8 @@ export const CRM_MANIFEST: CartridgeManifest = {
     {
       actionType: "crm.pipeline.diagnose",
       name: "Diagnose Pipeline Health",
-      description: "Analyze pipeline velocity, stage conversion rates, stalled deals, and concentration risk",
+      description:
+        "Analyze pipeline velocity, stage conversion rates, stalled deals, and concentration risk",
       parametersSchema: {
         type: "object",
         properties: {
@@ -166,12 +170,19 @@ export const CRM_MANIFEST: CartridgeManifest = {
     {
       actionType: "crm.activity.analyze",
       name: "Analyze Activity Cadence",
-      description: "Identify dormant contacts, overdue follow-ups, unengaged leads, and activity trends",
+      description:
+        "Identify dormant contacts, overdue follow-ups, unengaged leads, and activity trends",
       parametersSchema: {
         type: "object",
         properties: {
-          daysSinceDormant: { type: "number", description: "Days of inactivity before a contact is considered dormant (default: 30)" },
-          daysSinceFollowup: { type: "number", description: "Days since last activity before a follow-up is overdue (default: 7)" },
+          daysSinceDormant: {
+            type: "number",
+            description: "Days of inactivity before a contact is considered dormant (default: 30)",
+          },
+          daysSinceFollowup: {
+            type: "number",
+            description: "Days since last activity before a follow-up is overdue (default: 7)",
+          },
         },
       },
       baseRiskCategory: "low",

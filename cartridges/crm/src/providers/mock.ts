@@ -72,7 +72,14 @@ const SEED_CONTACTS: CrmContact[] = [
   },
 ];
 
-const PIPELINE_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"];
+const PIPELINE_STAGES = [
+  "lead",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "closed-won",
+  "closed-lost",
+];
 
 const SEED_DEALS: CrmDeal[] = [
   {
@@ -180,9 +187,16 @@ export class InMemoryCrmProvider implements CrmProvider {
   private nextId = 100;
 
   constructor() {
-    for (const c of SEED_CONTACTS) this.contacts.set(c.id, { ...c, tags: [...c.tags], properties: { ...c.properties } });
-    for (const d of SEED_DEALS) this.deals.set(d.id, { ...d, contactIds: [...d.contactIds], properties: { ...d.properties } });
-    for (const a of SEED_ACTIVITIES) this.activities.set(a.id, { ...a, contactIds: [...a.contactIds], dealIds: [...a.dealIds] });
+    for (const c of SEED_CONTACTS)
+      this.contacts.set(c.id, { ...c, tags: [...c.tags], properties: { ...c.properties } });
+    for (const d of SEED_DEALS)
+      this.deals.set(d.id, {
+        ...d,
+        contactIds: [...d.contactIds],
+        properties: { ...d.properties },
+      });
+    for (const a of SEED_ACTIVITIES)
+      this.activities.set(a.id, { ...a, contactIds: [...a.contactIds], dealIds: [...a.dealIds] });
   }
 
   private genId(prefix: string): string {
@@ -208,7 +222,11 @@ export class InMemoryCrmProvider implements CrmProvider {
     return this.contacts.get(contactId) ?? null;
   }
 
-  async listDeals(filters?: { contactId?: string; pipeline?: string; stage?: string }): Promise<CrmDeal[]> {
+  async listDeals(filters?: {
+    contactId?: string;
+    pipeline?: string;
+    stage?: string;
+  }): Promise<CrmDeal[]> {
     let deals = [...this.deals.values()];
     if (filters?.contactId) {
       deals = deals.filter((d) => d.contactIds.includes(filters.contactId!));
@@ -222,7 +240,11 @@ export class InMemoryCrmProvider implements CrmProvider {
     return deals;
   }
 
-  async listActivities(filters?: { contactId?: string; dealId?: string; type?: string }): Promise<CrmActivity[]> {
+  async listActivities(filters?: {
+    contactId?: string;
+    dealId?: string;
+    type?: string;
+  }): Promise<CrmActivity[]> {
     let activities = [...this.activities.values()];
     if (filters?.contactId) {
       activities = activities.filter((a) => a.contactIds.includes(filters.contactId!));
@@ -233,7 +255,9 @@ export class InMemoryCrmProvider implements CrmProvider {
     if (filters?.type) {
       activities = activities.filter((a) => a.type === filters.type);
     }
-    return activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return activities.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }
 
   async getPipelineStatus(pipelineId?: string): Promise<CrmPipelineStage[]> {
@@ -285,14 +309,26 @@ export class InMemoryCrmProvider implements CrmProvider {
     const contact = this.contacts.get(contactId);
     if (!contact) throw new Error(`Contact ${contactId} not found`);
 
-    const updatable = ["email", "firstName", "lastName", "company", "phone", "channel", "tags", "status"] as const;
+    const updatable = [
+      "email",
+      "firstName",
+      "lastName",
+      "company",
+      "phone",
+      "channel",
+      "tags",
+      "status",
+    ] as const;
     for (const key of updatable) {
       if (data[key] !== undefined) {
         (contact as unknown as Record<string, unknown>)[key] = data[key];
       }
     }
     if (data["properties"] && typeof data["properties"] === "object") {
-      contact.properties = { ...contact.properties, ...(data["properties"] as Record<string, unknown>) };
+      contact.properties = {
+        ...contact.properties,
+        ...(data["properties"] as Record<string, unknown>),
+      };
     }
     contact.updatedAt = new Date().toISOString();
     return { ...contact };

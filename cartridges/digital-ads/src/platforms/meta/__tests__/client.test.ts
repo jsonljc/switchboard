@@ -34,14 +34,12 @@ function errorResponse(code: number, message: string, httpStatus = 400): Respons
     status: httpStatus,
     statusText: "Bad Request",
     json: () => Promise.resolve({ error: { message, type: "OAuthException", code } }),
-    text: () => Promise.resolve(JSON.stringify({ error: { message, type: "OAuthException", code } })),
+    text: () =>
+      Promise.resolve(JSON.stringify({ error: { message, type: "OAuthException", code } })),
   } as unknown as Response;
 }
 
-function insightsResponse(
-  data: MetaInsightsResponse["data"],
-  next?: string,
-): MetaInsightsResponse {
+function insightsResponse(data: MetaInsightsResponse["data"], next?: string): MetaInsightsResponse {
   return {
     data,
     ...(next ? { paging: { next } } : {}),
@@ -303,9 +301,7 @@ describe("MetaApiClient", () => {
               impressions: "5000",
               inline_link_clicks: "200",
               clicks: "300",
-              actions: [
-                { action_type: "landing_page_view", value: "150" },
-              ],
+              actions: [{ action_type: "landing_page_view", value: "150" }],
             },
           ]),
         ),
@@ -400,22 +396,20 @@ describe("MetaApiClient", () => {
     it("retries on transient error code 2 with backoff", async () => {
       const client = makeClient({ maxRetries: 2 });
 
-      fetchMock
-        .mockResolvedValueOnce(errorResponse(2, "Temporary error"))
-        .mockResolvedValueOnce(
-          okResponse(
-            insightsResponse([
-              {
-                date_start: "2024-01-01",
-                date_stop: "2024-01-07",
-                spend: "100",
-                impressions: "5000",
-                inline_link_clicks: "200",
-                clicks: "250",
-              },
-            ]),
-          ),
-        );
+      fetchMock.mockResolvedValueOnce(errorResponse(2, "Temporary error")).mockResolvedValueOnce(
+        okResponse(
+          insightsResponse([
+            {
+              date_start: "2024-01-01",
+              date_stop: "2024-01-07",
+              spend: "100",
+              impressions: "5000",
+              inline_link_clicks: "200",
+              clicks: "250",
+            },
+          ]),
+        ),
+      );
 
       const promise = client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
       // Advance timers past the backoff (2^0 * 1000 = 1000ms)

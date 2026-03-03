@@ -35,8 +35,8 @@ describe("Connections API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", { _mock: true });
-    app.decorate("storageContext", { cartridges: mockCartridges });
+    app.decorate("prisma", { _mock: true } as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as any);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -83,7 +83,7 @@ describe("Connections API", () => {
       expect(body.connection.id).toBeDefined();
 
       expect(mockStore.save).toHaveBeenCalledTimes(1);
-      const savedConnection = mockStore.save.mock.calls[0][0];
+      const savedConnection = mockStore.save.mock.calls[0]![0];
       expect(savedConnection.serviceId).toBe("meta-ads");
       expect(savedConnection.credentials).toEqual({ accessToken: "secret-token-123" });
     });
@@ -127,8 +127,8 @@ describe("Connections API", () => {
       await app.close();
 
       app = Fastify({ logger: false });
-      app.decorate("prisma", { _mock: true });
-      app.decorate("storageContext", { cartridges: mockCartridges });
+      app.decorate("prisma", { _mock: true } as any);
+      app.decorate("storageContext", { cartridges: mockCartridges } as any);
       app.decorateRequest("organizationIdFromAuth", undefined);
       // Do NOT add the onRequest hook that sets organizationIdFromAuth
       await app.register(connectionsRoutes, { prefix: "/api/connections" });
@@ -168,7 +168,7 @@ describe("Connections API", () => {
       expect(body.connection.status).toBe("connected");
       expect(body.connection.refreshStrategy).toBe("auto");
 
-      const savedConnection = mockStore.save.mock.calls[0][0];
+      const savedConnection = mockStore.save.mock.calls[0]![0];
       expect(savedConnection.scopes).toEqual([]);
     });
   });

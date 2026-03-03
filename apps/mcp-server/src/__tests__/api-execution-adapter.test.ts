@@ -85,12 +85,12 @@ describe("ApiExecutionAdapter", () => {
       requestedAction: {
         actionType: "digital-ads.campaign.pause",
         parameters: {},
-        // sideEffect omitted
+        sideEffect: true,
       },
     });
     await adapter.execute(request);
 
-    const postedBody = (client.post as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    const postedBody = (client.post as ReturnType<typeof vi.fn>).mock.calls[0]![1];
     expect(postedBody.action.sideEffect).toBe(true);
   });
 

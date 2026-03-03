@@ -222,7 +222,7 @@ describe("createApiOrchestrator", () => {
         emergencyOverride: true,
       });
 
-      const postedBody = (client.post as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const postedBody = (client.post as ReturnType<typeof vi.fn>).mock.calls[0]![1];
       expect(postedBody.emergencyOverride).toBe(true);
     });
   });
@@ -305,7 +305,13 @@ describe("createApiStorage", () => {
         status: 200,
         data: {
           approvals: [
-            { id: "apr_1", summary: "Action A", riskCategory: "high", status: "pending", envelopeId: "env_1" },
+            {
+              id: "apr_1",
+              summary: "Action A",
+              riskCategory: "high",
+              status: "pending",
+              envelopeId: "env_1",
+            },
           ],
         },
       });
@@ -328,9 +334,7 @@ describe("createApiStorage", () => {
       const storage = createApiStorage(client);
       await storage.approvals.listPending("org_1");
 
-      expect(client.get).toHaveBeenCalledWith(
-        "/api/approvals/pending?organizationId=org_1",
-      );
+      expect(client.get).toHaveBeenCalledWith("/api/approvals/pending?organizationId=org_1");
     });
 
     it("returns empty array when no approvals key in response", async () => {
@@ -456,10 +460,9 @@ describe("createApiGovernanceProfileStore", () => {
       const store = createApiGovernanceProfileStore(client);
       await store.set("org_1", "enforce" as any);
 
-      expect(client.put).toHaveBeenCalledWith(
-        "/api/governance/org_1/profile",
-        { profile: "enforce" },
-      );
+      expect(client.put).toHaveBeenCalledWith("/api/governance/org_1/profile", {
+        profile: "enforce",
+      });
     });
   });
 });
@@ -502,7 +505,7 @@ describe("createApiLedger", () => {
       limit: 10,
     });
 
-    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(calledPath).toContain("/api/audit?");
     expect(calledPath).toContain("envelopeId=env_1");
     expect(calledPath).toContain("entityId=camp_1");
@@ -528,7 +531,7 @@ describe("createApiLedger", () => {
     const ledger = createApiLedger(client);
     await ledger.query({ after: afterDate, before: beforeDate });
 
-    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(calledPath).toContain("after=2026-01-01T00%3A00%3A00.000Z");
     expect(calledPath).toContain("before=2026-02-01T00%3A00%3A00.000Z");
   });
@@ -542,7 +545,7 @@ describe("createApiLedger", () => {
     const ledger = createApiLedger(client);
     await ledger.query({ after: "2026-01-01", before: "2026-02-01" });
 
-    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(calledPath).toContain("after=2026-01-01");
     expect(calledPath).toContain("before=2026-02-01");
   });
@@ -568,7 +571,7 @@ describe("createApiLedger", () => {
     const ledger = createApiLedger(client);
     await ledger.query({ envelopeId: "env_1" });
 
-    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const calledPath = (client.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(calledPath).toContain("envelopeId=env_1");
     expect(calledPath).not.toContain("entityId");
     expect(calledPath).not.toContain("eventType");

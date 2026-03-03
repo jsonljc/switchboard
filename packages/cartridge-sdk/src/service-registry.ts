@@ -40,7 +40,12 @@ export const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
     requiredFields: [
       { key: "apiKey", label: "API Key", type: "password" },
       { key: "apiSecret", label: "API Secret", type: "password" },
-      { key: "baseUrl", label: "Base URL", type: "text", placeholder: "https://api.broker.example.com" },
+      {
+        key: "baseUrl",
+        label: "Base URL",
+        type: "text",
+        placeholder: "https://api.broker.example.com",
+      },
     ],
     cartridgeId: "quant-trading",
     description: "Execute trades, manage portfolios, and access market data.",

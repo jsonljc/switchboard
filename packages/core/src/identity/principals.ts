@@ -16,12 +16,10 @@ export function canActAs(
 
   // Chain-based delegation resolution with scope narrowing
   // For canActAs, the "approver" is the target principal (the grantor)
-  const result = resolveDelegationChain(
-    principal.id,
-    [targetPrincipalId],
-    delegations,
-    { now, requiredScope: actionScope },
-  );
+  const result = resolveDelegationChain(principal.id, [targetPrincipalId], delegations, {
+    now,
+    requiredScope: actionScope,
+  });
 
   if (!result.authorized) return false;
 

@@ -25,7 +25,7 @@ export async function executeCancelAppointment(
       rollbackAvailable: true,
       partialFailures: [],
       durationMs: Date.now() - start,
-      undoRecipe: buildCancelUndoRecipe(appointmentId, params.originalStartTime as string ?? ""),
+      undoRecipe: buildCancelUndoRecipe(appointmentId, (params.originalStartTime as string) ?? ""),
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

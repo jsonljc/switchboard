@@ -33,11 +33,7 @@ const DEFAULT_CONTEXT: ClinicContext = {
 class TestableClinicInterpreter extends ClinicInterpreter {
   private mockResponse: string = "{}";
 
-  constructor(
-    config: LLMConfig,
-    context: ClinicContext,
-    modelRouter?: ModelRouter,
-  ) {
+  constructor(config: LLMConfig, context: ClinicContext, modelRouter?: ModelRouter) {
     super(config, context, modelRouter);
   }
 
@@ -72,11 +68,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants campaign report",
       });
 
-      const result = await interpreter.interpret(
-        "how are my campaigns doing?",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("how are my campaigns doing?", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(0);
       expect(result.readIntent).toBeDefined();
@@ -113,11 +105,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants more patient leads",
       });
 
-      const result = await interpreter.interpret(
-        "I want more patient leads",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("I want more patient leads", {}, ALL_ACTIONS);
 
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.MORE_LEADS);
@@ -131,11 +119,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants to reduce ad costs",
       });
 
-      const result = await interpreter.interpret(
-        "reduce my ad costs",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("reduce my ad costs", {}, ALL_ACTIONS);
 
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.REDUCE_COST);
@@ -154,11 +138,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants to pause campaign",
       });
 
-      const result = await interpreter.interpret(
-        "pause Summer Sale",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("pause Summer Sale", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(1);
       expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.pause");
@@ -175,11 +155,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants to resume campaign",
       });
 
-      const result = await interpreter.interpret(
-        "resume Winter Promo",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("resume Winter Promo", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(1);
       expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.resume");
@@ -252,11 +228,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "User wants emergency stop",
       });
 
-      const result = await interpreter.interpret(
-        "stop everything now",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("stop everything now", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(1);
       expect(result.proposals[0]?.actionType).toBe("system.kill_switch");
@@ -276,11 +248,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "Not ad-related",
       });
 
-      const result = await interpreter.interpret(
-        "what's the weather?",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("what's the weather?", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(0);
       expect(result.needsClarification).toBe(true);
@@ -295,11 +263,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "Not sure",
       });
 
-      const result = await interpreter.interpret(
-        "maybe pause something",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("maybe pause something", {}, ALL_ACTIONS);
 
       expect(result.proposals).toHaveLength(0);
       expect(result.needsClarification).toBe(true);
@@ -313,11 +277,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "Bad intent",
       });
 
-      const result = await interpreter.interpret(
-        "do something",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("do something", {}, ALL_ACTIONS);
 
       // Invalid intent → UNKNOWN → needsClarification
       expect(result.proposals).toHaveLength(0);
@@ -350,11 +310,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "Should not reach LLM",
       });
 
-      const result = await interpreterWithRouter.interpret(
-        "pause Summer Sale",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterWithRouter.interpret("pause Summer Sale", {}, ALL_ACTIONS);
 
       // Regex fallback should match "pause" pattern
       expect(result.rawResponse).toContain("[FALLBACK_REGEX]");
@@ -376,11 +332,7 @@ describe("ClinicInterpreter", () => {
         router,
       );
 
-      const result = await interpreterWithRouter.interpret(
-        "what's the weather?",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterWithRouter.interpret("what's the weather?", {}, ALL_ACTIONS);
 
       expect(result.rawResponse).toContain("[FALLBACK_NO_MATCH]");
       expect(result.proposals).toHaveLength(0);
@@ -432,11 +384,7 @@ describe("ClinicInterpreter", () => {
         reasoning: "test",
       });
 
-      const result = await interpreter.interpret(
-        "how are my campaigns?",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreter.interpret("how are my campaigns?", {}, ALL_ACTIONS);
 
       // Should still work correctly after updating names
       expect(result.readIntent).toBeDefined();
@@ -466,11 +414,7 @@ describe("ClinicInterpreter", () => {
     });
 
     it("matches 'resume campaign X'", async () => {
-      const result = await interpreterFallback.interpret(
-        "resume Winter Promo",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterFallback.interpret("resume Winter Promo", {}, ALL_ACTIONS);
       expect(result.proposals).toHaveLength(1);
       expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.resume");
       expect(result.proposals[0]!.parameters["campaignRef"]).toBe("Winter Promo");
@@ -499,31 +443,19 @@ describe("ClinicInterpreter", () => {
     });
 
     it("matches 'more leads'", async () => {
-      const result = await interpreterFallback.interpret(
-        "more patient leads",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterFallback.interpret("more patient leads", {}, ALL_ACTIONS);
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.MORE_LEADS);
     });
 
     it("matches 'reduce cost'", async () => {
-      const result = await interpreterFallback.interpret(
-        "reduce my ad cost",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterFallback.interpret("reduce my ad cost", {}, ALL_ACTIONS);
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.REDUCE_COST);
     });
 
     it("matches 'undo'", async () => {
-      const result = await interpreterFallback.interpret(
-        "undo",
-        {},
-        ALL_ACTIONS,
-      );
+      const result = await interpreterFallback.interpret("undo", {}, ALL_ACTIONS);
       expect(result.proposals).toHaveLength(1);
       expect(result.proposals[0]!.actionType).toBe("system.undo");
     });

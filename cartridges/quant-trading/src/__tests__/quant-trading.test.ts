@@ -184,7 +184,9 @@ describe("QuantTradingCartridge", () => {
 
     it("should have cooldowns for market orders", () => {
       const guardrails = cartridge.getGuardrails();
-      const buyCooldown = guardrails.cooldowns.find((c) => c.actionType === "trading.order.market_buy");
+      const buyCooldown = guardrails.cooldowns.find(
+        (c) => c.actionType === "trading.order.market_buy",
+      );
       expect(buyCooldown?.cooldownMs).toBe(30_000);
     });
   });

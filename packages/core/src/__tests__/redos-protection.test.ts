@@ -17,9 +17,7 @@ describe("evaluateRule ReDoS protection (#9)", () => {
     const result = evaluateRule(
       {
         composition: "AND",
-        conditions: [
-          { field: "parameters.value", operator: "matches", value: "a".repeat(257) },
-        ],
+        conditions: [{ field: "parameters.value", operator: "matches", value: "a".repeat(257) }],
       },
       { ...baseContext, parameters: { value: "test" } },
     );
@@ -30,9 +28,7 @@ describe("evaluateRule ReDoS protection (#9)", () => {
     const result = evaluateRule(
       {
         composition: "AND",
-        conditions: [
-          { field: "parameters.value", operator: "matches", value: "a+" },
-        ],
+        conditions: [{ field: "parameters.value", operator: "matches", value: "a+" }],
       },
       baseContext,
     );
@@ -43,9 +39,7 @@ describe("evaluateRule ReDoS protection (#9)", () => {
     const result = evaluateRule(
       {
         composition: "AND",
-        conditions: [
-          { field: "parameters.value", operator: "matches", value: "(.*)(.*)" },
-        ],
+        conditions: [{ field: "parameters.value", operator: "matches", value: "(.*)(.*)" }],
       },
       { ...baseContext, parameters: { value: "test" } },
     );
@@ -56,9 +50,7 @@ describe("evaluateRule ReDoS protection (#9)", () => {
     const result = evaluateRule(
       {
         composition: "AND",
-        conditions: [
-          { field: "parameters.value", operator: "matches", value: "^hello.*world$" },
-        ],
+        conditions: [{ field: "parameters.value", operator: "matches", value: "^hello.*world$" }],
       },
       { ...baseContext, parameters: { value: "hello beautiful world" } },
     );

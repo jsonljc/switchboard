@@ -49,7 +49,9 @@ class TelegramRateLimiter {
   }
 }
 
-export type PrincipalLookup = (principalId: string) => Promise<{ organizationId: string | null } | null>;
+export type PrincipalLookup = (
+  principalId: string,
+) => Promise<{ organizationId: string | null } | null>;
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly channel = "telegram" as const;
@@ -67,7 +69,9 @@ export class TelegramAdapter implements ChannelAdapter {
       throw new Error("TELEGRAM_WEBHOOK_SECRET must be set in production for webhook verification");
     }
     if (!webhookSecret && process.env.NODE_ENV !== "test") {
-      console.warn("[TelegramAdapter] No webhook secret configured — webhook verification is disabled");
+      console.warn(
+        "[TelegramAdapter] No webhook secret configured — webhook verification is disabled",
+      );
     }
   }
 

@@ -24,9 +24,7 @@ function makeSnapshot(overrides: Partial<MetricSnapshot> = {}): MetricSnapshot {
   };
 }
 
-function makeEntity(
-  overrides: Partial<SubEntityBreakdown> = {}
-): SubEntityBreakdown {
+function makeEntity(overrides: Partial<SubEntityBreakdown> = {}): SubEntityBreakdown {
   return {
     entityId: "adset_1",
     entityLevel: "adset",
@@ -68,10 +66,7 @@ describe("audienceOverlapAdvisor", () => {
       { adSetId1: "as1", adSetId2: "as2", overlapRate: 0.65 },
     ];
     const context: DiagnosticContext = {
-      subEntities: [
-        makeEntity({ entityId: "as1" }),
-        makeEntity({ entityId: "as2" }),
-      ],
+      subEntities: [makeEntity({ entityId: "as1" }), makeEntity({ entityId: "as2" })],
       audienceOverlaps: overlaps,
     };
     const findings = audienceOverlapAdvisor([], [], current, previous, context);
@@ -86,7 +81,7 @@ describe("audienceOverlapAdvisor", () => {
     const previous = makeSnapshot();
     const overlaps: AudienceOverlapPair[] = [
       { adSetId1: "as1", adSetId2: "as2", overlapRate: 0.35 },
-      { adSetId1: "as2", adSetId2: "as3", overlapRate: 0.40 },
+      { adSetId1: "as2", adSetId2: "as3", overlapRate: 0.4 },
     ];
     const context: DiagnosticContext = {
       subEntities: [
@@ -111,7 +106,7 @@ describe("audienceOverlapAdvisor", () => {
           entityId: `as_${i}`,
           spend: 100,
           conversions: 10, // All have CPA = $10 — very low variance
-        })
+        }),
       );
     }
     const current = makeSnapshot({ topLevel: { cpm: 12 } });
@@ -142,19 +137,17 @@ describe("audienceOverlapAdvisor", () => {
     const context: DiagnosticContext = { subEntities: entities };
     const findings = audienceOverlapAdvisor([], [], current, previous, context);
 
-    const overlapFindings = findings.filter(
-      (f) => f.message.includes("zero conversions")
-    );
+    const overlapFindings = findings.filter((f) => f.message.includes("zero conversions"));
     expect(overlapFindings.length).toBeGreaterThanOrEqual(1);
   });
 
   it("does not flag when ad sets have diverse CPAs", () => {
     const entities: SubEntityBreakdown[] = [
-      makeEntity({ entityId: "as_1", spend: 100, conversions: 20 }),   // CPA = 5
-      makeEntity({ entityId: "as_2", spend: 200, conversions: 10 }),   // CPA = 20
-      makeEntity({ entityId: "as_3", spend: 50, conversions: 25 }),    // CPA = 2
-      makeEntity({ entityId: "as_4", spend: 300, conversions: 5 }),    // CPA = 60
-      makeEntity({ entityId: "as_5", spend: 150, conversions: 15 }),   // CPA = 10
+      makeEntity({ entityId: "as_1", spend: 100, conversions: 20 }), // CPA = 5
+      makeEntity({ entityId: "as_2", spend: 200, conversions: 10 }), // CPA = 20
+      makeEntity({ entityId: "as_3", spend: 50, conversions: 25 }), // CPA = 2
+      makeEntity({ entityId: "as_4", spend: 300, conversions: 5 }), // CPA = 60
+      makeEntity({ entityId: "as_5", spend: 150, conversions: 15 }), // CPA = 10
     ];
     const current = makeSnapshot({ topLevel: { cpm: 10 } });
     const previous = makeSnapshot();

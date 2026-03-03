@@ -39,33 +39,33 @@ describe("PrismaGovernanceProfileStore", () => {
 
     it("returns stored profile", async () => {
       prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "autonomous",
+        governanceProfile: "strict",
       });
 
       const result = await store.get("org_1");
-      expect(result).toBe("autonomous");
+      expect(result).toBe("strict");
     });
   });
 
   describe("set", () => {
     it("no-op for null orgId", async () => {
-      await store.set(null, "autonomous");
+      await store.set(null, "strict");
       expect(prisma.organizationConfig.upsert).not.toHaveBeenCalled();
     });
 
     it("calls upsert with correct create/update", async () => {
       prisma.organizationConfig.upsert.mockResolvedValue({});
 
-      await store.set("org_1", "autonomous");
+      await store.set("org_1", "strict");
       expect(prisma.organizationConfig.upsert).toHaveBeenCalledWith({
         where: { id: "org_1" },
         create: {
           id: "org_1",
           name: "",
-          governanceProfile: "autonomous",
+          governanceProfile: "strict",
         },
         update: {
-          governanceProfile: "autonomous",
+          governanceProfile: "strict",
         },
       });
     });
@@ -98,42 +98,42 @@ describe("PrismaGovernanceProfileStore", () => {
 
     it("includes allowedActionTypes when populated", async () => {
       prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "supervised",
+        governanceProfile: "observe",
         smbAllowedActions: ["ad.create"],
         smbBlockedActions: [],
       });
 
       const result = await store.getConfig("org_1");
       expect(result).toEqual({
-        profile: "supervised",
+        profile: "observe",
         allowedActionTypes: ["ad.create"],
       });
     });
 
     it("includes blockedActionTypes when populated", async () => {
       prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "supervised",
+        governanceProfile: "observe",
         smbAllowedActions: [],
         smbBlockedActions: ["payment.send"],
       });
 
       const result = await store.getConfig("org_1");
       expect(result).toEqual({
-        profile: "supervised",
+        profile: "observe",
         blockedActionTypes: ["payment.send"],
       });
     });
 
     it("includes both lists when both populated", async () => {
       prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "autonomous",
+        governanceProfile: "strict",
         smbAllowedActions: ["ad.create"],
         smbBlockedActions: ["payment.send"],
       });
 
       const result = await store.getConfig("org_1");
       expect(result).toEqual({
-        profile: "autonomous",
+        profile: "strict",
         allowedActionTypes: ["ad.create"],
         blockedActionTypes: ["payment.send"],
       });
@@ -150,7 +150,7 @@ describe("PrismaGovernanceProfileStore", () => {
       prisma.organizationConfig.upsert.mockResolvedValue({});
 
       await store.setConfig("org_1", {
-        profile: "supervised",
+        profile: "observe",
         allowedActionTypes: ["ad.create"],
         blockedActionTypes: ["payment.send"],
       });
@@ -160,12 +160,12 @@ describe("PrismaGovernanceProfileStore", () => {
         create: {
           id: "org_1",
           name: "",
-          governanceProfile: "supervised",
+          governanceProfile: "observe",
           smbAllowedActions: ["ad.create"],
           smbBlockedActions: ["payment.send"],
         },
         update: {
-          governanceProfile: "supervised",
+          governanceProfile: "observe",
           smbAllowedActions: ["ad.create"],
           smbBlockedActions: ["payment.send"],
         },

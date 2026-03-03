@@ -1,11 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { AbstractPlatformClient } from "../base-client.js";
-import type {
-  EntityLevel,
-  FunnelSchema,
-  MetricSnapshot,
-  TimeRange,
-} from "../../core/types.js";
+import type { EntityLevel, FunnelSchema, MetricSnapshot, TimeRange } from "../../core/types.js";
 import type { PlatformType } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -15,14 +10,15 @@ import type { PlatformType } from "../types.js";
 class StubClient extends AbstractPlatformClient {
   readonly platform: PlatformType = "meta";
 
-  fetchSnapshot = vi.fn<
-    (
-      entityId: string,
-      entityLevel: EntityLevel,
-      timeRange: TimeRange,
-      funnel: FunnelSchema,
-    ) => Promise<MetricSnapshot>
-  >();
+  fetchSnapshot =
+    vi.fn<
+      (
+        entityId: string,
+        entityLevel: EntityLevel,
+        timeRange: TimeRange,
+        funnel: FunnelSchema,
+      ) => Promise<MetricSnapshot>
+    >();
 }
 
 // ---------------------------------------------------------------------------
@@ -68,20 +64,20 @@ describe("AbstractPlatformClient", () => {
   describe("fetchComparisonSnapshots", () => {
     it("calls fetchSnapshot with the current and previous time ranges", async () => {
       const client = new StubClient();
-      const currentSnap = makeSnapshot({ periodStart: "2024-01-08", periodEnd: "2024-01-14", spend: 200 });
-      const previousSnap = makeSnapshot({ periodStart: "2024-01-01", periodEnd: "2024-01-07", spend: 100 });
+      const currentSnap = makeSnapshot({
+        periodStart: "2024-01-08",
+        periodEnd: "2024-01-14",
+        spend: 200,
+      });
+      const previousSnap = makeSnapshot({
+        periodStart: "2024-01-01",
+        periodEnd: "2024-01-07",
+        spend: 100,
+      });
 
-      client.fetchSnapshot
-        .mockResolvedValueOnce(currentSnap)
-        .mockResolvedValueOnce(previousSnap);
+      client.fetchSnapshot.mockResolvedValueOnce(currentSnap).mockResolvedValueOnce(previousSnap);
 
-      await client.fetchComparisonSnapshots(
-        "123",
-        "campaign",
-        currentRange,
-        previousRange,
-        funnel,
-      );
+      await client.fetchComparisonSnapshots("123", "campaign", currentRange, previousRange, funnel);
 
       expect(client.fetchSnapshot).toHaveBeenCalledTimes(2);
       expect(client.fetchSnapshot).toHaveBeenCalledWith("123", "campaign", currentRange, funnel);
@@ -107,13 +103,7 @@ describe("AbstractPlatformClient", () => {
         return makeSnapshot();
       });
 
-      await client.fetchComparisonSnapshots(
-        "123",
-        "campaign",
-        currentRange,
-        previousRange,
-        funnel,
-      );
+      await client.fetchComparisonSnapshots("123", "campaign", currentRange, previousRange, funnel);
 
       // If calls were sequential, current would resolve first; parallel means previous resolves first
       expect(callOrder).toEqual(["previous", "current"]);
@@ -124,9 +114,7 @@ describe("AbstractPlatformClient", () => {
       const currentSnap = makeSnapshot({ spend: 200 });
       const previousSnap = makeSnapshot({ spend: 100 });
 
-      client.fetchSnapshot
-        .mockResolvedValueOnce(currentSnap)
-        .mockResolvedValueOnce(previousSnap);
+      client.fetchSnapshot.mockResolvedValueOnce(currentSnap).mockResolvedValueOnce(previousSnap);
 
       const result = await client.fetchComparisonSnapshots(
         "123",

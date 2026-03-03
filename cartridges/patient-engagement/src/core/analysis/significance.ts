@@ -47,8 +47,7 @@ export function zScore(value: number, history: number[]): number | null {
   if (history.length < 3) return null;
 
   const mean = history.reduce((a, b) => a + b, 0) / history.length;
-  const variance =
-    history.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / history.length;
+  const variance = history.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / history.length;
   const stdDev = Math.sqrt(variance);
 
   if (stdDev === 0) return value === mean ? 0 : null;

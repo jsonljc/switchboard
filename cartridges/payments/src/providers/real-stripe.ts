@@ -43,7 +43,9 @@ export class RealStripeProvider implements StripeProvider {
         shouldRetry: (err: unknown) => {
           if (err instanceof Error) {
             const msg = err.message;
-            return msg.includes("rate_limit") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET");
+            return (
+              msg.includes("rate_limit") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET")
+            );
           }
           return false;
         },
@@ -135,7 +137,11 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async createInvoice(customerId: string, amountCents: number, description: string): Promise<StripeInvoice> {
+  async createInvoice(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeInvoice> {
     const invoice = await this.call(() =>
       this.stripe.invoices.create(
         { customer: customerId, auto_advance: false },
@@ -169,7 +175,12 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async createCharge(customerId: string, amountCents: number, currency: string, description: string): Promise<StripeCharge> {
+  async createCharge(
+    customerId: string,
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripeCharge> {
     const charge = await this.call(() =>
       this.stripe.charges.create(
         { customer: customerId, amount: amountCents, currency, description },
@@ -191,7 +202,11 @@ export class RealStripeProvider implements StripeProvider {
   async createRefund(chargeId: string, amountCents: number, reason: string): Promise<StripeRefund> {
     const refund = await this.call(() =>
       this.stripe.refunds.create(
-        { charge: chargeId, amount: amountCents, reason: reason as "duplicate" | "fraudulent" | "requested_by_customer" },
+        {
+          charge: chargeId,
+          amount: amountCents,
+          reason: reason as "duplicate" | "fraudulent" | "requested_by_customer",
+        },
         { idempotencyKey: this.idempotencyKey() },
       ),
     );
@@ -204,16 +219,17 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async cancelSubscription(subscriptionId: string, cancelAtPeriodEnd: boolean): Promise<StripeSubscription> {
+  async cancelSubscription(
+    subscriptionId: string,
+    cancelAtPeriodEnd: boolean,
+  ): Promise<StripeSubscription> {
     let sub: import("stripe").Stripe.Subscription;
     if (cancelAtPeriodEnd) {
       sub = await this.call(() =>
         this.stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true }),
       );
     } else {
-      sub = await this.call(() =>
-        this.stripe.subscriptions.cancel(subscriptionId),
-      );
+      sub = await this.call(() => this.stripe.subscriptions.cancel(subscriptionId));
     }
     return {
       id: sub.id,
@@ -232,7 +248,10 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async modifySubscription(subscriptionId: string, changes: Record<string, unknown>): Promise<StripeSubscription> {
+  async modifySubscription(
+    subscriptionId: string,
+    changes: Record<string, unknown>,
+  ): Promise<StripeSubscription> {
     const sub = await this.call(() =>
       this.stripe.subscriptions.update(subscriptionId, changes as Record<string, unknown>),
     );
@@ -253,7 +272,11 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async createPaymentLink(amountCents: number, currency: string, description: string): Promise<StripePaymentLink> {
+  async createPaymentLink(
+    amountCents: number,
+    currency: string,
+    description: string,
+  ): Promise<StripePaymentLink> {
     // Create a price first, then a payment link
     const price = await this.call(() =>
       this.stripe.prices.create({
@@ -277,9 +300,7 @@ export class RealStripeProvider implements StripeProvider {
   }
 
   async deactivatePaymentLink(linkId: string): Promise<StripePaymentLink> {
-    const link = await this.call(() =>
-      this.stripe.paymentLinks.update(linkId, { active: false }),
-    );
+    const link = await this.call(() => this.stripe.paymentLinks.update(linkId, { active: false }));
     return {
       id: link.id,
       url: link.url,
@@ -289,11 +310,15 @@ export class RealStripeProvider implements StripeProvider {
     };
   }
 
-  async applyCredit(customerId: string, amountCents: number, description: string): Promise<StripeBalanceTransaction> {
+  async applyCredit(
+    customerId: string,
+    amountCents: number,
+    description: string,
+  ): Promise<StripeBalanceTransaction> {
     await this.call(() =>
       this.stripe.customers.update(
         customerId,
-        { balance: -(amountCents) }, // negative = credit in Stripe
+        { balance: -amountCents }, // negative = credit in Stripe
         { idempotencyKey: this.idempotencyKey() },
       ),
     );

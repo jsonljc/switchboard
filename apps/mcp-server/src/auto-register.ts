@@ -31,7 +31,7 @@ export function generateToolsFromRegistry(
     for (const action of actions) {
       if (manualActionTypes.has(action.actionType)) continue;
 
-      const toolName = action.actionType.replace(/[.\-]/g, "_");
+      const toolName = action.actionType.replace(/[.-]/g, "_");
       const inputSchema = normalizeSchema(action.parametersSchema);
       const annotations = deriveAnnotations(action);
 
@@ -56,9 +56,7 @@ export function generateToolsFromRegistry(
  * is `{ paramName: { type: "string" }, ... }` rather than a full JSON Schema
  * with `type: "object"` wrapper. We detect this and wrap it.
  */
-function normalizeSchema(
-  schema: Record<string, unknown>,
-): Record<string, unknown> {
+function normalizeSchema(schema: Record<string, unknown>): Record<string, unknown> {
   if (schema["type"] === "object" && schema["properties"]) {
     return schema;
   }
@@ -74,9 +72,7 @@ function normalizeSchema(
  * Derive MCP ToolAnnotations from an ActionDefinition.
  */
 function deriveAnnotations(action: ActionDefinition): ToolAnnotations {
-  const isHighRisk =
-    action.baseRiskCategory === "high" ||
-    action.baseRiskCategory === "critical";
+  const isHighRisk = action.baseRiskCategory === "high" || action.baseRiskCategory === "critical";
 
   return {
     readOnlyHint: false,

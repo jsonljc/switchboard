@@ -106,7 +106,7 @@ async function main() {
 
     // Rate limit by source IP
     const sourceIp = request.ip;
-    if (!await checkIngressRateLimit(sourceIp, rateLimitConfig)) {
+    if (!(await checkIngressRateLimit(sourceIp, rateLimitConfig))) {
       app.log.warn({ ip: sourceIp }, "Webhook rate limit exceeded");
       return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
     }
@@ -116,7 +116,7 @@ async function main() {
     const msg = payload["message"] as Record<string, unknown> | undefined;
     const cb = payload["callback_query"] as Record<string, unknown> | undefined;
     const nonceId = msg ? String(msg["message_id"]) : cb ? String(cb["id"]) : null;
-    if (nonceId && !await checkNonce(nonceId, rateLimitConfig.windowMs)) {
+    if (nonceId && !(await checkNonce(nonceId, rateLimitConfig.windowMs))) {
       app.log.warn({ nonceId }, "Duplicate webhook message, skipping");
       return reply.code(200).send({ ok: true });
     }
@@ -126,13 +126,15 @@ async function main() {
       return reply.code(200).send({ ok: true });
     } catch (err) {
       app.log.error(err, "Error handling webhook");
-      failedMessageStore?.record({
-        channel: "telegram",
-        rawPayload: request.body as Record<string, unknown>,
-        stage: "unknown",
-        errorMessage: err instanceof Error ? err.message : String(err),
-        errorStack: err instanceof Error ? err.stack : undefined,
-      }).catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
+      failedMessageStore
+        ?.record({
+          channel: "telegram",
+          rawPayload: request.body as Record<string, unknown>,
+          stage: "unknown",
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+        })
+        .catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
       return reply.code(200).send({ ok: true }); // Always 200 for Telegram
     }
   });
@@ -186,7 +188,9 @@ async function main() {
     // Verify request signature
     const managedAdapter = entry.runtime.getAdapter();
     if (managedAdapter.verifyRequest) {
-      const rawBody = (request as unknown as Record<string, unknown>).rawBody as string ?? JSON.stringify(request.body);
+      const rawBody =
+        ((request as unknown as Record<string, unknown>).rawBody as string) ??
+        JSON.stringify(request.body);
       const headers = request.headers as Record<string, string | undefined>;
       if (!managedAdapter.verifyRequest(rawBody, headers)) {
         app.log.warn({ webhookPath }, "Managed webhook request failed signature verification");
@@ -196,14 +200,17 @@ async function main() {
 
     // Rate limit by source IP
     const sourceIp = request.ip;
-    if (!await checkIngressRateLimit(sourceIp, rateLimitConfig)) {
+    if (!(await checkIngressRateLimit(sourceIp, rateLimitConfig))) {
       app.log.warn({ ip: sourceIp, webhookPath }, "Managed webhook rate limit exceeded");
       return reply.code(200).send({ ok: true });
     }
 
     // Nonce dedup
     const messageId = managedAdapter.extractMessageId(request.body);
-    if (messageId && !await checkNonce(`managed_${webhookId}_${messageId}`, rateLimitConfig.windowMs)) {
+    if (
+      messageId &&
+      !(await checkNonce(`managed_${webhookId}_${messageId}`, rateLimitConfig.windowMs))
+    ) {
       app.log.warn({ messageId, webhookPath }, "Duplicate managed webhook message, skipping");
       return reply.code(200).send({ ok: true });
     }
@@ -213,15 +220,17 @@ async function main() {
       return reply.code(200).send({ ok: true });
     } catch (err) {
       app.log.error(err, "Error handling managed webhook");
-      failedMessageStore?.record({
-        channel: entry.channel,
-        webhookPath,
-        organizationId: entry.orgId,
-        rawPayload: request.body as Record<string, unknown>,
-        stage: "unknown",
-        errorMessage: err instanceof Error ? err.message : String(err),
-        errorStack: err instanceof Error ? err.stack : undefined,
-      }).catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
+      failedMessageStore
+        ?.record({
+          channel: entry.channel,
+          webhookPath,
+          organizationId: entry.orgId,
+          rawPayload: request.body as Record<string, unknown>,
+          stage: "unknown",
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+        })
+        .catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
       return reply.code(200).send({ ok: true }); // Always 200 to prevent platform retries
     }
   });

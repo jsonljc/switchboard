@@ -33,7 +33,11 @@ export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => v
 
         const expiredState = transitionApproval(record.state, "expire");
         try {
-          await storage.approvals.updateState(record.request.id, expiredState, record.state.version);
+          await storage.approvals.updateState(
+            record.request.id,
+            expiredState,
+            record.state.version,
+          );
         } catch (err) {
           if (err instanceof StaleVersionError) continue; // Already transitioned
           throw err;
@@ -62,7 +66,10 @@ export function startApprovalExpiryJob(config: ApprovalExpiryJobConfig): () => v
           envelopeId: record.envelopeId,
         });
 
-        logger.info({ approvalId: record.request.id, envelopeId: record.envelopeId }, "Expired approval");
+        logger.info(
+          { approvalId: record.request.id, envelopeId: record.envelopeId },
+          "Expired approval",
+        );
       }
     } catch (err) {
       logger.error({ err }, "Error scanning approvals");

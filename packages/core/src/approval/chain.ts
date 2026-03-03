@@ -58,12 +58,14 @@ export function resolveDelegationChain(
     effectiveScope: string;
   }
 
-  const queue: BFSNode[] = [{
-    id: principalId,
-    chain: [principalId],
-    depth: 0,
-    effectiveScope: "*",
-  }];
+  const queue: BFSNode[] = [
+    {
+      id: principalId,
+      chain: [principalId],
+      depth: 0,
+      effectiveScope: "*",
+    },
+  ];
 
   const visited = new Set<string>();
   visited.add(principalId);

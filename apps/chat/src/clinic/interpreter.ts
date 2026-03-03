@@ -11,11 +11,7 @@ import {
   DIAGNOSTIC_INTENTS,
   DIAGNOSTIC_INTENT_TO_ACTION,
 } from "./types.js";
-import type {
-  ClassifyResult,
-  ClinicContext,
-  ReadIntentDescriptor,
-} from "./types.js";
+import type { ClassifyResult, ClinicContext, ReadIntentDescriptor } from "./types.js";
 import type { ModelRouter } from "./model-router-types.js";
 
 /** Maps write intents to cartridge action types. */
@@ -33,9 +29,9 @@ const MAX_CAMPAIGN_NAME_LENGTH = 80;
 /** Sanitize a campaign name before injecting into the LLM system prompt. */
 function sanitizeCampaignName(name: string): string {
   return name
-    .replace(/[\r\n]/g, " ")        // Strip newlines (prevent prompt structure escape)
-    .replace(/[<>]/g, "")           // Strip angle brackets (prevent XML-like tag injection)
-    .replace(/\{[A-Z_]+\}/g, "")   // Strip placeholder-like patterns
+    .replace(/[\r\n]/g, " ") // Strip newlines (prevent prompt structure escape)
+    .replace(/[<>]/g, "") // Strip angle brackets (prevent XML-like tag injection)
+    .replace(/\{[A-Z_]+\}/g, "") // Strip placeholder-like patterns
     .slice(0, MAX_CAMPAIGN_NAME_LENGTH)
     .trim();
 }
@@ -57,7 +53,8 @@ const FALLBACK_PATTERNS: Array<{
     extractSlots: (m) => ({ campaignRef: m[1]?.trim() }),
   },
   {
-    regex: /(?:set|change|adjust)\s+(?:the\s+)?budget\s+(?:for\s+)?['"]?(.+?)['"]?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
+    regex:
+      /(?:set|change|adjust)\s+(?:the\s+)?budget\s+(?:for\s+)?['"]?(.+?)['"]?\s+(?:to\s+)?\$?(\d+(?:\.\d+)?)/i,
     intent: AllowedIntent.ADJUST_BUDGET,
     extractSlots: (m) => ({ campaignRef: m[1]?.trim(), newBudget: parseFloat(m[2] ?? "0") }),
   },
@@ -93,7 +90,8 @@ const FALLBACK_PATTERNS: Array<{
     extractSlots: () => ({}),
   },
   {
-    regex: /(?:how\s+are|what's\s+wrong\s+with|analyze)\s+(?:my\s+)?(?:ads?|campaigns?|funnel|performance)/i,
+    regex:
+      /(?:how\s+are|what's\s+wrong\s+with|analyze)\s+(?:my\s+)?(?:ads?|campaigns?|funnel|performance)/i,
     intent: AllowedIntent.DIAGNOSE_FUNNEL,
     extractSlots: () => ({}),
   },
@@ -159,11 +157,7 @@ export class ClinicInterpreter extends LLMInterpreter {
   private clinicContext: ClinicContext;
   private modelRouter: ModelRouter | null;
 
-  constructor(
-    config: LLMConfig,
-    clinicContext: ClinicContext,
-    modelRouter?: ModelRouter,
-  ) {
+  constructor(config: LLMConfig, clinicContext: ClinicContext, modelRouter?: ModelRouter) {
     super({
       ...config,
       model: config.model || "claude-3-5-haiku-20241022",
@@ -176,17 +170,17 @@ export class ClinicInterpreter extends LLMInterpreter {
 
   /** Update campaign names for LLM grounding. Called by runtime on refresh. */
   updateCampaignNames(names: string[]): void {
-    this.clinicContext.campaignNames = names
-      .map(sanitizeCampaignName)
-      .filter((name) => {
-        if (name.length === 0) return false;
-        const check = detectPromptInjection(name);
-        if (check.detected) {
-          console.warn(`[Clinic] Filtered campaign name with injection pattern: "${name}" [${check.patterns.join(", ")}]`);
-          return false;
-        }
-        return true;
-      });
+    this.clinicContext.campaignNames = names.map(sanitizeCampaignName).filter((name) => {
+      if (name.length === 0) return false;
+      const check = detectPromptInjection(name);
+      if (check.detected) {
+        console.warn(
+          `[Clinic] Filtered campaign name with injection pattern: "${name}" [${check.patterns.join(", ")}]`,
+        );
+        return false;
+      }
+      return true;
+    });
   }
 
   async interpret(
@@ -266,13 +260,15 @@ export class ClinicInterpreter extends LLMInterpreter {
       ? this.clinicContext.campaignNames.map((n) => `- ${sanitizeCampaignName(n)}`).join("\n")
       : "(no campaigns loaded yet)";
 
-    const system = SYSTEM_PROMPT
-      .replace("{CAMPAIGN_NAMES}", campaignNames)
-      .replace("{AD_ACCOUNT_ID}", this.clinicContext.adAccountId);
+    const system = SYSTEM_PROMPT.replace("{CAMPAIGN_NAMES}", campaignNames).replace(
+      "{AD_ACCOUNT_ID}",
+      this.clinicContext.adAccountId,
+    );
 
     // Include recent conversation history for multi-turn context
     const recentMessages = conversationContext["recentMessages"] as
-      Array<{ role: string; text: string }> | undefined;
+      | Array<{ role: string; text: string }>
+      | undefined;
 
     let historyBlock = "";
     if (recentMessages && recentMessages.length > 1) {
@@ -290,13 +286,9 @@ export class ClinicInterpreter extends LLMInterpreter {
     return `${system}${historyBlock}\n<user_message>\n${text}\n</user_message>`;
   }
 
-  protected parseStructuredOutput(
-    rawText: string,
-    availableActions: string[],
-  ): unknown {
+  protected parseStructuredOutput(rawText: string, availableActions: string[]): unknown {
     // Extract JSON from response
-    const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) ??
-      rawText.match(/\{[\s\S]*\}/);
+    const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/) ?? rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("No JSON found in LLM output");
     }
@@ -354,14 +346,16 @@ export class ClinicInterpreter extends LLMInterpreter {
     // REVERT → system.undo
     if (intent === AllowedIntent.REVERT) {
       return {
-        proposals: [{
-          id: `prop_${randomUUID()}`,
-          actionType: "system.undo",
-          parameters: {},
-          evidence: "User requested undo/revert",
-          confidence,
-          originatingMessageId: "",
-        }],
+        proposals: [
+          {
+            id: `prop_${randomUUID()}`,
+            actionType: "system.undo",
+            parameters: {},
+            evidence: "User requested undo/revert",
+            confidence,
+            originatingMessageId: "",
+          },
+        ],
         needsClarification: false,
         clarificationQuestion: null,
         confidence,
@@ -371,14 +365,16 @@ export class ClinicInterpreter extends LLMInterpreter {
     // KILL_SWITCH → system.kill_switch
     if (intent === AllowedIntent.KILL_SWITCH) {
       return {
-        proposals: [{
-          id: `prop_${randomUUID()}`,
-          actionType: "system.kill_switch",
-          parameters: {},
-          evidence: "Emergency kill switch requested",
-          confidence,
-          originatingMessageId: "",
-        }],
+        proposals: [
+          {
+            id: `prop_${randomUUID()}`,
+            actionType: "system.kill_switch",
+            parameters: {},
+            evidence: "Emergency kill switch requested",
+            confidence,
+            originatingMessageId: "",
+          },
+        ],
         needsClarification: false,
         clarificationQuestion: null,
         confidence,
@@ -398,19 +394,21 @@ export class ClinicInterpreter extends LLMInterpreter {
       }
 
       return {
-        proposals: [{
-          id: `prop_${randomUUID()}`,
-          actionType,
-          parameters: {
-            platform: "meta",
-            entityId: this.clinicContext.adAccountId,
-            vertical: (slots["vertical"] as string) ?? "commerce",
-            periodDays: (slots["periodDays"] as number) ?? 7,
+        proposals: [
+          {
+            id: `prop_${randomUUID()}`,
+            actionType,
+            parameters: {
+              platform: "meta",
+              entityId: this.clinicContext.adAccountId,
+              vertical: (slots["vertical"] as string) ?? "commerce",
+              periodDays: (slots["periodDays"] as number) ?? 7,
+            },
+            evidence: `Diagnostic intent: ${intent}`,
+            confidence,
+            originatingMessageId: "",
           },
-          evidence: `Diagnostic intent: ${intent}`,
-          confidence,
-          originatingMessageId: "",
-        }],
+        ],
         needsClarification: false,
         clarificationQuestion: null,
         confidence,
@@ -437,14 +435,16 @@ export class ClinicInterpreter extends LLMInterpreter {
       if (slots["budgetChange"] !== undefined) parameters["budgetChange"] = slots["budgetChange"];
 
       return {
-        proposals: [{
-          id: `prop_${randomUUID()}`,
-          actionType,
-          parameters,
-          evidence: `Clinic intent: ${intent}`,
-          confidence,
-          originatingMessageId: "",
-        }],
+        proposals: [
+          {
+            id: `prop_${randomUUID()}`,
+            actionType,
+            parameters,
+            evidence: `Clinic intent: ${intent}`,
+            confidence,
+            originatingMessageId: "",
+          },
+        ],
         needsClarification: false,
         clarificationQuestion: null,
         confidence,
@@ -489,12 +489,16 @@ export class ClinicInterpreter extends LLMInterpreter {
           id,
           type: "optimize",
           objective: "Increase patient lead volume",
-          constraints: slots["maxCpl"] ? [{
-            field: "cpl",
-            operator: "lte",
-            value: Number(slots["maxCpl"]),
-            unit: "USD",
-          }] : [],
+          constraints: slots["maxCpl"]
+            ? [
+                {
+                  field: "cpl",
+                  operator: "lte",
+                  value: Number(slots["maxCpl"]),
+                  unit: "USD",
+                },
+              ]
+            : [],
           successMetrics: [{ name: "leads", direction: "increase" }],
           decomposable: true,
           entityRefs,
@@ -550,10 +554,7 @@ export class ClinicInterpreter extends LLMInterpreter {
   }
 
   /** Regex-based fallback when LLM budget is exceeded. */
-  private fallbackInterpret(
-    text: string,
-    availableActions: string[],
-  ): InterpreterResult {
+  private fallbackInterpret(text: string, availableActions: string[]): InterpreterResult {
     for (const pattern of FALLBACK_PATTERNS) {
       const match = text.match(pattern.regex);
       if (match) {
@@ -576,9 +577,9 @@ export class ClinicInterpreter extends LLMInterpreter {
       needsClarification: true,
       clarificationQuestion:
         "I'm running in limited mode right now. Please try a specific command like:\n" +
-        "- \"pause [campaign name]\"\n" +
-        "- \"set budget for [campaign] to $[amount]\"\n" +
-        "- \"how are my campaigns doing?\"",
+        '- "pause [campaign name]"\n' +
+        '- "set budget for [campaign] to $[amount]"\n' +
+        '- "how are my campaigns doing?"',
       confidence: 0,
       rawResponse: `[FALLBACK_NO_MATCH] ${text}`,
     };

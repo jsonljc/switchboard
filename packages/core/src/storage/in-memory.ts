@@ -91,7 +91,10 @@ export class InMemoryPolicyStore implements PolicyStore {
     return this.store.delete(id);
   }
 
-  async listActive(filter?: { cartridgeId?: string; organizationId?: string | null }): Promise<Policy[]> {
+  async listActive(filter?: {
+    cartridgeId?: string;
+    organizationId?: string | null;
+  }): Promise<Policy[]> {
     let results = [...this.store.values()].filter((p) => p.active);
 
     if (filter?.cartridgeId) {
@@ -104,9 +107,7 @@ export class InMemoryPolicyStore implements PolicyStore {
     // OR belong to the specified organization.
     if (filter?.organizationId !== undefined) {
       const orgId = filter.organizationId;
-      results = results.filter(
-        (p) => p.organizationId === null || p.organizationId === orgId,
-      );
+      results = results.filter((p) => p.organizationId === null || p.organizationId === orgId);
     }
 
     return results.sort((a, b) => a.priority - b.priority);
@@ -185,7 +186,12 @@ export class InMemoryIdentityStore implements IdentityStore {
 export class InMemoryApprovalStore implements ApprovalStore {
   private store = new Map<
     string,
-    { request: ApprovalRequest; state: ApprovalState; envelopeId: string; organizationId?: string | null }
+    {
+      request: ApprovalRequest;
+      state: ApprovalState;
+      envelopeId: string;
+      organizationId?: string | null;
+    }
   >();
 
   async save(approval: {
@@ -251,13 +257,13 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
       if (cmp < 0) {
         throw new Error(
           `Cannot register cartridge "${cartridgeId}" v${newVersion}: ` +
-          `would downgrade from v${existingVersion}`,
+            `would downgrade from v${existingVersion}`,
         );
       }
       if (cmp === 0) {
         throw new Error(
           `Cannot register cartridge "${cartridgeId}" v${newVersion}: ` +
-          `same version already registered. Unregister first to replace.`,
+            `same version already registered. Unregister first to replace.`,
         );
       }
     }
@@ -272,7 +278,7 @@ export class InMemoryCartridgeRegistry implements CartridgeRegistry {
           if (newAction.actionType === existingAction.actionType) {
             console.warn(
               `[CartridgeRegistry] Action type collision: "${newAction.actionType}" ` +
-              `is declared by both "${cartridgeId}" and "${existingId}"`,
+                `is declared by both "${cartridgeId}" and "${existingId}"`,
             );
           }
         }
@@ -382,9 +388,7 @@ function compareSemver(a: string, b: string): number {
 }
 
 export function matchActionTypePattern(pattern: string, actionType: string): boolean {
-  const regex = new RegExp(
-    "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$",
-  );
+  const regex = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
   return regex.test(actionType);
 }
 

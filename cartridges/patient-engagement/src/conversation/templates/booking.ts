@@ -13,7 +13,8 @@ export const bookingFlow: ConversationFlowDefinition = {
     {
       id: "intro",
       type: "message",
-      template: "Let's get your {{treatmentType}} appointment scheduled at {{clinicName}}, {{patientName}}.",
+      template:
+        "Let's get your {{treatmentType}} appointment scheduled at {{clinicName}}, {{patientName}}.",
     },
     {
       id: "preference_question",
@@ -41,7 +42,8 @@ export const bookingFlow: ConversationFlowDefinition = {
     {
       id: "confirmation",
       type: "message",
-      template: "Your appointment has been confirmed! You'll receive a reminder 24 hours before. Is there anything else I can help with?",
+      template:
+        "Your appointment has been confirmed! You'll receive a reminder 24 hours before. Is there anything else I can help with?",
     },
   ],
 };

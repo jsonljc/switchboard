@@ -15,7 +15,12 @@ export interface ChainVerificationJobConfig {
  * interval and signals any in-flight verification to not start new work.
  */
 export function startChainVerificationJob(config: ChainVerificationJobConfig): () => void {
-  const { ledger, intervalMs = 24 * 60 * 60 * 1000, onBrokenChain, logger = createLogger("chain-verify") } = config;
+  const {
+    ledger,
+    intervalMs = 24 * 60 * 60 * 1000,
+    onBrokenChain,
+    logger = createLogger("chain-verify"),
+  } = config;
 
   let stopped = false;
   let inFlightPromise: Promise<void> | null = null;

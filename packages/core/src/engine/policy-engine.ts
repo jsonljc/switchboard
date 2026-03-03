@@ -14,11 +14,7 @@ import type { EvaluationContext } from "./rule-evaluator.js";
 import { evaluateRule } from "./rule-evaluator.js";
 import { computeRiskScore, computeCompositeRiskAdjustment } from "./risk-scorer.js";
 import type { RiskScoringConfig, CompositeRiskConfig } from "./risk-scorer.js";
-import {
-  createTraceBuilder,
-  addCheck,
-  buildTrace,
-} from "./decision-trace.js";
+import { createTraceBuilder, addCheck, buildTrace } from "./decision-trace.js";
 import type { ResolvedIdentity } from "../identity/spec.js";
 import { formatSimulationResult } from "./simulator.js";
 import type { SimulationResult } from "./simulator.js";
@@ -71,19 +67,26 @@ export function evaluate(
 ): DecisionTrace {
   const { resolvedIdentity, guardrails, guardrailState, policies } = engineContext;
   const now = engineContext.now ?? new Date();
-  const builder = createTraceBuilder((evalContext.metadata["envelopeId"] ?? "unknown") as string, proposal.id);
+  const builder = createTraceBuilder(
+    (evalContext.metadata["envelopeId"] ?? "unknown") as string,
+    proposal.id,
+  );
 
   // Step 1: Forbidden behaviors
-  const isForbidden = resolvedIdentity.effectiveForbiddenBehaviors.includes(
-    proposal.actionType,
+  const isForbidden = resolvedIdentity.effectiveForbiddenBehaviors.includes(proposal.actionType);
+  addCheck(
+    builder,
+    "FORBIDDEN_BEHAVIOR",
+    {
+      behavior: proposal.actionType,
+      forbiddenList: resolvedIdentity.effectiveForbiddenBehaviors,
+    },
+    isForbidden
+      ? `Action type "${proposal.actionType}" is forbidden.`
+      : `Action type "${proposal.actionType}" is not in the forbidden list.`,
+    isForbidden,
+    isForbidden ? "deny" : "skip",
   );
-  addCheck(builder, "FORBIDDEN_BEHAVIOR", {
-    behavior: proposal.actionType,
-    forbiddenList: resolvedIdentity.effectiveForbiddenBehaviors,
-  }, isForbidden
-    ? `Action type "${proposal.actionType}" is forbidden.`
-    : `Action type "${proposal.actionType}" is not in the forbidden list.`,
-  isForbidden, isForbidden ? "deny" : "skip");
 
   if (isForbidden) {
     const riskScore = riskInput(engineContext, config);
@@ -94,36 +97,46 @@ export function evaluate(
   }
 
   // Step 2: Trust behaviors (fast path)
-  const isTrusted = resolvedIdentity.effectiveTrustBehaviors.includes(
-    proposal.actionType,
+  const isTrusted = resolvedIdentity.effectiveTrustBehaviors.includes(proposal.actionType);
+  addCheck(
+    builder,
+    "TRUST_BEHAVIOR",
+    {
+      behavior: proposal.actionType,
+      trustList: resolvedIdentity.effectiveTrustBehaviors,
+    },
+    isTrusted
+      ? `Action type "${proposal.actionType}" is pre-approved (trusted).`
+      : `Action type "${proposal.actionType}" is not in the trust list.`,
+    isTrusted,
+    isTrusted ? "allow" : "skip",
   );
-  addCheck(builder, "TRUST_BEHAVIOR", {
-    behavior: proposal.actionType,
-    trustList: resolvedIdentity.effectiveTrustBehaviors,
-  }, isTrusted
-    ? `Action type "${proposal.actionType}" is pre-approved (trusted).`
-    : `Action type "${proposal.actionType}" is not in the trust list.`,
-  isTrusted, isTrusted ? "allow" : "skip");
 
   // Step 2b: Competence trust (informational trace)
   if (engineContext.competenceAdjustments && engineContext.competenceAdjustments.length > 0) {
     for (const adj of engineContext.competenceAdjustments) {
-      addCheck(builder, "COMPETENCE_TRUST", {
-        principalId: adj.principalId,
-        actionType: adj.actionType,
-        score: adj.score,
-        shouldTrust: adj.shouldTrust,
-        shouldEscalate: adj.shouldEscalate,
-        successCount: adj.record.successCount,
-        failureCount: adj.record.failureCount,
-        rollbackCount: adj.record.rollbackCount,
-        consecutiveSuccesses: adj.record.consecutiveSuccesses,
-      }, adj.shouldTrust
-        ? `Competence earned: score ${adj.score.toFixed(1)} qualifies for auto-trust.`
-        : adj.shouldEscalate
-          ? `Competence low: score ${adj.score.toFixed(1)} suggests escalation.`
-          : `Competence tracking: score ${adj.score.toFixed(1)}.`,
-      adj.shouldTrust || adj.shouldEscalate, "skip");
+      addCheck(
+        builder,
+        "COMPETENCE_TRUST",
+        {
+          principalId: adj.principalId,
+          actionType: adj.actionType,
+          score: adj.score,
+          shouldTrust: adj.shouldTrust,
+          shouldEscalate: adj.shouldEscalate,
+          successCount: adj.record.successCount,
+          failureCount: adj.record.failureCount,
+          rollbackCount: adj.record.rollbackCount,
+          consecutiveSuccesses: adj.record.consecutiveSuccesses,
+        },
+        adj.shouldTrust
+          ? `Competence earned: score ${adj.score.toFixed(1)} qualifies for auto-trust.`
+          : adj.shouldEscalate
+            ? `Competence low: score ${adj.score.toFixed(1)} suggests escalation.`
+            : `Competence tracking: score ${adj.score.toFixed(1)}.`,
+        adj.shouldTrust || adj.shouldEscalate,
+        "skip",
+      );
     }
   }
 
@@ -137,15 +150,21 @@ export function evaluate(
       const inWindow = now.getTime() - windowStart < rl.windowMs;
       const exceeded = inWindow && count >= rl.maxActions;
 
-      addCheck(builder, "RATE_LIMIT", {
-        scope: rl.scope,
-        maxActions: rl.maxActions,
-        windowMs: rl.windowMs,
-        currentCount: count,
-      }, exceeded
-        ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
-        : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
-      exceeded, exceeded ? "deny" : "skip");
+      addCheck(
+        builder,
+        "RATE_LIMIT",
+        {
+          scope: rl.scope,
+          maxActions: rl.maxActions,
+          windowMs: rl.windowMs,
+          currentCount: count,
+        },
+        exceeded
+          ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
+          : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
+        exceeded,
+        exceeded ? "deny" : "skip",
+      );
 
       if (exceeded) {
         const riskScoreResult = riskInput(engineContext, config);
@@ -166,19 +185,26 @@ export function evaluate(
         const elapsedMs = now.getTime() - (lastTime ?? 0);
         const remainingMs = cd.cooldownMs - elapsedMs;
         const remainingMinutes = Math.ceil(remainingMs / 60000);
-        const cooldownExpiresAt = lastTime !== undefined ? new Date(lastTime + cd.cooldownMs) : null;
+        const cooldownExpiresAt =
+          lastTime !== undefined ? new Date(lastTime + cd.cooldownMs) : null;
 
-        addCheck(builder, "COOLDOWN", {
-          actionType: cd.actionType,
-          scope: cd.scope,
-          cooldownMs: cd.cooldownMs,
-          lastActionTime: lastTime ?? null,
-          entityKey,
-          cooldownExpiresAt: cooldownExpiresAt?.toISOString() ?? null,
-        }, inCooldown
-          ? `Cooldown active: entity was modified ${Math.round(elapsedMs / 60000)} minutes ago. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}.`
-          : `No cooldown active for this entity.`,
-        inCooldown, inCooldown ? "deny" : "skip");
+        addCheck(
+          builder,
+          "COOLDOWN",
+          {
+            actionType: cd.actionType,
+            scope: cd.scope,
+            cooldownMs: cd.cooldownMs,
+            lastActionTime: lastTime ?? null,
+            entityKey,
+            cooldownExpiresAt: cooldownExpiresAt?.toISOString() ?? null,
+          },
+          inCooldown
+            ? `Cooldown active: entity was modified ${Math.round(elapsedMs / 60000)} minutes ago. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}.`
+            : `No cooldown active for this entity.`,
+          inCooldown,
+          inCooldown ? "deny" : "skip",
+        );
 
         if (inCooldown) {
           const riskScoreResult = riskInput(engineContext, config);
@@ -196,12 +222,18 @@ export function evaluate(
       const isProtected = entityId === pe.entityId;
 
       if (isProtected) {
-        addCheck(builder, "PROTECTED_ENTITY", {
-          entityType: pe.entityType,
-          entityId: pe.entityId,
-          reason: pe.reason,
-        }, `Protected entity: ${pe.reason}`,
-        true, "deny");
+        addCheck(
+          builder,
+          "PROTECTED_ENTITY",
+          {
+            entityType: pe.entityType,
+            entityId: pe.entityId,
+            reason: pe.reason,
+          },
+          `Protected entity: ${pe.reason}`,
+          true,
+          "deny",
+        );
 
         const riskScoreResult = riskInput(engineContext, config);
         builder.computedRiskScore = riskScoreResult;
@@ -213,23 +245,30 @@ export function evaluate(
   }
 
   // Step 6: Spend limits
-  const spendAmount = typeof proposal.parameters["amount"] === "number"
-    ? proposal.parameters["amount"]
-    : typeof proposal.parameters["budgetChange"] === "number"
-      ? proposal.parameters["budgetChange"]
-      : null;
+  const spendAmount =
+    typeof proposal.parameters["amount"] === "number"
+      ? proposal.parameters["amount"]
+      : typeof proposal.parameters["budgetChange"] === "number"
+        ? proposal.parameters["budgetChange"]
+        : null;
 
   if (spendAmount !== null) {
     const limits = resolvedIdentity.effectiveSpendLimits;
     const perActionLimit = limits.perAction;
 
     if (perActionLimit !== null && Math.abs(spendAmount) > perActionLimit) {
-      addCheck(builder, "SPEND_LIMIT", {
-        field: "perAction",
-        actualValue: Math.abs(spendAmount),
-        threshold: perActionLimit,
-      }, `Spend limit exceeded: $${Math.abs(spendAmount)} exceeds per-action limit of $${perActionLimit}.`,
-      true, "deny");
+      addCheck(
+        builder,
+        "SPEND_LIMIT",
+        {
+          field: "perAction",
+          actualValue: Math.abs(spendAmount),
+          threshold: perActionLimit,
+        },
+        `Spend limit exceeded: $${Math.abs(spendAmount)} exceeds per-action limit of $${perActionLimit}.`,
+        true,
+        "deny",
+      );
 
       const riskScoreResult = riskInput(engineContext, config);
       builder.computedRiskScore = riskScoreResult;
@@ -239,12 +278,18 @@ export function evaluate(
     }
 
     if (perActionLimit !== null) {
-      addCheck(builder, "SPEND_LIMIT", {
-        field: "perAction",
-        actualValue: Math.abs(spendAmount),
-        threshold: perActionLimit,
-      }, `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
-      false, "skip");
+      addCheck(
+        builder,
+        "SPEND_LIMIT",
+        {
+          field: "perAction",
+          actualValue: Math.abs(spendAmount),
+          threshold: perActionLimit,
+        },
+        `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
+        false,
+        "skip",
+      );
     }
 
     // Step 6b: Time-windowed spend limits (daily/weekly/monthly)
@@ -264,16 +309,22 @@ export function evaluate(
         const projected = wc.cumulative + absSpend;
         const exceeded = projected > wc.limit;
 
-        addCheck(builder, "SPEND_LIMIT", {
-          field: wc.field,
-          currentCumulative: wc.cumulative,
-          proposedSpend: absSpend,
-          projectedTotal: projected,
-          threshold: wc.limit,
-        }, exceeded
-          ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
-          : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
-        exceeded, exceeded ? "deny" : "skip");
+        addCheck(
+          builder,
+          "SPEND_LIMIT",
+          {
+            field: wc.field,
+            currentCumulative: wc.cumulative,
+            proposedSpend: absSpend,
+            projectedTotal: projected,
+            threshold: wc.limit,
+          },
+          exceeded
+            ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
+            : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
+          exceeded,
+          exceeded ? "deny" : "skip",
+        );
 
         if (exceeded) {
           const riskScoreResult = riskInput(engineContext, config);
@@ -303,16 +354,22 @@ export function evaluate(
 
     const ruleResult = evaluateRule(policy.rule, evalContext);
 
-    addCheck(builder, "POLICY_RULE", {
-      ruleId: policy.id,
-      ruleName: policy.name,
-      effect: policy.effect,
-      matched: ruleResult.matched,
-      conditionResults: ruleResult.conditionResults,
-    }, ruleResult.matched
-      ? `Policy "${policy.name}" matched: effect is ${policy.effect}.`
-      : `Policy "${policy.name}" did not match.`,
-    ruleResult.matched, ruleResult.matched ? mapPolicyEffect(policy.effect) : "skip");
+    addCheck(
+      builder,
+      "POLICY_RULE",
+      {
+        ruleId: policy.id,
+        ruleName: policy.name,
+        effect: policy.effect,
+        matched: ruleResult.matched,
+        conditionResults: ruleResult.conditionResults,
+      },
+      ruleResult.matched
+        ? `Policy "${policy.name}" matched: effect is ${policy.effect}.`
+        : `Policy "${policy.name}" did not match.`,
+      ruleResult.matched,
+      ruleResult.matched ? mapPolicyEffect(policy.effect) : "skip",
+    );
 
     if (ruleResult.matched) {
       if (policy.effect === "deny") {
@@ -351,13 +408,19 @@ export function evaluate(
 
   const effectiveRiskCategory = policyRiskOverride ?? riskScoreResult.category;
 
-  addCheck(builder, "RISK_SCORING", {
-    rawScore: riskScoreResult.rawScore,
-    category: riskScoreResult.category,
-    effectiveCategory: effectiveRiskCategory,
-    factors: riskScoreResult.factors,
-  }, `Risk score: ${riskScoreResult.rawScore.toFixed(1)} (${effectiveRiskCategory}).`,
-  true, "skip");
+  addCheck(
+    builder,
+    "RISK_SCORING",
+    {
+      rawScore: riskScoreResult.rawScore,
+      category: riskScoreResult.category,
+      effectiveCategory: effectiveRiskCategory,
+      factors: riskScoreResult.factors,
+    },
+    `Risk score: ${riskScoreResult.rawScore.toFixed(1)} (${effectiveRiskCategory}).`,
+    true,
+    "skip",
+  );
 
   // Step 8b: Composite risk adjustment
   let finalRiskCategory = effectiveRiskCategory;
@@ -370,17 +433,23 @@ export function evaluate(
 
     const categoryChanged = adjustedScore.category !== riskScoreResult.category;
 
-    addCheck(builder, "COMPOSITE_RISK", {
-      originalScore: riskScoreResult.rawScore,
-      adjustedScore: adjustedScore.rawScore,
-      originalCategory: riskScoreResult.category,
-      adjustedCategory: adjustedScore.category,
-      compositeFactors,
-      context: engineContext.compositeContext,
-    }, categoryChanged
-      ? `Composite risk adjustment: score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)} (${riskScoreResult.category} → ${adjustedScore.category}).`
-      : `Composite risk check: no category change (score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)}).`,
-    categoryChanged, "skip");
+    addCheck(
+      builder,
+      "COMPOSITE_RISK",
+      {
+        originalScore: riskScoreResult.rawScore,
+        adjustedScore: adjustedScore.rawScore,
+        originalCategory: riskScoreResult.category,
+        adjustedCategory: adjustedScore.category,
+        compositeFactors,
+        context: engineContext.compositeContext,
+      },
+      categoryChanged
+        ? `Composite risk adjustment: score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)} (${riskScoreResult.category} → ${adjustedScore.category}).`
+        : `Composite risk check: no category change (score ${riskScoreResult.rawScore.toFixed(1)} → ${adjustedScore.rawScore.toFixed(1)}).`,
+      categoryChanged,
+      "skip",
+    );
 
     if (categoryChanged) {
       builder.computedRiskScore = adjustedScore;
@@ -389,25 +458,37 @@ export function evaluate(
   }
 
   // Step 9: Determine approval requirement
-  let approvalReq: ApprovalRequirement = policyApprovalOverride
-    ?? resolvedIdentity.effectiveRiskTolerance[finalRiskCategory];
+  let approvalReq: ApprovalRequirement =
+    policyApprovalOverride ?? resolvedIdentity.effectiveRiskTolerance[finalRiskCategory];
 
   // Step 9b: System-wide risk posture override
   const posture = engineContext.systemRiskPosture ?? "normal";
   if (posture === "critical") {
     approvalReq = "mandatory";
-    addCheck(builder, "SYSTEM_POSTURE", {
-      posture,
-      previousApproval: approvalReq,
-    }, `System posture is CRITICAL: all actions require mandatory approval.`,
-    true, "skip");
+    addCheck(
+      builder,
+      "SYSTEM_POSTURE",
+      {
+        posture,
+        previousApproval: approvalReq,
+      },
+      `System posture is CRITICAL: all actions require mandatory approval.`,
+      true,
+      "skip",
+    );
   } else if (posture === "elevated" && (approvalReq === "none" || approvalReq === "standard")) {
     approvalReq = "elevated";
-    addCheck(builder, "SYSTEM_POSTURE", {
-      posture,
-      previousApproval: approvalReq,
-    }, `System posture is ELEVATED: approval escalated to elevated.`,
-    true, "skip");
+    addCheck(
+      builder,
+      "SYSTEM_POSTURE",
+      {
+        posture,
+        previousApproval: approvalReq,
+      },
+      `System posture is ELEVATED: approval escalated to elevated.`,
+      true,
+      "skip",
+    );
   }
 
   builder.approvalRequired = approvalReq;
@@ -435,27 +516,32 @@ export function simulate(
   return formatSimulationResult(trace);
 }
 
-function riskInput(
-  engineContext: PolicyEngineContext,
-  config?: PolicyEngineConfig,
-) {
+function riskInput(engineContext: PolicyEngineContext, config?: PolicyEngineConfig) {
   if (engineContext.riskInput) {
     return computeRiskScore(engineContext.riskInput, config?.riskScoringConfig);
   }
-  return computeRiskScore({
-    baseRisk: "low",
-    exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-    reversibility: "full",
-    sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-  }, config?.riskScoringConfig);
+  return computeRiskScore(
+    {
+      baseRisk: "low",
+      exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+      reversibility: "full",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+    },
+    config?.riskScoringConfig,
+  );
 }
 
 function mapPolicyEffect(effect: string): "allow" | "deny" | "modify" | "skip" {
   switch (effect) {
-    case "allow": return "allow";
-    case "deny": return "deny";
-    case "modify": return "modify";
-    case "require_approval": return "allow";
-    default: return "skip";
+    case "allow":
+      return "allow";
+    case "deny":
+      return "deny";
+    case "modify":
+      return "modify";
+    case "require_approval":
+      return "allow";
+    default:
+      return "skip";
   }
 }

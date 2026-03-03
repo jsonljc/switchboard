@@ -19,7 +19,7 @@ export function setConnection(
   platform: PlatformType,
   credentials: PlatformCredentials,
   accountName?: string,
-  entityLevels?: EntityLevel[]
+  entityLevels?: EntityLevel[],
 ): void {
   session.connections.set(platform, {
     platform,
@@ -35,7 +35,7 @@ export function setConnectionError(
   session: SessionState,
   platform: PlatformType,
   credentials: PlatformCredentials,
-  error: string
+  error: string,
 ): void {
   session.connections.set(platform, {
     platform,
@@ -48,14 +48,14 @@ export function setConnectionError(
 
 export function getConnection(
   session: SessionState,
-  platform: PlatformType
+  platform: PlatformType,
 ): ConnectionState | undefined {
   return session.connections.get(platform);
 }
 
 export function getCredentials(
   session: SessionState,
-  platform: PlatformType
+  platform: PlatformType,
 ): PlatformCredentials | undefined {
   return session.connections.get(platform)?.credentials;
 }

@@ -12,9 +12,7 @@ export const DEFAULT_CRM_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "crm.contact.update" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "crm.contact.update" }],
     },
     effect: "require_approval",
     approvalRequirement: "standard",
@@ -53,9 +51,7 @@ export const DEFAULT_CRM_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "crm.deal.create" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "crm.deal.create" }],
     },
     effect: "require_approval",
     approvalRequirement: "standard",

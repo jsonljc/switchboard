@@ -1,0 +1,103 @@
+# Switchboard — Project Rules for Claude Code
+
+## Architecture
+
+Switchboard is a TypeScript monorepo using pnpm workspaces. The dependency layers are strictly ordered — **NEVER VIOLATE** these import rules:
+
+```
+schemas        → no @switchboard/* imports (leaf package)
+cartridge-sdk  → may import @switchboard/schemas only
+core           → may import @switchboard/schemas, @switchboard/cartridge-sdk
+db             → may import @switchboard/schemas, @switchboard/core
+apps/*         → may import any @switchboard/* package
+cartridges/*   → may import @switchboard/schemas, @switchboard/cartridge-sdk, @switchboard/core (NEVER db or apps)
+```
+
+Circular dependencies between packages are **forbidden**.
+
+### Package Layout
+
+```
+packages/schemas         — Zod schemas, shared types
+packages/cartridge-sdk   — Cartridge interface & base classes
+packages/core            — Orchestrator, routing, pipeline logic
+packages/db              — Prisma client, store implementations
+apps/api                 — Fastify REST API server
+apps/chat                — Chat/webhook server (Telegram, Slack, WhatsApp)
+apps/dashboard           — Next.js admin dashboard
+apps/mcp-server          — MCP protocol server
+cartridges/*             — Domain-specific cartridge implementations
+```
+
+## Build / Test / Lint Commands
+
+```bash
+pnpm build              # Build all packages (Turbo)
+pnpm lint               # Lint all packages
+pnpm test               # Run all tests
+pnpm test -- --coverage # Run tests with coverage report
+pnpm typecheck           # TypeScript type checking
+pnpm format:check        # Check Prettier formatting
+
+# Run a single package's tests
+pnpm --filter @switchboard/core test
+
+# Database
+pnpm db:generate         # Generate Prisma client
+pnpm db:migrate          # Run migrations
+pnpm db:seed             # Seed database
+```
+
+## Code Conventions
+
+- **ESM only** — all packages use ES modules with `"type": "module"`
+- **`.js` extensions** — use `.js` extensions in relative imports (TypeScript resolves them)
+- **Unused variables** — prefix with `_` (e.g., `_unused`); the linter enforces this
+- **No `console.log`** — use `console.warn` or `console.error` (or a logger). `no-console` rule is active
+- **No `any`** — avoid `@typescript-eslint/no-explicit-any`; use proper types or `unknown`
+- **Prettier** — formatting is enforced (semi, double quotes, 2-space indent, trailing commas, 100 char width)
+
+## Testing Requirements
+
+- Every new module or feature **must** include tests
+- Run `pnpm test` and `pnpm typecheck` before committing
+- Coverage thresholds are enforced: statements 60%, branches 50%, functions 55%, lines 60%
+- Test files use the pattern `*.test.ts` and are co-located with source files
+
+## Commit Message Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add webhook retry logic
+fix: handle null provider response
+chore: update dependencies
+docs: clarify API authentication flow
+refactor: extract validation into shared util
+test: add coverage for orchestrator edge cases
+```
+
+The commit message is validated by commitlint on every commit. Non-conforming messages are **rejected**.
+
+## Environment Variables
+
+See `.env.example` for the full list. Key variables:
+
+| Variable                                | Purpose                                |
+| --------------------------------------- | -------------------------------------- |
+| `DATABASE_URL`                          | PostgreSQL connection string           |
+| `REDIS_URL`                             | Redis for rate limiting, queues        |
+| `PORT` / `CHAT_PORT` / `DASHBOARD_PORT` | Server ports (3000 / 3001 / 3002)      |
+| `API_KEYS`                              | Comma-separated API keys for auth      |
+| `API_KEY_ENCRYPTION_SECRET`             | Encryption secret for stored API keys  |
+| `NEXTAUTH_SECRET`                       | NextAuth session secret                |
+| `CREDENTIALS_ENCRYPTION_KEY`            | Encrypt stored third-party credentials |
+
+Never commit `.env` files or secrets to the repository.
+
+## Pre-Commit Hooks
+
+Husky runs these hooks automatically:
+
+- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files)
+- **commit-msg**: commitlint (validates conventional commit format)

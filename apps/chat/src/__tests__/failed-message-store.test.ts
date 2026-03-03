@@ -225,8 +225,8 @@ describe("FailedMessageStore", () => {
   describe("getStats", () => {
     it("returns aggregate counts by status", async () => {
       prisma.failedMessage.count
-        .mockResolvedValueOnce(5)   // pending
-        .mockResolvedValueOnce(2)   // exhausted
+        .mockResolvedValueOnce(5) // pending
+        .mockResolvedValueOnce(2) // exhausted
         .mockResolvedValueOnce(10); // resolved
 
       const stats = await store.getStats();

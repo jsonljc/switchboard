@@ -24,19 +24,14 @@ import { brandFunnel as tiktokBrandFunnel } from "./tiktok/funnels/brand.js";
 
 // Benchmarks (platform-agnostic defaults)
 import { commerceBenchmarks } from "../verticals/commerce/benchmarks.js";
-import {
-  leadgenBenchmarks,
-  createLeadgenBenchmarks,
-} from "../verticals/leadgen/benchmarks.js";
+import { leadgenBenchmarks, createLeadgenBenchmarks } from "../verticals/leadgen/benchmarks.js";
 import { brandBenchmarks } from "../verticals/brand/benchmarks.js";
 
 // ---------------------------------------------------------------------------
 // Client factory
 // ---------------------------------------------------------------------------
 
-export function createPlatformClient(
-  credentials: PlatformCredentials
-): PlatformClient {
+export function createPlatformClient(credentials: PlatformCredentials): PlatformClient {
   switch (credentials.platform) {
     case "meta":
       return new MetaApiClient({ accessToken: credentials.accessToken });
@@ -68,7 +63,7 @@ export interface ResolveFunnelOptions {
 export function resolveFunnel(
   platform: PlatformType,
   vertical: VerticalType,
-  options?: ResolveFunnelOptions
+  options?: ResolveFunnelOptions,
 ): FunnelSchema {
   if (vertical === "commerce") {
     switch (platform) {
@@ -105,9 +100,7 @@ export function resolveFunnel(
     }
   }
 
-  throw new Error(
-    `No funnel schema for platform "${platform}" + vertical "${vertical}"`
-  );
+  throw new Error(`No funnel schema for platform "${platform}" + vertical "${vertical}"`);
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +110,7 @@ export function resolveFunnel(
 export function resolveBenchmarks(
   _platform: PlatformType,
   vertical: VerticalType,
-  options?: ResolveFunnelOptions
+  options?: ResolveFunnelOptions,
 ): VerticalBenchmarks {
   switch (vertical) {
     case "commerce":

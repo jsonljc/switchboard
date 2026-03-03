@@ -21,12 +21,7 @@ export function canApprove(
     return false;
   }
 
-  const result = resolveDelegationChain(
-    principal.id,
-    approverIds,
-    delegations,
-    { now },
-  );
+  const result = resolveDelegationChain(principal.id, approverIds, delegations, { now });
 
   return result.authorized;
 }
@@ -48,10 +43,5 @@ export function canApproveWithChain(
   }
 
   // Chain-based delegation resolution
-  return resolveDelegationChain(
-    principal.id,
-    approverIds,
-    delegations,
-    { now },
-  );
+  return resolveDelegationChain(principal.id, approverIds, delegations, { now });
 }

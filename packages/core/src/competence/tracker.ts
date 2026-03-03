@@ -86,19 +86,13 @@ export class CompetenceTracker {
 
     record.failureCount += 1;
     record.consecutiveSuccesses = 0;
-    record.score = Math.max(
-      record.score - thresholds.failurePoints,
-      thresholds.scoreFloor,
-    );
+    record.score = Math.max(record.score - thresholds.failurePoints, thresholds.scoreFloor);
     record.lastActivityAt = new Date();
     record.lastDecayAppliedAt = new Date();
     record.updatedAt = new Date();
 
     // Check demotion
-    if (
-      previousScore >= thresholds.demotionScore &&
-      record.score < thresholds.demotionScore
-    ) {
+    if (previousScore >= thresholds.demotionScore && record.score < thresholds.demotionScore) {
       const event: CompetenceEvent = {
         type: "demoted",
         timestamp: new Date(),
@@ -129,19 +123,13 @@ export class CompetenceTracker {
 
     record.rollbackCount += 1;
     record.consecutiveSuccesses = 0;
-    record.score = Math.max(
-      record.score - thresholds.rollbackPoints,
-      thresholds.scoreFloor,
-    );
+    record.score = Math.max(record.score - thresholds.rollbackPoints, thresholds.scoreFloor);
     record.lastActivityAt = new Date();
     record.lastDecayAppliedAt = new Date();
     record.updatedAt = new Date();
 
     // Check demotion
-    if (
-      previousScore >= thresholds.demotionScore &&
-      record.score < thresholds.demotionScore
-    ) {
+    if (previousScore >= thresholds.demotionScore && record.score < thresholds.demotionScore) {
       const event: CompetenceEvent = {
         type: "demoted",
         timestamp: new Date(),

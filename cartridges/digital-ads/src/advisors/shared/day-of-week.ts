@@ -27,7 +27,7 @@ export const dayOfWeekAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (
     !context?.dailyBreakdowns ||
@@ -101,11 +101,11 @@ export const dayOfWeekAdvisor: FindingAdvisor = (
   const weekendSpend = [0, 6].reduce((sum, d) => sum + (currentByDay[d]?.spend ?? 0), 0);
   const weekdayConversions = [1, 2, 3, 4, 5].reduce(
     (sum, d) => sum + (currentByDay[d]?.conversions ?? 0),
-    0
+    0,
   );
   const weekendConversions = [0, 6].reduce(
     (sum, d) => sum + (currentByDay[d]?.conversions ?? 0),
-    0
+    0,
   );
 
   if (weekdaySpend > 0 && weekendSpend > 0 && weekdayConversions > 0 && weekendConversions > 0) {
@@ -150,7 +150,7 @@ export const dayOfWeekAdvisor: FindingAdvisor = (
 };
 
 function groupByDayOfWeek(
-  daily: Array<{ dayOfWeek: number; spend: number; conversions: number }>
+  daily: Array<{ dayOfWeek: number; spend: number; conversions: number }>,
 ): Record<number, { spend: number; conversions: number }> {
   const result: Record<number, { spend: number; conversions: number }> = {};
 

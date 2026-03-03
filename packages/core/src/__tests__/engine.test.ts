@@ -243,9 +243,7 @@ describe("Rule Evaluator", () => {
   it("in: matches when field is in the expected array", () => {
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "cartridgeId", operator: "in", value: ["google-ads", "meta-ads"] },
-      ],
+      conditions: [{ field: "cartridgeId", operator: "in", value: ["google-ads", "meta-ads"] }],
     };
     expect(evaluateRule(rule, ctx).matched).toBe(true);
   });
@@ -253,9 +251,7 @@ describe("Rule Evaluator", () => {
   it("not_in: matches when field is not in the expected array", () => {
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "cartridgeId", operator: "not_in", value: ["meta-ads", "tiktok-ads"] },
-      ],
+      conditions: [{ field: "cartridgeId", operator: "not_in", value: ["meta-ads", "tiktok-ads"] }],
     };
     expect(evaluateRule(rule, ctx).matched).toBe(true);
   });
@@ -263,9 +259,7 @@ describe("Rule Evaluator", () => {
   it("contains: matches when string field includes substring", () => {
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "contains", value: "update" },
-      ],
+      conditions: [{ field: "actionType", operator: "contains", value: "update" }],
     };
     expect(evaluateRule(rule, ctx).matched).toBe(true);
   });
@@ -273,9 +267,7 @@ describe("Rule Evaluator", () => {
   it("matches: matches when string field matches regex", () => {
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "matches", value: "^campaign\\." },
-      ],
+      conditions: [{ field: "actionType", operator: "matches", value: "^campaign\\." }],
     };
     expect(evaluateRule(rule, ctx).matched).toBe(true);
   });
@@ -330,18 +322,14 @@ describe("Rule Evaluator", () => {
   it("NOT composition: inverts the inner result", () => {
     const rule: PolicyRule = {
       composition: "NOT",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "account.delete" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "account.delete" }],
     };
     // Inner is false (does not match), so NOT makes it true
     expect(evaluateRule(rule, ctx).matched).toBe(true);
 
     const ruleMatching: PolicyRule = {
       composition: "NOT",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "campaign.update_budget" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "campaign.update_budget" }],
     };
     // Inner is true, so NOT makes it false
     expect(evaluateRule(ruleMatching, ctx).matched).toBe(false);
@@ -351,9 +339,7 @@ describe("Rule Evaluator", () => {
     const ruleCtx = makeEvalContext({ parameters: { amount: 750 } });
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "parameters.amount", operator: "gte", value: 500 },
-      ],
+      conditions: [{ field: "parameters.amount", operator: "gte", value: 500 }],
     };
     expect(evaluateRule(rule, ruleCtx).matched).toBe(true);
   });
@@ -369,9 +355,7 @@ describe("Rule Evaluator", () => {
   it("nested child rules: evaluates children recursively", () => {
     const rule: PolicyRule = {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "campaign.update_budget" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "campaign.update_budget" }],
       children: [
         {
           composition: "OR",
@@ -525,9 +509,9 @@ describe("Identity + Overlay Merging", () => {
       overrides: {
         riskTolerance: {
           none: "none",
-          low: "standard",       // more restrictive than "none"
-          medium: "elevated",    // more restrictive than "standard"
-          high: "mandatory",     // more restrictive than "elevated"
+          low: "standard", // more restrictive than "none"
+          medium: "elevated", // more restrictive than "standard"
+          high: "mandatory", // more restrictive than "elevated"
           critical: "mandatory",
         },
       },
@@ -553,9 +537,9 @@ describe("Identity + Overlay Merging", () => {
       overrides: {
         riskTolerance: {
           none: "none",
-          low: "none",          // less restrictive
-          medium: "standard",   // less restrictive
-          high: "elevated",     // less restrictive
+          low: "none", // less restrictive
+          medium: "standard", // less restrictive
+          high: "elevated", // less restrictive
           critical: "mandatory",
         },
       },
@@ -599,12 +583,14 @@ describe("Identity + Overlay Merging", () => {
     // Create a time window for the current day/hour
     const now = new Date("2025-06-15T14:30:00Z"); // Sunday=0, but this is a Sunday
     const dayOfWeek = now.getDay(); // 0 for Sunday
-    const hour = now.getHours();    // 14
+    const hour = now.getHours(); // 14
 
     const activeOverlay = makeOverlay({
       id: "overlay-active",
       conditions: {
-        timeWindows: [{ dayOfWeek: [dayOfWeek], startHour: hour, endHour: hour + 1, timezone: "UTC" }],
+        timeWindows: [
+          { dayOfWeek: [dayOfWeek], startHour: hour, endHour: hour + 1, timezone: "UTC" },
+        ],
       },
       overrides: { additionalForbiddenBehaviors: ["test.action"] },
     });
@@ -612,7 +598,9 @@ describe("Identity + Overlay Merging", () => {
     const inactiveOverlay = makeOverlay({
       id: "overlay-inactive",
       conditions: {
-        timeWindows: [{ dayOfWeek: [dayOfWeek], startHour: hour + 5, endHour: hour + 6, timezone: "UTC" }],
+        timeWindows: [
+          { dayOfWeek: [dayOfWeek], startHour: hour + 5, endHour: hour + 6, timezone: "UTC" },
+        ],
       },
       overrides: { additionalForbiddenBehaviors: ["other.action"] },
     });
@@ -1074,11 +1062,7 @@ describe("ActionPlan Evaluator", () => {
       summary: "Test plan",
       proposalOrder: ["a1", "a2", "a3"],
     };
-    const decisions = [
-      makeTrace("a1", "allow"),
-      makeTrace("a2", "deny"),
-      makeTrace("a3", "allow"),
-    ];
+    const decisions = [makeTrace("a1", "allow"), makeTrace("a2", "deny"), makeTrace("a3", "allow")];
 
     const result = evaluatePlan(plan, decisions);
     expect(result.planDecision).toBe("deny");
@@ -1127,11 +1111,7 @@ describe("ActionPlan Evaluator", () => {
       summary: null,
       proposalOrder: ["a1", "a2", "a3"],
     };
-    const decisions = [
-      makeTrace("a1", "allow"),
-      makeTrace("a2", "deny"),
-      makeTrace("a3", "allow"),
-    ];
+    const decisions = [makeTrace("a1", "allow"), makeTrace("a2", "deny"), makeTrace("a3", "allow")];
     const result = evaluatePlan(plan, decisions);
     expect(result.planDecision).toBe("partial");
     expect(result.perProposal.get("a1")).toBe("allow");
@@ -1482,9 +1462,7 @@ describe("Policy Engine", () => {
       effect: "deny",
       rule: {
         composition: "AND",
-        conditions: [
-          { field: "actionType", operator: "eq", value: "campaign.update_budget" },
-        ],
+        conditions: [{ field: "actionType", operator: "eq", value: "campaign.update_budget" }],
       },
     });
 
@@ -1494,9 +1472,9 @@ describe("Policy Engine", () => {
 
     const trace = evaluate(proposal, ctx, engineCtx);
     expect(trace.finalDecision).toBe("deny");
-    expect(trace.checks.some(
-      (c) => c.checkCode === "POLICY_RULE" && c.matched && c.effect === "deny",
-    )).toBe(true);
+    expect(
+      trace.checks.some((c) => c.checkCode === "POLICY_RULE" && c.matched && c.effect === "deny"),
+    ).toBe(true);
   });
 
   it("risk scoring determines approval requirement", () => {
@@ -1549,9 +1527,7 @@ describe("Policy Engine", () => {
       approvalRequirement: "elevated",
       rule: {
         composition: "AND",
-        conditions: [
-          { field: "actionType", operator: "eq", value: "campaign.update_budget" },
-        ],
+        conditions: [{ field: "actionType", operator: "eq", value: "campaign.update_budget" }],
       },
     });
 
@@ -1764,9 +1740,7 @@ describe("Policy Engine — Composite Risk", () => {
     const engineCtx = makeEngineContext({ compositeContext });
 
     const trace = evaluate(proposal, ctx, engineCtx);
-    const compositeCheck = trace.checks.find(
-      (c) => c.checkCode === "COMPOSITE_RISK",
-    );
+    const compositeCheck = trace.checks.find((c) => c.checkCode === "COMPOSITE_RISK");
     expect(compositeCheck).toBeDefined();
   });
 
@@ -1776,9 +1750,7 @@ describe("Policy Engine — Composite Risk", () => {
     const engineCtx = makeEngineContext();
 
     const trace = evaluate(proposal, ctx, engineCtx);
-    const compositeCheck = trace.checks.find(
-      (c) => c.checkCode === "COMPOSITE_RISK",
-    );
+    const compositeCheck = trace.checks.find((c) => c.checkCode === "COMPOSITE_RISK");
     expect(compositeCheck).toBeUndefined();
   });
 
@@ -1819,9 +1791,7 @@ describe("Policy Engine — Composite Risk", () => {
     const trace = evaluate(proposal, ctx, engineCtx);
 
     // The composite risk check should be matched (category changed)
-    const compositeCheck = trace.checks.find(
-      (c) => c.checkCode === "COMPOSITE_RISK",
-    );
+    const compositeCheck = trace.checks.find((c) => c.checkCode === "COMPOSITE_RISK");
     expect(compositeCheck).toBeDefined();
     expect(compositeCheck!.matched).toBe(true);
 

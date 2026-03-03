@@ -102,11 +102,7 @@ export class SessionGuard {
     return { allowed: true };
   }
 
-  recordCall(
-    toolName: string,
-    args: Record<string, unknown>,
-    isMutation: boolean,
-  ): void {
+  recordCall(toolName: string, args: Record<string, unknown>, isMutation: boolean): void {
     this.callCount++;
 
     if (isMutation) {
@@ -157,9 +153,7 @@ export class SessionGuard {
   }
 
   private pruneRecentCalls(now: number): void {
-    this.recentCalls = this.recentCalls.filter(
-      (c) => now - c.timestamp < this.duplicateWindowMs,
-    );
+    this.recentCalls = this.recentCalls.filter((c) => now - c.timestamp < this.duplicateWindowMs);
   }
 }
 

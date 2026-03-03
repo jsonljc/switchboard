@@ -17,10 +17,7 @@ export interface DecisionTraceBuilder {
   approvalRequired: ApprovalRequirement | null;
 }
 
-export function createTraceBuilder(
-  envelopeId: string,
-  actionId: string,
-): DecisionTraceBuilder {
+export function createTraceBuilder(envelopeId: string, actionId: string): DecisionTraceBuilder {
   return {
     envelopeId,
     actionId,
@@ -59,17 +56,14 @@ export function buildTrace(builder: DecisionTraceBuilder): DecisionTrace {
   const finalDecision: FinalDecision =
     builder.finalDecision ?? (denied ? "deny" : modified ? "modify" : "allow");
 
-  const approvalRequired: ApprovalRequirement =
-    builder.approvalRequired ?? "none";
+  const approvalRequired: ApprovalRequirement = builder.approvalRequired ?? "none";
 
   // Build explanation from matched checks
   const matchedChecks = builder.checks.filter((c) => c.matched);
   let explanation: string;
   if (finalDecision === "deny") {
     const denyCheck = matchedChecks.find((c) => c.effect === "deny");
-    explanation = denyCheck
-      ? `Denied: ${denyCheck.humanDetail}`
-      : "Action denied by policy.";
+    explanation = denyCheck ? `Denied: ${denyCheck.humanDetail}` : "Action denied by policy.";
   } else if (finalDecision === "modify") {
     explanation = "Action allowed with modifications.";
   } else if (approvalRequired !== "none") {

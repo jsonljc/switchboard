@@ -70,7 +70,8 @@ export function verifySlackSignature(
   }
 
   const sigBasestring = `v0:${timestamp}:${rawBody}`;
-  const expectedSig = "v0=" + createHmac("sha256", signingSecret).update(sigBasestring).digest("hex");
+  const expectedSig =
+    "v0=" + createHmac("sha256", signingSecret).update(sigBasestring).digest("hex");
 
   // Use timing-safe comparison to prevent timing attacks
   try {
@@ -96,12 +97,12 @@ export class SlackAdapter implements ChannelAdapter {
       if (process.env.NODE_ENV === "production") {
         throw new Error(
           "Slack signing secret is required in production. " +
-          "Set the SLACK_SIGNING_SECRET environment variable.",
+            "Set the SLACK_SIGNING_SECRET environment variable.",
         );
       } else {
         console.warn(
           "[SlackAdapter] No signing secret configured — request signature verification is disabled. " +
-          "This is unsafe for production use.",
+            "This is unsafe for production use.",
         );
       }
     }
@@ -139,7 +140,7 @@ export class SlackAdapter implements ChannelAdapter {
         channelMessageId: String(action["action_id"] ?? Date.now()),
         threadId: String(channel["id"]),
         principalId: String(user["id"]),
-        organizationId: (payload["team"] as Record<string, unknown>)?.["id"] as string ?? null,
+        organizationId: ((payload["team"] as Record<string, unknown>)?.["id"] as string) ?? null,
         text: (action["value"] as string) ?? "",
         attachments: [],
         timestamp: new Date(),
@@ -247,7 +248,7 @@ export class SlackAdapter implements ChannelAdapter {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${this.botToken}`,
+            Authorization: `Bearer ${this.botToken}`,
           },
           body: JSON.stringify(body),
         });
@@ -264,14 +265,10 @@ export class SlackAdapter implements ChannelAdapter {
           );
         }
 
-        const data = await response.json() as Record<string, unknown>;
+        const data = (await response.json()) as Record<string, unknown>;
         if (!data["ok"]) {
           const slackError = (data["error"] as string) ?? "unknown";
-          throw new SlackApiError(
-            `Slack API error: ${slackError}`,
-            200,
-            slackError,
-          );
+          throw new SlackApiError(`Slack API error: ${slackError}`, 200, slackError);
         }
 
         return data;

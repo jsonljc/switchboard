@@ -5,10 +5,7 @@ import type { PrismaConnectionStore } from "./prisma-connection-store.js";
  * Defined locally to avoid circular dependency between packages/db and packages/core.
  */
 interface ConnectionCredentialResolver {
-  resolve(
-    cartridgeId: string,
-    organizationId: string | null,
-  ): Promise<Record<string, unknown>>;
+  resolve(cartridgeId: string, organizationId: string | null): Promise<Record<string, unknown>>;
 }
 
 /**
@@ -17,7 +14,7 @@ interface ConnectionCredentialResolver {
  */
 const CARTRIDGE_TO_SERVICE: Record<string, string> = {
   "digital-ads": "meta-ads",
-  "payments": "stripe",
+  payments: "stripe",
   "quant-trading": "broker-api",
 };
 

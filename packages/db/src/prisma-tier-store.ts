@@ -23,8 +23,10 @@ export class PrismaTierStore implements TierStore {
     return {
       tier: "smb",
       governanceProfile: config.governanceProfile as GovernanceProfile,
-      allowedActionTypes: config.smbAllowedActions.length > 0 ? config.smbAllowedActions : undefined,
-      blockedActionTypes: config.smbBlockedActions.length > 0 ? config.smbBlockedActions : undefined,
+      allowedActionTypes:
+        config.smbAllowedActions.length > 0 ? config.smbAllowedActions : undefined,
+      blockedActionTypes:
+        config.smbBlockedActions.length > 0 ? config.smbBlockedActions : undefined,
       perActionSpendLimit: config.smbPerActionLimit,
       dailySpendLimit: config.smbDailyLimit,
       ownerId: config.smbOwnerId,

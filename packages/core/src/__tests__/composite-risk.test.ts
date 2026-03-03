@@ -21,9 +21,7 @@ function makeBaseScore(overrides: Partial<RiskScore> = {}): RiskScore {
   };
 }
 
-function makeCompositeContext(
-  overrides: Partial<CompositeRiskContext> = {},
-): CompositeRiskContext {
+function makeCompositeContext(overrides: Partial<CompositeRiskContext> = {}): CompositeRiskContext {
   return {
     recentActionCount: 0,
     windowMs: 3600000,
@@ -38,10 +36,7 @@ describe("Composite Risk Adjustment", () => {
   it("no composite context values → no adjustment", () => {
     const base = makeBaseScore();
     const context = makeCompositeContext();
-    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
-      base,
-      context,
-    );
+    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(base, context);
     expect(adjustedScore.rawScore).toBe(base.rawScore);
     expect(adjustedScore.category).toBe(base.category);
     expect(compositeFactors).toHaveLength(0);
@@ -53,16 +48,13 @@ describe("Composite Risk Adjustment", () => {
       recentActionCount: 10,
       cumulativeExposure: 50000,
     });
-    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
-      base,
-      context,
-    );
+    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(base, context);
     expect(adjustedScore.rawScore).toBeGreaterThan(35);
-    const exposureFactor = compositeFactors.find(
-      (f) => f.factor === "cumulative_exposure",
-    );
+    const exposureFactor = compositeFactors.find((f) => f.factor === "cumulative_exposure");
     expect(exposureFactor).toBeDefined();
-    expect(exposureFactor!.contribution).toBe(DEFAULT_COMPOSITE_RISK_CONFIG.cumulativeExposureWeight);
+    expect(exposureFactor!.contribution).toBe(
+      DEFAULT_COMPOSITE_RISK_CONFIG.cumulativeExposureWeight,
+    );
   });
 
   it("high velocity → score bumps up", () => {
@@ -71,14 +63,9 @@ describe("Composite Risk Adjustment", () => {
       recentActionCount: 40, // 2x the threshold of 20
       distinctTargetEntities: 40,
     });
-    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
-      base,
-      context,
-    );
+    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(base, context);
     expect(adjustedScore.rawScore).toBeGreaterThan(35);
-    const velocityFactor = compositeFactors.find(
-      (f) => f.factor === "action_velocity",
-    );
+    const velocityFactor = compositeFactors.find((f) => f.factor === "action_velocity");
     expect(velocityFactor).toBeDefined();
     expect(velocityFactor!.contribution).toBeGreaterThan(0);
   });
@@ -90,9 +77,7 @@ describe("Composite Risk Adjustment", () => {
       distinctTargetEntities: 2, // 2/20 = 0.1 ratio → concentration = 0.9
     });
     const { compositeFactors } = computeCompositeRiskAdjustment(base, context);
-    const concentrationFactor = compositeFactors.find(
-      (f) => f.factor === "concentration_risk",
-    );
+    const concentrationFactor = compositeFactors.find((f) => f.factor === "concentration_risk");
     expect(concentrationFactor).toBeDefined();
     expect(concentrationFactor!.contribution).toBeGreaterThan(0);
   });
@@ -104,9 +89,7 @@ describe("Composite Risk Adjustment", () => {
       distinctCartridges: 4,
     });
     const { compositeFactors } = computeCompositeRiskAdjustment(base, context);
-    const crossCartridgeFactor = compositeFactors.find(
-      (f) => f.factor === "cross_cartridge_risk",
-    );
+    const crossCartridgeFactor = compositeFactors.find((f) => f.factor === "cross_cartridge_risk");
     expect(crossCartridgeFactor).toBeDefined();
     expect(crossCartridgeFactor!.contribution).toBeGreaterThan(0);
   });
@@ -119,10 +102,7 @@ describe("Composite Risk Adjustment", () => {
       distinctTargetEntities: 2,
       distinctCartridges: 4,
     });
-    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
-      base,
-      context,
-    );
+    const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(base, context);
     // Should have multiple factors
     expect(compositeFactors.length).toBeGreaterThanOrEqual(3);
     // Score should increase significantly
@@ -165,11 +145,7 @@ describe("Composite Risk Adjustment", () => {
       cumulativeExposureWeight: 50,
       cumulativeExposureThreshold: 100,
     };
-    const { adjustedScore } = computeCompositeRiskAdjustment(
-      base,
-      context,
-      customConfig,
-    );
+    const { adjustedScore } = computeCompositeRiskAdjustment(base, context, customConfig);
     // 35 + 50 = 85 → critical
     expect(adjustedScore.rawScore).toBe(85);
     expect(adjustedScore.category).toBe("critical");

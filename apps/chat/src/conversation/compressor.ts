@@ -26,15 +26,30 @@ export interface CompressedContext {
  */
 const ACTION_PATTERNS = [
   // "Paused campaign X" / "Resumed campaign X"
-  { regex: /(?:paused|resumed|adjusted|modified|created|deleted|cancelled|stopped)\s+(.+)/i, extract: (m: RegExpMatchArray) => ({ actionType: m[0]!.split(/\s+/)[0]!, outcome: m[0]! }) },
+  {
+    regex: /(?:paused|resumed|adjusted|modified|created|deleted|cancelled|stopped)\s+(.+)/i,
+    extract: (m: RegExpMatchArray) => ({ actionType: m[0]!.split(/\s+/)[0]!, outcome: m[0]! }),
+  },
   // "Budget changed to $X" / "Budget set to $X"
-  { regex: /budget\s+(?:changed|set|adjusted)\s+to\s+\$?(\d+)/i, extract: (m: RegExpMatchArray) => ({ actionType: "budget_adjust", outcome: m[0]! }) },
+  {
+    regex: /budget\s+(?:changed|set|adjusted)\s+to\s+\$?(\d+)/i,
+    extract: (m: RegExpMatchArray) => ({ actionType: "budget_adjust", outcome: m[0]! }),
+  },
   // "[Approval Required]"
-  { regex: /\[Approval Required\]\s+(.+)/i, extract: (m: RegExpMatchArray) => ({ actionType: "approval_requested", outcome: m[1]! }) },
+  {
+    regex: /\[Approval Required\]\s+(.+)/i,
+    extract: (m: RegExpMatchArray) => ({ actionType: "approval_requested", outcome: m[1]! }),
+  },
   // "Action rejected"
-  { regex: /Action rejected/i, extract: () => ({ actionType: "action_rejected", outcome: "rejected" }) },
+  {
+    regex: /Action rejected/i,
+    extract: () => ({ actionType: "action_rejected", outcome: "rejected" }),
+  },
   // Execution results
-  { regex: /(?:executed|completed|failed|denied)/i, extract: (m: RegExpMatchArray) => ({ actionType: "execution", outcome: m[0]! }) },
+  {
+    regex: /(?:executed|completed|failed|denied)/i,
+    extract: (m: RegExpMatchArray) => ({ actionType: "execution", outcome: m[0]! }),
+  },
 ];
 
 export class ConversationCompressor {
@@ -125,9 +140,7 @@ export class ConversationCompressor {
     }
 
     if (actionHistory.length > 0) {
-      const actionSummary = actionHistory
-        .map((a) => `${a.actionType}: ${a.outcome}`)
-        .join(", ");
+      const actionSummary = actionHistory.map((a) => `${a.actionType}: ${a.outcome}`).join(", ");
       parts.push(`Actions taken: ${actionSummary}`);
     }
 

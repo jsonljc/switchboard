@@ -36,20 +36,26 @@ export const ConnectionHealthSchema = z.object({
 export type ConnectionHealth = z.infer<typeof ConnectionHealthSchema>;
 
 export const GuardrailConfigSchema = z.object({
-  rateLimits: z.array(z.object({
-    scope: z.string(),
-    maxActions: z.number().int().positive(),
-    windowMs: z.number().int().positive(),
-  })),
-  cooldowns: z.array(z.object({
-    actionType: z.string(),
-    cooldownMs: z.number().int().positive(),
-    scope: z.string(),
-  })),
-  protectedEntities: z.array(z.object({
-    entityType: z.string(),
-    entityId: z.string(),
-    reason: z.string(),
-  })),
+  rateLimits: z.array(
+    z.object({
+      scope: z.string(),
+      maxActions: z.number().int().positive(),
+      windowMs: z.number().int().positive(),
+    }),
+  ),
+  cooldowns: z.array(
+    z.object({
+      actionType: z.string(),
+      cooldownMs: z.number().int().positive(),
+      scope: z.string(),
+    }),
+  ),
+  protectedEntities: z.array(
+    z.object({
+      entityType: z.string(),
+      entityId: z.string(),
+      reason: z.string(),
+    }),
+  ),
 });
 export type GuardrailConfig = z.infer<typeof GuardrailConfigSchema>;

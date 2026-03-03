@@ -23,9 +23,7 @@ export function computeBindingHash(data: {
 
 export function hashObject(obj: unknown): string {
   const serialized = canonicalizeSync(obj);
-  return createHash("sha256")
-    .update(serialized)
-    .digest("hex");
+  return createHash("sha256").update(serialized).digest("hex");
 }
 
 export function validateBindingHash(
