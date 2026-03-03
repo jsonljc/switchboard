@@ -182,7 +182,9 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
         select: { id: true, retryCount: true, maxRetries: true },
       });
 
-      const ids = overdue.filter((m) => m.retryCount >= m.maxRetries).map((m) => m.id);
+      const ids = overdue
+        .filter((m: (typeof overdue)[number]) => m.retryCount >= m.maxRetries)
+        .map((m: (typeof overdue)[number]) => m.id);
 
       if (ids.length === 0) {
         return reply.code(200).send({ swept: 0 });

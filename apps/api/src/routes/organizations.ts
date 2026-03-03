@@ -495,7 +495,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         where: { organizationId: orgId },
         select: { channel: true },
       });
-      const remainingNames = remaining.map((r) => r.channel);
+      const remainingNames = remaining.map((r: (typeof remaining)[number]) => r.channel);
 
       await app.prisma.organizationConfig.update({
         where: { id: orgId },
