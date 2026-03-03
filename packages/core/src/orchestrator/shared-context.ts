@@ -15,6 +15,8 @@ import type { TierStore } from "../smb/tier-resolver.js";
 import type { SmbActivityLog } from "../smb/activity-log.js";
 import type { ConnectionCredentialResolver } from "../credentials/resolver.js";
 import type { ExecutionMode, EnqueueCallback } from "./lifecycle.js";
+import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
+import type { IdempotencyGuard } from "../idempotency/guard.js";
 
 /**
  * Shared dependencies and configuration passed to ProposePipeline,
@@ -42,6 +44,8 @@ export interface SharedContext {
   tierStore: TierStore | null;
   smbActivityLog: SmbActivityLog | null;
   credentialResolver: ConnectionCredentialResolver | null;
+  circuitBreaker: CartridgeCircuitBreakerWrapper | null;
+  idempotencyGuard: IdempotencyGuard | null;
 }
 
 /**

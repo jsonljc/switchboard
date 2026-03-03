@@ -214,6 +214,7 @@ export type { RetryOptions } from "./utils/retry.js";
 // Circuit breaker
 export { CircuitBreaker, CircuitBreakerOpenError } from "./utils/circuit-breaker.js";
 export type { CircuitBreakerConfig, CircuitBreakerState } from "./utils/circuit-breaker.js";
+export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-wrapper.js";
 
 // Pagination
 export { paginationParams, paginate } from "./utils/pagination.js";
@@ -283,3 +284,12 @@ export type { IdempotencyStore } from "./idempotency/guard.js";
 // Credential resolution (per-org connection credentials at execution time)
 export { NoOpCredentialResolver } from "./credentials/resolver.js";
 export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
+
+// Skin loader & resolver
+export { SkinLoader, SkinResolver } from "./skin/index.js";
+export type { ResolvedSkin } from "./skin/index.js";
+
+// Tool registry
+export { ToolRegistry } from "./tool-registry/index.js";
+export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
+export { matchGlob, matchesAny } from "./tool-registry/index.js";

@@ -20,7 +20,11 @@ import {
   CartridgeReadAdapter,
   CapabilityRegistry,
   PlanGraphBuilder,
+  SkinLoader,
+  SkinResolver,
+  ToolRegistry,
 } from "@switchboard/core";
+import type { ResolvedSkin } from "@switchboard/core";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
@@ -35,6 +39,10 @@ import {
 } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
+import {
+  bootstrapPatientEngagementCartridge,
+  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
+} from "@switchboard/patient-engagement";
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
 import { SlackApprovalNotifier } from "./notifications/slack-notifier.js";
 import { WhatsAppApprovalNotifier } from "./notifications/whatsapp-notifier.js";
@@ -147,6 +155,40 @@ export async function createChatRuntime(
     const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
     storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
     await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
+
+    // Register patient-engagement cartridge (uses credential resolver for Google Calendar + Twilio)
+    const { cartridge: peCartridge, interceptors: peInterceptors } =
+      await bootstrapPatientEngagementCartridge({
+        requireCredentials: process.env.NODE_ENV === "production",
+      });
+    storage.cartridges.register(
+      "patient-engagement",
+      new GuardedCartridge(peCartridge, peInterceptors),
+    );
+    await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+
+    // --- Skin loading (optional, controlled by SKIN_ID env var) ---
+    let resolvedSkin: ResolvedSkin | null = null;
+    const skinId = process.env["SKIN_ID"];
+    if (skinId) {
+      const skinsDir = new URL("../../../skins", import.meta.url).pathname;
+      const skinLoader = new SkinLoader(skinsDir);
+      const skinResolver = new SkinResolver();
+      const toolRegistry = new ToolRegistry();
+
+      for (const cartridgeId of storage.cartridges.list()) {
+        const cartridge = storage.cartridges.get(cartridgeId);
+        if (cartridge) {
+          toolRegistry.registerCartridge(cartridgeId, cartridge.manifest);
+        }
+      }
+
+      const skin = await skinLoader.load(skinId);
+      resolvedSkin = skinResolver.resolve(skin, toolRegistry);
+      console.warn(
+        `[Chat] Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
+      );
+    }
 
     // Wire approval notifiers — fan out to all configured channels
     const notifiers: import("@switchboard/core").ApprovalNotifier[] = [];

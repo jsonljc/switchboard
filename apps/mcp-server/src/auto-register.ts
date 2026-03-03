@@ -2,6 +2,8 @@ import type { CartridgeRegistry } from "@switchboard/core";
 import type { ActionDefinition } from "@switchboard/schemas";
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { ToolDefinition } from "./tools/side-effect.js";
+import type { ToolFilter } from "@switchboard/core";
+import { matchesAny } from "@switchboard/core";
 
 export interface AutoRegisteredTool extends ToolDefinition {
   actionType: string;
@@ -15,10 +17,14 @@ export interface AutoRegisteredTool extends ToolDefinition {
  * Skips any actionTypes already covered by manual tools (provided in
  * `manualActionTypes`). Derives tool annotations from the manifest's
  * `baseRiskCategory`.
+ *
+ * When a `toolFilter` is provided (from a skin), only actions matching the
+ * filter's include/exclude patterns are exposed.
  */
 export function generateToolsFromRegistry(
   registry: CartridgeRegistry,
   manualActionTypes: Set<string>,
+  toolFilter?: ToolFilter,
 ): AutoRegisteredTool[] {
   const tools: AutoRegisteredTool[] = [];
 
@@ -30,6 +36,12 @@ export function generateToolsFromRegistry(
 
     for (const action of actions) {
       if (manualActionTypes.has(action.actionType)) continue;
+
+      // When a skin filter is active, skip actions not matching include/exclude patterns
+      if (toolFilter) {
+        if (!matchesAny(action.actionType, toolFilter.include)) continue;
+        if (toolFilter.exclude && matchesAny(action.actionType, toolFilter.exclude)) continue;
+      }
 
       const toolName = action.actionType.replace(/[.-]/g, "_");
       const inputSchema = normalizeSchema(action.parametersSchema);

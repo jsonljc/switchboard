@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import crypto from "node:crypto";
 import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
@@ -49,6 +50,9 @@ import {
   InMemoryTierStore,
   SmbActivityLog,
   InMemorySmbActivityLogStorage,
+  SkinLoader,
+  SkinResolver,
+  ToolRegistry,
 } from "@switchboard/core";
 import type {
   StorageContext,
@@ -57,6 +61,7 @@ import type {
   ApprovalNotifier,
   TierStore,
   GovernanceProfileStore,
+  ResolvedSkin,
 } from "@switchboard/core";
 import {
   bootstrapDigitalAdsCartridge,
@@ -69,6 +74,10 @@ import {
 } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
+import {
+  bootstrapPatientEngagementCartridge,
+  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
+} from "@switchboard/patient-engagement";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -97,6 +106,7 @@ declare module "fastify" {
     executionWorker: Worker | null;
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
+    resolvedSkin: ResolvedSkin | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -105,6 +115,8 @@ declare module "fastify" {
     runtimeIdFromAuth?: string;
     /** Set by auth when API_KEY_METADATA maps this key to a principal. */
     principalIdFromAuth?: string;
+    /** Request-level trace ID for correlation (from X-Request-Id header or auto-generated). */
+    traceId?: string;
   }
 }
 
@@ -350,6 +362,42 @@ export async function buildServer() {
   storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
   await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
+  // Register patient-engagement cartridge (uses credential resolver for Google Calendar + Twilio)
+  const { cartridge: peCartridge, interceptors: peInterceptors } =
+    await bootstrapPatientEngagementCartridge({
+      requireCredentials: process.env.NODE_ENV === "production",
+    });
+  storage.cartridges.register(
+    "patient-engagement",
+    new GuardedCartridge(peCartridge, peInterceptors),
+  );
+  await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+
+  // --- Skin loading (optional, controlled by SKIN_ID env var) ---
+  let resolvedSkin: ResolvedSkin | null = null;
+  const skinId = process.env["SKIN_ID"];
+  if (skinId) {
+    const skinsDir = new URL("../../../skins", import.meta.url).pathname;
+    const skinLoader = new SkinLoader(skinsDir);
+    const skinResolver = new SkinResolver();
+    const toolRegistry = new ToolRegistry();
+
+    // Register all cartridge manifests in the tool registry
+    for (const cartridgeId of storage.cartridges.list()) {
+      const cartridge = storage.cartridges.get(cartridgeId);
+      if (cartridge) {
+        toolRegistry.registerCartridge(cartridgeId, cartridge.manifest);
+      }
+    }
+
+    const skin = await skinLoader.load(skinId);
+    resolvedSkin = skinResolver.resolve(skin, toolRegistry);
+    app.log.info(
+      { skinId, tools: resolvedSkin.tools.length, profile: resolvedSkin.governance.profile },
+      `Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
+    );
+  }
+
   let queue: Queue | null = null;
   let worker: Worker | null = null;
   let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
@@ -477,6 +525,7 @@ export async function buildServer() {
   app.decorate("executionWorker", worker);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
+  app.decorate("resolvedSkin", resolvedSkin);
 
   // Resource cleanup on close — order: worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
@@ -506,6 +555,13 @@ export async function buildServer() {
   await app.register(authMiddleware);
   await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
+
+  // Assign a traceId to every request (from X-Request-Id header or auto-generated)
+  app.addHook("onRequest", async (request) => {
+    const headerVal = request.headers["x-request-id"];
+    request.traceId =
+      typeof headerVal === "string" && headerVal.trim() ? headerVal.trim() : crypto.randomUUID();
+  });
 
   // Live health check — pings configured backends
   app.get("/health", async (_request, reply) => {
