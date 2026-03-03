@@ -149,7 +149,8 @@ describe("SkinManifestSchema", () => {
   });
 
   it("accepts skin without optional fields", () => {
-    const skin = validClinicSkin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skin = validClinicSkin() as any;
     delete skin.playbooks;
     delete skin.channels;
     delete skin.tools.exclude;
@@ -165,7 +166,7 @@ describe("SkinManifestSchema", () => {
 
   it("rejects negative spend limits", () => {
     const skin = validClinicSkin();
-    skin.governance.spendLimits = { dailyUsd: -100 };
+    skin.governance.spendLimits = { dailyUsd: -100, weeklyUsd: -500 };
     const result = SkinManifestSchema.safeParse(skin);
     expect(result.success).toBe(false);
   });

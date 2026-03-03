@@ -6,6 +6,7 @@ import type {
   CartridgeReadAdapter,
   GovernanceProfileStore,
   CartridgeRegistry,
+  ToolFilter,
 } from "@switchboard/core";
 import { resolveAuth, loadMcpApiKeys } from "./auth.js";
 import type { McpAuthContext } from "./auth.js";
@@ -89,6 +90,8 @@ export interface SwitchboardMcpServerOptions {
   ledger: MinimalLedger;
   governanceProfileStore: GovernanceProfileStore;
   cartridgeRegistry?: CartridgeRegistry;
+  /** Skin-based tool filter — when set, only matching tools are auto-registered. */
+  toolFilter?: ToolFilter;
 }
 
 export class SwitchboardMcpServer {
@@ -127,7 +130,7 @@ export class SwitchboardMcpServer {
       version: "0.1.0",
     });
 
-    this.registerTools(options.cartridgeRegistry);
+    this.registerTools(options.cartridgeRegistry, options.toolFilter);
   }
 
   private getAuth(): McpAuthContext {
@@ -137,11 +140,11 @@ export class SwitchboardMcpServer {
     return resolveAuth(key, this.apiKeys);
   }
 
-  private registerTools(cartridgeRegistry?: CartridgeRegistry): void {
+  private registerTools(cartridgeRegistry?: CartridgeRegistry, toolFilter?: ToolFilter): void {
     // Auto-generate tools from cartridge registry if available
     let autoTools: AutoRegisteredTool[] = [];
     if (cartridgeRegistry) {
-      autoTools = generateToolsFromRegistry(cartridgeRegistry, MANUAL_ACTION_TYPES);
+      autoTools = generateToolsFromRegistry(cartridgeRegistry, MANUAL_ACTION_TYPES, toolFilter);
 
       // Mark auto-registered mutations in the side-effect set
       for (const tool of autoTools) {

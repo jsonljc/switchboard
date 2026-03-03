@@ -50,6 +50,7 @@ import { getTracer } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
 import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
+import { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 
 import type { TierStore } from "../smb/tier-resolver.js";
 import type { SmbActivityLog } from "../smb/activity-log.js";
@@ -89,6 +90,8 @@ export interface OrchestratorConfig {
   smbActivityLog?: SmbActivityLog;
   /** Credential resolver for org-scoped connection credentials at execution time. */
   credentialResolver?: import("../credentials/resolver.js").ConnectionCredentialResolver;
+  /** Circuit breaker wrapper for cartridge execute calls. When set, wraps each cartridge.execute() in a per-cartridge circuit breaker. */
+  circuitBreaker?: CartridgeCircuitBreakerWrapper;
 }
 
 export interface ProposeResult {
@@ -139,6 +142,7 @@ export class LifecycleOrchestrator {
   private credentialResolver:
     | import("../credentials/resolver.js").ConnectionCredentialResolver
     | null;
+  private circuitBreaker: CartridgeCircuitBreakerWrapper | null;
 
   constructor(config: OrchestratorConfig) {
     this.storage = config.storage;
@@ -161,6 +165,7 @@ export class LifecycleOrchestrator {
     this.tierStore = config.tierStore ?? null;
     this.smbActivityLog = config.smbActivityLog ?? null;
     this.credentialResolver = config.credentialResolver ?? null;
+    this.circuitBreaker = config.circuitBreaker ?? null;
   }
 
   /**
@@ -1695,11 +1700,18 @@ export class LifecycleOrchestrator {
         _actionId: proposal.id,
       };
 
-      executeResult = await cartridge.execute(
-        proposal.actionType,
-        execParams,
-        await this.buildCartridgeContext(execCartridgeId, execPrincipalId, execOrgId),
+      const cartridgeContext = await this.buildCartridgeContext(
+        execCartridgeId,
+        execPrincipalId,
+        execOrgId,
       );
+      const executeFn = () => cartridge.execute(proposal.actionType, execParams, cartridgeContext);
+
+      if (this.circuitBreaker) {
+        executeResult = await this.circuitBreaker.execute(execCartridgeId, executeFn);
+      } else {
+        executeResult = await executeFn();
+      }
     } catch (err) {
       executeResult = {
         success: false,

@@ -11,6 +11,9 @@ import {
   InMemoryGovernanceProfileStore,
   ExecutionService,
   CartridgeReadAdapter,
+  SkinLoader,
+  SkinResolver,
+  ToolRegistry,
 } from "@switchboard/core";
 import {
   bootstrapDigitalAdsCartridge,
@@ -162,6 +165,30 @@ async function main() {
   );
   await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
 
+  // --- Skin loading (optional, controlled by SKIN_ID env var) ---
+  let skinToolFilter: import("@switchboard/core").ToolFilter | undefined;
+  const skinId = process.env["SKIN_ID"];
+  if (skinId) {
+    const skinsDir = new URL("../../../skins", import.meta.url).pathname;
+    const skinLoader = new SkinLoader(skinsDir);
+    const skinResolver = new SkinResolver();
+    const toolRegistry = new ToolRegistry();
+
+    for (const cartridgeId of storage.cartridges.list()) {
+      const cartridge = storage.cartridges.get(cartridgeId);
+      if (cartridge) {
+        toolRegistry.registerCartridge(cartridgeId, cartridge.manifest);
+      }
+    }
+
+    const skin = await skinLoader.load(skinId);
+    const resolvedSkin = skinResolver.resolve(skin, toolRegistry);
+    skinToolFilter = resolvedSkin.toolFilter;
+    console.error(
+      `[mcp-server] Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
+    );
+  }
+
   // ── Orchestrator + services ──────────────────────────────────────────
   const orchestrator = new LifecycleOrchestrator({
     storage,
@@ -183,6 +210,7 @@ async function main() {
     ledger,
     governanceProfileStore,
     cartridgeRegistry: storage.cartridges,
+    toolFilter: skinToolFilter,
   });
 
   // Graceful shutdown
