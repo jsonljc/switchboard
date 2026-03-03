@@ -28,6 +28,7 @@ RUN pnpm install --frozen-lockfile
 FROM base AS build
 
 COPY . .
+RUN pnpm db:generate
 RUN pnpm build
 
 # ---- Production stage: API server ----
