@@ -1,3 +1,6 @@
+// NOTE: @experimental — Unused in production. HTTP-level idempotency is handled by apps/api/src/middleware/idempotency.ts.
+// Preserved for potential future use as an orchestrator-level deduplication guard.
+
 import { createHash } from "node:crypto";
 
 /**

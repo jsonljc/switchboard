@@ -20,7 +20,11 @@ export function assertOrgAccess(
 
   // Org mismatch
   if (authOrgId !== resourceOrgId) {
-    reply.code(403).send({ error: "Forbidden: organization mismatch" });
+    reply.code(403).send({
+      error: "Forbidden: organization mismatch",
+      hint: "Verify your API key is scoped to the correct organization.",
+      statusCode: 403,
+    });
     return false;
   }
 

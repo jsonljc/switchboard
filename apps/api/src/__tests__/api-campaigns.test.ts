@@ -17,6 +17,11 @@ describe("Campaigns API", () => {
 
     app.decorate("storageContext", { cartridges: mockCartridges } as any);
 
+    app.decorateRequest("organizationIdFromAuth", undefined);
+    app.addHook("onRequest", async (request) => {
+      request.organizationIdFromAuth = "org_test";
+    });
+
     await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
   });
 

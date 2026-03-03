@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { smbPropose } from "../smb/pipeline.js";
+import { computeFullSmbBindingHash } from "../smb/approval.js";
 import { SmbActivityLog, InMemorySmbActivityLogStorage } from "../smb/activity-log.js";
 import { createInMemoryStorage } from "../storage/index.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
@@ -247,5 +248,101 @@ describe("smbPropose (pipeline)", () => {
         { storage, activityLog, guardrailState, orgConfig: config },
       ),
     ).rejects.toThrow("Cartridge not found");
+  });
+
+  it("should compute binding hash covering parameters (tamper-evident)", async () => {
+    const config = makeSmbConfig({ governanceProfile: "locked" });
+
+    const result = await smbPropose(
+      {
+        actionType: "digital-ads.campaign.create",
+        parameters: { amount: 500, campaignId: "camp_1" },
+        principalId: "user_1",
+        organizationId: "org_1",
+        cartridgeId: "digital-ads",
+      },
+      { storage, activityLog, guardrailState, orgConfig: config },
+    );
+
+    expect(result.approvalRequest).not.toBeNull();
+    const bindingHash = result.approvalRequest!.bindingHash;
+
+    // Recompute with same parameters — should match
+    const proposal = result.envelope.proposals[0]!;
+    const recomputed = computeFullSmbBindingHash({
+      envelopeId: result.envelope.id,
+      actionId: proposal.id,
+      proposal,
+      decisionTrace: result.decisionTrace,
+      contextSnapshot: proposal.parameters as Record<string, unknown>,
+    });
+    expect(bindingHash).toBe(recomputed);
+
+    // Recompute with different parameters — should NOT match
+    const tampered = computeFullSmbBindingHash({
+      envelopeId: result.envelope.id,
+      actionId: proposal.id,
+      proposal: { ...proposal, parameters: { ...proposal.parameters, amount: 9999 } },
+      decisionTrace: result.decisionTrace,
+      contextSnapshot: proposal.parameters as Record<string, unknown>,
+    });
+    expect(bindingHash).not.toBe(tampered);
+  });
+
+  it("should allow emergency override for org owner", async () => {
+    const config = makeSmbConfig({ governanceProfile: "locked" });
+
+    const result = await smbPropose(
+      {
+        actionType: "digital-ads.campaign.pause",
+        parameters: {},
+        principalId: "owner_1",
+        organizationId: "org_1",
+        cartridgeId: "digital-ads",
+        emergencyOverride: true,
+      },
+      { storage, activityLog, guardrailState, orgConfig: config },
+    );
+
+    expect(result.envelope.status).toBe("approved");
+    expect(result.governanceNote).toBe("Emergency override approved for org owner");
+  });
+
+  it("should reject emergency override for non-owner", async () => {
+    const config = makeSmbConfig();
+
+    await expect(
+      smbPropose(
+        {
+          actionType: "digital-ads.campaign.pause",
+          parameters: {},
+          principalId: "user_1",
+          organizationId: "org_1",
+          cartridgeId: "digital-ads",
+          emergencyOverride: true,
+        },
+        { storage, activityLog, guardrailState, orgConfig: config },
+      ),
+    ).rejects.toThrow("Emergency override requires org owner principal");
+  });
+
+  it("should deny low-risk actions in strict profile (default-deny)", async () => {
+    const config = makeSmbConfig({ governanceProfile: "strict" });
+
+    const result = await smbPropose(
+      {
+        actionType: "digital-ads.campaign.pause",
+        parameters: { campaignId: "camp_1" },
+        principalId: "user_1",
+        organizationId: "org_1",
+        cartridgeId: "digital-ads",
+      },
+      { storage, activityLog, guardrailState, orgConfig: config },
+    );
+
+    // Low-risk action in strict mode: approval not required for low risk,
+    // but strict profile uses deny-by-default for non-approved actions
+    expect(result.denied).toBe(true);
+    expect(result.envelope.status).toBe("denied");
   });
 });

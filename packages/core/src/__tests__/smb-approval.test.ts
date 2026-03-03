@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { smbRouteApproval, smbCreateApprovalRequest, smbBindingHash } from "../smb/approval.js";
-import type { SmbOrgConfig, DecisionTrace } from "@switchboard/schemas";
+import type { SmbOrgConfig, DecisionTrace, ActionProposal } from "@switchboard/schemas";
 
 function makeSmbConfig(overrides?: Partial<SmbOrgConfig>): SmbOrgConfig {
   return {
@@ -23,6 +23,18 @@ function makeDecisionTrace(): DecisionTrace {
     approvalRequired: "standard",
     explanation: "Test trace",
     evaluatedAt: new Date(),
+  };
+}
+
+function makeProposal(overrides?: Partial<ActionProposal>): ActionProposal {
+  return {
+    id: "prop_1",
+    actionType: "digital-ads.campaign.pause",
+    parameters: { campaignId: "camp_1" },
+    evidence: "Test proposal",
+    confidence: 1.0,
+    originatingMessageId: "",
+    ...overrides,
   };
 }
 
@@ -72,6 +84,7 @@ describe("smbCreateApprovalRequest", () => {
       decisionTrace: trace,
       orgConfig: config,
       contextSnapshot: { foo: "bar" },
+      proposal: makeProposal(),
     });
 
     expect(request.id).toMatch(/^appr_/);
@@ -97,6 +110,7 @@ describe("smbCreateApprovalRequest", () => {
       decisionTrace: trace,
       orgConfig: config,
       contextSnapshot: {},
+      proposal: makeProposal(),
     });
 
     const expiryMs = request.expiresAt.getTime() - request.createdAt.getTime();
@@ -115,6 +129,7 @@ describe("smbCreateApprovalRequest", () => {
       decisionTrace: trace,
       orgConfig: config,
       contextSnapshot: { key: "value" },
+      proposal: makeProposal(),
     });
 
     expect(request.evidenceBundle.decisionTrace).toBe(trace);

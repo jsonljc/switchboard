@@ -325,7 +325,17 @@ export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext)
   const approvalReq: ApprovalRequirement = needsApproval ? "standard" : "none";
 
   builder.approvalRequired = approvalReq;
-  builder.finalDecision = "allow";
+
+  // Default decision for SMB orgs. SMB uses default-allow by design because the
+  // action allowlist/blocklist at the org config level (Step 1) serves as the policy
+  // gate — any action that reaches this point has already passed the allowlist check.
+  // However, for "strict" and "locked" profiles, use deny-by-default to match
+  // enterprise semantics where unpolicied actions should not auto-approve.
+  if (orgConfig.governanceProfile === "strict" || orgConfig.governanceProfile === "locked") {
+    builder.finalDecision = needsApproval ? "allow" : "deny";
+  } else {
+    builder.finalDecision = "allow";
+  }
 
   return buildTrace(builder);
 }

@@ -35,6 +35,15 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { orgId } = request.params as { orgId: string };
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: organization mismatch",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
+
       const store = app.governanceProfileStore;
       const profile = await store.get(orgId);
       const posture = profileToPosture(profile);
@@ -61,6 +70,14 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { orgId } = request.params as { orgId: string };
       const body = request.body as { profile: GovernanceProfile };
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: organization mismatch",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
 
       if (!body.profile) {
         return reply.code(400).send({ error: "profile is required", statusCode: 400 });
@@ -98,6 +115,21 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const body = request.body as { organizationId?: string; reason?: string };
       const orgId = body.organizationId ?? request.organizationIdFromAuth ?? null;
+
+      if (!orgId) {
+        return reply.code(400).send({
+          error: "organizationId is required (provide in body or via API key scoping)",
+          statusCode: 400,
+        });
+      }
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: organization mismatch",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
 
       const store = app.governanceProfileStore;
       await store.set(orgId, "locked");

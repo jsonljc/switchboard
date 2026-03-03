@@ -70,6 +70,22 @@ export class PrismaConnectionStore {
     return toConnectionRecord(row);
   }
 
+  /**
+   * Get a connection explicitly marked as global (organizationId = null).
+   * Prevents cross-org credential leakage by only returning connections
+   * that have no org binding.
+   */
+  async getByServiceGlobal(serviceId: string): Promise<ConnectionRecord | null> {
+    const row = await this.prisma.connection.findFirst({
+      where: {
+        serviceId,
+        organizationId: null,
+      },
+    });
+    if (!row) return null;
+    return toConnectionRecord(row);
+  }
+
   async list(organizationId?: string): Promise<ConnectionRecord[]> {
     const rows = await this.prisma.connection.findMany({
       where: organizationId ? { organizationId } : {},

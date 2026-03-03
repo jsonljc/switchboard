@@ -263,4 +263,91 @@ describe("DLQ Routes", () => {
       await nullApp.close();
     });
   });
+
+  describe("Cross-org access control", () => {
+    let scopedApp: FastifyInstance;
+    let scopedMockPrisma: ReturnType<typeof buildDlqTestServer>["mockPrisma"];
+
+    beforeEach(async () => {
+      scopedApp = Fastify({ logger: false });
+      scopedMockPrisma = {
+        failedMessage: {
+          findMany: vi.fn(),
+          findUnique: vi.fn(),
+          count: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          updateMany: vi.fn(),
+        },
+      };
+      scopedApp.decorate("prisma", scopedMockPrisma as any);
+      scopedApp.decorateRequest("organizationIdFromAuth", undefined);
+      scopedApp.addHook("onRequest", async (request) => {
+        request.organizationIdFromAuth = "org_A";
+      });
+      await scopedApp.register(dlqRoutes, { prefix: "/api/dlq" });
+      await scopedApp.ready();
+    });
+
+    afterEach(async () => {
+      await scopedApp.close();
+    });
+
+    it("GET messages filters by org", async () => {
+      scopedMockPrisma.failedMessage.findMany.mockResolvedValue([]);
+
+      await scopedApp.inject({ method: "GET", url: "/api/dlq/messages" });
+      expect(scopedMockPrisma.failedMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ organizationId: "org_A" }),
+        }),
+      );
+    });
+
+    it("GET stats filters by org", async () => {
+      scopedMockPrisma.failedMessage.count.mockResolvedValue(0);
+
+      await scopedApp.inject({ method: "GET", url: "/api/dlq/stats" });
+      for (const call of scopedMockPrisma.failedMessage.count.mock.calls) {
+        expect(call[0].where).toHaveProperty("organizationId", "org_A");
+      }
+    });
+
+    it("POST resolve returns 403 for cross-org message", async () => {
+      scopedMockPrisma.failedMessage.findUnique.mockResolvedValue(
+        makeFailedMessage({ organizationId: "org_B" }),
+      );
+
+      const res = await scopedApp.inject({
+        method: "POST",
+        url: "/api/dlq/messages/fm_1/resolve",
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("organization mismatch");
+    });
+
+    it("POST retry returns 403 for cross-org message", async () => {
+      scopedMockPrisma.failedMessage.findUnique.mockResolvedValue(
+        makeFailedMessage({ organizationId: "org_B" }),
+      );
+
+      const res = await scopedApp.inject({
+        method: "POST",
+        url: "/api/dlq/messages/fm_1/retry",
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("organization mismatch");
+    });
+
+    it("POST sweep filters by org", async () => {
+      scopedMockPrisma.failedMessage.findMany.mockResolvedValue([]);
+
+      await scopedApp.inject({ method: "POST", url: "/api/dlq/sweep" });
+      expect(scopedMockPrisma.failedMessage.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ organizationId: "org_A" }),
+        }),
+      );
+    });
+  });
 });

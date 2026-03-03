@@ -1,3 +1,6 @@
+// NOTE: @experimental — Unused in production. ModelRouterFactory creates RedisModelRouter/InMemoryModelRouter directly.
+// Preserved for potential future use as a step-type-aware routing strategy.
+
 import type { ModelRouter, TokenUsageSummary } from "./model-router-types.js";
 import type { StepType } from "@switchboard/schemas";
 import { LLM_COST_TABLE } from "@switchboard/core";
