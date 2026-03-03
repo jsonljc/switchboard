@@ -102,14 +102,17 @@ export class PrismaCrmProvider implements CrmProvider {
       "closed_lost",
     ];
     return groups
-      .map((g, i) => ({
+      .map((g: (typeof groups)[number], i: number) => ({
         id: g.stage,
-        label: g.stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        label: g.stage.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
         displayOrder: stageOrder.indexOf(g.stage) >= 0 ? stageOrder.indexOf(g.stage) : 100 + i,
         dealCount: g._count.id,
         totalValue: g._sum.amount ?? 0,
       }))
-      .sort((a, b) => a.displayOrder - b.displayOrder);
+      .sort(
+        (a: { displayOrder: number }, b: { displayOrder: number }) =>
+          a.displayOrder - b.displayOrder,
+      );
   }
 
   async createContact(data: {
