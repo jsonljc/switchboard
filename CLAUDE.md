@@ -8,9 +8,10 @@ Switchboard is a TypeScript monorepo using pnpm workspaces. The dependency layer
 schemas        → no @switchboard/* imports (leaf package)
 cartridge-sdk  → may import @switchboard/schemas only
 core           → may import @switchboard/schemas, @switchboard/cartridge-sdk
-db             → may import @switchboard/schemas, @switchboard/core
-apps/*         → may import any @switchboard/* package
+db             → may import @switchboard/schemas, @switchboard/core (NEVER cartridge imports)
+apps/*         → may import any @switchboard/* package; may read skins/
 cartridges/*   → may import @switchboard/schemas, @switchboard/cartridge-sdk, @switchboard/core (NEVER db or apps)
+skins/         → pure JSON data; not a package; not importable
 ```
 
 Circular dependencies between packages are **forbidden**.
@@ -18,15 +19,16 @@ Circular dependencies between packages are **forbidden**.
 ### Package Layout
 
 ```
-packages/schemas         — Zod schemas, shared types
+packages/schemas         — Zod schemas, shared types (incl. SkinManifest, CRM provider types)
 packages/cartridge-sdk   — Cartridge interface & base classes
-packages/core            — Orchestrator, routing, pipeline logic
+packages/core            — Orchestrator, policy engine, ToolRegistry, SkinLoader/Resolver
 packages/db              — Prisma client, store implementations
 apps/api                 — Fastify REST API server
 apps/chat                — Chat/webhook server (Telegram, Slack, WhatsApp)
 apps/dashboard           — Next.js admin dashboard
 apps/mcp-server          — MCP protocol server
 cartridges/*             — Domain-specific cartridge implementations
+skins/                   — Vertical deployment manifests (JSON, loaded at boot via SKIN_ID)
 ```
 
 ## Build / Test / Lint Commands
@@ -65,7 +67,7 @@ pnpm db:seed             # Seed database
 - **Sensitive packages have elevated thresholds** (per-package `vitest.config.ts`):
   - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
   - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)
-  - `cartridges/patient-engagement`: 40/60/70/40 (target: 80/70/75/80)
+  - `cartridges/patient-engagement`: 60/60/70/60 (target: 80/70/75/80)
 - Test files use the pattern `*.test.ts` and are co-located with source files
 
 ## Commit Message Format
@@ -96,6 +98,7 @@ See `.env.example` for the full list. Key variables:
 | `API_KEY_ENCRYPTION_SECRET`             | Encryption secret for stored API keys  |
 | `NEXTAUTH_SECRET`                       | NextAuth session secret                |
 | `CREDENTIALS_ENCRYPTION_KEY`            | Encrypt stored third-party credentials |
+| `SKIN_ID`                               | Vertical skin to load (e.g. `clinic`)  |
 
 Never commit `.env` files or secrets to the repository.
 
