@@ -238,7 +238,12 @@ export async function createChatRuntime(
       if (cartridge) {
         const loadCampaignNames = async () => {
           try {
-            const campaigns = (await cartridge.searchCampaigns?.("")) ?? [];
+            const searchFn = (
+              cartridge as unknown as {
+                searchCampaigns?: (q: string) => Promise<Array<{ name: string }>>;
+              }
+            ).searchCampaigns;
+            const campaigns = searchFn ? await searchFn("") : [];
             const names = campaigns.map((c) => c.name);
             clinicInterpreter.updateCampaignNames(names);
             return names.length;

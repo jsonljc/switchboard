@@ -138,8 +138,15 @@ export async function handleGovernanceTool(
 
       try {
         const cartridge = deps.storage.cartridges.get("digital-ads");
-        if (cartridge?.searchCampaigns) {
-          const campaigns = await cartridge.searchCampaigns("*");
+        const searchFn = cartridge
+          ? (
+              cartridge as unknown as {
+                searchCampaigns?: (q: string) => Promise<Array<{ id: string; status: string }>>;
+              }
+            ).searchCampaigns
+          : undefined;
+        if (searchFn) {
+          const campaigns = await searchFn("*");
           for (const campaign of campaigns) {
             if (campaign.status === "ACTIVE") {
               try {

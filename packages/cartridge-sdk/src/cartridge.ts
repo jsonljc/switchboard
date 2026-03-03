@@ -52,8 +52,6 @@ export interface Cartridge {
 
   healthCheck(): Promise<ConnectionHealth>;
 
-  searchCampaigns?(query: string): Promise<Array<{ id: string; name: string; status: string }>>;
-
   /** Resolve a user-provided reference (e.g. campaign name) to a concrete entity. Optional. */
   resolveEntity?(
     inputRef: string,

@@ -24,7 +24,6 @@
   "dependencies": {
     "@prisma/client": "^6.3.0",
     "@switchboard/core": "workspace:*",
-    "@switchboard/crm": "workspace:*",
     "@switchboard/schemas": "workspace:*"
   },
   "devDependencies": {
