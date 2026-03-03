@@ -23,11 +23,11 @@ export async function executeDiagnosePipeline(
   const clinicType = (params.clinicType as ClinicType) ?? "general";
 
   const periods: ComparisonPeriods = {
-    current: params.currentPeriod as ComparisonPeriods["current"] ?? {
+    current: (params.currentPeriod as ComparisonPeriods["current"]) ?? {
       since: currentSnapshot.periodStart,
       until: currentSnapshot.periodEnd,
     },
-    previous: params.previousPeriod as ComparisonPeriods["previous"] ?? {
+    previous: (params.previousPeriod as ComparisonPeriods["previous"]) ?? {
       since: previousSnapshot.periodStart,
       until: previousSnapshot.periodEnd,
     },

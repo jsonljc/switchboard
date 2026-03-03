@@ -78,10 +78,7 @@ export function setEvidenceStore(store: EvidenceStore): void {
   globalEvidenceStore = store;
 }
 
-export function storeEvidence(
-  content: unknown,
-  storagePrefix?: string,
-): EvidencePointer {
+export function storeEvidence(content: unknown, storagePrefix?: string): EvidencePointer {
   const serialized = canonicalizeSync(content);
   const hash = sha256(serialized);
 
@@ -90,9 +87,7 @@ export function storeEvidence(
   }
 
   // For large evidence, generate a storage ref and store if backend available
-  const storageRef = storagePrefix
-    ? `${storagePrefix}/${hash}`
-    : `evidence/${hash}`;
+  const storageRef = storagePrefix ? `${storagePrefix}/${hash}` : `evidence/${hash}`;
 
   if (globalEvidenceStore) {
     // Store asynchronously (fire and forget for now)

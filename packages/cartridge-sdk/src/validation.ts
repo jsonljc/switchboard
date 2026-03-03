@@ -140,10 +140,7 @@ export function validateManifest(manifest: CartridgeManifest): ValidationResult 
       }
 
       // parametersSchema warning
-      if (
-        !action.parametersSchema ||
-        Object.keys(action.parametersSchema).length === 0
-      ) {
+      if (!action.parametersSchema || Object.keys(action.parametersSchema).length === 0) {
         warnings.push({
           code: "EMPTY_PARAMETERS_SCHEMA",
           message: `Action "${action.actionType}" has no parametersSchema defined`,

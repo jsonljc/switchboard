@@ -51,10 +51,38 @@ async function buildTestContext(): Promise<TestContext> {
     createTestManifest({
       id: "digital-ads",
       actions: [
-        { actionType: "digital-ads.campaign.pause", name: "Pause Campaign", description: "Pause", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "digital-ads.campaign.resume", name: "Resume Campaign", description: "Resume", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "digital-ads.budget.adjust", name: "Adjust Budget", description: "Budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
-        { actionType: "digital-ads.targeting.modify", name: "Modify Targeting", description: "Targeting", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: false },
+        {
+          actionType: "digital-ads.campaign.pause",
+          name: "Pause Campaign",
+          description: "Pause",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.campaign.resume",
+          name: "Resume Campaign",
+          description: "Resume",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.budget.adjust",
+          name: "Adjust Budget",
+          description: "Budget",
+          parametersSchema: {},
+          baseRiskCategory: "high" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.targeting.modify",
+          name: "Modify Targeting",
+          description: "Targeting",
+          parametersSchema: {},
+          baseRiskCategory: "high" as const,
+          reversible: false,
+        },
       ],
     }),
   );
@@ -77,10 +105,7 @@ async function buildTestContext(): Promise<TestContext> {
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (cartridge as any).resolveEntity = async (
-    inputRef: string,
-    entityType: string,
-  ) => ({
+  (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
     id: `resolve_${Date.now()}`,
     inputRef,
     resolvedType: entityType,
@@ -220,23 +245,13 @@ describe("MCP Server", () => {
 
     it("rejects invalid input", async () => {
       await expect(
-        handleSideEffectTool(
-          "pause_campaign",
-          { campaignId: "" },
-          ctx.auth,
-          ctx.executionService,
-        ),
+        handleSideEffectTool("pause_campaign", { campaignId: "" }, ctx.auth, ctx.executionService),
       ).rejects.toThrow();
     });
 
     it("rejects unknown side-effect tool", async () => {
       await expect(
-        handleSideEffectTool(
-          "unknown_tool",
-          {},
-          ctx.auth,
-          ctx.executionService,
-        ),
+        handleSideEffectTool("unknown_tool", {}, ctx.auth, ctx.executionService),
       ).rejects.toThrow("Unknown side-effect tool");
     });
   });
@@ -278,12 +293,12 @@ describe("MCP Server", () => {
       const envelopesBefore = await ctx.storage.envelopes.list({});
       const countBefore = envelopesBefore.length;
 
-      const result = await handleReadTool(
+      const result = (await handleReadTool(
         "simulate_action",
         { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_123" } },
         ctx.auth,
         ctx.readDeps,
-      ) as { decision: string; riskScore: number; riskCategory: string; approvalRequired: string };
+      )) as { decision: string; riskScore: number; riskCategory: string; approvalRequired: string };
 
       expect(result.decision).toBeDefined();
       expect(result.riskScore).toBeDefined();
@@ -305,12 +320,12 @@ describe("MCP Server", () => {
       );
 
       if (execResult.outcome === "PENDING_APPROVAL" && execResult.approvalId) {
-        const result = await handleReadTool(
+        const result = (await handleReadTool(
           "get_approval_status",
           { approvalId: execResult.approvalId },
           ctx.auth,
           ctx.readDeps,
-        ) as { id: string; status: string };
+        )) as { id: string; status: string };
 
         expect(result.id).toBe(execResult.approvalId);
         expect(result.status).toBeDefined();
@@ -318,12 +333,12 @@ describe("MCP Server", () => {
     });
 
     it("list_pending_approvals returns list", async () => {
-      const result = await handleReadTool(
+      const result = (await handleReadTool(
         "list_pending_approvals",
         {},
         ctx.auth,
         ctx.readDeps,
-      ) as { approvals: unknown[] };
+      )) as { approvals: unknown[] };
 
       expect(result.approvals).toBeDefined();
       expect(Array.isArray(result.approvals)).toBe(true);
@@ -337,12 +352,12 @@ describe("MCP Server", () => {
         ctx.executionService,
       );
 
-      const result = await handleReadTool(
+      const result = (await handleReadTool(
         "get_action_status",
         { envelopeId: execResult.envelopeId },
         ctx.auth,
         ctx.readDeps,
-      ) as { id: string; status: string; actionType: string };
+      )) as { id: string; status: string; actionType: string };
 
       expect(result.id).toBe(execResult.envelopeId);
       expect(result.status).toBeDefined();
@@ -351,19 +366,14 @@ describe("MCP Server", () => {
 
     it("get_action_status throws for non-existent envelope", async () => {
       await expect(
-        handleReadTool(
-          "get_action_status",
-          { envelopeId: "non_existent" },
-          ctx.auth,
-          ctx.readDeps,
-        ),
+        handleReadTool("get_action_status", { envelopeId: "non_existent" }, ctx.auth, ctx.readDeps),
       ).rejects.toThrow("Envelope not found");
     });
 
     it("rejects unknown read tool", async () => {
-      await expect(
-        handleReadTool("unknown_read", {}, ctx.auth, ctx.readDeps),
-      ).rejects.toThrow("Unknown read tool");
+      await expect(handleReadTool("unknown_read", {}, ctx.auth, ctx.readDeps)).rejects.toThrow(
+        "Unknown read tool",
+      );
     });
   });
 
@@ -382,7 +392,9 @@ describe("MCP Server", () => {
         active: true,
         rule: {
           composition: "AND" as const,
-          conditions: [{ field: "actionType", operator: "eq" as const, value: "digital-ads.targeting.modify" }],
+          conditions: [
+            { field: "actionType", operator: "eq" as const, value: "digital-ads.targeting.modify" },
+          ],
         },
         effect: "deny" as const,
         effectParams: undefined,
@@ -483,11 +495,7 @@ describe("MCP Server", () => {
     });
 
     it("categorizes all tools into side-effect, read, or governance sets", () => {
-      const allCategorized = new Set([
-        ...SIDE_EFFECT_TOOLS,
-        ...READ_TOOLS,
-        ...GOVERNANCE_TOOLS,
-      ]);
+      const allCategorized = new Set([...SIDE_EFFECT_TOOLS, ...READ_TOOLS, ...GOVERNANCE_TOOLS]);
 
       for (const def of toolDefinitions) {
         expect(allCategorized.has(def.name)).toBe(true);

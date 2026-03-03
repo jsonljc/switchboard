@@ -22,7 +22,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           outcome: "EXECUTED",
           envelopeId: "env_1",
           traceId: "trace_1",
-          executionResult: { success: true, summary: "Done", rollbackAvailable: false, partialFailures: [], durationMs: 10, externalRefs: {} },
+          executionResult: {
+            success: true,
+            summary: "Done",
+            rollbackAvailable: false,
+            partialFailures: [],
+            durationMs: 10,
+            externalRefs: {},
+          },
         }),
       };
     });
@@ -57,7 +64,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           outcome: "EXECUTED",
           envelopeId: "env_1",
           traceId: "trace_1",
-          executionResult: { success: true, summary: "Done", rollbackAvailable: false, partialFailures: [], durationMs: 10, externalRefs: {} },
+          executionResult: {
+            success: true,
+            summary: "Done",
+            rollbackAvailable: false,
+            partialFailures: [],
+            durationMs: 10,
+            externalRefs: {},
+          },
         }),
       };
     });
@@ -91,7 +105,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           outcome: "EXECUTED",
           envelopeId: "env_1",
           traceId: "trace_1",
-          executionResult: { success: true, summary: "Done", rollbackAvailable: false, partialFailures: [], durationMs: 10, externalRefs: {} },
+          executionResult: {
+            success: true,
+            summary: "Done",
+            rollbackAvailable: false,
+            partialFailures: [],
+            durationMs: 10,
+            externalRefs: {},
+          },
         }),
       };
     });
@@ -195,7 +216,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           outcome: "EXECUTED",
           envelopeId: "env_1",
           traceId: "trace_1",
-          executionResult: { success: true, summary: "Done", rollbackAvailable: false, partialFailures: [], durationMs: 10, externalRefs: {} },
+          executionResult: {
+            success: true,
+            summary: "Done",
+            rollbackAvailable: false,
+            partialFailures: [],
+            durationMs: 10,
+            externalRefs: {},
+          },
         }),
       };
     });
@@ -222,7 +250,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           ok: true,
           status: 200,
           json: async () => ({
-            result: { success: true, summary: "Executed", rollbackAvailable: false, partialFailures: [], durationMs: 5, externalRefs: {} },
+            result: {
+              success: true,
+              summary: "Executed",
+              rollbackAvailable: false,
+              partialFailures: [],
+              durationMs: 5,
+              externalRefs: {},
+            },
           }),
         };
       });
@@ -246,7 +281,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
             outcome: "EXECUTED",
             envelopeId: "env_cached",
             traceId: "trace_1",
-            executionResult: { success: true, summary: "Cached result", rollbackAvailable: false, partialFailures: [], durationMs: 5, externalRefs: {} },
+            executionResult: {
+              success: true,
+              summary: "Cached result",
+              rollbackAvailable: false,
+              partialFailures: [],
+              durationMs: 5,
+              externalRefs: {},
+            },
           }),
         };
       });
@@ -280,7 +322,14 @@ describe("ApiOrchestratorAdapter retry logic", () => {
           ok: true,
           status: 200,
           json: async () => ({
-            result: { success: true, summary: "Executed after retry", rollbackAvailable: false, partialFailures: [], durationMs: 5, externalRefs: {} },
+            result: {
+              success: true,
+              summary: "Executed after retry",
+              rollbackAvailable: false,
+              partialFailures: [],
+              durationMs: 5,
+              externalRefs: {},
+            },
           }),
         };
       });

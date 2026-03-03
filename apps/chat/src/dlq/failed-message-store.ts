@@ -45,10 +45,7 @@ export class FailedMessageStore {
   }
 
   /** List pending (or filtered-by-status) failed messages. */
-  async listPending(
-    limit = 50,
-    status: "pending" | "exhausted" | "resolved" = "pending",
-  ) {
+  async listPending(limit = 50, status: "pending" | "exhausted" | "resolved" = "pending") {
     return this.prisma.failedMessage.findMany({
       where: { status },
       orderBy: { createdAt: "desc" },
@@ -101,9 +98,7 @@ export class FailedMessageStore {
       select: { id: true, retryCount: true, maxRetries: true },
     });
 
-    const ids = overdue
-      .filter((m) => m.retryCount >= m.maxRetries)
-      .map((m) => m.id);
+    const ids = overdue.filter((m) => m.retryCount >= m.maxRetries).map((m) => m.id);
 
     if (ids.length === 0) return 0;
 

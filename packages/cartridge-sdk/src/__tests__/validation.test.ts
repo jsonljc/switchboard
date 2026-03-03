@@ -250,9 +250,7 @@ describe("validateCartridge", () => {
 
   it("INVALID_GUARDRAILS on bad guardrail return", async () => {
     const manifest = validManifest();
-    const cartridge = new TestCartridge(manifest).onGuardrails(
-      { rateLimits: "bad" } as never,
-    );
+    const cartridge = new TestCartridge(manifest).onGuardrails({ rateLimits: "bad" } as never);
     const result = await validateCartridge(cartridge);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.code === "INVALID_GUARDRAILS")).toBe(true);

@@ -48,9 +48,7 @@ export function buildRescheduleUndoRecipe(
   };
 }
 
-export function buildCadenceStopUndoRecipe(
-  cadenceInstanceId: string,
-): UndoRecipe {
+export function buildCadenceStopUndoRecipe(cadenceInstanceId: string): UndoRecipe {
   return {
     originalActionId: "",
     originalEnvelopeId: "",
@@ -62,10 +60,7 @@ export function buildCadenceStopUndoRecipe(
   };
 }
 
-export function buildJourneyStageUndoRecipe(
-  patientId: string,
-  previousStage: string,
-): UndoRecipe {
+export function buildJourneyStageUndoRecipe(patientId: string, previousStage: string): UndoRecipe {
   return {
     originalActionId: "",
     originalEnvelopeId: "",

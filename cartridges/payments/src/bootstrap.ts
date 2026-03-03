@@ -23,7 +23,7 @@ export async function bootstrapPaymentsCartridge(
   if (config.requireCredentials && !config.secretKey) {
     throw new Error(
       "STRIPE_SECRET_KEY is required in production. " +
-      "Set this environment variable or set NODE_ENV to something other than 'production'.",
+        "Set this environment variable or set NODE_ENV to something other than 'production'.",
     );
   }
 

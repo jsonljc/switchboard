@@ -30,9 +30,7 @@ export function guardInterpreterOutput(raw: unknown): {
     return { valid: true, data: result.data, errors: [] };
   }
 
-  const errors = result.error.errors.map(
-    (e) => `${e.path.join(".")}: ${e.message}`,
-  );
+  const errors = result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`);
 
   return { valid: false, data: null, errors };
 }

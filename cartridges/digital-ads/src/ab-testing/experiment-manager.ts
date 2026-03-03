@@ -84,9 +84,7 @@ export class ExperimentManager {
     const experiment = this.experiments.get(experimentId);
     if (!experiment) throw new Error(`Experiment ${experimentId} not found`);
 
-    const variants = experiment.variants.filter(
-      (v) => v.status === "active" && v.metrics,
-    );
+    const variants = experiment.variants.filter((v) => v.status === "active" && v.metrics);
 
     if (variants.length < 2) {
       return {
@@ -123,7 +121,8 @@ export class ExperimentManager {
     const secondBest = metricValues[1]!;
 
     // Simplified z-test
-    const pooledRate = (best.value * best.sampleSize + secondBest.value * secondBest.sampleSize) /
+    const pooledRate =
+      (best.value * best.sampleSize + secondBest.value * secondBest.sampleSize) /
       (best.sampleSize + secondBest.sampleSize);
 
     if (pooledRate === 0 || pooledRate === 1) {

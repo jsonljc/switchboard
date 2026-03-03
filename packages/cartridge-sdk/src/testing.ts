@@ -1,12 +1,27 @@
-import type { CartridgeManifest, ConnectionHealth, GuardrailConfig, RiskInput } from "@switchboard/schemas";
+import type {
+  CartridgeManifest,
+  ConnectionHealth,
+  GuardrailConfig,
+  RiskInput,
+} from "@switchboard/schemas";
 import type { Cartridge, CartridgeContext, ExecuteResult } from "./cartridge.js";
 
 export class TestCartridge implements Cartridge {
   readonly manifest: CartridgeManifest;
-  private executeHandler: ((actionType: string, params: Record<string, unknown>) => ExecuteResult) | null = null;
-  private enrichHandler: ((actionType: string, params: Record<string, unknown>) => Record<string, unknown>) | null = null;
-  private riskInputHandler: ((actionType: string, params: Record<string, unknown>) => RiskInput) | null = null;
-  private guardrailConfig: GuardrailConfig = { rateLimits: [], cooldowns: [], protectedEntities: [] };
+  private executeHandler:
+    | ((actionType: string, params: Record<string, unknown>) => ExecuteResult)
+    | null = null;
+  private enrichHandler:
+    | ((actionType: string, params: Record<string, unknown>) => Record<string, unknown>)
+    | null = null;
+  private riskInputHandler:
+    | ((actionType: string, params: Record<string, unknown>) => RiskInput)
+    | null = null;
+  private guardrailConfig: GuardrailConfig = {
+    rateLimits: [],
+    cooldowns: [],
+    protectedEntities: [],
+  };
 
   constructor(manifest: CartridgeManifest) {
     this.manifest = manifest;
@@ -17,7 +32,9 @@ export class TestCartridge implements Cartridge {
     return this;
   }
 
-  onEnrich(handler: (actionType: string, params: Record<string, unknown>) => Record<string, unknown>): this {
+  onEnrich(
+    handler: (actionType: string, params: Record<string, unknown>) => Record<string, unknown>,
+  ): this {
     this.enrichHandler = handler;
     return this;
   }

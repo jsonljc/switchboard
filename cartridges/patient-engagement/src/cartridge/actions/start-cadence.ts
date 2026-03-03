@@ -5,9 +5,7 @@
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import { buildCadenceStopUndoRecipe } from "./undo-recipes.js";
 
-export async function executeStartCadence(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeStartCadence(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
   const cadenceTemplateId = params.cadenceTemplateId as string;

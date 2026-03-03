@@ -51,8 +51,16 @@ export interface CrmProvider {
   // Read
   searchContacts(query: string, limit?: number): Promise<CrmContact[]>;
   getContact(contactId: string): Promise<CrmContact | null>;
-  listDeals(filters?: { contactId?: string; pipeline?: string; stage?: string }): Promise<CrmDeal[]>;
-  listActivities(filters?: { contactId?: string; dealId?: string; type?: string }): Promise<CrmActivity[]>;
+  listDeals(filters?: {
+    contactId?: string;
+    pipeline?: string;
+    stage?: string;
+  }): Promise<CrmDeal[]>;
+  listActivities(filters?: {
+    contactId?: string;
+    dealId?: string;
+    type?: string;
+  }): Promise<CrmActivity[]>;
   getPipelineStatus(pipelineId?: string): Promise<CrmPipelineStage[]>;
 
   // Write

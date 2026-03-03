@@ -59,7 +59,10 @@ async function resolveValue(
     return resolveExpression(value, stepIndex, context);
   }
 
-  if (typeof value === "string" && value.includes("$step[") || (typeof value === "string" && value.includes("$prev."))) {
+  if (
+    (typeof value === "string" && value.includes("$step[")) ||
+    (typeof value === "string" && value.includes("$prev."))
+  ) {
     // String interpolation: "Treatment: $step[0].result.data.treatmentType"
     let result = value as string;
     const bindingPattern = /\$(?:step\[\d+\]|prev)\.[a-zA-Z0-9_.]+/g;
@@ -126,11 +129,7 @@ async function resolveExpression(
   throw new BindingResolutionError(expr, "Unknown binding expression format");
 }
 
-function resolveResultPath(
-  stepResult: StepExecutionResult,
-  path: string,
-  _expr: string,
-): unknown {
+function resolveResultPath(stepResult: StepExecutionResult, path: string, _expr: string): unknown {
   // Build a navigable object from the step result
   const resultObj: Record<string, unknown> = {
     result: stepResult.result,
@@ -149,10 +148,7 @@ function resolveResultPath(
   return getNestedValue(resultObj, path);
 }
 
-async function resolveEntityBinding(
-  expr: string,
-  context: BindingContext,
-): Promise<unknown> {
+async function resolveEntityBinding(expr: string, context: BindingContext): Promise<unknown> {
   if (!context.entityGraphService) {
     throw new BindingResolutionError(expr, "EntityGraphService not configured");
   }

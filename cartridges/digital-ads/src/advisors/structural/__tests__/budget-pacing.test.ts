@@ -93,9 +93,7 @@ describe("budgetPacingAdvisor", () => {
   });
 
   it("ignores entities with zero budget", () => {
-    const entities = [
-      makeEntity({ entityId: "adset_1", spend: 700, dailyBudget: 0 }),
-    ];
+    const entities = [makeEntity({ entityId: "adset_1", spend: 700, dailyBudget: 0 })];
     const context: DiagnosticContext = { subEntities: entities };
     const findings = budgetPacingAdvisor([], [], snapshot, snapshot, context);
     expect(findings).toHaveLength(0);

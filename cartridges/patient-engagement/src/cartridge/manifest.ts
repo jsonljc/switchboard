@@ -11,7 +11,8 @@ export const PATIENT_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "patient-engagement.lead.qualify",
     name: "Qualify Lead",
-    description: "Evaluate and qualify an incoming lead based on treatment interest, urgency, and engagement signals.",
+    description:
+      "Evaluate and qualify an incoming lead based on treatment interest, urgency, and engagement signals.",
     parametersSchema: {
       patientId: { type: "string" },
       treatmentInterest: { type: "string" },
@@ -24,7 +25,8 @@ export const PATIENT_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "patient-engagement.lead.score",
     name: "Score Lead",
-    description: "Compute a deterministic 0-100 lead score based on treatment value, urgency, budget, and engagement.",
+    description:
+      "Compute a deterministic 0-100 lead score based on treatment value, urgency, budget, and engagement.",
     parametersSchema: {
       patientId: { type: "string" },
       treatmentValue: { type: "number" },
@@ -170,7 +172,8 @@ export const PATIENT_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "patient-engagement.pipeline.diagnose",
     name: "Diagnose Patient Pipeline",
-    description: "Run a full journey diagnostic across all stages with period-over-period comparison.",
+    description:
+      "Run a full journey diagnostic across all stages with period-over-period comparison.",
     parametersSchema: {
       organizationId: { type: "string" },
       currentPeriod: { type: "object" },

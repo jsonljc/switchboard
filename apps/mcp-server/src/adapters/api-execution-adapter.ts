@@ -2,7 +2,11 @@
  * API-backed execution adapter for MCP server.
  * Delegates to POST /api/execute on the Switchboard API.
  */
-import type { RuntimeAdapter, RuntimeExecuteRequest, RuntimeExecuteResponse } from "@switchboard/core";
+import type {
+  RuntimeAdapter,
+  RuntimeExecuteRequest,
+  RuntimeExecuteResponse,
+} from "@switchboard/core";
 import type { McpApiClient } from "../api-client.js";
 
 export class ApiExecutionAdapter implements RuntimeAdapter {
@@ -14,8 +18,18 @@ export class ApiExecutionAdapter implements RuntimeAdapter {
       envelopeId: string;
       traceId?: string;
       approvalId?: string;
-      approvalRequest?: { id: string; summary: string; riskCategory: string; bindingHash: string; expiresAt: string };
-      executionResult?: { success: boolean; summary: string; externalRefs: Record<string, unknown> };
+      approvalRequest?: {
+        id: string;
+        summary: string;
+        riskCategory: string;
+        bindingHash: string;
+        expiresAt: string;
+      };
+      executionResult?: {
+        success: boolean;
+        summary: string;
+        externalRefs: Record<string, unknown>;
+      };
       deniedExplanation?: string;
     }>(
       "/api/execute",
@@ -48,13 +62,15 @@ export class ApiExecutionAdapter implements RuntimeAdapter {
       envelopeId: data.envelopeId,
       traceId: data.traceId ?? request.traceId ?? "",
       approvalId: data.approvalId,
-      approvalRequest: data.approvalRequest ? {
-        id: data.approvalRequest.id,
-        summary: data.approvalRequest.summary,
-        riskCategory: data.approvalRequest.riskCategory,
-        bindingHash: data.approvalRequest.bindingHash,
-        expiresAt: new Date(data.approvalRequest.expiresAt),
-      } : undefined,
+      approvalRequest: data.approvalRequest
+        ? {
+            id: data.approvalRequest.id,
+            summary: data.approvalRequest.summary,
+            riskCategory: data.approvalRequest.riskCategory,
+            bindingHash: data.approvalRequest.bindingHash,
+            expiresAt: new Date(data.approvalRequest.expiresAt),
+          }
+        : undefined,
       executionResult: data.executionResult as any,
       deniedExplanation: data.deniedExplanation,
     };

@@ -17,11 +17,11 @@ export const productPageAdvisor: FindingAdvisor = (
   _stageAnalysis: StageDiagnostic[],
   dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
-  _previous: MetricSnapshot
+  _previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
   const vcToATC = dropoffs.find(
-    (d) => d.fromStage === "view_content" && d.toStage === "add_to_cart"
+    (d) => d.fromStage === "view_content" && d.toStage === "add_to_cart",
   );
 
   if (vcToATC && vcToATC.deltaPercent < -20) {

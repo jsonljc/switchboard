@@ -40,7 +40,10 @@ export function useCreateReport() {
 export function useUpdateReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & Partial<CreateScheduledReportInput> & { enabled?: boolean }) => {
+    mutationFn: async ({
+      id,
+      ...data
+    }: { id: string } & Partial<CreateScheduledReportInput> & { enabled?: boolean }) => {
       const res = await fetch(`/api/dashboard/scheduled-reports/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

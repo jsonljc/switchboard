@@ -1,9 +1,4 @@
-import type {
-  EntityLevel,
-  FunnelSchema,
-  MetricSnapshot,
-  TimeRange,
-} from "../core/types.js";
+import type { EntityLevel, FunnelSchema, MetricSnapshot, TimeRange } from "../core/types.js";
 import type { PlatformClient, PlatformType } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -20,7 +15,7 @@ export abstract class AbstractPlatformClient implements PlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<MetricSnapshot>;
 
   async fetchComparisonSnapshots(
@@ -28,7 +23,7 @@ export abstract class AbstractPlatformClient implements PlatformClient {
     entityLevel: EntityLevel,
     current: TimeRange,
     previous: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<{ current: MetricSnapshot; previous: MetricSnapshot }> {
     const [currentSnap, previousSnap] = await Promise.all([
       this.fetchSnapshot(entityId, entityLevel, current, funnel),

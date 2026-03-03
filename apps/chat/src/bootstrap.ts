@@ -24,8 +24,15 @@ import {
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES, createSnapshotCacheStore } from "@switchboard/digital-ads";
-import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import {
+  bootstrapDigitalAdsCartridge,
+  DEFAULT_DIGITAL_ADS_POLICIES,
+  createSnapshotCacheStore,
+} from "@switchboard/digital-ads";
+import {
+  bootstrapQuantTradingCartridge,
+  DEFAULT_TRADING_POLICIES,
+} from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import { TelegramApprovalNotifier } from "./notifications/telegram-notifier.js";
@@ -117,7 +124,10 @@ export async function createChatRuntime(
       adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
       cacheStore: createSnapshotCacheStore(),
     });
-    storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+    storage.cartridges.register(
+      "digital-ads",
+      new GuardedCartridge(adsCartridge as any, interceptors),
+    );
     await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
     // Register quant-trading cartridge
@@ -145,7 +155,8 @@ export async function createChatRuntime(
     if (slackBotToken) notifiers.push(new SlackApprovalNotifier(slackBotToken));
     const waToken = process.env["WHATSAPP_TOKEN"];
     const waPhoneId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
-    if (waToken && waPhoneId) notifiers.push(new WhatsAppApprovalNotifier({ token: waToken, phoneNumberId: waPhoneId }));
+    if (waToken && waPhoneId)
+      notifiers.push(new WhatsAppApprovalNotifier({ token: waToken, phoneNumberId: waPhoneId }));
 
     let approvalNotifier: import("@switchboard/core").ApprovalNotifier | undefined;
     if (notifiers.length > 1) {
@@ -183,7 +194,8 @@ export async function createChatRuntime(
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
     const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-    const adAccountId = clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
+    const adAccountId =
+      clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
 
     // Create Redis client for model router if REDIS_URL is available
     let chatRedis: import("ioredis").default | undefined;
@@ -193,10 +205,13 @@ export async function createChatRuntime(
       chatRedis = new IORedis(chatRedisUrl);
     }
 
-    const modelRouter = createModelRouter({
-      dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
-      clinicId: adAccountId,
-    }, chatRedis);
+    const modelRouter = createModelRouter(
+      {
+        dailyTokenBudget: clinicConfig?.dailyTokenBudget ?? 100_000,
+        clinicId: adAccountId,
+      },
+      chatRedis,
+    );
 
     const clinicInterpreter = new ClinicInterpreter(
       {
@@ -223,7 +238,7 @@ export async function createChatRuntime(
       if (cartridge) {
         const loadCampaignNames = async () => {
           try {
-            const campaigns = await cartridge.searchCampaigns?.("") ?? [];
+            const campaigns = (await cartridge.searchCampaigns?.("")) ?? [];
             const names = campaigns.map((c) => c.name);
             clinicInterpreter.updateCampaignNames(names);
             return names.length;

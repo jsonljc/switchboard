@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  smbEvaluate,
-  smbCategorizeRisk,
-  smbApprovalRequired,
-} from "../smb/evaluator.js";
+import { smbEvaluate, smbCategorizeRisk, smbApprovalRequired } from "../smb/evaluator.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
 import type { ActionProposal, GuardrailConfig } from "@switchboard/schemas";
 import type { SmbOrgConfig } from "@switchboard/schemas";
@@ -235,9 +231,7 @@ describe("smbEvaluate", () => {
     });
 
     const guardrails: GuardrailConfig = {
-      rateLimits: [
-        { scope: "action", maxActions: 5, windowMs: 60000 },
-      ],
+      rateLimits: [{ scope: "action", maxActions: 5, windowMs: 60000 }],
       cooldowns: [],
       protectedEntities: [],
     };

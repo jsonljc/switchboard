@@ -72,8 +72,9 @@ export async function handleTriggeredAlert(
   }
 
   // Determine severity
-  const severity: ProactiveNotification["severity"] =
-    alert.metricPath.includes("critical") ? "critical" : "warning";
+  const severity: ProactiveNotification["severity"] = alert.metricPath.includes("critical")
+    ? "critical"
+    : "warning";
 
   const notification: ProactiveNotification = {
     title: `Alert: ${alert.name}`,

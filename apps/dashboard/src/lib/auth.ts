@@ -69,10 +69,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           emailVerified: user.emailVerified,
         },
       });
-      return { id: updated.id, email: updated.email, name: updated.name, emailVerified: updated.emailVerified };
+      return {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        emailVerified: updated.emailVerified,
+      };
     },
-    async linkAccount() { return undefined as any; },
-    async unlinkAccount() { return undefined as any; },
+    async linkAccount() {
+      return undefined as any;
+    },
+    async unlinkAccount() {
+      return undefined as any;
+    },
     async createSession(session) {
       await prisma.dashboardSession.create({
         data: {
@@ -91,8 +100,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       });
       if (!session) return null;
       return {
-        session: { sessionToken: session.sessionToken, userId: session.userId, expires: session.expires },
-        user: { id: session.user.id, email: session.user.email, name: session.user.name, emailVerified: session.user.emailVerified },
+        session: {
+          sessionToken: session.sessionToken,
+          userId: session.userId,
+          expires: session.expires,
+        },
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          emailVerified: session.user.emailVerified,
+        },
       };
     },
     async updateSession(session) {

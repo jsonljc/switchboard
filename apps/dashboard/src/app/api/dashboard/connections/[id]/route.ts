@@ -9,7 +9,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     const data = await client.getConnection(params.id);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -21,7 +24,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const data = await client.updateConnection(params.id, body);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -32,6 +38,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     const data = await client.deleteConnection(params.id);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

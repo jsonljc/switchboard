@@ -23,7 +23,7 @@ export const learningInstabilityAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.subEntities || context.subEntities.length === 0) {
     return [];
@@ -37,18 +37,12 @@ export const learningInstabilityAdvisor: FindingAdvisor = (
 
   // Find ad sets that are in learning phase and were recently edited
   const unstableEntities = activeEntities.filter(
-    (e) =>
-      e.inLearningPhase &&
-      e.daysSinceLastEdit !== null &&
-      e.daysSinceLastEdit <= 3
+    (e) => e.inLearningPhase && e.daysSinceLastEdit !== null && e.daysSinceLastEdit <= 3,
   );
 
   if (unstableEntities.length === 0) return findings;
 
-  const unstableSpend = unstableEntities.reduce(
-    (sum, e) => sum + e.spend,
-    0
-  );
+  const unstableSpend = unstableEntities.reduce((sum, e) => sum + e.spend, 0);
   const unstablePercent = (unstableSpend / totalSpend) * 100;
 
   if (unstablePercent > 30) {

@@ -24,7 +24,7 @@ describe("digital-ads.funnel.diagnose", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
     return cartridge;
   }
@@ -39,7 +39,7 @@ describe("digital-ads.funnel.diagnose", () => {
         entityId: "act_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -65,7 +65,7 @@ describe("digital-ads.funnel.diagnose", () => {
         vertical: "commerce",
         periodDays: 7,
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.rollbackAvailable).toBe(false);
@@ -95,7 +95,7 @@ describe("digital-ads.funnel.diagnose", () => {
         connectionCredentials: {
           meta: { platform: "meta", accessToken: "ctx_token" },
         },
-      }
+      },
     );
 
     expect(result.success).toBe(true);
@@ -113,7 +113,7 @@ describe("digital-ads.funnel.diagnose", () => {
         entityId: "act_123",
         vertical: "commerce",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);
@@ -130,7 +130,7 @@ describe("digital-ads.funnel.diagnose", () => {
         entityId: "act_123",
         vertical: "leadgen",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -148,7 +148,7 @@ describe("digital-ads.funnel.diagnose", () => {
         entityId: "act_123",
         vertical: "brand",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);

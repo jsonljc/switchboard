@@ -13,24 +13,30 @@ describe("WhatsAppAdapter", () => {
     it("should parse WhatsApp text message payload", () => {
       const payload = {
         object: "whatsapp_business_account",
-        entry: [{
-          id: "123",
-          changes: [{
-            value: {
-              messaging_product: "whatsapp",
-              metadata: { display_phone_number: "1234567890", phone_number_id: "123456789" },
-              contacts: [{ profile: { name: "John Doe" }, wa_id: "15551234567" }],
-              messages: [{
-                from: "15551234567",
-                id: "wamid.abc123",
-                timestamp: "1700000000",
-                text: { body: "Pause campaign ABC" },
-                type: "text",
-              }],
-            },
-            field: "messages",
-          }],
-        }],
+        entry: [
+          {
+            id: "123",
+            changes: [
+              {
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { display_phone_number: "1234567890", phone_number_id: "123456789" },
+                  contacts: [{ profile: { name: "John Doe" }, wa_id: "15551234567" }],
+                  messages: [
+                    {
+                      from: "15551234567",
+                      id: "wamid.abc123",
+                      timestamp: "1700000000",
+                      text: { body: "Pause campaign ABC" },
+                      type: "text",
+                    },
+                  ],
+                },
+                field: "messages",
+              },
+            ],
+          },
+        ],
       };
 
       const msg = adapter.parseIncomingMessage(payload);
@@ -45,18 +51,24 @@ describe("WhatsAppAdapter", () => {
     it("should return null for non-text messages", () => {
       const payload = {
         object: "whatsapp_business_account",
-        entry: [{
-          changes: [{
-            value: {
-              messages: [{
-                from: "15551234567",
-                id: "wamid.abc123",
-                type: "image",
-                image: { id: "img_123" },
-              }],
-            },
-          }],
-        }],
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: "15551234567",
+                      id: "wamid.abc123",
+                      type: "image",
+                      image: { id: "img_123" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
       };
 
       const msg = adapter.parseIncomingMessage(payload);
@@ -72,6 +84,7 @@ describe("WhatsAppAdapter", () => {
 
   describe("verifyRequest", () => {
     it("should verify valid HMAC-SHA256 signature", () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
       const { createHmac } = require("node:crypto");
       const body = '{"test": true}';
       const sig = "sha256=" + createHmac("sha256", "test_secret").update(body).digest("hex");
@@ -106,23 +119,32 @@ describe("WhatsAppAdapter", () => {
     it("should parse interactive button_reply messages", () => {
       const payload = {
         object: "whatsapp_business_account",
-        entry: [{
-          changes: [{
-            value: {
-              contacts: [{ profile: { name: "Jane" }, wa_id: "15559876543" }],
-              messages: [{
-                from: "15559876543",
-                id: "wamid.btn123",
-                timestamp: "1700000000",
-                type: "interactive",
-                interactive: {
-                  type: "button_reply",
-                  button_reply: { id: '{"action":"approve","approvalId":"appr_1","bindingHash":"abc"}', title: "Approve" },
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "Jane" }, wa_id: "15559876543" }],
+                  messages: [
+                    {
+                      from: "15559876543",
+                      id: "wamid.btn123",
+                      timestamp: "1700000000",
+                      type: "interactive",
+                      interactive: {
+                        type: "button_reply",
+                        button_reply: {
+                          id: '{"action":"approve","approvalId":"appr_1","bindingHash":"abc"}',
+                          title: "Approve",
+                        },
+                      },
+                    },
+                  ],
                 },
-              }],
-            },
-          }],
-        }],
+              },
+            ],
+          },
+        ],
       };
 
       const msg = adapter.parseIncomingMessage(payload);
@@ -135,22 +157,28 @@ describe("WhatsAppAdapter", () => {
     it("should parse interactive list_reply messages", () => {
       const payload = {
         object: "whatsapp_business_account",
-        entry: [{
-          changes: [{
-            value: {
-              messages: [{
-                from: "15559876543",
-                id: "wamid.list123",
-                timestamp: "1700000000",
-                type: "interactive",
-                interactive: {
-                  type: "list_reply",
-                  list_reply: { id: "option_1", title: "Option 1" },
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: "15559876543",
+                      id: "wamid.list123",
+                      timestamp: "1700000000",
+                      type: "interactive",
+                      interactive: {
+                        type: "list_reply",
+                        list_reply: { id: "option_1", title: "Option 1" },
+                      },
+                    },
+                  ],
                 },
-              }],
-            },
-          }],
-        }],
+              },
+            ],
+          },
+        ],
       };
 
       const msg = adapter.parseIncomingMessage(payload);
@@ -185,13 +213,17 @@ describe("WhatsAppAdapter", () => {
   describe("extractMessageId", () => {
     it("should extract message ID from webhook payload", () => {
       const payload = {
-        entry: [{
-          changes: [{
-            value: {
-              messages: [{ id: "wamid.test123" }],
-            },
-          }],
-        }],
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [{ id: "wamid.test123" }],
+                },
+              },
+            ],
+          },
+        ],
       };
 
       expect(adapter.extractMessageId(payload)).toBe("wamid.test123");

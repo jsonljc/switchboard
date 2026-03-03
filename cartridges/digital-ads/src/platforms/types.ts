@@ -25,7 +25,7 @@ export interface PlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<MetricSnapshot>;
 
   fetchComparisonSnapshots(
@@ -33,7 +33,7 @@ export interface PlatformClient {
     entityLevel: EntityLevel,
     current: TimeRange,
     previous: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<{ current: MetricSnapshot; previous: MetricSnapshot }>;
 
   /** Optional: fetch sub-entity (ad set / ad group) breakdowns for structural analysis */
@@ -41,7 +41,7 @@ export interface PlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]>;
 }
 
@@ -71,10 +71,7 @@ export interface TikTokCredentials {
   appId: string;
 }
 
-export type PlatformCredentials =
-  | MetaCredentials
-  | GoogleCredentials
-  | TikTokCredentials;
+export type PlatformCredentials = MetaCredentials | GoogleCredentials | TikTokCredentials;
 
 // ---------------------------------------------------------------------------
 // Platform diagnostic config — bundles everything for one platform run

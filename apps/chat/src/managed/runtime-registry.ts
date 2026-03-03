@@ -43,7 +43,10 @@ export class RuntimeRegistry {
       try {
         await this.provision(ch, prisma);
       } catch (err) {
-        console.error(`[RuntimeRegistry] Failed to load managed channel ${ch.id} (${ch.channel}):`, err);
+        console.error(
+          `[RuntimeRegistry] Failed to load managed channel ${ch.id} (${ch.channel}):`,
+          err,
+        );
         await prisma.managedChannel.update({
           where: { id: ch.id },
           data: { status: "error", statusDetail: String(err) },

@@ -10,9 +10,27 @@ import type { PlatformClient } from "../../../platforms/types.js";
 const FUNNEL: FunnelSchema = {
   vertical: "commerce",
   stages: [
-    { name: "awareness", metric: "impressions", metricSource: "top_level", costMetric: "cpm", costMetricSource: "top_level" },
-    { name: "click", metric: "clicks", metricSource: "top_level", costMetric: "cpc", costMetricSource: "top_level" },
-    { name: "purchase", metric: "purchase", metricSource: "actions", costMetric: "cost_per_purchase", costMetricSource: "cost_per_action_type" },
+    {
+      name: "awareness",
+      metric: "impressions",
+      metricSource: "top_level",
+      costMetric: "cpm",
+      costMetricSource: "top_level",
+    },
+    {
+      name: "click",
+      metric: "clicks",
+      metricSource: "top_level",
+      costMetric: "cpc",
+      costMetricSource: "top_level",
+    },
+    {
+      name: "purchase",
+      metric: "purchase",
+      metricSource: "actions",
+      costMetric: "cost_per_purchase",
+      costMetricSource: "cost_per_action_type",
+    },
   ],
   primaryKPI: "purchase",
   roasMetric: null,
@@ -102,12 +120,7 @@ describe("buildDiagnosticContext", () => {
   });
 
   it("uses default 4 periods when historicalPeriods not specified", async () => {
-    const client = makeMockClient([
-      makeSnapshot(),
-      makeSnapshot(),
-      makeSnapshot(),
-      makeSnapshot(),
-    ]);
+    const client = makeMockClient([makeSnapshot(), makeSnapshot(), makeSnapshot(), makeSnapshot()]);
 
     const context = await buildDiagnosticContext({
       client,
@@ -196,8 +209,24 @@ describe("buildDiagnosticContext", () => {
 
   it("fetches sub-entity breakdowns when enableStructural and client supports it", async () => {
     const mockBreakdowns = [
-      { entityId: "adset_1", entityLevel: "adset" as const, spend: 500, conversions: 20, daysSinceLastEdit: null, inLearningPhase: false, dailyBudget: null },
-      { entityId: "adset_2", entityLevel: "adset" as const, spend: 500, conversions: 30, daysSinceLastEdit: null, inLearningPhase: false, dailyBudget: null },
+      {
+        entityId: "adset_1",
+        entityLevel: "adset" as const,
+        spend: 500,
+        conversions: 20,
+        daysSinceLastEdit: null,
+        inLearningPhase: false,
+        dailyBudget: null,
+      },
+      {
+        entityId: "adset_2",
+        entityLevel: "adset" as const,
+        spend: 500,
+        conversions: 30,
+        daysSinceLastEdit: null,
+        inLearningPhase: false,
+        dailyBudget: null,
+      },
     ];
 
     const client = makeMockClient([]);

@@ -1,7 +1,4 @@
-export {
-  LifecycleOrchestrator,
-  inferCartridgeId,
-} from "./lifecycle.js";
+export { LifecycleOrchestrator, inferCartridgeId } from "./lifecycle.js";
 export type {
   OrchestratorConfig,
   ProposeResult,

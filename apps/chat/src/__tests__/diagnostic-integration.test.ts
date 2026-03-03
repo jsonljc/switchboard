@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { RuleBasedInterpreter } from "../interpreter/interpreter.js";
-import {
-  composeHelpMessage,
-  composeUncertainReply,
-} from "../composer/reply.js";
+import { composeHelpMessage, composeUncertainReply } from "../composer/reply.js";
 import { composeClinicHelp } from "../clinic/composers.js";
 import { ChatRuntime } from "../runtime.js";
-import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "../adapters/adapter.js";
+import type {
+  ChannelAdapter,
+  ApprovalCardPayload,
+  ResultCardPayload,
+} from "../adapters/adapter.js";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { Interpreter, InterpreterResult } from "../interpreter/interpreter.js";
 import {
@@ -300,10 +301,7 @@ describe("Runtime diagnostic integration", () => {
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (cartridge as any).resolveEntity = async (
-      inputRef: string,
-      entityType: string,
-    ) => ({
+    (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
       id: `resolve_${Date.now()}`,
       inputRef,
       resolvedType: entityType,
@@ -362,19 +360,21 @@ describe("Runtime diagnostic integration", () => {
     const mockInterpreter: Interpreter = {
       async interpret(): Promise<InterpreterResult> {
         return {
-          proposals: [{
-            id: "prop_diag_1",
-            actionType: "digital-ads.funnel.diagnose",
-            parameters: {
-              platform: "meta",
-              entityId: "act_test",
-              vertical: "commerce",
-              periodDays: 7,
+          proposals: [
+            {
+              id: "prop_diag_1",
+              actionType: "digital-ads.funnel.diagnose",
+              parameters: {
+                platform: "meta",
+                entityId: "act_test",
+                vertical: "commerce",
+                periodDays: 7,
+              },
+              evidence: "Diagnostic intent: diagnose_funnel",
+              confidence: 0.85,
+              originatingMessageId: "",
             },
-            evidence: "Diagnostic intent: diagnose_funnel",
-            confidence: 0.85,
-            originatingMessageId: "",
-          }],
+          ],
           needsClarification: false,
           clarificationQuestion: null,
           confidence: 0.85,
@@ -408,14 +408,21 @@ describe("Runtime diagnostic integration", () => {
     const mockInterpreter: Interpreter = {
       async interpret(): Promise<InterpreterResult> {
         return {
-          proposals: [{
-            id: "prop_diag_hist",
-            actionType: "digital-ads.funnel.diagnose",
-            parameters: { platform: "meta", entityId: "act_test", vertical: "commerce", periodDays: 7 },
-            evidence: "Diagnostic intent",
-            confidence: 0.85,
-            originatingMessageId: "",
-          }],
+          proposals: [
+            {
+              id: "prop_diag_hist",
+              actionType: "digital-ads.funnel.diagnose",
+              parameters: {
+                platform: "meta",
+                entityId: "act_test",
+                vertical: "commerce",
+                periodDays: 7,
+              },
+              evidence: "Diagnostic intent",
+              confidence: 0.85,
+              originatingMessageId: "",
+            },
+          ],
           needsClarification: false,
           clarificationQuestion: null,
           confidence: 0.85,

@@ -42,10 +42,7 @@ function computeSpendSummary(entries: AuditEntryResponse[]): SpendSummary {
 
     // Extract spend amount from snapshot
     const snapshot = entry.snapshot as Record<string, unknown>;
-    const spend =
-      (snapshot?.dollarsAtRisk as number) ??
-      (snapshot?.amount as number) ??
-      0;
+    const spend = (snapshot?.dollarsAtRisk as number) ?? (snapshot?.amount as number) ?? 0;
 
     if (isExecuted && spend > 0) {
       if (ts >= monthStart) thisMonth += spend;

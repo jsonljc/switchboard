@@ -59,10 +59,7 @@ export class PostMutationVerifier implements CartridgeInterceptor {
     }
   }
 
-  private async pollForVerification(
-    actionType: string,
-    result: ExecuteResult,
-  ): Promise<boolean> {
+  private async pollForVerification(actionType: string, result: ExecuteResult): Promise<boolean> {
     for (let i = 0; i < this.maxRetries; i++) {
       await this.delay(1000);
 

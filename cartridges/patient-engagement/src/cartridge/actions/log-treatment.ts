@@ -4,9 +4,7 @@
 
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
-export async function executeLogTreatment(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeLogTreatment(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
   const treatmentType = params.treatmentType as string;

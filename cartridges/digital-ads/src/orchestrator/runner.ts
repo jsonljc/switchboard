@@ -4,11 +4,7 @@ import type { MultiPlatformResult, PlatformResult } from "./types.js";
 import { analyzeFunnel } from "../core/analysis/funnel-walker.js";
 import { buildComparisonPeriods } from "../core/analysis/comparator.js";
 import { buildDiagnosticContext } from "../core/analysis/context-builder.js";
-import {
-  createPlatformClient,
-  resolveFunnel,
-  resolveBenchmarks,
-} from "../platforms/registry.js";
+import { createPlatformClient, resolveFunnel, resolveBenchmarks } from "../platforms/registry.js";
 import { resolveAdvisors } from "../advisors/registry.js";
 import { correlate } from "./correlator.js";
 import { generateExecutiveSummary } from "./summary.js";
@@ -22,11 +18,9 @@ import { generatePortfolioActions } from "./portfolio-actions.js";
 // ---------------------------------------------------------------------------
 
 export async function runMultiPlatformDiagnostic(
-  config: AccountConfig
+  config: AccountConfig,
 ): Promise<MultiPlatformResult> {
-  const refDate = config.referenceDate
-    ? new Date(config.referenceDate)
-    : getYesterday();
+  const refDate = config.referenceDate ? new Date(config.referenceDate) : getYesterday();
   const periodDays = config.periodDays ?? 7;
   const periods = buildComparisonPeriods(refDate, periodDays);
 
@@ -36,8 +30,7 @@ export async function runMultiPlatformDiagnostic(
     .map(async (platformConfig): Promise<PlatformResult> => {
       try {
         const platform = platformConfig.platform;
-        const entityLevel: EntityLevel =
-          platformConfig.entityLevel ?? "account";
+        const entityLevel: EntityLevel = platformConfig.entityLevel ?? "account";
 
         // Resolve platform-specific config
         const client = createPlatformClient(platformConfig.credentials);
@@ -50,14 +43,13 @@ export async function runMultiPlatformDiagnostic(
         const advisors = resolveAdvisors(platform, config.vertical);
 
         // Fetch comparison data
-        const { current, previous } =
-          await client.fetchComparisonSnapshots(
-            platformConfig.entityId,
-            entityLevel,
-            periods.current,
-            periods.previous,
-            funnel
-          );
+        const { current, previous } = await client.fetchComparisonSnapshots(
+          platformConfig.entityId,
+          entityLevel,
+          periods.current,
+          periods.previous,
+          funnel,
+        );
 
         // Build diagnostic context (historical trends, structural data, revenue)
         const context = await buildDiagnosticContext({
@@ -119,14 +111,13 @@ export async function runMultiPlatformDiagnostic(
   });
 
   // Correlate across platforms
-  const { findings: crossPlatformFindings, budgetRecommendations } =
-    correlate(platformResults);
+  const { findings: crossPlatformFindings, budgetRecommendations } = correlate(platformResults);
 
   // Generate portfolio actions
   const portfolioActions = generatePortfolioActions(
     platformResults,
     crossPlatformFindings,
-    budgetRecommendations
+    budgetRecommendations,
   );
 
   // Generate executive summary
@@ -134,7 +125,7 @@ export async function runMultiPlatformDiagnostic(
     platformResults,
     crossPlatformFindings,
     budgetRecommendations,
-    portfolioActions
+    portfolioActions,
   );
 
   return {

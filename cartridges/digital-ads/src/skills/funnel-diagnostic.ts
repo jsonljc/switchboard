@@ -1,18 +1,9 @@
 import { analyzeFunnel } from "../core/analysis/funnel-walker.js";
 import { buildComparisonPeriods } from "../core/analysis/comparator.js";
 import { buildDiagnosticContext } from "../core/analysis/context-builder.js";
-import {
-  createPlatformClient,
-  resolveFunnel,
-  resolveBenchmarks,
-} from "../platforms/registry.js";
+import { createPlatformClient, resolveFunnel, resolveBenchmarks } from "../platforms/registry.js";
 import { resolveAdvisors } from "../advisors/registry.js";
-import type {
-  DiagnosticResult,
-  EntityLevel,
-  Severity,
-  VerticalType,
-} from "../core/types.js";
+import type { DiagnosticResult, EntityLevel, Severity, VerticalType } from "../core/types.js";
 import type { PlatformType, PlatformCredentials } from "../platforms/types.js";
 
 // ---------------------------------------------------------------------------
@@ -59,9 +50,7 @@ export interface FunnelDiagnosticInput {
   enableStructuralAnalysis?: boolean;
 }
 
-export async function runFunnelDiagnostic(
-  input: FunnelDiagnosticInput
-): Promise<DiagnosticResult> {
+export async function runFunnelDiagnostic(input: FunnelDiagnosticInput): Promise<DiagnosticResult> {
   const {
     entityId,
     entityLevel = "account",
@@ -95,7 +84,7 @@ export async function runFunnelDiagnostic(
     entityLevel,
     periods.current,
     periods.previous,
-    funnel
+    funnel,
   );
 
   // Build diagnostic context
@@ -137,15 +126,13 @@ export function formatDiagnostic(result: DiagnosticResult): string {
   const lines: string[] = [];
 
   // Header
-  const platformTag = result.platform
-    ? ` (${result.platform.toUpperCase()})`
-    : "";
+  const platformTag = result.platform ? ` (${result.platform.toUpperCase()})` : "";
   lines.push(`## Funnel Diagnostic: ${result.entityId}${platformTag}`);
   lines.push(
-    `Period: ${result.periods.current.since} to ${result.periods.current.until} vs ${result.periods.previous.since} to ${result.periods.previous.until}`
+    `Period: ${result.periods.current.since} to ${result.periods.current.until} vs ${result.periods.previous.since} to ${result.periods.previous.until}`,
   );
   lines.push(
-    `Spend: $${result.spend.current.toFixed(2)} (prev: $${result.spend.previous.toFixed(2)})`
+    `Spend: $${result.spend.current.toFixed(2)} (prev: $${result.spend.previous.toFixed(2)})`,
   );
   lines.push("");
 
@@ -154,7 +141,7 @@ export function formatDiagnostic(result: DiagnosticResult): string {
   const kpiIcon = severityIcon(kpi.severity);
   lines.push(`### Primary KPI: ${kpi.name} ${kpiIcon}`);
   lines.push(
-    `$${kpi.current.toFixed(2)} → was $${kpi.previous.toFixed(2)} (${kpi.deltaPercent > 0 ? "+" : ""}${kpi.deltaPercent.toFixed(1)}% WoW)`
+    `$${kpi.current.toFixed(2)} → was $${kpi.previous.toFixed(2)} (${kpi.deltaPercent > 0 ? "+" : ""}${kpi.deltaPercent.toFixed(1)}% WoW)`,
   );
   lines.push("");
 
@@ -163,7 +150,7 @@ export function formatDiagnostic(result: DiagnosticResult): string {
   for (const stage of result.stageAnalysis) {
     const icon = stage.isSignificant ? severityIcon(stage.severity) : "";
     lines.push(
-      `- ${stage.stageName}: ${stage.currentValue.toLocaleString()} (${stage.deltaPercent > 0 ? "+" : ""}${stage.deltaPercent.toFixed(1)}%) ${icon}`
+      `- ${stage.stageName}: ${stage.currentValue.toLocaleString()} (${stage.deltaPercent > 0 ? "+" : ""}${stage.deltaPercent.toFixed(1)}%) ${icon}`,
     );
   }
   lines.push("");
@@ -174,7 +161,7 @@ export function formatDiagnostic(result: DiagnosticResult): string {
     const change = dropoff.deltaPercent;
     const flag = change < -20 ? " ⚠" : "";
     lines.push(
-      `- ${dropoff.fromStage} → ${dropoff.toStage}: ${(dropoff.currentRate * 100).toFixed(2)}% (was ${(dropoff.previousRate * 100).toFixed(2)}%)${flag}`
+      `- ${dropoff.fromStage} → ${dropoff.toStage}: ${(dropoff.currentRate * 100).toFixed(2)}% (was ${(dropoff.previousRate * 100).toFixed(2)}%)${flag}`,
     );
   }
   lines.push("");
@@ -182,7 +169,7 @@ export function formatDiagnostic(result: DiagnosticResult): string {
   // Bottleneck
   if (result.bottleneck) {
     lines.push(
-      `### Bottleneck: ${result.bottleneck.stageName} (${result.bottleneck.deltaPercent.toFixed(1)}% drop)`
+      `### Bottleneck: ${result.bottleneck.stageName} (${result.bottleneck.deltaPercent.toFixed(1)}% drop)`,
     );
     lines.push("");
   }
@@ -191,13 +178,11 @@ export function formatDiagnostic(result: DiagnosticResult): string {
   if (result.elasticity && result.elasticity.impactRanking.length > 0) {
     lines.push("### Economic Impact");
     lines.push(
-      `Estimated total revenue loss: $${Math.abs(result.elasticity.totalEstimatedRevenueLoss).toFixed(0)}/period`
+      `Estimated total revenue loss: $${Math.abs(result.elasticity.totalEstimatedRevenueLoss).toFixed(0)}/period`,
     );
     for (const entry of result.elasticity.impactRanking) {
       const icon = severityIcon(entry.severity);
-      lines.push(
-        `- ${entry.stage}: $${Math.abs(entry.estimatedRevenueDelta).toFixed(0)} ${icon}`
-      );
+      lines.push(`- ${entry.stage}: $${Math.abs(entry.estimatedRevenueDelta).toFixed(0)} ${icon}`);
     }
     lines.push("");
   }
@@ -227,10 +212,7 @@ export function formatDiagnostic(result: DiagnosticResult): string {
  * For Meta and TikTok, accessToken is sufficient for the basic case.
  * For Google, the full credentials should be provided via the config system.
  */
-function buildCredentials(
-  platform: PlatformType,
-  accessToken: string
-): PlatformCredentials {
+function buildCredentials(platform: PlatformType, accessToken: string): PlatformCredentials {
   switch (platform) {
     case "meta":
       return { platform: "meta", accessToken };
@@ -238,7 +220,7 @@ function buildCredentials(
       return { platform: "tiktok", accessToken, appId: "" };
     case "google":
       throw new Error(
-        "Google Ads requires full OAuth2 credentials. Use the multi-platform diagnostic skill with an AccountConfig instead."
+        "Google Ads requires full OAuth2 credentials. Use the multi-platform diagnostic skill with an AccountConfig instead.",
       );
   }
 }

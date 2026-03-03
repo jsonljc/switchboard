@@ -7,9 +7,7 @@ import { analyzeJourney } from "../core/analysis/journey-walker.js";
 import { PATIENT_JOURNEY_SCHEMA } from "../core/types.js";
 import type { PatientMetricsSnapshot, ComparisonPeriods } from "../core/types.js";
 
-function makeSnapshot(
-  overrides: Partial<PatientMetricsSnapshot> = {},
-): PatientMetricsSnapshot {
+function makeSnapshot(overrides: Partial<PatientMetricsSnapshot> = {}): PatientMetricsSnapshot {
   return {
     organizationId: "org-1",
     periodStart: "2024-01-01",
@@ -103,12 +101,14 @@ describe("analyzeJourney", () => {
     const current = makeSnapshot();
     const previous = makeSnapshot();
 
-    const mockAdvisor = () => [{
-      severity: "info" as const,
-      stage: "test",
-      message: "Test finding",
-      recommendation: null,
-    }];
+    const mockAdvisor = () => [
+      {
+        severity: "info" as const,
+        stage: "test",
+        message: "Test finding",
+        recommendation: null,
+      },
+    ];
 
     const result = analyzeJourney({
       schema: PATIENT_JOURNEY_SCHEMA,
@@ -139,9 +139,7 @@ describe("analyzeJourney", () => {
 
     const severityOrder = { critical: 0, warning: 1, info: 2, healthy: 3 };
     for (let i = 1; i < result.findings.length; i++) {
-      expect(
-        severityOrder[result.findings[i]!.severity],
-      ).toBeGreaterThanOrEqual(
+      expect(severityOrder[result.findings[i]!.severity]).toBeGreaterThanOrEqual(
         severityOrder[result.findings[i - 1]!.severity],
       );
     }

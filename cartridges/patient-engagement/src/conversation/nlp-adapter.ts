@@ -25,9 +25,19 @@ export interface NLPAdapterResult {
  * Affirmative/negative word → option mapping for yes/no questions.
  */
 const YES_NO_MAP: Record<string, number> = {
-  yes: 1, yeah: 1, yep: 1, yup: 1, sure: 1, ok: 1, okay: 1,
-  absolutely: 1, definitely: 1,
-  no: 2, nope: 2, nah: 2, pass: 2,
+  yes: 1,
+  yeah: 1,
+  yep: 1,
+  yup: 1,
+  sure: 1,
+  ok: 1,
+  okay: 1,
+  absolutely: 1,
+  definitely: 1,
+  no: 2,
+  nope: 2,
+  nah: 2,
+  pass: 2,
 };
 
 export class ConversationNLPAdapter {
@@ -41,10 +51,7 @@ export class ConversationNLPAdapter {
    * Process a user message in the context of the current conversation step.
    * Returns a resolved option index or extracted variables.
    */
-  processMessage(
-    message: string,
-    currentStep: FlowStep | null,
-  ): NLPAdapterResult {
+  processMessage(message: string, currentStep: FlowStep | null): NLPAdapterResult {
     const trimmed = message.trim();
     const classification = this.classifier.classify(trimmed);
 

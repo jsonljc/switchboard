@@ -31,8 +31,14 @@ const COMPLIANCE_BLOCKLIST = [
   { pattern: /cure[sd]?\s/i, reason: "Cannot claim to cure conditions" },
   { pattern: /100%\s+(?:safe|effective|success)/i, reason: "Cannot claim 100% efficacy" },
   { pattern: /no\s+(?:risk|side\s+effects?)/i, reason: "Cannot claim zero risk" },
-  { pattern: /(?:best|#1|number\s+one)\s+(?:in|doctor|clinic)/i, reason: "Superlative claims require substantiation" },
-  { pattern: /before\s+and\s+after/i, reason: "Before/after imagery may violate platform policies" },
+  {
+    pattern: /(?:best|#1|number\s+one)\s+(?:in|doctor|clinic)/i,
+    reason: "Superlative claims require substantiation",
+  },
+  {
+    pattern: /before\s+and\s+after/i,
+    reason: "Before/after imagery may violate platform policies",
+  },
   { pattern: /\b(?:FDA|approved)\b.*(?:not|hasn't|hasn't)/i, reason: "Misleading FDA claims" },
 ];
 
@@ -138,10 +144,7 @@ Respond with ONLY a JSON array, no other text:
     }
   }
 
-  private checkCompliance(
-    variant: CreativeVariant,
-    _extraRules?: string[],
-  ): string[] {
+  private checkCompliance(variant: CreativeVariant, _extraRules?: string[]): string[] {
     const issues: string[] = [];
     const fullText = `${variant.headline} ${variant.body} ${variant.callToAction}`;
 

@@ -1,5 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CompetenceRecord, CompetencePolicy, CompetenceEvent, CompetenceThresholds } from "@switchboard/schemas";
+import type {
+  CompetenceRecord,
+  CompetencePolicy,
+  CompetenceEvent,
+  CompetenceThresholds,
+} from "@switchboard/schemas";
 import type { CompetenceStore } from "@switchboard/core";
 import { matchActionTypePattern } from "@switchboard/core";
 
@@ -16,7 +21,9 @@ export class PrismaCompetenceStore implements CompetenceStore {
 
   async saveRecord(record: CompetenceRecord): Promise<void> {
     await this.prisma.competenceRecord.upsert({
-      where: { principalId_actionType: { principalId: record.principalId, actionType: record.actionType } },
+      where: {
+        principalId_actionType: { principalId: record.principalId, actionType: record.actionType },
+      },
       create: {
         id: record.id,
         principalId: record.principalId,

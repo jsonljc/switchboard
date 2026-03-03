@@ -66,11 +66,11 @@ describe("FileSystemEvidenceStore path traversal", () => {
     const tmpDir = path.join(os.tmpdir(), "evidence-test-" + Date.now());
     const store = new FileSystemEvidenceStore(tmpDir);
 
-    await expect(store.store("../../etc/passwd", Buffer.from("data")))
-      .rejects.toThrow("Path traversal detected");
+    await expect(store.store("../../etc/passwd", Buffer.from("data"))).rejects.toThrow(
+      "Path traversal detected",
+    );
 
-    await expect(store.retrieve("../../../etc/shadow"))
-      .rejects.toThrow("Path traversal detected");
+    await expect(store.retrieve("../../../etc/shadow")).rejects.toThrow("Path traversal detected");
   });
 
   it("should allow safe nested paths", async () => {

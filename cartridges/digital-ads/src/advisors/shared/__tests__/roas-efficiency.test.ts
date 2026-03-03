@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  roasEfficiencyAdvisor,
-  createROASEfficiencyAdvisor,
-} from "../roas-efficiency.js";
+import { roasEfficiencyAdvisor, createROASEfficiencyAdvisor } from "../roas-efficiency.js";
 import type { MetricSnapshot } from "../../../core/types.js";
 
 // ---------------------------------------------------------------------------
@@ -93,9 +90,7 @@ describe("roasEfficiencyAdvisor", () => {
 
     const findings = advisor([], [], current, previous);
 
-    const targetFinding = findings.find((f) =>
-      f.message.includes("below target")
-    );
+    const targetFinding = findings.find((f) => f.message.includes("below target"));
     expect(targetFinding).toBeDefined();
     expect(targetFinding!.severity).toBe("critical"); // 40% shortfall
   });
@@ -107,9 +102,7 @@ describe("roasEfficiencyAdvisor", () => {
 
     const findings = advisor([], [], current, previous);
 
-    const targetFinding = findings.find((f) =>
-      f.message.includes("below target")
-    );
+    const targetFinding = findings.find((f) => f.message.includes("below target"));
     expect(targetFinding).toBeUndefined();
   });
 

@@ -30,97 +30,84 @@ import { getYesterday } from "../utils.js";
 export async function executeDiagnosePortfolio(
   params: DiagnosePortfolioParams,
   providers: Map<string, AdPlatformProvider>,
-  _session: SessionState
+  _session: SessionState,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
   try {
-    const refDate = params.referenceDate
-      ? new Date(params.referenceDate)
-      : getYesterday();
+    const refDate = params.referenceDate ? new Date(params.referenceDate) : getYesterday();
     const periodDays = params.periodDays ?? 7;
     const periods = buildComparisonPeriods(refDate, periodDays);
 
     // Run per-platform diagnostics using providers
-    const tasks = params.platforms.map(
-      async (platformConfig): Promise<PlatformResult> => {
-        try {
-          const provider = providers.get(platformConfig.platform);
-          if (!provider) {
-            return {
-              platform: platformConfig.platform,
-              status: "error",
-              error: `No provider registered for platform: ${platformConfig.platform}`,
-            };
-          }
-
-          const client = provider.createClient(platformConfig.credentials);
-          const entityLevel: EntityLevel =
-            platformConfig.entityLevel ?? "account";
-
-          const funnel = resolveFunnel(platformConfig.platform, params.vertical, {
-            qualifiedLeadActionType: platformConfig.qualifiedLeadActionType,
-          });
-          const benchmarks = resolveBenchmarks(
-            platformConfig.platform,
-            params.vertical,
-            {
-              qualifiedLeadActionType: platformConfig.qualifiedLeadActionType,
-            }
-          );
-          const advisors = resolveAdvisors(
-            platformConfig.platform,
-            params.vertical
-          );
-
-          const { current, previous } =
-            await client.fetchComparisonSnapshots(
-              platformConfig.entityId,
-              entityLevel,
-              periods.current,
-              periods.previous,
-              funnel
-            );
-
-          const context = await buildDiagnosticContext({
-            client,
-            entityId: platformConfig.entityId,
-            entityLevel,
-            funnel,
-            referenceDate: refDate,
-            periodDays,
-            enableHistorical: platformConfig.enableHistoricalTrends ?? false,
-            historicalPeriods: 4,
-            enableStructural: platformConfig.enableStructuralAnalysis ?? false,
-            currentSnapshot: current,
-            previousSnapshot: previous,
-          });
-
-          const result = analyzeFunnel({
-            funnel,
-            current,
-            previous,
-            periods,
-            benchmarks,
-            advisors,
-            context,
-          });
-          result.platform = platformConfig.platform;
-
-          return {
-            platform: platformConfig.platform,
-            status: "success",
-            result,
-          };
-        } catch (err) {
+    const tasks = params.platforms.map(async (platformConfig): Promise<PlatformResult> => {
+      try {
+        const provider = providers.get(platformConfig.platform);
+        if (!provider) {
           return {
             platform: platformConfig.platform,
             status: "error",
-            error: err instanceof Error ? err.message : String(err),
+            error: `No provider registered for platform: ${platformConfig.platform}`,
           };
         }
+
+        const client = provider.createClient(platformConfig.credentials);
+        const entityLevel: EntityLevel = platformConfig.entityLevel ?? "account";
+
+        const funnel = resolveFunnel(platformConfig.platform, params.vertical, {
+          qualifiedLeadActionType: platformConfig.qualifiedLeadActionType,
+        });
+        const benchmarks = resolveBenchmarks(platformConfig.platform, params.vertical, {
+          qualifiedLeadActionType: platformConfig.qualifiedLeadActionType,
+        });
+        const advisors = resolveAdvisors(platformConfig.platform, params.vertical);
+
+        const { current, previous } = await client.fetchComparisonSnapshots(
+          platformConfig.entityId,
+          entityLevel,
+          periods.current,
+          periods.previous,
+          funnel,
+        );
+
+        const context = await buildDiagnosticContext({
+          client,
+          entityId: platformConfig.entityId,
+          entityLevel,
+          funnel,
+          referenceDate: refDate,
+          periodDays,
+          enableHistorical: platformConfig.enableHistoricalTrends ?? false,
+          historicalPeriods: 4,
+          enableStructural: platformConfig.enableStructuralAnalysis ?? false,
+          currentSnapshot: current,
+          previousSnapshot: previous,
+        });
+
+        const result = analyzeFunnel({
+          funnel,
+          current,
+          previous,
+          periods,
+          benchmarks,
+          advisors,
+          context,
+        });
+        result.platform = platformConfig.platform;
+
+        return {
+          platform: platformConfig.platform,
+          status: "success",
+          result,
+        };
+      } catch (err) {
+        return {
+          platform: platformConfig.platform,
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-    );
+    });
 
     const settled = await Promise.allSettled(tasks);
     const platformResults: PlatformResult[] = settled.map((s, index) => {
@@ -133,14 +120,13 @@ export async function executeDiagnosePortfolio(
     });
 
     // Correlate across platforms
-    const { findings: crossPlatformFindings, budgetRecommendations } =
-      correlate(platformResults);
+    const { findings: crossPlatformFindings, budgetRecommendations } = correlate(platformResults);
 
     // Generate portfolio actions
     const portfolioActions = generatePortfolioActions(
       platformResults,
       crossPlatformFindings,
-      budgetRecommendations
+      budgetRecommendations,
     );
 
     // Generate executive summary
@@ -148,7 +134,7 @@ export async function executeDiagnosePortfolio(
       platformResults,
       crossPlatformFindings,
       budgetRecommendations,
-      portfolioActions
+      portfolioActions,
     );
 
     const multiResult = {
@@ -167,12 +153,8 @@ export async function executeDiagnosePortfolio(
         error: p.error ?? "Unknown error",
       }));
 
-    const successCount = platformResults.filter(
-      (p) => p.status === "success"
-    ).length;
-    const errorCount = platformResults.filter(
-      (p) => p.status === "error"
-    ).length;
+    const successCount = platformResults.filter((p) => p.status === "success").length;
+    const errorCount = platformResults.filter((p) => p.status === "error").length;
     const totalFindings = crossPlatformFindings.length;
 
     return {

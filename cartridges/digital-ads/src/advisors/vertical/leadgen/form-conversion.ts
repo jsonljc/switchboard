@@ -18,12 +18,10 @@ export const formConversionAdvisor: FindingAdvisor = (
   _stageAnalysis: StageDiagnostic[],
   dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
-  _previous: MetricSnapshot
+  _previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
-  const clickToLead = dropoffs.find(
-    (d) => d.fromStage === "click" && d.toStage === "lead"
-  );
+  const clickToLead = dropoffs.find((d) => d.fromStage === "click" && d.toStage === "lead");
 
   if (!clickToLead) return findings;
 

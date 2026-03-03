@@ -13,12 +13,16 @@ export const RoleOverlaySchema = z.object({
   priority: z.number().int().nonnegative(),
   active: z.boolean(),
   conditions: z.object({
-    timeWindows: z.array(z.object({
-      dayOfWeek: z.array(z.number().int().min(0).max(6)),
-      startHour: z.number().int().min(0).max(23),
-      endHour: z.number().int().min(0).max(23),
-      timezone: z.string(),
-    })).optional(),
+    timeWindows: z
+      .array(
+        z.object({
+          dayOfWeek: z.array(z.number().int().min(0).max(6)),
+          startHour: z.number().int().min(0).max(23),
+          endHour: z.number().int().min(0).max(23),
+          timezone: z.string(),
+        }),
+      )
+      .optional(),
     cartridgeIds: z.array(z.string()).optional(),
     riskCategories: z.array(z.string()).optional(),
   }),

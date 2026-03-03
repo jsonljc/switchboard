@@ -19,18 +19,14 @@ export interface AccountHistory {
  * Uses the coefficient of variation (stddev / mean) from history.
  * Returns null if not enough history (< 4 weeks).
  */
-export function accountVariance(
-  metricKey: string,
-  history: AccountHistory
-): number | null {
+export function accountVariance(metricKey: string, history: AccountHistory): number | null {
   const values = history.weeklyValues[metricKey];
   if (!values || values.length < 4) return null;
 
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   if (mean === 0) return null;
 
-  const variance =
-    values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
   const stdDev = Math.sqrt(variance);
 
   // Return as percentage
@@ -44,7 +40,7 @@ export function accountVariance(
 export function getEffectiveVariance(
   metricKey: string,
   history: AccountHistory | null,
-  benchmarks: VerticalBenchmarks
+  benchmarks: VerticalBenchmarks,
 ): number {
   if (history) {
     const acctVar = accountVariance(metricKey, history);

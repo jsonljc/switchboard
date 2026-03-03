@@ -18,7 +18,5 @@ export function describePatch(
     }
   }
 
-  return changes.length > 0
-    ? `Modified: ${changes.join(", ")}`
-    : "No changes applied";
+  return changes.length > 0 ? `Modified: ${changes.join(", ")}` : "No changes applied";
 }

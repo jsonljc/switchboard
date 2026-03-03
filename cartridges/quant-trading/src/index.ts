@@ -17,10 +17,7 @@ import {
   computeRebalanceRisk,
   computeStopLossRisk,
 } from "./risk/categories.js";
-import {
-  buildLimitOrderUndoRecipe,
-  buildStopLossUndoRecipe,
-} from "./actions/index.js";
+import { buildLimitOrderUndoRecipe, buildStopLossUndoRecipe } from "./actions/index.js";
 
 export class QuantTradingCartridge implements Cartridge {
   readonly manifest: CartridgeManifest = QUANT_TRADING_MANIFEST;
@@ -40,7 +37,9 @@ export class QuantTradingCartridge implements Cartridge {
             summary: `Missing required parameter: ${field.name}`,
             externalRefs: {},
             rollbackAvailable: false,
-            partialFailures: [{ step: "validation", error: `Missing required parameter: ${field.name}` }],
+            partialFailures: [
+              { step: "validation", error: `Missing required parameter: ${field.name}` },
+            ],
             durationMs: 0,
             undoRecipe: null,
           },
@@ -54,7 +53,9 @@ export class QuantTradingCartridge implements Cartridge {
             summary: `Parameter ${field.name} must be a valid number`,
             externalRefs: {},
             rollbackAvailable: false,
-            partialFailures: [{ step: "validation", error: `Parameter ${field.name} must be a valid number` }],
+            partialFailures: [
+              { step: "validation", error: `Parameter ${field.name} must be a valid number` },
+            ],
             durationMs: 0,
             undoRecipe: null,
           },
@@ -68,7 +69,9 @@ export class QuantTradingCartridge implements Cartridge {
             summary: `Parameter ${field.name} must be a string`,
             externalRefs: {},
             rollbackAvailable: false,
-            partialFailures: [{ step: "validation", error: `Parameter ${field.name} must be a string` }],
+            partialFailures: [
+              { step: "validation", error: `Parameter ${field.name} must be a string` },
+            ],
             durationMs: 0,
             undoRecipe: null,
           },
@@ -97,7 +100,7 @@ export class QuantTradingCartridge implements Cartridge {
   ): Promise<Record<string, unknown>> {
     const provider = this.getProvider();
     const symbol = parameters["symbol"] as string | undefined;
-    const portfolioId = parameters["portfolioId"] as string | undefined ?? "default";
+    const portfolioId = (parameters["portfolioId"] as string | undefined) ?? "default";
 
     const enriched: Record<string, unknown> = {};
 
@@ -124,7 +127,8 @@ export class QuantTradingCartridge implements Cartridge {
     // Compute dollarsAtRisk for policy evaluation
     const quantity = typeof parameters["quantity"] === "number" ? parameters["quantity"] : 0;
     const limitPrice = typeof parameters["limitPrice"] === "number" ? parameters["limitPrice"] : 0;
-    const currentPrice = typeof enriched["currentPrice"] === "number" ? enriched["currentPrice"] : 0;
+    const currentPrice =
+      typeof enriched["currentPrice"] === "number" ? enriched["currentPrice"] : 0;
 
     if (limitPrice > 0 && quantity > 0) {
       enriched["dollarsAtRisk"] = quantity * limitPrice;
@@ -154,11 +158,15 @@ export class QuantTradingCartridge implements Cartridge {
 
         const symbol = parameters["symbol"] as string;
         const quantity = parameters["quantity"] as number;
-        const portfolioId = parameters["portfolioId"] as string ?? "default";
+        const portfolioId = (parameters["portfolioId"] as string) ?? "default";
         const side = actionType === "trading.order.market_buy" ? "buy" : "sell";
 
         const result = await provider.placeOrder({
-          symbol, side, type: "market", quantity, portfolioId,
+          symbol,
+          side,
+          type: "market",
+          quantity,
+          portfolioId,
         });
 
         return {
@@ -184,11 +192,16 @@ export class QuantTradingCartridge implements Cartridge {
         const symbol = parameters["symbol"] as string;
         const quantity = parameters["quantity"] as number;
         const limitPrice = parameters["limitPrice"] as number;
-        const portfolioId = parameters["portfolioId"] as string ?? "default";
+        const portfolioId = (parameters["portfolioId"] as string) ?? "default";
         const side = actionType === "trading.order.limit_buy" ? "buy" : "sell";
 
         const result = await provider.placeOrder({
-          symbol, side, type: "limit", quantity, limitPrice, portfolioId,
+          symbol,
+          side,
+          type: "limit",
+          quantity,
+          limitPrice,
+          portfolioId,
         });
 
         return {
@@ -200,16 +213,14 @@ export class QuantTradingCartridge implements Cartridge {
           durationMs: Date.now() - start,
           undoRecipe: buildLimitOrderUndoRecipe(
             result.orderId,
-            parameters["_envelopeId"] as string ?? "unknown",
-            parameters["_actionId"] as string ?? "unknown",
+            (parameters["_envelopeId"] as string) ?? "unknown",
+            (parameters["_actionId"] as string) ?? "unknown",
           ),
         };
       }
 
       case "trading.order.cancel": {
-        const validation = this.validateRequired(parameters, [
-          { name: "orderId", type: "string" },
-        ]);
+        const validation = this.validateRequired(parameters, [{ name: "orderId", type: "string" }]);
         if (!validation.valid) return validation.result;
 
         const orderId = parameters["orderId"] as string;
@@ -229,13 +240,11 @@ export class QuantTradingCartridge implements Cartridge {
       }
 
       case "trading.position.close": {
-        const validation = this.validateRequired(parameters, [
-          { name: "symbol", type: "string" },
-        ]);
+        const validation = this.validateRequired(parameters, [{ name: "symbol", type: "string" }]);
         if (!validation.valid) return validation.result;
 
         const symbol = parameters["symbol"] as string;
-        const portfolioId = parameters["portfolioId"] as string ?? "default";
+        const portfolioId = (parameters["portfolioId"] as string) ?? "default";
         const positions = await provider.getPositions(portfolioId);
         const position = positions.find((p) => p.symbol === symbol);
 
@@ -252,8 +261,11 @@ export class QuantTradingCartridge implements Cartridge {
         }
 
         const result = await provider.placeOrder({
-          symbol, side: "sell", type: "market",
-          quantity: position.quantity, portfolioId,
+          symbol,
+          side: "sell",
+          type: "market",
+          quantity: position.quantity,
+          portfolioId,
         });
 
         return {
@@ -268,7 +280,7 @@ export class QuantTradingCartridge implements Cartridge {
       }
 
       case "trading.portfolio.rebalance": {
-        const portfolioId = parameters["portfolioId"] as string ?? "default";
+        const portfolioId = (parameters["portfolioId"] as string) ?? "default";
         const portfolio = await provider.getPortfolio(portfolioId);
 
         return {
@@ -291,7 +303,7 @@ export class QuantTradingCartridge implements Cartridge {
 
         const symbol = parameters["symbol"] as string;
         const stopPrice = parameters["stopPrice"] as number;
-        const portfolioId = parameters["portfolioId"] as string ?? "default";
+        const portfolioId = (parameters["portfolioId"] as string) ?? "default";
 
         const result = await provider.setStopLoss({ symbol, portfolioId, stopPrice });
 
@@ -304,8 +316,8 @@ export class QuantTradingCartridge implements Cartridge {
           durationMs: Date.now() - start,
           undoRecipe: buildStopLossUndoRecipe(
             result.orderId,
-            parameters["_envelopeId"] as string ?? "unknown",
-            parameters["_actionId"] as string ?? "unknown",
+            (parameters["_envelopeId"] as string) ?? "unknown",
+            (parameters["_actionId"] as string) ?? "unknown",
           ),
         };
       }
@@ -337,7 +349,7 @@ export class QuantTradingCartridge implements Cartridge {
           {
             symbol: parameters["symbol"] as string,
             quantity: parameters["quantity"] as number,
-            portfolioId: parameters["portfolioId"] as string ?? "default",
+            portfolioId: (parameters["portfolioId"] as string) ?? "default",
           },
           provider,
         );
@@ -349,7 +361,7 @@ export class QuantTradingCartridge implements Cartridge {
             symbol: parameters["symbol"] as string,
             quantity: parameters["quantity"] as number,
             limitPrice: parameters["limitPrice"] as number,
-            portfolioId: parameters["portfolioId"] as string ?? "default",
+            portfolioId: (parameters["portfolioId"] as string) ?? "default",
           },
           provider,
         );
@@ -361,14 +373,14 @@ export class QuantTradingCartridge implements Cartridge {
         return computeClosePositionRisk(
           {
             symbol: parameters["symbol"] as string,
-            portfolioId: parameters["portfolioId"] as string ?? "default",
+            portfolioId: (parameters["portfolioId"] as string) ?? "default",
           },
           provider,
         );
 
       case "trading.portfolio.rebalance":
         return computeRebalanceRisk(
-          { portfolioId: parameters["portfolioId"] as string ?? "default" },
+          { portfolioId: (parameters["portfolioId"] as string) ?? "default" },
           provider,
         );
 
@@ -397,8 +409,12 @@ export class QuantTradingCartridge implements Cartridge {
       latencyMs: result.latencyMs,
       error: null,
       capabilities: [
-        "placeOrder", "cancelOrder", "getPositions",
-        "getPortfolio", "getMarketPrice", "setStopLoss",
+        "placeOrder",
+        "cancelOrder",
+        "getPositions",
+        "getPortfolio",
+        "getMarketPrice",
+        "setStopLoss",
       ],
     };
   }
@@ -407,7 +423,13 @@ export class QuantTradingCartridge implements Cartridge {
 export { QUANT_TRADING_MANIFEST } from "./manifest.js";
 export { DEFAULT_TRADING_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_TRADING_POLICIES } from "./defaults/policies.js";
-export type { TradingProvider, OrderResult, Position, Portfolio, MarketPrice } from "./providers/trading.js";
+export type {
+  TradingProvider,
+  OrderResult,
+  Position,
+  Portfolio,
+  MarketPrice,
+} from "./providers/trading.js";
 export { MockTradingProvider } from "./providers/trading.js";
 export { bootstrapQuantTradingCartridge } from "./bootstrap.js";
 export type { BootstrapQuantTradingResult } from "./bootstrap.js";

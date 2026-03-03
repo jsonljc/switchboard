@@ -4,11 +4,11 @@ import { z } from "zod";
  * Goal type — categorizes the user's high-level objective.
  */
 export const GoalTypeSchema = z.enum([
-  "optimize",     // "get more leads", "improve ROAS", "maximize conversions"
-  "investigate",  // "why is CPL up?", "what's wrong with my funnel?"
-  "execute",      // "pause campaign X", "set budget to $50"
-  "report",       // "how are my ads?", "weekly performance"
-  "maintain",     // "keep CPL under $50", "maintain current performance"
+  "optimize", // "get more leads", "improve ROAS", "maximize conversions"
+  "investigate", // "why is CPL up?", "what's wrong with my funnel?"
+  "execute", // "pause campaign X", "set budget to $50"
+  "report", // "how are my ads?", "weekly performance"
+  "maintain", // "keep CPL under $50", "maintain current performance"
 ]);
 export type GoalType = z.infer<typeof GoalTypeSchema>;
 

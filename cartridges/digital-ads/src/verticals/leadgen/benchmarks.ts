@@ -23,7 +23,7 @@ const QUALIFIED_LEAD_BENCHMARK: StageBenchmark = {
  * Create leadgen benchmarks with the correct key for the qualified lead action type.
  */
 export function createLeadgenBenchmarks(
-  qualifiedLeadAction: string = DEFAULT_QUALIFIED_LEAD_ACTION
+  qualifiedLeadAction: string = DEFAULT_QUALIFIED_LEAD_ACTION,
 ): VerticalBenchmarks {
   return {
     vertical: "leadgen",

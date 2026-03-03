@@ -78,7 +78,7 @@ export function composeCampaignStatus(data: unknown): string {
   const campaigns = toCampaignList(data);
 
   if (campaigns.length === 0) {
-    return "Campaign not found. Try asking \"how are my campaigns doing?\" to see all campaigns.";
+    return 'Campaign not found. Try asking "how are my campaigns doing?" to see all campaigns.';
   }
 
   const c = campaigns[0]!;
@@ -168,29 +168,29 @@ export function composeRecommendations(intent: AllowedIntent, data: unknown): st
     return text;
   }
 
-  return "I can help you optimize your campaigns. Try asking for \"more leads\" or \"reduce cost\".";
+  return 'I can help you optimize your campaigns. Try asking for "more leads" or "reduce cost".';
 }
 
 export function composeClinicHelp(): string {
   return (
     "I'm your clinic ad assistant. Here's what I can do:\n\n" +
     "Reports\n" +
-    "  \"How are my campaigns doing?\"\n" +
-    "  \"What's the status of [campaign]?\"\n\n" +
+    '  "How are my campaigns doing?"\n' +
+    '  "What\'s the status of [campaign]?"\n\n' +
     "Diagnostics\n" +
-    "  \"Diagnose my funnel\"\n" +
-    "  \"How are my ads doing?\"\n" +
-    "  \"Portfolio analysis\"\n" +
-    "  \"Analyze campaign structure\"\n" +
-    "  \"Show me my metrics\"\n\n" +
+    '  "Diagnose my funnel"\n' +
+    '  "How are my ads doing?"\n' +
+    '  "Portfolio analysis"\n' +
+    '  "Analyze campaign structure"\n' +
+    '  "Show me my metrics"\n\n' +
     "Optimize\n" +
-    "  \"I want more patient leads\"\n" +
-    "  \"Reduce my ad costs\"\n\n" +
+    '  "I want more patient leads"\n' +
+    '  "Reduce my ad costs"\n\n' +
     "Actions\n" +
-    "  \"Pause [campaign name]\"\n" +
-    "  \"Resume [campaign name]\"\n" +
-    "  \"Set budget for [campaign] to $[amount]\"\n" +
-    "  \"Undo\" (reverts last action)\n\n" +
+    '  "Pause [campaign name]"\n' +
+    '  "Resume [campaign name]"\n' +
+    '  "Set budget for [campaign] to $[amount]"\n' +
+    '  "Undo" (reverts last action)\n\n' +
     "Just type what you need in plain English."
   );
 }

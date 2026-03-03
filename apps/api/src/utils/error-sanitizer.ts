@@ -6,7 +6,7 @@
 
 const SENSITIVE_PATTERNS = [
   /SELECT\s|INSERT\s|UPDATE\s|DELETE\s|DROP\s|ALTER\s|CREATE\s/i, // SQL
-  /at\s+\S+\s+\(.*:\d+:\d+\)/,  // stack traces
+  /at\s+\S+\s+\(.*:\d+:\d+\)/, // stack traces
   /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/, // IPv4
   /postgresql:\/\/|mysql:\/\/|redis:\/\/|mongodb:\/\/|amqp:\/\//i, // connection strings
   /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET/i, // Node network errors

@@ -125,17 +125,29 @@ describe("buildElasticityRanking", () => {
       makeStage({
         stageName: "click",
         metric: "clicks",
-        economicImpact: { estimatedRevenueDelta: -500, conversionDelta: -10, revenueImpactPercent: -5 },
+        economicImpact: {
+          estimatedRevenueDelta: -500,
+          conversionDelta: -10,
+          revenueImpactPercent: -5,
+        },
       }),
       makeStage({
         stageName: "purchase",
         metric: "purchase",
-        economicImpact: { estimatedRevenueDelta: -2000, conversionDelta: -40, revenueImpactPercent: -20 },
+        economicImpact: {
+          estimatedRevenueDelta: -2000,
+          conversionDelta: -40,
+          revenueImpactPercent: -20,
+        },
       }),
       makeStage({
         stageName: "ATC",
         metric: "add_to_cart",
-        economicImpact: { estimatedRevenueDelta: -800, conversionDelta: -16, revenueImpactPercent: -8 },
+        economicImpact: {
+          estimatedRevenueDelta: -800,
+          conversionDelta: -16,
+          revenueImpactPercent: -8,
+        },
       }),
     ];
 
@@ -157,7 +169,11 @@ describe("buildElasticityRanking", () => {
       }),
       makeStage({
         stageName: "purchase",
-        economicImpact: { estimatedRevenueDelta: -1000, conversionDelta: -20, revenueImpactPercent: -10 },
+        economicImpact: {
+          estimatedRevenueDelta: -1000,
+          conversionDelta: -20,
+          revenueImpactPercent: -10,
+        },
       }),
     ];
 
@@ -173,7 +189,11 @@ describe("buildElasticityRanking", () => {
       makeStage({
         stageName: "click",
         isSignificant: false,
-        economicImpact: { estimatedRevenueDelta: -500, conversionDelta: -10, revenueImpactPercent: -5 },
+        economicImpact: {
+          estimatedRevenueDelta: -500,
+          conversionDelta: -10,
+          revenueImpactPercent: -5,
+        },
       }),
     ];
 

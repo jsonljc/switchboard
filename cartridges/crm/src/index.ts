@@ -100,13 +100,15 @@ export class CrmCartridge implements Cartridge {
         }
         const contacts = await provider.searchContacts(query, limit);
         const summaryLines = contacts.map(
-          (c) => `${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email ?? "no email"}) — ${c.company ?? "no company"}`,
+          (c) =>
+            `${c.firstName ?? ""} ${c.lastName ?? ""} (${c.email ?? "no email"}) — ${c.company ?? "no company"}`,
         );
         return {
           success: true,
-          summary: contacts.length === 0
-            ? `No contacts found matching "${query}"`
-            : `Found ${contacts.length} contact(s):\n${summaryLines.join("\n")}`,
+          summary:
+            contacts.length === 0
+              ? `No contacts found matching "${query}"`
+              : `Found ${contacts.length} contact(s):\n${summaryLines.join("\n")}`,
           externalRefs: { contactIds: contacts.map((c) => c.id).join(",") },
           rollbackAvailable: false,
           partialFailures: [],
@@ -122,14 +124,13 @@ export class CrmCartridge implements Cartridge {
         if (parameters["pipeline"]) filters.pipeline = parameters["pipeline"] as string;
         if (parameters["stage"]) filters.stage = parameters["stage"] as string;
         const deals = await provider.listDeals(filters);
-        const summaryLines = deals.map(
-          (d) => `${d.name} — ${d.stage} — $${d.amount ?? 0}`,
-        );
+        const summaryLines = deals.map((d) => `${d.name} — ${d.stage} — $${d.amount ?? 0}`);
         return {
           success: true,
-          summary: deals.length === 0
-            ? "No deals found"
-            : `Found ${deals.length} deal(s):\n${summaryLines.join("\n")}`,
+          summary:
+            deals.length === 0
+              ? "No deals found"
+              : `Found ${deals.length} deal(s):\n${summaryLines.join("\n")}`,
           externalRefs: { dealIds: deals.map((d) => d.id).join(",") },
           rollbackAvailable: false,
           partialFailures: [],
@@ -146,13 +147,15 @@ export class CrmCartridge implements Cartridge {
         if (parameters["type"]) actFilters.type = parameters["type"] as string;
         const activities = await provider.listActivities(actFilters);
         const summaryLines = activities.map(
-          (a) => `[${a.type}] ${a.subject ?? "(no subject)"} — ${new Date(a.createdAt).toLocaleDateString()}`,
+          (a) =>
+            `[${a.type}] ${a.subject ?? "(no subject)"} — ${new Date(a.createdAt).toLocaleDateString()}`,
         );
         return {
           success: true,
-          summary: activities.length === 0
-            ? "No activities found"
-            : `Found ${activities.length} activit${activities.length === 1 ? "y" : "ies"}:\n${summaryLines.join("\n")}`,
+          summary:
+            activities.length === 0
+              ? "No activities found"
+              : `Found ${activities.length} activit${activities.length === 1 ? "y" : "ies"}:\n${summaryLines.join("\n")}`,
           externalRefs: {},
           rollbackAvailable: false,
           partialFailures: [],
@@ -172,9 +175,10 @@ export class CrmCartridge implements Cartridge {
         const totalValue = stages.reduce((sum, s) => sum + s.totalValue, 0);
         return {
           success: true,
-          summary: totalDeals === 0
-            ? "Pipeline is empty"
-            : `Pipeline: ${totalDeals} deal(s), $${totalValue.toLocaleString()} total\n${summaryLines.join("\n")}`,
+          summary:
+            totalDeals === 0
+              ? "Pipeline is empty"
+              : `Pipeline: ${totalDeals} deal(s), $${totalValue.toLocaleString()} total\n${summaryLines.join("\n")}`,
           externalRefs: {},
           rollbackAvailable: false,
           partialFailures: [],
@@ -410,10 +414,20 @@ export { DEFAULT_CRM_GUARDRAILS } from "./defaults/guardrails.js";
 export { DEFAULT_CRM_POLICIES } from "./defaults/policies.js";
 export { bootstrapCrmCartridge } from "./bootstrap.js";
 export type { BootstrapCrmConfig, BootstrapCrmResult } from "./bootstrap.js";
-export type { CrmProvider, CrmContact, CrmDeal, CrmActivity, CrmPipelineStage } from "./providers/crm-provider.js";
+export type {
+  CrmProvider,
+  CrmContact,
+  CrmDeal,
+  CrmActivity,
+  CrmPipelineStage,
+} from "./providers/crm-provider.js";
 export { InMemoryCrmProvider } from "./providers/mock.js";
 
 // CRM Advisors (pipeline health + activity cadence analysis)
-export { PipelineHealthAdvisor, ActivityCadenceAdvisor, createCrmAdvisors } from "./advisors/registry.js";
+export {
+  PipelineHealthAdvisor,
+  ActivityCadenceAdvisor,
+  createCrmAdvisors,
+} from "./advisors/registry.js";
 export type { PipelineHealthInput, PipelineHealthFinding } from "./advisors/pipeline-health.js";
 export type { ActivityCadenceInput, ActivityCadenceFinding } from "./advisors/activity-cadence.js";

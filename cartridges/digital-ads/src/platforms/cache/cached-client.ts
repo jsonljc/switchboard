@@ -11,9 +11,9 @@ import type {
 
 /** Default TTLs per platform (milliseconds). */
 const DEFAULT_TTLS: Record<PlatformType, number> = {
-  meta: 10 * 60 * 1000,    // 10 min
-  google: 15 * 60 * 1000,  // 15 min
-  tiktok: 10 * 60 * 1000,  // 10 min
+  meta: 10 * 60 * 1000, // 10 min
+  google: 15 * 60 * 1000, // 15 min
+  tiktok: 10 * 60 * 1000, // 10 min
 };
 
 /**

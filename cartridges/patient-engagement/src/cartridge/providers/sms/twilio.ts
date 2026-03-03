@@ -79,9 +79,7 @@ export class TwilioSMSProvider implements SMSProvider {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `Twilio API error ${response.status}: ${errorBody}`,
-        );
+        throw new Error(`Twilio API error ${response.status}: ${errorBody}`);
       }
 
       const data = (await response.json()) as {

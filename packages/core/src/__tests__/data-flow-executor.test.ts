@@ -122,7 +122,8 @@ describe("DataFlowExecutor", () => {
     expect(result.stepResults).toHaveLength(2);
 
     // Verify the second step received resolved parameters
-    const step2Params = (orchestrator.propose as ReturnType<typeof vi.fn>).mock.calls[1]![0].parameters;
+    const step2Params = (orchestrator.propose as ReturnType<typeof vi.fn>).mock.calls[1]![0]
+      .parameters;
     expect(step2Params.amount).toBe(4000);
     expect(step2Params.description).toBe("Treatment: dental_crown");
   });

@@ -53,15 +53,11 @@ export class CartridgeReadAdapter {
     switch (op.operation) {
       case "getCampaign": {
         // enrichContext returns campaign metadata for a given campaignId
-        data = await cartridge.enrichContext(
-          "ads.campaign.read",
-          op.parameters,
-          {
-            principalId: op.actorId,
-            organizationId: op.organizationId ?? null,
-            connectionCredentials: {},
-          },
-        );
+        data = await cartridge.enrichContext("ads.campaign.read", op.parameters, {
+          principalId: op.actorId,
+          organizationId: op.organizationId ?? null,
+          connectionCredentials: {},
+        });
         break;
       }
       case "searchCampaigns": {
@@ -72,8 +68,15 @@ export class CartridgeReadAdapter {
         } else if ("resolveEntity" in cartridge && typeof cartridge.resolveEntity === "function") {
           // Fallback to resolveEntity for backward compatibility
           const query = (op.parameters["query"] as string) ?? "";
-          const results = await (cartridge as { resolveEntity: (ref: string, type: string, ctx: Record<string, unknown>) => Promise<unknown> })
-            .resolveEntity(query, "campaign", { principalId: op.actorId });
+          const results = await (
+            cartridge as {
+              resolveEntity: (
+                ref: string,
+                type: string,
+                ctx: Record<string, unknown>,
+              ) => Promise<unknown>;
+            }
+          ).resolveEntity(query, "campaign", { principalId: op.actorId });
           data = results;
         } else {
           data = [];

@@ -45,7 +45,7 @@ export interface ContextBuilderOptions {
  * can be passed through to advisors.
  */
 export async function buildDiagnosticContext(
-  options: ContextBuilderOptions
+  options: ContextBuilderOptions,
 ): Promise<DiagnosticContext> {
   const {
     client,
@@ -65,14 +65,10 @@ export async function buildDiagnosticContext(
 
   // Fetch historical snapshots in parallel
   if (enableHistorical) {
-    const trailingPeriods = buildTrailingPeriods(
-      referenceDate,
-      periodDays,
-      historicalPeriods
-    );
+    const trailingPeriods = buildTrailingPeriods(referenceDate, periodDays, historicalPeriods);
 
     const snapshotPromises = trailingPeriods.map((period: TimeRange) =>
-      client.fetchSnapshot(entityId, entityLevel, period, funnel)
+      client.fetchSnapshot(entityId, entityLevel, period, funnel),
     );
 
     context.historicalSnapshots = await Promise.all(snapshotPromises);
@@ -93,7 +89,7 @@ export async function buildDiagnosticContext(
       entityId,
       entityLevel,
       timeRange,
-      funnel
+      funnel,
     );
   }
 
@@ -112,9 +108,7 @@ export async function buildDiagnosticContext(
 /**
  * Type guard for clients that support sub-entity breakdowns.
  */
-function hasSubEntitySupport(
-  client: PlatformClient
-): client is PlatformClient & {
+function hasSubEntitySupport(client: PlatformClient): client is PlatformClient & {
   fetchSubEntityBreakdowns: NonNullable<PlatformClient["fetchSubEntityBreakdowns"]>;
 } {
   return typeof (client as any).fetchSubEntityBreakdowns === "function";
@@ -127,7 +121,7 @@ function hasSubEntitySupport(
 function extractRevenueData(
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  funnel: FunnelSchema
+  funnel: FunnelSchema,
 ): DiagnosticContext["revenueData"] {
   // Look for revenue in topLevel fields
   const totalRevenue =

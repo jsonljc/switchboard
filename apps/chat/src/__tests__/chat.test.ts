@@ -9,10 +9,7 @@ import {
   checkNonce,
   checkIngressRateLimit,
 } from "../adapters/security.js";
-import {
-  createConversation,
-  transitionConversation,
-} from "../conversation/state.js";
+import { createConversation, transitionConversation } from "../conversation/state.js";
 import { composeDenialReply, composeExecutionResult } from "../composer/reply.js";
 import { buildApprovalCard } from "../composer/approval-card.js";
 
@@ -50,11 +47,7 @@ describe("RuleBasedInterpreter", () => {
   });
 
   it('parses "set budget for Campaign A to $800" -> ads.budget.adjust with newBudget 800', async () => {
-    const result = await interpreter.interpret(
-      "set budget for Campaign A to $800",
-      {},
-      allActions,
-    );
+    const result = await interpreter.interpret("set budget for Campaign A to $800", {}, allActions);
     expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
@@ -64,11 +57,7 @@ describe("RuleBasedInterpreter", () => {
   });
 
   it('parses "increase budget for X by $200" -> ads.budget.adjust with budgetChange 200', async () => {
-    const result = await interpreter.interpret(
-      "increase budget for X by $200",
-      {},
-      allActions,
-    );
+    const result = await interpreter.interpret("increase budget for X by $200", {}, allActions);
     expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
@@ -78,11 +67,7 @@ describe("RuleBasedInterpreter", () => {
   });
 
   it('parses "decrease budget for X by $100" -> negative budgetChange', async () => {
-    const result = await interpreter.interpret(
-      "decrease budget for X by $100",
-      {},
-      allActions,
-    );
+    const result = await interpreter.interpret("decrease budget for X by $100", {}, allActions);
     expect(result.proposals).toHaveLength(1);
     expect(result.proposals[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
     expect(result.proposals[0]!.parameters).toMatchObject({
@@ -108,11 +93,7 @@ describe("RuleBasedInterpreter", () => {
   });
 
   it("returns needsClarification for unknown intent", async () => {
-    const result = await interpreter.interpret(
-      "show me something random",
-      {},
-      allActions,
-    );
+    const result = await interpreter.interpret("show me something random", {}, allActions);
     expect(result.proposals).toHaveLength(0);
     expect(result.needsClarification).toBe(true);
     expect(result.clarificationQuestion).toBeTruthy();
@@ -209,16 +190,12 @@ describe("Channel Security", () => {
       const body = '{"event":"test"}';
       const expected = createHmac("sha256", secret).update(body).digest("hex");
 
-      expect(
-        verifySignature(body, `sha256=${expected}`, secret, "hmac-sha256"),
-      ).toBe(true);
+      expect(verifySignature(body, `sha256=${expected}`, secret, "hmac-sha256")).toBe(true);
     });
 
     it("fails with an invalid signature", () => {
       const body = '{"event":"test"}';
-      expect(
-        verifySignature(body, "invalid-hex-value", secret, "hmac-sha256"),
-      ).toBe(false);
+      expect(verifySignature(body, "invalid-hex-value", secret, "hmac-sha256")).toBe(false);
     });
   });
 

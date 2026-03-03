@@ -39,7 +39,7 @@ export const audienceOverlapAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -62,10 +62,7 @@ export const audienceOverlapAdvisor: FindingAdvisor = (
 // Explicit overlap analysis (when API data is available)
 // ---------------------------------------------------------------------------
 
-function analyzeExplicitOverlap(
-  overlaps: AudienceOverlapPair[],
-  _totalAdSets: number
-): Finding[] {
+function analyzeExplicitOverlap(overlaps: AudienceOverlapPair[], _totalAdSets: number): Finding[] {
   const findings: Finding[] = [];
 
   const highOverlaps = overlaps.filter((o) => o.overlapRate > 0.3);
@@ -74,10 +71,7 @@ function analyzeExplicitOverlap(
   if (criticalOverlaps.length > 0) {
     const pairDescriptions = criticalOverlaps
       .slice(0, 3) // Show max 3 pairs
-      .map(
-        (o) =>
-          `${o.adSetId1} ↔ ${o.adSetId2} (${(o.overlapRate * 100).toFixed(0)}%)`
-      )
+      .map((o) => `${o.adSetId1} ↔ ${o.adSetId2} (${(o.overlapRate * 100).toFixed(0)}%)`)
       .join(", ");
 
     findings.push({
@@ -92,8 +86,7 @@ function analyzeExplicitOverlap(
 
   if (highOverlaps.length > 0) {
     const affectedPairs = highOverlaps.length;
-    const avgOverlap =
-      highOverlaps.reduce((sum, o) => sum + o.overlapRate, 0) / affectedPairs;
+    const avgOverlap = highOverlaps.reduce((sum, o) => sum + o.overlapRate, 0) / affectedPairs;
 
     findings.push({
       severity: "warning",
@@ -113,7 +106,7 @@ function analyzeExplicitOverlap(
 
 function analyzeHeuristicOverlap(
   entities: NonNullable<DiagnosticContext["subEntities"]>,
-  current: MetricSnapshot
+  current: MetricSnapshot,
 ): Finding[] {
   const findings: Finding[] = [];
   const activeEntities = entities.filter((e) => e.spend > 0);
@@ -121,17 +114,12 @@ function analyzeHeuristicOverlap(
   if (activeEntities.length < 3) return findings;
 
   const totalSpend = activeEntities.reduce((sum, e) => sum + e.spend, 0);
-  const totalConversions = activeEntities.reduce(
-    (sum, e) => sum + e.conversions,
-    0
-  );
+  const totalConversions = activeEntities.reduce((sum, e) => sum + e.conversions, 0);
 
   if (totalSpend === 0 || totalConversions === 0) return findings;
 
   // Compute per-ad-set CPA
-  const cpas = activeEntities
-    .filter((e) => e.conversions > 0)
-    .map((e) => e.spend / e.conversions);
+  const cpas = activeEntities.filter((e) => e.conversions > 0).map((e) => e.spend / e.conversions);
 
   if (cpas.length < 2) return findings;
 
@@ -139,8 +127,7 @@ function analyzeHeuristicOverlap(
   // When many ad sets have similar CPAs, they're likely targeting similar
   // audiences — unique targeting would produce diverse CPAs
   const avgCPA = totalSpend / totalConversions;
-  const cpaVariance =
-    cpas.reduce((sum, cpa) => sum + Math.pow(cpa - avgCPA, 2), 0) / cpas.length;
+  const cpaVariance = cpas.reduce((sum, cpa) => sum + Math.pow(cpa - avgCPA, 2), 0) / cpas.length;
   const cpaCV = Math.sqrt(cpaVariance) / avgCPA; // Coefficient of variation
 
   const currentCPM = current.topLevel.cpm ?? 0;
@@ -159,7 +146,7 @@ function analyzeHeuristicOverlap(
   // Heuristic 2: Many zero-conversion ad sets while others convert well
   // Overlap causes auction loss for weaker ad sets
   const zeroConvEntities = activeEntities.filter(
-    (e) => e.conversions === 0 && e.spend > totalSpend * 0.03
+    (e) => e.conversions === 0 && e.spend > totalSpend * 0.03,
   );
   const convertingEntities = activeEntities.filter((e) => e.conversions > 0);
 

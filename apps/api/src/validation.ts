@@ -22,19 +22,20 @@ export const ProposeBodySchema = z.object({
   principalId: z.string().min(1).max(500),
   organizationId: z.string().max(500).optional(),
   cartridgeId: z.string().max(500).optional(),
-  entityRefs: z
-    .array(z.object({ inputRef: z.string(), entityType: z.string() }))
-    .optional(),
+  entityRefs: z.array(z.object({ inputRef: z.string(), entityType: z.string() })).optional(),
   message: z.string().max(5000).optional(),
 });
 
 export const BatchProposeBodySchema = z.object({
-  proposals: z.array(
-    z.object({
-      actionType: z.string().min(1).max(500),
-      parameters: boundedParameters,
-    }),
-  ).min(1).max(50),
+  proposals: z
+    .array(
+      z.object({
+        actionType: z.string().min(1).max(500),
+        parameters: boundedParameters,
+      }),
+    )
+    .min(1)
+    .max(50),
   principalId: z.string().min(1).max(500),
   organizationId: z.string().max(500).optional(),
   cartridgeId: z.string().max(500).optional(),
@@ -46,9 +47,7 @@ export const ExecuteBodySchema = z.object({
   actorId: z.string().min(1).max(500),
   organizationId: z.string().max(500).optional().nullable(),
   action: ExecuteActionSchema,
-  entityRefs: z
-    .array(z.object({ inputRef: z.string(), entityType: z.string() }))
-    .optional(),
+  entityRefs: z.array(z.object({ inputRef: z.string(), entityType: z.string() })).optional(),
   message: z.string().max(5000).optional(),
   traceId: z.string().max(500).optional(),
 });

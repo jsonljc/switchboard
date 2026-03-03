@@ -23,7 +23,7 @@ export const reachSaturationAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -38,7 +38,7 @@ export const reachSaturationAdvisor: FindingAdvisor = (
 
   // Spend increased significantly but reach is flat or declining
   if (spendChange > 15 && reachChange < 5) {
-    const severity = reachChange < -5 ? "critical" as const : "warning" as const;
+    const severity = reachChange < -5 ? ("critical" as const) : ("warning" as const);
 
     findings.push({
       severity,

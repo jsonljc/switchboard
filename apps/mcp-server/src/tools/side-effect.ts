@@ -36,8 +36,7 @@ export const sideEffectToolDefinitions: ToolDefinition[] = [
   },
   {
     name: "resume_campaign",
-    description:
-      "Resume a paused ad campaign. Goes through the governance pipeline.",
+    description: "Resume a paused ad campaign. Goes through the governance pipeline.",
     inputSchema: {
       type: "object",
       properties: {

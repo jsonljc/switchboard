@@ -5,16 +5,15 @@ export const DEFAULT_PAYMENTS_POLICIES: Policy[] = [
   {
     id: "payments-refund-mandatory-approval",
     name: "Refunds Require Mandatory Approval",
-    description: "All refunds require mandatory approval because they are irreversible money outflow",
+    description:
+      "All refunds require mandatory approval because they are irreversible money outflow",
     organizationId: null,
     cartridgeId: "payments",
     priority: 1,
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "payments.refund.create" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "payments.refund.create" }],
     },
     effect: "require_approval",
     approvalRequirement: "mandatory",
@@ -32,9 +31,7 @@ export const DEFAULT_PAYMENTS_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "payments.subscription.cancel" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "payments.subscription.cancel" }],
     },
     effect: "require_approval",
     approvalRequirement: "mandatory",
@@ -52,9 +49,7 @@ export const DEFAULT_PAYMENTS_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "payments.batch.invoice" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "payments.batch.invoice" }],
     },
     effect: "require_approval",
     approvalRequirement: "elevated",
@@ -106,7 +101,8 @@ export const DEFAULT_PAYMENTS_POLICIES: Policy[] = [
   {
     id: "payments-high-refund-customer-escalation",
     name: "Escalate High-Refund Customers",
-    description: "Require elevated approval for charges to customers with more than 3 previous refunds",
+    description:
+      "Require elevated approval for charges to customers with more than 3 previous refunds",
     organizationId: null,
     cartridgeId: "payments",
     priority: 15,
@@ -134,9 +130,7 @@ export const DEFAULT_PAYMENTS_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "payments.charge.create" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "payments.charge.create" }],
     },
     effect: "require_approval",
     approvalRequirement: "standard",

@@ -34,7 +34,10 @@ export class McpApiClient {
    * Fetch with retry (retries 5xx and 429, not 4xx).
    * Up to 3 attempts with exponential backoff.
    */
-  async fetch(path: string, init: RequestInit & { idempotencyKey?: string } = {}): Promise<Response> {
+  async fetch(
+    path: string,
+    init: RequestInit & { idempotencyKey?: string } = {},
+  ): Promise<Response> {
     const url = `${this.baseUrl}${path}`;
     const headers = this.headers(init.idempotencyKey);
 
@@ -72,7 +75,11 @@ export class McpApiClient {
   }
 
   /** Convenience: POST JSON and return parsed response. */
-  async post<T = unknown>(path: string, body: unknown, idempotencyKey?: string): Promise<{ status: number; data: T }> {
+  async post<T = unknown>(
+    path: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ): Promise<{ status: number; data: T }> {
     const res = await this.fetch(path, {
       method: "POST",
       body: JSON.stringify(body),

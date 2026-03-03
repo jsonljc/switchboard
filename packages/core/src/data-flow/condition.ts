@@ -33,13 +33,21 @@ export function evaluateCondition(
       case "!==":
         return leftValue !== rightValue;
       case ">":
-        return typeof leftValue === "number" && typeof rightValue === "number" && leftValue > rightValue;
+        return (
+          typeof leftValue === "number" && typeof rightValue === "number" && leftValue > rightValue
+        );
       case ">=":
-        return typeof leftValue === "number" && typeof rightValue === "number" && leftValue >= rightValue;
+        return (
+          typeof leftValue === "number" && typeof rightValue === "number" && leftValue >= rightValue
+        );
       case "<":
-        return typeof leftValue === "number" && typeof rightValue === "number" && leftValue < rightValue;
+        return (
+          typeof leftValue === "number" && typeof rightValue === "number" && leftValue < rightValue
+        );
       case "<=":
-        return typeof leftValue === "number" && typeof rightValue === "number" && leftValue <= rightValue;
+        return (
+          typeof leftValue === "number" && typeof rightValue === "number" && leftValue <= rightValue
+        );
       default:
         return true;
     }

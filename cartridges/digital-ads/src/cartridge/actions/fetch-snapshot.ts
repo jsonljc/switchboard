@@ -13,43 +13,30 @@ export async function executeFetchSnapshot(
   params: FetchSnapshotParams,
   provider: AdPlatformProvider,
   session: SessionState,
-  credentials?: import("../../platforms/types.js").PlatformCredentials
+  credentials?: import("../../platforms/types.js").PlatformCredentials,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
   try {
-    const creds =
-      credentials ?? session.connections.get(params.platform)?.credentials;
+    const creds = credentials ?? session.connections.get(params.platform)?.credentials;
     if (!creds) {
       return {
         success: false,
         summary: `No credentials available for ${params.platform}. Use platform.connect first.`,
         externalRefs: { platform: params.platform, entityId: params.entityId },
         rollbackAvailable: false,
-        partialFailures: [
-          { step: "resolve_credentials", error: "No credentials found" },
-        ],
+        partialFailures: [{ step: "resolve_credentials", error: "No credentials found" }],
         durationMs: Date.now() - start,
         undoRecipe: null,
       };
     }
 
     const client = provider.createClient(creds);
-    const {
-      entityId,
-      entityLevel = "account",
-      vertical,
-      timeRange,
-    } = params;
+    const { entityId, entityLevel = "account", vertical, timeRange } = params;
 
     const funnel = resolveFunnel(params.platform, vertical);
 
-    const snapshot = await client.fetchSnapshot(
-      entityId,
-      entityLevel,
-      timeRange,
-      funnel
-    );
+    const snapshot = await client.fetchSnapshot(entityId, entityLevel, timeRange, funnel);
 
     return {
       success: true,

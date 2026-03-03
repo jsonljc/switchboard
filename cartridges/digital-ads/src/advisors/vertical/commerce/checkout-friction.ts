@@ -17,11 +17,11 @@ export const checkoutFrictionAdvisor: FindingAdvisor = (
   _stageAnalysis: StageDiagnostic[],
   dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
-  _previous: MetricSnapshot
+  _previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
   const atcToPurchase = dropoffs.find(
-    (d) => d.fromStage === "add_to_cart" && d.toStage === "purchase"
+    (d) => d.fromStage === "add_to_cart" && d.toStage === "purchase",
   );
 
   if (atcToPurchase && atcToPurchase.deltaPercent < -20) {

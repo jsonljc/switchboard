@@ -26,53 +26,157 @@ export const inboundMessagesRoutes: FastifyPluginAsync = async (app) => {
   // This endpoint verifies the signature, routes the message to the
   // conversation engine, and returns a TwiML response.
   // ─────────────────────────────────────────────────────────────────────────
-  app.post("/sms", {
-    schema: {
-      description: "Receive inbound SMS messages from Twilio webhook.",
-      tags: ["Inbound Messages"],
+  app.post(
+    "/sms",
+    {
+      schema: {
+        description: "Receive inbound SMS messages from Twilio webhook.",
+        tags: ["Inbound Messages"],
+      },
     },
-  }, async (request, reply) => {
-    // Twilio sends form-encoded data
-    const body = request.body as Record<string, string>;
-    const from = body["From"] ?? "";
-    const to = body["To"] ?? "";
-    const messageBody = body["Body"] ?? "";
-    const messageSid = body["MessageSid"] ?? "";
+    async (request, reply) => {
+      // Twilio sends form-encoded data
+      const body = request.body as Record<string, string>;
+      const from = body["From"] ?? "";
+      const to = body["To"] ?? "";
+      const messageBody = body["Body"] ?? "";
+      const messageSid = body["MessageSid"] ?? "";
 
-    // Verify Twilio signature if auth token is configured
-    const twilioAuthToken = process.env["TWILIO_AUTH_TOKEN"];
-    if (twilioAuthToken) {
-      const twilioSignature = request.headers["x-twilio-signature"] as string | undefined;
-      const requestUrl = buildTwilioRequestUrl(request);
+      // Verify Twilio signature if auth token is configured
+      const twilioAuthToken = process.env["TWILIO_AUTH_TOKEN"];
+      if (twilioAuthToken) {
+        const twilioSignature = request.headers["x-twilio-signature"] as string | undefined;
+        const requestUrl = buildTwilioRequestUrl(request);
 
-      if (!twilioSignature || !verifyTwilioSignature(twilioAuthToken, twilioSignature, requestUrl, body)) {
-        logger.warn({ from, messageSid }, "Invalid Twilio webhook signature");
-        return reply.code(401).send({ error: "Invalid signature" });
+        if (
+          !twilioSignature ||
+          !verifyTwilioSignature(twilioAuthToken, twilioSignature, requestUrl, body)
+        ) {
+          logger.warn({ from, messageSid }, "Invalid Twilio webhook signature");
+          return reply.code(401).send({ error: "Invalid signature" });
+        }
       }
-    }
 
-    logger.info({ from, to, messageSid, bodyLength: messageBody.length }, "Received inbound SMS");
+      logger.info({ from, to, messageSid, bodyLength: messageBody.length }, "Received inbound SMS");
 
-    const orgId = request.organizationIdFromAuth ?? resolveOrgFromNumber(to);
+      const orgId = request.organizationIdFromAuth ?? resolveOrgFromNumber(to);
 
-    // Route message to conversation engine
-    let responseMessages: string[] = [];
-    try {
-      const router = await getConversationRouter(app, orgId);
-      if (router) {
+      // Route message to conversation engine
+      let responseMessages: string[] = [];
+      try {
+        const router = await getConversationRouter(app, orgId);
+        if (router) {
+          const result = await router.handleMessage({
+            channelId: from,
+            channelType: "sms",
+            body: messageBody,
+            from,
+            timestamp: new Date(),
+            organizationId: orgId,
+            metadata: { messageSid, to },
+          });
+
+          responseMessages = result.responses;
+
+          // If an action is required, dispatch it through the orchestrator
+          if (result.actionRequired) {
+            const peCartridge = app.storageContext.cartridges.get("patient-engagement");
+            if (peCartridge) {
+              try {
+                await peCartridge.execute(
+                  result.actionRequired.actionType,
+                  result.actionRequired.parameters,
+                  systemContext(orgId),
+                );
+              } catch (err) {
+                logger.error(
+                  { err, actionType: result.actionRequired.actionType },
+                  "Failed to dispatch conversation action",
+                );
+              }
+            }
+          }
+
+          if (result.escalated) {
+            logger.info(
+              { from, sessionId: result.sessionId },
+              "Conversation escalated to human agent",
+            );
+          }
+        }
+      } catch (err) {
+        logger.error({ err, from, messageSid }, "Error routing inbound SMS");
+        responseMessages = [
+          "Sorry, we're experiencing technical difficulties. Please try again later.",
+        ];
+      }
+
+      // Return TwiML response
+      const twiml = buildTwiMLResponse(responseMessages);
+      return reply.code(200).header("Content-Type", "text/xml").send(twiml);
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/messages/chat — Web chat inbound messages
+  //
+  // For web chat widgets embedded on the clinic's website.
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    "/chat",
+    {
+      schema: {
+        description: "Receive inbound messages from web chat widget.",
+        tags: ["Inbound Messages"],
+        body: {
+          type: "object",
+          required: ["channelId", "body"],
+          properties: {
+            channelId: { type: "string", description: "Unique chat session identifier" },
+            body: { type: "string", description: "Message text" },
+            from: { type: "string", description: "Sender identifier (name or email)" },
+            metadata: { type: "object", description: "Additional metadata" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const {
+        channelId,
+        body: messageBody,
+        from,
+        metadata,
+      } = request.body as {
+        channelId: string;
+        body: string;
+        from?: string;
+        metadata?: Record<string, unknown>;
+      };
+
+      const orgId = request.organizationIdFromAuth ?? "default";
+
+      logger.info(
+        { channelId, from, orgId, bodyLength: messageBody.length },
+        "Received web chat message",
+      );
+
+      try {
+        const router = await getConversationRouter(app, orgId);
+        if (!router) {
+          return reply.code(503).send({ error: "Conversation service unavailable" });
+        }
+
         const result = await router.handleMessage({
-          channelId: from,
-          channelType: "sms",
+          channelId,
+          channelType: "web_chat",
           body: messageBody,
-          from,
+          from: from ?? channelId,
           timestamp: new Date(),
           organizationId: orgId,
-          metadata: { messageSid, to },
+          metadata,
         });
 
-        responseMessages = result.responses;
-
-        // If an action is required, dispatch it through the orchestrator
+        // Dispatch any required actions
         if (result.actionRequired) {
           const peCartridge = app.storageContext.cartridges.get("patient-engagement");
           if (peCartridge) {
@@ -83,132 +187,59 @@ export const inboundMessagesRoutes: FastifyPluginAsync = async (app) => {
                 systemContext(orgId),
               );
             } catch (err) {
-              logger.error({ err, actionType: result.actionRequired.actionType }, "Failed to dispatch conversation action");
+              logger.error(
+                { err, actionType: result.actionRequired.actionType },
+                "Failed to dispatch chat action",
+              );
             }
           }
         }
 
-        if (result.escalated) {
-          logger.info({ from, sessionId: result.sessionId }, "Conversation escalated to human agent");
-        }
+        return reply.code(200).send({
+          responses: result.responses,
+          sessionId: result.sessionId,
+          escalated: result.escalated,
+          completed: result.completed,
+        });
+      } catch (err) {
+        logger.error({ err, channelId }, "Error processing web chat message");
+        return reply.code(200).send({
+          responses: ["Sorry, we're experiencing technical difficulties. Please try again later."],
+          sessionId: null,
+          escalated: false,
+          completed: false,
+        });
       }
-    } catch (err) {
-      logger.error({ err, from, messageSid }, "Error routing inbound SMS");
-      responseMessages = ["Sorry, we're experiencing technical difficulties. Please try again later."];
-    }
-
-    // Return TwiML response
-    const twiml = buildTwiMLResponse(responseMessages);
-    return reply
-      .code(200)
-      .header("Content-Type", "text/xml")
-      .send(twiml);
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // POST /api/messages/chat — Web chat inbound messages
-  //
-  // For web chat widgets embedded on the clinic's website.
-  // ─────────────────────────────────────────────────────────────────────────
-  app.post("/chat", {
-    schema: {
-      description: "Receive inbound messages from web chat widget.",
-      tags: ["Inbound Messages"],
-      body: {
-        type: "object",
-        required: ["channelId", "body"],
-        properties: {
-          channelId: { type: "string", description: "Unique chat session identifier" },
-          body: { type: "string", description: "Message text" },
-          from: { type: "string", description: "Sender identifier (name or email)" },
-          metadata: { type: "object", description: "Additional metadata" },
-        },
-      },
     },
-  }, async (request, reply) => {
-    const { channelId, body: messageBody, from, metadata } = request.body as {
-      channelId: string;
-      body: string;
-      from?: string;
-      metadata?: Record<string, unknown>;
-    };
-
-    const orgId = request.organizationIdFromAuth ?? "default";
-
-    logger.info({ channelId, from, orgId, bodyLength: messageBody.length }, "Received web chat message");
-
-    try {
-      const router = await getConversationRouter(app, orgId);
-      if (!router) {
-        return reply.code(503).send({ error: "Conversation service unavailable" });
-      }
-
-      const result = await router.handleMessage({
-        channelId,
-        channelType: "web_chat",
-        body: messageBody,
-        from: from ?? channelId,
-        timestamp: new Date(),
-        organizationId: orgId,
-        metadata,
-      });
-
-      // Dispatch any required actions
-      if (result.actionRequired) {
-        const peCartridge = app.storageContext.cartridges.get("patient-engagement");
-        if (peCartridge) {
-          try {
-            await peCartridge.execute(
-              result.actionRequired.actionType,
-              result.actionRequired.parameters,
-              systemContext(orgId),
-            );
-          } catch (err) {
-            logger.error({ err, actionType: result.actionRequired.actionType }, "Failed to dispatch chat action");
-          }
-        }
-      }
-
-      return reply.code(200).send({
-        responses: result.responses,
-        sessionId: result.sessionId,
-        escalated: result.escalated,
-        completed: result.completed,
-      });
-    } catch (err) {
-      logger.error({ err, channelId }, "Error processing web chat message");
-      return reply.code(200).send({
-        responses: ["Sorry, we're experiencing technical difficulties. Please try again later."],
-        sessionId: null,
-        escalated: false,
-        completed: false,
-      });
-    }
-  });
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // POST /api/messages/status — Twilio message status callback
   // ─────────────────────────────────────────────────────────────────────────
-  app.post("/status", {
-    schema: {
-      description: "Receive Twilio message delivery status updates.",
-      tags: ["Inbound Messages"],
+  app.post(
+    "/status",
+    {
+      schema: {
+        description: "Receive Twilio message delivery status updates.",
+        tags: ["Inbound Messages"],
+      },
     },
-  }, async (request, reply) => {
-    const body = request.body as Record<string, string>;
-    const messageSid = body["MessageSid"] ?? "";
-    const messageStatus = body["MessageStatus"] ?? "";
-    const errorCode = body["ErrorCode"];
+    async (request, reply) => {
+      const body = request.body as Record<string, string>;
+      const messageSid = body["MessageSid"] ?? "";
+      const messageStatus = body["MessageStatus"] ?? "";
+      const errorCode = body["ErrorCode"];
 
-    logger.info({ messageSid, messageStatus, errorCode }, "Message status update");
+      logger.info({ messageSid, messageStatus, errorCode }, "Message status update");
 
-    // Track delivery failures for conversation state
-    if (messageStatus === "failed" || messageStatus === "undelivered") {
-      logger.warn({ messageSid, messageStatus, errorCode }, "Message delivery failed");
-    }
+      // Track delivery failures for conversation state
+      if (messageStatus === "failed" || messageStatus === "undelivered") {
+        logger.warn({ messageSid, messageStatus, errorCode }, "Message delivery failed");
+      }
 
-    return reply.code(200).send({ received: true });
-  });
+      return reply.code(200).send({ received: true });
+    },
+  );
 };
 
 // ── Helpers ──
@@ -250,7 +281,10 @@ async function getConversationRouter(
     const { ConversationRouter, InMemorySessionStore, RedisSessionStore } = pe;
 
     // Build flows map from available templates
-    const flows = new Map<string, import("@switchboard/patient-engagement").ConversationFlowDefinition>();
+    const flows = new Map<
+      string,
+      import("@switchboard/patient-engagement").ConversationFlowDefinition
+    >();
 
     // The package exports conversation flow definitions
     // We'll create a default qualification flow inline if none exist
@@ -264,7 +298,8 @@ async function getConversationRouter(
           {
             id: "greeting",
             type: "message" as const,
-            template: "Hi! Thanks for reaching out. I'd love to help you. What treatment are you interested in?",
+            template:
+              "Hi! Thanks for reaching out. I'd love to help you. What treatment are you interested in?",
           },
           {
             id: "treatment_interest",
@@ -275,7 +310,8 @@ async function getConversationRouter(
           {
             id: "schedule_prompt",
             type: "message" as const,
-            template: "Great choice! Let me check our availability for you. Would you like to schedule a consultation?",
+            template:
+              "Great choice! Let me check our availability for you. Would you like to schedule a consultation?",
           },
           {
             id: "book_action",
@@ -287,7 +323,8 @@ async function getConversationRouter(
           {
             id: "closing",
             type: "message" as const,
-            template: "Thank you, {{patientName}}! We'll get you booked right away. You'll receive a confirmation shortly.",
+            template:
+              "Thank you, {{patientName}}! We'll get you booked right away. You'll receive a confirmation shortly.",
           },
         ],
       });
@@ -350,9 +387,7 @@ function verifyTwilioSignature(
       data += key + params[key];
     }
 
-    const expectedSig = createHmac("sha1", authToken)
-      .update(data)
-      .digest("base64");
+    const expectedSig = createHmac("sha1", authToken).update(data).digest("base64");
 
     // Timing-safe comparison
     if (signature.length !== expectedSig.length) return false;
@@ -378,9 +413,7 @@ function buildTwiMLResponse(messages: string[]): string {
     return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
   }
 
-  const messageElements = messages
-    .map((msg) => `<Message>${escapeXml(msg)}</Message>`)
-    .join("");
+  const messageElements = messages.map((msg) => `<Message>${escapeXml(msg)}</Message>`).join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${messageElements}</Response>`;
 }

@@ -1,5 +1,1 @@
-export type {
-  DataFlowStep,
-  DataFlowPlan,
-  StepExecutionResult,
-} from "@switchboard/schemas";
+export type { DataFlowStep, DataFlowPlan, StepExecutionResult } from "@switchboard/schemas";

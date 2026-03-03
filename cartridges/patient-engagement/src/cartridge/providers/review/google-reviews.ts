@@ -97,24 +97,17 @@ export class GoogleReviewsProvider implements ReviewPlatformProvider {
     return this.call(async () => {
       const path = this.locationPath(locationId);
       // Review name format: accounts/{id}/locations/{id}/reviews/{id}
-      const reviewPath = reviewId.includes("/")
-        ? reviewId
-        : `${path}/reviews/${reviewId}`;
+      const reviewPath = reviewId.includes("/") ? reviewId : `${path}/reviews/${reviewId}`;
 
-      const response = await fetch(
-        `${GBP_BASE}/${reviewPath}/reply`,
-        {
-          method: "PUT",
-          headers: this.authHeaders(),
-          body: JSON.stringify({ comment: responseText }),
-        },
-      );
+      const response = await fetch(`${GBP_BASE}/${reviewPath}/reply`, {
+        method: "PUT",
+        headers: this.authHeaders(),
+        body: JSON.stringify({ comment: responseText }),
+      });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `Google Business Profile API error ${response.status}: ${errorBody}`,
-        );
+        throw new Error(`Google Business Profile API error ${response.status}: ${errorBody}`);
       }
 
       return { success: true };
@@ -134,9 +127,7 @@ export class GoogleReviewsProvider implements ReviewPlatformProvider {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `Google Business Profile API error ${response.status}: ${errorBody}`,
-        );
+        throw new Error(`Google Business Profile API error ${response.status}: ${errorBody}`);
       }
 
       const data = (await response.json()) as {
@@ -172,9 +163,7 @@ export class GoogleReviewsProvider implements ReviewPlatformProvider {
         rating: starMap[review.starRating] ?? 0,
         text: review.comment ?? "",
         createdAt: new Date(review.createTime),
-        respondedAt: review.reviewReply
-          ? new Date(review.reviewReply.updateTime)
-          : null,
+        respondedAt: review.reviewReply ? new Date(review.reviewReply.updateTime) : null,
         responseText: review.reviewReply?.comment ?? null,
       }));
     });

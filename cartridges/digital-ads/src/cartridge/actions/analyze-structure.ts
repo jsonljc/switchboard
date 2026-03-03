@@ -6,11 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AdPlatformProvider } from "../providers/provider.js";
-import type {
-  AnalyzeStructureParams,
-  ExecuteResult,
-  SessionState,
-} from "../types.js";
+import type { AnalyzeStructureParams, ExecuteResult, SessionState } from "../types.js";
 import type { Finding, SubEntityBreakdown } from "../../core/types.js";
 import { buildComparisonPeriods } from "../../core/analysis/comparator.js";
 import { resolveFunnel } from "../../platforms/registry.js";
@@ -27,22 +23,19 @@ export async function executeAnalyzeStructure(
   params: AnalyzeStructureParams,
   provider: AdPlatformProvider,
   session: SessionState,
-  credentials?: import("../../platforms/types.js").PlatformCredentials
+  credentials?: import("../../platforms/types.js").PlatformCredentials,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
   try {
-    const creds =
-      credentials ?? session.connections.get(params.platform)?.credentials;
+    const creds = credentials ?? session.connections.get(params.platform)?.credentials;
     if (!creds) {
       return {
         success: false,
         summary: `No credentials available for ${params.platform}. Use platform.connect first.`,
         externalRefs: { platform: params.platform, entityId: params.entityId },
         rollbackAvailable: false,
-        partialFailures: [
-          { step: "resolve_credentials", error: "No credentials found" },
-        ],
+        partialFailures: [{ step: "resolve_credentials", error: "No credentials found" }],
         durationMs: Date.now() - start,
         undoRecipe: null,
       };
@@ -79,17 +72,16 @@ export async function executeAnalyzeStructure(
       "account",
       periods.current,
       periods.previous,
-      funnel
+      funnel,
     );
 
     // Fetch sub-entity breakdowns (guard above ensures this exists)
-    const subEntities: SubEntityBreakdown[] =
-      await client.fetchSubEntityBreakdowns!(
-        entityId,
-        "account",
-        periods.current,
-        funnel
-      );
+    const subEntities: SubEntityBreakdown[] = await client.fetchSubEntityBreakdowns!(
+      entityId,
+      "account",
+      periods.current,
+      funnel,
+    );
 
     // Run structural advisors with sub-entity context
     const structuralAdvisors = [
@@ -108,17 +100,13 @@ export async function executeAnalyzeStructure(
           [], // dropoffs not needed for structural
           current,
           previous,
-          { subEntities }
-        )
+          { subEntities },
+        ),
       );
     }
 
-    const criticalCount = findings.filter(
-      (f) => f.severity === "critical"
-    ).length;
-    const warningCount = findings.filter(
-      (f) => f.severity === "warning"
-    ).length;
+    const criticalCount = findings.filter((f) => f.severity === "critical").length;
+    const warningCount = findings.filter((f) => f.severity === "warning").length;
 
     return {
       success: true,

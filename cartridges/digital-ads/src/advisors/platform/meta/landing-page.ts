@@ -18,12 +18,10 @@ export const landingPageAdvisor: FindingAdvisor = (
   _stageAnalysis: StageDiagnostic[],
   dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
-  _previous: MetricSnapshot
+  _previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
-  const clickToLPV = dropoffs.find(
-    (d) => d.fromStage === "click" && d.toStage === "landing_page"
-  );
+  const clickToLPV = dropoffs.find((d) => d.fromStage === "click" && d.toStage === "landing_page");
 
   if (clickToLPV && clickToLPV.deltaPercent < -15) {
     findings.push({

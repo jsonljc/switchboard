@@ -106,7 +106,7 @@ export class MetaApiClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<MetricSnapshot> {
     const rows = await this.fetchInsights(entityId, entityLevel, timeRange);
 
@@ -126,7 +126,7 @@ export class MetaApiClient extends AbstractPlatformClient {
     entityId: string,
     _entityLevel: EntityLevel,
     timeRange: TimeRange,
-    _funnel: FunnelSchema
+    _funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]> {
     const params = new URLSearchParams({
       fields: [
@@ -205,7 +205,7 @@ export class MetaApiClient extends AbstractPlatformClient {
   private async fetchInsights(
     entityId: string,
     entityLevel: EntityLevel,
-    timeRange: TimeRange
+    timeRange: TimeRange,
   ): Promise<MetaInsightsRow[]> {
     const endpoint = this.getEndpoint(entityId, entityLevel);
     const params = new URLSearchParams({
@@ -253,9 +253,7 @@ export class MetaApiClient extends AbstractPlatformClient {
           continue;
         }
 
-        throw new Error(
-          `Meta API error ${code}: ${body.error?.message ?? res.statusText}`
-        );
+        throw new Error(`Meta API error ${code}: ${body.error?.message ?? res.statusText}`);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (attempt < this.config.maxRetries) {
@@ -278,7 +276,7 @@ export class MetaApiClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     // Aggregate across rows
     let totalSpend = 0;
@@ -422,7 +420,7 @@ export class MetaApiClient extends AbstractPlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): MetricSnapshot {
     const stages: Record<string, StageMetrics> = {};
     for (const stage of funnel.stages) {

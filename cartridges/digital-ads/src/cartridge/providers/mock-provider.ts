@@ -46,7 +46,7 @@ export class MockPlatformClient implements PlatformClient {
     entityId: string,
     entityLevel: EntityLevel,
     timeRange: TimeRange,
-    _funnel: FunnelSchema
+    _funnel: FunnelSchema,
   ): Promise<MetricSnapshot> {
     return {
       ...this.snapshot,
@@ -62,7 +62,7 @@ export class MockPlatformClient implements PlatformClient {
     entityLevel: EntityLevel,
     current: TimeRange,
     previous: TimeRange,
-    funnel: FunnelSchema
+    funnel: FunnelSchema,
   ): Promise<{ current: MetricSnapshot; previous: MetricSnapshot }> {
     return {
       current: await this.fetchSnapshot(entityId, entityLevel, current, funnel),
@@ -74,7 +74,7 @@ export class MockPlatformClient implements PlatformClient {
     _entityId: string,
     _entityLevel: EntityLevel,
     _timeRange: TimeRange,
-    _funnel: FunnelSchema
+    _funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]> {
     return [
       {
@@ -117,7 +117,7 @@ export class MockProvider implements AdPlatformProvider {
 
   async connect(
     _credentials: PlatformCredentials,
-    entityId: string
+    entityId: string,
   ): Promise<{
     client: PlatformClient;
     accountName: string;
@@ -133,10 +133,7 @@ export class MockProvider implements AdPlatformProvider {
     };
   }
 
-  async checkHealth(
-    _credentials: PlatformCredentials,
-    _entityId: string
-  ): Promise<PlatformHealth> {
+  async checkHealth(_credentials: PlatformCredentials, _entityId: string): Promise<PlatformHealth> {
     if (this.shouldFail) {
       return {
         platform: this.platform,

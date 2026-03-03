@@ -1,8 +1,18 @@
 import { sideEffectToolDefinitions, SIDE_EFFECT_ACTION_TYPE_MAP } from "./side-effect.js";
 import { readToolDefinitions } from "./read.js";
 import { governanceToolDefinitions } from "./governance.js";
-import { crmToolDefinitions, CRM_SIDE_EFFECT_TOOLS, CRM_READ_TOOLS, CRM_ACTION_TYPE_MAP } from "./crm.js";
-import { paymentsToolDefinitions, PAYMENTS_SIDE_EFFECT_TOOLS, PAYMENTS_READ_TOOLS, PAYMENTS_ACTION_TYPE_MAP } from "./payments.js";
+import {
+  crmToolDefinitions,
+  CRM_SIDE_EFFECT_TOOLS,
+  CRM_READ_TOOLS,
+  CRM_ACTION_TYPE_MAP,
+} from "./crm.js";
+import {
+  paymentsToolDefinitions,
+  PAYMENTS_SIDE_EFFECT_TOOLS,
+  PAYMENTS_READ_TOOLS,
+  PAYMENTS_ACTION_TYPE_MAP,
+} from "./payments.js";
 import type { ToolDefinition } from "./side-effect.js";
 
 export type { ToolDefinition };
@@ -31,9 +41,7 @@ export const READ_TOOLS = new Set([
 ]);
 
 /** Set of governance tool names for dispatch routing. */
-export const GOVERNANCE_TOOLS = new Set(
-  governanceToolDefinitions.map((t) => t.name),
-);
+export const GOVERNANCE_TOOLS = new Set(governanceToolDefinitions.map((t) => t.name));
 
 /**
  * All actionTypes already covered by manual tool definitions.

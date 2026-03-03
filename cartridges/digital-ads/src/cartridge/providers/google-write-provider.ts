@@ -97,7 +97,10 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async updateBudget(campaignId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }> {
+  async updateBudget(
+    campaignId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }> {
     const current = await this.getCampaign(campaignId);
     const previousBudget = current.dailyBudget;
 
@@ -131,7 +134,10 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async updateAdSetBudget(adSetId: string, newBudgetCents: number): Promise<{ success: boolean; previousBudget: number }> {
+  async updateAdSetBudget(
+    adSetId: string,
+    newBudgetCents: number,
+  ): Promise<{ success: boolean; previousBudget: number }> {
     const current = await this.getAdSet(adSetId);
     const previousBudget = current.dailyBudget;
 
@@ -140,7 +146,10 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousBudget };
   }
 
-  async updateTargeting(adSetId: string, targetingSpec: Record<string, unknown>): Promise<{ success: boolean }> {
+  async updateTargeting(
+    adSetId: string,
+    targetingSpec: Record<string, unknown>,
+  ): Promise<{ success: boolean }> {
     // Google Ads targeting is set via ad group criterion mutations
     await this.mutateAdGroup(adSetId, { targeting: targetingSpec });
     return { success: true };
@@ -155,20 +164,23 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            create: {
-              name: `${params.name} Budget`,
-              amount_micros: budgetMicros,
-              delivery_method: "STANDARD",
+          operations: [
+            {
+              create: {
+                name: `${params.name} Budget`,
+                amount_micros: budgetMicros,
+                delivery_method: "STANDARD",
+              },
             },
-          }],
+          ],
         }),
       });
       if (!res.ok) throw new Error(`Google Ads API error: ${res.status} ${await res.text()}`);
       return res.json();
     });
 
-    const budgetResourceName = (budgetRes as { results: Array<{ resourceName: string }> }).results[0]?.resourceName;
+    const budgetResourceName = (budgetRes as { results: Array<{ resourceName: string }> })
+      .results[0]?.resourceName;
 
     // Then create the campaign
     const campaignRes = await this.circuitBreaker.execute(async () => {
@@ -176,21 +188,24 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            create: {
-              name: params.name,
-              status: params.status ?? "PAUSED",
-              advertising_channel_type: params.objective ?? "SEARCH",
-              campaign_budget: budgetResourceName,
+          operations: [
+            {
+              create: {
+                name: params.name,
+                status: params.status ?? "PAUSED",
+                advertising_channel_type: params.objective ?? "SEARCH",
+                campaign_budget: budgetResourceName,
+              },
             },
-          }],
+          ],
         }),
       });
       if (!res.ok) throw new Error(`Google Ads API error: ${res.status} ${await res.text()}`);
       return res.json();
     });
 
-    const resourceName = (campaignRes as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
+    const resourceName =
+      (campaignRes as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
     const id = resourceName.split("/").pop() ?? "";
     return { id, success: true };
   }
@@ -201,21 +216,24 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            create: {
-              name: params.name,
-              campaign: `customers/${this.customerId}/campaigns/${params.campaignId}`,
-              status: params.status ?? "PAUSED",
-              cpc_bid_micros: Math.round(params.dailyBudget * 1_000_000),
+          operations: [
+            {
+              create: {
+                name: params.name,
+                campaign: `customers/${this.customerId}/campaigns/${params.campaignId}`,
+                status: params.status ?? "PAUSED",
+                cpc_bid_micros: Math.round(params.dailyBudget * 1_000_000),
+              },
             },
-          }],
+          ],
         }),
       });
       if (!r.ok) throw new Error(`Google Ads API error: ${r.status} ${await r.text()}`);
       return r.json();
     });
 
-    const resourceName = (res as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
+    const resourceName =
+      (res as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
     const id = resourceName.split("/").pop() ?? "";
     return { id, success: true };
   }
@@ -226,20 +244,23 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            create: {
-              ad_group: `customers/${this.customerId}/adGroups/${params.adSetId}`,
-              status: params.status ?? "PAUSED",
-              ad: params.creative,
+          operations: [
+            {
+              create: {
+                ad_group: `customers/${this.customerId}/adGroups/${params.adSetId}`,
+                status: params.status ?? "PAUSED",
+                ad: params.creative,
+              },
             },
-          }],
+          ],
         }),
       });
       if (!r.ok) throw new Error(`Google Ads API error: ${r.status} ${await r.text()}`);
       return r.json();
     });
 
-    const resourceName = (res as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
+    const resourceName =
+      (res as { results: Array<{ resourceName: string }> }).results[0]?.resourceName ?? "";
     const id = resourceName.split("/").pop() ?? "";
     return { id, success: true };
   }
@@ -279,19 +300,24 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     });
   }
 
-  private async mutateCampaign(campaignId: string, updates: Record<string, unknown>): Promise<void> {
+  private async mutateCampaign(
+    campaignId: string,
+    updates: Record<string, unknown>,
+  ): Promise<void> {
     await this.circuitBreaker.execute(async () => {
       const res = await fetch(`${this.baseUrl}/campaigns:mutate`, {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            update: {
-              resource_name: `customers/${this.customerId}/campaigns/${campaignId}`,
-              ...updates,
+          operations: [
+            {
+              update: {
+                resource_name: `customers/${this.customerId}/campaigns/${campaignId}`,
+                ...updates,
+              },
+              update_mask: Object.keys(updates).join(","),
             },
-            update_mask: Object.keys(updates).join(","),
-          }],
+          ],
         }),
       });
       if (!res.ok) throw new Error(`Google Ads mutate error: ${res.status} ${await res.text()}`);
@@ -302,7 +328,8 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     // Fetch the budget resource name first
     const query = `SELECT campaign.campaign_budget FROM campaign WHERE campaign.id = ${campaignId}`;
     const rows = await this.search(query);
-    const budgetResource = (rows[0] as { campaign?: { campaign_budget?: string } })?.campaign?.campaign_budget;
+    const budgetResource = (rows[0] as { campaign?: { campaign_budget?: string } })?.campaign
+      ?.campaign_budget;
     if (!budgetResource) throw new Error(`Budget not found for campaign ${campaignId}`);
 
     await this.circuitBreaker.execute(async () => {
@@ -310,16 +337,19 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            update: {
-              resource_name: budgetResource,
-              amount_micros: amountMicros,
+          operations: [
+            {
+              update: {
+                resource_name: budgetResource,
+                amount_micros: amountMicros,
+              },
+              update_mask: "amount_micros",
             },
-            update_mask: "amount_micros",
-          }],
+          ],
         }),
       });
-      if (!res.ok) throw new Error(`Google Ads budget mutate error: ${res.status} ${await res.text()}`);
+      if (!res.ok)
+        throw new Error(`Google Ads budget mutate error: ${res.status} ${await res.text()}`);
     });
   }
 
@@ -329,13 +359,15 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
-          operations: [{
-            update: {
-              resource_name: `customers/${this.customerId}/adGroups/${adGroupId}`,
-              ...updates,
+          operations: [
+            {
+              update: {
+                resource_name: `customers/${this.customerId}/adGroups/${adGroupId}`,
+                ...updates,
+              },
+              update_mask: Object.keys(updates).join(","),
             },
-            update_mask: Object.keys(updates).join(","),
-          }],
+          ],
         }),
       });
       if (!res.ok) throw new Error(`Google Ads mutate error: ${res.status} ${await res.text()}`);
@@ -353,7 +385,9 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
       deliveryStatus: null,
       startTime: campaign.start_date ? String(campaign.start_date) : null,
       endTime: campaign.end_date ? String(campaign.end_date) : null,
-      objective: campaign.advertising_channel_type ? String(campaign.advertising_channel_type) : null,
+      objective: campaign.advertising_channel_type
+        ? String(campaign.advertising_channel_type)
+        : null,
     };
   }
 

@@ -2,12 +2,7 @@
 // Cadence Engine — Deterministic step evaluation
 // ---------------------------------------------------------------------------
 
-import type {
-  CadenceDefinition,
-  CadenceInstance,
-  CadenceStep,
-  CadenceCondition,
-} from "./types.js";
+import type { CadenceDefinition, CadenceInstance, CadenceStep, CadenceCondition } from "./types.js";
 
 export interface CadenceEvaluation {
   shouldExecute: boolean;
@@ -77,9 +72,7 @@ export function evaluateCadenceStep(
   if (step.condition && !evaluateCondition(step.condition, instance.variables)) {
     const nextIndex = instance.currentStepIndex + 1;
     const nextStep = definition.steps[nextIndex];
-    const nextExecAt = nextStep
-      ? new Date(now.getTime() + nextStep.delayMs)
-      : null;
+    const nextExecAt = nextStep ? new Date(now.getTime() + nextStep.delayMs) : null;
 
     return {
       shouldExecute: false,
@@ -98,9 +91,7 @@ export function evaluateCadenceStep(
   const parameters = interpolateParameters(step.parameters, instance.variables);
   const nextIndex = instance.currentStepIndex + 1;
   const nextStep = definition.steps[nextIndex];
-  const nextExecAt = nextStep
-    ? new Date(now.getTime() + nextStep.delayMs)
-    : null;
+  const nextExecAt = nextStep ? new Date(now.getTime() + nextStep.delayMs) : null;
 
   return {
     shouldExecute: true,
@@ -121,13 +112,20 @@ function evaluateCondition(
   const value = variables[condition.variable];
 
   switch (condition.operator) {
-    case "eq": return value === condition.value;
-    case "neq": return value !== condition.value;
-    case "gt": return Number(value) > Number(condition.value);
-    case "lt": return Number(value) < Number(condition.value);
-    case "exists": return value !== undefined && value !== null;
-    case "not_exists": return value === undefined || value === null;
-    default: return false;
+    case "eq":
+      return value === condition.value;
+    case "neq":
+      return value !== condition.value;
+    case "gt":
+      return Number(value) > Number(condition.value);
+    case "lt":
+      return Number(value) < Number(condition.value);
+    case "exists":
+      return value !== undefined && value !== null;
+    case "not_exists":
+      return value === undefined || value === null;
+    default:
+      return false;
   }
 }
 

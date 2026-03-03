@@ -33,14 +33,17 @@ export const attributionAwarenessAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   // Check for explicit attribution window metadata
-  if (context?.attributionWindow !== undefined && context?.previousAttributionWindow !== undefined) {
+  if (
+    context?.attributionWindow !== undefined &&
+    context?.previousAttributionWindow !== undefined
+  ) {
     return analyzeExplicitWindowChange(
       context.attributionWindow,
       context.previousAttributionWindow,
-      stageAnalysis
+      stageAnalysis,
     );
   }
 
@@ -55,20 +58,21 @@ export const attributionAwarenessAdvisor: FindingAdvisor = (
 function analyzeExplicitWindowChange(
   currentWindow: number,
   previousWindow: number,
-  stageAnalysis: StageDiagnostic[]
+  stageAnalysis: StageDiagnostic[],
 ): Finding[] {
   const findings: Finding[] = [];
 
   if (currentWindow === previousWindow) return findings;
 
   const windowChange = currentWindow > previousWindow ? "widened" : "narrowed";
-  const expectedImpact = currentWindow > previousWindow
-    ? "increase in reported conversions (more attribution credit captured)"
-    : "decrease in reported conversions (less attribution credit captured)";
+  const expectedImpact =
+    currentWindow > previousWindow
+      ? "increase in reported conversions (more attribution credit captured)"
+      : "decrease in reported conversions (less attribution credit captured)";
 
   // Check if stage changes align with the window change
   const hasLargeChange = stageAnalysis.some(
-    (s) => Math.abs(s.deltaPercent) > 20 && s.isSignificant
+    (s) => Math.abs(s.deltaPercent) > 20 && s.isSignificant,
   );
 
   findings.push({
@@ -94,16 +98,15 @@ function analyzeExplicitWindowChange(
 function analyzeHeuristicWindowChange(
   stageAnalysis: StageDiagnostic[],
   current: MetricSnapshot,
-  previous: MetricSnapshot
+  previous: MetricSnapshot,
 ): Finding[] {
   const findings: Finding[] = [];
 
   // Require at least 3 stages to detect the pattern
   if (stageAnalysis.length < 3) return findings;
 
-  const spendChange = previous.spend > 0
-    ? ((current.spend - previous.spend) / previous.spend) * 100
-    : 0;
+  const spendChange =
+    previous.spend > 0 ? ((current.spend - previous.spend) / previous.spend) * 100 : 0;
 
   // Find top-of-funnel (awareness) and conversion stages
   const topStage = stageAnalysis[0]; // impressions
@@ -115,18 +118,13 @@ function analyzeHeuristicWindowChange(
   // but conversion stages all shift dramatically (>40%) in the same direction
   const topStable = Math.abs(topStage.deltaPercent) < 15;
   const spendStable = Math.abs(spendChange) < 20;
-  const bottomShiftingUp = bottomStages.every(
-    (s) => s.deltaPercent > 40
-  );
-  const bottomShiftingDown = bottomStages.every(
-    (s) => s.deltaPercent < -40
-  );
+  const bottomShiftingUp = bottomStages.every((s) => s.deltaPercent > 40);
+  const bottomShiftingDown = bottomStages.every((s) => s.deltaPercent < -40);
 
   if (topStable && spendStable && (bottomShiftingUp || bottomShiftingDown)) {
     const direction = bottomShiftingUp ? "increased" : "decreased";
     const avgBottomChange =
-      bottomStages.reduce((sum, s) => sum + s.deltaPercent, 0) /
-      bottomStages.length;
+      bottomStages.reduce((sum, s) => sum + s.deltaPercent, 0) / bottomStages.length;
 
     findings.push({
       severity: "warning",

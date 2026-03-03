@@ -163,11 +163,7 @@ describe("PaymentsCartridge", () => {
     });
 
     it("should compute low risk for payment links", async () => {
-      const risk = await cartridge.getRiskInput(
-        "payments.link.create",
-        { amount: 75 },
-        {},
-      );
+      const risk = await cartridge.getRiskInput("payments.link.create", { amount: 75 }, {});
       expect(risk.baseRisk).toBe("low");
       expect(risk.exposure.dollarsAtRisk).toBe(75);
     });
@@ -199,11 +195,7 @@ describe("PaymentsCartridge", () => {
       const invoiceId = created.externalRefs["invoiceId"]!;
 
       // Then void it
-      const result = await cartridge.execute(
-        "payments.invoice.void",
-        { invoiceId },
-        ctx,
-      );
+      const result = await cartridge.execute("payments.invoice.void", { invoiceId }, ctx);
       expect(result.success).toBe(true);
       expect(result.summary).toContain("voided");
       expect(result.externalRefs["invoiceId"]).toBe(invoiceId);
@@ -268,11 +260,7 @@ describe("PaymentsCartridge", () => {
     });
 
     it("should create a payment link with undo recipe", async () => {
-      const result = await cartridge.execute(
-        "payments.link.create",
-        { amount: 100 },
-        ctx,
-      );
+      const result = await cartridge.execute("payments.link.create", { amount: 100 }, ctx);
       expect(result.success).toBe(true);
       expect(result.summary).toContain("Payment link");
       expect(result.externalRefs["linkId"]).toBeDefined();
@@ -283,19 +271,11 @@ describe("PaymentsCartridge", () => {
 
     it("should deactivate a payment link (undo of create)", async () => {
       // First create a link
-      const created = await cartridge.execute(
-        "payments.link.create",
-        { amount: 50 },
-        ctx,
-      );
+      const created = await cartridge.execute("payments.link.create", { amount: 50 }, ctx);
       const linkId = created.externalRefs["linkId"]!;
 
       // Then deactivate it
-      const result = await cartridge.execute(
-        "payments.link.deactivate",
-        { linkId },
-        ctx,
-      );
+      const result = await cartridge.execute("payments.link.deactivate", { linkId }, ctx);
       expect(result.success).toBe(true);
       expect(result.summary).toContain("deactivated");
       expect(result.externalRefs["linkId"]).toBe(linkId);
@@ -327,11 +307,7 @@ describe("PaymentsCartridge", () => {
       expect(undoParams["amount"]).toBe(-25); // negative = debit
 
       // Execute the undo (debit)
-      const debit = await cartridge.execute(
-        "payments.credit.apply",
-        undoParams,
-        ctx,
-      );
+      const debit = await cartridge.execute("payments.credit.apply", undoParams, ctx);
       expect(debit.success).toBe(true);
       expect(debit.summary).toContain("Debit");
       expect(debit.summary).toContain("$25");
@@ -425,11 +401,7 @@ describe("PaymentsCartridge", () => {
         entityId: `cus_${i}`,
         amount: 10,
       }));
-      const result = await cartridge.execute(
-        "payments.batch.invoice",
-        { invoices },
-        ctx,
-      );
+      const result = await cartridge.execute("payments.batch.invoice", { invoices }, ctx);
       expect(result.success).toBe(false);
       expect(result.summary).toContain("exceeds maximum");
     });
@@ -482,20 +454,28 @@ describe("PaymentsCartridge", () => {
       const guardrails = cartridge.getGuardrails();
       expect(guardrails.cooldowns.length).toBe(4);
 
-      const chargeCooldown = guardrails.cooldowns.find((c) => c.actionType === "payments.charge.create");
+      const chargeCooldown = guardrails.cooldowns.find(
+        (c) => c.actionType === "payments.charge.create",
+      );
       expect(chargeCooldown?.cooldownMs).toBe(30 * 60 * 1000);
       expect(chargeCooldown?.scope).toBe("customer");
 
-      const refundCooldown = guardrails.cooldowns.find((c) => c.actionType === "payments.refund.create");
+      const refundCooldown = guardrails.cooldowns.find(
+        (c) => c.actionType === "payments.refund.create",
+      );
       expect(refundCooldown?.cooldownMs).toBe(4 * 60 * 60 * 1000);
       expect(refundCooldown?.scope).toBe("customer");
 
       // subscription.modify uses customer scope (core engine resolves entityId)
-      const subCooldown = guardrails.cooldowns.find((c) => c.actionType === "payments.subscription.modify");
+      const subCooldown = guardrails.cooldowns.find(
+        (c) => c.actionType === "payments.subscription.modify",
+      );
       expect(subCooldown?.cooldownMs).toBe(24 * 60 * 60 * 1000);
       expect(subCooldown?.scope).toBe("customer");
 
-      const creditCooldown = guardrails.cooldowns.find((c) => c.actionType === "payments.credit.apply");
+      const creditCooldown = guardrails.cooldowns.find(
+        (c) => c.actionType === "payments.credit.apply",
+      );
       expect(creditCooldown?.cooldownMs).toBe(60 * 60 * 1000);
       expect(creditCooldown?.scope).toBe("customer");
     });
@@ -546,7 +526,8 @@ describe("PaymentsCartridge", () => {
       expect(escalatePolicy?.effect).toBe("require_approval");
       expect(escalatePolicy?.approvalRequirement).toBe("elevated");
       const condition = escalatePolicy?.rule.conditions?.find(
-        (c: { field: string; operator: string; value: unknown }) => c.field === "metadata.previousRefundCount",
+        (c: { field: string; operator: string; value: unknown }) =>
+          c.field === "metadata.previousRefundCount",
       );
       expect(condition?.operator).toBe("gt");
       expect(condition?.value).toBe(3);
@@ -589,11 +570,7 @@ describe("PaymentsCartridge", () => {
     });
 
     it("should return empty object when no entityId", async () => {
-      const enriched = await cartridge.enrichContext(
-        "payments.link.create",
-        { amount: 100 },
-        ctx,
-      );
+      const enriched = await cartridge.enrichContext("payments.link.create", { amount: 100 }, ctx);
       expect(Object.keys(enriched)).toHaveLength(0);
     });
 
@@ -613,7 +590,9 @@ describe("PaymentsCartridge", () => {
       await failCartridge.initialize(ctx);
       const provider = failCartridge.getProvider();
       // Sabotage the provider to simulate Stripe API failure
-      provider.getPaymentHistory = () => { throw new Error("Stripe API unreachable"); };
+      provider.getPaymentHistory = () => {
+        throw new Error("Stripe API unreachable");
+      };
 
       const enriched = await failCartridge.enrichContext(
         "payments.charge.create",

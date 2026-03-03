@@ -11,8 +11,11 @@ function parseMessages(raw: unknown): Array<{ role: string; text: string; timest
   if (!raw) return [];
   if (Array.isArray(raw)) return raw as Array<{ role: string; text: string; timestamp: Date }>;
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as Array<{ role: string; text: string; timestamp: Date }>; }
-    catch { return []; }
+    try {
+      return JSON.parse(raw) as Array<{ role: string; text: string; timestamp: Date }>;
+    } catch {
+      return [];
+    }
   }
   return [];
 }
@@ -37,9 +40,7 @@ describe("parseMessages", () => {
   });
 
   it("returns the array as-is when given an array directly", () => {
-    const messages = [
-      { role: "user", text: "hello", timestamp: new Date() },
-    ];
+    const messages = [{ role: "user", text: "hello", timestamp: new Date() }];
     expect(parseMessages(messages)).toBe(messages);
   });
 
@@ -65,7 +66,9 @@ describe("PrismaConversationStore integration", () => {
     const upsertArgs: unknown[] = [];
     const mockPrisma = {
       conversationState: {
-        upsert: async (args: unknown) => { upsertArgs.push(args); },
+        upsert: async (args: unknown) => {
+          upsertArgs.push(args);
+        },
         findUnique: async () => null,
         findMany: async () => [],
         deleteMany: async () => ({ count: 0 }),
@@ -110,9 +113,7 @@ describe("PrismaConversationStore integration", () => {
   });
 
   it("get returns parsed messages from stored data", async () => {
-    const storedMessages = [
-      { role: "user", text: "hello", timestamp: "2024-01-01T00:00:00Z" },
-    ];
+    const storedMessages = [{ role: "user", text: "hello", timestamp: "2024-01-01T00:00:00Z" }];
 
     const mockPrisma = {
       conversationState: {

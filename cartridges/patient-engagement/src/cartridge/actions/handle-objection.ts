@@ -24,7 +24,12 @@ export async function executeHandleObjection(
     durationMs: Date.now() - start,
     undoRecipe: null,
     data: match
-      ? { matched: true, category: match.category, response: match.response, followUp: match.followUp }
+      ? {
+          matched: true,
+          category: match.category,
+          response: match.response,
+          followUp: match.followUp,
+        }
       : { matched: false, escalate: true },
   };
 }

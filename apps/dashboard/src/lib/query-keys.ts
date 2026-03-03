@@ -11,8 +11,7 @@ export const queryKeys = {
   },
   audit: {
     all: ["audit"] as const,
-    list: (filters?: Record<string, string | undefined>) =>
-      ["audit", "list", filters] as const,
+    list: (filters?: Record<string, string | undefined>) => ["audit", "list", filters] as const,
   },
   policies: {
     all: ["policies"] as const,

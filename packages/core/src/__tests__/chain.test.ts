@@ -107,16 +107,30 @@ describe("Delegation Chain Resolution", () => {
   it("scope narrowing across chain", () => {
     const delegations: DelegationRule[] = [
       makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "digital-ads.*", maxChainDepth: 5 }),
-      makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "digital-ads.campaign.*", maxChainDepth: 5 }),
+      makeRule({
+        id: "d2",
+        grantor: "C",
+        grantee: "B",
+        scope: "digital-ads.campaign.*",
+        maxChainDepth: 5,
+      }),
     ];
-    const result = resolveDelegationChain("A", ["C"], delegations, { requiredScope: "digital-ads.campaign.adjust_budget" });
+    const result = resolveDelegationChain("A", ["C"], delegations, {
+      requiredScope: "digital-ads.campaign.adjust_budget",
+    });
     expect(result.authorized).toBe(true);
     expect(result.effectiveScope).toBe("digital-ads.campaign.*");
   });
 
   it("scope widening is prevented — keeps narrower scope", () => {
     const delegations: DelegationRule[] = [
-      makeRule({ id: "d1", grantor: "B", grantee: "A", scope: "digital-ads.campaign.*", maxChainDepth: 5 }),
+      makeRule({
+        id: "d1",
+        grantor: "B",
+        grantee: "A",
+        scope: "digital-ads.campaign.*",
+        maxChainDepth: 5,
+      }),
       makeRule({ id: "d2", grantor: "C", grantee: "B", scope: "digital-ads.*", maxChainDepth: 5 }),
     ];
     // B→C tries to widen from "digital-ads.campaign.*" to "digital-ads.*" but narrowScope keeps "digital-ads.campaign.*"
@@ -152,7 +166,9 @@ describe("narrowScope", () => {
   });
 
   it("equal scopes remain equal", () => {
-    expect(narrowScope("digital-ads.campaign.adjust_budget", "digital-ads.campaign.adjust_budget")).toBe("digital-ads.campaign.adjust_budget");
+    expect(
+      narrowScope("digital-ads.campaign.adjust_budget", "digital-ads.campaign.adjust_budget"),
+    ).toBe("digital-ads.campaign.adjust_budget");
   });
 
   it("narrows from broader to narrower", () => {

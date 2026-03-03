@@ -1,9 +1,4 @@
-import type {
-  StageDiagnostic,
-  FunnelDropoff,
-  MetricSnapshot,
-  Finding,
-} from "../../core/types.js";
+import type { StageDiagnostic, FunnelDropoff, MetricSnapshot, Finding } from "../../core/types.js";
 import type { FindingAdvisor } from "../../core/analysis/funnel-walker.js";
 import { percentChange } from "../../core/analysis/significance.js";
 
@@ -22,9 +17,7 @@ export interface CreativeFatigueOptions {
   recommendation?: string;
 }
 
-export function createCreativeFatigueAdvisor(
-  options?: CreativeFatigueOptions
-): FindingAdvisor {
+export function createCreativeFatigueAdvisor(options?: CreativeFatigueOptions): FindingAdvisor {
   const defaultRecommendation =
     "Introduce new creative variations. Test different hooks in the first 3 seconds of video, or swap primary images. Avoid changing targeting at the same time so you can isolate the variable.";
 
@@ -32,7 +25,7 @@ export function createCreativeFatigueAdvisor(
     _stageAnalysis: StageDiagnostic[],
     _dropoffs: FunnelDropoff[],
     current: MetricSnapshot,
-    previous: MetricSnapshot
+    previous: MetricSnapshot,
   ): Finding[] => {
     const findings: Finding[] = [];
     const currentCTR = current.topLevel.ctr ?? 0;
@@ -43,8 +36,7 @@ export function createCreativeFatigueAdvisor(
     if (previousCTR === 0) return findings;
 
     const ctrChange = percentChange(currentCTR, previousCTR);
-    const cpmChange =
-      previousCPM > 0 ? percentChange(currentCPM, previousCPM) : 0;
+    const cpmChange = previousCPM > 0 ? percentChange(currentCPM, previousCPM) : 0;
 
     // CTR dropped > 15% while CPM didn't decrease
     if (ctrChange < -15 && cpmChange >= -5) {
@@ -61,12 +53,10 @@ export function createCreativeFatigueAdvisor(
 }
 
 /** Default creative fatigue advisor (commerce-style recommendation) */
-export const creativeFatigueAdvisor: FindingAdvisor =
-  createCreativeFatigueAdvisor();
+export const creativeFatigueAdvisor: FindingAdvisor = createCreativeFatigueAdvisor();
 
 /** Leadgen-specific creative fatigue advisor */
-export const leadgenCreativeFatigueAdvisor: FindingAdvisor =
-  createCreativeFatigueAdvisor({
-    recommendation:
-      "Refresh creative with new angles. For leadgen, test different value propositions in the hook (free consultation, downloadable resource, limited spots). Lead magnets fatigue faster than product ads because the perceived value diminishes after repeated exposure.",
-  });
+export const leadgenCreativeFatigueAdvisor: FindingAdvisor = createCreativeFatigueAdvisor({
+  recommendation:
+    "Refresh creative with new angles. For leadgen, test different value propositions in the hook (free consultation, downloadable resource, limited spots). Lead magnets fatigue faster than product ads because the perceived value diminishes after repeated exposure.",
+});

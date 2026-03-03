@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     const data = await client.listPendingApprovals();
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -24,6 +27,9 @@ export async function POST(request: NextRequest) {
     const data = await client.respondToApproval(approvalId, rest);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

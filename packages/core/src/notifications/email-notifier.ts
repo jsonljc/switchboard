@@ -62,11 +62,11 @@ export class EmailApprovalNotifier implements ApprovalNotifier {
       commands.push(`DATA\r\n`);
       commands.push(
         `From: ${this.fromAddress}\r\n` +
-        `To: ${this.toAddresses.join(", ")}\r\n` +
-        `Subject: ${subject}\r\n` +
-        `Content-Type: text/plain; charset=utf-8\r\n` +
-        `\r\n` +
-        `${body}\r\n.\r\n`,
+          `To: ${this.toAddresses.join(", ")}\r\n` +
+          `Subject: ${subject}\r\n` +
+          `Content-Type: text/plain; charset=utf-8\r\n` +
+          `\r\n` +
+          `${body}\r\n.\r\n`,
       );
       commands.push(`QUIT\r\n`);
 

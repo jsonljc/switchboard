@@ -25,7 +25,7 @@ export function loadConfig(filePath: string): AccountConfig {
  * Applies defaults for optional fields.
  */
 export function buildConfig(
-  partial: Partial<AccountConfig> & Pick<AccountConfig, "name" | "vertical" | "platforms">
+  partial: Partial<AccountConfig> & Pick<AccountConfig, "name" | "vertical" | "platforms">,
 ): AccountConfig {
   return {
     name: partial.name,
@@ -64,7 +64,7 @@ function resolveConfig(raw: RawAccountConfig): AccountConfig {
 
 function resolveCredentials(
   platform: PlatformType,
-  raw: Record<string, string>
+  raw: Record<string, string>,
 ): PlatformCredentials {
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {
@@ -73,7 +73,7 @@ function resolveCredentials(
       const envValue = process.env[envVar];
       if (!envValue) {
         throw new Error(
-          `Environment variable "${envVar}" is not set (required for ${platform} credential "${key}")`
+          `Environment variable "${envVar}" is not set (required for ${platform} credential "${key}")`,
         );
       }
       resolved[key] = envValue;
@@ -106,16 +106,10 @@ function resolveCredentials(
   }
 }
 
-function requireField(
-  obj: Record<string, string>,
-  field: string,
-  platform: string
-): string {
+function requireField(obj: Record<string, string>, field: string, platform: string): string {
   const value = obj[field];
   if (!value) {
-    throw new Error(
-      `Missing required credential "${field}" for platform "${platform}"`
-    );
+    throw new Error(`Missing required credential "${field}" for platform "${platform}"`);
   }
   return value;
 }

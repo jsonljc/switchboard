@@ -186,24 +186,18 @@ export class DigitalAdsCartridge implements Cartridge {
       }
 
       case "digital-ads.snapshot.fetch": {
-        const timeRange = parameters.timeRange as
-          | { since?: string; until?: string }
-          | undefined;
+        const timeRange = parameters.timeRange as { since?: string; until?: string } | undefined;
         if (timeRange) {
           if (!timeRange.since || !timeRange.until) {
-            enriched.validationError =
-              "timeRange requires both 'since' and 'until' dates";
+            enriched.validationError = "timeRange requires both 'since' and 'until' dates";
           } else {
             const since = new Date(timeRange.since);
             const until = new Date(timeRange.until);
             if (since > until) {
-              enriched.validationError =
-                "timeRange.since must be before timeRange.until";
+              enriched.validationError = "timeRange.since must be before timeRange.until";
             }
             enriched.periodDays =
-              Math.ceil(
-                (until.getTime() - since.getTime()) / (1000 * 60 * 60 * 24),
-              ) + 1;
+              Math.ceil((until.getTime() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1;
           }
         }
         break;
@@ -225,9 +219,7 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.campaign.adjust_budget": {
         if (this.writeProvider && parameters.campaignId) {
           try {
-            const campaign = await this.writeProvider.getCampaign(
-              parameters.campaignId as string,
-            );
+            const campaign = await this.writeProvider.getCampaign(parameters.campaignId as string);
             enriched.currentBudget = campaign.dailyBudget / 100;
             enriched.campaignName = campaign.name;
             enriched.campaignStatus = campaign.status;
@@ -247,9 +239,7 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.targeting.modify": {
         if (this.writeProvider && parameters.adSetId) {
           try {
-            const adSet = await this.writeProvider.getAdSet(
-              parameters.adSetId as string,
-            );
+            const adSet = await this.writeProvider.getAdSet(parameters.adSetId as string);
             enriched.currentBudget = adSet.dailyBudget / 100;
             enriched.adSetName = adSet.name;
             enriched.adSetStatus = adSet.status;
@@ -368,11 +358,7 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.targeting.modify":
         return executeTargetingModify(parameters, this.writeProvider);
       default:
-        return failResult(
-          `Unknown action type: ${actionType}`,
-          "dispatch",
-          `Unknown action type`,
-        );
+        return failResult(`Unknown action type: ${actionType}`, "dispatch", `Unknown action type`);
     }
   }
 
@@ -395,13 +381,11 @@ export class DigitalAdsCartridge implements Cartridge {
     }
 
     // Fall back to diagnostic provider health
-    const platforms = Array.from(this.session.connections.entries()).map(
-      ([platform, conn]) => ({
-        platform,
-        credentials: conn.credentials,
-        entityId: conn.accountName ?? "",
-      }),
-    );
+    const platforms = Array.from(this.session.connections.entries()).map(([platform, conn]) => ({
+      platform,
+      credentials: conn.credentials,
+      entityId: conn.accountName ?? "",
+    }));
 
     if (platforms.length === 0) {
       return {
@@ -432,8 +416,7 @@ export class DigitalAdsCartridge implements Cartridge {
           )
         : 0;
 
-    const firstError =
-      healthData.platforms.find((p) => p.error)?.error ?? null;
+    const firstError = healthData.platforms.find((p) => p.error)?.error ?? null;
 
     return {
       status: healthData.overall,

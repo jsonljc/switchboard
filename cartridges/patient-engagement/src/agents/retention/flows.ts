@@ -14,12 +14,14 @@ export const winBackFlow: ConversationFlowDefinition = {
     {
       id: "reintro",
       type: "message",
-      template: "Hi {{patientName}}, it's been a while since your last visit to {{clinicName}}! We've missed you.",
+      template:
+        "Hi {{patientName}}, it's been a while since your last visit to {{clinicName}}! We've missed you.",
     },
     {
       id: "offer",
       type: "message",
-      template: "We have some exciting new treatments that complement your previous {{lastTreatmentType}}. Would you like to hear about them?",
+      template:
+        "We have some exciting new treatments that complement your previous {{lastTreatmentType}}. Would you like to hear about them?",
     },
     {
       id: "interest_question",
@@ -35,9 +37,19 @@ export const winBackFlow: ConversationFlowDefinition = {
       id: "interest_branch",
       type: "branch",
       branches: [
-        { variable: "interest", operator: "eq", value: "schedule", targetStepId: "schedule_action" },
+        {
+          variable: "interest",
+          operator: "eq",
+          value: "schedule",
+          targetStepId: "schedule_action",
+        },
         { variable: "interest", operator: "eq", value: "learn", targetStepId: "info_message" },
-        { variable: "interest", operator: "eq", value: "not_interested", targetStepId: "respect_decline" },
+        {
+          variable: "interest",
+          operator: "eq",
+          value: "not_interested",
+          targetStepId: "respect_decline",
+        },
       ],
     },
     {
@@ -50,12 +62,14 @@ export const winBackFlow: ConversationFlowDefinition = {
     {
       id: "info_message",
       type: "message",
-      template: "We'll send you some information about our latest offerings. Feel free to reach out anytime!",
+      template:
+        "We'll send you some information about our latest offerings. Feel free to reach out anytime!",
     },
     {
       id: "respect_decline",
       type: "message",
-      template: "No problem at all, {{patientName}}. We're here whenever you're ready. Have a great day!",
+      template:
+        "No problem at all, {{patientName}}. We're here whenever you're ready. Have a great day!",
     },
   ],
 };

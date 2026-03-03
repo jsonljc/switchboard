@@ -5,9 +5,17 @@ let prisma: PrismaClient;
 export function getDb(): PrismaClient {
   if (!prisma) {
     prisma = new PrismaClient({
-      log: process.env.NODE_ENV === "production"
-        ? [{ emit: "event", level: "error" }, { emit: "event", level: "warn" }]
-        : [{ emit: "stdout", level: "query" }, { emit: "stdout", level: "error" }, { emit: "stdout", level: "warn" }],
+      log:
+        process.env.NODE_ENV === "production"
+          ? [
+              { emit: "event", level: "error" },
+              { emit: "event", level: "warn" },
+            ]
+          : [
+              { emit: "stdout", level: "query" },
+              { emit: "stdout", level: "error" },
+              { emit: "stdout", level: "warn" },
+            ],
     });
     if (process.env.NODE_ENV === "production") {
       prisma.$on("error" as never, (e: unknown) => {
@@ -24,7 +32,13 @@ export function getDb(): PrismaClient {
 export { PrismaClient };
 export type { Prisma } from "@prisma/client";
 
-export { createPrismaStorage, PrismaLedgerStorage, PrismaConnectionStore, PrismaGovernanceProfileStore, PrismaCredentialResolver } from "./storage/index.js";
+export {
+  createPrismaStorage,
+  PrismaLedgerStorage,
+  PrismaConnectionStore,
+  PrismaGovernanceProfileStore,
+  PrismaCredentialResolver,
+} from "./storage/index.js";
 export { PrismaCrmProvider } from "./storage/prisma-crm-provider.js";
 export { PrismaTierStore } from "./prisma-tier-store.js";
 export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";

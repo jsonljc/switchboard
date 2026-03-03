@@ -38,17 +38,13 @@ describe("CrmCartridge", () => {
     });
 
     it("should mark activity.log as irreversible", () => {
-      const log = cartridge.manifest.actions.find(
-        (a) => a.actionType === "crm.activity.log",
-      );
+      const log = cartridge.manifest.actions.find((a) => a.actionType === "crm.activity.log");
       expect(log?.reversible).toBe(false);
       expect(log?.baseRiskCategory).toBe("low");
     });
 
     it("should mark contact.update as medium risk", () => {
-      const update = cartridge.manifest.actions.find(
-        (a) => a.actionType === "crm.contact.update",
-      );
+      const update = cartridge.manifest.actions.find((a) => a.actionType === "crm.contact.update");
       expect(update?.baseRiskCategory).toBe("medium");
       expect(update?.reversible).toBe(true);
     });
@@ -113,7 +109,11 @@ describe("CrmCartridge", () => {
     });
 
     it("should return no results for unknown query", async () => {
-      const result = await cartridge.execute("crm.contact.search", { query: "nonexistent123" }, ctx);
+      const result = await cartridge.execute(
+        "crm.contact.search",
+        { query: "nonexistent123" },
+        ctx,
+      );
       expect(result.success).toBe(true);
       expect(result.summary).toContain("No contacts found");
     });
@@ -193,11 +193,7 @@ describe("CrmCartridge", () => {
     });
 
     it("should fail contact update without contactId", async () => {
-      const result = await cartridge.execute(
-        "crm.contact.update",
-        { data: { company: "X" } },
-        ctx,
-      );
+      const result = await cartridge.execute("crm.contact.update", { data: { company: "X" } }, ctx);
       expect(result.success).toBe(false);
     });
 
@@ -234,11 +230,7 @@ describe("CrmCartridge", () => {
     });
 
     it("should reject invalid activity type", async () => {
-      const result = await cartridge.execute(
-        "crm.activity.log",
-        { type: "invalid" },
-        ctx,
-      );
+      const result = await cartridge.execute("crm.activity.log", { type: "invalid" }, ctx);
       expect(result.success).toBe(false);
     });
 

@@ -108,16 +108,28 @@ export class MockTradingProvider implements TradingProvider {
     this.positions.set("default", defaultPortfolio.positions);
 
     this.prices.set("AAPL", {
-      symbol: "AAPL", price: 175, bid: 174.95, ask: 175.05,
-      volume: 50_000_000, timestamp: new Date(),
+      symbol: "AAPL",
+      price: 175,
+      bid: 174.95,
+      ask: 175.05,
+      volume: 50_000_000,
+      timestamp: new Date(),
     });
     this.prices.set("GOOGL", {
-      symbol: "GOOGL", price: 160, bid: 159.90, ask: 160.10,
-      volume: 30_000_000, timestamp: new Date(),
+      symbol: "GOOGL",
+      price: 160,
+      bid: 159.9,
+      ask: 160.1,
+      volume: 30_000_000,
+      timestamp: new Date(),
     });
     this.prices.set("TSLA", {
-      symbol: "TSLA", price: 250, bid: 249.80, ask: 250.20,
-      volume: 80_000_000, timestamp: new Date(),
+      symbol: "TSLA",
+      price: 250,
+      bid: 249.8,
+      ask: 250.2,
+      volume: 80_000_000,
+      timestamp: new Date(),
     });
   }
 
@@ -131,9 +143,10 @@ export class MockTradingProvider implements TradingProvider {
   }): Promise<OrderResult> {
     this.orderCounter++;
     const orderId = `ord_${this.orderCounter}`;
-    const price = params.type === "market"
-      ? (this.prices.get(params.symbol)?.price ?? 100)
-      : (params.limitPrice ?? 100);
+    const price =
+      params.type === "market"
+        ? (this.prices.get(params.symbol)?.price ?? 100)
+        : (params.limitPrice ?? 100);
 
     const status: OrderStatus = {
       orderId,
@@ -167,9 +180,14 @@ export class MockTradingProvider implements TradingProvider {
   }
 
   async getPortfolio(portfolioId: string): Promise<Portfolio> {
-    return this.portfolios.get(portfolioId) ?? {
-      id: portfolioId, totalValue: 0, cashBalance: 0, positions: [],
-    };
+    return (
+      this.portfolios.get(portfolioId) ?? {
+        id: portfolioId,
+        totalValue: 0,
+        cashBalance: 0,
+        positions: [],
+      }
+    );
   }
 
   async getOrderStatus(orderId: string): Promise<OrderStatus> {
@@ -182,8 +200,12 @@ export class MockTradingProvider implements TradingProvider {
     const price = this.prices.get(symbol);
     if (!price) {
       return {
-        symbol, price: 100, bid: 99.95, ask: 100.05,
-        volume: 10_000_000, timestamp: new Date(),
+        symbol,
+        price: 100,
+        bid: 99.95,
+        ask: 100.05,
+        volume: 10_000_000,
+        timestamp: new Date(),
       };
     }
     return price;
@@ -206,15 +228,22 @@ export class MockTradingProvider implements TradingProvider {
     return { success: true, orderId };
   }
 
-  async healthCheck(): Promise<{ status: "connected" | "degraded" | "disconnected"; latencyMs: number }> {
+  async healthCheck(): Promise<{
+    status: "connected" | "degraded" | "disconnected";
+    latencyMs: number;
+  }> {
     return { status: "connected", latencyMs: 5 };
   }
 
   /** Test helper: set a custom price for a symbol. */
   setPrice(symbol: string, price: number): void {
     this.prices.set(symbol, {
-      symbol, price, bid: price - 0.05, ask: price + 0.05,
-      volume: 10_000_000, timestamp: new Date(),
+      symbol,
+      price,
+      bid: price - 0.05,
+      ask: price + 0.05,
+      volume: 10_000_000,
+      timestamp: new Date(),
     });
   }
 }

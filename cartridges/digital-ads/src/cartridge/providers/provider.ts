@@ -15,7 +15,7 @@ export interface AdPlatformProvider {
   /** Validate credentials and return a connected client */
   connect(
     credentials: PlatformCredentials,
-    entityId: string
+    entityId: string,
   ): Promise<{
     client: PlatformClient;
     accountName: string;
@@ -23,10 +23,7 @@ export interface AdPlatformProvider {
   }>;
 
   /** Lightweight connectivity check */
-  checkHealth(
-    credentials: PlatformCredentials,
-    entityId: string
-  ): Promise<PlatformHealth>;
+  checkHealth(credentials: PlatformCredentials, entityId: string): Promise<PlatformHealth>;
 
   /** Create a client from credentials (no validation) */
   createClient(credentials: PlatformCredentials): PlatformClient;

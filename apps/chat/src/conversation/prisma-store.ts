@@ -64,8 +64,11 @@ function parseMessages(raw: unknown): ConversationMessage[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw as ConversationMessage[];
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as ConversationMessage[]; }
-    catch { return []; }
+    try {
+      return JSON.parse(raw) as ConversationMessage[];
+    } catch {
+      return [];
+    }
   }
   return [];
 }

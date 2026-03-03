@@ -12,7 +12,12 @@ export interface PipelineHealthInput {
 }
 
 export interface PipelineHealthFinding {
-  type: "stalled_deals" | "stage_bottleneck" | "low_conversion" | "pipeline_empty" | "concentration_risk";
+  type:
+    | "stalled_deals"
+    | "stage_bottleneck"
+    | "low_conversion"
+    | "pipeline_empty"
+    | "concentration_risk";
   severity: "info" | "warning" | "critical";
   title: string;
   description: string;
@@ -54,7 +59,10 @@ export class PipelineHealthAdvisor {
         title: `${stalledDeals.length} Stalled Deal${stalledDeals.length > 1 ? "s" : ""}`,
         description: `${stalledDeals.length} of ${activeDeals.length} active deals (${pct.toFixed(0)}%) have had no activity in ${this.stalledThresholdDays}+ days.`,
         metric: stalledDeals.length,
-        recommendation: `Prioritize outreach on stalled deals: ${stalledDeals.slice(0, 3).map((d) => d.name).join(", ")}${stalledDeals.length > 3 ? "..." : ""}.`,
+        recommendation: `Prioritize outreach on stalled deals: ${stalledDeals
+          .slice(0, 3)
+          .map((d) => d.name)
+          .join(", ")}${stalledDeals.length > 3 ? "..." : ""}.`,
       });
     }
 
@@ -146,7 +154,8 @@ export class PipelineHealthAdvisor {
         title: "Pipeline Concentration Risk",
         description: `"${topDeal.name}" represents ${topPct.toFixed(0)}% of total pipeline value ($${(topDeal.amount ?? 0).toLocaleString()} of $${totalValue.toLocaleString()}).`,
         metric: topPct,
-        recommendation: "Diversify the pipeline by pursuing more opportunities to reduce dependency on a single deal.",
+        recommendation:
+          "Diversify the pipeline by pursuing more opportunities to reduce dependency on a single deal.",
       };
     }
 
@@ -175,7 +184,8 @@ export class PipelineHealthAdvisor {
           title: "Low Win Rate",
           description: `Win rate is ${winRate.toFixed(0)}% (${closedWon} won / ${totalClosed} closed). Industry benchmark is typically 20-30%.`,
           metric: winRate,
-          recommendation: "Analyze lost deals for common patterns. Consider improving qualification criteria or proposal process.",
+          recommendation:
+            "Analyze lost deals for common patterns. Consider improving qualification criteria or proposal process.",
         });
       }
     }

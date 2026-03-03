@@ -41,9 +41,7 @@ describe("CircuitBreaker", () => {
       await expect(cb.execute(fail)).rejects.toThrow("fail");
     }
 
-    await expect(cb.execute(() => Promise.resolve("ok"))).rejects.toThrow(
-      CircuitBreakerOpenError,
-    );
+    await expect(cb.execute(() => Promise.resolve("ok"))).rejects.toThrow(CircuitBreakerOpenError);
   });
 
   it("transitions from open to half-open after reset timeout", async () => {

@@ -28,7 +28,7 @@ export function encryptCredentials(
   if (!secret) {
     throw new Error(
       "CREDENTIALS_ENCRYPTION_KEY is required for credential encryption. " +
-      "Set this environment variable to a strong random secret (min 32 chars).",
+        "Set this environment variable to a strong random secret (min 32 chars).",
     );
   }
 
@@ -63,7 +63,10 @@ export function decryptCredentials(
 
   const salt = packed.subarray(0, SALT_LENGTH);
   const iv = packed.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-  const authTag = packed.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
+  const authTag = packed.subarray(
+    SALT_LENGTH + IV_LENGTH,
+    SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH,
+  );
   const ciphertext = packed.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
 
   const key = deriveKey(secret, salt);

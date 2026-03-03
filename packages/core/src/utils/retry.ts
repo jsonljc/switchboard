@@ -31,10 +31,7 @@ export interface RetryOptions {
  * @returns The resolved value of `fn`
  * @throws The last error if all attempts are exhausted
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {},
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const {
     maxAttempts = 3,
     baseDelayMs = 500,
@@ -56,10 +53,7 @@ export async function withRetry<T>(
       }
 
       // Compute exponential delay: baseDelayMs * 2^(attempt-1)
-      const exponentialDelay = Math.min(
-        baseDelayMs * Math.pow(2, attempt - 1),
-        maxDelayMs,
-      );
+      const exponentialDelay = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
 
       // Check if onRetry provides a custom delay (e.g. Retry-After)
       const overrideDelay = onRetry?.(error, attempt);

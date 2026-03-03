@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ChatRuntime } from "../runtime.js";
-import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "../adapters/adapter.js";
+import type {
+  ChannelAdapter,
+  ApprovalCardPayload,
+  ResultCardPayload,
+} from "../adapters/adapter.js";
 import type { IncomingMessage } from "@switchboard/schemas";
 import { RuleBasedInterpreter } from "../interpreter/interpreter.js";
 import {
@@ -141,10 +145,7 @@ describe("ChatRuntime Integration", () => {
 
     // Add resolveEntity to cartridge
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (cartridge as any).resolveEntity = async (
-      inputRef: string,
-      entityType: string,
-    ) => ({
+    (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
       id: `resolve_${Date.now()}`,
       inputRef,
       resolvedType: entityType,
@@ -204,7 +205,11 @@ describe("ChatRuntime Integration", () => {
       adapter,
       interpreter: new RuleBasedInterpreter(),
       orchestrator,
-      availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
+      availableActions: [
+        "digital-ads.campaign.pause",
+        "digital-ads.campaign.resume",
+        "digital-ads.campaign.adjust_budget",
+      ],
     });
 
     // Clean up thread state
@@ -263,9 +268,7 @@ describe("ChatRuntime Integration", () => {
 
     // The undo creates a new proposal which also needs approval (medium risk)
     // So we should get another approval card
-    expect(
-      adapter.sentApprovalCards.length + adapter.sentResultCards.length,
-    ).toBeGreaterThan(0);
+    expect(adapter.sentApprovalCards.length + adapter.sentResultCards.length).toBeGreaterThan(0);
   });
 
   it("should send denial message for forbidden action", async () => {
@@ -288,10 +291,7 @@ describe("ChatRuntime Integration", () => {
   it("should send clarification for ambiguous entity", async () => {
     // Set up resolver to return ambiguous result
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (cartridge as any).resolveEntity = async (
-      inputRef: string,
-      entityType: string,
-    ) => ({
+    (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
       id: `resolve_${Date.now()}`,
       inputRef,
       resolvedType: entityType,
@@ -335,9 +335,7 @@ describe("ChatRuntime Integration", () => {
     adapter.setNextMessage(makeMessage("pause Summer Sale"));
     await runtime.handleIncomingMessage({});
 
-    const rejectBtn = adapter.sentApprovalCards[0]!.card.buttons.find(
-      (b) => b.label === "Reject",
-    );
+    const rejectBtn = adapter.sentApprovalCards[0]!.card.buttons.find((b) => b.label === "Reject");
     expect(rejectBtn).toBeDefined();
 
     // Step 2: Reject

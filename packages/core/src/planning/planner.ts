@@ -175,11 +175,7 @@ export class PlanGraphBuilder {
    * Resolve a single value, replacing $goal references.
    * $step and $prev references are left for the DataFlowExecutor.
    */
-  private resolveValue(
-    value: unknown,
-    goal: GoalBrief,
-    context: PlanningContext,
-  ): unknown {
+  private resolveValue(value: unknown, goal: GoalBrief, context: PlanningContext): unknown {
     if (typeof value !== "string") return value;
 
     // $goal references → resolve now
@@ -206,12 +202,9 @@ export class PlanGraphBuilder {
   /**
    * Resolve a condition template string.
    */
-  private resolveConditionTemplate(
-    condition: string,
-    goal: GoalBrief,
-  ): string {
+  private resolveConditionTemplate(condition: string, goal: GoalBrief): string {
     // Replace $goal references in conditions
-    return condition.replace(/\$goal\.[a-zA-Z0-9_.\[\]]+/g, (match) => {
+    return condition.replace(/\$goal\.[a-zA-Z0-9_.[\]]+/g, (match) => {
       const path = match.slice("$goal.".length);
       const value = getNestedValue(goal, path);
       if (value === undefined) return match;

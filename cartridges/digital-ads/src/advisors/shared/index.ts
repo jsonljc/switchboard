@@ -12,10 +12,7 @@ export {
 
 export { creativeExhaustionAdvisor } from "./creative-exhaustion.js";
 
-export {
-  roasEfficiencyAdvisor,
-  createROASEfficiencyAdvisor,
-} from "./roas-efficiency.js";
+export { roasEfficiencyAdvisor, createROASEfficiencyAdvisor } from "./roas-efficiency.js";
 
 export { marginalEfficiencyAdvisor } from "./marginal-efficiency.js";
 

@@ -5,7 +5,9 @@ const cronRegex = /^(\S+\s+){4}\S+$/;
 
 const createReportSchema = z.object({
   name: z.string().min(1).max(200),
-  cronExpression: z.string().refine((v) => cronRegex.test(v), { message: "Invalid cron expression" }),
+  cronExpression: z
+    .string()
+    .refine((v) => cronRegex.test(v), { message: "Invalid cron expression" }),
   timezone: z.string().default("UTC"),
   reportType: z.enum(["funnel", "portfolio"]),
   platform: z.string().nullish(),
@@ -20,6 +22,7 @@ const updateReportSchema = createReportSchema.partial();
 function computeNextRunAt(cronExpression: string, timezone: string): Date | null {
   try {
     // Dynamic import at route level — cron-parser is an optional dependency
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const CronParser = require("cron-parser");
     const interval = CronParser.parseExpression(cronExpression, {
       currentDate: new Date(),
@@ -71,7 +74,9 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
     }
 
-    const existing = await prisma.scheduledReport.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.scheduledReport.findFirst({
+      where: { id, organizationId: orgId },
+    });
     if (!existing) return reply.code(404).send({ error: "Scheduled report not found" });
 
     const data: Record<string, unknown> = { ...parsed.data };
@@ -92,7 +97,9 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
-    const existing = await prisma.scheduledReport.findFirst({ where: { id, organizationId: orgId } });
+    const existing = await prisma.scheduledReport.findFirst({
+      where: { id, organizationId: orgId },
+    });
     if (!existing) return reply.code(404).send({ error: "Scheduled report not found" });
     await prisma.scheduledReport.delete({ where: { id } });
     return reply.send({ id, deleted: true });
@@ -108,17 +115,23 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge) return reply.code(400).send({ error: "digital-ads cartridge not registered" });
+      if (!cartridge)
+        return reply.code(400).send({ error: "digital-ads cartridge not registered" });
 
-      const actionId = report.reportType === "portfolio"
-        ? "digital-ads.portfolio.diagnose"
-        : "digital-ads.funnel.diagnose";
+      const actionId =
+        report.reportType === "portfolio"
+          ? "digital-ads.portfolio.diagnose"
+          : "digital-ads.funnel.diagnose";
 
-      const result = await cartridge.execute(actionId, {
-        platform: report.platform ?? "meta",
-        vertical: report.vertical,
-        entityId: "act_default",
-      }, { principalId: "system", organizationId: orgId, connectionCredentials: {} });
+      const result = await cartridge.execute(
+        actionId,
+        {
+          platform: report.platform ?? "meta",
+          vertical: report.vertical,
+          entityId: "act_default",
+        },
+        { principalId: "system", organizationId: orgId, connectionCredentials: {} },
+      );
 
       // Update lastRunAt and nextRunAt
       const nextRunAt = computeNextRunAt(report.cronExpression, report.timezone);

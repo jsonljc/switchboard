@@ -3,7 +3,13 @@ import { evaluateAlertRule, extractMetricValue, compareValue } from "../evaluato
 
 describe("extractMetricValue", () => {
   const result = {
-    primaryKPI: { name: "ROAS", current: 3.5, previous: 4.0, deltaPercent: -12.5, severity: "warning" },
+    primaryKPI: {
+      name: "ROAS",
+      current: 3.5,
+      previous: 4.0,
+      deltaPercent: -12.5,
+      severity: "warning",
+    },
     spend: { current: 1500, previous: 1200 },
     bottleneck: { stage: "checkout", deltaPercent: -25.3 },
     findings: [
@@ -99,7 +105,13 @@ describe("compareValue", () => {
 
 describe("evaluateAlertRule", () => {
   const diagnosticResult = {
-    primaryKPI: { name: "ROAS", current: 3.5, previous: 4.0, deltaPercent: -12.5, severity: "warning" },
+    primaryKPI: {
+      name: "ROAS",
+      current: 3.5,
+      previous: 4.0,
+      deltaPercent: -12.5,
+      severity: "warning",
+    },
     spend: { current: 1500, previous: 1200 },
     bottleneck: { stage: "checkout", deltaPercent: -25.3 },
     findings: [

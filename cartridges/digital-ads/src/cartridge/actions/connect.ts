@@ -11,15 +11,16 @@ import { setConnection, setConnectionError } from "../context/session.js";
 export async function executeConnect(
   params: ConnectParams,
   provider: AdPlatformProvider,
-  session: SessionState
+  session: SessionState,
 ): Promise<ExecuteResult> {
   const start = Date.now();
 
   try {
-    const { client: _client, accountName, entityLevels } = await provider.connect(
-      params.credentials,
-      params.entityId
-    );
+    const {
+      client: _client,
+      accountName,
+      entityLevels,
+    } = await provider.connect(params.credentials, params.entityId);
 
     setConnection(session, params.platform, params.credentials, accountName, entityLevels);
 

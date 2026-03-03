@@ -10,7 +10,10 @@ export async function GET() {
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -23,6 +26,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

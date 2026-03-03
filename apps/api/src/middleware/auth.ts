@@ -51,7 +51,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "API_KEYS environment variable is required in production. " +
-        "Set API_KEYS to a comma-separated list of valid API keys, or set NODE_ENV to something other than 'production'.",
+          "Set API_KEYS to a comma-separated list of valid API keys, or set NODE_ENV to something other than 'production'.",
       );
     }
     return;
@@ -89,7 +89,9 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
     const match = /^Bearer\s+(.+)$/i.exec(authHeader);
     if (!match?.[1]) {
-      return reply.code(401).send({ error: "Invalid Authorization format, expected: Bearer <key>", statusCode: 401 });
+      return reply
+        .code(401)
+        .send({ error: "Invalid Authorization format, expected: Bearer <key>", statusCode: 401 });
     }
 
     const incomingKey = match[1];
@@ -98,7 +100,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     // Fast path: check static env-var keys first
     let matchedEntry: HashedKeyEntry | undefined;
     for (const entry of keyEntries) {
-      if (entry.hash.length === incomingHash.length && crypto.timingSafeEqual(entry.hash, incomingHash)) {
+      if (
+        entry.hash.length === incomingHash.length &&
+        crypto.timingSafeEqual(entry.hash, incomingHash)
+      ) {
         matchedEntry = entry;
         break;
       }
@@ -165,7 +170,10 @@ function loadHashedKeys(): HashedKeyEntry[] {
   const rawKeys = process.env["API_KEYS"] ?? "";
   if (!rawKeys.trim()) return [];
 
-  const keys = rawKeys.split(",").map((k) => k.trim()).filter(Boolean);
+  const keys = rawKeys
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
   const metadata = loadApiKeyMetadata();
 
   return keys.map((key) => ({
@@ -183,7 +191,10 @@ function loadApiKeyMetadata(): Map<string, ApiKeyMetadata> {
   if (!raw.trim()) return new Map();
 
   const out = new Map<string, ApiKeyMetadata>();
-  for (const entry of raw.split(",").map((e) => e.trim()).filter(Boolean)) {
+  for (const entry of raw
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean)) {
     const parts = entry.split(":");
     const key = parts[0]?.trim();
     if (!key) continue;

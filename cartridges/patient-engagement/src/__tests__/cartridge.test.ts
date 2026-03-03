@@ -33,21 +33,13 @@ describe("PatientEngagementCartridge", () => {
 
   it("should return risk input", async () => {
     const { cartridge } = await bootstrapPatientEngagementCartridge();
-    const risk = await cartridge.getRiskInput(
-      "patient-engagement.lead.score",
-      {},
-      {},
-    );
+    const risk = await cartridge.getRiskInput("patient-engagement.lead.score", {}, {});
     expect(risk.baseRisk).toBe("none");
   });
 
   it("should return high risk for review responses", async () => {
     const { cartridge } = await bootstrapPatientEngagementCartridge();
-    const risk = await cartridge.getRiskInput(
-      "patient-engagement.review.respond",
-      {},
-      {},
-    );
+    const risk = await cartridge.getRiskInput("patient-engagement.review.respond", {}, {});
     expect(risk.baseRisk).toBe("high");
   });
 

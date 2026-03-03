@@ -4,10 +4,7 @@
 // Blocks outbound communication if the patient has not granted active consent.
 // ---------------------------------------------------------------------------
 
-import type {
-  CartridgeInterceptor,
-  CartridgeContext,
-} from "@switchboard/cartridge-sdk";
+import type { CartridgeInterceptor, CartridgeContext } from "@switchboard/cartridge-sdk";
 
 /** Action types that require active consent */
 const CONSENT_REQUIRED_ACTIONS = [

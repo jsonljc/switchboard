@@ -41,7 +41,12 @@ export class RedisModelRouter implements ModelRouter {
     }
   }
 
-  async recordUsage(promptTokens: number, completionTokens: number, orgId?: string, modelId?: string): Promise<void> {
+  async recordUsage(
+    promptTokens: number,
+    completionTokens: number,
+    orgId?: string,
+    modelId?: string,
+  ): Promise<void> {
     try {
       const tokenKey = this.dayKey(orgId);
       const costKey = this.costDayKey(orgId);
@@ -64,8 +69,9 @@ export class RedisModelRouter implements ModelRouter {
     try {
       const key = this.dayKey(orgId);
       const data = await this.redis.hgetall(key);
-      return (parseInt(data["prompt"] ?? "0", 10) || 0) +
-             (parseInt(data["completion"] ?? "0", 10) || 0);
+      return (
+        (parseInt(data["prompt"] ?? "0", 10) || 0) + (parseInt(data["completion"] ?? "0", 10) || 0)
+      );
     } catch {
       return 0; // fail-open
     }
@@ -87,7 +93,10 @@ export class RedisModelRouter implements ModelRouter {
     return Math.max(0, this.config.dailyTokenBudget - usage);
   }
 
-  async getUsageSummary(orgId: string, period: "daily" | "weekly" | "monthly"): Promise<TokenUsageSummary> {
+  async getUsageSummary(
+    orgId: string,
+    period: "daily" | "weekly" | "monthly",
+  ): Promise<TokenUsageSummary> {
     try {
       const days = period === "daily" ? 1 : period === "weekly" ? 7 : 30;
       const tokenKeys = this.lastNDayKeys(orgId, days);

@@ -28,7 +28,7 @@ export const deviceBreakdownAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.deviceBreakdowns || context.deviceBreakdowns.length === 0) {
     return [];
@@ -72,8 +72,7 @@ export const deviceBreakdownAdvisor: FindingAdvisor = (
         severity: spendShare > 0.15 ? "critical" : "warning",
         stage: "device",
         message: `${formatDeviceName(device.device)} has $${device.spend.toFixed(2)} spend (${(spendShare * 100).toFixed(1)}% of total) with zero conversions.`,
-        recommendation:
-          `Consider reducing ${formatDeviceName(device.device)} bid adjustments or excluding this device segment if consistently non-converting. Check if the landing page is optimized for ${formatDeviceName(device.device)}.`,
+        recommendation: `Consider reducing ${formatDeviceName(device.device)} bid adjustments or excluding this device segment if consistently non-converting. Check if the landing page is optimized for ${formatDeviceName(device.device)}.`,
       });
     }
   }
@@ -82,7 +81,7 @@ export const deviceBreakdownAdvisor: FindingAdvisor = (
     const deviceList = inefficientDevices
       .map(
         (d) =>
-          `${formatDeviceName(d.device)} (CPA $${d.cpa.toFixed(2)}, ${(d.spendShare * 100).toFixed(1)}% of spend)`
+          `${formatDeviceName(d.device)} (CPA $${d.cpa.toFixed(2)}, ${(d.spendShare * 100).toFixed(1)}% of spend)`,
       )
       .join("; ");
 
@@ -96,12 +95,7 @@ export const deviceBreakdownAdvisor: FindingAdvisor = (
   }
 
   // 2. Mobile vs desktop CPA gap
-  if (
-    mobile &&
-    desktop &&
-    mobile.conversions > 0 &&
-    desktop.conversions > 0
-  ) {
+  if (mobile && desktop && mobile.conversions > 0 && desktop.conversions > 0) {
     const mobileCPA = mobile.spend / mobile.conversions;
     const desktopCPA = desktop.spend / desktop.conversions;
 

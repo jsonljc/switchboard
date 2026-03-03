@@ -91,7 +91,8 @@ export function responseToOpenclawTool(
       out.approvalUrl = `${base}/api/approvals/${response.approvalId}`;
     }
     out.summary =
-      response.approvalRequest?.summary ?? "Approval required. Use approvalUrl to approve or reject.";
+      response.approvalRequest?.summary ??
+      "Approval required. Use approvalUrl to approve or reject.";
   }
 
   if (response.outcome === "EXECUTED" && response.executionResult) {

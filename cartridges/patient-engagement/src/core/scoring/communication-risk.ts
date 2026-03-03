@@ -5,11 +5,7 @@
 // consent, frequency, sentiment, and complaint signals.
 // ---------------------------------------------------------------------------
 
-import type {
-  CommunicationRiskResult,
-  CommunicationRiskLevel,
-  ConsentStatus,
-} from "../types.js";
+import type { CommunicationRiskResult, CommunicationRiskLevel, ConsentStatus } from "../types.js";
 
 export interface CommunicationRiskInput {
   consentStatus: ConsentStatus;
@@ -30,9 +26,7 @@ export interface CommunicationRiskInput {
  * - caution: Reduced frequency, avoid promotional content
  * - safe: Normal communication allowed
  */
-export function computeCommunicationRisk(
-  input: CommunicationRiskInput,
-): CommunicationRiskResult {
+export function computeCommunicationRisk(input: CommunicationRiskInput): CommunicationRiskResult {
   const reasons: string[] = [];
 
   // Hard blocks

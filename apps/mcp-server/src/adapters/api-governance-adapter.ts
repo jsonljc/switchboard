@@ -19,7 +19,10 @@ export interface MinimalOrchestrator {
 }
 
 export interface MinimalStorage {
-  approvals: { getById: (id: string) => Promise<any>; listPending: (orgId?: string) => Promise<any> };
+  approvals: {
+    getById: (id: string) => Promise<any>;
+    listPending: (orgId?: string) => Promise<any>;
+  };
   envelopes: { getById: (id: string) => Promise<any> };
   cartridges: { get: (id: string) => any; list: () => string[] };
 }
@@ -77,19 +80,26 @@ export function createApiOrchestrator(client: McpApiClient): MinimalOrchestrator
         version: 1,
         incomingMessage: null,
         conversationId: null,
-        proposals: [{
-          id: d.envelopeId,
-          actionType: params.actionType,
-          parameters: params.parameters,
-          status: d.outcome === "DENIED" ? "denied" : "proposed",
-        }],
+        proposals: [
+          {
+            id: d.envelopeId,
+            actionType: params.actionType,
+            parameters: params.parameters,
+            status: d.outcome === "DENIED" ? "denied" : "proposed",
+          },
+        ],
         resolvedEntities: [],
         plan: null,
         decisions: [],
         approvalRequests: d.approvalRequest ? [d.approvalRequest] : [],
         executionResults: [],
         auditEntryIds: [],
-        status: d.outcome === "DENIED" ? "denied" : d.outcome === "PENDING_APPROVAL" ? "pending_approval" : "approved",
+        status:
+          d.outcome === "DENIED"
+            ? "denied"
+            : d.outcome === "PENDING_APPROVAL"
+              ? "pending_approval"
+              : "approved",
         createdAt: new Date(),
         updatedAt: new Date(),
         parentEnvelopeId: null,
@@ -122,7 +132,9 @@ export function createApiStorage(client: McpApiClient): MinimalStorage {
   return {
     approvals: {
       async getById(approvalId: string) {
-        const { status, data } = await client.get(`/api/approvals/${encodeURIComponent(approvalId)}`);
+        const { status, data } = await client.get(
+          `/api/approvals/${encodeURIComponent(approvalId)}`,
+        );
         if (status === 404) return null;
         const d = data as any;
         return {
@@ -180,21 +192,29 @@ export function createApiGovernanceProfileStore(client: McpApiClient) {
   return {
     async get(organizationId: string | null): Promise<GovernanceProfile> {
       if (!organizationId) return "guarded" as GovernanceProfile;
-      const { data } = await client.get(`/api/governance/${encodeURIComponent(organizationId)}/status`);
+      const { data } = await client.get(
+        `/api/governance/${encodeURIComponent(organizationId)}/status`,
+      );
       return (data as any).profile ?? ("guarded" as GovernanceProfile);
     },
     async set(organizationId: string | null, profile: GovernanceProfile): Promise<void> {
       if (!organizationId) return;
-      await client.put(`/api/governance/${encodeURIComponent(organizationId)}/profile`, { profile });
+      await client.put(`/api/governance/${encodeURIComponent(organizationId)}/profile`, {
+        profile,
+      });
     },
     async getConfig(organizationId: string | null): Promise<GovernanceProfileConfig | null> {
       if (!organizationId) return null;
-      const { data } = await client.get(`/api/governance/${encodeURIComponent(organizationId)}/status`);
+      const { data } = await client.get(
+        `/api/governance/${encodeURIComponent(organizationId)}/status`,
+      );
       return (data as any).config ?? null;
     },
     async setConfig(organizationId: string | null, config: GovernanceProfileConfig): Promise<void> {
       if (!organizationId) return;
-      await client.put(`/api/governance/${encodeURIComponent(organizationId)}/profile`, { profile: config.profile });
+      await client.put(`/api/governance/${encodeURIComponent(organizationId)}/profile`, {
+        profile: config.profile,
+      });
     },
   };
 }
@@ -207,8 +227,16 @@ export function createApiLedger(client: McpApiClient): MinimalLedger {
       if (filter.entityId) params.set("entityId", filter.entityId);
       if (filter.eventType) params.set("eventType", filter.eventType);
       if (filter.organizationId) params.set("organizationId", filter.organizationId);
-      if (filter.after) params.set("after", filter.after instanceof Date ? filter.after.toISOString() : filter.after);
-      if (filter.before) params.set("before", filter.before instanceof Date ? filter.before.toISOString() : filter.before);
+      if (filter.after)
+        params.set(
+          "after",
+          filter.after instanceof Date ? filter.after.toISOString() : filter.after,
+        );
+      if (filter.before)
+        params.set(
+          "before",
+          filter.before instanceof Date ? filter.before.toISOString() : filter.before,
+        );
       if (filter.limit) params.set("limit", String(filter.limit));
 
       const { data } = await client.get(`/api/audit?${params.toString()}`);

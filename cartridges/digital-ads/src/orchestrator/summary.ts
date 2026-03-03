@@ -10,7 +10,7 @@ export function generateExecutiveSummary(
   platforms: PlatformResult[],
   crossPlatformFindings: MultiPlatformResult["crossPlatformFindings"],
   budgetRecommendations: MultiPlatformResult["budgetRecommendations"],
-  portfolioActions?: PortfolioAction[]
+  portfolioActions?: PortfolioAction[],
 ): string {
   const lines: string[] = [];
   lines.push("## Multi-Platform Diagnostic Summary");
@@ -21,7 +21,7 @@ export function generateExecutiveSummary(
   const failed = platforms.filter((p) => p.status === "error");
 
   lines.push(
-    `Analyzed ${successful.length} platform${successful.length !== 1 ? "s" : ""}${failed.length > 0 ? ` (${failed.length} failed)` : ""}.`
+    `Analyzed ${successful.length} platform${successful.length !== 1 ? "s" : ""}${failed.length > 0 ? ` (${failed.length} failed)` : ""}.`,
   );
   lines.push("");
 
@@ -43,26 +43,20 @@ export function generateExecutiveSummary(
 
     lines.push(`### ${pr.platform.toUpperCase()} — ${severityTag}`);
     lines.push(
-      `${kpi.name}: $${kpi.current.toFixed(2)} (${direction}${kpi.deltaPercent.toFixed(1)}% WoW)`
+      `${kpi.name}: $${kpi.current.toFixed(2)} (${direction}${kpi.deltaPercent.toFixed(1)}% WoW)`,
     );
-    lines.push(
-      `Spend: $${r.spend.current.toFixed(2)} (prev: $${r.spend.previous.toFixed(2)})`
-    );
+    lines.push(`Spend: $${r.spend.current.toFixed(2)} (prev: $${r.spend.previous.toFixed(2)})`);
 
     // Bottleneck
     if (r.bottleneck) {
       lines.push(
-        `Bottleneck: ${r.bottleneck.stageName} (${r.bottleneck.deltaPercent.toFixed(1)}% drop)`
+        `Bottleneck: ${r.bottleneck.stageName} (${r.bottleneck.deltaPercent.toFixed(1)}% drop)`,
       );
     }
 
     // Critical/warning findings count
-    const criticalCount = r.findings.filter(
-      (f) => f.severity === "critical"
-    ).length;
-    const warningCount = r.findings.filter(
-      (f) => f.severity === "warning"
-    ).length;
+    const criticalCount = r.findings.filter((f) => f.severity === "critical").length;
+    const warningCount = r.findings.filter((f) => f.severity === "warning").length;
     if (criticalCount > 0 || warningCount > 0) {
       const parts: string[] = [];
       if (criticalCount > 0) parts.push(`${criticalCount} critical`);
@@ -89,11 +83,9 @@ export function generateExecutiveSummary(
     lines.push("### Budget Recommendations");
     for (const rec of budgetRecommendations) {
       const confidence = `[${rec.confidence}]`;
-      const shift = rec.suggestedShiftPercent
-        ? ` (shift ~${rec.suggestedShiftPercent}%)`
-        : "";
+      const shift = rec.suggestedShiftPercent ? ` (shift ~${rec.suggestedShiftPercent}%)` : "";
       lines.push(
-        `${confidence} Consider shifting budget from ${rec.from} → ${rec.to}${shift}: ${rec.reason}`
+        `${confidence} Consider shifting budget from ${rec.from} → ${rec.to}${shift}: ${rec.reason}`,
       );
     }
     lines.push("");
@@ -105,12 +97,11 @@ export function generateExecutiveSummary(
     for (const action of portfolioActions) {
       const risk = `[${action.riskLevel.toUpperCase()} RISK]`;
       const confidence = `${(action.confidenceScore * 100).toFixed(0)}% confidence`;
-      const revenue = action.estimatedRevenueRecovery > 0
-        ? ` — est. $${action.estimatedRevenueRecovery.toFixed(0)} recovery`
-        : "";
-      lines.push(
-        `${action.priority}. ${risk} ${action.action} (${confidence}${revenue})`
-      );
+      const revenue =
+        action.estimatedRevenueRecovery > 0
+          ? ` — est. $${action.estimatedRevenueRecovery.toFixed(0)} recovery`
+          : "";
+      lines.push(`${action.priority}. ${risk} ${action.action} (${confidence}${revenue})`);
     }
     lines.push("");
   }

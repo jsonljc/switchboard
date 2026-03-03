@@ -41,9 +41,7 @@ describe("videoCompletionAdvisor", () => {
     const findings = videoCompletionAdvisor([], [], current, previous);
 
     expect(findings.length).toBeGreaterThanOrEqual(1);
-    const vcrFinding = findings.find((f) =>
-      f.message.includes("Video completion rate declined")
-    );
+    const vcrFinding = findings.find((f) => f.message.includes("Video completion rate declined"));
     expect(vcrFinding).toBeDefined();
     expect(vcrFinding!.severity).toBe("warning");
   });
@@ -57,9 +55,7 @@ describe("videoCompletionAdvisor", () => {
     });
     const findings = videoCompletionAdvisor([], [], current, previous);
 
-    const vcrFinding = findings.find((f) =>
-      f.message.includes("Video completion rate declined")
-    );
+    const vcrFinding = findings.find((f) => f.message.includes("Video completion rate declined"));
     expect(vcrFinding).toBeDefined();
     expect(vcrFinding!.severity).toBe("critical");
   });

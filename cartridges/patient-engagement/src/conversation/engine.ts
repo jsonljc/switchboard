@@ -33,7 +33,11 @@ export function createConversationState(
 export function executeNextStep(
   flow: ConversationFlowDefinition,
   state: ConversationState,
-): { output: string; state: ConversationState; actionRequired?: { actionType: string; parameters: Record<string, unknown> } } {
+): {
+  output: string;
+  state: ConversationState;
+  actionRequired?: { actionType: string; parameters: Record<string, unknown> };
+} {
   if (state.completed || state.escalated) {
     return { output: "", state };
   }
@@ -58,9 +62,7 @@ export function executeNextStep(
 
     case "question": {
       let output = interpolate(step.template ?? "", newState.variables);
-      const optionsText = (step.options ?? [])
-        .map((opt, i) => `${i + 1}. ${opt}`)
-        .join("\n");
+      const optionsText = (step.options ?? []).map((opt, i) => `${i + 1}. ${opt}`).join("\n");
       // When llmPersonalization is true, personalize the template with context
       if (step.llmPersonalization && newState.variables["patientName"]) {
         output = output.replace(/\bpatient\b/gi, String(newState.variables["patientName"]));
@@ -93,9 +95,7 @@ export function executeNextStep(
       return {
         output,
         state: newState,
-        actionRequired: step.actionType
-          ? { actionType: step.actionType, parameters }
-          : undefined,
+        actionRequired: step.actionType ? { actionType: step.actionType, parameters } : undefined,
       };
     }
 
@@ -133,10 +133,7 @@ export function executeNextStep(
 /**
  * Interpolate {{variable}} placeholders in a template string.
  */
-export function interpolate(
-  template: string,
-  variables: Record<string, unknown>,
-): string {
+export function interpolate(template: string, variables: Record<string, unknown>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
     const value = variables[key];
     return value !== undefined ? String(value) : `{{${key}}}`;
@@ -192,18 +189,25 @@ function evaluateCondition(
   target: unknown,
 ): boolean {
   switch (operator) {
-    case "eq": return value === target;
-    case "neq": return value !== target;
-    case "gt": return Number(value) > Number(target);
-    case "lt": return Number(value) < Number(target);
-    case "gte": return Number(value) >= Number(target);
-    case "lte": return Number(value) <= Number(target);
+    case "eq":
+      return value === target;
+    case "neq":
+      return value !== target;
+    case "gt":
+      return Number(value) > Number(target);
+    case "lt":
+      return Number(value) < Number(target);
+    case "gte":
+      return Number(value) >= Number(target);
+    case "lte":
+      return Number(value) <= Number(target);
     case "contains":
       return typeof value === "string" && typeof target === "string"
         ? value.toLowerCase().includes(target.toLowerCase())
         : false;
     case "in":
       return Array.isArray(target) ? target.includes(value) : false;
-    default: return false;
+    default:
+      return false;
   }
 }

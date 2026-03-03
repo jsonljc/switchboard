@@ -28,7 +28,9 @@ describe("Policies API", () => {
           active: true,
           rule: {
             composition: "AND",
-            conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.campaign.pause" }],
+            conditions: [
+              { field: "actionType", operator: "eq", value: "digital-ads.campaign.pause" },
+            ],
           },
           effect: "require_approval",
         },
@@ -68,7 +70,12 @@ describe("Policies API", () => {
           cartridgeId: "digital-ads",
           priority: 50,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
+          rule: {
+            composition: "AND",
+            conditions: [
+              { field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" },
+            ],
+          },
           effect: "require_approval",
         },
       });
@@ -95,7 +102,12 @@ describe("Policies API", () => {
           cartridgeId: "digital-ads",
           priority: 50,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
+          rule: {
+            composition: "AND",
+            conditions: [
+              { field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" },
+            ],
+          },
           effect: "require_approval",
         },
       });
@@ -127,7 +139,12 @@ describe("Policies API", () => {
           cartridgeId: "digital-ads",
           priority: 10,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
+          rule: {
+            composition: "AND",
+            conditions: [
+              { field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" },
+            ],
+          },
           effect: "require_approval",
         },
       });
@@ -166,7 +183,12 @@ describe("Policies API", () => {
           cartridgeId: "digital-ads",
           priority: 10,
           active: true,
-          rule: { composition: "AND", conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" }] },
+          rule: {
+            composition: "AND",
+            conditions: [
+              { field: "actionType", operator: "eq", value: "digital-ads.budget.adjust" },
+            ],
+          },
           effect: "require_approval",
         },
       });

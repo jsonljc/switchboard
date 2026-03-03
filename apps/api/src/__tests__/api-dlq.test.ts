@@ -99,8 +99,8 @@ describe("DLQ Routes", () => {
   describe("GET /api/dlq/stats", () => {
     it("returns aggregate counts by status", async () => {
       mockPrisma.failedMessage.count
-        .mockResolvedValueOnce(3)  // pending
-        .mockResolvedValueOnce(1)  // exhausted
+        .mockResolvedValueOnce(3) // pending
+        .mockResolvedValueOnce(1) // exhausted
         .mockResolvedValueOnce(7); // resolved
 
       const res = await app.inject({ method: "GET", url: "/api/dlq/stats" });
@@ -117,7 +117,11 @@ describe("DLQ Routes", () => {
     it("marks a pending message as resolved", async () => {
       const msg = makeFailedMessage();
       mockPrisma.failedMessage.findUnique.mockResolvedValue(msg);
-      mockPrisma.failedMessage.update.mockResolvedValue({ ...msg, status: "resolved", resolvedAt: new Date() });
+      mockPrisma.failedMessage.update.mockResolvedValue({
+        ...msg,
+        status: "resolved",
+        resolvedAt: new Date(),
+      });
 
       const res = await app.inject({ method: "POST", url: "/api/dlq/messages/fm_1/resolve" });
       expect(res.statusCode).toBe(200);
@@ -171,7 +175,11 @@ describe("DLQ Routes", () => {
     it("transitions to exhausted when retryCount reaches maxRetries", async () => {
       const msg = makeFailedMessage({ retryCount: 4, maxRetries: 5 });
       mockPrisma.failedMessage.findUnique.mockResolvedValue(msg);
-      mockPrisma.failedMessage.update.mockResolvedValue({ ...msg, retryCount: 5, status: "exhausted" });
+      mockPrisma.failedMessage.update.mockResolvedValue({
+        ...msg,
+        retryCount: 5,
+        status: "exhausted",
+      });
 
       const res = await app.inject({
         method: "POST",

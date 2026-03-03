@@ -24,7 +24,10 @@ export function loadMcpApiKeys(): Map<string, ApiKeyEntry> {
   if (!raw.trim()) return new Map();
 
   const out = new Map<string, ApiKeyEntry>();
-  for (const entry of raw.split(",").map((e) => e.trim()).filter(Boolean)) {
+  for (const entry of raw
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean)) {
     const parts = entry.split(":");
     const key = parts[0]?.trim();
     const actorId = parts[1]?.trim();
@@ -47,8 +50,7 @@ export function resolveAuth(
   if (keys.size === 0) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
-        "MCP_API_KEYS is required in production. " +
-        "Format: key:actorId:orgId (comma-separated)",
+        "MCP_API_KEYS is required in production. " + "Format: key:actorId:orgId (comma-separated)",
       );
     }
     return { actorId: "default", organizationId: null };

@@ -26,7 +26,7 @@ export const budgetPacingAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.subEntities || context.subEntities.length === 0) {
     return [];
@@ -34,7 +34,7 @@ export const budgetPacingAdvisor: FindingAdvisor = (
 
   const findings: Finding[] = [];
   const entitiesWithBudget = context.subEntities.filter(
-    (e) => e.dailyBudget !== null && e.dailyBudget > 0 && e.spend > 0
+    (e) => e.dailyBudget !== null && e.dailyBudget > 0 && e.spend > 0,
   );
 
   if (entitiesWithBudget.length === 0) return findings;

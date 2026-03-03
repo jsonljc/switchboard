@@ -33,18 +33,14 @@ export class CapabilityRegistry {
    * Find all capabilities matching a given executor type.
    */
   findByExecutorType(executorType: ExecutorType): CapabilityDescriptor[] {
-    return Array.from(this.capabilities.values()).filter(
-      (c) => c.executorType === executorType,
-    );
+    return Array.from(this.capabilities.values()).filter((c) => c.executorType === executorType);
   }
 
   /**
    * Find all capabilities matching a given step type.
    */
   findByStepType(stepType: StepType): CapabilityDescriptor[] {
-    return Array.from(this.capabilities.values()).filter(
-      (c) => c.stepType === stepType,
-    );
+    return Array.from(this.capabilities.values()).filter((c) => c.stepType === stepType);
   }
 
   /**
@@ -70,9 +66,7 @@ export class CapabilityRegistry {
    * Populate registry from a cartridge manifest's action definitions.
    * Uses explicit hints when available, otherwise applies heuristics.
    */
-  populateFromManifest(
-    actions: ActionDefinition[],
-  ): void {
+  populateFromManifest(actions: ActionDefinition[]): void {
     for (const action of actions) {
       const descriptor: CapabilityDescriptor = {
         actionType: action.actionType,

@@ -87,9 +87,7 @@ describe("budgetSkewAdvisor", () => {
   });
 
   it("returns no findings when only one active ad set", () => {
-    const entities = [
-      makeEntity({ entityId: "adset_1", spend: 1000 }),
-    ];
+    const entities = [makeEntity({ entityId: "adset_1", spend: 1000 })];
     const context: DiagnosticContext = { subEntities: entities };
 
     const findings = budgetSkewAdvisor([], [], snapshot, snapshot, context);

@@ -9,7 +9,10 @@ export async function GET() {
     const data = await client.getIdentitySpecByPrincipal(session.principalId);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -20,7 +23,10 @@ export async function POST(request: NextRequest) {
     const data = await client.createIdentitySpec(body);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }
 
@@ -32,6 +38,9 @@ export async function PUT(request: NextRequest) {
     const data = await client.updateIdentitySpec(id, updates);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

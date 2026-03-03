@@ -17,11 +17,7 @@ import {
 import type { StorageContext, GovernanceProfileStore, PolicyCache } from "@switchboard/core";
 import { profileToPosture } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
-import {
-  handleSideEffectTool,
-  handleReadTool,
-  handleGovernanceTool,
-} from "../tools/index.js";
+import { handleSideEffectTool, handleReadTool, handleGovernanceTool } from "../tools/index.js";
 import type { ReadToolDeps, GovernanceToolDeps } from "../tools/index.js";
 import type { McpAuthContext } from "../auth.js";
 import { McpApiClient } from "../api-client.js";
@@ -40,9 +36,30 @@ function createTestCartridgeFixture() {
     createTestManifest({
       id: "digital-ads",
       actions: [
-        { actionType: "digital-ads.campaign.pause", name: "Pause Campaign", description: "Pause", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "digital-ads.campaign.resume", name: "Resume Campaign", description: "Resume", parametersSchema: {}, baseRiskCategory: "medium" as const, reversible: true },
-        { actionType: "digital-ads.budget.adjust", name: "Adjust Budget", description: "Budget", parametersSchema: {}, baseRiskCategory: "high" as const, reversible: true },
+        {
+          actionType: "digital-ads.campaign.pause",
+          name: "Pause Campaign",
+          description: "Pause",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.campaign.resume",
+          name: "Resume Campaign",
+          description: "Resume",
+          parametersSchema: {},
+          baseRiskCategory: "medium" as const,
+          reversible: true,
+        },
+        {
+          actionType: "digital-ads.budget.adjust",
+          name: "Adjust Budget",
+          description: "Budget",
+          parametersSchema: {},
+          baseRiskCategory: "high" as const,
+          reversible: true,
+        },
       ],
     }),
   );
@@ -65,10 +82,7 @@ function createTestCartridgeFixture() {
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (cartridge as any).resolveEntity = async (
-    inputRef: string,
-    entityType: string,
-  ) => ({
+  (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
     id: `resolve_${Date.now()}`,
     inputRef,
     resolvedType: entityType,
@@ -341,13 +355,11 @@ async function buildApiModeServer(): Promise<{
   // GET /api/cartridges
   app.get("/api/cartridges", async (_req, reply) => {
     const ids = storage.cartridges.list();
-    const manifests = ids
-      .map((id) => storage.cartridges.get(id)?.manifest ?? null)
-      .filter(Boolean);
+    const manifests = ids.map((id) => storage.cartridges.get(id)?.manifest ?? null).filter(Boolean);
     return reply.code(200).send({ cartridges: manifests });
   });
 
-  const _address = await app.listen({ port: 0, host: "127.0.0.1" });
+  await app.listen({ port: 0, host: "127.0.0.1" });
   const port = (app.server.address() as { port: number }).port;
 
   return { app, port, storage, orchestrator, ledger, governanceProfileStore };
@@ -384,7 +396,11 @@ async function buildApiContext(): Promise<{ ctx: ModeContext; app: FastifyInstan
     async execute(request: {
       actorId: string;
       organizationId?: string | null;
-      requestedAction: { actionType: string; parameters: Record<string, unknown>; sideEffect?: boolean };
+      requestedAction: {
+        actionType: string;
+        parameters: Record<string, unknown>;
+        sideEffect?: boolean;
+      };
       message?: string;
     }) {
       const { data } = await client.post<{
@@ -395,16 +411,20 @@ async function buildApiContext(): Promise<{ ctx: ModeContext; app: FastifyInstan
         approvalId?: string;
         approvalRequest?: unknown;
         deniedExplanation?: string;
-      }>("/api/execute", {
-        actorId: request.actorId,
-        organizationId: request.organizationId ?? null,
-        action: {
-          actionType: request.requestedAction.actionType,
-          parameters: request.requestedAction.parameters,
-          sideEffect: request.requestedAction.sideEffect ?? true,
+      }>(
+        "/api/execute",
+        {
+          actorId: request.actorId,
+          organizationId: request.organizationId ?? null,
+          action: {
+            actionType: request.requestedAction.actionType,
+            parameters: request.requestedAction.parameters,
+            sideEffect: request.requestedAction.sideEffect ?? true,
+          },
+          message: request.message,
         },
-        message: request.message,
-      }, client.idempotencyKey("mcp_exec"));
+        client.idempotencyKey("mcp_exec"),
+      );
 
       return {
         outcome: data.outcome,
@@ -472,8 +492,18 @@ describe("Dual-mode integration: in-memory vs API", () => {
       parameters: { campaignId: "camp_sim_test" },
     };
 
-    const inMemoryResult = await handleReadTool("simulate_action", args, inMemory.auth, inMemory.readDeps) as Record<string, unknown>;
-    const apiResult = await handleReadTool("simulate_action", args, api.auth, api.readDeps) as Record<string, unknown>;
+    const inMemoryResult = (await handleReadTool(
+      "simulate_action",
+      args,
+      inMemory.auth,
+      inMemory.readDeps,
+    )) as Record<string, unknown>;
+    const apiResult = (await handleReadTool(
+      "simulate_action",
+      args,
+      api.auth,
+      api.readDeps,
+    )) as Record<string, unknown>;
 
     // Both should have decision, risk score, and risk category
     expect(hasKeys(inMemoryResult, ["decision", "riskScore", "riskCategory"])).toBe(true);
@@ -485,8 +515,18 @@ describe("Dual-mode integration: in-memory vs API", () => {
   });
 
   it("list_pending_approvals returns structurally equivalent results", async () => {
-    const inMemoryResult = await handleReadTool("list_pending_approvals", {}, inMemory.auth, inMemory.readDeps) as { approvals: unknown[] };
-    const apiResult = await handleReadTool("list_pending_approvals", {}, api.auth, api.readDeps) as { approvals: unknown[] };
+    const inMemoryResult = (await handleReadTool(
+      "list_pending_approvals",
+      {},
+      inMemory.auth,
+      inMemory.readDeps,
+    )) as { approvals: unknown[] };
+    const apiResult = (await handleReadTool(
+      "list_pending_approvals",
+      {},
+      api.auth,
+      api.readDeps,
+    )) as { approvals: unknown[] };
 
     // Both should return an approvals array
     expect(Array.isArray(inMemoryResult.approvals)).toBe(true);
@@ -494,8 +534,18 @@ describe("Dual-mode integration: in-memory vs API", () => {
   });
 
   it("get_governance_status returns structurally equivalent results", async () => {
-    const inMemoryResult = await handleGovernanceTool("get_governance_status", {}, inMemory.auth, inMemory.governanceDeps) as Record<string, unknown>;
-    const apiResult = await handleGovernanceTool("get_governance_status", {}, api.auth, api.governanceDeps) as Record<string, unknown>;
+    const inMemoryResult = (await handleGovernanceTool(
+      "get_governance_status",
+      {},
+      inMemory.auth,
+      inMemory.governanceDeps,
+    )) as Record<string, unknown>;
+    const apiResult = (await handleGovernanceTool(
+      "get_governance_status",
+      {},
+      api.auth,
+      api.governanceDeps,
+    )) as Record<string, unknown>;
 
     // Both should have profile and posture
     expect(hasKeys(inMemoryResult, ["profile", "posture"])).toBe(true);
@@ -508,8 +558,18 @@ describe("Dual-mode integration: in-memory vs API", () => {
   it("propose (pause_campaign) returns structurally equivalent results", async () => {
     const args = { campaignId: "camp_dual_test" };
 
-    const inMemoryResult = await handleSideEffectTool("pause_campaign", args, inMemory.auth, inMemory.executionService) as unknown as Record<string, unknown>;
-    const apiResult = await handleSideEffectTool("pause_campaign", args, api.auth, api.executionService) as unknown as Record<string, unknown>;
+    const inMemoryResult = (await handleSideEffectTool(
+      "pause_campaign",
+      args,
+      inMemory.auth,
+      inMemory.executionService,
+    )) as unknown as Record<string, unknown>;
+    const apiResult = (await handleSideEffectTool(
+      "pause_campaign",
+      args,
+      api.auth,
+      api.executionService,
+    )) as unknown as Record<string, unknown>;
 
     // Both should have outcome and envelopeId
     expect(hasKeys(inMemoryResult, ["outcome", "envelopeId"])).toBe(true);
@@ -527,8 +587,18 @@ describe("Dual-mode integration: in-memory vs API", () => {
 
   it("list_pending_approvals shows proposal after propose", async () => {
     // Both modes should now have at least one pending approval from the propose test above
-    const inMemoryResult = await handleReadTool("list_pending_approvals", {}, inMemory.auth, inMemory.readDeps) as { approvals: unknown[] };
-    const apiResult = await handleReadTool("list_pending_approvals", {}, api.auth, api.readDeps) as { approvals: unknown[] };
+    const inMemoryResult = (await handleReadTool(
+      "list_pending_approvals",
+      {},
+      inMemory.auth,
+      inMemory.readDeps,
+    )) as { approvals: unknown[] };
+    const apiResult = (await handleReadTool(
+      "list_pending_approvals",
+      {},
+      api.auth,
+      api.readDeps,
+    )) as { approvals: unknown[] };
 
     // If the proposal required approval, both should list it
     if (inMemoryResult.approvals.length > 0) {

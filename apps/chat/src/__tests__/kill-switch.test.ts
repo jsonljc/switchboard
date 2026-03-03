@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ChannelAdapter } from "../adapters/adapter.js";
 import type { Interpreter, InterpreterResult } from "../interpreter/interpreter.js";
-import type { CartridgeReadAdapter as CartridgeReadAdapterType, ReadOperation } from "@switchboard/core";
+import type {
+  CartridgeReadAdapter as CartridgeReadAdapterType,
+  ReadOperation,
+} from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Mock adapter that records answerCallbackQuery calls
@@ -16,13 +19,17 @@ function createMockAdapter(): ChannelAdapter & {
     answeredCallbacks: [] as string[],
     parseIncomingMessage: vi.fn(),
     sendTextReply: vi.fn(async (_tid: string, text: string) => {
-      (createMockAdapter as unknown as { lastAdapter: typeof adapter }).lastAdapter?.sentTexts.push(text);
+      (createMockAdapter as unknown as { lastAdapter: typeof adapter }).lastAdapter?.sentTexts.push(
+        text,
+      );
     }),
     sendApprovalCard: vi.fn(),
     sendResultCard: vi.fn(),
     extractMessageId: vi.fn(() => null),
     answerCallbackQuery: vi.fn(async (cbqId: string) => {
-      (createMockAdapter as unknown as { lastAdapter: typeof adapter }).lastAdapter?.answeredCallbacks.push(cbqId);
+      (
+        createMockAdapter as unknown as { lastAdapter: typeof adapter }
+      ).lastAdapter?.answeredCallbacks.push(cbqId);
     }),
   } as unknown as ChannelAdapter & { sentTexts: string[]; answeredCallbacks: string[] };
 }
@@ -34,20 +41,24 @@ let adapter: ReturnType<typeof createMockAdapter>;
 // ---------------------------------------------------------------------------
 function createKillSwitchInterpreter(): Interpreter {
   return {
-    interpret: vi.fn(async (): Promise<InterpreterResult> => ({
-      proposals: [{
-        id: "prop_ks_1",
-        actionType: "system.kill_switch",
-        parameters: {},
-        evidence: "Emergency",
+    interpret: vi.fn(
+      async (): Promise<InterpreterResult> => ({
+        proposals: [
+          {
+            id: "prop_ks_1",
+            actionType: "system.kill_switch",
+            parameters: {},
+            evidence: "Emergency",
+            confidence: 0.95,
+            originatingMessageId: "",
+          },
+        ],
+        needsClarification: false,
+        clarificationQuestion: null,
         confidence: 0.95,
-        originatingMessageId: "",
-      }],
-      needsClarification: false,
-      clarificationQuestion: null,
-      confidence: 0.95,
-      rawResponse: "kill_switch",
-    })),
+        rawResponse: "kill_switch",
+      }),
+    ),
   };
 }
 
@@ -116,9 +127,7 @@ describe("Kill switch flow", () => {
       { id: "c1", name: "Campaign A", status: "PAUSED" },
       { id: "c2", name: "Campaign B", status: "DELETED" },
     ];
-    const active = campaigns.filter(
-      (c) => c.status === "ACTIVE" || c.status === "active",
-    );
+    const active = campaigns.filter((c) => c.status === "ACTIVE" || c.status === "active");
     expect(active).toHaveLength(0);
   });
 });

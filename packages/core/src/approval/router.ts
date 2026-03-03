@@ -61,11 +61,7 @@ export function routeApproval(
 
   // Safety: if approval is required but no approvers are configured,
   // either deny or use fallback approver
-  if (
-    approvalRequired !== "none" &&
-    approvers.length === 0 &&
-    !config.defaultFallbackApprover
-  ) {
+  if (approvalRequired !== "none" && approvers.length === 0 && !config.defaultFallbackApprover) {
     if (config.denyWhenNoApprovers) {
       // Override to "none" is wrong — we need to signal denial.
       // Return mandatory with empty approvers; the orchestrator will

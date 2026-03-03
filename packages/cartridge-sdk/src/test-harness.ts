@@ -33,10 +33,7 @@ const DEFAULT_CONTEXT: CartridgeContext = {
   connectionCredentials: {},
 };
 
-async function runStep(
-  name: string,
-  fn: () => Promise<void> | void,
-): Promise<HarnessStepResult> {
+async function runStep(name: string, fn: () => Promise<void> | void): Promise<HarnessStepResult> {
   const start = performance.now();
   try {
     await fn();
@@ -61,8 +58,7 @@ export class CartridgeTestHarness {
   constructor(cartridge: Cartridge, options?: HarnessOptions) {
     this.cartridge = cartridge;
     this.context = options?.context ?? DEFAULT_CONTEXT;
-    this.actionType =
-      options?.actionType ?? cartridge.manifest.actions[0]?.actionType ?? "";
+    this.actionType = options?.actionType ?? cartridge.manifest.actions[0]?.actionType ?? "";
     this.parameters = options?.parameters ?? {};
     this.skipExecute = options?.skipExecute ?? false;
   }
@@ -107,16 +103,10 @@ export class CartridgeTestHarness {
     // 4. get-risk-input
     steps.push(
       await runStep("get-risk-input", async () => {
-        const riskInput = await this.cartridge.getRiskInput(
-          this.actionType,
-          this.parameters,
-          {},
-        );
+        const riskInput = await this.cartridge.getRiskInput(this.actionType, this.parameters, {});
         const parseResult = RiskInputSchema.safeParse(riskInput);
         if (!parseResult.success) {
-          throw new Error(
-            `RiskInput schema validation failed: ${parseResult.error.message}`,
-          );
+          throw new Error(`RiskInput schema validation failed: ${parseResult.error.message}`);
         }
       }),
     );
@@ -127,9 +117,7 @@ export class CartridgeTestHarness {
         const guardrails = this.cartridge.getGuardrails();
         const parseResult = GuardrailConfigSchema.safeParse(guardrails);
         if (!parseResult.success) {
-          throw new Error(
-            `GuardrailConfig schema validation failed: ${parseResult.error.message}`,
-          );
+          throw new Error(`GuardrailConfig schema validation failed: ${parseResult.error.message}`);
         }
       }),
     );
@@ -209,9 +197,7 @@ export class CartridgeTestHarness {
         .filter((s) => !s.passed)
         .map((s) => `  - ${s.step}: ${s.error ?? "unknown error"}`)
         .join("\n");
-      throw new Error(
-        `CartridgeTestHarness: ${report.cartridgeId} failed steps:\n${failures}`,
-      );
+      throw new Error(`CartridgeTestHarness: ${report.cartridgeId} failed steps:\n${failures}`);
     }
     return report;
   }

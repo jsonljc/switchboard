@@ -20,9 +20,7 @@ describe("CartridgeManifest", () => {
   });
 
   it("declares digital-ads-default as default policy", () => {
-    expect(DIGITAL_ADS_MANIFEST.defaultPolicies).toEqual([
-      "digital-ads-default",
-    ]);
+    expect(DIGITAL_ADS_MANIFEST.defaultPolicies).toEqual(["digital-ads-default"]);
   });
 
   it("defines exactly 16 actions (6 read + 10 write)", () => {
@@ -67,10 +65,10 @@ describe("CartridgeManifest", () => {
 
   it("marks connect and health.check as none risk", () => {
     const connect = DIGITAL_ADS_MANIFEST.actions.find(
-      (a) => a.actionType === "digital-ads.platform.connect"
+      (a) => a.actionType === "digital-ads.platform.connect",
     );
     const health = DIGITAL_ADS_MANIFEST.actions.find(
-      (a) => a.actionType === "digital-ads.health.check"
+      (a) => a.actionType === "digital-ads.health.check",
     );
     expect(connect?.baseRiskCategory).toBe("none");
     expect(health?.baseRiskCategory).toBe("none");
@@ -114,14 +112,14 @@ describe("CartridgeManifest", () => {
 
   it("marks targeting.modify as irreversible", () => {
     const targeting = DIGITAL_ADS_MANIFEST.actions.find(
-      (a) => a.actionType === "digital-ads.targeting.modify"
+      (a) => a.actionType === "digital-ads.targeting.modify",
     );
     expect(targeting?.reversible).toBe(false);
   });
 
   it("marks all other actions as reversible", () => {
     const reversibleActions = DIGITAL_ADS_MANIFEST.actions.filter(
-      (a) => a.actionType !== "digital-ads.targeting.modify"
+      (a) => a.actionType !== "digital-ads.targeting.modify",
     );
     for (const action of reversibleActions) {
       expect(action.reversible).toBe(true);
@@ -144,10 +142,7 @@ describe("CartridgeManifest", () => {
   it("rejects manifest with duplicate action types", () => {
     const bad = {
       ...DIGITAL_ADS_MANIFEST,
-      actions: [
-        DIGITAL_ADS_MANIFEST.actions[0],
-        DIGITAL_ADS_MANIFEST.actions[0],
-      ],
+      actions: [DIGITAL_ADS_MANIFEST.actions[0], DIGITAL_ADS_MANIFEST.actions[0]],
     };
     const errors = validateManifest(bad);
     expect(errors.some((e) => e.message.includes("duplicate"))).toBe(true);

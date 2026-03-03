@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ChatRuntime } from "../runtime.js";
-import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "../adapters/adapter.js";
+import type {
+  ChannelAdapter,
+  ApprovalCardPayload,
+  ResultCardPayload,
+} from "../adapters/adapter.js";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { Interpreter, InterpreterResult } from "../interpreter/interpreter.js";
 import { RuleBasedInterpreter } from "../interpreter/interpreter.js";
@@ -202,10 +206,7 @@ describe("Clinic Integration", () => {
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (cartridge as any).resolveEntity = async (
-      inputRef: string,
-      entityType: string,
-    ) => ({
+    (cartridge as any).resolveEntity = async (inputRef: string, entityType: string) => ({
       id: `resolve_${Date.now()}`,
       inputRef,
       resolvedType: entityType,
@@ -285,7 +286,11 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
+        availableActions: [
+          "digital-ads.campaign.pause",
+          "digital-ads.campaign.resume",
+          "digital-ads.campaign.adjust_budget",
+        ],
         readAdapter,
       });
 
@@ -412,7 +417,9 @@ describe("Clinic Integration", () => {
       });
 
       const readAdapter = {
-        query: async () => { throw new Error("Connection timeout"); },
+        query: async () => {
+          throw new Error("Connection timeout");
+        },
       } as unknown as CartridgeReadAdapter;
 
       const runtime = new ChatRuntime({
@@ -439,14 +446,16 @@ describe("Clinic Integration", () => {
     it("sends approval card for write intent (pause)", async () => {
       const mockInterpreter = new MockClinicInterpreter();
       mockInterpreter.setNextResult({
-        proposals: [{
-          id: "prop_test_1",
-          actionType: "digital-ads.campaign.pause",
-          parameters: { campaignRef: "Summer Sale" },
-          evidence: "Clinic intent: pause",
-          confidence: 0.95,
-          originatingMessageId: "",
-        }],
+        proposals: [
+          {
+            id: "prop_test_1",
+            actionType: "digital-ads.campaign.pause",
+            parameters: { campaignRef: "Summer Sale" },
+            evidence: "Clinic intent: pause",
+            confidence: 0.95,
+            originatingMessageId: "",
+          },
+        ],
         needsClarification: false,
         clarificationQuestion: null,
         confidence: 0.95,
@@ -457,7 +466,11 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: mockInterpreter,
         orchestrator,
-        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
+        availableActions: [
+          "digital-ads.campaign.pause",
+          "digital-ads.campaign.resume",
+          "digital-ads.campaign.adjust_budget",
+        ],
       });
 
       adapter.setNextMessage(makeMessage("pause Summer Sale"));
@@ -508,7 +521,11 @@ describe("Clinic Integration", () => {
         adapter,
         interpreter: ruleInterpreter,
         orchestrator,
-        availableActions: ["digital-ads.campaign.pause", "digital-ads.campaign.resume", "digital-ads.campaign.adjust_budget"],
+        availableActions: [
+          "digital-ads.campaign.pause",
+          "digital-ads.campaign.resume",
+          "digital-ads.campaign.adjust_budget",
+        ],
         // No readAdapter
       });
 

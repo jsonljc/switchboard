@@ -76,27 +76,21 @@ describe("resolveBindings", () => {
   });
 
   it("passes through non-binding values", async () => {
-    const resolved = await resolveBindings(
-      { name: "hello", count: 42, flag: true },
-      0,
-      { stepResults: [] },
-    );
+    const resolved = await resolveBindings({ name: "hello", count: 42, flag: true }, 0, {
+      stepResults: [],
+    });
     expect(resolved).toEqual({ name: "hello", count: 42, flag: true });
   });
 
   it("resolves arrays with bindings", async () => {
-    const stepResults = [
-      makeStepResult({ result: { data: { id: "ct_1" } } }),
-    ];
+    const stepResults = [makeStepResult({ result: { data: { id: "ct_1" } } })];
     const params = { ids: ["$step[0].result.data.id", "static_id"] };
     const resolved = await resolveBindings(params, 1, { stepResults });
     expect(resolved.ids).toEqual(["ct_1", "static_id"]);
   });
 
   it("resolves nested objects with bindings", async () => {
-    const stepResults = [
-      makeStepResult({ result: { data: { amount: 500 } } }),
-    ];
+    const stepResults = [makeStepResult({ result: { data: { amount: 500 } } })];
     const params = {
       payment: { amount: "$step[0].result.data.amount", currency: "USD" },
     };
@@ -115,25 +109,19 @@ describe("evaluateCondition", () => {
   });
 
   it("evaluates === true condition", () => {
-    const results = [
-      makeStepResult({ result: { success: true } }),
-    ];
+    const results = [makeStepResult({ result: { success: true } })];
     expect(evaluateCondition("$prev.result.success === true", 1, results)).toBe(true);
     expect(evaluateCondition("$prev.result.success === false", 1, results)).toBe(false);
   });
 
   it("evaluates numeric > condition", () => {
-    const results = [
-      makeStepResult({ result: { data: { value: 5000 } } }),
-    ];
+    const results = [makeStepResult({ result: { data: { value: 5000 } } })];
     expect(evaluateCondition("$prev.result.data.value > 1000", 1, results)).toBe(true);
     expect(evaluateCondition("$prev.result.data.value > 10000", 1, results)).toBe(false);
   });
 
   it("evaluates $step[N] references", () => {
-    const results = [
-      makeStepResult({ outcome: "executed" }),
-    ];
+    const results = [makeStepResult({ outcome: "executed" })];
     expect(evaluateCondition("$step[0].outcome === 'executed'", 1, results)).toBe(true);
     expect(evaluateCondition("$step[0].outcome === 'denied'", 1, results)).toBe(false);
   });

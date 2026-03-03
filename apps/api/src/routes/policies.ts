@@ -11,167 +11,191 @@ const updatePolicyJsonSchema = zodToJsonSchema(UpdatePolicyBodySchema, { target:
 
 export const policiesRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/policies
-  app.get("/", {
-    schema: {
-      description: "List all active policies. Optionally filter by cartridgeId.",
-      tags: ["Policies"],
-      querystring: { type: "object", properties: { cartridgeId: { type: "string" } } },
+  app.get(
+    "/",
+    {
+      schema: {
+        description: "List all active policies. Optionally filter by cartridgeId.",
+        tags: ["Policies"],
+        querystring: { type: "object", properties: { cartridgeId: { type: "string" } } },
+      },
     },
-  }, async (request, reply) => {
-    const query = request.query as { cartridgeId?: string };
-    const orgId = request.organizationIdFromAuth ?? undefined;
-    const filter: { cartridgeId?: string; organizationId?: string | null } = {};
-    if (query.cartridgeId) filter.cartridgeId = query.cartridgeId;
-    if (orgId !== undefined) filter.organizationId = orgId;
-    const policies = await app.storageContext.policies.listActive(
-      Object.keys(filter).length > 0 ? filter : undefined,
-    );
-    return reply.code(200).send({ policies });
-  });
+    async (request, reply) => {
+      const query = request.query as { cartridgeId?: string };
+      const orgId = request.organizationIdFromAuth ?? undefined;
+      const filter: { cartridgeId?: string; organizationId?: string | null } = {};
+      if (query.cartridgeId) filter.cartridgeId = query.cartridgeId;
+      if (orgId !== undefined) filter.organizationId = orgId;
+      const policies = await app.storageContext.policies.listActive(
+        Object.keys(filter).length > 0 ? filter : undefined,
+      );
+      return reply.code(200).send({ policies });
+    },
+  );
 
   // POST /api/policies
-  app.post("/", {
-    schema: {
-      description: "Create a new guardrail policy.",
-      tags: ["Policies"],
-      body: createPolicyJsonSchema,
+  app.post(
+    "/",
+    {
+      schema: {
+        description: "Create a new guardrail policy.",
+        tags: ["Policies"],
+        body: createPolicyJsonSchema,
+      },
     },
-  }, async (request, reply) => {
-    if (!(await requireRole(request, reply, "admin", "operator"))) return;
+    async (request, reply) => {
+      if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
-    const parsed = CreatePolicyBodySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
-    }
+      const parsed = CreatePolicyBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "Invalid request body", details: parsed.error.issues });
+      }
 
-    const now = new Date();
-    const policy: Policy = {
-      id: `policy_${randomUUID()}`,
-      createdAt: now,
-      updatedAt: now,
-      ...parsed.data,
-    };
+      const now = new Date();
+      const policy: Policy = {
+        id: `policy_${randomUUID()}`,
+        createdAt: now,
+        updatedAt: now,
+        ...parsed.data,
+      };
 
-    await app.storageContext.policies.save(policy);
-    await app.policyCache.invalidate(policy.cartridgeId ?? undefined);
+      await app.storageContext.policies.save(policy);
+      await app.policyCache.invalidate(policy.cartridgeId ?? undefined);
 
-    // Audit: record policy creation
-    await app.auditLedger.record({
-      eventType: "policy.created",
-      actorType: "user",
-      actorId: request.principalIdFromAuth ?? "unknown",
-      entityType: "policy",
-      entityId: policy.id,
-      riskCategory: "low",
-      summary: `Policy "${policy.name}" created`,
-      snapshot: { policy },
-      organizationId: request.organizationIdFromAuth ?? undefined,
-    });
+      // Audit: record policy creation
+      await app.auditLedger.record({
+        eventType: "policy.created",
+        actorType: "user",
+        actorId: request.principalIdFromAuth ?? "unknown",
+        entityType: "policy",
+        entityId: policy.id,
+        riskCategory: "low",
+        summary: `Policy "${policy.name}" created`,
+        snapshot: { policy },
+        organizationId: request.organizationIdFromAuth ?? undefined,
+      });
 
-    return reply.code(201).send({ policy });
-  });
+      return reply.code(201).send({ policy });
+    },
+  );
 
   // GET /api/policies/:id
-  app.get("/:id", {
-    schema: {
-      description: "Get a policy by ID.",
-      tags: ["Policies"],
-      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  app.get(
+    "/:id",
+    {
+      schema: {
+        description: "Get a policy by ID.",
+        tags: ["Policies"],
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      },
     },
-  }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const policy = await app.storageContext.policies.getById(id);
-    if (!policy) {
-      return reply.code(404).send({ error: "Policy not found" });
-    }
-    if (!assertOrgAccess(request, policy.organizationId, reply)) return;
-    return reply.code(200).send({ policy });
-  });
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const policy = await app.storageContext.policies.getById(id);
+      if (!policy) {
+        return reply.code(404).send({ error: "Policy not found" });
+      }
+      if (!assertOrgAccess(request, policy.organizationId, reply)) return;
+      return reply.code(200).send({ policy });
+    },
+  );
 
   // PUT /api/policies/:id
-  app.put("/:id", {
-    schema: {
-      description: "Update an existing policy.",
-      tags: ["Policies"],
-      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-      body: updatePolicyJsonSchema,
+  app.put(
+    "/:id",
+    {
+      schema: {
+        description: "Update an existing policy.",
+        tags: ["Policies"],
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+        body: updatePolicyJsonSchema,
+      },
     },
-  }, async (request, reply) => {
-    if (!(await requireRole(request, reply, "admin", "operator"))) return;
+    async (request, reply) => {
+      if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
-    const { id } = request.params as { id: string };
+      const { id } = request.params as { id: string };
 
-    const parsed = UpdatePolicyBodySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid request body", details: parsed.error.issues });
-    }
+      const parsed = UpdatePolicyBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "Invalid request body", details: parsed.error.issues });
+      }
 
-    const existing = await app.storageContext.policies.getById(id);
-    if (!existing) {
-      return reply.code(404).send({ error: "Policy not found" });
-    }
-    if (!assertOrgAccess(request, existing.organizationId, reply)) return;
+      const existing = await app.storageContext.policies.getById(id);
+      if (!existing) {
+        return reply.code(404).send({ error: "Policy not found" });
+      }
+      if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
-    await app.storageContext.policies.update(id, {
-      ...parsed.data,
-      updatedAt: new Date(),
-    });
-    await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
-    const updated = await app.storageContext.policies.getById(id);
-
-    // Audit: record policy update with previous values
-    await app.auditLedger.record({
-      eventType: "policy.updated",
-      actorType: "user",
-      actorId: request.principalIdFromAuth ?? "unknown",
-      entityType: "policy",
-      entityId: id,
-      riskCategory: "low",
-      summary: `Policy "${existing.name}" updated`,
-      snapshot: { previous: existing, current: updated },
-      organizationId: request.organizationIdFromAuth ?? undefined,
-    });
-
-    return reply.code(200).send({ policy: updated });
-  });
-
-  // DELETE /api/policies/:id
-  app.delete("/:id", {
-    schema: {
-      description: "Delete a policy by ID.",
-      tags: ["Policies"],
-      params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-    },
-  }, async (request, reply) => {
-    if (!(await requireRole(request, reply, "admin", "operator"))) return;
-
-    const { id } = request.params as { id: string };
-    const existing = await app.storageContext.policies.getById(id);
-    if (!existing) {
-      return reply.code(404).send({ error: "Policy not found" });
-    }
-    if (!assertOrgAccess(request, existing.organizationId, reply)) return;
-
-    const deleted = await app.storageContext.policies.delete(id);
-    if (!deleted) {
-      return reply.code(404).send({ error: "Policy not found" });
-    }
-    if (existing) {
+      await app.storageContext.policies.update(id, {
+        ...parsed.data,
+        updatedAt: new Date(),
+      });
       await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
+      const updated = await app.storageContext.policies.getById(id);
 
-      // Audit: record policy deletion
+      // Audit: record policy update with previous values
       await app.auditLedger.record({
-        eventType: "policy.deleted",
+        eventType: "policy.updated",
         actorType: "user",
         actorId: request.principalIdFromAuth ?? "unknown",
         entityType: "policy",
         entityId: id,
-        riskCategory: "medium",
-        summary: `Policy "${existing.name}" deleted`,
-        snapshot: { deletedPolicy: existing },
+        riskCategory: "low",
+        summary: `Policy "${existing.name}" updated`,
+        snapshot: { previous: existing, current: updated },
         organizationId: request.organizationIdFromAuth ?? undefined,
       });
-    }
-    return reply.code(200).send({ id, deleted: true });
-  });
+
+      return reply.code(200).send({ policy: updated });
+    },
+  );
+
+  // DELETE /api/policies/:id
+  app.delete(
+    "/:id",
+    {
+      schema: {
+        description: "Delete a policy by ID.",
+        tags: ["Policies"],
+        params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+      },
+    },
+    async (request, reply) => {
+      if (!(await requireRole(request, reply, "admin", "operator"))) return;
+
+      const { id } = request.params as { id: string };
+      const existing = await app.storageContext.policies.getById(id);
+      if (!existing) {
+        return reply.code(404).send({ error: "Policy not found" });
+      }
+      if (!assertOrgAccess(request, existing.organizationId, reply)) return;
+
+      const deleted = await app.storageContext.policies.delete(id);
+      if (!deleted) {
+        return reply.code(404).send({ error: "Policy not found" });
+      }
+      if (existing) {
+        await app.policyCache.invalidate(existing.cartridgeId ?? undefined);
+
+        // Audit: record policy deletion
+        await app.auditLedger.record({
+          eventType: "policy.deleted",
+          actorType: "user",
+          actorId: request.principalIdFromAuth ?? "unknown",
+          entityType: "policy",
+          entityId: id,
+          riskCategory: "medium",
+          summary: `Policy "${existing.name}" deleted`,
+          snapshot: { deletedPolicy: existing },
+          organizationId: request.organizationIdFromAuth ?? undefined,
+        });
+      }
+      return reply.code(200).send({ id, deleted: true });
+    },
+  );
 };

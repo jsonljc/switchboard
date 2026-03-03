@@ -45,7 +45,7 @@ describe("adsetFragmentationAdvisor", () => {
 
   it("returns no findings when <= 10 active ad sets", () => {
     const entities = Array.from({ length: 10 }, (_, i) =>
-      makeEntity({ entityId: `adset_${i}`, conversions: 3 })
+      makeEntity({ entityId: `adset_${i}`, conversions: 3 }),
     );
     const context: DiagnosticContext = { subEntities: entities };
 
@@ -55,7 +55,7 @@ describe("adsetFragmentationAdvisor", () => {
 
   it("detects fragmentation when >10 ad sets with low conversions", () => {
     const entities = Array.from({ length: 15 }, (_, i) =>
-      makeEntity({ entityId: `adset_${i}`, conversions: 3, spend: 50 })
+      makeEntity({ entityId: `adset_${i}`, conversions: 3, spend: 50 }),
     );
     const context: DiagnosticContext = { subEntities: entities };
 
@@ -70,7 +70,7 @@ describe("adsetFragmentationAdvisor", () => {
 
   it("flags critical when avg conversions < 2", () => {
     const entities = Array.from({ length: 20 }, (_, i) =>
-      makeEntity({ entityId: `adset_${i}`, conversions: 1, spend: 50 })
+      makeEntity({ entityId: `adset_${i}`, conversions: 1, spend: 50 }),
     );
     const context: DiagnosticContext = { subEntities: entities };
 
@@ -82,7 +82,7 @@ describe("adsetFragmentationAdvisor", () => {
 
   it("does not trigger when conversions are adequate", () => {
     const entities = Array.from({ length: 15 }, (_, i) =>
-      makeEntity({ entityId: `adset_${i}`, conversions: 10, spend: 100 })
+      makeEntity({ entityId: `adset_${i}`, conversions: 10, spend: 100 }),
     );
     const context: DiagnosticContext = { subEntities: entities };
 
@@ -93,10 +93,10 @@ describe("adsetFragmentationAdvisor", () => {
   it("excludes ad sets with zero spend", () => {
     const entities = [
       ...Array.from({ length: 5 }, (_, i) =>
-        makeEntity({ entityId: `active_${i}`, conversions: 10, spend: 100 })
+        makeEntity({ entityId: `active_${i}`, conversions: 10, spend: 100 }),
       ),
       ...Array.from({ length: 10 }, (_, i) =>
-        makeEntity({ entityId: `inactive_${i}`, conversions: 0, spend: 0 })
+        makeEntity({ entityId: `inactive_${i}`, conversions: 0, spend: 0 }),
       ),
     ];
     const context: DiagnosticContext = { subEntities: entities };
@@ -108,7 +108,7 @@ describe("adsetFragmentationAdvisor", () => {
   it("recommends correct consolidation count", () => {
     // 12 ad sets * 3 conversions = 36 total, target = ceil(36/50) = 1
     const entities = Array.from({ length: 12 }, (_, i) =>
-      makeEntity({ entityId: `adset_${i}`, conversions: 3, spend: 50 })
+      makeEntity({ entityId: `adset_${i}`, conversions: 3, spend: 50 }),
     );
     const context: DiagnosticContext = { subEntities: entities };
 

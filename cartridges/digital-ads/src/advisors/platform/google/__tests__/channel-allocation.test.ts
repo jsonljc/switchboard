@@ -47,19 +47,17 @@ describe("googleChannelAdvisor", () => {
     const current = makeSnapshot({
       topLevel: {
         channel_spend_search: 500,
-        channel_conversions_search: 50,    // CPA = $10
+        channel_conversions_search: 50, // CPA = $10
         channel_spend_display: 400,
-        channel_conversions_display: 5,     // CPA = $80 (8x)
+        channel_conversions_display: 5, // CPA = $80 (8x)
         channel_spend_shopping: 100,
-        channel_conversions_shopping: 8,    // CPA = $12.50
+        channel_conversions_shopping: 8, // CPA = $12.50
       },
     });
     const previous = makeSnapshot();
     const findings = googleChannelAdvisor([], [], current, previous);
 
-    const disparity = findings.filter((f) =>
-      f.message.includes("CPA disparity")
-    );
+    const disparity = findings.filter((f) => f.message.includes("CPA disparity"));
     expect(disparity).toHaveLength(1);
     expect(disparity[0].message).toContain("Display");
     expect(disparity[0].message).toContain("Search");
@@ -71,7 +69,7 @@ describe("googleChannelAdvisor", () => {
         channel_spend_search: 500,
         channel_conversions_search: 50,
         channel_spend_video: 200,
-        channel_conversions_video: 0,       // Zero conversions, 29% spend
+        channel_conversions_video: 0, // Zero conversions, 29% spend
         channel_spend_shopping: 100,
         channel_conversions_shopping: 10,
       },
@@ -79,9 +77,7 @@ describe("googleChannelAdvisor", () => {
     const previous = makeSnapshot();
     const findings = googleChannelAdvisor([], [], current, previous);
 
-    const zeroConv = findings.filter((f) =>
-      f.message.includes("Zero-conversion")
-    );
+    const zeroConv = findings.filter((f) => f.message.includes("Zero-conversion"));
     expect(zeroConv).toHaveLength(1);
     expect(zeroConv[0].message).toContain("Video");
   });
@@ -90,11 +86,11 @@ describe("googleChannelAdvisor", () => {
     const current = makeSnapshot({
       topLevel: {
         channel_spend_search: 500,
-        channel_conversions_search: 50,    // CPA = $10
+        channel_conversions_search: 50, // CPA = $10
         channel_spend_shopping: 300,
-        channel_conversions_shopping: 25,  // CPA = $12
+        channel_conversions_shopping: 25, // CPA = $12
         channel_spend_display: 200,
-        channel_conversions_display: 12,   // CPA = $16.67
+        channel_conversions_display: 12, // CPA = $16.67
       },
     });
     const previous = makeSnapshot();
@@ -107,19 +103,17 @@ describe("googleChannelAdvisor", () => {
     const current = makeSnapshot({
       topLevel: {
         channel_spend_search: 200,
-        channel_conversions_search: 40,    // CPA = $5
+        channel_conversions_search: 40, // CPA = $5
         channel_spend_display: 500,
-        channel_conversions_display: 5,     // CPA = $100 (20x)
+        channel_conversions_display: 5, // CPA = $100 (20x)
         channel_spend_video: 300,
-        channel_conversions_video: 3,       // CPA = $100 (20x)
+        channel_conversions_video: 3, // CPA = $100 (20x)
       },
     });
     const previous = makeSnapshot();
     const findings = googleChannelAdvisor([], [], current, previous);
 
-    const disparity = findings.filter(
-      (f) => f.message.includes("CPA disparity")
-    );
+    const disparity = findings.filter((f) => f.message.includes("CPA disparity"));
     expect(disparity).toHaveLength(1);
     expect(disparity[0].severity).toBe("critical");
   });
@@ -137,9 +131,7 @@ describe("googleChannelAdvisor", () => {
     const findings = googleChannelAdvisor([], [], current, previous);
 
     // Only 1 converting channel — should not flag CPA disparity
-    const disparity = findings.filter(
-      (f) => f.message.includes("CPA disparity")
-    );
+    const disparity = findings.filter((f) => f.message.includes("CPA disparity"));
     expect(disparity).toHaveLength(0);
   });
 });

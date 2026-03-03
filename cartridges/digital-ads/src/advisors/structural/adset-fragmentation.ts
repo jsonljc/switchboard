@@ -22,7 +22,7 @@ export const adsetFragmentationAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.subEntities || context.subEntities.length === 0) {
     return [];
@@ -34,17 +34,11 @@ export const adsetFragmentationAdvisor: FindingAdvisor = (
 
   if (totalEntities <= 10) return findings;
 
-  const totalConversions = activeEntities.reduce(
-    (sum, e) => sum + e.conversions,
-    0
-  );
+  const totalConversions = activeEntities.reduce((sum, e) => sum + e.conversions, 0);
   const avgConversions = totalConversions / totalEntities;
 
   if (avgConversions < 5) {
-    const recommendedCount = Math.max(
-      Math.ceil(totalConversions / 50),
-      1
-    );
+    const recommendedCount = Math.max(Math.ceil(totalConversions / 50), 1);
 
     findings.push({
       severity: avgConversions < 2 ? "critical" : "warning",

@@ -165,25 +165,28 @@ export class SwitchboardMcpServer {
           description: def.description,
           inputSchema: def.inputSchema.properties
             ? Object.fromEntries(
-                Object.entries(def.inputSchema.properties as Record<string, { type: string; description?: string }>).map(
-                  ([key, prop]) => {
-                    let schema: z.ZodTypeAny;
-                    switch (prop.type) {
-                      case "number":
-                        schema = z.number().optional();
-                        break;
-                      case "object":
-                        schema = z.record(z.string(), z.unknown()).optional();
-                        break;
-                      case "array":
-                        schema = z.array(z.unknown()).optional();
-                        break;
-                      default:
-                        schema = z.string().optional();
-                    }
-                    return [key, schema];
-                  },
-                ),
+                Object.entries(
+                  def.inputSchema.properties as Record<
+                    string,
+                    { type: string; description?: string }
+                  >,
+                ).map(([key, prop]) => {
+                  let schema: z.ZodTypeAny;
+                  switch (prop.type) {
+                    case "number":
+                      schema = z.number().optional();
+                      break;
+                    case "object":
+                      schema = z.record(z.string(), z.unknown()).optional();
+                      break;
+                    case "array":
+                      schema = z.array(z.unknown()).optional();
+                      break;
+                    default:
+                      schema = z.string().optional();
+                  }
+                  return [key, schema];
+                }),
               )
             : {},
           annotations: def.annotations,
@@ -241,30 +244,15 @@ export class SwitchboardMcpServer {
           governanceNote: response.governanceNote,
         };
       } else if (CRM_SIDE_EFFECT_TOOLS.has(toolName)) {
-        result = await handleCrmSideEffectTool(
-          toolName,
-          args,
-          auth,
-          this.executionService,
-        );
+        result = await handleCrmSideEffectTool(toolName, args, auth, this.executionService);
       } else if (CRM_READ_TOOLS.has(toolName)) {
         result = await handleCrmReadTool(toolName, args, auth, this.readDeps);
       } else if (PAYMENTS_SIDE_EFFECT_TOOLS.has(toolName)) {
-        result = await handlePaymentsSideEffectTool(
-          toolName,
-          args,
-          auth,
-          this.executionService,
-        );
+        result = await handlePaymentsSideEffectTool(toolName, args, auth, this.executionService);
       } else if (PAYMENTS_READ_TOOLS.has(toolName)) {
         result = await handlePaymentsReadTool(toolName, args, auth, this.readDeps);
       } else if (SIDE_EFFECT_TOOLS.has(toolName)) {
-        result = await handleSideEffectTool(
-          toolName,
-          args,
-          auth,
-          this.executionService,
-        );
+        result = await handleSideEffectTool(toolName, args, auth, this.executionService);
       } else if (READ_TOOLS.has(toolName)) {
         result = await handleReadTool(toolName, args, auth, this.readDeps);
       } else if (GOVERNANCE_TOOLS.has(toolName)) {

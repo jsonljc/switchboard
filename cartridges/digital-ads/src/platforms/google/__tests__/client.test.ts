@@ -31,12 +31,7 @@ function okResponse(body: unknown): Response {
   } as unknown as Response;
 }
 
-function errorResponse(
-  code: number,
-  message: string,
-  status: string,
-  httpStatus = 400,
-): Response {
+function errorResponse(code: number, message: string, status: string, httpStatus = 400): Response {
   return {
     ok: false,
     status: httpStatus,
@@ -120,8 +115,8 @@ describe("GoogleAdsClient", () => {
       await client.fetchSnapshot(CUSTOMER_ID, "campaign", TIME_RANGE, commerceFunnel);
 
       // Only one token fetch despite two API calls
-      const tokenCalls = fetchMock.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("oauth2"),
+      const tokenCalls = fetchMock.mock.calls.filter((call: unknown[]) =>
+        (call[0] as string).includes("oauth2"),
       );
       expect(tokenCalls).toHaveLength(1);
     });
@@ -145,8 +140,8 @@ describe("GoogleAdsClient", () => {
       await client.fetchSnapshot(CUSTOMER_ID, "campaign", TIME_RANGE, commerceFunnel);
 
       // Two token fetches total
-      const tokenCalls = fetchMock.mock.calls.filter(
-        (call: unknown[]) => (call[0] as string).includes("oauth2"),
+      const tokenCalls = fetchMock.mock.calls.filter((call: unknown[]) =>
+        (call[0] as string).includes("oauth2"),
       );
       expect(tokenCalls).toHaveLength(2);
     });
@@ -233,21 +228,19 @@ describe("GoogleAdsClient", () => {
 
     it("does not compute derived fields when denominators are zero", async () => {
       const client = makeClient();
-      fetchMock
-        .mockResolvedValueOnce(tokenResponse())
-        .mockResolvedValueOnce(
-          okResponse(
-            searchStreamResponse([
-              makeRow({
-                impressions: "0",
-                clicks: "0",
-                costMicros: "0",
-                conversions: 0,
-                conversionsValue: 0,
-              }),
-            ]),
-          ),
-        );
+      fetchMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(
+        okResponse(
+          searchStreamResponse([
+            makeRow({
+              impressions: "0",
+              clicks: "0",
+              costMicros: "0",
+              conversions: 0,
+              conversionsValue: 0,
+            }),
+          ]),
+        ),
+      );
 
       const snap = await client.fetchSnapshot(CUSTOMER_ID, "campaign", TIME_RANGE, commerceFunnel);
 
@@ -262,16 +255,52 @@ describe("GoogleAdsClient", () => {
       const client = makeClient();
       const rowsWithChannels: GoogleAdsRow[] = [
         {
-          campaign: { id: "1", name: "Search Campaign", status: "ENABLED", advertisingChannelType: "SEARCH" },
-          metrics: { impressions: "5000", clicks: "200", costMicros: "25000000", conversions: 10, conversionsValue: 500, allConversions: 12 },
+          campaign: {
+            id: "1",
+            name: "Search Campaign",
+            status: "ENABLED",
+            advertisingChannelType: "SEARCH",
+          },
+          metrics: {
+            impressions: "5000",
+            clicks: "200",
+            costMicros: "25000000",
+            conversions: 10,
+            conversionsValue: 500,
+            allConversions: 12,
+          },
         },
         {
-          campaign: { id: "2", name: "Shopping Campaign", status: "ENABLED", advertisingChannelType: "SHOPPING" },
-          metrics: { impressions: "3000", clicks: "100", costMicros: "15000000", conversions: 8, conversionsValue: 400, allConversions: 10 },
+          campaign: {
+            id: "2",
+            name: "Shopping Campaign",
+            status: "ENABLED",
+            advertisingChannelType: "SHOPPING",
+          },
+          metrics: {
+            impressions: "3000",
+            clicks: "100",
+            costMicros: "15000000",
+            conversions: 8,
+            conversionsValue: 400,
+            allConversions: 10,
+          },
         },
         {
-          campaign: { id: "3", name: "Another Search", status: "ENABLED", advertisingChannelType: "SEARCH" },
-          metrics: { impressions: "2000", clicks: "50", costMicros: "10000000", conversions: 5, conversionsValue: 250, allConversions: 6 },
+          campaign: {
+            id: "3",
+            name: "Another Search",
+            status: "ENABLED",
+            advertisingChannelType: "SEARCH",
+          },
+          metrics: {
+            impressions: "2000",
+            clicks: "50",
+            costMicros: "10000000",
+            conversions: 5,
+            conversionsValue: 250,
+            allConversions: 6,
+          },
         },
       ];
 
@@ -392,9 +421,7 @@ describe("GoogleAdsClient", () => {
       const client = makeClient({ maxRetries: 2 });
       fetchMock
         .mockResolvedValueOnce(tokenResponse())
-        .mockResolvedValueOnce(
-          errorResponse(429, "Too many requests", "RESOURCE_EXHAUSTED", 429),
-        )
+        .mockResolvedValueOnce(errorResponse(429, "Too many requests", "RESOURCE_EXHAUSTED", 429))
         .mockResolvedValueOnce(okResponse(searchStreamResponse([makeRow()])));
 
       const promise = client.fetchSnapshot(CUSTOMER_ID, "campaign", TIME_RANGE, commerceFunnel);
@@ -408,9 +435,7 @@ describe("GoogleAdsClient", () => {
       const client = makeClient({ maxRetries: 0 });
       fetchMock
         .mockResolvedValueOnce(tokenResponse())
-        .mockResolvedValueOnce(
-          errorResponse(403, "Permission denied", "PERMISSION_DENIED", 403),
-        );
+        .mockResolvedValueOnce(errorResponse(403, "Permission denied", "PERMISSION_DENIED", 403));
 
       await expect(
         client.fetchSnapshot(CUSTOMER_ID, "campaign", TIME_RANGE, commerceFunnel),

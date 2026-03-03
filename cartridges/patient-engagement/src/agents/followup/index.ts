@@ -12,10 +12,7 @@ import { executeRespondReview } from "../../cartridge/actions/respond-review.js"
 
 export class FollowupAgent implements AgentModule {
   readonly type = "followup" as const;
-  readonly stages: JourneyStageId[] = [
-    "treatment_completed",
-    "repeat_patient",
-  ];
+  readonly stages: JourneyStageId[] = ["treatment_completed", "repeat_patient"];
 
   constructor(
     private readonly review: ReviewPlatformProvider,

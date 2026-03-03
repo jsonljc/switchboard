@@ -61,8 +61,7 @@ export async function collectAnswers(): Promise<CartridgeAnswers | null> {
         message: "First action type (dotted notation, e.g. stripe.payment.create)",
         initial: (_prev: unknown, values: Record<string, string>) =>
           `${derivePrefix(values["name"] ?? "")}.resource.verb`,
-        validate: (v: string) =>
-          DOTTED_RE.test(v) || "Must be dotted notation with 2+ segments",
+        validate: (v: string) => DOTTED_RE.test(v) || "Must be dotted notation with 2+ segments",
       },
       {
         type: "text",

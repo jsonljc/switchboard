@@ -25,7 +25,7 @@ export const videoCompletionAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -49,8 +49,7 @@ export const videoCompletionAdvisor: FindingAdvisor = (
   if (currentVideoViews === 0 && previousVideoViews === 0) return findings;
 
   // Compute video completion rates
-  const currentVCR =
-    currentImpressions > 0 ? (currentVideoViews / currentImpressions) * 100 : 0;
+  const currentVCR = currentImpressions > 0 ? (currentVideoViews / currentImpressions) * 100 : 0;
   const previousVCR =
     previousImpressions > 0 ? (previousVideoViews / previousImpressions) * 100 : 0;
 

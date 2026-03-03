@@ -31,7 +31,7 @@ export type FindingAdvisor = (
   dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ) => Finding[];
 
 export interface FunnelWalkerOptions {
@@ -87,14 +87,17 @@ export function analyzeFunnel(options: FunnelWalkerOptions): DiagnosticResult {
 
   // 5. Primary KPI summary
   const primaryStage = funnel.stages.find(
-    (s) => s.metric === funnel.primaryKPI || s.costMetric === funnel.primaryKPI
+    (s) => s.metric === funnel.primaryKPI || s.costMetric === funnel.primaryKPI,
   );
   const primaryMetric = funnel.primaryKPI;
   const currentCost = current.stages[primaryMetric]?.cost;
   const previousCost = previous.stages[primaryMetric]?.cost;
   // Use cost if available on either period; fall back to count-based comparison
-  const hasCostData = currentCost !== null && currentCost !== undefined
-    && previousCost !== null && previousCost !== undefined;
+  const hasCostData =
+    currentCost !== null &&
+    currentCost !== undefined &&
+    previousCost !== null &&
+    previousCost !== undefined;
   const currentKPI = hasCostData ? currentCost : (current.stages[primaryMetric]?.count ?? 0);
   const previousKPI = hasCostData ? previousCost : (previous.stages[primaryMetric]?.count ?? 0);
   const kpiDelta = percentChange(currentKPI, previousKPI);
@@ -112,14 +115,15 @@ export function analyzeFunnel(options: FunnelWalkerOptions): DiagnosticResult {
     stageAnalysis,
     dropoffs,
     bottleneck,
-    primaryKPI
+    primaryKPI,
   );
 
   // Conversion lag assessment
-  const periodDays = Math.round(
-    (new Date(periods.current.until).getTime() - new Date(periods.current.since).getTime()) /
-    (1000 * 60 * 60 * 24)
-  ) + 1;
+  const periodDays =
+    Math.round(
+      (new Date(periods.current.until).getTime() - new Date(periods.current.since).getTime()) /
+        (1000 * 60 * 60 * 24),
+    ) + 1;
   const lagAssessment = assessConversionLag(
     periods.current.until,
     periods.previous.until,
@@ -131,7 +135,8 @@ export function analyzeFunnel(options: FunnelWalkerOptions): DiagnosticResult {
       severity: "info",
       stage: "conversion_lag",
       message: `Conversion lag warning: current period is ${(lagAssessment.currentMaturity * 100).toFixed(0)}% mature vs ${(lagAssessment.previousMaturity * 100).toFixed(0)}% for previous. Reported drops may partially reflect attribution delay.`,
-      recommendation: "Re-check in 2-3 days when current period data matures, or compare against a period that ended 4+ days ago.",
+      recommendation:
+        "Re-check in 2-3 days when current period data matures, or compare against a period that ended 4+ days ago.",
     });
   }
 
@@ -148,9 +153,7 @@ export function analyzeFunnel(options: FunnelWalkerOptions): DiagnosticResult {
     info: 2,
     healthy: 3,
   };
-  findings.sort(
-    (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
-  );
+  findings.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
   return {
     vertical: funnel.vertical,
@@ -174,7 +177,7 @@ function analyzeStages(
   funnel: FunnelSchema,
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  benchmarks?: VerticalBenchmarks
+  benchmarks?: VerticalBenchmarks,
 ): StageDiagnostic[] {
   return funnel.stages.map((stage) => {
     const currentMetrics = current.stages[stage.metric];
@@ -185,14 +188,9 @@ function analyzeStages(
     const delta = currentValue - previousValue;
     const deltaPercent = percentChange(currentValue, previousValue);
 
-    const benchmarkVariance =
-      benchmarks?.benchmarks[stage.metric]?.normalVariancePercent;
+    const benchmarkVariance = benchmarks?.benchmarks[stage.metric]?.normalVariancePercent;
 
-    const significant = isSignificantChange(
-      deltaPercent,
-      current.spend,
-      benchmarkVariance
-    );
+    const significant = isSignificantChange(deltaPercent, current.spend, benchmarkVariance);
 
     return {
       stageName: stage.name,
@@ -214,7 +212,7 @@ function analyzeStages(
 function analyzeDropoffs(
   funnel: FunnelSchema,
   current: MetricSnapshot,
-  previous: MetricSnapshot
+  previous: MetricSnapshot,
 ): FunnelDropoff[] {
   const dropoffs: FunnelDropoff[] = [];
 
@@ -248,7 +246,7 @@ function analyzeDropoffs(
 
 function findBottleneck(
   stageAnalysis: StageDiagnostic[],
-  elasticity?: DiagnosticResult["elasticity"]
+  elasticity?: DiagnosticResult["elasticity"],
 ): StageDiagnostic | null {
   // When economic impact data is available, prefer the stage with the worst
   // revenue impact rather than the worst percentage drop
@@ -278,11 +276,7 @@ function findBottleneck(
 // Severity classification
 // ---------------------------------------------------------------------------
 
-function classifySeverity(
-  deltaPercent: number,
-  spend: number,
-  isCostMetric: boolean
-): Severity {
+function classifySeverity(deltaPercent: number, spend: number, isCostMetric: boolean): Severity {
   // For cost metrics (CPA, CPL), increases are bad
   // For volume metrics (clicks, purchases), decreases are bad
   const badDirection = isCostMetric ? deltaPercent > 0 : deltaPercent < 0;
@@ -307,7 +301,7 @@ function generateGenericFindings(
   stageAnalysis: StageDiagnostic[],
   dropoffs: FunnelDropoff[],
   bottleneck: StageDiagnostic | null,
-  primaryKPI: DiagnosticResult["primaryKPI"]
+  primaryKPI: DiagnosticResult["primaryKPI"],
 ): Finding[] {
   const findings: Finding[] = [];
 
@@ -318,7 +312,8 @@ function generateGenericFindings(
       severity: "info",
       stage: primaryKPI.name,
       message: `No ${primaryKPI.name} conversions recorded in either period.`,
-      recommendation: "Verify tracking is configured correctly or that the campaign has sufficient spend to generate conversions.",
+      recommendation:
+        "Verify tracking is configured correctly or that the campaign has sufficient spend to generate conversions.",
     });
   } else if (primaryKPI.severity === "healthy") {
     findings.push({

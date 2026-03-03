@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  SmbActivityLog,
-  InMemorySmbActivityLogStorage,
-} from "../smb/activity-log.js";
+import { SmbActivityLog, InMemorySmbActivityLogStorage } from "../smb/activity-log.js";
 
 describe("SmbActivityLog", () => {
   it("should record and query entries", async () => {

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  smbRouteApproval,
-  smbCreateApprovalRequest,
-  smbBindingHash,
-} from "../smb/approval.js";
+import { smbRouteApproval, smbCreateApprovalRequest, smbBindingHash } from "../smb/approval.js";
 import type { SmbOrgConfig, DecisionTrace } from "@switchboard/schemas";
 
 function makeSmbConfig(overrides?: Partial<SmbOrgConfig>): SmbOrgConfig {

@@ -224,9 +224,7 @@ describe("Governance Profiles", () => {
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       }));
 
-      await storage.identity.saveSpec(
-        makeIdentitySpec({ governanceProfile: "observe" }),
-      );
+      await storage.identity.saveSpec(makeIdentitySpec({ governanceProfile: "observe" }));
 
       const result = await orchestrator.propose({
         actionType: "digital-ads.campaign.pause",
@@ -241,9 +239,7 @@ describe("Governance Profiles", () => {
     });
 
     it("locked mode requires mandatory approval for all risk levels", async () => {
-      await storage.identity.saveSpec(
-        makeIdentitySpec({ governanceProfile: "locked" }),
-      );
+      await storage.identity.saveSpec(makeIdentitySpec({ governanceProfile: "locked" }));
 
       // Low-risk action should still require approval in locked mode
       const result = await orchestrator.propose({

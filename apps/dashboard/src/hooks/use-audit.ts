@@ -22,10 +22,7 @@ interface AuditResponse {
   total: number;
 }
 
-async function fetchAudit(params?: {
-  eventType?: string;
-  limit?: number;
-}): Promise<AuditResponse> {
+async function fetchAudit(params?: { eventType?: string; limit?: number }): Promise<AuditResponse> {
   const searchParams = new URLSearchParams();
   if (params?.eventType) searchParams.set("eventType", params.eventType);
   if (params?.limit) searchParams.set("limit", String(params.limit));

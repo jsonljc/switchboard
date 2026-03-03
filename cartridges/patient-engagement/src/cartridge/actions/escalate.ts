@@ -4,9 +4,7 @@
 
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
-export async function executeEscalate(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeEscalate(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
   const reason = (params.reason as string) ?? "unspecified";

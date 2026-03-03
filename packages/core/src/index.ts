@@ -1,18 +1,32 @@
 // Engine
 export { evaluateRule } from "./engine/rule-evaluator.js";
 export type { EvaluationContext, ConditionResult, RuleResult } from "./engine/rule-evaluator.js";
-export { computeRiskScore, DEFAULT_RISK_CONFIG, computeCompositeRiskAdjustment, DEFAULT_COMPOSITE_RISK_CONFIG } from "./engine/risk-scorer.js";
+export {
+  computeRiskScore,
+  DEFAULT_RISK_CONFIG,
+  computeCompositeRiskAdjustment,
+  DEFAULT_COMPOSITE_RISK_CONFIG,
+} from "./engine/risk-scorer.js";
 export type { RiskScoringConfig, CompositeRiskConfig } from "./engine/risk-scorer.js";
 export { createTraceBuilder, addCheck, buildTrace } from "./engine/decision-trace.js";
 export type { DecisionTraceBuilder } from "./engine/decision-trace.js";
-export { resolveEntities, buildClarificationQuestion, buildNotFoundExplanation } from "./engine/resolver.js";
+export {
+  resolveEntities,
+  buildClarificationQuestion,
+  buildNotFoundExplanation,
+} from "./engine/resolver.js";
 export type { EntityResolver, ResolverResult } from "./engine/resolver.js";
 export { evaluatePlan } from "./engine/composites.js";
 export type { PlanEvaluationResult } from "./engine/composites.js";
 export { formatSimulationResult } from "./engine/simulator.js";
 export type { SimulationInput, SimulationResult } from "./engine/simulator.js";
 export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine.js";
-export type { PolicyEngineConfig, PolicyEngineContext, GuardrailState, SpendLookup } from "./engine/policy-engine.js";
+export type {
+  PolicyEngineConfig,
+  PolicyEngineContext,
+  GuardrailState,
+  SpendLookup,
+} from "./engine/policy-engine.js";
 export { InMemoryRiskPostureStore } from "./engine/risk-posture.js";
 export type { RiskPostureStore } from "./engine/risk-posture.js";
 
@@ -32,7 +46,12 @@ export {
   determineApprovalRequirement,
   StaleVersionError,
 } from "./approval/state-machine.js";
-export type { ApprovalState, ApprovalStatus, QuorumState, QuorumEntry } from "./approval/state-machine.js";
+export type {
+  ApprovalState,
+  ApprovalStatus,
+  QuorumState,
+  QuorumEntry,
+} from "./approval/state-machine.js";
 export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./approval/router.js";
 export type { ApprovalRouting, ApprovalRoutingConfig } from "./approval/router.js";
 export { computeBindingHash, hashObject, validateBindingHash } from "./approval/binding.js";
@@ -66,15 +85,31 @@ export type {
 
 // Orchestrator
 export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js";
-export type { OrchestratorConfig, ProposeResult, ApprovalResponse, RuntimeOrchestrator } from "./orchestrator/index.js";
+export type {
+  OrchestratorConfig,
+  ProposeResult,
+  ApprovalResponse,
+  RuntimeOrchestrator,
+} from "./orchestrator/index.js";
 
 // Audit
-export { computeAuditHash, computeAuditHashSync, sha256, verifyChain } from "./audit/canonical-hash.js";
+export {
+  computeAuditHash,
+  computeAuditHashSync,
+  sha256,
+  verifyChain,
+} from "./audit/canonical-hash.js";
 export { canonicalizeSync } from "./audit/canonical-json.js";
 export type { AuditHashInput } from "./audit/canonical-hash.js";
 export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./audit/redaction.js";
 export type { RedactionConfig, RedactionResult } from "./audit/redaction.js";
-export { storeEvidence, verifyEvidence, setEvidenceStore, InMemoryEvidenceStore, FileSystemEvidenceStore } from "./audit/evidence.js";
+export {
+  storeEvidence,
+  verifyEvidence,
+  setEvidenceStore,
+  InMemoryEvidenceStore,
+  FileSystemEvidenceStore,
+} from "./audit/evidence.js";
 export type { EvidencePointer, EvidenceStore } from "./audit/evidence.js";
 export { AuditLedger, InMemoryLedgerStorage } from "./audit/ledger.js";
 export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
@@ -103,7 +138,13 @@ export type { ModelCostEntry } from "./telemetry/llm-costs.js";
 export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
 
 // Notifications
-export { NoopNotifier, CompositeNotifier, buildApprovalNotification, EmailApprovalNotifier, WebhookApprovalNotifier } from "./notifications/index.js";
+export {
+  NoopNotifier,
+  CompositeNotifier,
+  buildApprovalNotification,
+  EmailApprovalNotifier,
+  WebhookApprovalNotifier,
+} from "./notifications/index.js";
 export type { ApprovalNotifier, ApprovalNotification } from "./notifications/index.js";
 
 // Guardrail State Store
@@ -147,7 +188,11 @@ export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapte
 
 // Integration guide generator
 export { generateIntegrationGuide } from "./runtime-adapters/integration-guide.js";
-export type { IntegrationGuide, IntegrationStep, IntegrationGuideParams } from "./runtime-adapters/integration-guide.js";
+export type {
+  IntegrationGuide,
+  IntegrationStep,
+  IntegrationGuideParams,
+} from "./runtime-adapters/integration-guide.js";
 
 // Governance profiles (per-org posture)
 export {
@@ -176,11 +221,29 @@ export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";
 
 // Cross-Cartridge Enrichment
 export { DefaultCrossCartridgeEnricher, DEFAULT_ENRICHMENT_MAPPINGS } from "./enrichment/index.js";
-export type { CrossCartridgeContext, EnrichmentMapping, CrossCartridgeEnricher, DefaultCrossCartridgeEnricherConfig } from "./enrichment/index.js";
+export type {
+  CrossCartridgeContext,
+  EnrichmentMapping,
+  CrossCartridgeEnricher,
+  DefaultCrossCartridgeEnricherConfig,
+} from "./enrichment/index.js";
 
 // Data-Flow Plan Execution (multi-step cross-cartridge plans with binding resolution)
-export { DataFlowExecutor, resolveBindings, BindingResolutionError, evaluateCondition } from "./data-flow/index.js";
-export type { DataFlowStep, DataFlowPlan, StepExecutionResult, DataFlowOrchestrator, DataFlowExecutorConfig, DataFlowExecutionResult, BindingContext } from "./data-flow/index.js";
+export {
+  DataFlowExecutor,
+  resolveBindings,
+  BindingResolutionError,
+  evaluateCondition,
+} from "./data-flow/index.js";
+export type {
+  DataFlowStep,
+  DataFlowPlan,
+  StepExecutionResult,
+  DataFlowOrchestrator,
+  DataFlowExecutorConfig,
+  DataFlowExecutionResult,
+  BindingContext,
+} from "./data-flow/index.js";
 
 // SMB governance (simplified pipeline for SMB-tier organizations)
 export {
@@ -220,4 +283,3 @@ export type { IdempotencyStore } from "./idempotency/guard.js";
 // Credential resolution (per-org connection credentials at execution time)
 export { NoOpCredentialResolver } from "./credentials/resolver.js";
 export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
-

@@ -22,7 +22,13 @@ class PromCounter implements Counter {
 class PromHistogram implements Histogram {
   private histogram: client.Histogram;
   constructor(name: string, help: string, labelNames: string[], buckets?: number[]) {
-    this.histogram = new client.Histogram({ name, help, labelNames, buckets, registers: [register] });
+    this.histogram = new client.Histogram({
+      name,
+      help,
+      labelNames,
+      buckets,
+      registers: [register],
+    });
   }
   observe(labels: Record<string, string>, value: number): void {
     this.histogram.observe(labels, value);
@@ -35,18 +41,70 @@ const LATENCY_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
 export function createPromMetrics(): SwitchboardMetrics {
   return {
-    proposalsTotal: new PromCounter("switchboard_proposals_total", "Total action proposals", COUNTER_LABELS),
-    proposalsDenied: new PromCounter("switchboard_proposals_denied_total", "Denied proposals", COUNTER_LABELS),
-    approvalsCreated: new PromCounter("switchboard_approvals_created_total", "Approvals created", COUNTER_LABELS),
-    approvalsExpired: new PromCounter("switchboard_approvals_expired_total", "Approvals expired", COUNTER_LABELS),
-    executionsTotal: new PromCounter("switchboard_executions_total", "Total executions", COUNTER_LABELS),
-    executionsSuccess: new PromCounter("switchboard_executions_success_total", "Successful executions", COUNTER_LABELS),
-    executionsFailed: new PromCounter("switchboard_executions_failed_total", "Failed executions", COUNTER_LABELS),
-    circuitBreakerTrips: new PromCounter("switchboard_circuit_breaker_trips_total", "Circuit breaker trips to open state", ["service"]),
-    proposalLatencyMs: new PromHistogram("switchboard_proposal_latency_ms", "Proposal latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
-    approvalLatencyMs: new PromHistogram("switchboard_approval_latency_ms", "Approval latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
-    executionLatencyMs: new PromHistogram("switchboard_execution_latency_ms", "Execution latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
-    policyEngineLatencyMs: new PromHistogram("switchboard_policy_engine_latency_ms", "Policy engine evaluation latency in ms", HISTOGRAM_LABELS, LATENCY_BUCKETS),
+    proposalsTotal: new PromCounter(
+      "switchboard_proposals_total",
+      "Total action proposals",
+      COUNTER_LABELS,
+    ),
+    proposalsDenied: new PromCounter(
+      "switchboard_proposals_denied_total",
+      "Denied proposals",
+      COUNTER_LABELS,
+    ),
+    approvalsCreated: new PromCounter(
+      "switchboard_approvals_created_total",
+      "Approvals created",
+      COUNTER_LABELS,
+    ),
+    approvalsExpired: new PromCounter(
+      "switchboard_approvals_expired_total",
+      "Approvals expired",
+      COUNTER_LABELS,
+    ),
+    executionsTotal: new PromCounter(
+      "switchboard_executions_total",
+      "Total executions",
+      COUNTER_LABELS,
+    ),
+    executionsSuccess: new PromCounter(
+      "switchboard_executions_success_total",
+      "Successful executions",
+      COUNTER_LABELS,
+    ),
+    executionsFailed: new PromCounter(
+      "switchboard_executions_failed_total",
+      "Failed executions",
+      COUNTER_LABELS,
+    ),
+    circuitBreakerTrips: new PromCounter(
+      "switchboard_circuit_breaker_trips_total",
+      "Circuit breaker trips to open state",
+      ["service"],
+    ),
+    proposalLatencyMs: new PromHistogram(
+      "switchboard_proposal_latency_ms",
+      "Proposal latency in ms",
+      HISTOGRAM_LABELS,
+      LATENCY_BUCKETS,
+    ),
+    approvalLatencyMs: new PromHistogram(
+      "switchboard_approval_latency_ms",
+      "Approval latency in ms",
+      HISTOGRAM_LABELS,
+      LATENCY_BUCKETS,
+    ),
+    executionLatencyMs: new PromHistogram(
+      "switchboard_execution_latency_ms",
+      "Execution latency in ms",
+      HISTOGRAM_LABELS,
+      LATENCY_BUCKETS,
+    ),
+    policyEngineLatencyMs: new PromHistogram(
+      "switchboard_policy_engine_latency_ms",
+      "Policy engine evaluation latency in ms",
+      HISTOGRAM_LABELS,
+      LATENCY_BUCKETS,
+    ),
   };
 }
 

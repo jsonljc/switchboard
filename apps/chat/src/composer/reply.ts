@@ -1,9 +1,7 @@
 import type { DecisionTrace } from "@switchboard/schemas";
 
 export function composeDenialReply(trace: DecisionTrace): string {
-  const deniedCheck = trace.checks.find(
-    (c) => c.matched && c.effect === "deny",
-  );
+  const deniedCheck = trace.checks.find((c) => c.matched && c.effect === "deny");
 
   let reply = `Blocked: ${trace.explanation}\n\n`;
 
@@ -59,36 +57,36 @@ export function composeHelpMessage(availableActions: string[]): string {
   if (hasAds) {
     sections.push(
       `Ads:\n` +
-      `- "pause Summer Sale"\n` +
-      `- "resume Brand Awareness"\n` +
-      `- "set budget for Retargeting to $800"`,
+        `- "pause Summer Sale"\n` +
+        `- "resume Brand Awareness"\n` +
+        `- "set budget for Retargeting to $800"`,
     );
     sections.push(
       `Diagnostics:\n` +
-      `- "diagnose my funnel"\n` +
-      `- "how are my ads doing?"\n` +
-      `- "portfolio analysis"\n` +
-      `- "analyze campaign structure"\n` +
-      `- "show me my metrics"`,
+        `- "diagnose my funnel"\n` +
+        `- "how are my ads doing?"\n` +
+        `- "portfolio analysis"\n` +
+        `- "analyze campaign structure"\n` +
+        `- "show me my metrics"`,
     );
   }
   if (hasPayments) {
     sections.push(
       `Payments:\n` +
-      `- "refund $150 for ch_abc"\n` +
-      `- "charge cus_123 $500"\n` +
-      `- "invoice cus_123 $200 for consulting"\n` +
-      `- "cancel subscription sub_1"\n` +
-      `- "apply $50 credit to cus_123"\n` +
-      `- "create payment link for $100"`,
+        `- "refund $150 for ch_abc"\n` +
+        `- "charge cus_123 $500"\n` +
+        `- "invoice cus_123 $200 for consulting"\n` +
+        `- "cancel subscription sub_1"\n` +
+        `- "apply $50 credit to cus_123"\n` +
+        `- "create payment link for $100"`,
     );
   }
   if (hasTrading) {
     sections.push(
       `Trading:\n` +
-      `- "market buy 100 AAPL"\n` +
-      `- "limit sell 50 TSLA at $250"\n` +
-      `- "cancel order ord_123"`,
+        `- "market buy 100 AAPL"\n` +
+        `- "limit sell 50 TSLA at $250"\n` +
+        `- "cancel order ord_123"`,
     );
   }
 

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  formatDiagnosticResult,
-  isDiagnosticAction,
-} from "../formatters/diagnostic-formatter.js";
+import { formatDiagnosticResult, isDiagnosticAction } from "../formatters/diagnostic-formatter.js";
 
 describe("isDiagnosticAction", () => {
   it("returns true for diagnostic action types", () => {

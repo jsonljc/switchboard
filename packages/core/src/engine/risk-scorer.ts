@@ -92,8 +92,7 @@ export function computeRiskScore(
 
   // Exposure: blast radius
   if (input.exposure.blastRadius > 1) {
-    const blastContribution =
-      config.blastRadiusWeight * Math.log2(input.exposure.blastRadius);
+    const blastContribution = config.blastRadiusWeight * Math.log2(input.exposure.blastRadius);
     const cappedBlast = Math.min(config.blastRadiusWeight * 2, blastContribution);
     factors.push({
       factor: "blast_radius",
@@ -207,7 +206,7 @@ export function computeCompositeRiskAdjustment(
   // 3. Concentration risk — penalty when distinctTargetEntities is low relative to action count
   // (hammering the same target repeatedly)
   if (context.recentActionCount > 1 && context.distinctTargetEntities > 0) {
-    const concentrationRatio = 1 - (context.distinctTargetEntities / context.recentActionCount);
+    const concentrationRatio = 1 - context.distinctTargetEntities / context.recentActionCount;
     if (concentrationRatio > 0.5) {
       const contribution = (concentrationRatio - 0.5) * 2 * config.concentrationWeight;
       compositeFactors.push({

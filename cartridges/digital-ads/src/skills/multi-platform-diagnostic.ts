@@ -13,9 +13,7 @@ export { runMultiPlatformDiagnostic } from "../orchestrator/runner.js";
 /**
  * Format a MultiPlatformResult into a human-readable string for agent output.
  */
-export function formatMultiPlatformDiagnostic(
-  result: MultiPlatformResult
-): string {
+export function formatMultiPlatformDiagnostic(result: MultiPlatformResult): string {
   const lines: string[] = [];
 
   // Executive summary first
@@ -30,11 +28,12 @@ export function formatMultiPlatformDiagnostic(
     for (const action of result.portfolioActions) {
       const risk = `[${action.riskLevel.toUpperCase()} RISK]`;
       const confidence = `${(action.confidenceScore * 100).toFixed(0)}%`;
-      const revenue = action.estimatedRevenueRecovery > 0
-        ? ` | est. $${action.estimatedRevenueRecovery.toFixed(0)} recovery`
-        : "";
+      const revenue =
+        action.estimatedRevenueRecovery > 0
+          ? ` | est. $${action.estimatedRevenueRecovery.toFixed(0)} recovery`
+          : "";
       lines.push(
-        `${action.priority}. ${risk} ${action.action} (${confidence} confidence${revenue})`
+        `${action.priority}. ${risk} ${action.action} (${confidence} confidence${revenue})`,
       );
     }
     lines.push("");

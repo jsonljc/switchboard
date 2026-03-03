@@ -11,9 +11,7 @@ export async function computeMarketOrderRisk(
   ]);
 
   const dollarsAtRisk = params.quantity * price.price;
-  const blastRadius = portfolio.totalValue > 0
-    ? dollarsAtRisk / portfolio.totalValue
-    : 1;
+  const blastRadius = portfolio.totalValue > 0 ? dollarsAtRisk / portfolio.totalValue : 1;
 
   return {
     baseRisk: "critical",
@@ -34,9 +32,7 @@ export async function computeLimitOrderRisk(
   const portfolio = await provider.getPortfolio(params.portfolioId);
 
   const dollarsAtRisk = params.quantity * params.limitPrice;
-  const blastRadius = portfolio.totalValue > 0
-    ? dollarsAtRisk / portfolio.totalValue
-    : 1;
+  const blastRadius = portfolio.totalValue > 0 ? dollarsAtRisk / portfolio.totalValue : 1;
 
   return {
     baseRisk: "high",
@@ -74,9 +70,7 @@ export async function computeClosePositionRisk(
 
   const position = positions.find((p) => p.symbol === params.symbol);
   const dollarsAtRisk = position ? position.marketValue : 0;
-  const blastRadius = portfolio.totalValue > 0
-    ? dollarsAtRisk / portfolio.totalValue
-    : 1;
+  const blastRadius = portfolio.totalValue > 0 ? dollarsAtRisk / portfolio.totalValue : 1;
 
   return {
     baseRisk: "critical",

@@ -134,7 +134,7 @@ describe("PrismaPolicyStore", () => {
 
       await store.update("pol_1", { priority: 5 });
 
-      const callArgs = prisma.policy.update.mock.calls[0][0];
+      const callArgs = prisma.policy.update.mock.calls[0]![0];
       expect(callArgs.data).toHaveProperty("priority", 5);
       expect(callArgs.data).toHaveProperty("updatedAt");
       expect(callArgs.data).not.toHaveProperty("name");
@@ -165,7 +165,7 @@ describe("PrismaPolicyStore", () => {
 
       const result = await store.listActive();
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe("pol_1");
+      expect(result[0]!.id).toBe("pol_1");
       expect(prisma.policy.findMany).toHaveBeenCalledWith({
         where: { active: true },
         orderBy: { priority: "asc" },
@@ -180,10 +180,7 @@ describe("PrismaPolicyStore", () => {
       expect(prisma.policy.findMany).toHaveBeenCalledWith({
         where: {
           active: true,
-          OR: [
-            { cartridgeId: null },
-            { cartridgeId: "digital-ads" },
-          ],
+          OR: [{ cartridgeId: null }, { cartridgeId: "digital-ads" }],
         },
         orderBy: { priority: "asc" },
       });
@@ -197,10 +194,7 @@ describe("PrismaPolicyStore", () => {
       expect(prisma.policy.findMany).toHaveBeenCalledWith({
         where: {
           active: true,
-          OR: [
-            { organizationId: null },
-            { organizationId: "org_1" },
-          ],
+          OR: [{ organizationId: null }, { organizationId: "org_1" }],
         },
         orderBy: { priority: "asc" },
       });
@@ -230,7 +224,10 @@ describe("PrismaPolicyStore", () => {
 
     beforeEach(() => {
       redis = createMockRedis();
-      cachedStore = new PrismaPolicyStore(prisma as any, { redis: redis as any, cacheTtlSeconds: 120 });
+      cachedStore = new PrismaPolicyStore(prisma as any, {
+        redis: redis as any,
+        cacheTtlSeconds: 120,
+      });
     });
 
     it("returns cached results on cache hit", async () => {
@@ -241,7 +238,7 @@ describe("PrismaPolicyStore", () => {
 
       const result = await cachedStore.listActive();
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe("pol_1");
+      expect(result[0]!.id).toBe("pol_1");
       expect(prisma.policy.findMany).not.toHaveBeenCalled();
     });
 

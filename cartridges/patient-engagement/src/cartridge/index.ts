@@ -2,11 +2,7 @@
 // PatientEngagementCartridge — implements Cartridge interface
 // ---------------------------------------------------------------------------
 
-import type {
-  Cartridge,
-  CartridgeContext,
-  ExecuteResult,
-} from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/cartridge-sdk";
 import type {
   CartridgeManifest,
   ConnectionHealth,
@@ -14,7 +10,11 @@ import type {
   RiskInput,
 } from "@switchboard/schemas";
 import type { AgentModule, AgentType } from "../agents/types.js";
-import type { CalendarProvider, SMSProvider, ReviewPlatformProvider } from "./providers/provider.js";
+import type {
+  CalendarProvider,
+  SMSProvider,
+  ReviewPlatformProvider,
+} from "./providers/provider.js";
 import type { PatientMetricsSnapshot } from "../core/types.js";
 
 import { PATIENT_ENGAGEMENT_MANIFEST } from "./manifest.js";
@@ -45,18 +45,17 @@ export class PatientEngagementCartridge implements Cartridge {
     this.agents.set(agent.type, agent);
   }
 
-  setProviders(
-    calendar: CalendarProvider,
-    sms: SMSProvider,
-    review: ReviewPlatformProvider,
-  ): void {
+  setProviders(calendar: CalendarProvider, sms: SMSProvider, review: ReviewPlatformProvider): void {
     this.calendar = calendar;
     this.sms = sms;
     this.review = review;
   }
 
   setSnapshotProvider(
-    provider: (orgId: string, period: { since: string; until: string }) => Promise<PatientMetricsSnapshot>,
+    provider: (
+      orgId: string,
+      period: { since: string; until: string },
+    ) => Promise<PatientMetricsSnapshot>,
   ): void {
     this.snapshotProvider = provider;
   }
@@ -141,7 +140,7 @@ export class PatientEngagementCartridge implements Cartridge {
     ]);
 
     const statuses = checks.map((c) =>
-      c.status === "fulfilled" ? c.value?.status ?? "disconnected" : "disconnected",
+      c.status === "fulfilled" ? (c.value?.status ?? "disconnected") : "disconnected",
     );
 
     const allConnected = statuses.every((s) => s === "connected");

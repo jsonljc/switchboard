@@ -13,13 +13,20 @@ export const postTreatmentFlow: ConversationFlowDefinition = {
     {
       id: "checkin",
       type: "message",
-      template: "Hi {{patientName}}, I hope you're doing well! It's been {{daysSinceTreatment}} days since your {{treatmentType}}. How are you feeling?",
+      template:
+        "Hi {{patientName}}, I hope you're doing well! It's been {{daysSinceTreatment}} days since your {{treatmentType}}. How are you feeling?",
     },
     {
       id: "satisfaction_question",
       type: "question",
       template: "On a scale of 1-5, how satisfied are you with your results?",
-      options: ["5 - Very satisfied", "4 - Satisfied", "3 - Neutral", "2 - Unsatisfied", "1 - Very unsatisfied"],
+      options: [
+        "5 - Very satisfied",
+        "4 - Satisfied",
+        "3 - Neutral",
+        "2 - Unsatisfied",
+        "1 - Very unsatisfied",
+      ],
     },
     {
       id: "satisfaction_branch",
@@ -44,7 +51,8 @@ export const postTreatmentFlow: ConversationFlowDefinition = {
     {
       id: "concern_followup",
       type: "escalate",
-      template: "I'm sorry to hear that. Let me connect you with {{providerName}} to address your concerns right away.",
+      template:
+        "I'm sorry to hear that. Let me connect you with {{providerName}} to address your concerns right away.",
       escalationReason: "Patient expressed dissatisfaction with treatment results",
     },
     {

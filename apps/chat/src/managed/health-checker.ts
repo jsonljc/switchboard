@@ -22,7 +22,11 @@ export function startHealthChecker(prisma: PrismaClient): () => void {
           if (!connection) {
             await prisma.managedChannel.update({
               where: { id: channel.id },
-              data: { status: "error", statusDetail: "Connection not found", lastHealthCheck: new Date() },
+              data: {
+                status: "error",
+                statusDetail: "Connection not found",
+                lastHealthCheck: new Date(),
+              },
             });
             continue;
           }
@@ -33,7 +37,11 @@ export function startHealthChecker(prisma: PrismaClient): () => void {
             if (!botToken) {
               await prisma.managedChannel.update({
                 where: { id: channel.id },
-                data: { status: "error", statusDetail: "Missing bot token", lastHealthCheck: new Date() },
+                data: {
+                  status: "error",
+                  statusDetail: "Missing bot token",
+                  lastHealthCheck: new Date(),
+                },
               });
               continue;
             }
@@ -43,7 +51,11 @@ export function startHealthChecker(prisma: PrismaClient): () => void {
             if (!botToken) {
               await prisma.managedChannel.update({
                 where: { id: channel.id },
-                data: { status: "error", statusDetail: "Missing bot token", lastHealthCheck: new Date() },
+                data: {
+                  status: "error",
+                  statusDetail: "Missing bot token",
+                  lastHealthCheck: new Date(),
+                },
               });
               continue;
             }
@@ -54,7 +66,11 @@ export function startHealthChecker(prisma: PrismaClient): () => void {
             if (!token || !phoneNumberId) {
               await prisma.managedChannel.update({
                 where: { id: channel.id },
-                data: { status: "error", statusDetail: "Missing WhatsApp credentials", lastHealthCheck: new Date() },
+                data: {
+                  status: "error",
+                  statusDetail: "Missing WhatsApp credentials",
+                  lastHealthCheck: new Date(),
+                },
               });
               continue;
             }

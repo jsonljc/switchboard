@@ -6,9 +6,7 @@ import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import { computeLTV } from "../../core/scoring/ltv-score.js";
 import type { LTVScoreInput } from "../../core/types.js";
 
-export async function executeScoreLTV(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeScoreLTV(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
 

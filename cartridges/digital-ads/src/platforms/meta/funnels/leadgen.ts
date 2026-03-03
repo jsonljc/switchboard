@@ -17,7 +17,7 @@ export const DEFAULT_QUALIFIED_LEAD_ACTION = "offsite_conversion.fb_pixel_lead";
  * Create a leadgen funnel schema with a configurable qualified lead action type.
  */
 export function createLeadgenFunnel(
-  qualifiedLeadAction: string = DEFAULT_QUALIFIED_LEAD_ACTION
+  qualifiedLeadAction: string = DEFAULT_QUALIFIED_LEAD_ACTION,
 ): FunnelSchema {
   return {
     vertical: "leadgen",

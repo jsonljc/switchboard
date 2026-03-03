@@ -127,14 +127,15 @@ export class InterpreterRegistry {
           availableActions,
         );
 
-        const interpreterName = (result.proposals[0] as Record<string, unknown>)?.["interpreterName"] as string ?? name;
+        const interpreterName =
+          ((result.proposals[0] as Record<string, unknown>)?.["interpreterName"] as string) ?? name;
 
         const tagged: InterpreterResult & { interpreterName: string } = {
           ...result,
           interpreterName,
           proposals: result.proposals.map((p) => ({
             ...p,
-            interpreterName: (p as Record<string, unknown>)["interpreterName"] as string ?? name,
+            interpreterName: ((p as Record<string, unknown>)["interpreterName"] as string) ?? name,
           })),
         };
 

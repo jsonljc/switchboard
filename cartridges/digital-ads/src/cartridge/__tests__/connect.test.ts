@@ -29,7 +29,7 @@ describe("digital-ads.platform.connect", () => {
         credentials: { platform: "meta", accessToken: "test_token" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(true);
@@ -53,7 +53,7 @@ describe("digital-ads.platform.connect", () => {
         credentials: { platform: "meta", accessToken: "test_token" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     const session = cartridge.getSession();
@@ -73,7 +73,7 @@ describe("digital-ads.platform.connect", () => {
         credentials: { platform: "meta", accessToken: "test" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);
@@ -93,7 +93,7 @@ describe("digital-ads.platform.connect", () => {
         credentials: { platform: "meta", accessToken: "bad_token" },
         entityId: "act_123",
       },
-      defaultCtx
+      defaultCtx,
     );
 
     expect(result.success).toBe(false);

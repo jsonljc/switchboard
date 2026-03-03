@@ -226,9 +226,7 @@ function formatFunnelDiagnostic(data: FunnelData): string {
 
   // Estimated revenue impact
   if (data.elasticity?.totalEstimatedRevenueLoss !== undefined) {
-    lines.push(
-      `Estimated Revenue Impact: ${dollars(data.elasticity.totalEstimatedRevenueLoss)}`,
-    );
+    lines.push(`Estimated Revenue Impact: ${dollars(data.elasticity.totalEstimatedRevenueLoss)}`);
     lines.push("");
   }
 
@@ -289,9 +287,7 @@ function formatPortfolioDiagnostic(data: PortfolioData): string {
   if (data.budgetRecommendations && data.budgetRecommendations.length > 0) {
     lines.push("Budget Recommendations:");
     for (const br of data.budgetRecommendations) {
-      const shift = br.suggestedShiftPercent
-        ? ` (${br.suggestedShiftPercent}%)`
-        : "";
+      const shift = br.suggestedShiftPercent ? ` (${br.suggestedShiftPercent}%)` : "";
       lines.push(
         `  ${capitalize(br.from ?? "?")} → ${capitalize(br.to ?? "?")}${shift}: ${br.reason ?? ""}`,
       );
@@ -332,11 +328,15 @@ function formatSnapshot(data: SnapshotData): string {
     lines.push("Top-Level Metrics:");
     for (const [key, value] of Object.entries(data.topLevel)) {
       const label = key.toUpperCase().padEnd(12);
-      const formatted = key.includes("ctr") || key.includes("rate")
-        ? `${(value * 100).toFixed(2)}%`
-        : key.includes("cpm") || key.includes("cpc") || key.includes("cpa") || key.includes("roas")
-          ? dollars(value)
-          : num(value);
+      const formatted =
+        key.includes("ctr") || key.includes("rate")
+          ? `${(value * 100).toFixed(2)}%`
+          : key.includes("cpm") ||
+              key.includes("cpc") ||
+              key.includes("cpa") ||
+              key.includes("roas")
+            ? dollars(value)
+            : num(value);
       lines.push(`  ${label} ${formatted}`);
     }
   }
@@ -347,9 +347,10 @@ function formatSnapshot(data: SnapshotData): string {
     lines.push("Funnel Stages:");
     for (const [stage, metrics] of Object.entries(data.stages)) {
       const count = num(metrics?.count);
-      const cost = metrics?.cost !== null && metrics?.cost !== undefined
-        ? ` (cost: ${dollars(metrics.cost)})`
-        : "";
+      const cost =
+        metrics?.cost !== null && metrics?.cost !== undefined
+          ? ` (cost: ${dollars(metrics.cost)})`
+          : "";
       lines.push(`  ${stage.padEnd(16)} ${count}${cost}`);
     }
   }

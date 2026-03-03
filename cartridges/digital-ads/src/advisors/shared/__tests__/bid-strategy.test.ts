@@ -19,9 +19,7 @@ function makeSnapshot(overrides: Partial<MetricSnapshot> = {}): MetricSnapshot {
   };
 }
 
-function makeStageAnalysis(
-  overrides: Partial<StageDiagnostic> = {}
-): StageDiagnostic[] {
+function makeStageAnalysis(overrides: Partial<StageDiagnostic> = {}): StageDiagnostic[] {
   return [
     {
       stageName: "purchase",

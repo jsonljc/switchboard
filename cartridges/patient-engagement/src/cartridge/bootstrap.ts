@@ -37,25 +37,37 @@ export async function bootstrapPatientEngagementCartridge(
   // Resolve providers
   const useMocks = !config.requireCredentials;
 
-  const calendar = config.calendarApiKey && config.calendarId
-    ? new GoogleCalendarProvider({ accessToken: config.calendarApiKey, calendarId: config.calendarId })
-    : useMocks ? new MockCalendarProvider() : new MockCalendarProvider();
+  const calendar =
+    config.calendarApiKey && config.calendarId
+      ? new GoogleCalendarProvider({
+          accessToken: config.calendarApiKey,
+          calendarId: config.calendarId,
+        })
+      : useMocks
+        ? new MockCalendarProvider()
+        : new MockCalendarProvider();
 
-  const sms = config.twilioAccountSid && config.twilioAuthToken && config.twilioPhoneNumber
-    ? new TwilioSMSProvider({
-        accountSid: config.twilioAccountSid,
-        authToken: config.twilioAuthToken,
-        fromNumber: config.twilioPhoneNumber,
-      })
-    : useMocks ? new MockSMSProvider() : new MockSMSProvider();
+  const sms =
+    config.twilioAccountSid && config.twilioAuthToken && config.twilioPhoneNumber
+      ? new TwilioSMSProvider({
+          accountSid: config.twilioAccountSid,
+          authToken: config.twilioAuthToken,
+          fromNumber: config.twilioPhoneNumber,
+        })
+      : useMocks
+        ? new MockSMSProvider()
+        : new MockSMSProvider();
 
-  const review = config.googleBusinessApiKey && config.googleBusinessLocationId
-    ? new GoogleReviewsProvider({
-        accessToken: config.googleBusinessApiKey,
-        accountId: config.googleBusinessLocationId,
-        locationId: config.googleBusinessLocationId,
-      })
-    : useMocks ? new MockReviewProvider() : new MockReviewProvider();
+  const review =
+    config.googleBusinessApiKey && config.googleBusinessLocationId
+      ? new GoogleReviewsProvider({
+          accessToken: config.googleBusinessApiKey,
+          accountId: config.googleBusinessLocationId,
+          locationId: config.googleBusinessLocationId,
+        })
+      : useMocks
+        ? new MockReviewProvider()
+        : new MockReviewProvider();
 
   cartridge.setProviders(calendar, sms, review);
 

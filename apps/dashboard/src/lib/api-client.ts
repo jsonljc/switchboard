@@ -189,22 +189,35 @@ export class SwitchboardClient {
     return this.request<ApprovalDetail>(`/api/approvals/${id}`);
   }
 
-  async respondToApproval(id: string, body: { action: string; respondedBy: string; bindingHash: string; patchValue?: unknown }) {
-    return this.request<{ envelope: unknown; approvalState: unknown; executionResult: unknown }>(`/api/approvals/${id}/respond`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+  async respondToApproval(
+    id: string,
+    body: { action: string; respondedBy: string; bindingHash: string; patchValue?: unknown },
+  ) {
+    return this.request<{ envelope: unknown; approvalState: unknown; executionResult: unknown }>(
+      `/api/approvals/${id}/respond`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
   }
 
   // Audit
-  async queryAudit(params?: { eventType?: string; limit?: number; after?: string; before?: string }) {
+  async queryAudit(params?: {
+    eventType?: string;
+    limit?: number;
+    after?: string;
+    before?: string;
+  }) {
     const searchParams = new URLSearchParams();
     if (params?.eventType) searchParams.set("eventType", params.eventType);
     if (params?.limit) searchParams.set("limit", String(params.limit));
     if (params?.after) searchParams.set("after", params.after);
     if (params?.before) searchParams.set("before", params.before);
     const qs = searchParams.toString();
-    return this.request<{ entries: AuditEntry[]; total: number }>(`/api/audit${qs ? `?${qs}` : ""}`);
+    return this.request<{ entries: AuditEntry[]; total: number }>(
+      `/api/audit${qs ? `?${qs}` : ""}`,
+    );
   }
 
   // Policies
@@ -227,11 +240,18 @@ export class SwitchboardClient {
   }
 
   async deletePolicy(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/policies/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/policies/${id}`, {
+      method: "DELETE",
+    });
   }
 
   // Simulate
-  async simulate(body: { actionType: string; parameters: Record<string, unknown>; principalId: string; cartridgeId?: string }) {
+  async simulate(body: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    cartridgeId?: string;
+  }) {
     return this.request<SimulateResult>("/api/simulate", {
       method: "POST",
       body: JSON.stringify(body),
@@ -257,7 +277,13 @@ export class SwitchboardClient {
     return this.request<{ connections: unknown[] }>("/api/connections");
   }
 
-  async createConnection(body: { serviceId: string; serviceName: string; authType: string; credentials: Record<string, unknown>; scopes?: string[] }) {
+  async createConnection(body: {
+    serviceId: string;
+    serviceName: string;
+    authType: string;
+    credentials: Record<string, unknown>;
+    scopes?: string[];
+  }) {
     return this.request<{ connection: unknown }>("/api/connections", {
       method: "POST",
       body: JSON.stringify(body),
@@ -268,7 +294,15 @@ export class SwitchboardClient {
     return this.request<{ connection: unknown }>(`/api/connections/${id}`);
   }
 
-  async updateConnection(id: string, body: { serviceName?: string; authType?: string; credentials?: Record<string, unknown>; scopes?: string[] }) {
+  async updateConnection(
+    id: string,
+    body: {
+      serviceName?: string;
+      authType?: string;
+      credentials?: Record<string, unknown>;
+      scopes?: string[];
+    },
+  ) {
     return this.request<{ connection: unknown }>(`/api/connections/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -276,11 +310,15 @@ export class SwitchboardClient {
   }
 
   async deleteConnection(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/connections/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/connections/${id}`, {
+      method: "DELETE",
+    });
   }
 
   async testConnection(id: string) {
-    return this.request<{ healthy: boolean; detail?: string }>(`/api/connections/${id}/test`, { method: "POST" });
+    return this.request<{ healthy: boolean; detail?: string }>(`/api/connections/${id}/test`, {
+      method: "POST",
+    });
   }
 
   // Organization Config
@@ -288,7 +326,16 @@ export class SwitchboardClient {
     return this.request<{ config: unknown }>(`/api/organizations/${orgId}/config`);
   }
 
-  async updateOrgConfig(orgId: string, body: { name?: string; runtimeType?: string; runtimeConfig?: Record<string, unknown>; governanceProfile?: string; onboardingComplete?: boolean }) {
+  async updateOrgConfig(
+    orgId: string,
+    body: {
+      name?: string;
+      runtimeType?: string;
+      runtimeConfig?: Record<string, unknown>;
+      governanceProfile?: string;
+      onboardingComplete?: boolean;
+    },
+  ) {
     return this.request<{ config: unknown }>(`/api/organizations/${orgId}/config`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -301,15 +348,46 @@ export class SwitchboardClient {
   }
 
   // Managed Provisioning
-  async provision(orgId: string, body: { channels: Array<{ channel: string; botToken: string; webhookSecret?: string; signingSecret?: string }> }) {
-    return this.request<{ channels: Array<{ channel: string; botUsername?: string; webhookUrl?: string; status: string; note?: string }>; provisioningStatus: string }>(`/api/organizations/${orgId}/provision`, {
+  async provision(
+    orgId: string,
+    body: {
+      channels: Array<{
+        channel: string;
+        botToken: string;
+        webhookSecret?: string;
+        signingSecret?: string;
+      }>;
+    },
+  ) {
+    return this.request<{
+      channels: Array<{
+        channel: string;
+        botUsername?: string;
+        webhookUrl?: string;
+        status: string;
+        note?: string;
+      }>;
+      provisioningStatus: string;
+    }>(`/api/organizations/${orgId}/provision`, {
       method: "POST",
       body: JSON.stringify(body),
     });
   }
 
   async getManagedChannels(orgId: string) {
-    return this.request<{ channels: Array<{ id: string; channel: string; botUsername: string | null; webhookPath: string; webhookRegistered: boolean; status: string; statusDetail: string | null; lastHealthCheck: string | null; createdAt: string }> }>(`/api/organizations/${orgId}/channels`);
+    return this.request<{
+      channels: Array<{
+        id: string;
+        channel: string;
+        botUsername: string | null;
+        webhookPath: string;
+        webhookRegistered: boolean;
+        status: string;
+        statusDetail: string | null;
+        lastHealthCheck: string | null;
+        createdAt: string;
+      }>;
+    }>(`/api/organizations/${orgId}/channels`);
   }
 
   async deleteChannel(orgId: string, channelId: string) {
@@ -335,7 +413,12 @@ export class SwitchboardClient {
     if (params?.days) searchParams.set("days", String(params.days));
     const qs = searchParams.toString();
     return this.request<{
-      trend: Array<{ date: string; promptTokens: number; completionTokens: number; totalTokens: number }>;
+      trend: Array<{
+        date: string;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      }>;
       orgId: string;
     }>(`/api/token-usage/trend${qs ? `?${qs}` : ""}`);
   }
@@ -352,7 +435,10 @@ export class SwitchboardClient {
     });
   }
 
-  async updateAlert(id: string, data: Partial<CreateAlertInput> & { enabled?: boolean; snoozedUntil?: string | null }) {
+  async updateAlert(
+    id: string,
+    data: Partial<CreateAlertInput> & { enabled?: boolean; snoozedUntil?: string | null },
+  ) {
     return this.request<{ rule: AlertRule }>(`/api/alerts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -360,7 +446,9 @@ export class SwitchboardClient {
   }
 
   async deleteAlert(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/alerts/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/alerts/${id}`, {
+      method: "DELETE",
+    });
   }
 
   async getAlertHistory(id: string) {
@@ -368,7 +456,14 @@ export class SwitchboardClient {
   }
 
   async testAlert(id: string) {
-    return this.request<{ evaluation: { triggered: boolean; metricValue: number; threshold: number; description: string } }>(`/api/alerts/${id}/test`, { method: "POST" });
+    return this.request<{
+      evaluation: {
+        triggered: boolean;
+        metricValue: number;
+        threshold: number;
+        description: string;
+      };
+    }>(`/api/alerts/${id}/test`, { method: "POST" });
   }
 
   async snoozeAlert(id: string, durationMinutes: number) {
@@ -390,7 +485,10 @@ export class SwitchboardClient {
     });
   }
 
-  async updateScheduledReport(id: string, data: Partial<CreateScheduledReportInput> & { enabled?: boolean }) {
+  async updateScheduledReport(
+    id: string,
+    data: Partial<CreateScheduledReportInput> & { enabled?: boolean },
+  ) {
     return this.request<{ report: ScheduledReportEntry }>(`/api/scheduled-reports/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -398,11 +496,15 @@ export class SwitchboardClient {
   }
 
   async deleteScheduledReport(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/scheduled-reports/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/scheduled-reports/${id}`, {
+      method: "DELETE",
+    });
   }
 
   async runScheduledReport(id: string) {
-    return this.request<{ success: boolean; data: unknown }>(`/api/scheduled-reports/${id}/run`, { method: "POST" });
+    return this.request<{ success: boolean; data: unknown }>(`/api/scheduled-reports/${id}/run`, {
+      method: "POST",
+    });
   }
 
   // DLQ
@@ -415,15 +517,21 @@ export class SwitchboardClient {
   }
 
   async getDlqStats() {
-    return this.request<{ stats: { pending: number; exhausted: number; resolved: number; total: number } }>("/api/dlq/stats");
+    return this.request<{
+      stats: { pending: number; exhausted: number; resolved: number; total: number };
+    }>("/api/dlq/stats");
   }
 
   async retryDlqMessage(id: string) {
-    return this.request<{ message: unknown; exhausted: boolean }>(`/api/dlq/messages/${id}/retry`, { method: "POST" });
+    return this.request<{ message: unknown; exhausted: boolean }>(`/api/dlq/messages/${id}/retry`, {
+      method: "POST",
+    });
   }
 
   async resolveDlqMessage(id: string) {
-    return this.request<{ message: unknown }>(`/api/dlq/messages/${id}/resolve`, { method: "POST" });
+    return this.request<{ message: unknown }>(`/api/dlq/messages/${id}/resolve`, {
+      method: "POST",
+    });
   }
 
   // Competence
@@ -451,7 +559,9 @@ export class SwitchboardClient {
   }
 
   async deleteCompetencePolicy(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/competence/policies/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/competence/policies/${id}`, {
+      method: "DELETE",
+    });
   }
 
   // Webhooks
@@ -467,7 +577,9 @@ export class SwitchboardClient {
   }
 
   async deleteWebhook(id: string) {
-    return this.request<{ id: string; deleted: boolean }>(`/api/webhooks/${id}`, { method: "DELETE" });
+    return this.request<{ id: string; deleted: boolean }>(`/api/webhooks/${id}`, {
+      method: "DELETE",
+    });
   }
 
   async testWebhook(id: string) {

@@ -35,11 +35,15 @@ export function verifySignature(
     // Try both raw hex and prefixed formats, using timing-safe comparison
     try {
       if (timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return true;
-    } catch { /* length mismatch */ }
+    } catch {
+      /* length mismatch */
+    }
     try {
       const prefixed = `sha256=${expected}`;
       if (timingSafeEqual(Buffer.from(prefixed), Buffer.from(signature))) return true;
-    } catch { /* length mismatch */ }
+    } catch {
+      /* length mismatch */
+    }
     return false;
   }
   // RSA-SHA256 and Ed25519 are not yet implemented — deny by default
@@ -126,13 +130,13 @@ export async function verifyChannelWebhook(
 
   // 3. Nonce dedup
   if (config.nonceTracking && messageId) {
-    if (!await checkNonce(messageId, config.maxTimestampDriftMs)) {
+    if (!(await checkNonce(messageId, config.maxTimestampDriftMs))) {
       return { allowed: false, reason: "Duplicate message" };
     }
   }
 
   // 4. Ingress rate limit
-  if (!await checkIngressRateLimit(sourceIp, config.ingressRateLimit)) {
+  if (!(await checkIngressRateLimit(sourceIp, config.ingressRateLimit))) {
     return { allowed: false, reason: "Rate limit exceeded" };
   }
 

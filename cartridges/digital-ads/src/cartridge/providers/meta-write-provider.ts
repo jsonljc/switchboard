@@ -5,12 +5,7 @@
 // ad set mutation support via the Meta Graph API.
 // ---------------------------------------------------------------------------
 
-import type {
-  CampaignInfo,
-  AdSetInfo,
-  ConnectionHealth,
-  MetaAdsWriteProvider,
-} from "../types.js";
+import type { CampaignInfo, AdSetInfo, ConnectionHealth, MetaAdsWriteProvider } from "../types.js";
 
 export interface MetaAdsWriteConfig {
   accessToken: string;
@@ -61,15 +56,13 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
           results.push(this.parseCampaign(item));
         }
       }
-      nextUrl = (data.paging as Record<string, unknown> | undefined)?.next as string ?? null;
+      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
     }
 
     return results;
   }
 
-  async pauseCampaign(
-    campaignId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async pauseCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     const current = await this.getCampaign(campaignId);
     const previousStatus = current.status;
 
@@ -83,9 +76,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async resumeCampaign(
-    campaignId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async resumeCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     const current = await this.getCampaign(campaignId);
     const previousStatus = current.status;
 
@@ -126,9 +117,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return this.parseAdSet(data);
   }
 
-  async pauseAdSet(
-    adSetId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async pauseAdSet(adSetId: string): Promise<{ success: boolean; previousStatus: string }> {
     const current = await this.getAdSet(adSetId);
     const previousStatus = current.status;
 
@@ -142,9 +131,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus };
   }
 
-  async resumeAdSet(
-    adSetId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async resumeAdSet(adSetId: string): Promise<{ success: boolean; previousStatus: string }> {
     const current = await this.getAdSet(adSetId);
     const previousStatus = current.status;
 
@@ -193,9 +180,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async healthCheck(): Promise<ConnectionHealth> {
     const start = Date.now();
     try {
-      await this.executeWithRetry(
-        `${this.baseUrl}/me?access_token=${this.accessToken}`,
-      );
+      await this.executeWithRetry(`${this.baseUrl}/me?access_token=${this.accessToken}`);
       return {
         status: "connected",
         latencyMs: Date.now() - start,
@@ -345,15 +330,11 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     ];
   }
 
-  async pauseCampaign(
-    _campaignId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async pauseCampaign(_campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     return { success: true, previousStatus: "ACTIVE" };
   }
 
-  async resumeCampaign(
-    _campaignId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async resumeCampaign(_campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     return { success: true, previousStatus: "PAUSED" };
   }
 
@@ -379,15 +360,11 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     };
   }
 
-  async pauseAdSet(
-    _adSetId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async pauseAdSet(_adSetId: string): Promise<{ success: boolean; previousStatus: string }> {
     return { success: true, previousStatus: "ACTIVE" };
   }
 
-  async resumeAdSet(
-    _adSetId: string,
-  ): Promise<{ success: boolean; previousStatus: string }> {
+  async resumeAdSet(_adSetId: string): Promise<{ success: boolean; previousStatus: string }> {
     return { success: true, previousStatus: "PAUSED" };
   }
 

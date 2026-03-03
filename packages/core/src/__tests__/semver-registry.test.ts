@@ -41,7 +41,11 @@ describe("compareSemver with pre-release (#19)", () => {
 
   it("should invoke onChange callback on register and unregister", () => {
     let changeCount = 0;
-    const registry = new InMemoryCartridgeRegistry({ onChange: () => { changeCount++; } });
+    const registry = new InMemoryCartridgeRegistry({
+      onChange: () => {
+        changeCount++;
+      },
+    });
 
     const cart = new TestCartridge(createTestManifest({ version: "1.0.0" }));
     registry.register("test", cart);

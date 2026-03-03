@@ -12,11 +12,20 @@ import {
   ExecutionService,
   CartridgeReadAdapter,
 } from "@switchboard/core";
-import { bootstrapDigitalAdsCartridge, DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
-import { bootstrapQuantTradingCartridge, DEFAULT_TRADING_POLICIES } from "@switchboard/quant-trading";
+import {
+  bootstrapDigitalAdsCartridge,
+  DEFAULT_DIGITAL_ADS_POLICIES,
+} from "@switchboard/digital-ads";
+import {
+  bootstrapQuantTradingCartridge,
+  DEFAULT_TRADING_POLICIES,
+} from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
-import { bootstrapPatientEngagementCartridge, DEFAULT_PATIENT_ENGAGEMENT_POLICIES } from "@switchboard/patient-engagement";
+import {
+  bootstrapPatientEngagementCartridge,
+  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
+} from "@switchboard/patient-engagement";
 import { SwitchboardMcpServer } from "./server.js";
 import { McpApiClient } from "./api-client.js";
 import { ApiReadAdapter } from "./adapters/api-read-adapter.js";
@@ -60,15 +69,19 @@ async function main() {
           approvalId?: string;
           approvalRequest?: unknown;
           deniedExplanation?: string;
-        }>("/api/execute", {
-          actorId: params.principalId,
-          organizationId: params.organizationId ?? null,
-          action: {
-            actionType: params.actionType,
-            parameters: params.parameters,
-            sideEffect: true,
+        }>(
+          "/api/execute",
+          {
+            actorId: params.principalId,
+            organizationId: params.organizationId ?? null,
+            action: {
+              actionType: params.actionType,
+              parameters: params.parameters,
+              sideEffect: true,
+            },
           },
-        }, client.idempotencyKey("mcp_exec"));
+          client.idempotencyKey("mcp_exec"),
+        );
 
         return {
           outcome: data.outcome,
@@ -116,7 +129,10 @@ async function main() {
     adAccountId: adsAccountId ?? "act_mock_dev_only",
     requireCredentials: process.env.NODE_ENV === "production",
   });
-  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
+  storage.cartridges.register(
+    "digital-ads",
+    new GuardedCartridge(adsCartridge as any, interceptors),
+  );
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Register quant-trading cartridge

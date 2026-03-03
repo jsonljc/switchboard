@@ -1,4 +1,8 @@
-import type { LifecycleOrchestrator, CartridgeReadAdapter, StorageContext } from "@switchboard/core";
+import type {
+  LifecycleOrchestrator,
+  CartridgeReadAdapter,
+  StorageContext,
+} from "@switchboard/core";
 import { inferCartridgeId } from "@switchboard/core";
 import {
   GetCampaignInputSchema,
@@ -150,14 +154,9 @@ export async function handleReadTool(
 
     case "simulate_action": {
       const parsed = SimulateActionInputSchema.parse(args);
-      const cartridgeId = inferCartridgeId(
-        parsed.actionType,
-        deps.storage.cartridges,
-      );
+      const cartridgeId = inferCartridgeId(parsed.actionType, deps.storage.cartridges);
       if (!cartridgeId) {
-        throw new Error(
-          `Cannot infer cartridgeId from actionType: ${parsed.actionType}`,
-        );
+        throw new Error(`Cannot infer cartridgeId from actionType: ${parsed.actionType}`);
       }
       const result = await deps.orchestrator.simulate({
         actionType: parsed.actionType,
@@ -197,9 +196,7 @@ export async function handleReadTool(
 
     case "list_pending_approvals": {
       const parsed = ListPendingApprovalsInputSchema.parse(args);
-      const pending = await deps.storage.approvals.listPending(
-        auth.organizationId ?? undefined,
-      );
+      const pending = await deps.storage.approvals.listPending(auth.organizationId ?? undefined);
       const limited = pending.slice(0, parsed.limit ?? 20);
       return {
         approvals: limited.map((a) => ({

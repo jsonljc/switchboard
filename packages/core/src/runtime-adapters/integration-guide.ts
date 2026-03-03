@@ -36,7 +36,11 @@ export function generateIntegrationGuide(params: IntegrationGuideParams): Integr
   }
 }
 
-function generateOpenClawGuide(apiBaseUrl: string, apiKey: string, organizationId: string): IntegrationGuide {
+function generateOpenClawGuide(
+  apiBaseUrl: string,
+  apiKey: string,
+  organizationId: string,
+): IntegrationGuide {
   return {
     runtimeType: "openclaw",
     title: "OpenClaw Integration",
@@ -44,95 +48,126 @@ function generateOpenClawGuide(apiBaseUrl: string, apiKey: string, organizationI
     steps: [
       {
         title: "Add the Switchboard MCP server to your openclaw.json",
-        description: "Add the following to your openclaw.json configuration to enable the switchboard_execute tool.",
+        description:
+          "Add the following to your openclaw.json configuration to enable the switchboard_execute tool.",
         language: "json",
-        code: JSON.stringify({
-          mcpServers: {
-            switchboard: {
-              command: "npx",
-              args: ["-y", "@switchboard/mcp-server"],
-              env: {
-                SWITCHBOARD_API_URL: apiBaseUrl,
-                SWITCHBOARD_API_KEY: apiKey,
-                SWITCHBOARD_ORG_ID: organizationId,
+        code: JSON.stringify(
+          {
+            mcpServers: {
+              switchboard: {
+                command: "npx",
+                args: ["-y", "@switchboard/mcp-server"],
+                env: {
+                  SWITCHBOARD_API_URL: apiBaseUrl,
+                  SWITCHBOARD_API_KEY: apiKey,
+                  SWITCHBOARD_ORG_ID: organizationId,
+                },
               },
             },
           },
-        }, null, 2),
+          null,
+          2,
+        ),
       },
       {
         title: "Use the switchboard_execute tool",
-        description: "Your agent can now call switchboard_execute to propose governed actions. The tool will return EXECUTED, PENDING_APPROVAL, or DENIED.",
+        description:
+          "Your agent can now call switchboard_execute to propose governed actions. The tool will return EXECUTED, PENDING_APPROVAL, or DENIED.",
         language: "json",
-        code: JSON.stringify({
-          tool: "switchboard_execute",
-          arguments: {
-            action_type: "your_cartridge.action_name",
-            parameters: { key: "value" },
-            actor_id: "agent-principal-id",
-            organization_id: organizationId,
+        code: JSON.stringify(
+          {
+            tool: "switchboard_execute",
+            arguments: {
+              action_type: "your_cartridge.action_name",
+              parameters: { key: "value" },
+              actor_id: "agent-principal-id",
+              organization_id: organizationId,
+            },
           },
-        }, null, 2),
+          null,
+          2,
+        ),
       },
       {
         title: "Handle approval responses",
-        description: "When an action requires approval, you'll receive an approval_id. Poll or subscribe for the approval outcome.",
+        description:
+          "When an action requires approval, you'll receive an approval_id. Poll or subscribe for the approval outcome.",
       },
     ],
   };
 }
 
-function generateMcpGuide(apiBaseUrl: string, apiKey: string, organizationId: string): IntegrationGuide {
+function generateMcpGuide(
+  apiBaseUrl: string,
+  apiKey: string,
+  organizationId: string,
+): IntegrationGuide {
   return {
     runtimeType: "mcp",
     title: "MCP Server Integration",
-    description: "Add Switchboard as an MCP server to Claude Desktop, Cursor, or any MCP-compatible client.",
+    description:
+      "Add Switchboard as an MCP server to Claude Desktop, Cursor, or any MCP-compatible client.",
     steps: [
       {
         title: "Claude Desktop configuration",
-        description: "Add this to your Claude Desktop MCP settings (~/Library/Application Support/Claude/claude_desktop_config.json).",
+        description:
+          "Add this to your Claude Desktop MCP settings (~/Library/Application Support/Claude/claude_desktop_config.json).",
         language: "json",
-        code: JSON.stringify({
-          mcpServers: {
-            switchboard: {
-              command: "npx",
-              args: ["-y", "@switchboard/mcp-server"],
-              env: {
-                SWITCHBOARD_API_URL: apiBaseUrl,
-                SWITCHBOARD_API_KEY: apiKey,
-                SWITCHBOARD_ORG_ID: organizationId,
+        code: JSON.stringify(
+          {
+            mcpServers: {
+              switchboard: {
+                command: "npx",
+                args: ["-y", "@switchboard/mcp-server"],
+                env: {
+                  SWITCHBOARD_API_URL: apiBaseUrl,
+                  SWITCHBOARD_API_KEY: apiKey,
+                  SWITCHBOARD_ORG_ID: organizationId,
+                },
               },
             },
           },
-        }, null, 2),
+          null,
+          2,
+        ),
       },
       {
         title: "Cursor configuration",
-        description: "Add this to your Cursor MCP settings (.cursor/mcp.json in your project root).",
+        description:
+          "Add this to your Cursor MCP settings (.cursor/mcp.json in your project root).",
         language: "json",
-        code: JSON.stringify({
-          mcpServers: {
-            switchboard: {
-              command: "npx",
-              args: ["-y", "@switchboard/mcp-server"],
-              env: {
-                SWITCHBOARD_API_URL: apiBaseUrl,
-                SWITCHBOARD_API_KEY: apiKey,
-                SWITCHBOARD_ORG_ID: organizationId,
+        code: JSON.stringify(
+          {
+            mcpServers: {
+              switchboard: {
+                command: "npx",
+                args: ["-y", "@switchboard/mcp-server"],
+                env: {
+                  SWITCHBOARD_API_URL: apiBaseUrl,
+                  SWITCHBOARD_API_KEY: apiKey,
+                  SWITCHBOARD_ORG_ID: organizationId,
+                },
               },
             },
           },
-        }, null, 2),
+          null,
+          2,
+        ),
       },
       {
         title: "Available tools",
-        description: "Once connected, your AI assistant will have access to 15 governed tools including execute actions, manage approvals, query audit logs, and more.",
+        description:
+          "Once connected, your AI assistant will have access to 15 governed tools including execute actions, manage approvals, query audit logs, and more.",
       },
     ],
   };
 }
 
-function generateHttpGuide(apiBaseUrl: string, apiKey: string, organizationId: string): IntegrationGuide {
+function generateHttpGuide(
+  apiBaseUrl: string,
+  apiKey: string,
+  organizationId: string,
+): IntegrationGuide {
   return {
     runtimeType: "http",
     title: "HTTP API Integration",
@@ -183,7 +218,8 @@ const result = await response.json();
       },
       {
         title: "Check approval status",
-        description: "When an action returns PENDING_APPROVAL, use the approval endpoint to check or respond.",
+        description:
+          "When an action returns PENDING_APPROVAL, use the approval endpoint to check or respond.",
         language: "bash",
         code: `curl ${apiBaseUrl}/api/approvals/pending \\
   -H "Authorization: Bearer ${apiKey}"`,

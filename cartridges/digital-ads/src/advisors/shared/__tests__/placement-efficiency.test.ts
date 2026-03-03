@@ -56,9 +56,9 @@ describe("placementEfficiencyAdvisor", () => {
 
   it("flags placement with CPA > 2x average and >10% spend share", () => {
     const placements = [
-      makePlacement({ placement: "feed", spend: 500, conversions: 50 }),      // CPA $10
+      makePlacement({ placement: "feed", spend: 500, conversions: 50 }), // CPA $10
       makePlacement({ placement: "audience_network", spend: 200, conversions: 2 }), // CPA $100 (10x)
-      makePlacement({ placement: "stories", spend: 300, conversions: 30 }),    // CPA $10
+      makePlacement({ placement: "stories", spend: 300, conversions: 30 }), // CPA $10
     ];
     const context: DiagnosticContext = { placementBreakdowns: placements };
     const findings = placementEfficiencyAdvisor([], [], snapshot, snapshot, context);
@@ -76,9 +76,7 @@ describe("placementEfficiencyAdvisor", () => {
     const findings = placementEfficiencyAdvisor([], [], snapshot, snapshot, context);
 
     expect(findings.length).toBeGreaterThanOrEqual(1);
-    const zeroConversion = findings.find((f) =>
-      f.message.includes("zero conversions")
-    );
+    const zeroConversion = findings.find((f) => f.message.includes("zero conversions"));
     expect(zeroConversion).toBeDefined();
   });
 

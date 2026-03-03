@@ -36,10 +36,7 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
       const rules = await (prisma as any).alertRule.findMany({
         where: {
           enabled: true,
-          OR: [
-            { snoozedUntil: null },
-            { snoozedUntil: { lt: now } },
-          ],
+          OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }],
         },
       });
 
@@ -61,9 +58,13 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
         telegram: process.env["TELEGRAM_BOT_TOKEN"]
           ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
           : undefined,
-        whatsapp: process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
-          ? { token: process.env["WHATSAPP_TOKEN"], phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"] }
-          : undefined,
+        whatsapp:
+          process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+            ? {
+                token: process.env["WHATSAPP_TOKEN"],
+                phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+              }
+            : undefined,
       };
 
       for (const [orgId, orgRules] of byOrg) {
@@ -81,11 +82,15 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
           const platform = orgRules[0]?.platform ?? "meta";
           const vertical = orgRules[0]?.vertical ?? "commerce";
 
-          const execResult = await cartridge.execute("digital-ads.funnel.diagnose", {
-            platform,
-            vertical,
-            entityId: "act_default",
-          }, { principalId: "system", organizationId: orgId, connectionCredentials: {} });
+          const execResult = await cartridge.execute(
+            "digital-ads.funnel.diagnose",
+            {
+              platform,
+              vertical,
+              entityId: "act_default",
+            },
+            { principalId: "system", organizationId: orgId, connectionCredentials: {} },
+          );
 
           if (!execResult?.data) {
             logger.warn({ orgId }, "No diagnostic data returned for org");
@@ -96,7 +101,13 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
           for (const rule of orgRules) {
             if (stopped) break;
             try {
-              await handleTriggeredAlert(rule, execResult.data as Record<string, unknown>, prisma, channelCredentials, logger as any);
+              await handleTriggeredAlert(
+                rule,
+                execResult.data as Record<string, unknown>,
+                prisma,
+                channelCredentials,
+                logger as any,
+              );
             } catch (err) {
               logger.error({ err, alertRuleId: rule.id } as any, "Failed to handle alert rule");
             }
@@ -106,7 +117,10 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
         }
       }
 
-      logger.info({ orgsScanned: byOrg.size, rulesEvaluated: rules.length }, "Diagnostic scan complete");
+      logger.info(
+        { orgsScanned: byOrg.size, rulesEvaluated: rules.length },
+        "Diagnostic scan complete",
+      );
     } catch (err) {
       logger.error({ err } as any, "Error in diagnostic scanner");
     }

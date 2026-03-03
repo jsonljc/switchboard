@@ -31,7 +31,7 @@ export const creativeExhaustionAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.historicalSnapshots || context.historicalSnapshots.length < 3) {
     return [];
@@ -81,22 +81,20 @@ export const creativeExhaustionAdvisor: FindingAdvisor = (
   if (consecutiveDeclines >= 3) {
     // Check if decline is accelerating
     const isAccelerating =
-      declineRates.length >= 2 &&
-      Math.abs(declineRates[0]!) > Math.abs(declineRates[1]!);
+      declineRates.length >= 2 && Math.abs(declineRates[0]!) > Math.abs(declineRates[1]!);
 
     const severity = isAccelerating ? "critical" : "warning";
     const avgDecline = totalDeclinePercent / consecutiveDeclines;
 
     const oldestCTR = ctrTimeline[consecutiveDeclines]!;
     const cumulativeDecline =
-      oldestCTR > 0
-        ? (((currentCTR - oldestCTR) / oldestCTR) * 100).toFixed(1)
-        : "N/A";
+      oldestCTR > 0 ? (((currentCTR - oldestCTR) / oldestCTR) * 100).toFixed(1) : "N/A";
 
     findings.push({
       severity,
       stage: "click",
-      message: `Creative exhaustion detected: CTR has declined for ${consecutiveDeclines} consecutive periods (avg ${avgDecline.toFixed(1)}%/period, cumulative ${cumulativeDecline}%). ${isAccelerating ? "The decline is accelerating." : ""}`.trim(),
+      message:
+        `Creative exhaustion detected: CTR has declined for ${consecutiveDeclines} consecutive periods (avg ${avgDecline.toFixed(1)}%/period, cumulative ${cumulativeDecline}%). ${isAccelerating ? "The decline is accelerating." : ""}`.trim(),
       recommendation: isAccelerating
         ? "Creative refresh is urgent — the decline is accelerating. Prepare new creative variations immediately and consider pausing the worst-performing ads to stop audience fatigue from worsening."
         : "Creative is showing sustained fatigue. Begin testing new creative angles, formats, or hooks. Rotate in fresh variations over the next 1-2 weeks to prevent further erosion.",

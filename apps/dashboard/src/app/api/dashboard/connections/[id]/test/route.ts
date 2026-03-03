@@ -9,6 +9,9 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     const data = await client.testConnection(params.id);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: err.message === "Unauthorized" ? 401 : 500 });
+    return NextResponse.json(
+      { error: err.message },
+      { status: err.message === "Unauthorized" ? 401 : 500 },
+    );
   }
 }

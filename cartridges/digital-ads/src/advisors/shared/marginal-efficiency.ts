@@ -26,7 +26,7 @@ export const marginalEfficiencyAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   current: MetricSnapshot,
   previous: MetricSnapshot,
-  _context?: DiagnosticContext
+  _context?: DiagnosticContext,
 ): Finding[] => {
   const findings: Finding[] = [];
 
@@ -114,10 +114,5 @@ function extractConversions(snapshot: MetricSnapshot): number {
   }
 
   // Fallback to topLevel fields
-  return (
-    tl.conversions ??
-    tl.complete_payment ??
-    tl.conversion ??
-    0
-  );
+  return tl.conversions ?? tl.complete_payment ?? tl.conversion ?? 0;
 }

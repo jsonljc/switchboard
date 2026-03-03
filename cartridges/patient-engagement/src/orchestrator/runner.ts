@@ -2,7 +2,12 @@
 // Multi-stage Diagnostic Runner
 // ---------------------------------------------------------------------------
 
-import type { JourneyDiagnosticResult, PatientMetricsSnapshot, ComparisonPeriods, ClinicType } from "../core/types.js";
+import type {
+  JourneyDiagnosticResult,
+  PatientMetricsSnapshot,
+  ComparisonPeriods,
+  ClinicType,
+} from "../core/types.js";
 import { PATIENT_JOURNEY_SCHEMA } from "../core/types.js";
 import { analyzeJourney } from "../core/analysis/journey-walker.js";
 import { resolveAdvisors } from "../advisors/registry.js";

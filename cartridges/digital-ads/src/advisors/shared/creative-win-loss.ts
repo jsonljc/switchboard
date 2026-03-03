@@ -47,7 +47,7 @@ export const creativeWinLossAdvisor: FindingAdvisor = (
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
   _previous: MetricSnapshot,
-  context?: DiagnosticContext
+  context?: DiagnosticContext,
 ): Finding[] => {
   if (!context?.adBreakdowns || context.adBreakdowns.length === 0) {
     return [];
@@ -136,7 +136,7 @@ export const creativeWinLossAdvisor: FindingAdvisor = (
       .map((l) =>
         l.cpa === Infinity
           ? `${l.ad.adId} ($${l.ad.spend.toFixed(2)} spend, 0 conversions)`
-          : `${l.ad.adId} (CPA $${l.cpa.toFixed(2)}, ${(l.spendShare * 100).toFixed(0)}% of ad set spend)`
+          : `${l.ad.adId} (CPA $${l.cpa.toFixed(2)}, ${(l.spendShare * 100).toFixed(0)}% of ad set spend)`,
       )
       .join("; ");
 
@@ -155,7 +155,7 @@ export const creativeWinLossAdvisor: FindingAdvisor = (
       .slice(0, 3)
       .map(
         (w) =>
-          `${w.ad.adId} (CPA $${w.cpa.toFixed(2)}, ${(w.spendShare * 100).toFixed(0)}% spend share)`
+          `${w.ad.adId} (CPA $${w.cpa.toFixed(2)}, ${(w.spendShare * 100).toFixed(0)}% spend share)`,
       )
       .join("; ");
 

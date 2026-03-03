@@ -28,9 +28,7 @@ export class TelegramApprovalNotifier implements ApprovalNotifier {
 
   private formatMessage(n: ApprovalNotification): string {
     const riskEmoji = this.riskEmoji(n.riskCategory);
-    const expiresIn = Math.round(
-      (n.expiresAt.getTime() - Date.now()) / 60000,
-    );
+    const expiresIn = Math.round((n.expiresAt.getTime() - Date.now()) / 60000);
 
     return (
       `${riskEmoji} *Approval Required*\n\n` +
@@ -42,7 +40,9 @@ export class TelegramApprovalNotifier implements ApprovalNotifier {
     );
   }
 
-  private buildButtons(n: ApprovalNotification): Array<Array<{ text: string; callback_data: string }>> {
+  private buildButtons(
+    n: ApprovalNotification,
+  ): Array<Array<{ text: string; callback_data: string }>> {
     return [
       [
         {
@@ -66,11 +66,16 @@ export class TelegramApprovalNotifier implements ApprovalNotifier {
 
   private riskEmoji(category: string): string {
     switch (category) {
-      case "critical": return "\u{1F6A8}";
-      case "high": return "\u{1F534}";
-      case "medium": return "\u{1F7E1}";
-      case "low": return "\u{1F7E2}";
-      default: return "\u{2139}\u{FE0F}";
+      case "critical":
+        return "\u{1F6A8}";
+      case "high":
+        return "\u{1F534}";
+      case "medium":
+        return "\u{1F7E1}";
+      case "low":
+        return "\u{1F7E2}";
+      default:
+        return "\u{2139}\u{FE0F}";
     }
   }
 

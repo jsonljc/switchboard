@@ -18,14 +18,12 @@ export const leadQualityAdvisor: FindingAdvisor = (
   stageAnalysis: StageDiagnostic[],
   _dropoffs: FunnelDropoff[],
   _current: MetricSnapshot,
-  _previous: MetricSnapshot
+  _previous: MetricSnapshot,
 ): Finding[] => {
   const findings: Finding[] = [];
 
   const leadStage = stageAnalysis.find((s) => s.stageName === "lead");
-  const qualifiedStage = stageAnalysis.find(
-    (s) => s.stageName === "qualified_lead"
-  );
+  const qualifiedStage = stageAnalysis.find((s) => s.stageName === "qualified_lead");
 
   if (!leadStage || !qualifiedStage) return findings;
 
@@ -39,13 +37,9 @@ export const leadQualityAdvisor: FindingAdvisor = (
 
   // Quality ratio: qualified / total leads
   const currentQualRate =
-    leadStage.currentValue > 0
-      ? qualifiedStage.currentValue / leadStage.currentValue
-      : 0;
+    leadStage.currentValue > 0 ? qualifiedStage.currentValue / leadStage.currentValue : 0;
   const previousQualRate =
-    leadStage.previousValue > 0
-      ? qualifiedStage.previousValue / leadStage.previousValue
-      : 0;
+    leadStage.previousValue > 0 ? qualifiedStage.previousValue / leadStage.previousValue : 0;
   const qualRateChange = percentChange(currentQualRate, previousQualRate);
 
   // Pattern 1: Volume up + quality down = junk leads

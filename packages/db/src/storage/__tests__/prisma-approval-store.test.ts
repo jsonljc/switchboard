@@ -22,7 +22,7 @@ const TEST_REQUEST = {
   summary: "Create ad campaign",
   requiredApprovers: ["user_1"],
   quorum: null,
-};
+} as any;
 
 const TEST_STATE = {
   status: "pending" as const,
@@ -158,7 +158,7 @@ describe("PrismaApprovalStore", () => {
 
       const result = await store.listPending();
       expect(result).toHaveLength(1);
-      expect(result[0].request.id).toBe("apr_1");
+      expect(result[0]!.request.id).toBe("apr_1");
       expect(prisma.approvalRecord.findMany).toHaveBeenCalledWith({
         where: { status: "pending" },
       });

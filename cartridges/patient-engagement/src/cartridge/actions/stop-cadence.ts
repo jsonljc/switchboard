@@ -4,9 +4,7 @@
 
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
-export async function executeStopCadence(
-  params: Record<string, unknown>,
-): Promise<ExecuteResult> {
+export async function executeStopCadence(params: Record<string, unknown>): Promise<ExecuteResult> {
   const start = Date.now();
   const cadenceInstanceId = params.cadenceInstanceId as string;
   const reason = (params.reason as string) ?? "manual";
