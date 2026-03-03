@@ -1,0 +1,13 @@
+# Default owner
+* @jsonljc
+
+# Sensitive packages — require explicit review
+cartridges/payments/ @jsonljc
+cartridges/patient-engagement/ @jsonljc
+packages/core/ @jsonljc
+packages/db/ @jsonljc
+
+# CI and security config
+.github/ @jsonljc
+.eslintrc.json @jsonljc
+vitest.config.ts @jsonljc

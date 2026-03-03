@@ -197,7 +197,15 @@ export async function smbPropose(
 
   const isObserveMode = orgConfig.governanceProfile === "observe";
 
-  if (isObserveMode) {
+  // Emergency override — allows org owner to bypass approval
+  if (params.emergencyOverride) {
+    if (params.principalId === orgConfig.ownerId) {
+      envelope.status = "approved";
+      governanceNote = "Emergency override approved for org owner";
+    } else {
+      throw new Error("Emergency override requires org owner principal");
+    }
+  } else if (isObserveMode) {
     envelope.status = "approved";
     governanceNote =
       "Auto-approved (observe mode): SMB governance evaluation ran but approval requirement was bypassed.";
@@ -215,6 +223,7 @@ export async function smbPropose(
       decisionTrace,
       orgConfig,
       contextSnapshot: enrichedParams as Record<string, unknown>,
+      proposal,
     });
 
     envelope.approvalRequests = [approvalRequest];

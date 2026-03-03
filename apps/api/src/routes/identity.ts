@@ -170,6 +170,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
         ...parsed.data,
       };
 
+      // Check org access via the parent identity spec
+      const parentSpec = await app.storageContext.identity.getSpecById(parsed.data.identitySpecId);
+      if (parentSpec && !assertOrgAccess(request, parentSpec.organizationId, reply)) return;
+
       await app.storageContext.identity.saveOverlay(overlay);
       return reply.code(201).send({ overlay });
     },
@@ -194,6 +198,11 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       if (!query.specId) {
         return reply.code(400).send({ error: "specId query parameter required" });
       }
+
+      // Check org access via the parent identity spec
+      const parentSpec = await app.storageContext.identity.getSpecById(query.specId);
+      if (parentSpec && !assertOrgAccess(request, parentSpec.organizationId, reply)) return;
+
       const overlays = await app.storageContext.identity.listOverlaysBySpecId(query.specId);
       return reply.code(200).send({ overlays });
     },

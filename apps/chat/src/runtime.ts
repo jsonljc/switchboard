@@ -265,35 +265,15 @@ export class ChatRuntime {
         });
 
         if (plan && plan.steps.length > 0) {
-          const orch = this.orchestrator as unknown as {
-            executePlan?: (
-              plan: unknown,
-              context: { principalId: string; organizationId?: string },
-            ) => Promise<{
-              overallOutcome: string;
-              stepResults: Array<{ stepIndex: number; outcome: string }>;
-            }>;
-          };
-          if (orch.executePlan) {
-            const planResult = await orch.executePlan(plan, {
-              principalId: message.principalId,
-              organizationId: message.organizationId ?? undefined,
-            });
-
-            const summaryParts = planResult.stepResults.map(
-              (sr: { stepIndex: number; outcome: string }) => {
-                const outcomeLabel = sr.outcome === "executed" ? "Done" : sr.outcome;
-                return `Step ${sr.stepIndex + 1}: ${outcomeLabel}`;
-              },
-            );
-            const summaryText = `Plan "${plan.summary}" — ${planResult.overallOutcome}\n${summaryParts.join("\n")}`;
-            await this.adapter.sendTextReply(threadId, summaryText);
-            await this.recordAssistantMessage(threadId, summaryText);
-            return;
-          }
+          // Multi-step plan execution is not yet supported — executePlan is not
+          // implemented on the orchestrator. Log and fall through to single-action proposal.
+          console.warn(
+            "[ChatRuntime] Multi-step plan produced but executePlan not available; falling through to single-action.",
+          );
+          // Continue with single-action proposal below
         }
       } catch (err) {
-        console.warn("[Runtime] Plan execution failed, falling through to proposal flow:", err);
+        console.warn("[Runtime] Plan building failed, falling through to proposal flow:", err);
         // Fall through to single-proposal flow
       }
     }

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 export const dlqRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/dlq/messages?status=pending&limit=50
@@ -28,7 +29,12 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const messages = await app.prisma.failedMessage.findMany({
-        where: { status },
+        where: {
+          status,
+          ...(request.organizationIdFromAuth
+            ? { organizationId: request.organizationIdFromAuth }
+            : {}),
+        },
         orderBy: { createdAt: "desc" },
         take: limit,
       });
@@ -46,15 +52,19 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
         tags: ["DLQ"],
       },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
+      const orgFilter = request.organizationIdFromAuth
+        ? { organizationId: request.organizationIdFromAuth }
+        : {};
+
       const [pending, exhausted, resolved] = await Promise.all([
-        app.prisma.failedMessage.count({ where: { status: "pending" } }),
-        app.prisma.failedMessage.count({ where: { status: "exhausted" } }),
-        app.prisma.failedMessage.count({ where: { status: "resolved" } }),
+        app.prisma.failedMessage.count({ where: { status: "pending", ...orgFilter } }),
+        app.prisma.failedMessage.count({ where: { status: "exhausted", ...orgFilter } }),
+        app.prisma.failedMessage.count({ where: { status: "resolved", ...orgFilter } }),
       ]);
 
       return reply.code(200).send({
@@ -83,6 +93,8 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
       if (!existing) {
         return reply.code(404).send({ error: "Failed message not found", statusCode: 404 });
       }
+
+      if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
       if (existing.status === "resolved") {
         return reply.code(200).send({ message: existing });
@@ -120,6 +132,8 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Failed message not found", statusCode: 404 });
       }
 
+      if (!assertOrgAccess(request, existing.organizationId, reply)) return;
+
       if (existing.status !== "pending") {
         return reply.code(409).send({
           error: `Cannot retry message with status '${existing.status}'`,
@@ -153,14 +167,18 @@ export const dlqRoutes: FastifyPluginAsync = async (app) => {
         tags: ["DLQ"],
       },
     },
-    async (_request, reply) => {
+    async (request, reply) => {
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
+      const orgFilter = request.organizationIdFromAuth
+        ? { organizationId: request.organizationIdFromAuth }
+        : {};
+
       // Find pending messages where retryCount >= maxRetries
       const overdue = await app.prisma.failedMessage.findMany({
-        where: { status: "pending" },
+        where: { status: "pending", ...orgFilter },
         select: { id: true, retryCount: true, maxRetries: true },
       });
 

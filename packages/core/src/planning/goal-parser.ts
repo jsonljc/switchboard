@@ -1,3 +1,6 @@
+// NOTE: @experimental — Unused in production. ClinicInterpreter.intentToGoalBrief() handles goal parsing.
+// Preserved for potential future use as an alternative parsing strategy.
+
 import { randomUUID } from "node:crypto";
 import type { GoalBrief, GoalType } from "@switchboard/schemas";
 

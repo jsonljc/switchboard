@@ -115,6 +115,17 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      const envelope = await app.storageContext.envelopes.getById(id);
+      if (!envelope) {
+        return reply.code(404).send({ error: "Envelope not found" });
+      }
+
+      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
+        | string
+        | null
+        | undefined;
+      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
+
       try {
         const result = await app.orchestrator.executeApproved(id);
         return reply.code(200).send({ result });
@@ -139,6 +150,17 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+
+      const envelope = await app.storageContext.envelopes.getById(id);
+      if (!envelope) {
+        return reply.code(404).send({ error: "Envelope not found" });
+      }
+
+      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
+        | string
+        | null
+        | undefined;
+      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
 
       try {
         const result = await app.orchestrator.requestUndo(id);

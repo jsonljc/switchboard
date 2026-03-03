@@ -284,4 +284,97 @@ describe("Governance API", () => {
       expect(res.json().reason).toBeNull();
     });
   });
+
+  // ── Cross-org access control ─────────────────────────────────────
+
+  describe("Cross-org access control", () => {
+    let scopedApp: FastifyInstance;
+
+    beforeEach(async () => {
+      scopedApp = Fastify({ logger: false });
+
+      const scopedMockGovernanceProfileStore = {
+        get: vi.fn().mockResolvedValue("guarded"),
+        set: vi.fn(),
+        getConfig: vi.fn().mockResolvedValue(null),
+        setConfig: vi.fn(),
+      };
+
+      const scopedMockCartridges = { get: vi.fn() };
+      const scopedMockOrchestrator = { propose: vi.fn(), executeApproved: vi.fn() };
+
+      scopedApp.decorate("governanceProfileStore", scopedMockGovernanceProfileStore);
+      scopedApp.decorate("storageContext", { cartridges: scopedMockCartridges } as any);
+      scopedApp.decorate("orchestrator", scopedMockOrchestrator as any);
+
+      scopedApp.decorateRequest("organizationIdFromAuth", undefined);
+      scopedApp.decorateRequest("principalIdFromAuth", undefined);
+      scopedApp.addHook("onRequest", async (request) => {
+        request.organizationIdFromAuth = "org_A";
+      });
+
+      await scopedApp.register(governanceRoutes, { prefix: "/api/governance" });
+    });
+
+    afterEach(async () => {
+      await scopedApp.close();
+    });
+
+    it("GET status returns 403 for cross-org read", async () => {
+      const res = await scopedApp.inject({
+        method: "GET",
+        url: "/api/governance/org_B/status",
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("organization mismatch");
+    });
+
+    it("PUT profile returns 403 for cross-org write", async () => {
+      const res = await scopedApp.inject({
+        method: "PUT",
+        url: "/api/governance/org_B/profile",
+        payload: { profile: "observe" },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("organization mismatch");
+    });
+
+    it("emergency-halt returns 403 for cross-org request", async () => {
+      const res = await scopedApp.inject({
+        method: "POST",
+        url: "/api/governance/emergency-halt",
+        payload: { organizationId: "org_B", reason: "test" },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toContain("organization mismatch");
+    });
+
+    it("emergency-halt returns 400 when no orgId can be resolved", async () => {
+      // Create app with no org auth and no body orgId
+      const noOrgApp = Fastify({ logger: false });
+      const noOrgStore = {
+        get: vi.fn(),
+        set: vi.fn(),
+        getConfig: vi.fn(),
+        setConfig: vi.fn(),
+      };
+
+      noOrgApp.decorate("governanceProfileStore", noOrgStore);
+      noOrgApp.decorate("storageContext", { cartridges: { get: vi.fn() } } as any);
+      noOrgApp.decorate("orchestrator", { propose: vi.fn(), executeApproved: vi.fn() } as any);
+      noOrgApp.decorateRequest("organizationIdFromAuth", undefined);
+      noOrgApp.decorateRequest("principalIdFromAuth", undefined);
+      await noOrgApp.register(governanceRoutes, { prefix: "/api/governance" });
+
+      const res = await noOrgApp.inject({
+        method: "POST",
+        url: "/api/governance/emergency-halt",
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("organizationId is required");
+
+      await noOrgApp.close();
+    });
+  });
 });

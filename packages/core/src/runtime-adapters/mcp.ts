@@ -35,7 +35,11 @@ export interface McpToolResponse {
   governanceNote?: string;
 }
 
-/** Maps an MCP tool name to the corresponding actionType. */
+/**
+ * Maps an MCP tool name to the corresponding actionType.
+ * Currently only digital-ads tools are mapped. Other cartridges (CRM, payments)
+ * use auto-registration in the MCP server app rather than this static mapping.
+ */
 const TOOL_TO_ACTION: Record<string, string> = {
   pause_campaign: "digital-ads.campaign.pause",
   resume_campaign: "digital-ads.campaign.resume",
@@ -49,7 +53,11 @@ const TOOL_TO_ACTION: Record<string, string> = {
 export function mcpToolCallToExecuteRequest(payload: McpToolCallPayload): RuntimeExecuteRequest {
   const actionType = TOOL_TO_ACTION[payload.toolName];
   if (!actionType) {
-    throw new Error(`Unknown MCP side-effect tool: ${payload.toolName}`);
+    throw new Error(
+      `Tool '${payload.toolName}' is not mapped in the core MCP adapter. ` +
+        `Use the MCP server's auto-registration or the API directly. ` +
+        `Mapped tools: ${Object.keys(TOOL_TO_ACTION).join(", ")}`,
+    );
   }
 
   const action: ExecuteAction = {

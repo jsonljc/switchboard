@@ -31,6 +31,17 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      // Campaign data is fetched via external APIs using cartridge boot-time credentials.
+      // TODO: Per-org credential scoping needed — currently campaigns are scoped by whichever
+      // credentials the cartridge was initialized with, not by the requester's org.
+      if (!request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: API key must be scoped to an organization",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
+
       const cartridge = app.storageContext.cartridges.get("digital-ads");
       if (!cartridge) {
         return reply
@@ -68,6 +79,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const query = request.query as { query?: string; limit?: string };
+
+      // TODO: Per-org credential scoping needed — see GET /:id comment
+      if (!request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: API key must be scoped to an organization",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
 
       if (!query.query) {
         return reply.code(400).send({ error: "query parameter is required", statusCode: 400 });

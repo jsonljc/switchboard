@@ -256,13 +256,13 @@ describe("Actions API", () => {
       expect(body.envelope.parentEnvelopeId).toBe(envelopeId);
     });
 
-    it("should return 400 for non-existent envelope", async () => {
+    it("should return 404 for non-existent envelope", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/non-existent-id/undo",
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(404);
     });
   });
 

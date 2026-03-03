@@ -1,3 +1,6 @@
+// NOTE: @experimental — Unused in production. Wire into LLMInterpreter.callLLM() to enable response caching.
+// Preserved for potential future use as an LLM response deduplication layer.
+
 import { createHash } from "node:crypto";
 
 /**
