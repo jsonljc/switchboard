@@ -21,6 +21,7 @@ import {
   SkinLoader,
   SkinResolver,
   ToolRegistry,
+  InMemoryGovernanceProfileStore,
 } from "@switchboard/core";
 import type { ResolvedSkin } from "@switchboard/core";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
@@ -98,6 +99,8 @@ export async function createChatRuntime(
     skinIdEnv = "clinic";
   }
 
+  let resolvedSkin: ResolvedSkin | null = null;
+
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
     let ledgerStorage: LedgerStorage;
@@ -122,7 +125,6 @@ export async function createChatRuntime(
     await registerAllCartridges(storage);
 
     // --- Skin loading (optional, controlled by SKIN_ID env var) ---
-    let _resolvedSkin: ResolvedSkin | null = null;
     if (skinIdEnv) {
       const skinsDir = new URL("../../../skins", import.meta.url).pathname;
       const skinLoader = new SkinLoader(skinsDir);
@@ -137,9 +139,18 @@ export async function createChatRuntime(
       }
 
       const skin = await skinLoader.load(skinIdEnv);
-      _resolvedSkin = skinResolver.resolve(skin, toolRegistry);
+      resolvedSkin = skinResolver.resolve(skin, toolRegistry);
       console.warn(
-        `[Chat] Skin "${skinIdEnv}" loaded: ${_resolvedSkin.tools.length} tools, profile=${_resolvedSkin.governance.profile}`,
+        `[Chat] Skin "${skinIdEnv}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
+      );
+    }
+
+    // Create governance profile store and apply skin profile if loaded
+    const governanceProfileStore = new InMemoryGovernanceProfileStore();
+    if (resolvedSkin) {
+      await governanceProfileStore.set(null, resolvedSkin.governance.profile);
+      console.warn(
+        `[Chat] Skin governance profile set as global default: ${resolvedSkin.governance.profile}`,
       );
     }
 
@@ -166,6 +177,7 @@ export async function createChatRuntime(
       ledger,
       guardrailState,
       guardrailStateStore,
+      governanceProfileStore,
       approvalNotifier,
     });
   }
@@ -309,6 +321,7 @@ export async function createChatRuntime(
     planGraphBuilder,
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? DEFAULT_CHAT_AVAILABLE_ACTIONS,
+    resolvedSkin,
   });
 
   const cleanup = () => {

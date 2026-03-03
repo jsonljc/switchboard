@@ -17,8 +17,9 @@ import type {
   CartridgeReadAdapter as CartridgeReadAdapterType,
   CapabilityRegistry,
   PlanGraphBuilder,
+  ResolvedSkin,
 } from "@switchboard/core";
-import { inferCartridgeId } from "@switchboard/core";
+import { inferCartridgeId, matchesAny } from "@switchboard/core";
 import type { UndoRecipe } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
@@ -42,6 +43,8 @@ export interface ChatRuntimeConfig {
   capabilityRegistry?: CapabilityRegistry;
   /** Plan graph builder for converting goals to multi-step plans. */
   planGraphBuilder?: PlanGraphBuilder;
+  /** Resolved skin for tool filter enforcement and config. */
+  resolvedSkin?: ResolvedSkin | null;
 }
 
 export class ChatRuntime {
@@ -56,6 +59,7 @@ export class ChatRuntime {
   private maxContextMessages: number;
   private capabilityRegistry: CapabilityRegistry | null;
   private planGraphBuilder: PlanGraphBuilder | null;
+  private resolvedSkin: ResolvedSkin | null;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -75,6 +79,7 @@ export class ChatRuntime {
     this.maxContextMessages = config.maxContextMessages ?? 5;
     this.capabilityRegistry = config.capabilityRegistry ?? null;
     this.planGraphBuilder = config.planGraphBuilder ?? null;
+    this.resolvedSkin = config.resolvedSkin ?? null;
   }
 
   getAdapter(): ChannelAdapter {
@@ -298,6 +303,22 @@ export class ChatRuntime {
         "You're sending too many requests. Please wait a moment and try again.",
       );
       return;
+    }
+
+    // Skin tool filter enforcement — reject proposals for disallowed action types
+    if (this.resolvedSkin) {
+      const { include, exclude } = this.resolvedSkin.toolFilter;
+      for (const proposal of result.proposals) {
+        const included = matchesAny(proposal.actionType, include);
+        const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
+        if (!included || excluded) {
+          await this.adapter.sendTextReply(
+            threadId,
+            `Action "${proposal.actionType}" is not available in the current configuration.`,
+          );
+          return;
+        }
+      }
     }
 
     // Set proposals on conversation
