@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { inferCartridgeId } from "@switchboard/core";
+import { inferCartridgeId, matchesAny } from "@switchboard/core";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
@@ -28,6 +28,20 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "Invalid request body", details: parsed.error.issues });
       }
       const body = parsed.data;
+
+      // Skin tool filter enforcement
+      const skin = app.resolvedSkin;
+      if (skin) {
+        const { include, exclude } = skin.toolFilter;
+        const included = matchesAny(body.actionType, include);
+        const excluded = exclude ? matchesAny(body.actionType, exclude) : false;
+        if (!included || excluded) {
+          return reply.code(403).send({
+            error: `Action "${body.actionType}" is not available in the current skin configuration`,
+            statusCode: 403,
+          });
+        }
+      }
 
       const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
       if (!cartridgeId) {
@@ -197,6 +211,22 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "Invalid request body", details: parsed.error.issues });
       }
       const body = parsed.data;
+
+      // Skin tool filter enforcement — reject entire batch if any proposal is disallowed
+      const batchSkin = app.resolvedSkin;
+      if (batchSkin) {
+        const { include, exclude } = batchSkin.toolFilter;
+        for (const proposal of body.proposals) {
+          const included = matchesAny(proposal.actionType, include);
+          const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
+          if (!included || excluded) {
+            return reply.code(403).send({
+              error: `Action "${proposal.actionType}" is not available in the current skin configuration`,
+              statusCode: 403,
+            });
+          }
+        }
+      }
 
       const results = [];
       for (const proposal of body.proposals) {
