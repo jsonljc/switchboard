@@ -11,9 +11,12 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
+COPY packages/create-switchboard-cartridge/package.json packages/create-switchboard-cartridge/
 COPY cartridges/digital-ads/package.json cartridges/digital-ads/
 COPY cartridges/crm/package.json cartridges/crm/
 COPY cartridges/payments/package.json cartridges/payments/
+COPY cartridges/patient-engagement/package.json cartridges/patient-engagement/
+COPY cartridges/quant-trading/package.json cartridges/quant-trading/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
