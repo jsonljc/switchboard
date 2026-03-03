@@ -863,6 +863,7 @@ export class ProposePipeline {
     organizationId?: string | null;
     traceId?: string;
     emergencyOverride?: boolean;
+    idempotencyKey?: string;
   }): Promise<
     | ProposeResult
     | { needsClarification: true; question: string }

@@ -50,6 +50,7 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         entityRefs: body.entityRefs,
         message: body.message,
         traceId: body.traceId,
+        idempotencyKey,
       };
 
       try {

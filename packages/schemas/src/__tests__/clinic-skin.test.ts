@@ -1,27 +1,61 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { SkinManifestSchema } from "../skin.js";
 
 // Resolve from packages/schemas/src/__tests__/ up to repo root /skins/
 const skinsDir = join(import.meta.dirname, "../../../../skins");
 
-describe("clinic skin manifest", () => {
+// Dynamically discover all skin JSON files
+const skinFiles = readdirSync(skinsDir).filter((f) => f.endsWith(".json"));
+
+describe("skin manifest validation (all skins)", () => {
+  it("has at least one skin file", () => {
+    expect(skinFiles.length).toBeGreaterThan(0);
+  });
+
+  for (const file of skinFiles) {
+    describe(`skins/${file}`, () => {
+      const raw = readFileSync(join(skinsDir, file), "utf-8");
+      const parsed = JSON.parse(raw);
+
+      it("parses as valid JSON", () => {
+        expect(parsed).toBeDefined();
+        expect(typeof parsed).toBe("object");
+      });
+
+      it("validates against SkinManifestSchema", () => {
+        const result = SkinManifestSchema.safeParse(parsed);
+        if (!result.success) {
+          console.error(`${file} validation errors:`, result.error.issues);
+        }
+        expect(result.success).toBe(true);
+      });
+
+      it("id matches filename", () => {
+        const expectedId = file.replace(".json", "");
+        expect(parsed.id).toBe(expectedId);
+      });
+
+      it("has at least one required cartridge", () => {
+        expect(parsed.requiredCartridges.length).toBeGreaterThan(0);
+      });
+
+      it("playbook steps do not exceed max of 10", () => {
+        if (parsed.playbooks) {
+          for (const playbook of parsed.playbooks) {
+            expect(playbook.steps.length).toBeLessThanOrEqual(10);
+          }
+        }
+      });
+    });
+  }
+});
+
+// Keep existing clinic-specific tests
+describe("clinic skin manifest (detailed)", () => {
   const raw = readFileSync(join(skinsDir, "clinic.json"), "utf-8");
   const parsed = JSON.parse(raw);
-
-  it("parses as valid JSON", () => {
-    expect(parsed).toBeDefined();
-    expect(typeof parsed).toBe("object");
-  });
-
-  it("validates against SkinManifestSchema", () => {
-    const result = SkinManifestSchema.safeParse(parsed);
-    if (!result.success) {
-      console.error(result.error.issues);
-    }
-    expect(result.success).toBe(true);
-  });
 
   it("has correct id", () => {
     expect(parsed.id).toBe("clinic");
@@ -68,12 +102,6 @@ describe("clinic skin manifest", () => {
     expect(ids).toContain("new-patient-intake");
     expect(ids).toContain("post-treatment-followup");
     expect(ids).toContain("appointment-reschedule");
-  });
-
-  it("playbook steps do not exceed max of 10", () => {
-    for (const playbook of parsed.playbooks) {
-      expect(playbook.steps.length).toBeLessThanOrEqual(10);
-    }
   });
 
   it("defines clinic-specific terminology", () => {

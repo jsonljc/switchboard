@@ -19,6 +19,8 @@ export interface RuntimeExecuteRequest {
   message?: string;
   /** Optional trace id for correlation. */
   traceId?: string;
+  /** Optional idempotency key for deduplication at orchestrator level. */
+  idempotencyKey?: string;
 }
 
 /** Response shape for runtime execute. */
