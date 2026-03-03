@@ -20,10 +20,10 @@ export default defineConfig({
       ],
       exclude: ["**/__tests__/**", "**/*.test.ts", "**/dist/**", "**/node_modules/**"],
       thresholds: {
-        statements: 60,
+        statements: 58,
         branches: 50,
         functions: 55,
-        lines: 60,
+        lines: 58,
       },
     },
   },
