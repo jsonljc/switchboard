@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect, useSearchParams } from "next/navigation";
 import { ActivityItem } from "@/components/activity/activity-item";
@@ -14,6 +14,31 @@ import { useAudit } from "@/hooks/use-audit";
 import { AlertTriangle } from "lucide-react";
 
 export default function ActivityPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <h1 className="text-2xl font-bold">Activity</h1>
+          <div className="space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3 p-3">
+                <Skeleton className="h-5 w-5 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <ActivityPageContent />
+    </Suspense>
+  );
+}
+
+function ActivityPageContent() {
   const { status } = useSession();
   const searchParams = useSearchParams();
 
@@ -37,7 +62,9 @@ export default function ActivityPage() {
               <span className="font-medium">Failed to load activity</span>
             </div>
             <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -67,19 +94,13 @@ export default function ActivityPage() {
           </div>
         ) : (
           data?.entries.map((entry) => (
-            <ActivityItem
-              key={entry.id}
-              entry={entry}
-              onClick={() => setSelectedEntry(entry)}
-            />
+            <ActivityItem key={entry.id} entry={entry} onClick={() => setSelectedEntry(entry)} />
           ))
         )}
       </div>
 
       <Sheet open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
-        <SheetContent>
-          {selectedEntry && <ActivityDetail entry={selectedEntry} />}
-        </SheetContent>
+        <SheetContent>{selectedEntry && <ActivityDetail entry={selectedEntry} />}</SheetContent>
       </Sheet>
     </div>
   );
