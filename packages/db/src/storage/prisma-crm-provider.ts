@@ -122,6 +122,7 @@ export class PrismaCrmProvider implements CrmProvider {
     company?: string;
     phone?: string;
     channel?: string;
+    assignedStaffId?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     const row = await this.prisma.crmContact.create({
@@ -132,6 +133,7 @@ export class PrismaCrmProvider implements CrmProvider {
         company: data.company ?? null,
         phone: data.phone ?? null,
         channel: data.channel ?? null,
+        assignedStaffId: data.assignedStaffId ?? null,
         organizationId: this.organizationId ?? null,
         properties: (data.properties as object) ?? {},
         status: "active",
@@ -150,6 +152,8 @@ export class PrismaCrmProvider implements CrmProvider {
     if (data["phone"] !== undefined) updateData["phone"] = data["phone"];
     if (data["tags"] !== undefined) updateData["tags"] = data["tags"];
     if (data["status"] !== undefined) updateData["status"] = data["status"];
+    if (data["assignedStaffId"] !== undefined)
+      updateData["assignedStaffId"] = data["assignedStaffId"];
     if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
 
     const row = await this.prisma.crmContact.update({
@@ -172,6 +176,7 @@ export class PrismaCrmProvider implements CrmProvider {
     stage?: string;
     amount?: number;
     contactIds?: string[];
+    assignedStaffId?: string;
   }): Promise<CrmDeal> {
     const row = await this.prisma.crmDeal.create({
       data: {
@@ -180,6 +185,7 @@ export class PrismaCrmProvider implements CrmProvider {
         stage: data.stage ?? "lead",
         amount: data.amount ?? null,
         contactId: data.contactIds?.[0] ?? null,
+        assignedStaffId: data.assignedStaffId ?? null,
         organizationId: this.organizationId ?? null,
         properties: {},
       },
@@ -240,6 +246,7 @@ function toContact(row: {
   phone: string | null;
   tags: string[];
   status: string;
+  assignedStaffId: string | null;
   properties: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -255,6 +262,7 @@ function toContact(row: {
     phone: row.phone,
     tags: row.tags,
     status: row.status as "active" | "archived",
+    assignedStaffId: row.assignedStaffId,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -269,6 +277,7 @@ function toDeal(row: {
   amount: number | null;
   closeDate: Date | null;
   contactId: string | null;
+  assignedStaffId: string | null;
   properties: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -281,6 +290,7 @@ function toDeal(row: {
     amount: row.amount,
     closeDate: row.closeDate?.toISOString() ?? null,
     contactIds: row.contactId ? [row.contactId] : [],
+    assignedStaffId: row.assignedStaffId,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

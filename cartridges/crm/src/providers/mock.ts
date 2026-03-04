@@ -21,6 +21,7 @@ const SEED_CONTACTS: CrmContact[] = [
     phone: "+1-555-0101",
     tags: ["enterprise", "decision-maker"],
     status: "active",
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     properties: { title: "VP of Engineering", source: "inbound" },
@@ -36,6 +37,7 @@ const SEED_CONTACTS: CrmContact[] = [
     phone: "+1-555-0202",
     tags: ["startup", "technical"],
     status: "active",
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     properties: { title: "CTO", source: "referral" },
@@ -51,6 +53,7 @@ const SEED_CONTACTS: CrmContact[] = [
     phone: "+1-555-0303",
     tags: ["enterprise", "procurement"],
     status: "active",
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
     properties: { title: "Head of Procurement", source: "cold-outreach" },
@@ -66,6 +69,7 @@ const SEED_CONTACTS: CrmContact[] = [
     phone: null,
     tags: ["freelancer"],
     status: "active",
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     properties: { source: "website-signup" },
@@ -90,6 +94,7 @@ const SEED_DEALS: CrmDeal[] = [
     amount: 50000,
     closeDate: new Date(Date.now() + 30 * 86400000).toISOString(),
     contactIds: ["ct_alice"],
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 45 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
     properties: {},
@@ -102,6 +107,7 @@ const SEED_DEALS: CrmDeal[] = [
     amount: 12000,
     closeDate: new Date(Date.now() + 14 * 86400000).toISOString(),
     contactIds: ["ct_bob"],
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
     properties: {},
@@ -114,6 +120,7 @@ const SEED_DEALS: CrmDeal[] = [
     amount: 120000,
     closeDate: new Date(Date.now() + 60 * 86400000).toISOString(),
     contactIds: ["ct_carol"],
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     properties: {},
@@ -126,6 +133,7 @@ const SEED_DEALS: CrmDeal[] = [
     amount: 500,
     closeDate: null,
     contactIds: ["ct_dave"],
+    assignedStaffId: null,
     createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     properties: {},
@@ -283,6 +291,7 @@ export class InMemoryCrmProvider implements CrmProvider {
     company?: string;
     phone?: string;
     channel?: string;
+    assignedStaffId?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     const now = new Date().toISOString();
@@ -297,6 +306,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       phone: data.phone ?? null,
       tags: [],
       status: "active",
+      assignedStaffId: data.assignedStaffId ?? null,
       createdAt: now,
       updatedAt: now,
       properties: data.properties ?? {},
@@ -318,6 +328,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       "channel",
       "tags",
       "status",
+      "assignedStaffId",
     ] as const;
     for (const key of updatable) {
       if (data[key] !== undefined) {
@@ -348,6 +359,7 @@ export class InMemoryCrmProvider implements CrmProvider {
     stage?: string;
     amount?: number;
     contactIds?: string[];
+    assignedStaffId?: string;
   }): Promise<CrmDeal> {
     const now = new Date().toISOString();
     const deal: CrmDeal = {
@@ -358,6 +370,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       amount: data.amount ?? null,
       closeDate: null,
       contactIds: data.contactIds ?? [],
+      assignedStaffId: data.assignedStaffId ?? null,
       createdAt: now,
       updatedAt: now,
       properties: {},

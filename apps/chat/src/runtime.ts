@@ -89,6 +89,10 @@ export class ChatRuntime {
   private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
     const conversation = await getThread(threadId);
     if (conversation) {
+      // Track first reply time for response time metrics
+      if (!conversation.firstReplyAt) {
+        conversation.firstReplyAt = new Date();
+      }
       const updated = transitionConversation(conversation, {
         type: "add_message",
         message: { role: "assistant", text, timestamp: new Date() },

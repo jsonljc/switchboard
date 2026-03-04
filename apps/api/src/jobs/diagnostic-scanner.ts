@@ -71,19 +71,26 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
         if (stopped) break;
 
         try {
-          // Run diagnostic for this org
-          const cartridge = storageContext.cartridges.get("digital-ads");
+          // Determine cartridge based on the alert rule's vertical
+          const vertical = orgRules[0]?.vertical ?? "commerce";
+          const cartridgeId = resolveCartridgeForVertical(vertical);
+
+          const cartridge = storageContext.cartridges.get(cartridgeId);
           if (!cartridge) {
-            logger.warn({ orgId }, "digital-ads cartridge not available, skipping org");
+            logger.warn(
+              { orgId, cartridgeId },
+              `${cartridgeId} cartridge not available, skipping org`,
+            );
             continue;
           }
 
           // Determine platform from first rule (all rules in same org likely share platform)
           const platform = orgRules[0]?.platform ?? "meta";
-          const vertical = orgRules[0]?.vertical ?? "commerce";
+
+          const actionId = resolveDiagnoseAction(cartridgeId);
 
           const execResult = await cartridge.execute(
-            "digital-ads.funnel.diagnose",
+            actionId,
             {
               platform,
               vertical,
@@ -145,4 +152,26 @@ export function startDiagnosticScanner(config: DiagnosticScannerConfig): () => v
       inFlightPromise.catch(() => {});
     }
   };
+}
+
+/** Map vertical identifiers to their corresponding cartridge ID. */
+function resolveCartridgeForVertical(vertical: string): string {
+  switch (vertical) {
+    case "clinic":
+    case "healthcare":
+    case "dental":
+      return "patient-engagement";
+    default:
+      return "digital-ads";
+  }
+}
+
+/** Resolve the diagnostic action ID for a given cartridge. */
+function resolveDiagnoseAction(cartridgeId: string): string {
+  switch (cartridgeId) {
+    case "patient-engagement":
+      return "patient-engagement.pipeline.diagnose";
+    default:
+      return "digital-ads.funnel.diagnose";
+  }
 }

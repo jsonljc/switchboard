@@ -126,6 +126,6 @@
 
   "channels": {
     "primary": "whatsapp",
-    "enabled": ["whatsapp", "telegram"]
+    "enabled": ["whatsapp", "telegram", "instagram", "messenger"]
   }
 }

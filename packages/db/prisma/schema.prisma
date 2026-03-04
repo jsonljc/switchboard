@@ -126,8 +126,8 @@ model ActionEnvelope {
 }
 
 model ConversationState {
-  id                    String   @id @default(uuid())
-  threadId              String   @unique
+  id                    String    @id @default(uuid())
+  threadId              String    @unique
   channel               String
   principalId           String
   status                String
@@ -135,8 +135,9 @@ model ConversationState {
   pendingProposalIds    String[]
   pendingApprovalIds    String[]
   clarificationQuestion String?
-  messages              Json     @default("[]")
-  lastActivityAt        DateTime @default(now())
+  messages              Json      @default("[]")
+  firstReplyAt          DateTime?
+  lastActivityAt        DateTime  @default(now())
   expiresAt             DateTime
 
   @@index([principalId])
@@ -398,20 +399,21 @@ model FailedMessage {
 // ── CRM models (built-in unified inbox) ──
 
 model CrmContact {
-  id             String    @id @default(uuid())
-  externalId     String?   // e.g., Telegram user ID
-  channel        String?   // telegram, email, web
-  email          String?
-  firstName      String?
-  lastName       String?
-  company        String?
-  phone          String?
-  tags           String[]  @default([])
-  status         String    @default("active") // active, archived
-  organizationId String?
-  properties     Json      @default("{}")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  externalId      String?   // e.g., Telegram user ID
+  channel         String?   // telegram, email, web
+  email           String?
+  firstName       String?
+  lastName        String?
+  company         String?
+  phone           String?
+  tags            String[]  @default([])
+  status          String    @default("active") // active, archived
+  organizationId  String?
+  assignedStaffId String?
+  properties      Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   deals          CrmDeal[]
   activities     CrmActivity[]
@@ -423,17 +425,18 @@ model CrmContact {
 }
 
 model CrmDeal {
-  id             String    @id @default(uuid())
-  name           String
-  stage          String    @default("lead")
-  pipeline       String    @default("default")
-  amount         Float?
-  closeDate      DateTime?
-  contactId      String?
-  organizationId String?
-  properties     Json      @default("{}")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  name            String
+  stage           String    @default("lead")
+  pipeline        String    @default("default")
+  amount          Float?
+  closeDate       DateTime?
+  contactId       String?
+  organizationId  String?
+  assignedStaffId String?
+  properties      Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   contact        CrmContact? @relation(fields: [contactId], references: [id])
   activities     CrmActivity[]

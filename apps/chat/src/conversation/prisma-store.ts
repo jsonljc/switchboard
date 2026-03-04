@@ -28,6 +28,7 @@ export class PrismaConversationStore implements ConversationStore {
         pendingApprovalIds: state.pendingApprovalIds,
         clarificationQuestion: state.clarificationQuestion,
         messages: JSON.stringify(state.messages),
+        firstReplyAt: state.firstReplyAt,
         lastActivityAt: state.lastActivityAt,
         expiresAt: state.expiresAt,
       },
@@ -38,6 +39,7 @@ export class PrismaConversationStore implements ConversationStore {
         pendingApprovalIds: state.pendingApprovalIds,
         clarificationQuestion: state.clarificationQuestion,
         messages: JSON.stringify(state.messages),
+        firstReplyAt: state.firstReplyAt,
         lastActivityAt: state.lastActivityAt,
         expiresAt: state.expiresAt,
       },
@@ -84,6 +86,7 @@ function toConversationStateData(row: {
   pendingApprovalIds: string[];
   clarificationQuestion: string | null;
   messages: unknown;
+  firstReplyAt: Date | null;
   lastActivityAt: Date;
   expiresAt: Date;
 }): ConversationStateData {
@@ -98,6 +101,7 @@ function toConversationStateData(row: {
     pendingApprovalIds: row.pendingApprovalIds,
     clarificationQuestion: row.clarificationQuestion,
     messages: parseMessages(row.messages),
+    firstReplyAt: row.firstReplyAt,
     lastActivityAt: row.lastActivityAt,
     expiresAt: row.expiresAt,
   };

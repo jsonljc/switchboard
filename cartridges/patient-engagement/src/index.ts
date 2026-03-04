@@ -65,6 +65,10 @@ export { PATIENT_ENGAGEMENT_MANIFEST, PATIENT_ENGAGEMENT_ACTIONS } from "./cartr
 export { DEFAULT_PATIENT_ENGAGEMENT_POLICIES } from "./cartridge/defaults/policies.js";
 export { DEFAULT_PATIENT_ENGAGEMENT_GUARDRAILS } from "./cartridge/defaults/guardrails.js";
 
+// Escalation
+export { setEscalationNotifier } from "./cartridge/actions/escalate.js";
+export type { EscalationNotifier } from "./cartridge/actions/escalate.js";
+
 // Providers
 export type {
   CalendarProvider,

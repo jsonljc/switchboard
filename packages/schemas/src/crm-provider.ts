@@ -11,6 +11,7 @@ export interface CrmContact {
   phone: string | null;
   tags: string[];
   status: "active" | "archived";
+  assignedStaffId: string | null;
   createdAt: string;
   updatedAt: string;
   properties: Record<string, unknown>;
@@ -24,6 +25,7 @@ export interface CrmDeal {
   amount: number | null;
   closeDate: string | null;
   contactIds: string[];
+  assignedStaffId: string | null;
   createdAt: string;
   updatedAt: string;
   properties: Record<string, unknown>;
@@ -71,6 +73,7 @@ export interface CrmProvider {
     company?: string;
     phone?: string;
     channel?: string;
+    assignedStaffId?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact>;
   updateContact(contactId: string, data: Record<string, unknown>): Promise<CrmContact>;
@@ -81,6 +84,7 @@ export interface CrmProvider {
     stage?: string;
     amount?: number;
     contactIds?: string[];
+    assignedStaffId?: string;
   }): Promise<CrmDeal>;
   archiveDeal(dealId: string): Promise<void>;
   logActivity(data: {
