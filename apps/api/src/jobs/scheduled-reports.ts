@@ -63,17 +63,20 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
         if (stopped) break;
 
         try {
-          const cartridge = storageContext.cartridges.get("digital-ads");
+          const vertical = report.vertical ?? "commerce";
+          const cartridgeId = resolveCartridgeForVertical(vertical);
+
+          const cartridge = storageContext.cartridges.get(cartridgeId);
           if (!cartridge) {
-            logger.warn({ reportId: report.id }, "digital-ads cartridge not available");
+            logger.warn(
+              { reportId: report.id, cartridgeId },
+              `${cartridgeId} cartridge not available`,
+            );
             continue;
           }
 
           // Run the appropriate diagnostic
-          const actionId =
-            report.reportType === "portfolio"
-              ? "digital-ads.portfolio.diagnose"
-              : "digital-ads.funnel.diagnose";
+          const actionId = resolveDiagnoseAction(cartridgeId, report.reportType);
 
           const execResult = await cartridge.execute(
             actionId,
@@ -160,4 +163,26 @@ export function startScheduledReportJob(config: ScheduledReportJobConfig): () =>
       inFlightPromise.catch(() => {});
     }
   };
+}
+
+/** Map vertical identifiers to their corresponding cartridge ID. */
+function resolveCartridgeForVertical(vertical: string): string {
+  switch (vertical) {
+    case "clinic":
+    case "healthcare":
+    case "dental":
+      return "patient-engagement";
+    default:
+      return "digital-ads";
+  }
+}
+
+/** Resolve the diagnostic action ID for a given cartridge and report type. */
+function resolveDiagnoseAction(cartridgeId: string, reportType: string): string {
+  if (cartridgeId === "patient-engagement") {
+    return "patient-engagement.pipeline.diagnose";
+  }
+  return reportType === "portfolio"
+    ? "digital-ads.portfolio.diagnose"
+    : "digital-ads.funnel.diagnose";
 }

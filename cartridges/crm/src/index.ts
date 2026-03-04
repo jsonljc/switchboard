@@ -209,6 +209,7 @@ export class CrmCartridge implements Cartridge {
           company: parameters["company"] as string | undefined,
           phone: parameters["phone"] as string | undefined,
           channel: parameters["channel"] as string | undefined,
+          assignedStaffId: parameters["assignedStaffId"] as string | undefined,
           properties: parameters["properties"] as Record<string, unknown> | undefined,
         });
         return {
@@ -275,6 +276,7 @@ export class CrmCartridge implements Cartridge {
           stage: parameters["stage"] as string | undefined,
           amount: parameters["amount"] as number | undefined,
           contactIds: parameters["contactIds"] as string[] | undefined,
+          assignedStaffId: parameters["assignedStaffId"] as string | undefined,
         });
         const amountStr = deal.amount != null ? ` worth $${deal.amount.toLocaleString()}` : "";
         return {

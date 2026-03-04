@@ -381,6 +381,9 @@ export function evaluate(
       }
       if (policy.effect === "modify") {
         policyDecision = "modify";
+        console.warn(
+          `[PolicyEngine] Policy "${policy.name}" (${policy.id}) uses "modify" effect which is not fully implemented — action will be allowed but parameters will not be modified.`,
+        );
       }
       if (policy.effect === "require_approval" && policy.approvalRequirement) {
         policyApprovalOverride = policy.approvalRequirement;

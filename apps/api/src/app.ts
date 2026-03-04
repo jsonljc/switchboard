@@ -30,6 +30,7 @@ import { inboundMessagesRoutes } from "./routes/inbound-messages.js";
 import { smbRoutes } from "./routes/smb.js";
 import { governanceRoutes } from "./routes/governance.js";
 import { campaignsRoutes } from "./routes/campaigns.js";
+import { reportsRoutes } from "./routes/reports.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import apiVersionPlugin from "./versioning.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -78,6 +79,7 @@ import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import {
   bootstrapPatientEngagementCartridge,
   DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
+  setEscalationNotifier,
 } from "@switchboard/patient-engagement";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
@@ -197,6 +199,7 @@ export async function buildServer() {
         { name: "SMB", description: "SMB-tier pipeline and tier management" },
         { name: "Governance", description: "Governance profiles and emergency halt" },
         { name: "Campaigns", description: "Campaign read operations via digital-ads cartridge" },
+        { name: "Reports", description: "Clinic and vertical reporting endpoints" },
       ],
       components: {
         securitySchemes: {
@@ -371,6 +374,58 @@ export async function buildServer() {
   );
   await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
 
+  // Wire escalation notifier for patient-engagement cartridge
+  // Uses the proactive notification infrastructure to alert staff on configured channels
+  {
+    const { sendProactiveNotification } = await import("./alerts/notifier.js");
+    setEscalationNotifier({
+      async notify(escalation) {
+        const escalationCredentials = {
+          slack: process.env["SLACK_BOT_TOKEN"]
+            ? { botToken: process.env["SLACK_BOT_TOKEN"] }
+            : undefined,
+          telegram: process.env["TELEGRAM_BOT_TOKEN"]
+            ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
+            : undefined,
+          whatsapp:
+            process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+              ? {
+                  token: process.env["WHATSAPP_TOKEN"],
+                  phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+                }
+              : undefined,
+        };
+
+        // Determine delivery channels and recipients from skin config or env
+        const channels = process.env["ESCALATION_CHANNELS"]?.split(",") ?? ["telegram"];
+        const recipients = process.env["ESCALATION_RECIPIENTS"]?.split(",") ?? [];
+
+        if (recipients.length === 0) {
+          console.warn("[escalation] No ESCALATION_RECIPIENTS configured — notification skipped");
+          return;
+        }
+
+        await sendProactiveNotification(
+          {
+            title: "Patient Escalation",
+            body: [
+              `Patient: ${escalation.patientId}`,
+              `Reason: ${escalation.reason}`,
+              escalation.conversationId ? `Conversation: ${escalation.conversationId}` : null,
+              `Time: ${escalation.escalatedAt}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            severity: "warning",
+            channels,
+            recipients,
+          },
+          escalationCredentials,
+        );
+      },
+    });
+  }
+
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
   let resolvedSkin: ResolvedSkin | null = null;
   const skinId = process.env["SKIN_ID"];
@@ -408,6 +463,15 @@ export async function buildServer() {
       const now = new Date();
       for (let i = 0; i < resolvedSkin.governance.policyOverrides.length; i++) {
         const override = resolvedSkin.governance.policyOverrides[i]!;
+        // Extract approvalRequirement from effectParams or default to "standard"
+        // when the effect is "require_approval" — without this, the policy engine
+        // silently ignores the approval intent (see PolicyEngine step 7).
+        const approvalRequirement =
+          override.effect === "require_approval"
+            ? ((override.effectParams?.["approvalRequirement"] as Policy["approvalRequirement"]) ??
+              "standard")
+            : undefined;
+
         await storage.policies.save({
           id: `skin_${resolvedSkin.manifest.id}_${i}`,
           name: override.name,
@@ -419,6 +483,7 @@ export async function buildServer() {
           rule: override.rule as Policy["rule"],
           effect: override.effect,
           effectParams: override.effectParams ?? {},
+          approvalRequirement,
           createdAt: now,
           updatedAt: now,
         });
@@ -663,6 +728,7 @@ export async function buildServer() {
   await app.register(smbRoutes, { prefix: "/api/smb" });
   await app.register(governanceRoutes, { prefix: "/api/governance" });
   await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
+  await app.register(reportsRoutes, { prefix: "/api/reports" });
 
   return app;
 }

@@ -89,6 +89,7 @@ describe("PrismaConversationStore integration", () => {
       pendingProposalIds: [],
       pendingApprovalIds: [],
       clarificationQuestion: null,
+      firstReplyAt: null,
       messages: [
         { role: "user" as const, text: "hello", timestamp: new Date("2024-01-01") },
         { role: "assistant" as const, text: "hi", timestamp: new Date("2024-01-01") },

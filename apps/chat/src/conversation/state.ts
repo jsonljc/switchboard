@@ -18,6 +18,7 @@ export interface ConversationStateData {
   pendingApprovalIds: string[];
   clarificationQuestion: string | null;
   messages: ConversationMessage[];
+  firstReplyAt: Date | null;
   lastActivityAt: Date;
   expiresAt: Date;
 }
@@ -38,6 +39,7 @@ export function createConversation(
     pendingApprovalIds: [],
     clarificationQuestion: null,
     messages: [],
+    firstReplyAt: null,
     lastActivityAt: new Date(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   };

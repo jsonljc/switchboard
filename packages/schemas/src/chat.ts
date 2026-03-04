@@ -1,6 +1,14 @@
 import { z } from "zod";
 
-export const ChannelSchema = z.enum(["telegram", "slack", "whatsapp", "email", "api"]);
+export const ChannelSchema = z.enum([
+  "telegram",
+  "slack",
+  "whatsapp",
+  "instagram",
+  "messenger",
+  "email",
+  "api",
+]);
 export type Channel = z.infer<typeof ChannelSchema>;
 
 export const AttachmentSchema = z.object({
@@ -44,6 +52,7 @@ export const ConversationStateSchema = z.object({
   pendingProposalIds: z.array(z.string()),
   pendingApprovalIds: z.array(z.string()),
   clarificationQuestion: z.string().nullable(),
+  firstReplyAt: z.coerce.date().nullable().optional(),
   lastActivityAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
 });

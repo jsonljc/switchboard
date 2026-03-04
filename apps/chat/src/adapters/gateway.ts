@@ -38,8 +38,23 @@ export class ChannelGateway {
       if (adapter) return { adapter, channel: "slack" };
     }
 
-    // WhatsApp (future): has "entry" array with "changes"
+    // WhatsApp: has "entry" array with object="whatsapp_business_account"
     if (Array.isArray(payload["entry"])) {
+      const objectType = payload["object"] as string | undefined;
+
+      // Instagram DM webhooks have object="instagram"
+      if (objectType === "instagram") {
+        const adapter = this.adapters.get("instagram");
+        if (adapter) return { adapter, channel: "instagram" };
+      }
+
+      // Messenger webhooks have object="page"
+      if (objectType === "page") {
+        const adapter = this.adapters.get("messenger");
+        if (adapter) return { adapter, channel: "messenger" };
+      }
+
+      // WhatsApp webhooks have object="whatsapp_business_account"
       const adapter = this.adapters.get("whatsapp");
       if (adapter) return { adapter, channel: "whatsapp" };
     }

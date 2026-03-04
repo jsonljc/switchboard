@@ -9,7 +9,7 @@ const createReportSchema = z.object({
     .string()
     .refine((v) => cronRegex.test(v), { message: "Invalid cron expression" }),
   timezone: z.string().default("UTC"),
-  reportType: z.enum(["funnel", "portfolio"]),
+  reportType: z.enum(["funnel", "portfolio", "clinic"]),
   platform: z.string().nullish(),
   vertical: z.string().default("commerce"),
   deliveryChannels: z.array(z.string()).default([]),
@@ -114,14 +114,14 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
     if (!report) return reply.code(404).send({ error: "Scheduled report not found" });
 
     try {
-      const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge)
-        return reply.code(400).send({ error: "digital-ads cartridge not registered" });
+      const vertical = report.vertical ?? "commerce";
+      const cartridgeId = resolveCartridgeForVertical(vertical);
 
-      const actionId =
-        report.reportType === "portfolio"
-          ? "digital-ads.portfolio.diagnose"
-          : "digital-ads.funnel.diagnose";
+      const cartridge = app.storageContext.cartridges.get(cartridgeId);
+      if (!cartridge)
+        return reply.code(400).send({ error: `${cartridgeId} cartridge not registered` });
+
+      const actionId = resolveDiagnoseAction(cartridgeId, report.reportType);
 
       const result = await cartridge.execute(
         actionId,
@@ -147,3 +147,25 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 };
+
+/** Map vertical identifiers to their corresponding cartridge ID. */
+function resolveCartridgeForVertical(vertical: string): string {
+  switch (vertical) {
+    case "clinic":
+    case "healthcare":
+    case "dental":
+      return "patient-engagement";
+    default:
+      return "digital-ads";
+  }
+}
+
+/** Resolve the diagnostic action ID for a given cartridge and report type. */
+function resolveDiagnoseAction(cartridgeId: string, reportType: string): string {
+  if (cartridgeId === "patient-engagement") {
+    return "patient-engagement.pipeline.diagnose";
+  }
+  return reportType === "portfolio"
+    ? "digital-ads.portfolio.diagnose"
+    : "digital-ads.funnel.diagnose";
+}
