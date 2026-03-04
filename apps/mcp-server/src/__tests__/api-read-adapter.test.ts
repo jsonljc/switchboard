@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ApiReadAdapter } from "../adapters/api-read-adapter.js";
 import type { McpApiClient } from "../api-client.js";
-import type { ReadOperation } from "../adapters/api-read-adapter.js";
+import type { ReadOperation } from "@switchboard/core";
 
 // ── Mock Client ────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ describe("ApiReadAdapter", () => {
       const result = await adapter.query(op);
 
       expect(client.get).toHaveBeenCalledWith("/api/campaigns/camp_1");
-      expect(result).toEqual(campaignData);
+      expect(result).toEqual({ data: campaignData, traceId: expect.any(String) });
     });
 
     it("returns full data when .campaign is not present", async () => {
@@ -63,7 +63,7 @@ describe("ApiReadAdapter", () => {
       };
 
       const result = await adapter.query(op);
-      expect(result).toEqual(fallbackData);
+      expect(result).toEqual({ data: fallbackData, traceId: expect.any(String) });
     });
 
     it("encodes campaignId in URL", async () => {
@@ -108,7 +108,7 @@ describe("ApiReadAdapter", () => {
 
       expect(client.get).toHaveBeenCalledWith(expect.stringContaining("/api/campaigns/search?"));
       expect(client.get).toHaveBeenCalledWith(expect.stringContaining("query=summer"));
-      expect(result).toEqual(searchResult);
+      expect(result).toEqual({ data: searchResult, traceId: expect.any(String) });
     });
 
     it("includes limit parameter when provided", async () => {

@@ -3,30 +3,22 @@
  * Delegates read operations to the correct API endpoints.
  */
 import type { McpApiClient } from "../api-client.js";
-
-export interface ReadOperation {
-  cartridgeId: string;
-  operation: string;
-  parameters: Record<string, unknown>;
-  actorId: string;
-  organizationId?: string | null;
-}
-
-export interface ReadResult {
-  data: unknown;
-}
+import type { ReadOperation, ReadResult } from "@switchboard/core";
+import { randomUUID } from "node:crypto";
 
 export class ApiReadAdapter {
   constructor(private client: McpApiClient) {}
 
-  async query(op: ReadOperation): Promise<unknown> {
+  async query(op: ReadOperation): Promise<ReadResult> {
+    const traceId = op.traceId ?? randomUUID();
+
     switch (op.operation) {
       case "getCampaign": {
         const campaignId = op.parameters.campaignId as string;
         const { data } = await this.client.get<{ campaign: unknown }>(
           `/api/campaigns/${encodeURIComponent(campaignId)}`,
         );
-        return (data as { campaign: unknown }).campaign ?? data;
+        return { data: (data as { campaign: unknown }).campaign ?? data, traceId };
       }
 
       case "searchCampaigns": {
@@ -37,7 +29,7 @@ export class ApiReadAdapter {
         const { data } = await this.client.get<{ campaigns: unknown[] }>(
           `/api/campaigns/search?${params.toString()}`,
         );
-        return data;
+        return { data, traceId };
       }
 
       default:

@@ -30,13 +30,10 @@ const updateAlertSchema = createAlertSchema.partial().extend({
 });
 
 export const alertsRoutes: FastifyPluginAsync = async (app) => {
-  // Cast to any — the generated Prisma client knows about AlertRule/AlertHistory
-  // but the re-exported PrismaClient type from @switchboard/db may lag behind.
-  const prisma = app.prisma as any;
-
   // GET /api/alerts — list alert rules for the org
   app.get("/", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const orgId = request.organizationIdFromAuth ?? "default";
     const rules = await prisma.alertRule.findMany({
       where: { organizationId: orgId },
@@ -47,7 +44,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/alerts — create alert rule
   app.post("/", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const orgId = request.organizationIdFromAuth ?? "default";
     const parsed = createAlertSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -61,7 +59,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
 
   // PUT /api/alerts/:id — update alert rule
   app.put("/:id", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
     const parsed = updateAlertSchema.safeParse(request.body);
@@ -82,7 +81,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
 
   // DELETE /api/alerts/:id — delete alert rule
   app.delete("/:id", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
     const existing = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
@@ -93,7 +93,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/alerts/:id/test — dry-run evaluation
   app.post("/:id/test", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
     const rule = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
@@ -124,15 +125,18 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
         result.data as Record<string, unknown>,
       );
       return reply.send({ evaluation, rule: { id: rule.id, name: rule.name } });
-    } catch (err: any) {
+    } catch (err: unknown) {
       app.log.error({ err, alertRuleId: id }, "Alert test failed");
-      return reply.code(500).send({ error: "Test failed", detail: err.message });
+      return reply
+        .code(500)
+        .send({ error: "Test failed", detail: err instanceof Error ? err.message : String(err) });
     }
   });
 
   // GET /api/alerts/:id/history — list alert history
   app.get("/:id/history", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
     const rule = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
@@ -148,7 +152,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/alerts/:id/snooze — temporarily silence
   app.post("/:id/snooze", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+    const prisma = app.prisma;
     const { id } = request.params as { id: string };
     const orgId = request.organizationIdFromAuth ?? "default";
     const body = request.body as { durationMinutes?: number };

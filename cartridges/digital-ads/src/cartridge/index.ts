@@ -8,17 +8,10 @@
 
 import type {
   ReadActionType,
-  Cartridge,
-  CartridgeContext,
-  CartridgeManifest,
+  DigitalAdsContext,
   CapturedSnapshot,
   CampaignInfo,
-  ConnectionHealth,
-  ExecuteResult,
-  GuardrailConfig,
-  HealthCheckResult,
   MetaAdsWriteProvider,
-  RiskInput,
   SessionState,
   ConnectParams,
   DiagnoseFunnelParams,
@@ -27,6 +20,14 @@ import type {
   AnalyzeStructureParams,
   HealthCheckParams,
 } from "./types.js";
+import type { Cartridge, CartridgeContext, ExecuteResult } from "@switchboard/cartridge-sdk";
+import type {
+  CartridgeManifest,
+  ConnectionHealth,
+  GuardrailConfig,
+  RiskInput,
+} from "@switchboard/schemas";
+import type { HealthCheckResult } from "./types.js";
 import type { PlatformType, PlatformCredentials } from "../platforms/types.js";
 import type { VerticalType } from "../core/types.js";
 import type { AdPlatformProvider } from "./providers/provider.js";
@@ -265,12 +266,13 @@ export class DigitalAdsCartridge implements Cartridge {
     parameters: Record<string, unknown>,
     context: CartridgeContext,
   ): Promise<ExecuteResult> {
-    // Check for validation errors
-    if (typeof context.validationError === "string") {
+    // Check for validation errors (set by enrichContext)
+    const ctx = context as DigitalAdsContext;
+    if (typeof ctx.validationError === "string") {
       return failResult(
-        `Validation failed: ${context.validationError}`,
+        `Validation failed: ${ctx.validationError}`,
         "validation",
-        context.validationError,
+        ctx.validationError,
       );
     }
 

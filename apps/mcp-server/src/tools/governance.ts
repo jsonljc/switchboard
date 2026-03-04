@@ -1,13 +1,6 @@
-import type {
-  LifecycleOrchestrator,
-  CartridgeReadAdapter,
-  GovernanceProfileStore,
-  AuditLedger,
-  AuditQueryFilter,
-  StorageContext,
-} from "@switchboard/core";
+import type { CartridgeReadAdapter, GovernanceProfileStore } from "@switchboard/core";
 import { profileToPosture } from "@switchboard/core";
-import type { AuditEventType } from "@switchboard/schemas";
+import type { MinimalOrchestrator, MinimalStorage, MinimalLedger } from "../server.js";
 import {
   RequestUndoInputSchema,
   EmergencyHaltInputSchema,
@@ -18,11 +11,11 @@ import type { McpAuthContext } from "../auth.js";
 import type { ToolDefinition } from "./side-effect.js";
 
 export interface GovernanceToolDeps {
-  orchestrator: LifecycleOrchestrator;
+  orchestrator: MinimalOrchestrator;
   readAdapter: CartridgeReadAdapter;
   governanceProfileStore: GovernanceProfileStore;
-  ledger: AuditLedger;
-  storage: StorageContext;
+  ledger: MinimalLedger;
+  storage: MinimalStorage;
 }
 
 export const governanceToolDefinitions: ToolDefinition[] = [
@@ -187,13 +180,13 @@ export async function handleGovernanceTool(
 
     case "get_audit_trail": {
       const parsed = GetAuditTrailInputSchema.parse(args);
-      const filter: AuditQueryFilter = {
+      const filter: Parameters<MinimalLedger["query"]>[0] = {
         limit: parsed.limit ?? 50,
       };
 
       if (parsed.envelopeId) filter.envelopeId = parsed.envelopeId;
       if (parsed.entityId) filter.entityId = parsed.entityId;
-      if (parsed.eventType) filter.eventType = parsed.eventType as AuditEventType;
+      if (parsed.eventType) filter.eventType = parsed.eventType;
       if (parsed.after) filter.after = new Date(parsed.after);
       if (parsed.before) filter.before = new Date(parsed.before);
       if (auth.organizationId) filter.organizationId = auth.organizationId;

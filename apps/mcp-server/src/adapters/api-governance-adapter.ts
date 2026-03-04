@@ -5,31 +5,14 @@
  */
 import type { McpApiClient } from "../api-client.js";
 import type { GovernanceProfile, GovernanceProfileConfig } from "@switchboard/schemas";
-
-// ── Minimal interfaces ─────────────────────────────────────────────
-// These are satisfied by both concrete in-memory implementations and
-// the API proxies below. Using `any` for return types since the tool
-// handlers operate on these structurally.
-
-export interface MinimalOrchestrator {
-  simulate: (params: any) => Promise<any>;
-  requestUndo: (envelopeId: string) => Promise<any>;
-  executeApproved: (envelopeId: string) => Promise<any>;
-  propose: (params: any) => Promise<any>;
-}
-
-export interface MinimalStorage {
-  approvals: {
-    getById: (id: string) => Promise<any>;
-    listPending: (orgId?: string) => Promise<any>;
-  };
-  envelopes: { getById: (id: string) => Promise<any> };
-  cartridges: { get: (id: string) => any; list: () => string[] };
-}
-
-export interface MinimalLedger {
-  query: (filter: any) => Promise<any>;
-}
+import type {
+  MinimalOrchestrator,
+  MinimalStorage,
+  MinimalLedger,
+  MinimalApprovalRecord,
+  MinimalEnvelopeRecord,
+  MinimalAuditEntry,
+} from "../server.js";
 
 // ── API-backed implementations ──────────────────────────────────────
 
@@ -42,18 +25,33 @@ export function createApiOrchestrator(client: McpApiClient): MinimalOrchestrator
         actorId: params.principalId,
         cartridgeId: params.cartridgeId,
       });
-      const d = data as any;
-      return { decisionTrace: d.decisionTrace ?? d };
+      const d = data as Record<string, unknown>;
+      return {
+        decisionTrace: (d.decisionTrace ?? d) as {
+          finalDecision: string;
+          computedRiskScore: { rawScore: number; category: string };
+          approvalRequired: string;
+        },
+      };
     },
 
     async requestUndo(envelopeId) {
       const { data } = await client.post(`/api/actions/${envelopeId}/undo`, {});
-      return data;
+      return data as {
+        denied: boolean;
+        envelope: { id: string };
+        explanation?: string;
+        approvalRequest?: { id: string; summary: string } | null;
+      };
     },
 
     async executeApproved(envelopeId) {
       const { data } = await client.post(`/api/actions/${envelopeId}/execute`, {});
-      return (data as any).result ?? data;
+      const d = data as Record<string, unknown>;
+      return ((d.result as { summary?: string; success?: boolean }) ?? data) as {
+        summary?: string;
+        success?: boolean;
+      };
     },
 
     async propose(params) {
@@ -73,7 +71,13 @@ export function createApiOrchestrator(client: McpApiClient): MinimalOrchestrator
         client.idempotencyKey("mcp_propose"),
       );
 
-      const d = data as any;
+      const d = data as {
+        envelopeId: string;
+        outcome: string;
+        approvalRequest?: { id: string; summary: string } | null;
+        deniedExplanation?: string;
+        traceId?: string;
+      };
 
       const envelope = {
         id: d.envelopeId,
@@ -131,48 +135,49 @@ export function createApiOrchestrator(client: McpApiClient): MinimalOrchestrator
 export function createApiStorage(client: McpApiClient): MinimalStorage {
   return {
     approvals: {
-      async getById(approvalId: string) {
+      async getById(approvalId: string): Promise<MinimalApprovalRecord | null> {
         const { status, data } = await client.get(
           `/api/approvals/${encodeURIComponent(approvalId)}`,
         );
         if (status === 404) return null;
-        const d = data as any;
+        const d = data as Record<string, unknown>;
         return {
           request: {
-            id: d.id ?? approvalId,
-            summary: d.summary ?? "",
-            riskCategory: d.riskCategory ?? "low",
-            expiresAt: d.expiresAt ? new Date(d.expiresAt) : new Date(),
-            respondedBy: d.respondedBy ?? null,
+            id: (d.id as string) ?? approvalId,
+            summary: (d.summary as string) ?? "",
+            riskCategory: (d.riskCategory as string) ?? "low",
+            expiresAt: d.expiresAt ? new Date(d.expiresAt as string) : new Date(),
+            respondedBy: (d.respondedBy as string) ?? null,
           },
-          state: { status: d.status ?? "pending" },
-          envelopeId: d.envelopeId ?? "",
-          organizationId: d.organizationId ?? null,
+          state: { status: (d.status as string) ?? "pending" },
+          envelopeId: (d.envelopeId as string) ?? "",
+          organizationId: (d.organizationId as string) ?? null,
         };
       },
-      async listPending(organizationId?: string) {
+      async listPending(organizationId?: string): Promise<MinimalApprovalRecord[]> {
         const path = organizationId
           ? `/api/approvals/pending?organizationId=${encodeURIComponent(organizationId)}`
           : "/api/approvals/pending";
         const { data } = await client.get(path);
-        const approvals = (data as any).approvals ?? [];
-        return approvals.map((a: any) => ({
+        const d = data as { approvals?: Array<Record<string, unknown>> };
+        const approvals = d.approvals ?? [];
+        return approvals.map((a) => ({
           request: {
-            id: a.id,
-            summary: a.summary ?? "",
-            riskCategory: a.riskCategory ?? "low",
-            expiresAt: a.expiresAt ? new Date(a.expiresAt) : new Date(),
+            id: a.id as string,
+            summary: (a.summary as string) ?? "",
+            riskCategory: (a.riskCategory as string) ?? "low",
+            expiresAt: a.expiresAt ? new Date(a.expiresAt as string) : new Date(),
           },
-          state: { status: a.status ?? "pending" },
-          envelopeId: a.envelopeId ?? "",
+          state: { status: (a.status as string) ?? "pending" },
+          envelopeId: (a.envelopeId as string) ?? "",
         }));
       },
     },
     envelopes: {
-      async getById(envelopeId: string) {
+      async getById(envelopeId: string): Promise<MinimalEnvelopeRecord | null> {
         const { status, data } = await client.get(`/api/actions/${encodeURIComponent(envelopeId)}`);
         if (status === 404) return null;
-        return data;
+        return data as MinimalEnvelopeRecord;
       },
     },
     cartridges: {
@@ -195,7 +200,10 @@ export function createApiGovernanceProfileStore(client: McpApiClient) {
       const { data } = await client.get(
         `/api/governance/${encodeURIComponent(organizationId)}/status`,
       );
-      return (data as any).profile ?? ("guarded" as GovernanceProfile);
+      return (
+        ((data as Record<string, unknown>).profile as GovernanceProfile) ??
+        ("guarded" as GovernanceProfile)
+      );
     },
     async set(organizationId: string | null, profile: GovernanceProfile): Promise<void> {
       if (!organizationId) return;
@@ -208,7 +216,7 @@ export function createApiGovernanceProfileStore(client: McpApiClient) {
       const { data } = await client.get(
         `/api/governance/${encodeURIComponent(organizationId)}/status`,
       );
-      return (data as any).config ?? null;
+      return ((data as Record<string, unknown>).config as GovernanceProfileConfig) ?? null;
     },
     async setConfig(organizationId: string | null, config: GovernanceProfileConfig): Promise<void> {
       if (!organizationId) return;
@@ -221,7 +229,7 @@ export function createApiGovernanceProfileStore(client: McpApiClient) {
 
 export function createApiLedger(client: McpApiClient): MinimalLedger {
   return {
-    async query(filter: any) {
+    async query(filter) {
       const params = new URLSearchParams();
       if (filter.envelopeId) params.set("envelopeId", filter.envelopeId);
       if (filter.entityId) params.set("entityId", filter.entityId);
@@ -240,17 +248,20 @@ export function createApiLedger(client: McpApiClient): MinimalLedger {
       if (filter.limit) params.set("limit", String(filter.limit));
 
       const { data } = await client.get(`/api/audit?${params.toString()}`);
-      return ((data as any).entries ?? []).map((e: any) => ({
-        id: e.id,
-        eventType: e.eventType,
-        timestamp: new Date(e.timestamp),
-        actorId: e.actorId,
-        entityType: e.entityType,
-        entityId: e.entityId,
-        riskCategory: e.riskCategory,
-        summary: e.summary,
-        envelopeId: e.envelopeId,
-      }));
+      const d = data as { entries?: Array<Record<string, unknown>> };
+      return (d.entries ?? []).map(
+        (e): MinimalAuditEntry => ({
+          id: e.id as string,
+          eventType: e.eventType as string,
+          timestamp: new Date(e.timestamp as string),
+          actorId: e.actorId as string,
+          entityType: e.entityType as string,
+          entityId: e.entityId as string,
+          riskCategory: e.riskCategory as string | undefined,
+          summary: e.summary as string | undefined,
+          envelopeId: e.envelopeId as string | undefined,
+        }),
+      );
     },
   };
 }

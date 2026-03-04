@@ -339,10 +339,7 @@ export async function buildServer() {
     requireCredentials: isProd,
     cacheStore: createSnapshotCacheStore(redis ?? undefined),
   });
-  storage.cartridges.register(
-    "digital-ads",
-    new GuardedCartridge(adsCartridge as any, interceptors),
-  );
+  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Register quant-trading cartridge

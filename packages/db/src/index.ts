@@ -39,6 +39,7 @@ export {
   PrismaGovernanceProfileStore,
   PrismaCredentialResolver,
 } from "./storage/index.js";
+export type { ConnectionRecord } from "./storage/index.js";
 export { PrismaCrmProvider } from "./storage/prisma-crm-provider.js";
 export { PrismaTierStore } from "./prisma-tier-store.js";
 export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";

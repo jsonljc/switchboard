@@ -154,10 +154,10 @@ describe("createApiOrchestrator", () => {
       expect(result.envelope).toBeDefined();
       expect(result.envelope.id).toBe("env_prop_1");
       expect(result.envelope.status).toBe("pending_approval");
-      expect(result.envelope.proposals[0].status).toBe("proposed");
+      expect(result.envelope.proposals![0]!.status).toBe("proposed");
       expect(result.decisionTrace).toBeDefined();
-      expect(result.decisionTrace.finalDecision).toBe("allow");
-      expect(result.decisionTrace.approvalRequired).toBe("standard");
+      expect(result.decisionTrace!.finalDecision).toBe("allow");
+      expect(result.decisionTrace!.approvalRequired).toBe("standard");
       expect(result.approvalRequest).toEqual({ id: "apr_1", summary: "Needs review" });
       expect(result.denied).toBe(false);
     });
@@ -181,8 +181,8 @@ describe("createApiOrchestrator", () => {
 
       expect(result.denied).toBe(true);
       expect(result.envelope.status).toBe("denied");
-      expect(result.envelope.proposals[0].status).toBe("denied");
-      expect(result.decisionTrace.finalDecision).toBe("deny");
+      expect(result.envelope.proposals![0]!.status).toBe("denied");
+      expect(result.decisionTrace!.finalDecision).toBe("deny");
       expect(result.explanation).toBe("Policy violation");
     });
 
@@ -205,7 +205,7 @@ describe("createApiOrchestrator", () => {
 
       expect(result.denied).toBe(false);
       expect(result.envelope.status).toBe("approved");
-      expect(result.decisionTrace.approvalRequired).toBe("none");
+      expect(result.decisionTrace!.approvalRequired).toBe("none");
     });
 
     it("passes emergencyOverride when set", async () => {
@@ -258,14 +258,14 @@ describe("createApiStorage", () => {
 
       expect(client.get).toHaveBeenCalledWith("/api/approvals/apr_1");
       expect(result).not.toBeNull();
-      expect(result.request.id).toBe("apr_1");
-      expect(result.request.summary).toBe("High risk");
-      expect(result.request.riskCategory).toBe("high");
-      expect(result.request.expiresAt).toBeInstanceOf(Date);
-      expect(result.request.respondedBy).toBe("reviewer_1");
-      expect(result.state.status).toBe("approved");
-      expect(result.envelopeId).toBe("env_1");
-      expect(result.organizationId).toBe("org_1");
+      expect(result!.request.id).toBe("apr_1");
+      expect(result!.request.summary).toBe("High risk");
+      expect(result!.request.riskCategory).toBe("high");
+      expect(result!.request.expiresAt).toBeInstanceOf(Date);
+      expect(result!.request.respondedBy).toBe("reviewer_1");
+      expect(result!.state.status).toBe("approved");
+      expect(result!.envelopeId).toBe("env_1");
+      expect(result!.organizationId).toBe("org_1");
     });
 
     it("returns null on 404", async () => {
@@ -289,13 +289,13 @@ describe("createApiStorage", () => {
       const storage = createApiStorage(client);
       const result = await storage.approvals.getById("apr_sparse");
 
-      expect(result.request.id).toBe("apr_sparse");
-      expect(result.request.summary).toBe("");
-      expect(result.request.riskCategory).toBe("low");
-      expect(result.request.respondedBy).toBeNull();
-      expect(result.state.status).toBe("pending");
-      expect(result.envelopeId).toBe("");
-      expect(result.organizationId).toBeNull();
+      expect(result!.request.id).toBe("apr_sparse");
+      expect(result!.request.summary).toBe("");
+      expect(result!.request.riskCategory).toBe("low");
+      expect(result!.request.respondedBy).toBeNull();
+      expect(result!.state.status).toBe("pending");
+      expect(result!.envelopeId).toBe("");
+      expect(result!.organizationId).toBeNull();
     });
   });
 
@@ -321,8 +321,8 @@ describe("createApiStorage", () => {
 
       expect(client.get).toHaveBeenCalledWith("/api/approvals/pending");
       expect(result).toHaveLength(1);
-      expect(result[0].request.id).toBe("apr_1");
-      expect(result[0].state.status).toBe("pending");
+      expect(result[0]!.request.id).toBe("apr_1");
+      expect(result[0]!.state.status).toBe("pending");
     });
 
     it("GETs pending approvals with org filter", async () => {
@@ -514,9 +514,9 @@ describe("createApiLedger", () => {
     expect(calledPath).toContain("limit=10");
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("entry_1");
-    expect(result[0].timestamp).toBeInstanceOf(Date);
-    expect(result[0].timestamp.toISOString()).toBe("2026-03-01T10:00:00.000Z");
+    expect(result[0]!.id).toBe("entry_1");
+    expect(result[0]!.timestamp).toBeInstanceOf(Date);
+    expect(result[0]!.timestamp.toISOString()).toBe("2026-03-01T10:00:00.000Z");
   });
 
   it("converts Date filter values to ISO strings", async () => {
