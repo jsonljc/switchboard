@@ -68,7 +68,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
     this.phoneNumberId = config.phoneNumberId;
     this.appSecret = config.appSecret ?? null;
     this.verifyToken = config.verifyToken ?? null;
-    this.apiVersion = config.apiVersion ?? "v17.0";
+    this.apiVersion = config.apiVersion ?? "v21.0";
   }
 
   /**

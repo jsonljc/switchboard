@@ -15,12 +15,18 @@ export async function getApiClient(): Promise<SwitchboardClient> {
   });
 
   if (user) {
-    const apiKey = decryptApiKey(user.apiKeyEncrypted);
-    return new SwitchboardClient(baseUrl, apiKey);
+    try {
+      const apiKey = decryptApiKey(user.apiKeyEncrypted);
+      return new SwitchboardClient(baseUrl, apiKey);
+    } catch (err) {
+      throw new Error(
+        `Failed to decrypt API key for user ${session.user.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // Dev bypass fallback: use env API key when user not found in DB
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+  if (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
     const fallbackKey = process.env.SWITCHBOARD_API_KEY;
     if (fallbackKey) {
       return new SwitchboardClient(baseUrl, fallbackKey);
