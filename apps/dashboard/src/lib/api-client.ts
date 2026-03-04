@@ -585,4 +585,68 @@ export class SwitchboardClient {
   async testWebhook(id: string) {
     return this.request<{ success: boolean }>(`/api/webhooks/${id}/test`, { method: "POST" });
   }
+
+  // Clinic Reports
+  async getClinicReport(params?: { startDate?: string; endDate?: string; adSpend?: number }) {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.set("startDate", params.startDate);
+    if (params?.endDate) query.set("endDate", params.endDate);
+    if (params?.adSpend != null) query.set("adSpend", String(params.adSpend));
+    const qs = query.toString();
+    return this.request<{
+      period: { startDate: string; endDate: string };
+      organizationId: string;
+      leads: {
+        total: number;
+        byStage: Array<{ stage: string; count: number; totalValue: number }>;
+      };
+      bookings: { count: number; fromDeals: number; fromAudit: number };
+      responseTime: {
+        averageMs: number | null;
+        p50Ms: number | null;
+        p95Ms: number | null;
+        sampleSize: number;
+      };
+      adCorrelation: {
+        leadsFromAds: number;
+        bookingsFromAds: number;
+        adAttributionRate: number;
+        bySource: Array<{
+          sourceAdId: string | null;
+          utmSource: string | null;
+          leadCount: number;
+          bookingCount: number;
+        }>;
+      };
+      costMetrics: {
+        adSpend: number | null;
+        costPerBooking: number | null;
+        costPerLead: number | null;
+      };
+    }>(`/api/reports/clinic${qs ? `?${qs}` : ""}`);
+  }
+
+  // Conversations
+  async getConversations(filters?: { status?: string; channel?: string; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.channel) params.set("channel", filters.channel);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    const qs = params.toString();
+    return this.request<{
+      conversations: Array<{
+        id: string;
+        threadId: string;
+        channel: string;
+        principalId: string;
+        status: string;
+        currentIntent: string | null;
+        firstReplyAt: string | null;
+        lastActivityAt: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/conversations${qs ? `?${qs}` : ""}`);
+  }
 }

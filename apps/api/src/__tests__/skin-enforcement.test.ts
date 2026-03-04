@@ -52,6 +52,7 @@ function createMockSkin(overrides?: Partial<ResolvedSkin>): ResolvedSkin {
     playbooks: [],
     primaryChannel: null,
     requiredCartridges: ["patient-engagement"],
+    config: {},
     ...overrides,
   };
 }

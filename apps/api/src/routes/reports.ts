@@ -5,10 +5,11 @@ const clinicReportQuerySchema = z.object({
   organizationId: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  adSpend: z.coerce.number().optional(),
 });
 
 export const reportsRoutes: FastifyPluginAsync = async (app) => {
-  const prisma = app.prisma as any;
+  const prisma = app.prisma;
 
   // GET /api/reports/clinic — clinic performance metrics
   app.get("/clinic", async (request, reply) => {
@@ -199,6 +200,15 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       bySource: [...bySourceMap.values()],
     };
 
+    // Cost metrics (from optional adSpend param)
+    const effectiveBookings = bookingCount || bookingAuditCount;
+    const costPerBooking =
+      parsed.data.adSpend != null && effectiveBookings > 0
+        ? parsed.data.adSpend / effectiveBookings
+        : null;
+    const costPerLead =
+      parsed.data.adSpend != null && leadsFromAds > 0 ? parsed.data.adSpend / leadsFromAds : null;
+
     return reply.send({
       period: {
         startDate: startDate.toISOString(),
@@ -210,12 +220,17 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
         byStage: leadsByStage,
       },
       bookings: {
-        count: bookingCount || bookingAuditCount,
+        count: effectiveBookings,
         fromDeals: bookingCount,
         fromAudit: bookingAuditCount,
       },
       responseTime: responseTimeMetrics,
       adCorrelation,
+      costMetrics: {
+        adSpend: parsed.data.adSpend ?? null,
+        costPerBooking,
+        costPerLead,
+      },
     });
   });
 };

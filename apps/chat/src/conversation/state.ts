@@ -21,6 +21,7 @@ export interface ConversationStateData {
   firstReplyAt: Date | null;
   lastActivityAt: Date;
   expiresAt: Date;
+  crmContactId: string | null;
 }
 
 export function createConversation(
@@ -42,6 +43,7 @@ export function createConversation(
     firstReplyAt: null,
     lastActivityAt: new Date(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    crmContactId: null,
   };
 }
 

@@ -96,6 +96,7 @@ describe("PrismaConversationStore integration", () => {
       ],
       lastActivityAt: new Date(),
       expiresAt: new Date(Date.now() + 86400000),
+      crmContactId: null,
     };
 
     await store.save(state);

@@ -20,9 +20,10 @@ import type {
   ResolvedSkin,
 } from "@switchboard/core";
 import { inferCartridgeId, matchesAny } from "@switchboard/core";
-import type { UndoRecipe } from "@switchboard/schemas";
+import type { UndoRecipe, CrmProvider } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
+import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
@@ -45,6 +46,8 @@ export interface ChatRuntimeConfig {
   planGraphBuilder?: PlanGraphBuilder;
   /** Resolved skin for tool filter enforcement and config. */
   resolvedSkin?: ResolvedSkin | null;
+  /** Optional CRM provider for auto-linking conversations to contacts. */
+  crmProvider?: CrmProvider | null;
 }
 
 export class ChatRuntime {
@@ -60,6 +63,8 @@ export class ChatRuntime {
   private capabilityRegistry: CapabilityRegistry | null;
   private planGraphBuilder: PlanGraphBuilder | null;
   private resolvedSkin: ResolvedSkin | null;
+  private crmProvider: CrmProvider | null;
+  private filterOutgoing: (text: string) => string;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -80,10 +85,30 @@ export class ChatRuntime {
     this.capabilityRegistry = config.capabilityRegistry ?? null;
     this.planGraphBuilder = config.planGraphBuilder ?? null;
     this.resolvedSkin = config.resolvedSkin ?? null;
+    this.crmProvider = config.crmProvider ?? null;
+
+    // Initialize banned phrase filter from skin config
+    const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
+      | BannedPhraseConfig
+      | string[]
+      | undefined;
+    if (bannedConfig) {
+      const normalizedConfig: BannedPhraseConfig = Array.isArray(bannedConfig)
+        ? { phrases: bannedConfig }
+        : bannedConfig;
+      this.filterOutgoing = createBannedPhraseFilter(normalizedConfig);
+    } else {
+      this.filterOutgoing = (text: string) => text;
+    }
   }
 
   getAdapter(): ChannelAdapter {
     return this.adapter;
+  }
+
+  /** Send text reply with banned phrase filtering applied. */
+  private async sendFilteredReply(threadId: string, text: string): Promise<void> {
+    await this.adapter.sendTextReply(threadId, this.filterOutgoing(text));
   }
 
   private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
@@ -152,6 +177,20 @@ export class ChatRuntime {
     let conversation = await getThread(threadId);
     if (!conversation) {
       conversation = createConversation(threadId, message.channel, message.principalId);
+      // Auto-link to CRM contact by external ID (e.g. WhatsApp phone, Telegram user ID)
+      if (this.crmProvider) {
+        try {
+          const existing = await this.crmProvider.findByExternalId(
+            message.principalId,
+            message.channel,
+          );
+          if (existing) {
+            conversation.crmContactId = existing.id;
+          }
+        } catch {
+          // Non-critical — continue without CRM link
+        }
+      }
       await setThread(conversation);
     }
 
@@ -165,7 +204,7 @@ export class ChatRuntime {
     // Handle help command
     if (/^help$/i.test(message.text.trim())) {
       const helpText = composeHelpMessage(this.availableActions);
-      await this.adapter.sendTextReply(threadId, helpText);
+      await this.sendFilteredReply(threadId, helpText);
       await this.recordAssistantMessage(threadId, helpText);
       return;
     }
@@ -216,7 +255,7 @@ export class ChatRuntime {
     if (!guard.valid || !guard.data) {
       console.error("Interpreter output failed schema guard:", guard.errors);
       const uncertainReply = composeUncertainReply(this.availableActions);
-      await this.adapter.sendTextReply(threadId, uncertainReply);
+      await this.sendFilteredReply(threadId, uncertainReply);
       await this.recordAssistantMessage(threadId, uncertainReply);
       return;
     }
@@ -225,7 +264,7 @@ export class ChatRuntime {
     // Handle read intents (no governance pipeline needed)
     if (result.readIntent && result.proposals.length === 0) {
       if (!this.readAdapter) {
-        await this.adapter.sendTextReply(threadId, "Read operations are not configured.");
+        await this.sendFilteredReply(threadId, "Read operations are not configured.");
         return;
       }
       try {
@@ -238,10 +277,10 @@ export class ChatRuntime {
             organizationId: message.organizationId,
           },
         );
-        await this.adapter.sendTextReply(threadId, readResult.text);
+        await this.sendFilteredReply(threadId, readResult.text);
       } catch (err) {
         console.error("Read intent error:", err);
-        await this.adapter.sendTextReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
+        await this.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
       }
       return;
     }
@@ -254,13 +293,13 @@ export class ChatRuntime {
         question,
       });
       await setThread(conversation);
-      await this.adapter.sendTextReply(threadId, question);
+      await this.sendFilteredReply(threadId, question);
       return;
     }
 
     // If no proposals, uncertain
     if (result.proposals.length === 0) {
-      await this.adapter.sendTextReply(threadId, composeUncertainReply(this.availableActions));
+      await this.sendFilteredReply(threadId, composeUncertainReply(this.availableActions));
       return;
     }
 
@@ -302,7 +341,7 @@ export class ChatRuntime {
 
     // Rate limit proposals per principal (defense against compute DoS)
     if (!this.checkProposalRateLimit(message.principalId)) {
-      await this.adapter.sendTextReply(
+      await this.sendFilteredReply(
         threadId,
         "You're sending too many requests. Please wait a moment and try again.",
       );
@@ -316,7 +355,7 @@ export class ChatRuntime {
         const included = matchesAny(proposal.actionType, include);
         const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
         if (!included || excluded) {
-          await this.adapter.sendTextReply(
+          await this.sendFilteredReply(
             threadId,
             `Action "${proposal.actionType}" is not available in the current configuration.`,
           );
@@ -373,9 +412,9 @@ export class ChatRuntime {
             question: proposeResult.question,
           });
           await setThread(conversation);
-          await this.adapter.sendTextReply(threadId, proposeResult.question);
+          await this.sendFilteredReply(threadId, proposeResult.question);
         } else if ("notFound" in proposeResult) {
-          await this.adapter.sendTextReply(threadId, proposeResult.explanation);
+          await this.sendFilteredReply(threadId, proposeResult.explanation);
         } else {
           await this.handleProposeResult(threadId, proposeResult, message.principalId);
         }
@@ -391,7 +430,7 @@ export class ChatRuntime {
             errorStack: err instanceof Error ? err.stack : undefined,
           })
           .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
-        await this.adapter.sendTextReply(
+        await this.sendFilteredReply(
           threadId,
           `Error processing request: ${safeErrorMessage(err)}`,
         );
@@ -407,7 +446,7 @@ export class ChatRuntime {
     if (result.denied) {
       // Denied
       const denialText = composeDenialReply(result.decisionTrace);
-      await this.adapter.sendTextReply(threadId, denialText);
+      await this.sendFilteredReply(threadId, denialText);
       await this.recordAssistantMessage(threadId, denialText);
       return;
     }
@@ -447,7 +486,7 @@ export class ChatRuntime {
       const actionType = result.envelope.proposals[0]?.actionType ?? "";
       if (isDiagnosticAction(actionType) && executeResult.data) {
         const formatted = formatDiagnosticResult(actionType, executeResult.data);
-        await this.adapter.sendTextReply(threadId, formatted);
+        await this.sendFilteredReply(threadId, formatted);
         await this.recordAssistantMessage(threadId, formatted);
         return;
       }
@@ -476,7 +515,7 @@ export class ChatRuntime {
         })
         .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
       const errText = `Execution failed: ${safeErrorMessage(err)}`;
-      await this.adapter.sendTextReply(threadId, errText);
+      await this.sendFilteredReply(threadId, errText);
       await this.recordAssistantMessage(threadId, errText);
     }
   }
@@ -527,19 +566,19 @@ export class ChatRuntime {
         }
       } else if (parsed.action === "reject") {
         const rejectText = `Action rejected by ${principalId}.`;
-        await this.adapter.sendTextReply(threadId, rejectText);
+        await this.sendFilteredReply(threadId, rejectText);
         await this.recordAssistantMessage(threadId, rejectText);
       }
     } catch (err) {
       console.error("Approval callback error:", err);
-      await this.adapter.sendTextReply(threadId, `Error: ${safeErrorMessage(err)}`);
+      await this.sendFilteredReply(threadId, `Error: ${safeErrorMessage(err)}`);
     }
   }
 
   private async handleUndo(threadId: string, principalId: string): Promise<void> {
     const lastEnvelopeId = await this.getLastExecutedEnvelopeId(threadId);
     if (!lastEnvelopeId) {
-      await this.adapter.sendTextReply(threadId, "No recent action to undo.");
+      await this.sendFilteredReply(threadId, "No recent action to undo.");
       return;
     }
 
@@ -548,7 +587,7 @@ export class ChatRuntime {
       await this.handleProposeResult(threadId, undoResult, principalId);
     } catch (err) {
       console.error("Undo error:", err);
-      await this.adapter.sendTextReply(threadId, `Cannot undo: ${safeErrorMessage(err)}`);
+      await this.sendFilteredReply(threadId, `Cannot undo: ${safeErrorMessage(err)}`);
     }
   }
 
@@ -558,7 +597,7 @@ export class ChatRuntime {
     organizationId: string | null,
   ): Promise<void> {
     if (!this.readAdapter) {
-      await this.adapter.sendTextReply(
+      await this.sendFilteredReply(
         threadId,
         "Cannot execute kill switch: read adapter not configured.",
       );
@@ -581,11 +620,11 @@ export class ChatRuntime {
       );
 
       if (activeCampaigns.length === 0) {
-        await this.adapter.sendTextReply(threadId, "No active campaigns to pause.");
+        await this.sendFilteredReply(threadId, "No active campaigns to pause.");
         return;
       }
 
-      await this.adapter.sendTextReply(
+      await this.sendFilteredReply(
         threadId,
         `Emergency: pausing ${activeCampaigns.length} active campaign(s)...`,
       );
@@ -621,14 +660,14 @@ export class ChatRuntime {
       }
 
       if (failures.length > 0) {
-        await this.adapter.sendTextReply(
+        await this.sendFilteredReply(
           threadId,
           `Kill switch failures:\n${failures.map((f) => `- ${f}`).join("\n")}`,
         );
       }
     } catch (err) {
       console.error("Kill switch error:", err);
-      await this.adapter.sendTextReply(threadId, `Kill switch error: ${safeErrorMessage(err)}`);
+      await this.sendFilteredReply(threadId, `Kill switch error: ${safeErrorMessage(err)}`);
     }
   }
 

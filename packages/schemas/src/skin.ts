@@ -91,5 +91,7 @@ export const SkinManifestSchema = z.object({
   playbooks: z.array(SkinPlaybookSchema).optional(),
   requiredCartridges: z.array(z.string()).min(1),
   channels: SkinChannelsSchema.optional(),
+  /** Arbitrary skin-specific configuration (e.g. bannedPhrases, bookingUrl). */
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 export type SkinManifest = z.infer<typeof SkinManifestSchema>;

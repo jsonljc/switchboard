@@ -127,5 +127,10 @@
   "channels": {
     "primary": "whatsapp",
     "enabled": ["whatsapp", "telegram", "instagram", "messenger"]
+  },
+
+  "config": {
+    "bannedPhrases": ["competitor_name", "guaranteed results", "100% success"],
+    "bookingUrl": "https://calendly.com/your-clinic"
   }
 }

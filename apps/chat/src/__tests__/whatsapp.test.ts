@@ -229,4 +229,116 @@ describe("WhatsAppAdapter", () => {
       expect(adapter.extractMessageId(payload)).toBe("wamid.test123");
     });
   });
+
+  describe("referral extraction", () => {
+    it("should extract referral data from text messages", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "Ad User" }, wa_id: "15551112222" }],
+                  messages: [
+                    {
+                      from: "15551112222",
+                      id: "wamid.ref001",
+                      timestamp: "1700000000",
+                      text: { body: "Hi from ad" },
+                      type: "text",
+                      referral: {
+                        source_id: "ad_123456",
+                        source_type: "ad",
+                        headline: "Book Now",
+                        body: "50% off first visit",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ad_123456");
+      expect(msg!.metadata).toHaveProperty("adSourceType", "ad");
+      expect(msg!.metadata).toHaveProperty("adHeadline", "Book Now");
+      expect(msg!.metadata).toHaveProperty("adBody", "50% off first visit");
+      expect(msg!.metadata).toHaveProperty("contactName", "Ad User");
+    });
+
+    it("should extract referral data from interactive messages", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "Jane" }, wa_id: "15559876543" }],
+                  messages: [
+                    {
+                      from: "15559876543",
+                      id: "wamid.ref_btn",
+                      timestamp: "1700000000",
+                      type: "interactive",
+                      interactive: {
+                        type: "button_reply",
+                        button_reply: { id: "yes", title: "Yes" },
+                      },
+                      referral: {
+                        source_id: "ad_789",
+                        source_type: "post",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ad_789");
+      expect(msg!.metadata).toHaveProperty("adSourceType", "post");
+      expect(msg!.metadata).toHaveProperty("contactName", "Jane");
+      expect(msg!.metadata).toHaveProperty("interactiveType", "button_reply");
+    });
+
+    it("should not include referral fields when referral is absent", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: "15551234567",
+                      id: "wamid.noref",
+                      timestamp: "1700000000",
+                      text: { body: "Normal message" },
+                      type: "text",
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).not.toHaveProperty("sourceAdId");
+      expect(msg!.metadata).not.toHaveProperty("adSourceType");
+    });
+  });
 });

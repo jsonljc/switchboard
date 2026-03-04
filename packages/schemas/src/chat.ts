@@ -55,6 +55,7 @@ export const ConversationStateSchema = z.object({
   firstReplyAt: z.coerce.date().nullable().optional(),
   lastActivityAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
+  crmContactId: z.string().nullable().optional(),
 });
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 

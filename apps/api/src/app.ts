@@ -31,6 +31,7 @@ import { smbRoutes } from "./routes/smb.js";
 import { governanceRoutes } from "./routes/governance.js";
 import { campaignsRoutes } from "./routes/campaigns.js";
 import { reportsRoutes } from "./routes/reports.js";
+import { conversationsRoutes } from "./routes/conversations.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import apiVersionPlugin from "./versioning.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -200,6 +201,7 @@ export async function buildServer() {
         { name: "Governance", description: "Governance profiles and emergency halt" },
         { name: "Campaigns", description: "Campaign read operations via digital-ads cartridge" },
         { name: "Reports", description: "Clinic and vertical reporting endpoints" },
+        { name: "Conversations", description: "Conversation listing and management" },
       ],
       components: {
         securitySchemes: {
@@ -602,8 +604,14 @@ export async function buildServer() {
     : () => {};
 
   // Start cadence cron runner (evaluates pending cadences on schedule)
+  let cadenceStore: import("@switchboard/db").CadenceStore | undefined;
+  if (prismaClient) {
+    const { PrismaCadenceStore } = await import("@switchboard/db");
+    cadenceStore = new PrismaCadenceStore(prismaClient);
+  }
   const stopCadenceRunner = startCadenceRunner({
     storageContext: storage,
+    cadenceStore,
     intervalMs: 60_000,
     logger: app.log,
   });
@@ -729,6 +737,7 @@ export async function buildServer() {
   await app.register(governanceRoutes, { prefix: "/api/governance" });
   await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
   await app.register(reportsRoutes, { prefix: "/api/reports" });
+  await app.register(conversationsRoutes, { prefix: "/api/conversations" });
 
   return app;
 }
