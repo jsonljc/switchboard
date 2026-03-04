@@ -242,8 +242,11 @@ async function handleStripeEvent(
             },
             systemContext(),
           );
-        } catch {
-          // Non-fatal — log and continue
+        } catch (err) {
+          logger.warn(
+            { err, paymentId: obj["id"] },
+            "Failed to log payment via patient-engagement cartridge",
+          );
         }
       }
       break;
@@ -321,8 +324,8 @@ async function handleFormSubmission(
         },
         systemContext(),
       );
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      logger.warn({ err, leadId }, "Failed to create CRM contact");
     }
   }
 
@@ -341,8 +344,8 @@ async function handleFormSubmission(
         },
         systemContext(),
       );
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      logger.warn({ err, leadId }, "Failed to qualify lead");
     }
   }
 

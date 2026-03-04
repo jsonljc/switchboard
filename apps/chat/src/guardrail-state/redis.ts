@@ -18,8 +18,8 @@ export class RedisGuardrailStateStore implements GuardrailStateStore {
       try {
         const entry = JSON.parse(raw) as RateLimitEntry;
         result.set(key, entry);
-      } catch {
-        // Corrupted entry — skip
+      } catch (err) {
+        console.warn("Corrupted guardrail rate-limit entry, skipping", { key, err });
       }
     }
     return result;

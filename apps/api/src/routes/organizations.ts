@@ -2,6 +2,9 @@ import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import { generateIntegrationGuide } from "@switchboard/core";
 import { getConnectionStore } from "../utils/connection-store.js";
+import { createLogger } from "../logger.js";
+
+const logger = createLogger("organizations");
 
 export const organizationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/organizations/:orgId/config
@@ -475,8 +478,11 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         const connectionStore = await getConnectionStore(app.prisma);
         try {
           await connectionStore.delete(managedChannel.connectionId);
-        } catch {
-          // Connection may already be deleted
+        } catch (err) {
+          logger.warn(
+            { err, connectionId: managedChannel.connectionId },
+            "Failed to delete connection (may already be deleted)",
+          );
         }
       }
 
