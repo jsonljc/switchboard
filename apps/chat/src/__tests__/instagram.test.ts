@@ -267,6 +267,140 @@ describe("InstagramAdapter", () => {
       expect(adapter.extractMessageId({ entry: [{ messaging: [{}] }] })).toBeNull();
     });
   });
+
+  describe("referral extraction", () => {
+    it("should extract referral data from text messages", () => {
+      const payload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "page_123",
+            time: 1700000000,
+            messaging: [
+              {
+                sender: { id: "user_ad" },
+                recipient: { id: "page_123" },
+                timestamp: 1700000000000,
+                message: {
+                  mid: "m_ref001",
+                  text: "Interested in your services",
+                },
+                referral: {
+                  ad_id: "ig_ad_456",
+                  source: "ig_story",
+                  type: "OPEN_THREAD",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ig_ad_456");
+      expect(msg!.metadata).toHaveProperty("utmSource", "ig_story");
+      expect(msg!.metadata).toHaveProperty("adSourceType", "OPEN_THREAD");
+    });
+
+    it("should extract referral data from postback messages", () => {
+      const payload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "page_123",
+            time: 1700000000,
+            messaging: [
+              {
+                sender: { id: "user_ad" },
+                recipient: { id: "page_123" },
+                timestamp: 1700000000000,
+                postback: {
+                  title: "Get Started",
+                  payload: "GET_STARTED",
+                },
+                referral: {
+                  ad_id: "ig_ad_789",
+                  source: "ig_feed",
+                  type: "OPEN_THREAD",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.text).toBe("GET_STARTED");
+      expect(msg!.metadata).toHaveProperty("type", "postback");
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ig_ad_789");
+      expect(msg!.metadata).toHaveProperty("utmSource", "ig_feed");
+    });
+
+    it("should extract referral data from quick_reply messages", () => {
+      const payload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "page_123",
+            time: 1700000000,
+            messaging: [
+              {
+                sender: { id: "user_ad" },
+                recipient: { id: "page_123" },
+                timestamp: 1700000000000,
+                message: {
+                  mid: "m_qr_ref",
+                  text: "Book",
+                  quick_reply: { payload: "BOOK_NOW" },
+                },
+                referral: {
+                  ad_id: "ig_ad_qr",
+                  source: "ig_explore",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.text).toBe("BOOK_NOW");
+      expect(msg!.metadata).toHaveProperty("type", "quick_reply");
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ig_ad_qr");
+      expect(msg!.metadata).toHaveProperty("utmSource", "ig_explore");
+    });
+
+    it("should not include referral fields when referral is absent", () => {
+      const payload = {
+        object: "instagram",
+        entry: [
+          {
+            id: "page_123",
+            time: 1700000000,
+            messaging: [
+              {
+                sender: { id: "user_456" },
+                recipient: { id: "page_123" },
+                timestamp: 1700000000000,
+                message: {
+                  mid: "m_noref",
+                  text: "Normal message",
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).not.toHaveProperty("sourceAdId");
+      expect(msg!.metadata).not.toHaveProperty("utmSource");
+    });
+  });
 });
 
 describe("ChannelGateway detection", () => {

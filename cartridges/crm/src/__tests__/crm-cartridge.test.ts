@@ -173,6 +173,32 @@ describe("CrmCartridge", () => {
       expect(result.undoRecipe).toBeTruthy();
     });
 
+    it("should create a contact with ad attribution fields", async () => {
+      const result = await cartridge.execute(
+        "crm.contact.create",
+        {
+          email: "ad-lead@example.com",
+          firstName: "Ad",
+          lastName: "Lead",
+          sourceAdId: "ad_12345",
+          utmSource: "facebook_feed",
+        },
+        ctx,
+      );
+      expect(result.success).toBe(true);
+      expect(result.summary).toContain("created");
+      expect(result.externalRefs["contactId"]).toBeTruthy();
+
+      // Verify the created contact has the attribution fields
+      const searchResult = await cartridge.execute(
+        "crm.contact.search",
+        { query: "ad-lead@example.com" },
+        ctx,
+      );
+      expect(searchResult.success).toBe(true);
+      expect(searchResult.summary).toContain("ad-lead@example.com");
+    });
+
     it("should fail contact creation without email", async () => {
       const result = await cartridge.execute("crm.contact.create", { firstName: "No Email" }, ctx);
       expect(result.success).toBe(false);
@@ -190,6 +216,16 @@ describe("CrmCartridge", () => {
       expect(result.rollbackAvailable).toBe(true);
       expect(result.undoRecipe).toBeTruthy();
       expect(result.undoRecipe?.reverseActionType).toBe("crm.contact.update");
+    });
+
+    it("should update a contact with ad attribution fields", async () => {
+      const result = await cartridge.execute(
+        "crm.contact.update",
+        { contactId: "ct_alice", data: { sourceAdId: "ad_99", utmSource: "google_search" } },
+        ctx,
+      );
+      expect(result.success).toBe(true);
+      expect(result.summary).toContain("updated");
     });
 
     it("should fail contact update without contactId", async () => {
