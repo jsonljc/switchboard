@@ -22,6 +22,8 @@ const SEED_CONTACTS: CrmContact[] = [
     tags: ["enterprise", "decision-maker"],
     status: "active",
     assignedStaffId: null,
+    sourceAdId: null,
+    utmSource: null,
     createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
     properties: { title: "VP of Engineering", source: "inbound" },
@@ -38,6 +40,8 @@ const SEED_CONTACTS: CrmContact[] = [
     tags: ["startup", "technical"],
     status: "active",
     assignedStaffId: null,
+    sourceAdId: null,
+    utmSource: null,
     createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     properties: { title: "CTO", source: "referral" },
@@ -54,6 +58,8 @@ const SEED_CONTACTS: CrmContact[] = [
     tags: ["enterprise", "procurement"],
     status: "active",
     assignedStaffId: null,
+    sourceAdId: null,
+    utmSource: null,
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
     properties: { title: "Head of Procurement", source: "cold-outreach" },
@@ -70,6 +76,8 @@ const SEED_CONTACTS: CrmContact[] = [
     tags: ["freelancer"],
     status: "active",
     assignedStaffId: null,
+    sourceAdId: null,
+    utmSource: null,
     createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     properties: { source: "website-signup" },
@@ -292,6 +300,8 @@ export class InMemoryCrmProvider implements CrmProvider {
     phone?: string;
     channel?: string;
     assignedStaffId?: string;
+    sourceAdId?: string;
+    utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     const now = new Date().toISOString();
@@ -307,6 +317,8 @@ export class InMemoryCrmProvider implements CrmProvider {
       tags: [],
       status: "active",
       assignedStaffId: data.assignedStaffId ?? null,
+      sourceAdId: data.sourceAdId ?? null,
+      utmSource: data.utmSource ?? null,
       createdAt: now,
       updatedAt: now,
       properties: data.properties ?? {},
@@ -329,6 +341,8 @@ export class InMemoryCrmProvider implements CrmProvider {
       "tags",
       "status",
       "assignedStaffId",
+      "sourceAdId",
+      "utmSource",
     ] as const;
     for (const key of updatable) {
       if (data[key] !== undefined) {

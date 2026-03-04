@@ -411,6 +411,8 @@ model CrmContact {
   status          String    @default("active") // active, archived
   organizationId  String?
   assignedStaffId String?
+  sourceAdId      String?
+  utmSource       String?
   properties      Json      @default("{}")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -422,6 +424,7 @@ model CrmContact {
   @@index([email])
   @@index([externalId])
   @@index([status])
+  @@index([sourceAdId])
 }
 
 model CrmDeal {

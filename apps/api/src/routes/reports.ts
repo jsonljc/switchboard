@@ -128,6 +128,77 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
+    // 6. Ad spend ↔ booking correlation
+    const adAttributedContacts = await prisma.crmContact.findMany({
+      where: {
+        ...orgFilter,
+        ...dateFilter,
+        sourceAdId: { not: null },
+      },
+      select: {
+        id: true,
+        sourceAdId: true,
+        utmSource: true,
+      },
+    });
+
+    const leadsFromAds = adAttributedContacts.length;
+
+    // Find which ad-attributed contacts have booking-stage deals
+    let bookingsFromAds = 0;
+    const bySourceMap = new Map<
+      string,
+      {
+        sourceAdId: string | null;
+        utmSource: string | null;
+        leadCount: number;
+        bookingCount: number;
+      }
+    >();
+
+    if (leadsFromAds > 0) {
+      const adContactIds = adAttributedContacts.map((c: { id: string }) => c.id);
+      const adDeals = await prisma.crmDeal.findMany({
+        where: {
+          ...orgFilter,
+          contactId: { in: adContactIds },
+          stage: { in: bookingStages },
+        },
+        select: {
+          contactId: true,
+        },
+      });
+
+      const bookedContactIds = new Set(
+        adDeals.map((d: { contactId: string | null }) => d.contactId),
+      );
+      bookingsFromAds = bookedContactIds.size;
+
+      // Group by sourceAdId / utmSource
+      for (const contact of adAttributedContacts) {
+        const key = `${contact.sourceAdId ?? ""}|${contact.utmSource ?? ""}`;
+        const existing = bySourceMap.get(key);
+        if (existing) {
+          existing.leadCount += 1;
+          if (bookedContactIds.has(contact.id)) existing.bookingCount += 1;
+        } else {
+          bySourceMap.set(key, {
+            sourceAdId: contact.sourceAdId,
+            utmSource: contact.utmSource,
+            leadCount: 1,
+            bookingCount: bookedContactIds.has(contact.id) ? 1 : 0,
+          });
+        }
+      }
+    }
+
+    const adCorrelation = {
+      leadsFromAds,
+      bookingsFromAds,
+      adAttributionRate: totalLeads > 0 ? leadsFromAds / totalLeads : 0,
+      bySource: [...bySourceMap.values()],
+    };
+
     return reply.send({
       period: {
         startDate: startDate.toISOString(),
@@ -144,6 +215,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
         fromAudit: bookingAuditCount,
       },
       responseTime: responseTimeMetrics,
+      adCorrelation,
     });
   });
 };

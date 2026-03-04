@@ -597,6 +597,8 @@ export class HubSpotCrmProvider implements CrmProvider {
       tags: [],
       status: "active",
       assignedStaffId: raw.properties["hubspot_owner_id"] ?? null,
+      sourceAdId: raw.properties["hs_analytics_source_data_1"] ?? null,
+      utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
       properties: raw.properties as Record<string, unknown>,

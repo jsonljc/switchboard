@@ -123,6 +123,8 @@ export class PrismaCrmProvider implements CrmProvider {
     phone?: string;
     channel?: string;
     assignedStaffId?: string;
+    sourceAdId?: string;
+    utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     const row = await this.prisma.crmContact.create({
@@ -134,6 +136,8 @@ export class PrismaCrmProvider implements CrmProvider {
         phone: data.phone ?? null,
         channel: data.channel ?? null,
         assignedStaffId: data.assignedStaffId ?? null,
+        sourceAdId: data.sourceAdId ?? null,
+        utmSource: data.utmSource ?? null,
         organizationId: this.organizationId ?? null,
         properties: (data.properties as object) ?? {},
         status: "active",
@@ -154,6 +158,8 @@ export class PrismaCrmProvider implements CrmProvider {
     if (data["status"] !== undefined) updateData["status"] = data["status"];
     if (data["assignedStaffId"] !== undefined)
       updateData["assignedStaffId"] = data["assignedStaffId"];
+    if (data["sourceAdId"] !== undefined) updateData["sourceAdId"] = data["sourceAdId"];
+    if (data["utmSource"] !== undefined) updateData["utmSource"] = data["utmSource"];
     if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
 
     const row = await this.prisma.crmContact.update({
@@ -247,6 +253,8 @@ function toContact(row: {
   tags: string[];
   status: string;
   assignedStaffId: string | null;
+  sourceAdId: string | null;
+  utmSource: string | null;
   properties: unknown;
   createdAt: Date;
   updatedAt: Date;
@@ -263,6 +271,8 @@ function toContact(row: {
     tags: row.tags,
     status: row.status as "active" | "archived",
     assignedStaffId: row.assignedStaffId,
+    sourceAdId: row.sourceAdId,
+    utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
