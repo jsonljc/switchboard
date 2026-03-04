@@ -210,6 +210,8 @@ export class CrmCartridge implements Cartridge {
           phone: parameters["phone"] as string | undefined,
           channel: parameters["channel"] as string | undefined,
           assignedStaffId: parameters["assignedStaffId"] as string | undefined,
+          sourceAdId: parameters["sourceAdId"] as string | undefined,
+          utmSource: parameters["utmSource"] as string | undefined,
           properties: parameters["properties"] as Record<string, unknown> | undefined,
         });
         return {

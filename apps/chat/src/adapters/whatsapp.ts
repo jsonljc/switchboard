@@ -153,6 +153,18 @@ export class WhatsAppAdapter implements ChannelAdapter {
           | string
           | undefined;
 
+        const metadata: Record<string, unknown> = { interactiveType };
+        if (contactName) metadata["contactName"] = contactName;
+
+        // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
+        const referral = msg["referral"] as Record<string, unknown> | undefined;
+        if (referral) {
+          if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
+          if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
+          if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
+          if (referral["body"]) metadata["adBody"] = referral["body"];
+        }
+
         return {
           id: msgId ?? `wa_${Date.now()}`,
           channel: "whatsapp",
@@ -161,7 +173,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
           text,
           threadId: from,
           timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
-          metadata: contactName ? { contactName, interactiveType } : { interactiveType },
+          metadata,
           attachments: [],
           organizationId: null,
         };
@@ -185,6 +197,18 @@ export class WhatsAppAdapter implements ChannelAdapter {
       | string
       | undefined;
 
+    const metadata: Record<string, unknown> = {};
+    if (contactName) metadata["contactName"] = contactName;
+
+    // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
+    const referral = msg["referral"] as Record<string, unknown> | undefined;
+    if (referral) {
+      if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
+      if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
+      if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
+      if (referral["body"]) metadata["adBody"] = referral["body"];
+    }
+
     return {
       id: msgId ?? `wa_${Date.now()}`,
       channel: "whatsapp",
@@ -193,7 +217,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
       text,
       threadId: from, // In WhatsApp, thread is keyed by phone number
       timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
-      metadata: contactName ? { contactName } : {},
+      metadata,
       attachments: [],
       organizationId: null,
     };

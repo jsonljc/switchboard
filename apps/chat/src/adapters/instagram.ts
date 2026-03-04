@@ -158,6 +158,15 @@ export class InstagramAdapter implements ChannelAdapter {
 
     const timestamp = messaging["timestamp"] as number | undefined;
 
+    // Extract referral data from Instagram DM ads
+    const referral = messaging["referral"] as Record<string, unknown> | undefined;
+    const referralMetadata: Record<string, unknown> = {};
+    if (referral) {
+      if (referral["ad_id"]) referralMetadata["sourceAdId"] = referral["ad_id"];
+      if (referral["source"]) referralMetadata["utmSource"] = referral["source"];
+      if (referral["type"]) referralMetadata["adSourceType"] = referral["type"];
+    }
+
     // Handle postback (button tap)
     const postback = messaging["postback"] as Record<string, unknown> | undefined;
     if (postback) {
@@ -176,7 +185,7 @@ export class InstagramAdapter implements ChannelAdapter {
         text: postbackPayload,
         threadId: senderId,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
-        metadata: { type: "postback" },
+        metadata: { type: "postback", ...referralMetadata },
         attachments: [],
         organizationId: null,
       };
@@ -202,7 +211,7 @@ export class InstagramAdapter implements ChannelAdapter {
         text: qrPayload,
         threadId: senderId,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
-        metadata: { type: "quick_reply" },
+        metadata: { type: "quick_reply", ...referralMetadata },
         attachments: [],
         organizationId: null,
       };
@@ -220,7 +229,7 @@ export class InstagramAdapter implements ChannelAdapter {
       text,
       threadId: senderId,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
-      metadata: {},
+      metadata: { ...referralMetadata },
       attachments: [],
       organizationId: null,
     };
