@@ -104,5 +104,6 @@ function toConversationStateData(row: {
     firstReplyAt: row.firstReplyAt,
     lastActivityAt: row.lastActivityAt,
     expiresAt: row.expiresAt,
+    crmContactId: null,
   };
 }

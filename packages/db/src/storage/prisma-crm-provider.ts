@@ -44,6 +44,13 @@ export class PrismaCrmProvider implements CrmProvider {
     return toContact(row);
   }
 
+  async findByExternalId(externalId: string, channel?: string): Promise<CrmContact | null> {
+    const where: Record<string, unknown> = { ...this.orgFilter(), externalId };
+    if (channel) where["channel"] = channel;
+    const row = await this.prisma.crmContact.findFirst({ where });
+    return row ? toContact(row) : null;
+  }
+
   async listDeals(filters?: {
     contactId?: string;
     pipeline?: string;
@@ -116,6 +123,7 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async createContact(data: {
+    externalId?: string;
     email: string;
     firstName?: string;
     lastName?: string;
@@ -129,6 +137,7 @@ export class PrismaCrmProvider implements CrmProvider {
   }): Promise<CrmContact> {
     const row = await this.prisma.crmContact.create({
       data: {
+        externalId: data.externalId ?? null,
         email: data.email,
         firstName: data.firstName ?? null,
         lastName: data.lastName ?? null,

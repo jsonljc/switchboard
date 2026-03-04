@@ -526,3 +526,26 @@ model AlertHistory {
   @@index([alertRuleId])
   @@index([organizationId, triggeredAt])
 }
+
+// ── Cadence persistence (runtime state) ──
+
+model CadenceInstance {
+  id                  String    @id @default(uuid())
+  cadenceDefinitionId String
+  patientId           String
+  organizationId      String?
+  status              String    @default("active") // active, paused, completed, cancelled
+  currentStepIndex    Int       @default(0)
+  stepStates          Json      @default("[]")
+  startedAt           DateTime  @default(now())
+  lastEvaluatedAt     DateTime?
+  nextEvaluationAt    DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([nextEvaluationAt])
+}

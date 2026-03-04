@@ -31,6 +31,8 @@ export interface ResolvedSkin {
   primaryChannel: string | null;
   /** Required cartridge IDs. */
   requiredCartridges: string[];
+  /** Arbitrary skin-specific configuration (bannedPhrases, bookingUrl, etc.). */
+  config: Record<string, unknown>;
 }
 
 /**
@@ -96,6 +98,7 @@ export class SkinResolver {
       playbooks: manifest.playbooks ?? [],
       primaryChannel: manifest.channels?.primary ?? null,
       requiredCartridges: manifest.requiredCartridges,
+      config: manifest.config ?? {},
     };
   }
 }

@@ -33,7 +33,7 @@ describe("Cadence Runner Job", () => {
     expect(true).toBe(true);
   });
 
-  it("startCadenceInstance and getCadenceInstance work", () => {
+  it("startCadenceInstance and getCadenceInstance work", async () => {
     const instance = {
       id: "inst_1",
       cadenceDefinitionId: "cad_def_1",
@@ -41,10 +41,10 @@ describe("Cadence Runner Job", () => {
       status: "active",
     };
     startCadenceInstance(instance as any);
-    expect(getCadenceInstance("inst_1")).toEqual(instance);
+    expect(await getCadenceInstance("inst_1")).toEqual(instance);
   });
 
-  it("getActiveCadenceInstances filters active instances", () => {
+  it("getActiveCadenceInstances filters active instances", async () => {
     startCadenceInstance({
       id: "inst_a",
       cadenceDefinitionId: "cad_1",
@@ -58,9 +58,9 @@ describe("Cadence Runner Job", () => {
       status: "completed",
     } as any);
 
-    const active = getActiveCadenceInstances();
-    expect(active.some((i) => i.id === "inst_a")).toBe(true);
-    expect(active.some((i) => i.id === "inst_b")).toBe(false);
+    const active = await getActiveCadenceInstances();
+    expect(active.some((i: { id: string }) => i.id === "inst_a")).toBe(true);
+    expect(active.some((i: { id: string }) => i.id === "inst_b")).toBe(false);
   });
 
   it("does nothing when no active instances", async () => {

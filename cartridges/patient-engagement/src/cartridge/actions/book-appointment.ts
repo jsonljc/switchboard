@@ -13,10 +13,30 @@ export async function executeBookAppointment(
 ): Promise<ExecuteResult> {
   const start = Date.now();
   const patientId = params.patientId as string;
+  const treatmentType = (params.treatmentType as string) ?? "consultation";
+
+  // If bookingUrl is configured, generate a pass-through link instead of calendar-booking
+  const bookingUrl = params.bookingUrl as string | undefined;
+  if (bookingUrl) {
+    const url = new URL(bookingUrl);
+    url.searchParams.set("patient_id", patientId);
+    if (treatmentType) url.searchParams.set("type", treatmentType);
+
+    return {
+      success: true,
+      summary: `Booking link generated for patient ${patientId}: ${url.toString()}`,
+      externalRefs: { patientId, bookingUrl: url.toString() },
+      rollbackAvailable: false,
+      partialFailures: [],
+      durationMs: Date.now() - start,
+      undoRecipe: null,
+      data: { bookingUrl: url.toString(), patientId, treatmentType },
+    };
+  }
+
   const startTime = new Date(params.startTime as string);
   const durationMinutes = Number(params.durationMinutes ?? 60);
   const endTime = new Date(startTime.getTime() + durationMinutes * 60_000);
-  const treatmentType = (params.treatmentType as string) ?? "consultation";
 
   try {
     const appointment = await calendar.bookAppointment(

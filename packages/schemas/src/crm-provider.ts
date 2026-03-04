@@ -55,6 +55,7 @@ export interface CrmProvider {
   // Read
   searchContacts(query: string, limit?: number): Promise<CrmContact[]>;
   getContact(contactId: string): Promise<CrmContact | null>;
+  findByExternalId(externalId: string, channel?: string): Promise<CrmContact | null>;
   listDeals(filters?: {
     contactId?: string;
     pipeline?: string;
@@ -69,6 +70,7 @@ export interface CrmProvider {
 
   // Write
   createContact(data: {
+    externalId?: string;
     email: string;
     firstName?: string;
     lastName?: string;

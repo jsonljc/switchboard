@@ -238,6 +238,16 @@ export class InMemoryCrmProvider implements CrmProvider {
     return this.contacts.get(contactId) ?? null;
   }
 
+  async findByExternalId(externalId: string, channel?: string): Promise<CrmContact | null> {
+    for (const contact of this.contacts.values()) {
+      if (contact.externalId === externalId) {
+        if (channel && contact.channel !== channel) continue;
+        return { ...contact };
+      }
+    }
+    return null;
+  }
+
   async listDeals(filters?: {
     contactId?: string;
     pipeline?: string;
@@ -293,6 +303,7 @@ export class InMemoryCrmProvider implements CrmProvider {
   }
 
   async createContact(data: {
+    externalId?: string;
     email: string;
     firstName?: string;
     lastName?: string;
@@ -307,7 +318,7 @@ export class InMemoryCrmProvider implements CrmProvider {
     const now = new Date().toISOString();
     const contact: CrmContact = {
       id: this.genId("ct"),
-      externalId: null,
+      externalId: data.externalId ?? null,
       channel: data.channel ?? null,
       email: data.email,
       firstName: data.firstName ?? null,

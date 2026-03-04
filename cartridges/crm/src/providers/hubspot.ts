@@ -137,6 +137,39 @@ export class HubSpotCrmProvider implements CrmProvider {
     });
   }
 
+  async findByExternalId(externalId: string, _channel?: string): Promise<CrmContact | null> {
+    // HubSpot uses email as the primary external ID; search by email or custom property
+    return this.call(async () => {
+      const response = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/search`, {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify({
+          filterGroups: [
+            {
+              filters: [{ propertyName: "email", operator: "EQ", value: externalId }],
+            },
+          ],
+          limit: 1,
+          properties: ["email", "firstname", "lastname", "company", "phone", "hs_lead_status"],
+        }),
+      });
+
+      if (!response.ok) return null;
+
+      const data = (await response.json()) as {
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+          createdAt: string;
+          updatedAt: string;
+        }>;
+      };
+
+      if (data.results.length === 0) return null;
+      return this.mapContact(data.results[0]!);
+    });
+  }
+
   async listDeals(filters?: {
     contactId?: string;
     pipeline?: string;
@@ -318,6 +351,7 @@ export class HubSpotCrmProvider implements CrmProvider {
   // ── Write Operations ──
 
   async createContact(data: {
+    externalId?: string;
     email: string;
     firstName?: string;
     lastName?: string;
