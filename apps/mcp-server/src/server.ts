@@ -9,6 +9,7 @@ import type {
   CartridgeRegistry,
   ToolFilter,
 } from "@switchboard/core";
+import type { ReadOperation, ReadResult } from "@switchboard/core";
 import { resolveAuth, loadMcpApiKeys } from "./auth.js";
 import type { McpAuthContext } from "./auth.js";
 import { SessionGuard } from "./session-guard.js";
@@ -43,9 +44,20 @@ export interface MinimalOrchestrator {
     parameters: Record<string, unknown>;
     principalId: string;
     cartridgeId?: string;
-  }): Promise<unknown>;
-  requestUndo(envelopeId: string): Promise<unknown>;
-  executeApproved(envelopeId: string): Promise<unknown>;
+  }): Promise<{
+    decisionTrace: {
+      finalDecision: string;
+      computedRiskScore: { rawScore: number; category: string };
+      approvalRequired: string;
+    };
+  }>;
+  requestUndo(envelopeId: string): Promise<{
+    denied: boolean;
+    envelope: { id: string };
+    explanation?: string;
+    approvalRequest?: { id: string; summary: string } | null;
+  }>;
+  executeApproved(envelopeId: string): Promise<{ summary?: string; success?: boolean }>;
   propose(params: {
     actionType: string;
     parameters: Record<string, unknown>;
@@ -54,7 +66,50 @@ export interface MinimalOrchestrator {
     cartridgeId?: string;
     message?: string;
     emergencyOverride?: boolean;
-  }): Promise<{ denied: boolean; envelope: { id: string } }>;
+  }): Promise<{
+    denied: boolean;
+    envelope: {
+      id: string;
+      status?: string;
+      proposals?: Array<{ actionType: string; status?: string; [key: string]: unknown }>;
+      [key: string]: unknown;
+    };
+    decisionTrace?: {
+      finalDecision: string;
+      computedRiskScore?: { rawScore: number; category: string };
+      approvalRequired?: string;
+      [key: string]: unknown;
+    };
+    approvalRequest?: { id: string; summary: string } | null;
+    explanation?: string;
+  }>;
+}
+
+/** Shape of an approval record as accessed by MCP tool handlers. */
+export interface MinimalApprovalRecord {
+  request: {
+    id: string;
+    summary: string;
+    riskCategory: string;
+    expiresAt: Date;
+    respondedBy?: string | null;
+  };
+  state: { status: string };
+  envelopeId: string;
+  organizationId?: string | null;
+}
+
+/** Shape of an envelope record as accessed by MCP tool handlers. */
+export interface MinimalEnvelopeRecord {
+  id: string;
+  status: string;
+  proposals: Array<{ actionType: string }>;
+  decisions: Array<{
+    approvalRequired: string;
+    computedRiskScore: { category: string };
+  }>;
+  approvalRequests: unknown[];
+  createdAt: Date;
 }
 
 /**
@@ -63,11 +118,11 @@ export interface MinimalOrchestrator {
  */
 export interface MinimalStorage {
   approvals: {
-    getById(id: string): Promise<unknown>;
-    listPending(organizationId?: string): Promise<unknown>;
+    getById(id: string): Promise<MinimalApprovalRecord | null>;
+    listPending(organizationId?: string): Promise<MinimalApprovalRecord[]>;
   };
   envelopes: {
-    getById(id: string): Promise<unknown>;
+    getById(id: string): Promise<MinimalEnvelopeRecord | null>;
   };
   cartridges: {
     get(id: string): unknown;
@@ -75,17 +130,38 @@ export interface MinimalStorage {
   };
 }
 
+/** Shape of an audit entry as accessed by MCP tool handlers. */
+export interface MinimalAuditEntry {
+  id: string;
+  eventType: string;
+  timestamp: Date;
+  actorId: string;
+  entityType: string;
+  entityId: string;
+  riskCategory?: string;
+  summary?: string | null;
+  envelopeId?: string | null;
+}
+
 /**
  * Minimal ledger interface — satisfied by both AuditLedger
  * and the API-backed proxy from api-governance-adapter.ts.
  */
 export interface MinimalLedger {
-  query(filter: Record<string, unknown>): Promise<unknown>;
+  query(filter: {
+    envelopeId?: string;
+    entityId?: string;
+    eventType?: string;
+    after?: Date | string;
+    before?: Date | string;
+    organizationId?: string;
+    limit?: number;
+  }): Promise<MinimalAuditEntry[]>;
 }
 
 export interface SwitchboardMcpServerOptions {
   executionService: ExecutionService;
-  readAdapter: CartridgeReadAdapter | { query(params: any): Promise<unknown> };
+  readAdapter: CartridgeReadAdapter | { query(params: ReadOperation): Promise<ReadResult> };
   orchestrator: MinimalOrchestrator;
   storage: MinimalStorage;
   ledger: MinimalLedger;
@@ -110,16 +186,16 @@ export class SwitchboardMcpServer {
     this.sessionGuard = SessionGuard.fromEnv();
     this.readDeps = {
       readAdapter: options.readAdapter as CartridgeReadAdapter,
-      orchestrator: options.orchestrator as any,
-      storage: options.storage as any,
+      orchestrator: options.orchestrator,
+      storage: options.storage,
       sessionGuard: this.sessionGuard,
     };
     this.governanceDeps = {
-      orchestrator: options.orchestrator as any,
+      orchestrator: options.orchestrator,
       readAdapter: options.readAdapter as CartridgeReadAdapter,
       governanceProfileStore: options.governanceProfileStore,
-      ledger: options.ledger as any,
-      storage: options.storage as any,
+      ledger: options.ledger,
+      storage: options.storage,
     };
     this.apiKeys = loadMcpApiKeys();
 

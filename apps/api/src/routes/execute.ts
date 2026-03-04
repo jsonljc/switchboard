@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { NeedsClarificationError, NotFoundError } from "@switchboard/core";
+import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard/core";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 
@@ -40,6 +40,21 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "Invalid request body", details: parsed.error.issues });
       }
       const body = parsed.data;
+
+      // Skin tool filter enforcement
+      const skin = app.resolvedSkin;
+      if (skin) {
+        const actionType = body.action.actionType;
+        const { include, exclude } = skin.toolFilter;
+        const included = matchesAny(actionType, include);
+        const excluded = exclude ? matchesAny(actionType, exclude) : false;
+        if (!included || excluded) {
+          return reply.code(403).send({
+            error: `Action "${actionType}" is not available in the current skin configuration`,
+            statusCode: 403,
+          });
+        }
+      }
 
       // Phase 2: when API key has org metadata, bind request to that org if body does not set it
       const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;

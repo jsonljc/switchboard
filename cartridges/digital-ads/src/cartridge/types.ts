@@ -1,58 +1,53 @@
 // ---------------------------------------------------------------------------
 // Switchboard Cartridge — Contract Types
 // ---------------------------------------------------------------------------
-// Defines the interfaces that any Switchboard cartridge must implement.
-// These types are framework-level — the digital-ads cartridge
-// implements them in index.ts.
+// Re-exports shared types from @switchboard/cartridge-sdk and
+// @switchboard/schemas, plus defines digital-ads-specific domain types.
 // ---------------------------------------------------------------------------
 
 import type { PlatformType, PlatformCredentials } from "../platforms/types.js";
 import type { VerticalType, EntityLevel, TimeRange } from "../core/types.js";
 
 // ---------------------------------------------------------------------------
-// Manifest types
+// Re-exports from SDK / Schemas (previously duplicated locally)
 // ---------------------------------------------------------------------------
 
-export interface ActionDefinition {
-  /** Fully qualified action type (e.g. "digital-ads.funnel.diagnose") */
-  actionType: string;
-  /** Human-readable name for this action */
-  name: string;
-  /** Human-readable description of what this action does */
-  description: string;
-  /** JSON Schema for the action's parameters */
-  parametersSchema: Record<string, unknown>;
-  /** Base risk category for this action */
-  baseRiskCategory: "none" | "low" | "medium" | "high" | "critical";
-  /** Whether the action is reversible */
-  reversible: boolean;
-  /** Optional executor hint for capability registry */
-  executorHint?: string;
-  /** Optional step type for plan decomposition */
-  stepType?: string;
-}
+export type {
+  CartridgeManifest,
+  ConnectionHealth,
+  GuardrailConfig,
+  RiskInput,
+  ActionDefinition,
+} from "@switchboard/schemas";
 
-export interface CartridgeManifest {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  requiredConnections: string[];
-  defaultPolicies: string[];
-  actions: ActionDefinition[];
+export type {
+  ExecuteResult,
+  Cartridge,
+  CartridgeContext,
+  CartridgeInterceptor,
+} from "@switchboard/cartridge-sdk";
+
+/** Re-export SDK UndoRecipe — all undo recipes use this format directly. */
+export type { UndoRecipe } from "@switchboard/schemas";
+
+/** Convenience alias for the partial failure shape used in ExecuteResult. */
+export interface PartialFailure {
+  step: string;
+  error: string;
 }
 
 // ---------------------------------------------------------------------------
-// Cartridge context
+// Digital-Ads extended context
 // ---------------------------------------------------------------------------
 
-export interface CartridgeContext {
-  /** Principal (user) ID for audit/authorization */
-  principalId: string;
-  /** Organization ID, or null if not applicable */
-  organizationId: string | null;
-  /** Connection credentials keyed by connection name */
-  connectionCredentials: Record<string, unknown>;
+import type { CartridgeContext } from "@switchboard/cartridge-sdk";
+
+/**
+ * Extended context for the digital-ads cartridge.
+ * The extra optional fields are populated by enrichContext() and merged
+ * into the context by the orchestrator before execute() is called.
+ */
+export interface DigitalAdsContext extends CartridgeContext {
   /** Session-level state (connections, cached data) */
   session?: SessionState;
   /** Resolved funnel schema (set by enrichContext for funnel.diagnose) */
@@ -67,6 +62,10 @@ export interface CartridgeContext {
   validationError?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Session types
+// ---------------------------------------------------------------------------
+
 export interface SessionState {
   /** Established platform connections */
   connections: Map<PlatformType, ConnectionState>;
@@ -80,135 +79,6 @@ export interface ConnectionState {
   entityLevels?: EntityLevel[];
   connectedAt: number;
   error?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Undo recipe
-// ---------------------------------------------------------------------------
-
-/** Re-export SDK UndoRecipe — all undo recipes use this format directly. */
-export type { UndoRecipe } from "@switchboard/schemas";
-
-// ---------------------------------------------------------------------------
-// Execution types
-// ---------------------------------------------------------------------------
-
-export interface PartialFailure {
-  step: string;
-  error: string;
-}
-
-export interface ExecuteResult {
-  success: boolean;
-  /** Human-readable summary of what happened */
-  summary: string;
-  /** External references for audit/tracking */
-  externalRefs: Record<string, string>;
-  /** Whether rollback is available (always false for read-only) */
-  rollbackAvailable: boolean;
-  /** Partial failures if some steps failed */
-  partialFailures: PartialFailure[];
-  /** Execution duration in milliseconds */
-  durationMs: number;
-  /** Undo recipe in SDK format (null for read-only actions) */
-  undoRecipe: import("@switchboard/schemas").UndoRecipe | null;
-  /** The actual result data */
-  data?: unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Risk types
-// ---------------------------------------------------------------------------
-
-export interface RiskExposure {
-  dollarsAtRisk: number;
-  blastRadius: number;
-}
-
-export interface RiskSensitivity {
-  entityVolatile: boolean;
-  learningPhase: boolean;
-  recentlyModified: boolean;
-}
-
-export interface RiskInput {
-  baseRisk: "none" | "low" | "medium" | "high" | "critical";
-  exposure: RiskExposure;
-  reversibility: "full" | "partial" | "none";
-  sensitivity: RiskSensitivity;
-}
-
-// ---------------------------------------------------------------------------
-// Guardrails
-// ---------------------------------------------------------------------------
-
-export interface RateLimitConfig {
-  /** Scope: per-platform, per-entity, or global */
-  scope: "platform" | "entity" | "global";
-  /** Maximum actions in the window */
-  maxActions: number;
-  /** Window duration in milliseconds */
-  windowMs: number;
-}
-
-export interface CooldownConfig {
-  /** Action type this cooldown applies to */
-  actionType: string;
-  /** Cooldown duration in milliseconds */
-  cooldownMs: number;
-  /** Scope for the cooldown */
-  scope: "entityId" | "platform" | "global";
-}
-
-export interface ProtectedEntity {
-  entityType: string;
-  entityId: string;
-  reason: string;
-}
-
-export interface GuardrailConfig {
-  rateLimits: RateLimitConfig[];
-  cooldowns: CooldownConfig[];
-  protectedEntities: ProtectedEntity[];
-}
-
-// ---------------------------------------------------------------------------
-// Health check
-// ---------------------------------------------------------------------------
-
-export interface ConnectionHealth {
-  status: "connected" | "degraded" | "disconnected";
-  latencyMs: number;
-  error: string | null;
-  capabilities: string[];
-}
-
-/** Internal per-platform health result used by the health-check action */
-export interface PlatformHealth {
-  platform: PlatformType;
-  status: "connected" | "degraded" | "disconnected";
-  latencyMs: number;
-  error?: string;
-  capabilities: string[];
-}
-
-export interface HealthCheckResult {
-  overall: "connected" | "degraded" | "disconnected";
-  platforms: PlatformHealth[];
-  capabilities: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Policy
-// ---------------------------------------------------------------------------
-
-export interface PolicyConfig {
-  id: string;
-  name: string;
-  description: string;
-  allowedActions: string[];
-  deniedActions: string[];
-  maxRiskLevel: "none" | "low" | "medium" | "high" | "critical";
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +210,7 @@ export interface MetaAdsWriteProvider {
   createCampaign?(params: CreateCampaignParams): Promise<{ id: string; success: boolean }>;
   createAdSet?(params: CreateAdSetParams): Promise<{ id: string; success: boolean }>;
   createAd?(params: CreateAdParams): Promise<{ id: string; success: boolean }>;
-  healthCheck(): Promise<ConnectionHealth>;
+  healthCheck(): Promise<import("@switchboard/schemas").ConnectionHealth>;
 }
 
 export interface CreateCampaignParams {
@@ -369,22 +239,36 @@ export interface CreateAdParams {
 }
 
 // ---------------------------------------------------------------------------
-// Interceptor
+// Health check (domain-specific)
 // ---------------------------------------------------------------------------
 
-export interface CartridgeInterceptor {
-  name: string;
-  before?(
-    actionType: string,
-    params: Record<string, unknown>,
-    context: Record<string, unknown>,
-  ): Promise<void>;
-  after?(actionType: string, result: ExecuteResult): Promise<void>;
+/** Internal per-platform health result used by the health-check action */
+export interface PlatformHealth {
+  platform: PlatformType;
+  status: "connected" | "degraded" | "disconnected";
+  latencyMs: number;
+  error?: string;
+  capabilities: string[];
+}
+
+export interface HealthCheckResult {
+  overall: "connected" | "degraded" | "disconnected";
+  platforms: PlatformHealth[];
+  capabilities: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Cartridge interface
+// Policy
 // ---------------------------------------------------------------------------
+
+export interface PolicyConfig {
+  id: string;
+  name: string;
+  description: string;
+  allowedActions: string[];
+  deniedActions: string[];
+  maxRiskLevel: "none" | "low" | "medium" | "high" | "critical";
+}
 
 // ---------------------------------------------------------------------------
 // Action types — read + write
@@ -412,57 +296,6 @@ export type WriteActionType =
 
 export type ActionType = ReadActionType | WriteActionType;
 
-export interface Cartridge {
-  readonly manifest: CartridgeManifest;
-
-  /** Initialize the cartridge with context (credentials, config) */
-  initialize(context: CartridgeContext): Promise<void>;
-
-  /** Enrich context before execution (resolve funnels, benchmarks, etc.) */
-  enrichContext(
-    actionType: string,
-    parameters: Record<string, unknown>,
-    context: CartridgeContext,
-  ): Promise<Record<string, unknown>>;
-
-  /** Execute an action */
-  execute(
-    actionType: string,
-    parameters: Record<string, unknown>,
-    context: CartridgeContext,
-  ): Promise<ExecuteResult>;
-
-  /** Get risk input for an action */
-  getRiskInput(
-    actionType: string,
-    parameters: Record<string, unknown>,
-    context: Record<string, unknown>,
-  ): Promise<RiskInput>;
-
-  /** Get guardrail configuration */
-  getGuardrails(): GuardrailConfig;
-
-  /** Check health of all configured platforms */
-  healthCheck(): Promise<ConnectionHealth>;
-
-  /** Capture a snapshot for audit/comparison (optional) */
-  captureSnapshot?(
-    actionType: string,
-    parameters: Record<string, unknown>,
-    context: CartridgeContext,
-  ): Promise<Record<string, unknown>>;
-
-  /** Search campaigns by query (optional, for entity resolution) */
-  searchCampaigns?(query: string): Promise<unknown[]>;
-
-  /** Resolve an entity reference (optional, for entity resolution) */
-  resolveEntity?(
-    inputRef: string,
-    entityType: string,
-    context: Record<string, unknown>,
-  ): Promise<unknown>;
-}
-
 // ---------------------------------------------------------------------------
 // Manifest validation
 // ---------------------------------------------------------------------------
@@ -477,7 +310,9 @@ const MANIFEST_ID_REGEX = /^[a-z][a-z0-9-]*$/;
 const VERSION_REGEX = /^\d+\.\d+\.\d+$/;
 const ACTION_TYPE_REGEX = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9_]*){1,4}$/;
 
-export function validateManifest(manifest: CartridgeManifest): ManifestValidationError[] {
+export function validateManifest(
+  manifest: import("@switchboard/schemas").CartridgeManifest,
+): ManifestValidationError[] {
   const errors: ManifestValidationError[] = [];
 
   if (!manifest.id || typeof manifest.id !== "string") {

@@ -1,20 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
-import type { PrismaConnectionStore as PrismaConnectionStoreType } from "@switchboard/db";
+import { getConnectionStore } from "../utils/connection-store.js";
 
-let _storeModule: { PrismaConnectionStore: typeof PrismaConnectionStoreType } | null = null;
-async function getConnectionStore(
-  prisma: any,
-): Promise<InstanceType<typeof PrismaConnectionStoreType>> {
-  if (!_storeModule) {
-    _storeModule = (await import("@switchboard/db")) as any;
-  }
-  return new _storeModule!.PrismaConnectionStore(prisma);
-}
-
-function redactCredentials(connection: Record<string, any>): Record<string, any> {
+function redactCredentials<T extends { credentials: unknown }>(
+  connection: T,
+): Omit<T, "credentials"> & { credentials: string } {
   const { credentials: _, ...rest } = connection;
-  return { ...rest, credentials: "***" };
+  return { ...rest, credentials: "***" } as Omit<T, "credentials"> & { credentials: string };
 }
 
 function hasEncryptionKey(): boolean {
@@ -296,15 +288,14 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         const required = manifest.requiredConnections ?? [];
         if (required.some((rc: string) => rc === connection.serviceId)) {
           // Found a matching cartridge — check if it has healthCheck
-          if (typeof (cartridge as any).healthCheck === "function") {
-            try {
-              await (cartridge as any).healthCheck(connection.credentials);
-              healthResult = { healthy: true };
-            } catch (err: any) {
-              healthResult = { healthy: false, detail: err.message };
-            }
-          } else {
-            healthResult = { healthy: true, detail: "No healthCheck method, assuming OK" };
+          try {
+            await cartridge.healthCheck();
+            healthResult = { healthy: true };
+          } catch (err: unknown) {
+            healthResult = {
+              healthy: false,
+              detail: err instanceof Error ? err.message : String(err),
+            };
           }
           break;
         }

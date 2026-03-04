@@ -54,6 +54,7 @@ import {
   SkinResolver,
   ToolRegistry,
 } from "@switchboard/core";
+import type { Policy } from "@switchboard/schemas";
 import type {
   StorageContext,
   LedgerStorage,
@@ -338,10 +339,7 @@ export async function buildServer() {
     requireCredentials: isProd,
     cacheStore: createSnapshotCacheStore(redis ?? undefined),
   });
-  storage.cartridges.register(
-    "digital-ads",
-    new GuardedCartridge(adsCartridge as any, interceptors),
-  );
+  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
 
   // Register quant-trading cartridge
@@ -396,6 +394,40 @@ export async function buildServer() {
       { skinId, tools: resolvedSkin.tools.length, profile: resolvedSkin.governance.profile },
       `Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
     );
+  }
+
+  // Apply skin governance profile and seed policy overrides
+  if (resolvedSkin) {
+    await governanceProfileStore.set(null, resolvedSkin.governance.profile);
+    app.log.info(
+      { profile: resolvedSkin.governance.profile },
+      "Skin governance profile set as global default",
+    );
+
+    if (resolvedSkin.governance.policyOverrides?.length) {
+      const now = new Date();
+      for (let i = 0; i < resolvedSkin.governance.policyOverrides.length; i++) {
+        const override = resolvedSkin.governance.policyOverrides[i]!;
+        await storage.policies.save({
+          id: `skin_${resolvedSkin.manifest.id}_${i}`,
+          name: override.name,
+          description: override.description ?? `Skin policy: ${override.name}`,
+          organizationId: null,
+          cartridgeId: null,
+          priority: 9000 + i,
+          active: true,
+          rule: override.rule as Policy["rule"],
+          effect: override.effect,
+          effectParams: override.effectParams ?? {},
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      app.log.info(
+        { count: resolvedSkin.governance.policyOverrides.length },
+        "Skin policy overrides seeded",
+      );
+    }
   }
 
   let queue: Queue | null = null;

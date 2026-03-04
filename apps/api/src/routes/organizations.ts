@@ -1,17 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import { generateIntegrationGuide } from "@switchboard/core";
-import type { PrismaConnectionStore as PrismaConnectionStoreType } from "@switchboard/db";
-
-let _storeModule: { PrismaConnectionStore: typeof PrismaConnectionStoreType } | null = null;
-async function getConnectionStore(
-  prisma: any,
-): Promise<InstanceType<typeof PrismaConnectionStoreType>> {
-  if (!_storeModule) {
-    _storeModule = (await import("@switchboard/db")) as any;
-  }
-  return new _storeModule!.PrismaConnectionStore(prisma);
-}
+import { getConnectionStore } from "../utils/connection-store.js";
 
 export const organizationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/organizations/:orgId/config
@@ -79,7 +69,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
           id: orgId,
           name: body.name ?? "",
           runtimeType: body.runtimeType ?? "http",
-          runtimeConfig: (body.runtimeConfig ?? {}) as any,
+          runtimeConfig: (body.runtimeConfig ?? {}) as object,
           governanceProfile: body.governanceProfile ?? "guarded",
           selectedCartridgeId: body.selectedCartridgeId ?? null,
           onboardingComplete: body.onboardingComplete ?? false,
@@ -87,7 +77,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         update: {
           ...(body.name !== undefined && { name: body.name }),
           ...(body.runtimeType !== undefined && { runtimeType: body.runtimeType }),
-          ...(body.runtimeConfig !== undefined && { runtimeConfig: body.runtimeConfig as any }),
+          ...(body.runtimeConfig !== undefined && { runtimeConfig: body.runtimeConfig as object }),
           ...(body.governanceProfile !== undefined && {
             governanceProfile: body.governanceProfile,
           }),

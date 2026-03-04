@@ -1,9 +1,6 @@
-import type {
-  LifecycleOrchestrator,
-  CartridgeReadAdapter,
-  StorageContext,
-} from "@switchboard/core";
+import type { CartridgeReadAdapter, CartridgeRegistry } from "@switchboard/core";
 import { inferCartridgeId } from "@switchboard/core";
+import type { MinimalOrchestrator, MinimalStorage } from "../server.js";
 import {
   GetCampaignInputSchema,
   SearchCampaignsInputSchema,
@@ -116,8 +113,8 @@ export const readToolDefinitions: ToolDefinition[] = [
 
 export interface ReadToolDeps {
   readAdapter: CartridgeReadAdapter;
-  orchestrator: LifecycleOrchestrator;
-  storage: StorageContext;
+  orchestrator: MinimalOrchestrator;
+  storage: MinimalStorage;
   sessionGuard?: SessionGuard;
 }
 
@@ -154,7 +151,10 @@ export async function handleReadTool(
 
     case "simulate_action": {
       const parsed = SimulateActionInputSchema.parse(args);
-      const cartridgeId = inferCartridgeId(parsed.actionType, deps.storage.cartridges);
+      const cartridgeId = inferCartridgeId(
+        parsed.actionType,
+        deps.storage.cartridges as CartridgeRegistry,
+      );
       if (!cartridgeId) {
         throw new Error(`Cannot infer cartridgeId from actionType: ${parsed.actionType}`);
       }
