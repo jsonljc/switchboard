@@ -649,4 +649,34 @@ export class SwitchboardClient {
       offset: number;
     }>(`/api/conversations${qs ? `?${qs}` : ""}`);
   }
+
+  // CRM Contacts
+  async getContacts(filters?: { search?: string; limit?: number; offset?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.search) params.set("search", filters.search);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    if (filters?.offset) params.set("offset", String(filters.offset));
+    const qs = params.toString();
+    return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
+      `/api/crm/contacts${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  // CRM Deals
+  async getDeals(filters?: {
+    stage?: string;
+    contactId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const params = new URLSearchParams();
+    if (filters?.stage) params.set("stage", filters.stage);
+    if (filters?.contactId) params.set("contactId", filters.contactId);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    if (filters?.offset) params.set("offset", String(filters.offset));
+    const qs = params.toString();
+    return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
+      `/api/crm/deals${qs ? `?${qs}` : ""}`,
+    );
+  }
 }
