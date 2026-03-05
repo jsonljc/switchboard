@@ -37,7 +37,7 @@ export function detectCorrelations(result: JourneyDiagnosticResult): JourneyFind
       severity: "info",
       stage: "cross-stage",
       message:
-        "Treatment proposals dropping while acceptance rate is stable — fewer patients reaching treatment discussion.",
+        "Treatment proposals dropping while acceptance rate is stable — fewer contacts reaching treatment discussion.",
       recommendation: "Focus on improving consultation-to-proposal conversion.",
     });
   }

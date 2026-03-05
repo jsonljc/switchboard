@@ -362,7 +362,7 @@ describe("Clinic Integration", () => {
         readAdapter,
       });
 
-      adapter.setNextMessage(makeMessage("I want more patient leads"));
+      adapter.setNextMessage(makeMessage("I want more contact leads"));
       await runtime.handleIncomingMessage({});
 
       expect(adapter.sentText).toHaveLength(1);

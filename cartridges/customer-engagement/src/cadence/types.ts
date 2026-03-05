@@ -41,7 +41,7 @@ export interface CadenceDefinition {
   description: string;
   trigger: CadenceTrigger;
   steps: CadenceStep[];
-  /** Max patients that can be in this cadence concurrently per org */
+  /** Max contacts that can be in this cadence concurrently per org */
   maxConcurrent?: number;
 }
 

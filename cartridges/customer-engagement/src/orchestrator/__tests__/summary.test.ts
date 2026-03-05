@@ -28,7 +28,7 @@ function makeResult(overrides: Partial<JourneyDiagnosticResult> = {}): JourneyDi
 describe("generateSummary", () => {
   it("includes header with organization and period", () => {
     const summary = generateSummary(makeResult());
-    expect(summary).toContain("Patient Pipeline Diagnostic — clinic-alpha");
+    expect(summary).toContain("Contact Pipeline Diagnostic — clinic-alpha");
     expect(summary).toContain("Period: 2025-01-01 to 2025-01-31");
   });
 
@@ -51,7 +51,7 @@ describe("generateSummary", () => {
     expect(summary).toContain("(down 20.0%)");
   });
 
-  it("shows total patients comparison", () => {
+  it("shows total contacts comparison", () => {
     const summary = generateSummary(makeResult());
     expect(summary).toContain("Total contacts: 120 (was 100)");
   });

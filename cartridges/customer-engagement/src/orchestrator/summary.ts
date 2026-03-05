@@ -11,7 +11,7 @@ export function generateSummary(result: JourneyDiagnosticResult): string {
   const lines: string[] = [];
 
   // Header
-  lines.push(`Patient Pipeline Diagnostic — ${result.organizationId}`);
+  lines.push(`Contact Pipeline Diagnostic — ${result.organizationId}`);
   lines.push(`Period: ${result.periods.current.since} to ${result.periods.current.until}`);
   lines.push("");
 

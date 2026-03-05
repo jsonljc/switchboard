@@ -19,12 +19,12 @@ export async function executeBookAppointment(
   const bookingUrl = params.bookingUrl as string | undefined;
   if (bookingUrl) {
     const url = new URL(bookingUrl);
-    url.searchParams.set("patient_id", contactId);
+    url.searchParams.set("contact_id", contactId);
     if (serviceType) url.searchParams.set("type", serviceType);
 
     return {
       success: true,
-      summary: `Booking link generated for patient ${contactId}: ${url.toString()}`,
+      summary: `Booking link generated for contact ${contactId}: ${url.toString()}`,
       externalRefs: { contactId, bookingUrl: url.toString() },
       rollbackAvailable: false,
       partialFailures: [],
@@ -44,13 +44,13 @@ export async function executeBookAppointment(
       contactId,
       startTime,
       endTime,
-      `${serviceType} - Patient ${contactId}`,
+      `${serviceType} - Contact ${contactId}`,
       params.notes as string | undefined,
     );
 
     return {
       success: true,
-      summary: `Booked ${serviceType} appointment for patient ${contactId} at ${startTime.toISOString()}`,
+      summary: `Booked ${serviceType} appointment for contact ${contactId} at ${startTime.toISOString()}`,
       externalRefs: {
         contactId,
         appointmentId: appointment.appointmentId,

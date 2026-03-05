@@ -46,7 +46,7 @@ export async function executeEscalate(params: Record<string, unknown>): Promise<
 
   return {
     success: true,
-    summary: `Escalated conversation for patient ${contactId}. Reason: ${reason}`,
+    summary: `Escalated conversation for contact ${contactId}. Reason: ${reason}`,
     externalRefs: { contactId },
     rollbackAvailable: false,
     partialFailures: notificationResults,

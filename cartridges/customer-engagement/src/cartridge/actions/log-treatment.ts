@@ -14,7 +14,7 @@ export async function executeLogTreatment(params: Record<string, unknown>): Prom
 
   return {
     success: true,
-    summary: `Logged ${serviceType} treatment for patient ${contactId} ($${value.toFixed(2)})`,
+    summary: `Logged ${serviceType} treatment for contact ${contactId} ($${value.toFixed(2)})`,
     externalRefs: { contactId, treatmentId, providerId },
     rollbackAvailable: false,
     partialFailures: [],

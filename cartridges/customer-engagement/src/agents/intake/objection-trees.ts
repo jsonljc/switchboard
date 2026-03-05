@@ -15,7 +15,7 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
     category: "price",
     keywords: ["expensive", "cost", "price", "afford", "cheap", "budget", "money", "payment"],
     response:
-      "We understand cost is an important factor. We offer flexible payment plans and financing options to make treatment more accessible. Many patients find that spreading payments over several months makes it very manageable.",
+      "We understand cost is an important factor. We offer flexible payment plans and financing options to make treatment more accessible. Many customers find that spreading payments over several months makes it very manageable.",
     followUp: "Would you like to learn more about our financing options?",
   },
   {
@@ -34,17 +34,17 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
       "credentials",
       "trust",
       "reputation",
-      "new patient",
+      "new customer",
     ],
     response:
-      "Your comfort is our priority. Our providers are board-certified with extensive experience. We have hundreds of satisfied patients and would be happy to share before-and-after results or connect you with patients who've had similar treatments.",
-    followUp: "Would you like to see our patient testimonials or provider credentials?",
+      "Your comfort is our priority. Our providers are board-certified with extensive experience. We have hundreds of satisfied customers and would be happy to share before-and-after results or connect you with customers who've had similar treatments.",
+    followUp: "Would you like to see our customer testimonials or provider credentials?",
   },
   {
     category: "fear",
     keywords: ["pain", "hurt", "scary", "afraid", "nervous", "anxious", "uncomfortable", "needle"],
     response:
-      "It's completely normal to feel nervous. We use the latest techniques to ensure maximum comfort, including topical numbing, gentle approaches, and sedation options when appropriate. Most patients say the experience was much easier than expected.",
+      "It's completely normal to feel nervous. We use the latest techniques to ensure maximum comfort, including topical numbing, gentle approaches, and sedation options when appropriate. Most customers say the experience was much easier than expected.",
     followUp: "Would a consultation help address your specific concerns about comfort?",
   },
   {
@@ -74,7 +74,7 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
       "different",
     ],
     response:
-      "We encourage you to make the best choice for your care. What sets us apart is our personalized approach, advanced technology, and commitment to ongoing patient care. We'd love the opportunity to show you why our patients choose to stay with us.",
+      "We encourage you to make the best choice for your care. What sets us apart is our personalized approach, advanced technology, and commitment to ongoing customer care. We'd love the opportunity to show you why our customers choose to stay with us.",
     followUp:
       "Would you like to schedule a complimentary consultation to experience our approach firsthand?",
   },

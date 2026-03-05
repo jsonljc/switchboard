@@ -144,7 +144,7 @@ describe("detectCorrelations", () => {
     expect(findings[0]!.recommendation).toContain("Simplify booking flow");
   });
 
-  it("does not trigger schedule issue for small patient count (≤20)", () => {
+  it("does not trigger schedule issue for small contact count (≤20)", () => {
     const dropoffs: JourneyDropoff[] = [
       {
         fromStage: "Qualified",

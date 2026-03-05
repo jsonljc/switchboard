@@ -25,7 +25,7 @@ describe("percentChange", () => {
 });
 
 describe("isSignificantChange", () => {
-  it("should return false for zero patients", () => {
+  it("should return false for zero contacts", () => {
     expect(isSignificantChange(50, 0)).toBe(false);
   });
 

@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 export interface CadenceInstanceRecord {
   id: string;
   cadenceDefinitionId: string;
-  patientId: string;
+  contactId: string;
   organizationId: string | null;
   status: string;
   currentStepIndex: number;
@@ -21,7 +21,7 @@ export interface CadenceStore {
   getById(id: string): Promise<CadenceInstanceRecord | null>;
   save(record: CadenceInstanceRecord): Promise<void>;
   complete(id: string): Promise<void>;
-  listByPatient(patientId: string): Promise<CadenceInstanceRecord[]>;
+  listByContact(contactId: string): Promise<CadenceInstanceRecord[]>;
 }
 
 export class PrismaCadenceStore implements CadenceStore {
@@ -47,7 +47,7 @@ export class PrismaCadenceStore implements CadenceStore {
       create: {
         id: record.id,
         cadenceDefinitionId: record.cadenceDefinitionId,
-        patientId: record.patientId,
+        contactId: record.contactId,
         organizationId: record.organizationId,
         status: record.status,
         currentStepIndex: record.currentStepIndex,
@@ -78,9 +78,9 @@ export class PrismaCadenceStore implements CadenceStore {
     });
   }
 
-  async listByPatient(patientId: string): Promise<CadenceInstanceRecord[]> {
+  async listByContact(contactId: string): Promise<CadenceInstanceRecord[]> {
     const rows = await this.prisma.cadenceInstance.findMany({
-      where: { patientId },
+      where: { contactId },
       orderBy: { startedAt: "desc" },
     });
     return rows.map(toRecord);
@@ -90,7 +90,7 @@ export class PrismaCadenceStore implements CadenceStore {
 function toRecord(row: {
   id: string;
   cadenceDefinitionId: string;
-  patientId: string;
+  contactId: string;
   organizationId: string | null;
   status: string;
   currentStepIndex: number;
@@ -105,7 +105,7 @@ function toRecord(row: {
   return {
     id: row.id,
     cadenceDefinitionId: row.cadenceDefinitionId,
-    patientId: row.patientId,
+    contactId: row.contactId,
     organizationId: row.organizationId,
     status: row.status,
     currentStepIndex: row.currentStepIndex,

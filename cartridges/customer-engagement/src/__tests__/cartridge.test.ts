@@ -109,7 +109,7 @@ describe("CustomerEngagementCartridge", () => {
     const { cartridge } = await bootstrapCustomerEngagementCartridge();
     const result = await cartridge.execute(
       "customer-engagement.conversation.escalate",
-      { contactId: "p-1", reason: "Patient upset" },
+      { contactId: "p-1", reason: "Contact upset" },
       { principalId: "test", organizationId: null, connectionCredentials: {} },
     );
 

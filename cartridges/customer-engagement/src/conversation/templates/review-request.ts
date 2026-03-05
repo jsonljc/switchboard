@@ -7,7 +7,7 @@ import type { ConversationFlowDefinition } from "../types.js";
 export const reviewRequestFlow: ConversationFlowDefinition = {
   id: "review-request",
   name: "Review Solicitation",
-  description: "Requests a review from a satisfied patient.",
+  description: "Requests a review from a satisfied customer.",
   variables: ["contactName", "serviceType", "clinicName", "reviewLink"],
   steps: [
     {

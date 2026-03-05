@@ -30,7 +30,7 @@ export interface ConversationSession {
   channelId: string;
   /** Channel type */
   channelType: "sms" | "web_chat" | "instagram_dm" | "facebook_messenger" | "whatsapp";
-  /** Patient ID if known */
+  /** Contact ID if known */
   contactId: string | null;
   /** Organization ID */
   organizationId: string;

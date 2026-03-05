@@ -86,7 +86,7 @@ export function computeLeadScore(
   const sourceScore = srcScores[input.source] ?? 2;
   factors.push({ factor: "source", contribution: sourceScore });
 
-  // Returning patient bonus
+  // Returning contact bonus
   const returningScore = input.isReturning ? retBonus : 0;
   factors.push({ factor: "returning", contribution: returningScore });
 

@@ -6,7 +6,7 @@ import type { AppointmentSlot } from "../../core/types.js";
 import type { CalendarProvider } from "../../cartridge/providers/provider.js";
 
 /**
- * Find available slots that match patient preferences.
+ * Find available slots that match contact preferences.
  */
 export async function findAvailableSlots(
   calendar: CalendarProvider,

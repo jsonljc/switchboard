@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Consent Gate — beforeExecute interceptor
 // ---------------------------------------------------------------------------
-// Blocks outbound communication if the patient has not granted active consent.
+// Blocks outbound communication if the contact has not granted active consent.
 // ---------------------------------------------------------------------------
 
 import type { CartridgeInterceptor, CartridgeContext } from "@switchboard/cartridge-sdk";

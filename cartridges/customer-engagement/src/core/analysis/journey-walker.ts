@@ -118,7 +118,7 @@ function generateGenericFindings(
       stage: primaryKPI.name,
       message: `No ${primaryKPI.name} recorded in either period.`,
       recommendation:
-        "Verify data collection is configured correctly or that there is sufficient patient volume.",
+        "Verify data collection is configured correctly or that there is sufficient contact volume.",
     });
   } else if (primaryKPI.severity === "healthy") {
     findings.push({

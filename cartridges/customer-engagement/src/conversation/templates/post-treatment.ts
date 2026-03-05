@@ -7,7 +7,7 @@ import type { ConversationFlowDefinition } from "../types.js";
 export const postTreatmentFlow: ConversationFlowDefinition = {
   id: "post-treatment",
   name: "Post-Treatment Follow-up",
-  description: "Checks in with patients after treatment completion.",
+  description: "Checks in with customers after treatment completion.",
   variables: ["contactName", "serviceType", "daysSinceTreatment", "providerName"],
   steps: [
     {
@@ -53,7 +53,7 @@ export const postTreatmentFlow: ConversationFlowDefinition = {
       type: "escalate",
       template:
         "I'm sorry to hear that. Let me connect you with {{providerName}} to address your concerns right away.",
-      escalationReason: "Patient expressed dissatisfaction with treatment results",
+      escalationReason: "Customer expressed dissatisfaction with treatment results",
     },
     {
       id: "review_request",

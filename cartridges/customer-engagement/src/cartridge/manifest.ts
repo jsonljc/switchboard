@@ -41,7 +41,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.appointment.book",
     name: "Book Appointment",
-    description: "Book a consultation or treatment appointment for a patient.",
+    description: "Book a consultation or treatment appointment for a customer.",
     parametersSchema: {
       contactId: { type: "string" },
       providerId: { type: "string" },
@@ -78,7 +78,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.reminder.send",
     name: "Send Reminder",
-    description: "Send an appointment or follow-up reminder to a patient via SMS.",
+    description: "Send an appointment or follow-up reminder to a customer via SMS.",
     parametersSchema: {
       contactId: { type: "string" },
       appointmentId: { type: "string" },
@@ -93,7 +93,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.cadence.start",
     name: "Start Cadence",
-    description: "Start a multi-step outreach cadence for a patient.",
+    description: "Start a multi-step outreach cadence for a contact.",
     parametersSchema: {
       contactId: { type: "string" },
       cadenceTemplateId: { type: "string" },
@@ -104,7 +104,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.cadence.stop",
     name: "Stop Cadence",
-    description: "Stop an active cadence for a patient.",
+    description: "Stop an active cadence for a contact.",
     parametersSchema: {
       cadenceInstanceId: { type: "string" },
       reason: { type: "string" },
@@ -117,7 +117,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.treatment.log",
     name: "Log Treatment",
-    description: "Log a completed treatment for a patient with outcome tracking.",
+    description: "Log a completed treatment for a contact with outcome tracking.",
     parametersSchema: {
       contactId: { type: "string" },
       serviceType: { type: "string" },
@@ -133,7 +133,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.review.request",
     name: "Request Review",
-    description: "Send a review solicitation to a patient after treatment.",
+    description: "Send a review solicitation to a customer after treatment.",
     parametersSchema: {
       contactId: { type: "string" },
       platform: { type: "string" },
@@ -145,7 +145,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.review.respond",
     name: "Respond to Review",
-    description: "Post a public response to a patient review on an external platform.",
+    description: "Post a public response to a customer review on an external platform.",
     parametersSchema: {
       reviewId: { type: "string" },
       responseText: { type: "string" },
@@ -158,7 +158,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   {
     actionType: "customer-engagement.journey.update_stage",
     name: "Update Journey Stage",
-    description: "Move a patient to a new stage in the journey lifecycle.",
+    description: "Move a contact to a new stage in the journey lifecycle.",
     parametersSchema: {
       contactId: { type: "string" },
       newStage: { type: "string" },
@@ -171,7 +171,7 @@ export const CUSTOMER_ENGAGEMENT_ACTIONS: ActionDefinition[] = [
   // ── Diagnostics ────────────────────────────────────────────────────
   {
     actionType: "customer-engagement.pipeline.diagnose",
-    name: "Diagnose Patient Pipeline",
+    name: "Diagnose Customer Pipeline",
     description:
       "Run a full journey diagnostic across all stages with period-over-period comparison.",
     parametersSchema: {

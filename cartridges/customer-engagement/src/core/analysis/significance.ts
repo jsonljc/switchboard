@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Statistical significance for patient metric changes
+// Statistical significance for contact metric changes
 // ---------------------------------------------------------------------------
 
 /**
@@ -16,10 +16,10 @@ export function percentChange(current: number, previous: number): number {
 
 /**
  * Determines whether a period-over-period percentage change is meaningful
- * given patient volume. Higher volume = smaller changes are significant.
+ * given contact volume. Higher volume = smaller changes are significant.
  *
  * Uses a heuristic: minimum detectable change scales inversely with
- * the square root of total patients (mimicking sample-size logic).
+ * the square root of total contacts (mimicking sample-size logic).
  */
 export function isSignificantChange(
   deltaPercent: number,
@@ -33,8 +33,8 @@ export function isSignificantChange(
     return Math.abs(deltaPercent) > benchmarkVariance * 2;
   }
 
-  // Fallback: patient-volume-based heuristic
-  // minDetectable = 100 / sqrt(patients) — capped between 5% and 50%
+  // Fallback: contact-volume-based heuristic
+  // minDetectable = 100 / sqrt(contacts) — capped between 5% and 50%
   const minDetectable = Math.max(5, Math.min(50, 100 / Math.sqrt(totalContacts)));
   return Math.abs(deltaPercent) > minDetectable;
 }
