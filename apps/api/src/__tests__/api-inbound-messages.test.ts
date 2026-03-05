@@ -3,7 +3,7 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
 
-vi.mock("@switchboard/patient-engagement", () => ({
+vi.mock("@switchboard/customer-engagement", () => ({
   ConversationRouter: vi.fn().mockImplementation(() => ({
     handleMessage: vi.fn().mockResolvedValue({
       handled: true,
@@ -155,7 +155,7 @@ describe("Inbound Messages API", () => {
         },
       });
 
-      // The router depends on dynamic import of @switchboard/patient-engagement.
+      // The router depends on dynamic import of @switchboard/customer-engagement.
       // If it resolves, we get 200 with responses; if not, 503.
       if (res.statusCode === 200) {
         const body = res.json();

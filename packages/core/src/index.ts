@@ -289,6 +289,10 @@ export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
 export { SkinLoader, SkinResolver } from "./skin/index.js";
 export type { ResolvedSkin } from "./skin/index.js";
 
+// Business profile loader & resolver
+export { ProfileLoader, ProfileResolver } from "./profile/index.js";
+export type { ResolvedProfile } from "./profile/index.js";
+
 // Tool registry
 export { ToolRegistry } from "./tool-registry/index.js";
 export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";

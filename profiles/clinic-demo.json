@@ -1,0 +1,273 @@
+{
+  "id": "clinic-demo",
+  "name": "Bright Smile Dental",
+  "version": "1.0.0",
+  "business": {
+    "name": "Bright Smile Dental",
+    "type": "dental",
+    "tagline": "Your smile, our passion",
+    "website": "https://brightsmile.example.com",
+    "phone": "+15551234567",
+    "timezone": "America/New_York"
+  },
+  "services": {
+    "catalog": [
+      {
+        "id": "cleaning",
+        "name": "Dental Cleaning",
+        "category": "preventive",
+        "typicalValue": 150,
+        "durationMinutes": 60
+      },
+      {
+        "id": "whitening",
+        "name": "Teeth Whitening",
+        "category": "cosmetic",
+        "typicalValue": 350,
+        "durationMinutes": 90
+      },
+      {
+        "id": "orthodontics",
+        "name": "Orthodontics Consultation",
+        "category": "corrective",
+        "typicalValue": 5000,
+        "durationMinutes": 45
+      },
+      {
+        "id": "implants",
+        "name": "Dental Implants",
+        "category": "restorative",
+        "typicalValue": 3500,
+        "durationMinutes": 120
+      },
+      {
+        "id": "crowns",
+        "name": "Crowns & Bridges",
+        "category": "restorative",
+        "typicalValue": 1200,
+        "durationMinutes": 90
+      },
+      {
+        "id": "checkup",
+        "name": "General Checkup",
+        "category": "preventive",
+        "typicalValue": 100,
+        "durationMinutes": 30
+      },
+      {
+        "id": "emergency",
+        "name": "Emergency Visit",
+        "category": "urgent",
+        "typicalValue": 250,
+        "durationMinutes": 60
+      }
+    ],
+    "affinityMatrix": {
+      "cleaning": { "whitening": 0.7, "orthodontics": 0.3, "checkup": 0.2 },
+      "whitening": { "cleaning": 0.6, "crowns": 0.3 },
+      "orthodontics": { "whitening": 0.4, "cleaning": 0.3 },
+      "implants": { "crowns": 0.6, "cleaning": 0.3 },
+      "crowns": { "implants": 0.5, "whitening": 0.3, "cleaning": 0.3 },
+      "checkup": { "cleaning": 0.5, "whitening": 0.2 }
+    }
+  },
+  "team": [
+    {
+      "id": "dr-chen",
+      "name": "Dr. Sarah Chen",
+      "role": "Lead Dentist",
+      "specialties": ["cosmetic", "implants"]
+    },
+    {
+      "id": "dr-patel",
+      "name": "Dr. Raj Patel",
+      "role": "Orthodontist",
+      "specialties": ["orthodontics", "braces"]
+    },
+    {
+      "id": "hygienist-jones",
+      "name": "Maria Jones",
+      "role": "Dental Hygienist",
+      "specialties": ["cleaning", "preventive"]
+    }
+  ],
+  "journey": {
+    "stages": [
+      { "id": "new_lead", "name": "New Lead", "metric": "new_leads", "terminal": false },
+      { "id": "qualified", "name": "Qualified", "metric": "qualified_leads", "terminal": false },
+      {
+        "id": "consultation_booked",
+        "name": "Consultation Booked",
+        "metric": "consultations_booked",
+        "terminal": false
+      },
+      {
+        "id": "consultation_completed",
+        "name": "Consultation Completed",
+        "metric": "consultations_completed",
+        "terminal": false
+      },
+      {
+        "id": "service_proposed",
+        "name": "Treatment Proposed",
+        "metric": "services_proposed",
+        "terminal": false
+      },
+      {
+        "id": "service_accepted",
+        "name": "Treatment Accepted",
+        "metric": "services_accepted",
+        "terminal": false
+      },
+      {
+        "id": "service_scheduled",
+        "name": "Treatment Scheduled",
+        "metric": "services_scheduled",
+        "terminal": false
+      },
+      {
+        "id": "service_completed",
+        "name": "Treatment Completed",
+        "metric": "services_completed",
+        "terminal": false
+      },
+      {
+        "id": "repeat_customer",
+        "name": "Repeat Patient",
+        "metric": "repeat_customers",
+        "terminal": false
+      },
+      { "id": "dormant", "name": "Dormant", "metric": "dormant_customers", "terminal": true },
+      { "id": "lost", "name": "Lost", "metric": "lost_customers", "terminal": true }
+    ],
+    "primaryKPI": "services_completed"
+  },
+  "scoring": {
+    "referralValue": 200,
+    "noShowCost": 75,
+    "retentionDecayRate": 0.85,
+    "projectionYears": 5
+  },
+  "objectionTrees": [
+    {
+      "category": "price",
+      "keywords": ["expensive", "cost", "price", "afford", "cheap", "budget", "money", "payment"],
+      "response": "We understand cost is an important factor. We offer flexible payment plans and financing options to make treatment more accessible. Many patients find that spreading payments over several months makes it very manageable.",
+      "followUp": "Would you like to learn more about our financing options?"
+    },
+    {
+      "category": "timing",
+      "keywords": [
+        "busy",
+        "schedule",
+        "time",
+        "later",
+        "wait",
+        "not now",
+        "next month",
+        "too soon"
+      ],
+      "response": "We completely understand that timing matters. We offer flexible scheduling including early morning, evening, and weekend appointments to work around your schedule.",
+      "followUp": "Would you like me to check availability for times that work best for you?"
+    },
+    {
+      "category": "fear",
+      "keywords": [
+        "pain",
+        "hurt",
+        "scary",
+        "afraid",
+        "nervous",
+        "anxious",
+        "uncomfortable",
+        "needle"
+      ],
+      "response": "It's completely normal to feel nervous. We use the latest techniques to ensure maximum comfort, including topical numbing, gentle approaches, and sedation options when appropriate.",
+      "followUp": "Would a consultation help address your specific concerns about comfort?"
+    },
+    {
+      "category": "insurance",
+      "keywords": [
+        "insurance",
+        "coverage",
+        "covered",
+        "out of pocket",
+        "deductible",
+        "copay",
+        "in-network"
+      ],
+      "response": "We work with many insurance plans and can verify your coverage before your appointment. For treatments not covered by insurance, we offer transparent pricing and payment plans.",
+      "followUp": "Would you like us to check your insurance coverage?"
+    }
+  ],
+  "cadenceTemplates": [
+    {
+      "id": "consultation-reminder",
+      "name": "Consultation Reminder",
+      "trigger": "consultation_booked",
+      "steps": [
+        {
+          "actionType": "customer-engagement.reminder.send",
+          "delayMs": 0,
+          "messageTemplate": "Booking confirmation",
+          "parameters": {
+            "contactId": "{{contactId}}",
+            "message": "Hi {{contactName}}, this is a reminder about your consultation on {{appointmentDate}}. Reply CONFIRM to confirm or call us to reschedule."
+          }
+        },
+        {
+          "actionType": "customer-engagement.reminder.send",
+          "delayMs": 86400000,
+          "messageTemplate": "24-hour reminder",
+          "parameters": {
+            "contactId": "{{contactId}}",
+            "message": "{{contactName}}, your consultation is tomorrow at {{appointmentTime}}. We look forward to seeing you!"
+          },
+          "condition": {
+            "variable": "appointmentConfirmed",
+            "operator": "neq",
+            "value": "cancelled"
+          }
+        }
+      ]
+    }
+  ],
+  "compliance": {
+    "enableHipaaRedactor": true,
+    "enableMedicalClaimFilter": true,
+    "enableConsentGate": true
+  },
+  "reviewPlatforms": ["google", "yelp", "healthgrades"],
+  "hours": {
+    "monday": { "open": "08:00", "close": "17:00" },
+    "tuesday": { "open": "08:00", "close": "17:00" },
+    "wednesday": { "open": "08:00", "close": "17:00" },
+    "thursday": { "open": "08:00", "close": "19:00" },
+    "friday": { "open": "08:00", "close": "15:00" },
+    "saturday": { "open": "09:00", "close": "13:00" }
+  },
+  "policies": [
+    {
+      "topic": "Cancellation",
+      "content": "Please cancel at least 24 hours in advance to avoid a $50 cancellation fee."
+    },
+    {
+      "topic": "Insurance",
+      "content": "We accept most major dental insurance plans. Please bring your insurance card to your first visit."
+    },
+    {
+      "topic": "Payment",
+      "content": "We accept cash, credit cards, and offer CareCredit financing for treatments over $500."
+    },
+    {
+      "topic": "Emergency",
+      "content": "For dental emergencies outside business hours, call our emergency line at +15559876543."
+    }
+  ],
+  "llmContext": {
+    "systemPromptExtension": "Always prioritize patient comfort and address dental anxiety proactively. Use warm, empathetic language.",
+    "persona": "friendly dental office coordinator",
+    "tone": "warm and professional",
+    "bannedTopics": ["competitor pricing", "medical diagnoses outside dentistry"]
+  }
+}

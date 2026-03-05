@@ -6,7 +6,7 @@ import type { StorageContext } from "@switchboard/core";
 import type { CartridgeContext } from "@switchboard/cartridge-sdk";
 import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
-import type { CadenceInstance, CadenceDefinition } from "@switchboard/patient-engagement";
+import type { CadenceInstance, CadenceDefinition } from "@switchboard/customer-engagement";
 import type { CadenceStore, CadenceInstanceRecord } from "@switchboard/db";
 
 export interface CadenceRunnerConfig {
@@ -30,7 +30,7 @@ export function registerCadenceDefinition(definition: CadenceDefinition): void {
 }
 
 /**
- * Start a new cadence instance for a patient.
+ * Start a new cadence instance for a contact.
  */
 export function startCadenceInstance(instance: CadenceInstance, cadenceStore?: CadenceStore): void {
   if (cadenceStore) {
@@ -86,14 +86,14 @@ export function startCadenceRunner(config: CadenceRunnerConfig): () => void {
   let inFlightPromise: Promise<void> | null = null;
 
   // Dynamic import to avoid circular deps at module load time
-  let evaluatePendingCadences: typeof import("@switchboard/patient-engagement").evaluatePendingCadences;
-  let applyCadenceEvaluation: typeof import("@switchboard/patient-engagement").applyCadenceEvaluation;
+  let evaluatePendingCadences: typeof import("@switchboard/customer-engagement").evaluatePendingCadences;
+  let applyCadenceEvaluation: typeof import("@switchboard/customer-engagement").applyCadenceEvaluation;
   let loaded = false;
 
   const loadDeps = async () => {
     if (loaded) return;
     try {
-      const pe = await import("@switchboard/patient-engagement");
+      const pe = await import("@switchboard/customer-engagement");
       evaluatePendingCadences = pe.evaluatePendingCadences;
       applyCadenceEvaluation = pe.applyCadenceEvaluation;
       loaded = true;
@@ -165,14 +165,14 @@ export function startCadenceRunner(config: CadenceRunnerConfig): () => void {
           };
           try {
             await storageContext.cartridges
-              .get("patient-engagement")
+              .get("customer-engagement")
               ?.execute(evaluation.actionType, evaluation.parameters, ctx);
             executed++;
             logger.info(
               {
                 instanceId,
                 actionType: evaluation.actionType,
-                patientId: instance.patientId,
+                contactId: instance.contactId,
               },
               "Cadence step executed",
             );
@@ -224,7 +224,7 @@ function toCadenceRecord(instance: CadenceInstance): CadenceInstanceRecord {
   return {
     id: instance.id,
     cadenceDefinitionId: instance.cadenceDefinitionId,
-    patientId: instance.patientId,
+    patientId: instance.contactId,
     organizationId: instance.organizationId,
     status: instance.status,
     currentStepIndex: instance.currentStepIndex,
@@ -252,7 +252,7 @@ function fromCadenceRecord(record: CadenceInstanceRecord): CadenceInstance {
   return {
     id: record.id,
     cadenceDefinitionId: record.cadenceDefinitionId,
-    patientId: record.patientId,
+    contactId: record.patientId,
     organizationId: record.organizationId ?? "",
     status: record.status as CadenceInstance["status"],
     currentStepIndex: record.currentStepIndex,

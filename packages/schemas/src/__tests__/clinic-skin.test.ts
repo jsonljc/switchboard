@@ -61,16 +61,16 @@ describe("clinic skin manifest (detailed)", () => {
     expect(parsed.id).toBe("clinic");
   });
 
-  it("requires patient-engagement cartridge", () => {
-    expect(parsed.requiredCartridges).toContain("patient-engagement");
+  it("requires customer-engagement cartridge", () => {
+    expect(parsed.requiredCartridges).toContain("customer-engagement");
   });
 
-  it("includes patient-engagement tools", () => {
-    expect(parsed.tools.include).toContain("patient-engagement.*");
+  it("includes customer-engagement tools", () => {
+    expect(parsed.tools.include).toContain("customer-engagement.*");
   });
 
   it("excludes diagnostic/internal tools", () => {
-    expect(parsed.tools.exclude).toContain("patient-engagement.pipeline.*");
+    expect(parsed.tools.exclude).toContain("customer-engagement.pipeline.*");
   });
 
   it("declares WhatsApp as primary channel", () => {
@@ -92,8 +92,8 @@ describe("clinic skin manifest (detailed)", () => {
     const actionTypes = parsed.governance.policyOverrides.map(
       (p: { rule: { actionType: string } }) => p.rule.actionType,
     );
-    expect(actionTypes).toContain("patient-engagement.appointment.cancel");
-    expect(actionTypes).toContain("patient-engagement.review.respond");
+    expect(actionTypes).toContain("customer-engagement.appointment.cancel");
+    expect(actionTypes).toContain("customer-engagement.review.respond");
   });
 
   it("defines 3 playbooks", () => {
@@ -111,8 +111,8 @@ describe("clinic skin manifest (detailed)", () => {
   });
 
   it("defines tool aliases for common actions", () => {
-    expect(parsed.tools.aliases.book_appointment).toBe("patient-engagement.appointment.book");
-    expect(parsed.tools.aliases.send_reminder).toBe("patient-engagement.reminder.send");
-    expect(parsed.tools.aliases.log_treatment).toBe("patient-engagement.treatment.log");
+    expect(parsed.tools.aliases.book_appointment).toBe("customer-engagement.appointment.book");
+    expect(parsed.tools.aliases.send_reminder).toBe("customer-engagement.reminder.send");
+    expect(parsed.tools.aliases.log_treatment).toBe("customer-engagement.treatment.log");
   });
 });

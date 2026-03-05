@@ -160,7 +160,7 @@ function resolveCartridgeForVertical(vertical: string): string {
     case "clinic":
     case "healthcare":
     case "dental":
-      return "patient-engagement";
+      return "customer-engagement";
     default:
       return "digital-ads";
   }
@@ -169,8 +169,8 @@ function resolveCartridgeForVertical(vertical: string): string {
 /** Resolve the diagnostic action ID for a given cartridge. */
 function resolveDiagnoseAction(cartridgeId: string): string {
   switch (cartridgeId) {
-    case "patient-engagement":
-      return "patient-engagement.pipeline.diagnose";
+    case "customer-engagement":
+      return "customer-engagement.pipeline.diagnose";
     default:
       return "digital-ads.funnel.diagnose";
   }

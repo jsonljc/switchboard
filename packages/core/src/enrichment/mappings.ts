@@ -5,20 +5,20 @@ import type { EnrichmentMapping } from "./types.js";
  * Each mapping specifies how to find the source entity from the target's parameters.
  */
 export const DEFAULT_ENRICHMENT_MAPPINGS: EnrichmentMapping[] = [
-  // patient-engagement ← crm
+  // customer-engagement ← crm
   {
-    targetCartridgeId: "patient-engagement",
+    targetCartridgeId: "customer-engagement",
     sourceCartridgeId: "crm",
-    targetEntityParam: "patientId",
+    targetEntityParam: "contactId",
     sourceEntityType: "contact",
     enrichmentHint: "contactName,dealCount,totalDealValue",
     enabled: true,
   },
-  // patient-engagement ← payments
+  // customer-engagement ← payments
   {
-    targetCartridgeId: "patient-engagement",
+    targetCartridgeId: "customer-engagement",
     sourceCartridgeId: "payments",
-    targetEntityParam: "patientId",
+    targetEntityParam: "contactId",
     sourceEntityType: "customer",
     enrichmentHint: "hasOpenDispute,totalLifetimeSpend",
     enabled: true,
@@ -32,12 +32,12 @@ export const DEFAULT_ENRICHMENT_MAPPINGS: EnrichmentMapping[] = [
     enrichmentHint: "contactName,contactCompany",
     enabled: true,
   },
-  // payments ← patient-engagement
+  // payments ← customer-engagement
   {
     targetCartridgeId: "payments",
-    sourceCartridgeId: "patient-engagement",
+    sourceCartridgeId: "customer-engagement",
     targetEntityParam: "entityId",
-    sourceEntityType: "patient",
+    sourceEntityType: "contact",
     enrichmentHint: "journeyStage",
     enabled: true,
   },
@@ -50,12 +50,12 @@ export const DEFAULT_ENRICHMENT_MAPPINGS: EnrichmentMapping[] = [
     enrichmentHint: "hasOpenDispute,totalLifetimeSpend",
     enabled: true,
   },
-  // crm ← patient-engagement
+  // crm ← customer-engagement
   {
     targetCartridgeId: "crm",
-    sourceCartridgeId: "patient-engagement",
+    sourceCartridgeId: "customer-engagement",
     targetEntityParam: "contactId",
-    sourceEntityType: "patient",
+    sourceEntityType: "contact",
     enrichmentHint: "journeyStage",
     enabled: true,
   },

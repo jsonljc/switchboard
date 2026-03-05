@@ -39,7 +39,7 @@ describe("matchGlob", () => {
   });
 
   it("does not match different prefix", () => {
-    expect(matchGlob("crm.*", "patient-engagement.appointment.book")).toBe(false);
+    expect(matchGlob("crm.*", "customer-engagement.appointment.book")).toBe(false);
   });
 
   it("matches nested wildcard", () => {
@@ -128,29 +128,29 @@ describe("ToolRegistry", () => {
     registry.registerCartridge(
       "pe",
       makeMockManifest("pe", [
-        { actionType: "patient-engagement.appointment.book" },
-        { actionType: "patient-engagement.internal.debug" },
+        { actionType: "customer-engagement.appointment.book" },
+        { actionType: "customer-engagement.internal.debug" },
       ]),
     );
 
     const filtered = registry.getFilteredTools({
-      include: ["patient-engagement.*"],
-      exclude: ["patient-engagement.internal.*"],
+      include: ["customer-engagement.*"],
+      exclude: ["customer-engagement.internal.*"],
     });
     expect(filtered).toHaveLength(1);
-    expect(filtered[0]!.actionType).toBe("patient-engagement.appointment.book");
+    expect(filtered[0]!.actionType).toBe("customer-engagement.appointment.book");
   });
 
   it("applies aliases to filtered tools", () => {
     const registry = new ToolRegistry();
     registry.registerCartridge(
       "pe",
-      makeMockManifest("pe", [{ actionType: "patient-engagement.appointment.book" }]),
+      makeMockManifest("pe", [{ actionType: "customer-engagement.appointment.book" }]),
     );
 
     const filtered = registry.getFilteredTools({
-      include: ["patient-engagement.*"],
-      aliases: { book_appointment: "patient-engagement.appointment.book" },
+      include: ["customer-engagement.*"],
+      aliases: { book_appointment: "customer-engagement.appointment.book" },
     });
     expect(filtered).toHaveLength(1);
     expect(filtered[0]!.alias).toBe("book_appointment");
@@ -160,19 +160,19 @@ describe("ToolRegistry", () => {
     const registry = new ToolRegistry();
     registry.registerCartridge(
       "pe",
-      makeMockManifest("pe", [{ actionType: "patient-engagement.appointment.book" }]),
+      makeMockManifest("pe", [{ actionType: "customer-engagement.appointment.book" }]),
     );
 
     const filter = {
-      include: ["patient-engagement.*"],
-      aliases: { book_appointment: "patient-engagement.appointment.book" },
+      include: ["customer-engagement.*"],
+      aliases: { book_appointment: "customer-engagement.appointment.book" },
     };
 
     expect(registry.resolveActionType("book_appointment", filter)).toBe(
-      "patient-engagement.appointment.book",
+      "customer-engagement.appointment.book",
     );
-    expect(registry.resolveActionType("patient-engagement.appointment.book")).toBe(
-      "patient-engagement.appointment.book",
+    expect(registry.resolveActionType("customer-engagement.appointment.book")).toBe(
+      "customer-engagement.appointment.book",
     );
     expect(registry.resolveActionType("unknown_action")).toBeNull();
   });

@@ -22,8 +22,11 @@ import {
   SkinResolver,
   ToolRegistry,
   InMemoryGovernanceProfileStore,
+  ProfileLoader,
+  ProfileResolver,
 } from "@switchboard/core";
-import type { ResolvedSkin } from "@switchboard/core";
+import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
+import type { BusinessProfile } from "@switchboard/schemas";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
@@ -91,15 +94,11 @@ export async function createChatRuntime(
 
   let ledger: AuditLedger | undefined;
 
-  // --- CLINIC_MODE backward compatibility ---
-  // Maps CLINIC_MODE=true → SKIN_ID=clinic with a deprecation warning.
-  let skinIdEnv = process.env["SKIN_ID"];
-  if (!skinIdEnv && process.env["CLINIC_MODE"] === "true") {
-    console.warn("[Chat] CLINIC_MODE is deprecated. Use SKIN_ID=clinic instead.");
-    skinIdEnv = "clinic";
-  }
+  // Skin ID determines which vertical skin to load (e.g. "clinic", "gym")
+  const skinIdEnv = process.env["SKIN_ID"];
 
   let resolvedSkin: ResolvedSkin | null = null;
+  let resolvedProfile: ResolvedProfile | null = null;
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
@@ -121,8 +120,21 @@ export async function createChatRuntime(
     const guardrailState = createGuardrailState();
     const guardrailStateStore = createGuardrailStateStore();
 
-    // Register all domain cartridges
-    await registerAllCartridges(storage);
+    // Register all domain cartridges (with optional business profile)
+    let businessProfile: BusinessProfile | undefined;
+    const profileIdEnv = process.env["PROFILE_ID"];
+    if (profileIdEnv) {
+      const profilesDir = new URL("../../../profiles", import.meta.url).pathname;
+      const profileLoader = new ProfileLoader(profilesDir);
+      try {
+        businessProfile = await profileLoader.load(profileIdEnv);
+        console.warn(`[Chat] Business profile "${profileIdEnv}" loaded`);
+      } catch (err) {
+        console.warn(`[Chat] Failed to load business profile "${profileIdEnv}":`, err);
+      }
+    }
+
+    await registerAllCartridges(storage, businessProfile);
 
     // --- Skin loading (optional, controlled by SKIN_ID env var) ---
     if (skinIdEnv) {
@@ -143,6 +155,13 @@ export async function createChatRuntime(
       console.warn(
         `[Chat] Skin "${skinIdEnv}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
       );
+    }
+
+    // Resolve business profile for LLM context
+    if (businessProfile) {
+      const profileResolver = new ProfileResolver();
+      resolvedProfile = profileResolver.resolve(businessProfile);
+      console.warn(`[Chat] Business profile resolved for LLM context`);
     }
 
     // Create governance profile store and apply skin profile if loaded
@@ -192,13 +211,12 @@ export async function createChatRuntime(
   }
   const adapter = config?.adapter ?? new TelegramAdapter(botToken, principalLookup, webhookSecret);
 
-  // Clinic mode: use ClinicInterpreter + CartridgeReadAdapter
-  // Activated by clinicConfig or skin with clinic ID
-  const isClinicMode = clinicConfig || skinIdEnv === "clinic";
+  // LLM interpreter mode: use SkinAwareInterpreter (when skin is loaded) or
+  // ClinicInterpreter (legacy clinicConfig). Activated by skinIdEnv or clinicConfig.
+  const useLlmInterpreter = skinIdEnv || clinicConfig;
   let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  if (isClinicMode && !interpreter) {
-    const { ClinicInterpreter } = await import("./clinic/interpreter.js");
+  if (useLlmInterpreter && !interpreter) {
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
     const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
@@ -221,19 +239,31 @@ export async function createChatRuntime(
       chatRedis,
     );
 
-    const clinicInterpreter = new ClinicInterpreter(
-      {
-        apiKey: anthropicApiKey,
-        model: "claude-3-5-haiku-20241022",
-        baseUrl: "https://api.anthropic.com",
-      },
-      {
-        adAccountId,
-        clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
-      },
-      modelRouter,
-    );
-    interpreter = clinicInterpreter;
+    const llmConfig = {
+      apiKey: anthropicApiKey,
+      model: "claude-3-5-haiku-20241022" as const,
+      baseUrl: "https://api.anthropic.com",
+    };
+
+    const clinicContext = {
+      adAccountId,
+      clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
+    };
+
+    // Use SkinAwareInterpreter when a skin is loaded; fall back to ClinicInterpreter
+    let llmInterpreter: Interpreter & { updateCampaignNames(names: string[]): void };
+    if (skinIdEnv) {
+      const { SkinAwareInterpreter } = await import("./interpreter/skin-aware-interpreter.js");
+      llmInterpreter = new SkinAwareInterpreter(llmConfig, clinicContext, {
+        skin: resolvedSkin,
+        profile: resolvedProfile,
+        modelRouter,
+      });
+    } else {
+      const { ClinicInterpreter } = await import("./clinic/interpreter.js");
+      llmInterpreter = new ClinicInterpreter(llmConfig, clinicContext, modelRouter);
+    }
+    interpreter = llmInterpreter;
 
     // Create CartridgeReadAdapter for read intents
     if (storage && ledger && !readAdapter) {
@@ -253,7 +283,7 @@ export async function createChatRuntime(
             ).searchCampaigns;
             const campaigns = searchFn ? await searchFn("") : [];
             const names = campaigns.map((c) => c.name);
-            clinicInterpreter.updateCampaignNames(names);
+            llmInterpreter.updateCampaignNames(names);
             return names.length;
           } catch (err) {
             console.warn("[Clinic] Failed to load campaign names:", err);

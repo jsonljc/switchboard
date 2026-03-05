@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { StorageContext } from "@switchboard/core";
+import type { BusinessProfile } from "@switchboard/schemas";
 import { seedDefaultStorage, GuardedCartridge } from "@switchboard/core";
 import {
   bootstrapDigitalAdsCartridge,
@@ -16,15 +17,18 @@ import {
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import {
-  bootstrapPatientEngagementCartridge,
-  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
-} from "@switchboard/patient-engagement";
+  bootstrapCustomerEngagementCartridge,
+  DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
+} from "@switchboard/customer-engagement";
 
 /**
  * Register all domain cartridges into the provided storage context.
- * Returns the digital-ads cartridge instance for optional campaign refresh.
+ * When a business profile is provided, it is passed to the customer-engagement cartridge.
  */
-export async function registerAllCartridges(storage: StorageContext): Promise<void> {
+export async function registerAllCartridges(
+  storage: StorageContext,
+  profile?: BusinessProfile,
+): Promise<void> {
   // Digital ads
   const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
     accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
@@ -55,16 +59,19 @@ export async function registerAllCartridges(storage: StorageContext): Promise<vo
   storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
   await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
-  // Patient engagement
+  // Customer engagement
   const { cartridge: peCartridge, interceptors: peInterceptors } =
-    await bootstrapPatientEngagementCartridge({
-      requireCredentials: process.env.NODE_ENV === "production",
-    });
+    await bootstrapCustomerEngagementCartridge(
+      {
+        requireCredentials: process.env.NODE_ENV === "production",
+      },
+      profile,
+    );
   storage.cartridges.register(
-    "patient-engagement",
+    "customer-engagement",
     new GuardedCartridge(peCartridge, peInterceptors),
   );
-  await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+  await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
 }
 
 /**

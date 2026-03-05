@@ -160,11 +160,11 @@ describe("SkinResolver", () => {
       makeManifest("digital-ads", ["digital-ads.campaign.create", "digital-ads.campaign.pause"]),
     );
     registry.registerCartridge(
-      "patient-engagement",
-      makeManifest("patient-engagement", [
-        "patient-engagement.appointment.book",
-        "patient-engagement.appointment.cancel",
-        "patient-engagement.reminder.send",
+      "customer-engagement",
+      makeManifest("customer-engagement", [
+        "customer-engagement.appointment.book",
+        "customer-engagement.appointment.cancel",
+        "customer-engagement.reminder.send",
       ]),
     );
   });
@@ -308,12 +308,12 @@ describe("SkinResolver", () => {
   it("multi-cartridge skin filters correctly", () => {
     const resolver = new SkinResolver();
     const skin = makeValidSkin({
-      tools: { include: ["crm.*", "patient-engagement.*"] },
-      requiredCartridges: ["crm", "patient-engagement"],
+      tools: { include: ["crm.*", "customer-engagement.*"] },
+      requiredCartridges: ["crm", "customer-engagement"],
     });
 
     const resolved = resolver.resolve(skin, registry);
-    expect(resolved.tools).toHaveLength(6); // 3 crm + 3 patient-engagement
+    expect(resolved.tools).toHaveLength(6); // 3 crm + 3 customer-engagement
     expect(resolved.tools.some((t) => t.actionType.startsWith("digital-ads"))).toBe(false);
   });
 

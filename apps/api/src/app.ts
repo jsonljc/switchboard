@@ -55,6 +55,7 @@ import {
   SkinLoader,
   SkinResolver,
   ToolRegistry,
+  ProfileLoader,
 } from "@switchboard/core";
 import type { Policy } from "@switchboard/schemas";
 import type {
@@ -78,10 +79,10 @@ import {
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import {
-  bootstrapPatientEngagementCartridge,
-  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
+  bootstrapCustomerEngagementCartridge,
+  DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
   setEscalationNotifier,
-} from "@switchboard/patient-engagement";
+} from "@switchboard/customer-engagement";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
@@ -365,18 +366,38 @@ export async function buildServer() {
   storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
   await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
-  // Register patient-engagement cartridge (uses credential resolver for Google Calendar + Twilio)
+  // Register customer-engagement cartridge (uses credential resolver for Google Calendar + Twilio)
+  // Optionally load a business profile for profile-driven configuration
+  let businessProfile: import("@switchboard/schemas").BusinessProfile | undefined;
+  const profileId = process.env["PROFILE_ID"];
+  if (profileId) {
+    const profilesDir = new URL("../../../profiles", import.meta.url).pathname;
+    const profileLoader = new ProfileLoader(profilesDir);
+    try {
+      businessProfile = await profileLoader.load(profileId);
+      app.log.info({ profileId }, `Business profile "${profileId}" loaded`);
+    } catch (err) {
+      app.log.warn(
+        { err, profileId },
+        `Failed to load business profile "${profileId}" — using defaults`,
+      );
+    }
+  }
+
   const { cartridge: peCartridge, interceptors: peInterceptors } =
-    await bootstrapPatientEngagementCartridge({
-      requireCredentials: process.env.NODE_ENV === "production",
-    });
+    await bootstrapCustomerEngagementCartridge(
+      {
+        requireCredentials: process.env.NODE_ENV === "production",
+      },
+      businessProfile,
+    );
   storage.cartridges.register(
-    "patient-engagement",
+    "customer-engagement",
     new GuardedCartridge(peCartridge, peInterceptors),
   );
-  await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+  await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
 
-  // Wire escalation notifier for patient-engagement cartridge
+  // Wire escalation notifier for customer-engagement cartridge
   // Uses the proactive notification infrastructure to alert staff on configured channels
   {
     const { sendProactiveNotification } = await import("./alerts/notifier.js");
@@ -409,9 +430,9 @@ export async function buildServer() {
 
         await sendProactiveNotification(
           {
-            title: "Patient Escalation",
+            title: "Customer Escalation",
             body: [
-              `Patient: ${escalation.patientId}`,
+              `Patient: ${escalation.contactId}`,
               `Reason: ${escalation.reason}`,
               escalation.conversationId ? `Conversation: ${escalation.conversationId}` : null,
               `Time: ${escalation.escalatedAt}`,

@@ -152,10 +152,11 @@ Rules:
 - If the user mentions a budget amount, put it in slots.budgetAmount
 - If you are unsure, set confidence below 0.5`;
 
+/** @deprecated Use SkinAwareInterpreter instead for new deployments. */
 export class ClinicInterpreter extends LLMInterpreter {
-  readonly name = "clinic-haiku";
-  private clinicContext: ClinicContext;
-  private modelRouter: ModelRouter | null;
+  readonly name: string = "clinic-haiku";
+  protected clinicContext: ClinicContext;
+  protected modelRouter: ModelRouter | null;
 
   constructor(config: LLMConfig, clinicContext: ClinicContext, modelRouter?: ModelRouter) {
     super({
@@ -306,7 +307,7 @@ export class ClinicInterpreter extends LLMInterpreter {
     return this.mapClassifyToInterpreterOutput(intent, confidence, slots, availableActions);
   }
 
-  private mapClassifyToInterpreterOutput(
+  protected mapClassifyToInterpreterOutput(
     intent: AllowedIntent,
     confidence: number,
     slots: Record<string, unknown>,
@@ -554,7 +555,7 @@ export class ClinicInterpreter extends LLMInterpreter {
   }
 
   /** Regex-based fallback when LLM budget is exceeded. */
-  private fallbackInterpret(text: string, availableActions: string[]): InterpreterResult {
+  protected fallbackInterpret(text: string, availableActions: string[]): InterpreterResult {
     for (const pattern of FALLBACK_PATTERNS) {
       const match = text.match(pattern.regex);
       if (match) {

@@ -94,9 +94,9 @@ describe("DataFlowExecutor", () => {
       steps: [
         {
           index: 0,
-          cartridgeId: "patient-engagement",
-          actionType: "patient-engagement.treatment.log",
-          parameters: { patientId: "pat_1", treatmentType: "dental_crown", value: 4000 },
+          cartridgeId: "customer-engagement",
+          actionType: "customer-engagement.treatment.log",
+          parameters: { contactId: "pat_1", treatmentType: "dental_crown", value: 4000 },
           condition: null,
         },
         {
@@ -140,9 +140,9 @@ describe("DataFlowExecutor", () => {
       steps: [
         {
           index: 0,
-          cartridgeId: "patient-engagement",
-          actionType: "pe.treatment.log",
-          parameters: { patientId: "pat_1" },
+          cartridgeId: "customer-engagement",
+          actionType: "ce.treatment.log",
+          parameters: { contactId: "pat_1" },
           condition: null,
         },
         {

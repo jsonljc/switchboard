@@ -5,24 +5,24 @@
   "description": "Vertical skin for dental clinic patient engagement. Exposes appointment, reminder, cadence, treatment, and review tools with guarded governance and WhatsApp as the primary channel.",
 
   "tools": {
-    "include": ["patient-engagement.*"],
-    "exclude": ["patient-engagement.pipeline.*"],
+    "include": ["customer-engagement.*"],
+    "exclude": ["customer-engagement.pipeline.*"],
     "aliases": {
-      "book_appointment": "patient-engagement.appointment.book",
-      "cancel_appointment": "patient-engagement.appointment.cancel",
-      "reschedule_appointment": "patient-engagement.appointment.reschedule",
-      "send_reminder": "patient-engagement.reminder.send",
-      "log_treatment": "patient-engagement.treatment.log",
-      "request_review": "patient-engagement.review.request",
-      "respond_to_review": "patient-engagement.review.respond",
-      "start_cadence": "patient-engagement.cadence.start",
-      "stop_cadence": "patient-engagement.cadence.stop",
-      "qualify_lead": "patient-engagement.lead.qualify",
-      "score_lead": "patient-engagement.lead.score",
-      "update_stage": "patient-engagement.journey.update_stage",
-      "score_ltv": "patient-engagement.patient.score_ltv",
-      "handle_objection": "patient-engagement.conversation.handle_objection",
-      "escalate": "patient-engagement.conversation.escalate"
+      "book_appointment": "customer-engagement.appointment.book",
+      "cancel_appointment": "customer-engagement.appointment.cancel",
+      "reschedule_appointment": "customer-engagement.appointment.reschedule",
+      "send_reminder": "customer-engagement.reminder.send",
+      "log_treatment": "customer-engagement.treatment.log",
+      "request_review": "customer-engagement.review.request",
+      "respond_to_review": "customer-engagement.review.respond",
+      "start_cadence": "customer-engagement.cadence.start",
+      "stop_cadence": "customer-engagement.cadence.stop",
+      "qualify_lead": "customer-engagement.lead.qualify",
+      "score_lead": "customer-engagement.lead.score",
+      "update_stage": "customer-engagement.journey.update_stage",
+      "score_ltv": "customer-engagement.contact.score_ltv",
+      "handle_objection": "customer-engagement.conversation.handle_objection",
+      "escalate": "customer-engagement.conversation.escalate"
     }
   },
 
@@ -33,7 +33,7 @@
         "name": "clinic-high-risk-cancellation",
         "description": "Require approval for appointment cancellations within 24 hours",
         "rule": {
-          "actionType": "patient-engagement.appointment.cancel"
+          "actionType": "customer-engagement.appointment.cancel"
         },
         "effect": "require_approval"
       },
@@ -41,7 +41,7 @@
         "name": "clinic-review-response-approval",
         "description": "Public review responses always require manager approval",
         "rule": {
-          "actionType": "patient-engagement.review.respond"
+          "actionType": "customer-engagement.review.respond"
         },
         "effect": "require_approval"
       }
@@ -60,13 +60,13 @@
     "locale": "en",
     "interpreterSystemPrompt": "You are a helpful dental clinic assistant. Help staff manage appointments, patient communications, and treatment records. Use clear, professional language appropriate for a healthcare setting.",
     "replyTemplates": {
-      "appointment_booked": "Appointment confirmed for {{patientName}} on {{date}} at {{time}}.",
-      "appointment_cancelled": "Appointment for {{patientName}} on {{date}} has been cancelled.",
-      "reminder_sent": "Reminder sent to {{patientName}} for their appointment on {{date}}.",
-      "treatment_logged": "Treatment record saved for {{patientName}}: {{treatmentType}}.",
-      "review_requested": "Review request sent to {{patientName}}.",
-      "cadence_started": "Outreach cadence started for {{patientName}}.",
-      "cadence_stopped": "Outreach cadence stopped for {{patientName}}."
+      "appointment_booked": "Appointment confirmed for {{contactName}} on {{date}} at {{time}}.",
+      "appointment_cancelled": "Appointment for {{contactName}} on {{date}} has been cancelled.",
+      "reminder_sent": "Reminder sent to {{contactName}} for their appointment on {{date}}.",
+      "treatment_logged": "Treatment record saved for {{contactName}}: {{treatmentType}}.",
+      "review_requested": "Review request sent to {{contactName}}.",
+      "cadence_started": "Outreach cadence started for {{contactName}}.",
+      "cadence_stopped": "Outreach cadence stopped for {{contactName}}."
     },
     "terminology": {
       "campaign": "treatment plan",
@@ -85,11 +85,11 @@
       "name": "New Patient Intake",
       "trigger": "new patient intake",
       "steps": [
-        { "actionType": "patient-engagement.lead.qualify" },
-        { "actionType": "patient-engagement.lead.score" },
-        { "actionType": "patient-engagement.appointment.book" },
+        { "actionType": "customer-engagement.lead.qualify" },
+        { "actionType": "customer-engagement.lead.score" },
+        { "actionType": "customer-engagement.appointment.book" },
         {
-          "actionType": "patient-engagement.cadence.start",
+          "actionType": "customer-engagement.cadence.start",
           "parameterDefaults": { "cadenceType": "new-patient-welcome" }
         }
       ]
@@ -99,12 +99,12 @@
       "name": "Post-Treatment Follow-up",
       "trigger": "post treatment follow up",
       "steps": [
-        { "actionType": "patient-engagement.treatment.log" },
+        { "actionType": "customer-engagement.treatment.log" },
         {
-          "actionType": "patient-engagement.reminder.send",
+          "actionType": "customer-engagement.reminder.send",
           "parameterDefaults": { "reminderType": "follow-up" }
         },
-        { "actionType": "patient-engagement.review.request" }
+        { "actionType": "customer-engagement.review.request" }
       ]
     },
     {
@@ -112,17 +112,17 @@
       "name": "Reschedule Appointment",
       "trigger": "reschedule appointment",
       "steps": [
-        { "actionType": "patient-engagement.appointment.cancel" },
-        { "actionType": "patient-engagement.appointment.book" },
+        { "actionType": "customer-engagement.appointment.cancel" },
+        { "actionType": "customer-engagement.appointment.book" },
         {
-          "actionType": "patient-engagement.reminder.send",
+          "actionType": "customer-engagement.reminder.send",
           "parameterDefaults": { "reminderType": "rescheduled" }
         }
       ]
     }
   ],
 
-  "requiredCartridges": ["patient-engagement"],
+  "requiredCartridges": ["customer-engagement"],
 
   "channels": {
     "primary": "whatsapp",

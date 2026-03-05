@@ -40,3 +40,6 @@ export * from "./crm-provider.js";
 
 // Skin manifests (vertical deployment configuration)
 export * from "./skin.js";
+
+// Business profiles (per-business instance knowledge)
+export * from "./business-profile.js";

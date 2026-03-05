@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@switchboard/patient-engagement", () => ({
+vi.mock("@switchboard/customer-engagement", () => ({
   evaluatePendingCadences: vi.fn(),
   applyCadenceEvaluation: vi.fn(),
 }));
@@ -12,7 +12,7 @@ import {
   getActiveCadenceInstances,
   getCadenceInstance,
 } from "../jobs/cadence-runner.js";
-import { evaluatePendingCadences, applyCadenceEvaluation } from "@switchboard/patient-engagement";
+import { evaluatePendingCadences, applyCadenceEvaluation } from "@switchboard/customer-engagement";
 
 const mockEvaluate = vi.mocked(evaluatePendingCadences);
 const mockApply = vi.mocked(applyCadenceEvaluation);
@@ -37,7 +37,7 @@ describe("Cadence Runner Job", () => {
     const instance = {
       id: "inst_1",
       cadenceDefinitionId: "cad_def_1",
-      patientId: "pat_1",
+      contactId: "pat_1",
       status: "active",
     };
     startCadenceInstance(instance as any);
@@ -48,13 +48,13 @@ describe("Cadence Runner Job", () => {
     startCadenceInstance({
       id: "inst_a",
       cadenceDefinitionId: "cad_1",
-      patientId: "pat_1",
+      contactId: "pat_1",
       status: "active",
     } as any);
     startCadenceInstance({
       id: "inst_b",
       cadenceDefinitionId: "cad_1",
-      patientId: "pat_2",
+      contactId: "pat_2",
       status: "completed",
     } as any);
 
@@ -88,7 +88,7 @@ describe("Cadence Runner Job", () => {
     startCadenceInstance({
       id: "inst_exec",
       cadenceDefinitionId: "cad_1",
-      patientId: "pat_exec",
+      contactId: "pat_exec",
       status: "active",
       currentStepIndex: 0,
     } as any);
@@ -99,7 +99,7 @@ describe("Cadence Runner Job", () => {
         evaluation: {
           shouldExecute: true,
           actionType: "send_reminder",
-          parameters: { patientId: "pat_exec" },
+          parameters: { contactId: "pat_exec" },
           completed: false,
           skipped: false,
         },
@@ -138,7 +138,7 @@ describe("Cadence Runner Job", () => {
     startCadenceInstance({
       id: "inst_err",
       cadenceDefinitionId: "cad_1",
-      patientId: "pat_err",
+      contactId: "pat_err",
       status: "active",
       currentStepIndex: 0,
     } as any);

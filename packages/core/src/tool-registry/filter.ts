@@ -3,7 +3,7 @@
  * Supports `*` as a wildcard that matches any substring.
  *
  * Examples:
- *   "patient-engagement.*"  matches "patient-engagement.appointment.book"
+ *   "customer-engagement.*"  matches "customer-engagement.appointment.book"
  *   "crm.*"                 matches "crm.contact.search"
  *   "crm.contact.*"         matches "crm.contact.search" but not "crm.deal.list"
  *   "*"                     matches everything

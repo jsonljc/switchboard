@@ -26,12 +26,12 @@ function createMockSkin(overrides?: Partial<ResolvedSkin>): ResolvedSkin {
       id: "clinic",
       name: "Clinic",
       version: "1.0.0",
-      tools: { include: ["patient-engagement.*"] },
+      tools: { include: ["customer-engagement.*"] },
       governance: { profile: "strict" },
       language: { locale: "en" },
-      requiredCartridges: ["patient-engagement"],
+      requiredCartridges: ["customer-engagement"],
     } as ResolvedSkin["manifest"],
-    toolFilter: { include: ["patient-engagement.*"] },
+    toolFilter: { include: ["customer-engagement.*"] },
     tools: [],
     governancePreset: {} as ResolvedSkin["governancePreset"],
     governance: {
@@ -39,7 +39,7 @@ function createMockSkin(overrides?: Partial<ResolvedSkin>): ResolvedSkin {
       policyOverrides: [
         {
           name: "deny-high-risk-pe",
-          description: "Deny high-risk patient-engagement actions",
+          description: "Deny high-risk customer-engagement actions",
           rule: {
             composition: "AND",
             conditions: [{ field: "actionType", operator: "contains", value: "delete" }],
@@ -51,7 +51,7 @@ function createMockSkin(overrides?: Partial<ResolvedSkin>): ResolvedSkin {
     language: { locale: "en" },
     playbooks: [],
     primaryChannel: null,
-    requiredCartridges: ["patient-engagement"],
+    requiredCartridges: ["customer-engagement"],
     config: {},
     ...overrides,
   };
@@ -79,13 +79,13 @@ async function buildSkinTestServer(skin: ResolvedSkin | null): Promise<SkinTestC
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
-  // Register a patient-engagement cartridge
+  // Register a customer-engagement cartridge
   const peCartridge = new TestCartridge(
     createTestManifest({
-      id: "patient-engagement",
+      id: "customer-engagement",
       actions: [
         {
-          actionType: "patient-engagement.appointment.book",
+          actionType: "customer-engagement.appointment.book",
           name: "Book Appointment",
           description: "Book an appointment",
           parametersSchema: {},
@@ -121,7 +121,7 @@ async function buildSkinTestServer(skin: ResolvedSkin | null): Promise<SkinTestC
     alternatives: [],
     status: "resolved" as const,
   });
-  storage.cartridges.register("patient-engagement", peCartridge);
+  storage.cartridges.register("customer-engagement", peCartridge);
 
   // Register a digital-ads cartridge (should be blocked by skin filter)
   const adsCartridge = new TestCartridge(
@@ -159,10 +159,10 @@ async function buildSkinTestServer(skin: ResolvedSkin | null): Promise<SkinTestC
   // Seed default allow policies for both cartridges
   await storage.policies.save({
     id: "allow-pe",
-    name: "Allow patient-engagement",
-    description: "Allow all patient-engagement actions",
+    name: "Allow customer-engagement",
+    description: "Allow all customer-engagement actions",
     organizationId: null,
-    cartridgeId: "patient-engagement",
+    cartridgeId: "customer-engagement",
     priority: 100,
     active: true,
     rule: { composition: "AND", conditions: [], children: [] },
@@ -265,7 +265,7 @@ describe("Skin enforcement", () => {
         payload: {
           actorId: "default",
           action: {
-            actionType: "patient-engagement.appointment.book",
+            actionType: "customer-engagement.appointment.book",
             parameters: { appointmentId: "appt_1" },
             sideEffect: true,
           },
@@ -327,7 +327,7 @@ describe("Skin enforcement", () => {
         method: "POST",
         url: "/api/actions/propose",
         payload: {
-          actionType: "patient-engagement.appointment.book",
+          actionType: "customer-engagement.appointment.book",
           parameters: { appointmentId: "appt_1" },
           principalId: "default",
         },
@@ -349,7 +349,7 @@ describe("Skin enforcement", () => {
           principalId: "default",
           proposals: [
             {
-              actionType: "patient-engagement.appointment.book",
+              actionType: "customer-engagement.appointment.book",
               parameters: { appointmentId: "appt_1" },
             },
             {
@@ -370,8 +370,8 @@ describe("Skin enforcement", () => {
     it("blocks action matching exclude pattern", async () => {
       const skin = createMockSkin({
         toolFilter: {
-          include: ["patient-engagement.*"],
-          exclude: ["patient-engagement.appointment.cancel"],
+          include: ["customer-engagement.*"],
+          exclude: ["customer-engagement.appointment.cancel"],
         },
       });
       const ctx = await buildSkinTestServer(skin);
@@ -384,7 +384,7 @@ describe("Skin enforcement", () => {
         payload: {
           actorId: "default",
           action: {
-            actionType: "patient-engagement.appointment.cancel",
+            actionType: "customer-engagement.appointment.cancel",
             parameters: {},
             sideEffect: true,
           },

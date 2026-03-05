@@ -228,10 +228,10 @@ async function handleStripeEvent(
     case "payment_intent.succeeded": {
       logger.info({ paymentIntentId: obj["id"], amount: obj["amount"] }, "Payment succeeded");
       // Dispatch to orchestrator: log payment, update CRM deal stage
-      const patientEngagement = app.storageContext.cartridges.get("patient-engagement");
-      if (patientEngagement) {
+      const customerEngagement = app.storageContext.cartridges.get("customer-engagement");
+      if (customerEngagement) {
         try {
-          await patientEngagement.execute(
+          await customerEngagement.execute(
             "payment.log",
             {
               paymentId: obj["id"],
@@ -245,7 +245,7 @@ async function handleStripeEvent(
         } catch (err) {
           logger.warn(
             { err, paymentId: obj["id"] },
-            "Failed to log payment via patient-engagement cartridge",
+            "Failed to log payment via customer-engagement cartridge",
           );
         }
       }
@@ -329,8 +329,8 @@ async function handleFormSubmission(
     }
   }
 
-  // Step 2: Trigger patient engagement qualification
-  const peCartridge = app.storageContext.cartridges.get("patient-engagement");
+  // Step 2: Trigger customer engagement qualification
+  const peCartridge = app.storageContext.cartridges.get("customer-engagement");
   if (peCartridge) {
     try {
       await peCartridge.execute(

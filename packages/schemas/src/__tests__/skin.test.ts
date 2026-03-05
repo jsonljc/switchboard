@@ -12,9 +12,9 @@ function validClinicSkin() {
     version: "1.0.0",
     description: "Skin for dental clinic operations",
     tools: {
-      include: ["patient-engagement.*"],
-      exclude: ["patient-engagement.internal.*"],
-      aliases: { book_appointment: "patient-engagement.appointment.book" },
+      include: ["customer-engagement.*"],
+      exclude: ["customer-engagement.internal.*"],
+      aliases: { book_appointment: "customer-engagement.appointment.book" },
     },
     governance: {
       profile: "guarded",
@@ -38,15 +38,15 @@ function validClinicSkin() {
         name: "New Patient Intake",
         trigger: "register new patient",
         steps: [
-          { actionType: "patient-engagement.patient.register" },
+          { actionType: "customer-engagement.contact.register" },
           {
-            actionType: "patient-engagement.appointment.book",
+            actionType: "customer-engagement.appointment.book",
             parameterDefaults: { type: "initial-consultation" },
           },
         ],
       },
     ],
-    requiredCartridges: ["patient-engagement"],
+    requiredCartridges: ["customer-engagement"],
     channels: {
       primary: "whatsapp",
       enabled: ["whatsapp", "telegram"],

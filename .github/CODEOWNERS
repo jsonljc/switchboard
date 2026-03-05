@@ -3,7 +3,7 @@
 
 # Sensitive packages — require explicit review
 cartridges/payments/ @jsonljc
-cartridges/patient-engagement/ @jsonljc
+cartridges/customer-engagement/ @jsonljc
 packages/core/ @jsonljc
 packages/db/ @jsonljc
 

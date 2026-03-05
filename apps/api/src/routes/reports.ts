@@ -124,7 +124,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       where: {
         ...orgFilter,
         eventType: "action.executed",
-        entityType: { in: ["patient-engagement.appointment.book"] },
+        entityType: { in: ["customer-engagement.appointment.book"] },
         timestamp: { gte: startDate, lte: endDate },
       },
     });

@@ -12,12 +12,12 @@ export { matchGlob, matchesAny } from "./filter.js";
  * Usage:
  *   const registry = new ToolRegistry();
  *   registry.registerCartridge("crm", crmManifest);
- *   registry.registerCartridge("patient-engagement", peManifest);
+ *   registry.registerCartridge("customer-engagement", peManifest);
  *
  *   // Apply skin filter
  *   const filtered = registry.getFilteredTools({
- *     include: ["patient-engagement.*"],
- *     exclude: ["patient-engagement.internal.*"],
+ *     include: ["customer-engagement.*"],
+ *     exclude: ["customer-engagement.internal.*"],
  *   });
  */
 export class ToolRegistry {
