@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
+  Users,
   Activity,
   ShieldCheck,
   FileText,
@@ -20,15 +21,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const primaryNavItems = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/leads", label: "Leads", icon: Users },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
   { href: "/simulate", label: "Simulate", icon: FlaskConical },
@@ -52,9 +49,7 @@ export function NavBar() {
   const pendingCount = useApprovalCount();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const isSecondaryActive = secondaryNavItems.some((item) =>
-    pathname.startsWith(item.href),
-  );
+  const isSecondaryActive = secondaryNavItems.some((item) => pathname.startsWith(item.href));
 
   return (
     <>
@@ -62,10 +57,7 @@ export function NavBar() {
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
         <div className="flex items-center justify-around h-16">
           {primaryNavItems.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link
@@ -73,9 +65,7 @@ export function NavBar() {
                 href={item.href}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] text-xs transition-colors",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <div className="relative">
@@ -94,9 +84,7 @@ export function NavBar() {
             onClick={() => setMoreOpen(true)}
             className={cn(
               "flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] text-xs transition-colors",
-              isSecondaryActive
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
+              isSecondaryActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <MoreHorizontal className="h-5 w-5" />
@@ -124,7 +112,7 @@ export function NavBar() {
                     "flex flex-col items-center gap-2 p-3 rounded-lg text-xs transition-colors",
                     isActive
                       ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <Icon className="h-5 w-5" />
@@ -145,10 +133,7 @@ export function NavBar() {
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {allNavItems.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link
@@ -158,7 +143,7 @@ export function NavBar() {
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted",
                 )}
               >
                 <Icon className="h-4 w-4" />
