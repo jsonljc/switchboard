@@ -8,9 +8,9 @@ describe("MockCalendarProvider", () => {
     const cal = new MockCalendarProvider();
     const start = new Date("2025-06-01T10:00:00Z");
     const end = new Date("2025-06-01T11:00:00Z");
-    const result = await cal.bookAppointment("cal-1", "patient-1", start, end, "Cleaning");
+    const result = await cal.bookAppointment("cal-1", "contact-1", start, end, "Cleaning");
     expect(result.appointmentId).toMatch(/^mock-appt-/);
-    expect(result.contactId).toBe("patient-1");
+    expect(result.contactId).toBe("contact-1");
     expect(result.startTime).toEqual(start);
     expect(result.endTime).toEqual(end);
     expect(result.status).toBe("scheduled");

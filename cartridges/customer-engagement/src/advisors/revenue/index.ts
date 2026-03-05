@@ -119,7 +119,7 @@ export const upsellAdvisor: JourneyFindingAdvisor = (
 };
 
 /**
- * LTV Cohort Trend — tracks lifetime value trends across patient cohorts.
+ * LTV Cohort Trend — tracks lifetime value trends across contact cohorts.
  */
 export const ltvTrendAdvisor: JourneyFindingAdvisor = (
   _stageAnalysis,
@@ -129,23 +129,23 @@ export const ltvTrendAdvisor: JourneyFindingAdvisor = (
 ) => {
   const currentRevenue = current.aggregates.totalRevenue;
   const previousRevenue = previous.aggregates.totalRevenue;
-  const currentPatients = current.totalContacts;
-  const previousPatients = previous.totalContacts;
+  const currentContacts = current.totalContacts;
+  const previousContacts = previous.totalContacts;
 
-  if (currentPatients === 0 || previousPatients === 0) return [];
+  if (currentContacts === 0 || previousContacts === 0) return [];
 
-  const currentRevenuePerPatient = currentRevenue / currentPatients;
-  const previousRevenuePerPatient = previousRevenue / previousPatients;
-  const delta = percentChange(currentRevenuePerPatient, previousRevenuePerPatient);
+  const currentRevenuePerContact = currentRevenue / currentContacts;
+  const previousRevenuePerContact = previousRevenue / previousContacts;
+  const delta = percentChange(currentRevenuePerContact, previousRevenuePerContact);
 
   if (delta < -20) {
     return [
       {
         severity: "warning",
         stage: "ltv_trend",
-        message: `Revenue per patient dropped ${delta.toFixed(1)}% ($${previousRevenuePerPatient.toFixed(0)} → $${currentRevenuePerPatient.toFixed(0)}).`,
+        message: `Revenue per contact dropped ${delta.toFixed(1)}% ($${previousRevenuePerContact.toFixed(0)} → $${currentRevenuePerContact.toFixed(0)}).`,
         recommendation:
-          "Analyze patient cohort retention. Implement win-back campaigns for dormant patients.",
+          "Analyze contact cohort retention. Implement win-back campaigns for dormant contacts.",
       },
     ];
   }

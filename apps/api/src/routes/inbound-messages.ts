@@ -293,19 +293,19 @@ async function getConversationRouter(
         id: "qualification",
         name: "Lead Qualification",
         description: "Qualify incoming leads through a conversational flow",
-        variables: ["patientName", "patientPhone", "treatmentInterest"],
+        variables: ["contactName", "contactPhone", "serviceInterest"],
         steps: [
           {
             id: "greeting",
             type: "message" as const,
             template:
-              "Hi! Thanks for reaching out. I'd love to help you. What treatment are you interested in?",
+              "Hi! Thanks for reaching out. I'd love to help you. What can we assist you with?",
           },
           {
             id: "treatment_interest",
             type: "question" as const,
             template: "What brings you in today?",
-            options: ["Botox/Fillers", "Laser Treatment", "Dental Care", "Consultation", "Other"],
+            options: ["Consultation", "Service Inquiry", "Pricing", "Other"],
           },
           {
             id: "schedule_prompt",
@@ -317,14 +317,14 @@ async function getConversationRouter(
             id: "book_action",
             type: "action" as const,
             actionType: "appointment.check_availability",
-            actionParameters: { treatmentInterest: "{{treatmentInterest}}" },
+            actionParameters: { serviceInterest: "{{serviceInterest}}" },
             template: "Let me look up available times for you...",
           },
           {
             id: "closing",
             type: "message" as const,
             template:
-              "Thank you, {{patientName}}! We'll get you booked right away. You'll receive a confirmation shortly.",
+              "Thank you, {{contactName}}! We'll get you booked right away. You'll receive a confirmation shortly.",
           },
         ],
       });

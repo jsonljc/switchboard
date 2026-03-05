@@ -224,7 +224,7 @@ function toCadenceRecord(instance: CadenceInstance): CadenceInstanceRecord {
   return {
     id: instance.id,
     cadenceDefinitionId: instance.cadenceDefinitionId,
-    patientId: instance.contactId,
+    contactId: instance.contactId,
     organizationId: instance.organizationId,
     status: instance.status,
     currentStepIndex: instance.currentStepIndex,
@@ -252,7 +252,7 @@ function fromCadenceRecord(record: CadenceInstanceRecord): CadenceInstance {
   return {
     id: record.id,
     cadenceDefinitionId: record.cadenceDefinitionId,
-    contactId: record.patientId,
+    contactId: record.contactId,
     organizationId: record.organizationId ?? "",
     status: record.status as CadenceInstance["status"],
     currentStepIndex: record.currentStepIndex,

@@ -134,7 +134,7 @@ export const medicalFlagAdvisor: JourneyFindingAdvisor = (
         stage: "medical_flags",
         message: `Treatment acceptance rate is ${((accepted / proposed) * 100).toFixed(1)}%. Only ${accepted} of ${proposed} proposed treatments were accepted.`,
         recommendation:
-          "Review treatment proposals for alignment with patient expectations and medical feasibility.",
+          "Review treatment proposals for alignment with contact expectations and medical feasibility.",
       },
     ];
   }

@@ -62,7 +62,7 @@ export const followupComplianceAdvisor: JourneyFindingAdvisor = (
       {
         severity: "warning",
         stage: "followup_compliance",
-        message: `Only ${((repeat / completed) * 100).toFixed(1)}% of treated patients became repeat patients.`,
+        message: `Only ${((repeat / completed) * 100).toFixed(1)}% of treated contacts became repeat customers.`,
         recommendation:
           "Strengthen post-treatment follow-up cadence. Send satisfaction surveys within 24 hours.",
       },
@@ -104,25 +104,25 @@ export const messageFrequencyAdvisor: JourneyFindingAdvisor = (
   const totalContacts = current.totalContacts;
   if (totalContacts === 0) return [];
 
-  const messagesPerPatient = commData.totalMessagesSent / totalContacts;
+  const messagesPerContact = commData.totalMessagesSent / totalContacts;
 
-  if (messagesPerPatient > 10) {
+  if (messagesPerContact > 10) {
     return [
       {
         severity: "warning",
         stage: "message_frequency",
-        message: `Average ${messagesPerPatient.toFixed(1)} messages per patient this period — risk of over-communication.`,
-        recommendation: "Review cadence configurations. Implement per-patient frequency caps.",
+        message: `Average ${messagesPerContact.toFixed(1)} messages per contact this period — risk of over-communication.`,
+        recommendation: "Review cadence configurations. Implement per-contact frequency caps.",
       },
     ];
   }
 
-  if (messagesPerPatient < 1 && totalContacts > 20) {
+  if (messagesPerContact < 1 && totalContacts > 20) {
     return [
       {
         severity: "info",
         stage: "message_frequency",
-        message: `Average ${messagesPerPatient.toFixed(1)} messages per patient — patients may be under-engaged.`,
+        message: `Average ${messagesPerContact.toFixed(1)} messages per contact — contacts may be under-engaged.`,
         recommendation: "Ensure follow-up cadences are active. Check SMS delivery rates.",
       },
     ];

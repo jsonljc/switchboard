@@ -44,7 +44,7 @@ export const objectionHandlingFlow: ConversationFlowDefinition = {
       id: "escalate_step",
       type: "escalate",
       template: "Let me connect you with someone who can answer your specific questions in detail.",
-      escalationReason: "Patient objection not resolved by automated response",
+      escalationReason: "Customer objection not resolved by automated response",
     },
   ],
 };

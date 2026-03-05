@@ -64,7 +64,7 @@ export const consultationReminderCadence: CadenceDefinition = {
 export const noShowRebookCadence: CadenceDefinition = {
   id: "no-show-rebook",
   name: "No-Show Rebook",
-  description: "Re-engagement sequence after a patient no-shows.",
+  description: "Re-engagement sequence after a contact no-shows.",
   trigger: { event: "appointment_no_show" },
   steps: [
     {
@@ -140,12 +140,12 @@ export const postTreatmentCadence: CadenceDefinition = {
 };
 
 /**
- * Review Request — solicits reviews from satisfied patients.
+ * Review Request — solicits reviews from satisfied contacts.
  */
 export const reviewRequestCadence: CadenceDefinition = {
   id: "review-request",
   name: "Review Request",
-  description: "Review solicitation for patients who haven't left a review.",
+  description: "Review solicitation for contacts who haven't left a review.",
   trigger: { event: "service_completed" },
   steps: [
     {
@@ -175,13 +175,13 @@ export const reviewRequestCadence: CadenceDefinition = {
 };
 
 /**
- * Dormant Win-Back — re-engages patients who haven't visited in 90+ days.
+ * Dormant Win-Back — re-engages contacts who haven't visited in 90+ days.
  */
 export const dormantWinBackCadence: CadenceDefinition = {
   id: "dormant-winback",
-  name: "Dormant Patient Win-Back",
-  description: "Re-engagement sequence for patients inactive for 90+ days.",
-  trigger: { event: "patient_dormant", stage: "dormant" },
+  name: "Dormant Contact Win-Back",
+  description: "Re-engagement sequence for contacts inactive for 90+ days.",
+  trigger: { event: "contact_dormant", stage: "dormant" },
   steps: [
     {
       index: 0,

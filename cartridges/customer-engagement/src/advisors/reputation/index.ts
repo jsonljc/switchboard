@@ -26,7 +26,7 @@ export const reviewVelocityAdvisor: JourneyFindingAdvisor = (
       {
         severity: "warning",
         stage: "review_velocity",
-        message: `Only ${currentCount} reviews received this period despite ${current.totalContacts} patients.`,
+        message: `Only ${currentCount} reviews received this period despite ${current.totalContacts} contacts.`,
         recommendation:
           "Implement post-treatment review solicitation. Send requests within 48 hours of treatment.",
       },
@@ -89,7 +89,7 @@ export const sentimentTrendAdvisor: JourneyFindingAdvisor = (
 };
 
 /**
- * Referral Conversion — tracks referral-generated patients.
+ * Referral Conversion — tracks referral-generated contacts.
  */
 export const referralConversionAdvisor: JourneyFindingAdvisor = (
   _stageAnalysis,
@@ -108,7 +108,7 @@ export const referralConversionAdvisor: JourneyFindingAdvisor = (
         stage: "referral_conversion",
         message: "No referrals received this period.",
         recommendation:
-          "Launch a patient referral program. Offer incentives for successful referrals.",
+          "Launch a contact referral program. Offer incentives for successful referrals.",
       },
     ];
   }

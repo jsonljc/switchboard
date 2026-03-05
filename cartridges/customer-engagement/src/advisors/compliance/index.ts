@@ -5,7 +5,7 @@
 import type { JourneyFindingAdvisor } from "../types.js";
 
 /**
- * Consent Coverage — checks percentage of patients with active consent.
+ * Consent Coverage — checks percentage of contacts with active consent.
  */
 export const consentStatusAdvisor: JourneyFindingAdvisor = (
   _stageAnalysis,
@@ -44,7 +44,7 @@ export const consentStatusAdvisor: JourneyFindingAdvisor = (
 };
 
 /**
- * Communication Frequency — enforces per-patient message limits.
+ * Communication Frequency — enforces per-contact message limits.
  */
 export const communicationFrequencyAdvisor: JourneyFindingAdvisor = (
   _stageAnalysis,
@@ -61,14 +61,14 @@ export const communicationFrequencyAdvisor: JourneyFindingAdvisor = (
 
   const avgMessages = commData.totalMessagesSent / totalContacts;
 
-  // Daily limit is 5 per patient; flag if approaching weekly limits
+  // Daily limit is 5 per contact; flag if approaching weekly limits
   if (avgMessages > 20) {
     return [
       {
         severity: "critical",
         stage: "communication_frequency",
-        message: `Average ${avgMessages.toFixed(1)} messages per patient this period — exceeding safe limits.`,
-        recommendation: "Immediately audit cadence configurations. Enforce daily per-patient caps.",
+        message: `Average ${avgMessages.toFixed(1)} messages per contact this period — exceeding safe limits.`,
+        recommendation: "Immediately audit cadence configurations. Enforce daily per-contact caps.",
       },
     ];
   }
@@ -113,7 +113,7 @@ export const dataRetentionAdvisor: JourneyFindingAdvisor = (
   current,
   _previous,
 ) => {
-  // Track dormant and lost patients for data retention compliance
+  // Track dormant and lost contacts for data retention compliance
   const dormant = current.stages["dormant_customers"]?.count ?? 0;
   const lost = current.stages["lost_customers"]?.count ?? 0;
   const total = current.totalContacts;
@@ -123,7 +123,7 @@ export const dataRetentionAdvisor: JourneyFindingAdvisor = (
       {
         severity: "info",
         stage: "data_retention",
-        message: `${dormant + lost} of ${total} patients (${(((dormant + lost) / total) * 100).toFixed(1)}%) are dormant or lost.`,
+        message: `${dormant + lost} of ${total} contacts (${(((dormant + lost) / total) * 100).toFixed(1)}%) are dormant or lost.`,
         recommendation:
           "Review data retention policy. Consider archiving records older than retention period.",
       },

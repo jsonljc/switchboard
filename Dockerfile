@@ -62,6 +62,15 @@ COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
 COPY --from=build /app/cartridges/payments/package.json cartridges/payments/package.json
 COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
 
+COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
+COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
+
+COPY --from=build /app/cartridges/quant-trading/package.json cartridges/quant-trading/package.json
+COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/dist/
+
+COPY --from=build /app/skins/ skins/
+COPY --from=build /app/profiles/ profiles/
+
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
 
@@ -98,6 +107,18 @@ COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
 
 COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
 COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
+
+COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
+COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
+
+COPY --from=build /app/cartridges/payments/package.json cartridges/payments/package.json
+COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
+
+COPY --from=build /app/cartridges/quant-trading/package.json cartridges/quant-trading/package.json
+COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/dist/
+
+COPY --from=build /app/skins/ skins/
+COPY --from=build /app/profiles/ profiles/
 
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/

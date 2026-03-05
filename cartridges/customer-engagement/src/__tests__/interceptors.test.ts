@@ -43,19 +43,19 @@ describe("HIPAARedactor", () => {
   });
 
   it("should redact SSN patterns in string values", async () => {
-    const params = { notes: "Patient SSN is 123-45-6789 on file" };
+    const params = { notes: "Contact SSN is 123-45-6789 on file" };
     const { parameters } = await redactor.beforeEnrich!("test", params, mockContext);
-    expect(parameters.notes).toBe("Patient SSN is [REDACTED] on file");
+    expect(parameters.notes).toBe("Contact SSN is [REDACTED] on file");
   });
 
   it("should handle nested objects", async () => {
     const params = {
-      patient: { name: "Dave", medicalCondition: "Diabetes" },
+      contact: { name: "Dave", medicalCondition: "Diabetes" },
     };
     const { parameters } = await redactor.beforeEnrich!("test", params, mockContext);
-    const patient = parameters.patient as Record<string, unknown>;
-    expect(patient.medicalCondition).toBe("[REDACTED]");
-    expect(patient.name).toBe("Dave");
+    const contact = parameters.contact as Record<string, unknown>;
+    expect(contact.medicalCondition).toBe("[REDACTED]");
+    expect(contact.name).toBe("Dave");
   });
 });
 
@@ -96,7 +96,7 @@ describe("MedicalClaimFilter", () => {
   it("should block 'guaranteed results'", async () => {
     const result = await filter.afterExecute!(
       "customer-engagement.review.respond",
-      { responseText: "We guarantee guaranteed results for all patients." },
+      { responseText: "We guarantee guaranteed results for all contacts." },
       successResult,
       mockContext,
     );

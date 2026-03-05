@@ -7,7 +7,7 @@ function makeSession(overrides: Partial<ConversationSession> = {}): Conversation
     id: "sess-1",
     channelId: "ch-1",
     channelType: "sms",
-    contactId: "patient-1",
+    contactId: "contact-1",
     organizationId: "org-1",
     flowId: "booking",
     state: {

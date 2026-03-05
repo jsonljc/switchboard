@@ -103,7 +103,7 @@ export const cancellationPatternAdvisor: JourneyFindingAdvisor = (
         stage: "cancellation_pattern",
         message: `Cancellation rate is ${(currentRate * 100).toFixed(1)}% (up ${delta.toFixed(1)}% PoP).`,
         recommendation:
-          "Survey cancelling patients. Review scheduling flexibility and cancellation policy.",
+          "Survey cancelling contacts. Review scheduling flexibility and cancellation policy.",
       },
     ];
   }

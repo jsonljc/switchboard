@@ -184,7 +184,7 @@ export function composeClinicHelp(): string {
     '  "Analyze campaign structure"\n' +
     '  "Show me my metrics"\n\n' +
     "Optimize\n" +
-    '  "I want more patient leads"\n' +
+    '  "I want more contact leads"\n' +
     '  "Reduce my ad costs"\n\n' +
     "Actions\n" +
     '  "Pause [campaign name]"\n' +

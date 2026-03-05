@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Communication Risk — Deterministic gating
 // ---------------------------------------------------------------------------
-// Evaluates whether it's safe to communicate with a patient based on
+// Evaluates whether it's safe to communicate with a contact based on
 // consent, frequency, sentiment, and complaint signals.
 // ---------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ export function computeCommunicationRisk(input: CommunicationRiskInput): Communi
   if (input.consentStatus === "revoked" || input.optOutRequested) {
     return {
       level: "blocked",
-      reasons: [input.optOutRequested ? "Patient opted out" : "Consent revoked"],
+      reasons: [input.optOutRequested ? "Contact opted out" : "Consent revoked"],
       maxMessagesPerDay: 0,
     };
   }

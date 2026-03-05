@@ -20,7 +20,7 @@ export async function executeSendReminder(
 
     return {
       success: true,
-      summary: `Sent reminder to patient ${contactId}: "${message.slice(0, 50)}..."`,
+      summary: `Sent reminder to contact ${contactId}: "${message.slice(0, 50)}..."`,
       externalRefs: { contactId, messageId: result.messageId },
       rollbackAvailable: false,
       partialFailures: [],

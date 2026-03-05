@@ -162,13 +162,13 @@ describe("Conversation Templates", () => {
       expect(branchStep?.branches?.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("escalates for dissatisfied patients", () => {
+    it("escalates for dissatisfied customers", () => {
       const escStep = postTreatmentFlow.steps.find((s) => s.type === "escalate");
       expect(escStep).toBeDefined();
       expect(escStep?.escalationReason).toContain("dissatisfaction");
     });
 
-    it("includes review request action for satisfied patients", () => {
+    it("includes review request action for satisfied customers", () => {
       const actionStep = postTreatmentFlow.steps.find((s) => s.type === "action");
       expect(actionStep?.actionType).toBe("customer-engagement.review.request");
     });

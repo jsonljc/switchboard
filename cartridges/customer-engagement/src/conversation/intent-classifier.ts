@@ -1,5 +1,5 @@
 /**
- * MessageIntentClassifier — classifies patient messages into semantic categories.
+ * MessageIntentClassifier — classifies contact messages into semantic categories.
  *
  * Uses deterministic regex patterns first, with optional LLM fallback.
  * This enables free-text understanding in conversation flows.
@@ -105,7 +105,7 @@ const INTENT_PATTERNS: Array<{
 
 export class MessageIntentClassifier {
   /**
-   * Classify a patient message into an intent category.
+   * Classify a contact message into an intent category.
    * Uses deterministic regex patterns — no LLM dependency.
    */
   classify(text: string): ClassificationResult {

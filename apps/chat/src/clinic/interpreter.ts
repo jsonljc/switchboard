@@ -69,7 +69,7 @@ const FALLBACK_PATTERNS: Array<{
     extractSlots: () => ({}),
   },
   {
-    regex: /more\s+(?:patient\s+)?leads/i,
+    regex: /more\s+(?:contact\s+)?leads/i,
     intent: AllowedIntent.MORE_LEADS,
     extractSlots: () => ({}),
   },
@@ -118,7 +118,7 @@ Important: Your output is a classification that feeds into a governance pipeline
 
 Intents:
 - report_performance: user wants to see how campaigns are performing (e.g. "how are my ads doing?", "weekly report")
-- more_leads: user wants more patient leads or wants recommendations to improve lead volume
+- more_leads: user wants more contact leads or wants recommendations to improve lead volume
 - reduce_cost: user wants to reduce ad spending or cost per lead
 - check_status: user wants to know current campaign status (active/paused/learning)
 - pause: user wants to pause a specific campaign
@@ -489,7 +489,7 @@ export class ClinicInterpreter extends LLMInterpreter {
         return {
           id,
           type: "optimize",
-          objective: "Increase patient lead volume",
+          objective: "Increase contact lead volume",
           constraints: slots["maxCpl"]
             ? [
                 {

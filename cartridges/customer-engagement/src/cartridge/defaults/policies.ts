@@ -9,7 +9,7 @@ export const DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES: Policy[] = [
   {
     id: "customer-engagement-consent-required",
     name: "Customer Engagement Consent Required",
-    description: "Block all outbound communication if patient consent is not active.",
+    description: "Block all outbound communication if contact consent is not active.",
     organizationId: null,
     cartridgeId: "customer-engagement",
     priority: 1,

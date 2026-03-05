@@ -13,7 +13,7 @@ export async function executeStartCadence(params: Record<string, unknown>): Prom
 
   return {
     success: true,
-    summary: `Started cadence "${cadenceTemplateId}" for patient ${contactId} (instance: ${cadenceInstanceId})`,
+    summary: `Started cadence "${cadenceTemplateId}" for contact ${contactId} (instance: ${cadenceInstanceId})`,
     externalRefs: { contactId, cadenceInstanceId, cadenceTemplateId },
     rollbackAvailable: true,
     partialFailures: [],

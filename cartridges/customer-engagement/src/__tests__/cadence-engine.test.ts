@@ -38,13 +38,13 @@ function makeInstance(overrides: Partial<CadenceInstance> = {}): CadenceInstance
   return {
     id: "inst-1",
     cadenceDefinitionId: "test-cadence",
-    contactId: "patient-1",
+    contactId: "contact-1",
     organizationId: "org-1",
     status: "active",
     currentStepIndex: 0,
     startedAt: new Date("2024-01-01"),
     nextExecutionAt: null,
-    variables: { contactId: "patient-1", contactName: "Alice" },
+    variables: { contactId: "contact-1", contactName: "Alice" },
     completedSteps: [],
     skippedSteps: [],
     ...overrides,
@@ -77,7 +77,7 @@ describe("evaluateCadenceStep", () => {
   it("should skip step when condition is not met", () => {
     const instance = makeInstance({
       currentStepIndex: 1,
-      variables: { contactId: "patient-1", contactName: "Alice", responded: true },
+      variables: { contactId: "contact-1", contactName: "Alice", responded: true },
     });
 
     const result = evaluateCadenceStep(testCadence, instance);
@@ -89,7 +89,7 @@ describe("evaluateCadenceStep", () => {
   it("should execute step when condition is met", () => {
     const instance = makeInstance({
       currentStepIndex: 1,
-      variables: { contactId: "patient-1", contactName: "Alice", responded: false },
+      variables: { contactId: "contact-1", contactName: "Alice", responded: false },
     });
 
     const result = evaluateCadenceStep(testCadence, instance);

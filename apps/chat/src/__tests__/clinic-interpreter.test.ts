@@ -102,10 +102,10 @@ describe("ClinicInterpreter", () => {
         intent: "more_leads",
         confidence: 0.85,
         slots: {},
-        reasoning: "User wants more patient leads",
+        reasoning: "User wants more contact leads",
       });
 
-      const result = await interpreter.interpret("I want more patient leads", {}, ALL_ACTIONS);
+      const result = await interpreter.interpret("I want more contact leads", {}, ALL_ACTIONS);
 
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.MORE_LEADS);
@@ -443,7 +443,7 @@ describe("ClinicInterpreter", () => {
     });
 
     it("matches 'more leads'", async () => {
-      const result = await interpreterFallback.interpret("more patient leads", {}, ALL_ACTIONS);
+      const result = await interpreterFallback.interpret("more contact leads", {}, ALL_ACTIONS);
       expect(result.readIntent).toBeDefined();
       expect(result.readIntent!.intent).toBe(AllowedIntent.MORE_LEADS);
     });

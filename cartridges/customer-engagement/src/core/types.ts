@@ -112,7 +112,7 @@ export const DEFAULT_BUSINESS_TYPES: BusinessType[] = [
 
 export interface StageMetrics {
   count: number;
-  /** Average value per patient at this stage (null if not applicable) */
+  /** Average value per contact at this stage (null if not applicable) */
   averageValue: number | null;
 }
 

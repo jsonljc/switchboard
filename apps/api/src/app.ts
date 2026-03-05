@@ -432,7 +432,7 @@ export async function buildServer() {
           {
             title: "Customer Escalation",
             body: [
-              `Patient: ${escalation.contactId}`,
+              `Contact: ${escalation.contactId}`,
               `Reason: ${escalation.reason}`,
               escalation.conversationId ? `Conversation: ${escalation.conversationId}` : null,
               `Time: ${escalation.escalatedAt}`,

@@ -20,7 +20,7 @@ export async function executeRequestReview(
 
     return {
       success: true,
-      summary: `Sent review request to patient ${contactId}`,
+      summary: `Sent review request to customer ${contactId}`,
       externalRefs: { contactId, requestId: result.requestId },
       rollbackAvailable: false,
       partialFailures: [],

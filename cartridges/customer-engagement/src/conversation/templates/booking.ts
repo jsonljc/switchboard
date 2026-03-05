@@ -7,7 +7,7 @@ import type { ConversationFlowDefinition } from "../types.js";
 export const bookingFlow: ConversationFlowDefinition = {
   id: "booking",
   name: "Appointment Booking",
-  description: "Guides patients through the appointment booking process.",
+  description: "Guides customers through the appointment booking process.",
   variables: ["contactName", "serviceType", "providerName", "clinicName"],
   steps: [
     {

@@ -4,11 +4,11 @@
 
 import type { ConversationFlowDefinition } from "../../conversation/types.js";
 
-/** Dormant patient win-back flow */
+/** Dormant contact win-back flow */
 export const winBackFlow: ConversationFlowDefinition = {
   id: "win-back",
-  name: "Dormant Patient Win-Back",
-  description: "Re-engages dormant patients with personalized outreach.",
+  name: "Dormant Contact Win-Back",
+  description: "Re-engages dormant contacts with personalized outreach.",
   variables: ["contactName", "lastServiceType", "daysSinceLastVisit", "clinicName"],
   steps: [
     {

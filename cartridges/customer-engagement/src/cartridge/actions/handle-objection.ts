@@ -16,8 +16,8 @@ export async function executeHandleObjection(
   return {
     success: true,
     summary: match
-      ? `Matched objection "${match.category}" for patient ${contactId}`
-      : `No objection match found for patient ${contactId}`,
+      ? `Matched objection "${match.category}" for contact ${contactId}`
+      : `No objection match found for contact ${contactId}`,
     externalRefs: { contactId },
     rollbackAvailable: false,
     partialFailures: [],

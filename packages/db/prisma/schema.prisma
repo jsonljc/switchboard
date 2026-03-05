@@ -532,7 +532,7 @@ model AlertHistory {
 model CadenceInstance {
   id                  String    @id @default(uuid())
   cadenceDefinitionId String
-  patientId           String
+  contactId           String
   organizationId      String?
   status              String    @default("active") // active, paused, completed, cancelled
   currentStepIndex    Int       @default(0)
@@ -546,6 +546,6 @@ model CadenceInstance {
 
   @@index([status])
   @@index([organizationId])
-  @@index([patientId])
+  @@index([contactId])
   @@index([nextEvaluationAt])
 }

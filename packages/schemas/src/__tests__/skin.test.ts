@@ -34,9 +34,9 @@ function validClinicSkin() {
     },
     playbooks: [
       {
-        id: "new-patient",
-        name: "New Patient Intake",
-        trigger: "register new patient",
+        id: "new-contact",
+        name: "New Contact Intake",
+        trigger: "register new contact",
         steps: [
           { actionType: "customer-engagement.contact.register" },
           {

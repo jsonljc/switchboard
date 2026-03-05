@@ -65,7 +65,7 @@ export function executeNextStep(
       const optionsText = (step.options ?? []).map((opt, i) => `${i + 1}. ${opt}`).join("\n");
       // When llmPersonalization is true, personalize the template with context
       if (step.llmPersonalization && newState.variables["contactName"]) {
-        output = output.replace(/\bpatient\b/gi, String(newState.variables["contactName"]));
+        output = output.replace(/\bcustomer\b/gi, String(newState.variables["contactName"]));
       }
       const fullOutput = `${output}\n${optionsText}`;
       newState.history.push({ stepId: step.id, output: fullOutput, timestamp: new Date() });

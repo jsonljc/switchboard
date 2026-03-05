@@ -73,7 +73,7 @@ export interface SMSProvider {
 export interface ReviewPlatformProvider {
   readonly platform: "google" | "mock";
 
-  /** Request a review from a patient */
+  /** Request a review from a customer */
   sendReviewRequest(
     contactId: string,
     locationId: string,
