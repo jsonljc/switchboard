@@ -80,7 +80,7 @@ export const inboundMessagesRoutes: FastifyPluginAsync = async (app) => {
 
           // If an action is required, dispatch it through the orchestrator
           if (result.actionRequired) {
-            const peCartridge = app.storageContext.cartridges.get("patient-engagement");
+            const peCartridge = app.storageContext.cartridges.get("customer-engagement");
             if (peCartridge) {
               try {
                 await peCartridge.execute(
@@ -178,7 +178,7 @@ export const inboundMessagesRoutes: FastifyPluginAsync = async (app) => {
 
         // Dispatch any required actions
         if (result.actionRequired) {
-          const peCartridge = app.storageContext.cartridges.get("patient-engagement");
+          const peCartridge = app.storageContext.cartridges.get("customer-engagement");
           if (peCartridge) {
             try {
               await peCartridge.execute(
@@ -266,14 +266,14 @@ type ConvRouter = {
 
 /**
  * Get or create a conversation router for an organization.
- * Lazy-loads conversation flow templates from @switchboard/patient-engagement.
+ * Lazy-loads conversation flow templates from @switchboard/customer-engagement.
  */
 async function getConversationRouter(
   app: import("fastify").FastifyInstance,
   _orgId: string,
 ): Promise<ConvRouter | null> {
   try {
-    const pe = await import("@switchboard/patient-engagement");
+    const pe = await import("@switchboard/customer-engagement");
 
     // Load flow templates from the DEFAULT_CADENCE_TEMPLATES won't work here,
     // but the conversation templates are exported from the main package.
@@ -283,7 +283,7 @@ async function getConversationRouter(
     // Build flows map from available templates
     const flows = new Map<
       string,
-      import("@switchboard/patient-engagement").ConversationFlowDefinition
+      import("@switchboard/customer-engagement").ConversationFlowDefinition
     >();
 
     // The package exports conversation flow definitions
@@ -331,7 +331,7 @@ async function getConversationRouter(
     }
 
     // Use Redis session store if available, otherwise in-memory
-    let sessionStore: import("@switchboard/patient-engagement").ConversationSessionStore;
+    let sessionStore: import("@switchboard/customer-engagement").ConversationSessionStore;
     if (app.redis) {
       sessionStore = new RedisSessionStore(app.redis);
     } else {

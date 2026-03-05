@@ -4,7 +4,7 @@ export const GovernanceProfileNameSchema = z.enum(["observe", "guarded", "strict
 export type GovernanceProfileName = z.infer<typeof GovernanceProfileNameSchema>;
 
 export const SkinToolsSchema = z.object({
-  /** Glob patterns for action types to include (e.g. "patient-engagement.*"). */
+  /** Glob patterns for action types to include (e.g. "customer-engagement.*"). */
   include: z.array(z.string()).min(1),
   /** Glob patterns for action types to exclude. */
   exclude: z.array(z.string()).optional(),

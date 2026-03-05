@@ -2,7 +2,7 @@ import type { ActionDefinition } from "@switchboard/schemas";
 
 /** A registered tool with its source cartridge and action definition. */
 export interface RegisteredTool {
-  /** Fully qualified action type (e.g. "patient-engagement.appointment.book"). */
+  /** Fully qualified action type (e.g. "customer-engagement.appointment.book"). */
   actionType: string;
   /** The cartridge that owns this tool. */
   cartridgeId: string;
@@ -14,7 +14,7 @@ export interface RegisteredTool {
 
 /** Filter configuration for tool visibility (typically from a skin manifest). */
 export interface ToolFilter {
-  /** Glob patterns of action types to include (e.g. ["patient-engagement.*"]). */
+  /** Glob patterns of action types to include (e.g. ["customer-engagement.*"]). */
   include: string[];
   /** Glob patterns of action types to exclude. */
   exclude?: string[];

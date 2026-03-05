@@ -74,15 +74,15 @@ importers:
       '@switchboard/crm':
         specifier: workspace:*
         version: link:../../cartridges/crm
+      '@switchboard/customer-engagement':
+        specifier: workspace:*
+        version: link:../../cartridges/customer-engagement
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@switchboard/digital-ads':
         specifier: workspace:*
         version: link:../../cartridges/digital-ads
-      '@switchboard/patient-engagement':
-        specifier: workspace:*
-        version: link:../../cartridges/patient-engagement
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
@@ -141,15 +141,15 @@ importers:
       '@switchboard/crm':
         specifier: workspace:*
         version: link:../../cartridges/crm
+      '@switchboard/customer-engagement':
+        specifier: workspace:*
+        version: link:../../cartridges/customer-engagement
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@switchboard/digital-ads':
         specifier: workspace:*
         version: link:../../cartridges/digital-ads
-      '@switchboard/patient-engagement':
-        specifier: workspace:*
-        version: link:../../cartridges/patient-engagement
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
@@ -320,12 +320,12 @@ importers:
       '@switchboard/crm':
         specifier: workspace:*
         version: link:../../cartridges/crm
+      '@switchboard/customer-engagement':
+        specifier: workspace:*
+        version: link:../../cartridges/customer-engagement
       '@switchboard/digital-ads':
         specifier: workspace:*
         version: link:../../cartridges/digital-ads
-      '@switchboard/patient-engagement':
-        specifier: workspace:*
-        version: link:../../cartridges/patient-engagement
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
@@ -371,7 +371,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.33)(jsdom@25.0.1)
 
-  cartridges/digital-ads:
+  cartridges/customer-engagement:
     dependencies:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
@@ -390,7 +390,7 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@20.19.33)(jsdom@25.0.1)
 
-  cartridges/patient-engagement:
+  cartridges/digital-ads:
     dependencies:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*

@@ -17,7 +17,7 @@
     "@switchboard/core": "workspace:*",
     "@switchboard/crm": "workspace:*",
     "@switchboard/digital-ads": "workspace:*",
-    "@switchboard/patient-engagement": "workspace:*",
+    "@switchboard/customer-engagement": "workspace:*",
     "@switchboard/payments": "workspace:*",
     "@switchboard/quant-trading": "workspace:*",
     "@switchboard/schemas": "workspace:*",

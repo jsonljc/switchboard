@@ -5,7 +5,7 @@ import { DIGITAL_ADS_MANIFEST } from "@switchboard/digital-ads";
 import { QUANT_TRADING_MANIFEST } from "@switchboard/quant-trading";
 import { PAYMENTS_MANIFEST } from "@switchboard/payments";
 import { CRM_MANIFEST } from "@switchboard/crm";
-import { PATIENT_ENGAGEMENT_MANIFEST } from "@switchboard/patient-engagement";
+import { CUSTOMER_ENGAGEMENT_MANIFEST } from "@switchboard/customer-engagement";
 
 /**
  * Cross-cutting schema/contract tests that validate invariants
@@ -18,7 +18,7 @@ const ALL_MANIFESTS: Array<{ id: string; manifest: CartridgeManifest }> = [
   { id: "quant-trading", manifest: QUANT_TRADING_MANIFEST as CartridgeManifest },
   { id: "payments", manifest: PAYMENTS_MANIFEST as CartridgeManifest },
   { id: "crm", manifest: CRM_MANIFEST as CartridgeManifest },
-  { id: "patient-engagement", manifest: PATIENT_ENGAGEMENT_MANIFEST as CartridgeManifest },
+  { id: "customer-engagement", manifest: CUSTOMER_ENGAGEMENT_MANIFEST as CartridgeManifest },
 ];
 
 /** Action types that are read-only / diagnostic and legitimately have "none" risk. */

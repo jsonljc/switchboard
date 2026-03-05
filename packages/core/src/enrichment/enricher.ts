@@ -130,10 +130,10 @@ export class DefaultCrossCartridgeEnricher implements CrossCartridgeEnricher {
 
   /**
    * Infer the entity type from the cartridge and parameter name.
-   * E.g., "patient-engagement" + "patientId" → "patient"
+   * E.g., "customer-engagement" + "contactId" → "contact"
    */
   private inferEntityType(cartridgeId: string, paramName: string): string {
-    // Common patterns: patientId → patient, contactId → contact, entityId → customer
+    // Common patterns: contactId → contact, entityId → customer
     if (paramName.endsWith("Id")) {
       const raw = paramName.slice(0, -2);
       if (raw === "entity") {
@@ -143,8 +143,8 @@ export class DefaultCrossCartridgeEnricher implements CrossCartridgeEnricher {
             return "customer";
           case "crm":
             return "contact";
-          case "patient-engagement":
-            return "patient";
+          case "customer-engagement":
+            return "contact";
           default:
             return raw;
         }

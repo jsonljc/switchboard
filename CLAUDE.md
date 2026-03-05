@@ -19,9 +19,9 @@ Circular dependencies between packages are **forbidden**.
 ### Package Layout
 
 ```
-packages/schemas         — Zod schemas, shared types (incl. SkinManifest, CRM provider types)
+packages/schemas         — Zod schemas, shared types (incl. SkinManifest, BusinessProfile, CRM provider types)
 packages/cartridge-sdk   — Cartridge interface & base classes
-packages/core            — Orchestrator, policy engine, ToolRegistry, SkinLoader/Resolver
+packages/core            — Orchestrator, policy engine, ToolRegistry, SkinLoader/Resolver, ProfileLoader/Resolver
 packages/db              — Prisma client, store implementations
 apps/api                 — Fastify REST API server
 apps/chat                — Chat/webhook server (Telegram, Slack, WhatsApp)
@@ -29,7 +29,14 @@ apps/dashboard           — Next.js admin dashboard
 apps/mcp-server          — MCP protocol server
 cartridges/*             — Domain-specific cartridge implementations
 skins/                   — Vertical deployment manifests (JSON, loaded at boot via SKIN_ID)
+profiles/                — Business profiles (JSON, loaded at boot via PROFILE_ID)
 ```
+
+### Key Concepts
+
+- **Skin** = vertical template shared by all businesses of a type (e.g. all dental clinics share the `clinic` skin). Controls tool filtering, governance profile, terminology, playbooks, and channels.
+- **Business Profile** = per-instance knowledge for a specific business (e.g. THIS dental clinic). Contains services catalog, team, policies, hours, objection trees, cadence templates, scoring config, compliance flags, and LLM context (persona, tone, banned topics).
+- **Cartridge** = domain-specific capability module (e.g. `customer-engagement`, `digital-ads`, `payments`). Cartridges define actions, agents, and interceptors.
 
 ## Build / Test / Lint Commands
 
@@ -67,7 +74,7 @@ pnpm db:seed             # Seed database
 - **Sensitive packages have elevated thresholds** (per-package `vitest.config.ts`):
   - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
   - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)
-  - `cartridges/patient-engagement`: 60/60/70/60 (target: 80/70/75/80)
+  - `cartridges/customer-engagement`: 60/60/70/60 (target: 80/70/75/80)
 - Test files use the pattern `*.test.ts` and are co-located with source files
 
 ## Commit Message Format
@@ -89,16 +96,17 @@ The commit message is validated by commitlint on every commit. Non-conforming me
 
 See `.env.example` for the full list. Key variables:
 
-| Variable                                | Purpose                                |
-| --------------------------------------- | -------------------------------------- |
-| `DATABASE_URL`                          | PostgreSQL connection string           |
-| `REDIS_URL`                             | Redis for rate limiting, queues        |
-| `PORT` / `CHAT_PORT` / `DASHBOARD_PORT` | Server ports (3000 / 3001 / 3002)      |
-| `API_KEYS`                              | Comma-separated API keys for auth      |
-| `API_KEY_ENCRYPTION_SECRET`             | Encryption secret for stored API keys  |
-| `NEXTAUTH_SECRET`                       | NextAuth session secret                |
-| `CREDENTIALS_ENCRYPTION_KEY`            | Encrypt stored third-party credentials |
-| `SKIN_ID`                               | Vertical skin to load (e.g. `clinic`)  |
+| Variable                                | Purpose                                       |
+| --------------------------------------- | --------------------------------------------- |
+| `DATABASE_URL`                          | PostgreSQL connection string                  |
+| `REDIS_URL`                             | Redis for rate limiting, queues               |
+| `PORT` / `CHAT_PORT` / `DASHBOARD_PORT` | Server ports (3000 / 3001 / 3002)             |
+| `API_KEYS`                              | Comma-separated API keys for auth             |
+| `API_KEY_ENCRYPTION_SECRET`             | Encryption secret for stored API keys         |
+| `NEXTAUTH_SECRET`                       | NextAuth session secret                       |
+| `CREDENTIALS_ENCRYPTION_KEY`            | Encrypt stored third-party credentials        |
+| `SKIN_ID`                               | Vertical skin to load (e.g. `clinic`)         |
+| `PROFILE_ID`                            | Business profile to load (e.g. `clinic-demo`) |
 
 Never commit `.env` files or secrets to the repository.
 

@@ -66,7 +66,7 @@ switchboard/
 │   ├── quant-trading    # Quantitative trading cartridge (order management, risk limits)
 │   ├── payments         # Payments cartridge (Stripe invoices, refunds, payouts)
 │   ├── crm              # CRM cartridge (contacts, deals, activities)
-│   └── patient-engagement # Patient engagement cartridge (appointments, messaging)
+│   └── customer-engagement # Customer engagement cartridge (appointments, messaging)
 ├── apps/
 │   ├── api              # Fastify REST API with Swagger UI
 │   ├── chat             # Chat interface (Telegram bot)
@@ -93,7 +93,7 @@ schemas
    │        ├──► quant-trading
    │        ├──► payments
    │        ├──► crm
-   │        └──► patient-engagement
+   │        └──► customer-engagement
    │
    └──► db ──► api, dashboard
 ```
@@ -159,77 +159,83 @@ docker build --target mcp-server -t switchboard-mcp-server .
 
 See [`.env.example`](.env.example) for all available options:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | API server port |
-| `CHAT_PORT` | `3001` | Chat server port |
-| `CORS_ORIGIN` | _(empty = allow all)_ | Comma-separated allowed origins |
-| `RATE_LIMIT_MAX` | `100` | Max requests per window |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `REDIS_URL` | — | Redis connection string |
-| `TELEGRAM_BOT_TOKEN` | — | Telegram bot API token |
-| `META_ADS_ACCESS_TOKEN` | — | Meta Ads API access token |
-| `META_ADS_ACCOUNT_ID` | — | Meta Ads account ID |
-| `CREDENTIALS_ENCRYPTION_KEY` | — | Encryption key for stored connection credentials (min 32 chars) |
-| `STRIPE_SECRET_KEY` | — | Stripe API secret key for payments cartridge |
-| `MCP_API_KEYS` | — | MCP server API keys (`key:actorId:orgId,...`) |
-| `MCP_API_KEY` | — | Single MCP API key for stdio mode |
-| `SWITCHBOARD_API_URL` | — | Backend API URL (used by dashboard and MCP server in API mode) |
-| `NEXTAUTH_SECRET` | — | NextAuth.js session encryption secret |
-| `NEXTAUTH_URL` | — | NextAuth.js canonical URL for the dashboard |
+| Variable                     | Default               | Description                                                     |
+| ---------------------------- | --------------------- | --------------------------------------------------------------- |
+| `PORT`                       | `3000`                | API server port                                                 |
+| `CHAT_PORT`                  | `3001`                | Chat server port                                                |
+| `CORS_ORIGIN`                | _(empty = allow all)_ | Comma-separated allowed origins                                 |
+| `RATE_LIMIT_MAX`             | `100`                 | Max requests per window                                         |
+| `RATE_LIMIT_WINDOW_MS`       | `60000`               | Rate limit window in ms                                         |
+| `DATABASE_URL`               | —                     | PostgreSQL connection string                                    |
+| `REDIS_URL`                  | —                     | Redis connection string                                         |
+| `TELEGRAM_BOT_TOKEN`         | —                     | Telegram bot API token                                          |
+| `META_ADS_ACCESS_TOKEN`      | —                     | Meta Ads API access token                                       |
+| `META_ADS_ACCOUNT_ID`        | —                     | Meta Ads account ID                                             |
+| `CREDENTIALS_ENCRYPTION_KEY` | —                     | Encryption key for stored connection credentials (min 32 chars) |
+| `STRIPE_SECRET_KEY`          | —                     | Stripe API secret key for payments cartridge                    |
+| `MCP_API_KEYS`               | —                     | MCP server API keys (`key:actorId:orgId,...`)                   |
+| `MCP_API_KEY`                | —                     | Single MCP API key for stdio mode                               |
+| `SWITCHBOARD_API_URL`        | —                     | Backend API URL (used by dashboard and MCP server in API mode)  |
+| `NEXTAUTH_SECRET`            | —                     | NextAuth.js session encryption secret                           |
+| `NEXTAUTH_URL`               | —                     | NextAuth.js canonical URL for the dashboard                     |
 
 ## API Endpoints
 
 All endpoints are documented via OpenAPI at `/docs`. Summary:
 
 ### Actions (`/api/actions`)
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/actions/propose` | Create a new action proposal |
-| `POST` | `/api/actions/batch` | Batch-propose multiple actions |
-| `GET` | `/api/actions/:id` | Get envelope by ID |
-| `POST` | `/api/actions/:id/execute` | Execute an approved envelope |
-| `POST` | `/api/actions/:id/undo` | Request undo of an executed action |
+
+| Method | Path                       | Description                        |
+| ------ | -------------------------- | ---------------------------------- |
+| `POST` | `/api/actions/propose`     | Create a new action proposal       |
+| `POST` | `/api/actions/batch`       | Batch-propose multiple actions     |
+| `GET`  | `/api/actions/:id`         | Get envelope by ID                 |
+| `POST` | `/api/actions/:id/execute` | Execute an approved envelope       |
+| `POST` | `/api/actions/:id/undo`    | Request undo of an executed action |
 
 ### Approvals (`/api/approvals`)
-| Method | Path | Description |
-|--------|------|-------------|
+
+| Method | Path                         | Description                                  |
+| ------ | ---------------------------- | -------------------------------------------- |
 | `POST` | `/api/approvals/:id/respond` | Approve, reject, or patch a pending approval |
-| `GET` | `/api/approvals/pending` | List pending approval requests |
-| `GET` | `/api/approvals/:id` | Get approval details |
+| `GET`  | `/api/approvals/pending`     | List pending approval requests               |
+| `GET`  | `/api/approvals/:id`         | Get approval details                         |
 
 ### Simulate (`/api/simulate`)
-| Method | Path | Description |
-|--------|------|-------------|
+
+| Method | Path            | Description                             |
+| ------ | --------------- | --------------------------------------- |
 | `POST` | `/api/simulate` | Dry-run evaluation without side effects |
 
 ### Policies (`/api/policies`)
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/policies` | List policies (optionally filter by cartridgeId) |
-| `POST` | `/api/policies` | Create a policy |
-| `GET` | `/api/policies/:id` | Get policy by ID |
-| `PUT` | `/api/policies/:id` | Update a policy |
-| `DELETE` | `/api/policies/:id` | Delete a policy |
+
+| Method   | Path                | Description                                      |
+| -------- | ------------------- | ------------------------------------------------ |
+| `GET`    | `/api/policies`     | List policies (optionally filter by cartridgeId) |
+| `POST`   | `/api/policies`     | Create a policy                                  |
+| `GET`    | `/api/policies/:id` | Get policy by ID                                 |
+| `PUT`    | `/api/policies/:id` | Update a policy                                  |
+| `DELETE` | `/api/policies/:id` | Delete a policy                                  |
 
 ### Identity (`/api/identity`)
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/identity/specs` | Create an identity spec |
-| `GET` | `/api/identity/specs/:id` | Get identity spec |
-| `GET` | `/api/identity/specs/by-principal/:principalId` | Look up spec by principal |
-| `PUT` | `/api/identity/specs/:id` | Update identity spec |
-| `POST` | `/api/identity/overlays` | Create a role overlay |
-| `GET` | `/api/identity/overlays?specId=X` | List overlays for a spec |
-| `PUT` | `/api/identity/overlays/:id` | Update a role overlay |
+
+| Method | Path                                            | Description               |
+| ------ | ----------------------------------------------- | ------------------------- |
+| `POST` | `/api/identity/specs`                           | Create an identity spec   |
+| `GET`  | `/api/identity/specs/:id`                       | Get identity spec         |
+| `GET`  | `/api/identity/specs/by-principal/:principalId` | Look up spec by principal |
+| `PUT`  | `/api/identity/specs/:id`                       | Update identity spec      |
+| `POST` | `/api/identity/overlays`                        | Create a role overlay     |
+| `GET`  | `/api/identity/overlays?specId=X`               | List overlays for a spec  |
+| `PUT`  | `/api/identity/overlays/:id`                    | Update a role overlay     |
 
 ### Audit (`/api/audit`)
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/audit` | Query audit entries with filters |
-| `GET` | `/api/audit/verify` | Verify hash chain integrity |
-| `GET` | `/api/audit/:id` | Get a single audit entry |
+
+| Method | Path                | Description                      |
+| ------ | ------------------- | -------------------------------- |
+| `GET`  | `/api/audit`        | Query audit entries with filters |
+| `GET`  | `/api/audit/verify` | Verify hash chain integrity      |
+| `GET`  | `/api/audit/:id`    | Get a single audit entry         |
 
 ## Building a Cartridge
 
@@ -247,7 +253,11 @@ export class MyCartridge implements Cartridge {
       version: "1.0.0",
       description: "Manages actions for My Service",
       actions: [
-        { actionType: "my-service.do-thing", description: "Does a thing", requiredParams: ["thingId"] },
+        {
+          actionType: "my-service.do-thing",
+          description: "Does a thing",
+          requiredParams: ["thingId"],
+        },
       ],
       requiredConnections: [],
       defaultPolicies: [],
@@ -283,7 +293,7 @@ import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 
 const cartridge = new TestCartridge(createTestManifest({ id: "test" }));
 cartridge.onExecute(async () => ({ success: true, summary: "ok" }));
-cartridge.onRiskInput(async () => ({ baseRisk: "low", /* ... */ }));
+cartridge.onRiskInput(async () => ({ baseRisk: "low" /* ... */ }));
 ```
 
 ## Testing

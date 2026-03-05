@@ -26,9 +26,9 @@ import {
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import {
-  bootstrapPatientEngagementCartridge,
-  DEFAULT_PATIENT_ENGAGEMENT_POLICIES,
-} from "@switchboard/patient-engagement";
+  bootstrapCustomerEngagementCartridge,
+  DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
+} from "@switchboard/customer-engagement";
 import { SwitchboardMcpServer } from "./server.js";
 import { McpApiClient } from "./api-client.js";
 import { ApiReadAdapter } from "./adapters/api-read-adapter.js";
@@ -156,14 +156,14 @@ async function main() {
   storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
   await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
-  // Register patient-engagement cartridge (mock providers for dev)
+  // Register customer-engagement cartridge (mock providers for dev)
   const { cartridge: peCartridge, interceptors: peInterceptors } =
-    await bootstrapPatientEngagementCartridge();
+    await bootstrapCustomerEngagementCartridge();
   storage.cartridges.register(
-    "patient-engagement",
+    "customer-engagement",
     new GuardedCartridge(peCartridge, peInterceptors),
   );
-  await seedDefaultStorage(storage, DEFAULT_PATIENT_ENGAGEMENT_POLICIES);
+  await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
 
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
   let skinToolFilter: import("@switchboard/core").ToolFilter | undefined;
