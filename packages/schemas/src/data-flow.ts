@@ -1,6 +1,11 @@
 import { z } from "zod";
-import { ActionPlanStrategySchema, ActionPlanApprovalModeSchema } from "./action-plan.js";
 import { StepTypeSchema } from "./capability.js";
+
+export const ActionPlanStrategySchema = z.enum(["atomic", "best_effort", "sequential"]);
+export type ActionPlanStrategy = z.infer<typeof ActionPlanStrategySchema>;
+
+export const ActionPlanApprovalModeSchema = z.enum(["per_action", "single_approval"]);
+export type ActionPlanApprovalMode = z.infer<typeof ActionPlanApprovalModeSchema>;
 
 export const DataFlowStepSchema = z.object({
   index: z.number().int().nonnegative(),
