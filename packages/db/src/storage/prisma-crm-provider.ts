@@ -124,7 +124,7 @@ export class PrismaCrmProvider implements CrmProvider {
 
   async createContact(data: {
     externalId?: string;
-    email: string;
+    email?: string;
     firstName?: string;
     lastName?: string;
     company?: string;
@@ -138,7 +138,7 @@ export class PrismaCrmProvider implements CrmProvider {
     const row = await this.prisma.crmContact.create({
       data: {
         externalId: data.externalId ?? null,
-        email: data.email,
+        email: data.email ?? null,
         firstName: data.firstName ?? null,
         lastName: data.lastName ?? null,
         company: data.company ?? null,

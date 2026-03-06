@@ -304,7 +304,7 @@ export class InMemoryCrmProvider implements CrmProvider {
 
   async createContact(data: {
     externalId?: string;
-    email: string;
+    email?: string;
     firstName?: string;
     lastName?: string;
     company?: string;
@@ -320,7 +320,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       id: this.genId("ct"),
       externalId: data.externalId ?? null,
       channel: data.channel ?? null,
-      email: data.email,
+      email: data.email ?? null,
       firstName: data.firstName ?? null,
       lastName: data.lastName ?? null,
       company: data.company ?? null,

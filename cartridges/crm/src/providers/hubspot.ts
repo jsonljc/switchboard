@@ -352,7 +352,7 @@ export class HubSpotCrmProvider implements CrmProvider {
 
   async createContact(data: {
     externalId?: string;
-    email: string;
+    email?: string;
     firstName?: string;
     lastName?: string;
     company?: string;
@@ -361,9 +361,8 @@ export class HubSpotCrmProvider implements CrmProvider {
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     return this.call(async () => {
-      const properties: Record<string, string> = {
-        email: data.email,
-      };
+      const properties: Record<string, string> = {};
+      if (data.email) properties["email"] = data.email;
       if (data.firstName) properties["firstname"] = data.firstName;
       if (data.lastName) properties["lastname"] = data.lastName;
       if (data.company) properties["company"] = data.company;
