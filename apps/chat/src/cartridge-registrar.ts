@@ -16,10 +16,16 @@ import {
 } from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
+import type { CrmProviderOptions, CrmProvider } from "@switchboard/crm";
 import {
   bootstrapCustomerEngagementCartridge,
   DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
 } from "@switchboard/customer-engagement";
+
+export interface RegisterCartridgesResult {
+  /** The CRM provider instance, if initialized. */
+  crmProvider: CrmProvider | null;
+}
 
 /**
  * Register all domain cartridges into the provided storage context.
@@ -28,7 +34,7 @@ import {
 export async function registerAllCartridges(
   storage: StorageContext,
   profile?: BusinessProfile,
-): Promise<void> {
+): Promise<RegisterCartridgesResult> {
   // Digital ads
   const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
     accessToken: process.env["META_ADS_ACCESS_TOKEN"] ?? "mock-token",
@@ -54,8 +60,13 @@ export async function registerAllCartridges(
   storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
   await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
 
-  // CRM
-  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
+  // CRM — use Prisma-backed provider when database is available
+  let crmProviderOptions: CrmProviderOptions | undefined;
+  if (process.env["DATABASE_URL"]) {
+    const { getDb } = await import("@switchboard/db");
+    crmProviderOptions = { prisma: getDb() };
+  }
+  const { cartridge: crmCartridge } = await bootstrapCrmCartridge(undefined, crmProviderOptions);
   storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
   await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
 
@@ -72,6 +83,8 @@ export async function registerAllCartridges(
     new GuardedCartridge(peCartridge, peInterceptors),
   );
   await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
+
+  return { crmProvider: crmCartridge.getProvider() };
 }
 
 /**

@@ -26,7 +26,7 @@ import {
   ProfileResolver,
 } from "@switchboard/core";
 import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
-import type { BusinessProfile } from "@switchboard/schemas";
+import type { BusinessProfile, CrmProvider } from "@switchboard/schemas";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
@@ -99,6 +99,7 @@ export async function createChatRuntime(
 
   let resolvedSkin: ResolvedSkin | null = null;
   let resolvedProfile: ResolvedProfile | null = null;
+  let crmProvider: CrmProvider | null = null;
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
@@ -134,7 +135,11 @@ export async function createChatRuntime(
       }
     }
 
-    await registerAllCartridges(storage, businessProfile);
+    const { crmProvider: registeredCrmProvider } = await registerAllCartridges(
+      storage,
+      businessProfile,
+    );
+    crmProvider = registeredCrmProvider;
 
     // --- Skin loading (optional, controlled by SKIN_ID env var) ---
     if (skinIdEnv) {
@@ -220,6 +225,7 @@ export async function createChatRuntime(
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
     const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
+    const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
     const adAccountId =
       clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
 
@@ -239,11 +245,19 @@ export async function createChatRuntime(
       chatRedis,
     );
 
-    const llmConfig = {
-      apiKey: anthropicApiKey,
-      model: "claude-3-5-haiku-20241022" as const,
-      baseUrl: "https://api.anthropic.com",
-    };
+    // Select LLM provider: prefer Anthropic when available, fall back to OpenAI
+    const llmConfig =
+      openaiApiKey && !anthropicApiKey
+        ? {
+            apiKey: openaiApiKey,
+            model: "gpt-4o-mini",
+            baseUrl: "https://api.openai.com",
+          }
+        : {
+            apiKey: anthropicApiKey,
+            model: "claude-3-5-haiku-20241022" as const,
+            baseUrl: "https://api.anthropic.com",
+          };
 
     const clinicContext = {
       adAccountId,
@@ -352,6 +366,7 @@ export async function createChatRuntime(
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? DEFAULT_CHAT_AVAILABLE_ACTIONS,
     resolvedSkin,
+    crmProvider,
   });
 
   const cleanup = () => {

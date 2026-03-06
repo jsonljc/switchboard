@@ -215,6 +215,13 @@ export class ClinicInterpreter extends LLMInterpreter {
   }
 
   protected async callLLM(prompt: string): Promise<LLMResponse> {
+    if (this.config.baseUrl?.includes("openai")) {
+      return this.callOpenAI(prompt);
+    }
+    return this.callAnthropic(prompt);
+  }
+
+  private async callAnthropic(prompt: string): Promise<LLMResponse> {
     const response = await fetch(`${this.config.baseUrl}/v1/messages`, {
       method: "POST",
       headers: {
@@ -248,6 +255,40 @@ export class ClinicInterpreter extends LLMInterpreter {
       text,
       usage: data.usage
         ? { promptTokens: data.usage.input_tokens, completionTokens: data.usage.output_tokens }
+        : undefined,
+    };
+  }
+
+  private async callOpenAI(prompt: string): Promise<LLMResponse> {
+    const response = await fetch(`${this.config.baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        max_tokens: this.config.maxTokens ?? 512,
+        messages: [{ role: "user", content: prompt }],
+        temperature: this.config.temperature ?? 0.0,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens: number; completion_tokens: number };
+    };
+
+    const text = data.choices?.[0]?.message?.content ?? "";
+
+    return {
+      text,
+      usage: data.usage
+        ? { promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens }
         : undefined,
     };
   }

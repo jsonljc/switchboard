@@ -25,12 +25,19 @@ import {
   buildDealCreateUndoRecipe,
 } from "./actions/index.js";
 
+import type { CrmProviderOptions } from "./providers/factory.js";
+
 export class CrmCartridge implements Cartridge {
   readonly manifest: CartridgeManifest = CRM_MANIFEST;
   private provider: CrmProvider | null = null;
+  private providerOptions?: CrmProviderOptions;
+
+  constructor(options?: CrmProviderOptions) {
+    this.providerOptions = options;
+  }
 
   async initialize(_context: CartridgeContext): Promise<void> {
-    this.provider = createCrmProvider();
+    this.provider = createCrmProvider(this.providerOptions);
   }
 
   getProvider(): CrmProvider {
@@ -426,6 +433,7 @@ export type {
   CrmPipelineStage,
 } from "./providers/crm-provider.js";
 export { InMemoryCrmProvider } from "./providers/mock.js";
+export type { CrmProviderOptions } from "./providers/factory.js";
 
 // CRM Advisors (pipeline health + activity cadence analysis)
 export {
