@@ -253,7 +253,7 @@ export class InstagramAdapter implements ChannelAdapter {
     await this.sendMessage({
       recipient: { id: threadId },
       message: {
-        text: `[${card.riskCategory.toUpperCase()}] Approval Required\n\n${card.summary}\n\n${card.explanation}`,
+        text: `${card.summary}\n\n${card.explanation}`,
         quick_replies: quickReplies,
       },
     });
@@ -261,20 +261,18 @@ export class InstagramAdapter implements ChannelAdapter {
 
   async sendResultCard(threadId: string, card: ResultCardPayload): Promise<void> {
     const statusEmoji = card.success ? "OK" : "FAILED";
-    const undoNote = card.undoAvailable
-      ? `\n\nUndo available${card.undoExpiresAt ? ` until ${card.undoExpiresAt.toISOString()}` : ""}`
-      : "";
+    const parts = [`[${statusEmoji}] ${card.summary}`];
+    if (!card.success) {
+      parts.push(`Reference: ${card.auditId}`);
+    }
+    if (card.undoAvailable) {
+      const hours = card.undoExpiresAt
+        ? Math.round((card.undoExpiresAt.getTime() - Date.now()) / 3600000)
+        : 24;
+      parts.push(`Reply 'undo' if you change your mind (${hours}h window).`);
+    }
 
-    const text = [
-      `[${statusEmoji}] ${card.summary}`,
-      `Risk: ${card.riskCategory}`,
-      `Audit: ${card.auditId}`,
-      undoNote,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    await this.sendTextReply(threadId, text);
+    await this.sendTextReply(threadId, parts.join("\n"));
   }
 
   extractMessageId(rawPayload: unknown): string | null {

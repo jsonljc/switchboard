@@ -181,7 +181,7 @@ export class SlackAdapter implements ChannelAdapter {
     const blocks = [
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*Approval Required*\n\n${card.summary}` },
+        text: { type: "mrkdwn", text: `*${card.summary}*` },
       },
       {
         type: "section",
@@ -210,13 +210,14 @@ export class SlackAdapter implements ChannelAdapter {
   async sendResultCard(threadId: string, card: ResultCardPayload): Promise<void> {
     const icon = card.success ? ":white_check_mark:" : ":x:";
     let text = `${icon} ${card.summary}\n`;
-    text += `*Risk:* ${card.riskCategory}\n`;
-    text += `*Audit:* \`${card.auditId}\`\n`;
+    if (!card.success) {
+      text += `*Reference:* \`${card.auditId}\`\n`;
+    }
     if (card.undoAvailable) {
       const hours = card.undoExpiresAt
         ? Math.round((card.undoExpiresAt.getTime() - Date.now()) / 3600000)
         : 24;
-      text += `*Undo available:* reply \`undo\` within ${hours}h`;
+      text += `Reply \`undo\` if you change your mind (${hours}h window).`;
     }
 
     await this.apiCall("chat.postMessage", {

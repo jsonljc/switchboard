@@ -350,9 +350,9 @@ export class RuleBasedInterpreter implements Interpreter {
       proposals: [],
       needsClarification: true,
       clarificationQuestion:
-        "I'm not sure what you're asking me to do. Could you clarify?\n" +
+        "I didn't quite catch that. Could you rephrase?\n" +
         `I can help with: ${capList}.\n` +
-        "Reply with what you'd like, or type 'help' for the full list.",
+        "Type 'help' to see what I can do.",
       confidence: 0,
       rawResponse: text,
     };

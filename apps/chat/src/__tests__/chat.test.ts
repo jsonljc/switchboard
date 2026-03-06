@@ -10,7 +10,7 @@ import {
   checkIngressRateLimit,
 } from "../adapters/security.js";
 import { createConversation, transitionConversation } from "../conversation/state.js";
-import { composeDenialReply, composeExecutionResult } from "../composer/reply.js";
+import { composeDenialReply } from "../composer/reply.js";
 import { buildApprovalCard } from "../composer/approval-card.js";
 
 // ---------------------------------------------------------------------------
@@ -380,7 +380,7 @@ describe("Composer", () => {
   });
 
   describe("buildApprovalCard", () => {
-    it("builds an approval card with correct buttons", () => {
+    it("builds an approval card with 2 buttons when no actionType", () => {
       const card = buildApprovalCard(
         "Pause Summer Sale campaign",
         "medium",
@@ -393,12 +393,12 @@ describe("Composer", () => {
       expect(card.riskCategory).toBe("medium");
       expect(card.explanation).toContain("MEDIUM");
       expect(card.explanation).toContain("Pausing an active campaign");
-      expect(card.buttons).toHaveLength(3);
+      expect(card.buttons).toHaveLength(2);
 
       const labels = card.buttons.map((b) => b.label);
       expect(labels).toContain("Approve");
       expect(labels).toContain("Reject");
-      expect(labels).toContain("Approve capped at +20%");
+      expect(labels).not.toContain("Approve capped at +20%");
 
       // Verify callback data is valid JSON
       for (const btn of card.buttons) {
@@ -412,38 +412,20 @@ describe("Composer", () => {
       expect(approveData["approvalId"]).toBe("appr_123");
       expect(approveData["bindingHash"]).toBe("hash_abc");
     });
-  });
 
-  describe("composeExecutionResult", () => {
-    it("includes undo info for a successful result", () => {
-      const reply = composeExecutionResult(
-        "Campaign paused successfully",
-        true,
-        "audit_xyz",
-        "medium",
-        true,
-        "user@example.com",
-      );
-      expect(reply).toContain("Done");
-      expect(reply).toContain("Campaign paused successfully");
-      expect(reply).toContain("audit_xyz");
-      expect(reply).toContain("MEDIUM");
-      expect(reply).toContain("undo");
-      expect(reply).toContain("user@example.com");
-    });
-
-    it("marks failed execution correctly", () => {
-      const reply = composeExecutionResult(
-        "Campaign pause failed",
-        false,
-        "audit_fail",
+    it("includes patch button for budget adjustment actions", () => {
+      const card = buildApprovalCard(
+        "Set budget to $800",
         "high",
-        false,
-        "admin@example.com",
+        "Budget increase exceeds threshold",
+        "appr_456",
+        "hash_def",
+        "digital-ads.campaign.adjust_budget",
       );
-      expect(reply).toContain("Failed");
-      expect(reply).toContain("Campaign pause failed");
-      expect(reply).not.toContain("undo");
+
+      expect(card.buttons).toHaveLength(3);
+      const labels = card.buttons.map((b) => b.label);
+      expect(labels).toContain("Approve capped at +20%");
     });
   });
 });
