@@ -51,7 +51,8 @@
       "pipeline": "member journey",
       "stage": "journey stage",
       "activity": "interaction"
-    }
+    },
+    "welcomeMessage": "Welcome to {{businessName}}! I'm your gym assistant. I can help you manage memberships, schedule classes, and handle member communications.\n\nType 'help' to see everything I can do, or just tell me what you need!"
   },
 
   "playbooks": [

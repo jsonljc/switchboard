@@ -105,6 +105,11 @@ export class TelegramAdapter implements ChannelAdapter {
       const from = message["from"] as Record<string, unknown>;
       const chat = message["chat"] as Record<string, unknown>;
 
+      const metadata: Record<string, unknown> = {};
+      if (from["first_name"]) metadata["firstName"] = from["first_name"];
+      if (from["last_name"]) metadata["lastName"] = from["last_name"];
+      if (from["username"]) metadata["username"] = from["username"];
+
       return {
         id: `tg_${message["message_id"]}`,
         channel: "telegram",
@@ -115,6 +120,7 @@ export class TelegramAdapter implements ChannelAdapter {
         text: (message["text"] as string) ?? "",
         attachments: [],
         timestamp: new Date((message["date"] as number) * 1000),
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       };
     }
 
@@ -122,6 +128,11 @@ export class TelegramAdapter implements ChannelAdapter {
       const from = callbackQuery["from"] as Record<string, unknown>;
       const cbMessage = callbackQuery["message"] as Record<string, unknown>;
       const chat = cbMessage["chat"] as Record<string, unknown>;
+
+      const metadata: Record<string, unknown> = {};
+      if (from["first_name"]) metadata["firstName"] = from["first_name"];
+      if (from["last_name"]) metadata["lastName"] = from["last_name"];
+      if (from["username"]) metadata["username"] = from["username"];
 
       return {
         id: `tg_cb_${callbackQuery["id"]}`,
@@ -133,6 +144,7 @@ export class TelegramAdapter implements ChannelAdapter {
         text: (callbackQuery["data"] as string) ?? "",
         attachments: [],
         timestamp: new Date(),
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       };
     }
 
@@ -161,12 +173,15 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async sendResultCard(threadId: string, card: ResultCardPayload): Promise<void> {
-    const icon = card.success ? "Done" : "Failed";
-    let text = `${icon}: ${card.summary}\n`;
-    text += `Risk: ${card.riskCategory}\n`;
-    text += `Audit: ${card.auditId}\n`;
+    let text = `${card.summary}\n`;
+    if (!card.success) {
+      text += `Reference: ${card.auditId}\n`;
+    }
     if (card.undoAvailable) {
-      text += `Undo available: reply 'undo' within ${card.undoExpiresAt ? Math.round((card.undoExpiresAt.getTime() - Date.now()) / 3600000) : 24}h`;
+      const hours = card.undoExpiresAt
+        ? Math.round((card.undoExpiresAt.getTime() - Date.now()) / 3600000)
+        : 24;
+      text += `Reply 'undo' if you change your mind (${hours}h window).`;
     }
 
     await this.apiCall("sendMessage", {

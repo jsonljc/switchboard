@@ -71,7 +71,7 @@ export interface CrmProvider {
   // Write
   createContact(data: {
     externalId?: string;
-    email: string;
+    email?: string;
     firstName?: string;
     lastName?: string;
     company?: string;

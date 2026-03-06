@@ -5,9 +5,14 @@ import type { InterpreterRegistry } from "./interpreter/registry.js";
 import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
 import { getThread, setThread } from "./conversation/threads.js";
-import { composeHelpMessage, composeUncertainReply, composeDenialReply } from "./composer/reply.js";
+import {
+  composeHelpMessage,
+  composeUncertainReply,
+  composeWelcomeMessage,
+} from "./composer/reply.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
+import { ResponseHumanizer } from "./composer/humanize.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
 import { formatDiagnosticResult, isDiagnosticAction } from "./formatters/diagnostic-formatter.js";
 import type {
@@ -18,6 +23,7 @@ import type {
   CapabilityRegistry,
   PlanGraphBuilder,
   ResolvedSkin,
+  ResolvedProfile,
 } from "@switchboard/core";
 import { inferCartridgeId, matchesAny } from "@switchboard/core";
 import type { UndoRecipe, CrmProvider } from "@switchboard/schemas";
@@ -46,6 +52,8 @@ export interface ChatRuntimeConfig {
   planGraphBuilder?: PlanGraphBuilder;
   /** Resolved skin for tool filter enforcement and config. */
   resolvedSkin?: ResolvedSkin | null;
+  /** Resolved business profile for personalization (e.g. welcome message). */
+  resolvedProfile?: ResolvedProfile | null;
   /** Optional CRM provider for auto-linking conversations to contacts. */
   crmProvider?: CrmProvider | null;
 }
@@ -63,8 +71,10 @@ export class ChatRuntime {
   private capabilityRegistry: CapabilityRegistry | null;
   private planGraphBuilder: PlanGraphBuilder | null;
   private resolvedSkin: ResolvedSkin | null;
+  private resolvedProfile: ResolvedProfile | null;
   private crmProvider: CrmProvider | null;
   private filterOutgoing: (text: string) => string;
+  private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
@@ -85,6 +95,7 @@ export class ChatRuntime {
     this.capabilityRegistry = config.capabilityRegistry ?? null;
     this.planGraphBuilder = config.planGraphBuilder ?? null;
     this.resolvedSkin = config.resolvedSkin ?? null;
+    this.resolvedProfile = config.resolvedProfile ?? null;
     this.crmProvider = config.crmProvider ?? null;
 
     // Initialize banned phrase filter from skin config
@@ -100,6 +111,13 @@ export class ChatRuntime {
     } else {
       this.filterOutgoing = (text: string) => text;
     }
+
+    // Initialize response humanizer from skin terminology
+    this.humanizer = new ResponseHumanizer(
+      (this.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
+        | Record<string, string>
+        | undefined,
+    );
   }
 
   getAdapter(): ChannelAdapter {
@@ -109,6 +127,17 @@ export class ChatRuntime {
   /** Send text reply with banned phrase filtering applied. */
   private async sendFilteredReply(threadId: string, text: string): Promise<void> {
     await this.adapter.sendTextReply(threadId, this.filterOutgoing(text));
+  }
+
+  /** Apply banned phrase filter to card text fields. */
+  private filterCardText<T extends { summary: string; explanation?: string }>(card: T): T {
+    return {
+      ...card,
+      summary: this.filterOutgoing(card.summary),
+      ...(card.explanation !== undefined
+        ? { explanation: this.filterOutgoing(card.explanation) }
+        : {}),
+    };
   }
 
   private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
@@ -175,6 +204,7 @@ export class ChatRuntime {
 
     // Get or create conversation
     let conversation = await getThread(threadId);
+    let isNewConversation = false;
     if (!conversation) {
       conversation = createConversation(threadId, message.channel, message.principalId);
       // Auto-link to CRM contact by external ID (e.g. WhatsApp phone, Telegram user ID)
@@ -186,12 +216,55 @@ export class ChatRuntime {
           );
           if (existing) {
             conversation.crmContactId = existing.id;
+          } else {
+            // Auto-create CRM contact for new chat users
+            const phone = message.channel === "whatsapp" ? message.principalId : undefined;
+            const contact = await this.crmProvider.createContact({
+              externalId: message.principalId,
+              channel: message.channel,
+              firstName: message.metadata?.["firstName"] as string | undefined,
+              lastName: message.metadata?.["lastName"] as string | undefined,
+              phone,
+              sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
+              properties: {
+                source: "chat",
+                ...(message.metadata?.["username"]
+                  ? { telegramUsername: message.metadata["username"] }
+                  : {}),
+                ...(message.metadata?.["contactName"]
+                  ? { displayName: message.metadata["contactName"] }
+                  : {}),
+              },
+            });
+            conversation.crmContactId = contact.id;
+
+            // Log activity so there's a record of how the contact was created
+            await this.crmProvider.logActivity({
+              type: "note",
+              subject: "Contact auto-created from chat",
+              body: `Created from ${message.channel} conversation`,
+              contactIds: [contact.id],
+            });
           }
         } catch {
           // Non-critical — continue without CRM link
         }
       }
       await setThread(conversation);
+
+      // Welcome message for first-time users
+      const businessName =
+        this.resolvedProfile?.profile?.business?.name ??
+        this.resolvedSkin?.manifest?.name ??
+        undefined;
+      const welcomeText = composeWelcomeMessage(
+        this.resolvedSkin,
+        businessName,
+        this.availableActions,
+      );
+      await this.sendFilteredReply(threadId, welcomeText);
+      await this.recordAssistantMessage(threadId, welcomeText);
+      isNewConversation = true;
     }
 
     // Record the incoming user message for conversation memory
@@ -203,7 +276,12 @@ export class ChatRuntime {
 
     // Handle help command
     if (/^help$/i.test(message.text.trim())) {
-      const helpText = composeHelpMessage(this.availableActions);
+      const helpText = composeHelpMessage(
+        this.availableActions,
+        (this.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
+          | Record<string, string>
+          | undefined,
+      );
       await this.sendFilteredReply(threadId, helpText);
       await this.recordAssistantMessage(threadId, helpText);
       return;
@@ -287,6 +365,10 @@ export class ChatRuntime {
 
     // If clarification needed
     if (result.needsClarification || result.confidence < 0.5) {
+      // Welcome already handled the greeting — skip duplicate "I didn't catch that"
+      if (isNewConversation && result.confidence === 0) {
+        return;
+      }
       const question = result.clarificationQuestion ?? composeUncertainReply(this.availableActions);
       conversation = transitionConversation(conversation, {
         type: "set_clarifying",
@@ -299,6 +381,7 @@ export class ChatRuntime {
 
     // If no proposals, uncertain
     if (result.proposals.length === 0) {
+      if (isNewConversation) return;
       await this.sendFilteredReply(threadId, composeUncertainReply(this.availableActions));
       return;
     }
@@ -444,8 +527,12 @@ export class ChatRuntime {
     _principalId: string,
   ): Promise<void> {
     if (result.denied) {
-      // Denied
-      const denialText = composeDenialReply(result.decisionTrace);
+      // Denied — produce conversational denial text
+      const deniedCheck = result.decisionTrace.checks.find((c) => c.matched && c.effect === "deny");
+      const denialText = this.humanizer.humanizeDenial(
+        result.decisionTrace.explanation,
+        deniedCheck?.humanDetail,
+      );
       await this.sendFilteredReply(threadId, denialText);
       await this.recordAssistantMessage(threadId, denialText);
       return;
@@ -462,13 +549,16 @@ export class ChatRuntime {
         await setThread(updated);
       }
 
-      const card = buildApprovalCard(
+      const actionType = result.envelope.proposals[0]?.actionType;
+      const rawCard = buildApprovalCard(
         result.approvalRequest.summary,
         result.approvalRequest.riskCategory,
         result.explanation,
         result.approvalRequest.id,
         result.approvalRequest.bindingHash,
+        actionType,
       );
+      const card = this.filterCardText(this.humanizer.humanizeApprovalCard(rawCard));
       await this.adapter.sendApprovalCard(threadId, card);
       await this.recordAssistantMessage(
         threadId,
@@ -493,7 +583,7 @@ export class ChatRuntime {
 
       const undoRecipe = executeResult.undoRecipe as UndoRecipe | null;
 
-      const card = buildResultCard(
+      const rawCard = buildResultCard(
         executeResult.summary,
         executeResult.success,
         result.envelope.auditEntryIds[0] ?? result.envelope.id,
@@ -501,8 +591,9 @@ export class ChatRuntime {
         executeResult.rollbackAvailable,
         undoRecipe?.undoExpiresAt ?? null,
       );
+      const card = this.filterCardText(this.humanizer.humanizeResultCard(rawCard));
       await this.adapter.sendResultCard(threadId, card);
-      await this.recordAssistantMessage(threadId, executeResult.summary);
+      await this.recordAssistantMessage(threadId, card.summary);
     } catch (err) {
       console.error("Execution error:", err);
       this.failedMessageStore
@@ -553,7 +644,7 @@ export class ChatRuntime {
 
           const undoRecipe = response.executionResult.undoRecipe as UndoRecipe | null;
 
-          const card = buildResultCard(
+          const rawCard = buildResultCard(
             response.executionResult.summary,
             response.executionResult.success,
             response.envelope.auditEntryIds[0] ?? response.envelope.id,
@@ -561,8 +652,9 @@ export class ChatRuntime {
             response.executionResult.rollbackAvailable,
             undoRecipe?.undoExpiresAt ?? null,
           );
+          const card = this.filterCardText(this.humanizer.humanizeResultCard(rawCard));
           await this.adapter.sendResultCard(threadId, card);
-          await this.recordAssistantMessage(threadId, response.executionResult.summary);
+          await this.recordAssistantMessage(threadId, card.summary);
         }
       } else if (parsed.action === "reject") {
         const rejectText = `Action rejected by ${principalId}.`;

@@ -297,10 +297,12 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("how are my campaigns doing?"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Campaign Performance Report");
-      expect(adapter.sentText[0]!.text).toContain("Summer Sale");
-      expect(adapter.sentText[0]!.text).toContain("Winter Promo");
+      // Welcome + performance report
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[0]!.text).toContain("Welcome");
+      expect(adapter.sentText[1]!.text).toContain("Campaign Performance Report");
+      expect(adapter.sentText[1]!.text).toContain("Summer Sale");
+      expect(adapter.sentText[1]!.text).toContain("Winter Promo");
       // No approval cards
       expect(adapter.sentApprovalCards).toHaveLength(0);
     });
@@ -333,8 +335,9 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("status of Summer Sale"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Campaign: Summer Sale");
+      // Welcome + campaign status
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[1]!.text).toContain("Campaign: Summer Sale");
     });
 
     it("sends recommendations for more_leads intent", async () => {
@@ -365,8 +368,9 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("I want more patient leads"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Recommendations for More Leads");
+      // Welcome + recommendations
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[1]!.text).toContain("Recommendations for More Leads");
     });
 
     it("sends error message when readAdapter is not configured", async () => {
@@ -396,8 +400,9 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("how are my campaigns?"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Read operations are not configured");
+      // Welcome + error message
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[1]!.text).toContain("Read operations are not configured");
     });
 
     it("sends error message when readAdapter throws", async () => {
@@ -433,9 +438,10 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("how are my campaigns?"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Error reading data");
-      expect(adapter.sentText[0]!.text).toContain("Something went wrong");
+      // Welcome + error message
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[1]!.text).toContain("Error reading data");
+      expect(adapter.sentText[1]!.text).toContain("Something went wrong");
     });
   });
 
@@ -506,8 +512,9 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("what's the weather?"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("campaign reports");
+      // Welcome + clarification
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[1]!.text).toContain("campaign reports");
     });
   });
 
@@ -549,8 +556,9 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("what is the weather"));
       await runtime.handleIncomingMessage({});
 
+      // First message on new thread → welcome only (uncertain reply suppressed for confidence 0)
       expect(adapter.sentText.length).toBeGreaterThan(0);
-      expect(adapter.sentText[0]!.text).toContain("not sure");
+      expect(adapter.sentText[0]!.text).toContain("Welcome");
     });
 
     it("RuleBasedInterpreter help command still works", async () => {
@@ -565,8 +573,10 @@ describe("Clinic Integration", () => {
       adapter.setNextMessage(makeMessage("help"));
       await runtime.handleIncomingMessage({});
 
-      expect(adapter.sentText).toHaveLength(1);
-      expect(adapter.sentText[0]!.text).toContain("Available actions");
+      // Welcome + help response
+      expect(adapter.sentText).toHaveLength(2);
+      expect(adapter.sentText[0]!.text).toContain("Welcome");
+      expect(adapter.sentText[1]!.text).toContain("what I can help with");
     });
   });
 });
