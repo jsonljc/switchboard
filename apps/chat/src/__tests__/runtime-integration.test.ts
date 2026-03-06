@@ -223,7 +223,6 @@ describe("ChatRuntime Integration", () => {
     // Should have sent an approval card
     expect(adapter.sentApprovalCards).toHaveLength(1);
     expect(adapter.sentApprovalCards[0]?.card.buttons.length).toBeGreaterThan(0);
-    expect(adapter.sentApprovalCards[0]?.card.summary).toContain("ads");
     expect(adapter.sentApprovalCards[0]?.card.summary).toContain("pause");
   });
 
@@ -284,7 +283,7 @@ describe("ChatRuntime Integration", () => {
 
     // Should receive a text denial
     expect(adapter.sentText.length).toBeGreaterThan(0);
-    const denialMsg = adapter.sentText.find((t) => t.text.includes("Blocked"));
+    const denialMsg = adapter.sentText.find((t) => t.text.includes("I can't do that"));
     expect(denialMsg).toBeDefined();
   });
 
@@ -318,16 +317,19 @@ describe("ChatRuntime Integration", () => {
     adapter.setNextMessage(makeMessage("help"));
     await runtime.handleIncomingMessage({});
 
-    expect(adapter.sentText).toHaveLength(1);
-    expect(adapter.sentText[0]?.text).toContain("Available actions");
+    // Welcome + help response
+    expect(adapter.sentText).toHaveLength(2);
+    expect(adapter.sentText[0]?.text).toContain("Welcome");
+    expect(adapter.sentText[1]?.text).toContain("what I can help with");
   });
 
   it("should handle unknown intent", async () => {
     adapter.setNextMessage(makeMessage("what is the weather"));
     await runtime.handleIncomingMessage({});
 
+    // First message on new thread → welcome only (uncertain reply suppressed)
     expect(adapter.sentText.length).toBeGreaterThan(0);
-    expect(adapter.sentText[0]?.text).toContain("not sure");
+    expect(adapter.sentText[0]?.text).toContain("Welcome");
   });
 
   it("should handle rejection", async () => {

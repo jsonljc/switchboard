@@ -366,6 +366,7 @@ export async function createChatRuntime(
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? DEFAULT_CHAT_AVAILABLE_ACTIONS,
     resolvedSkin,
+    resolvedProfile,
     crmProvider,
   });
 

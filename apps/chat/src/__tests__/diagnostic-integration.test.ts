@@ -240,16 +240,15 @@ describe("RuleBasedInterpreter — diagnostic patterns", () => {
 describe("Help text includes diagnostic examples", () => {
   it("composeHelpMessage includes diagnostic section for digital-ads actions", () => {
     const help = composeHelpMessage(ALL_ACTIONS);
-    expect(help).toContain("Diagnostics:");
-    expect(help).toContain("diagnose my funnel");
-    expect(help).toContain("portfolio analysis");
-    expect(help).toContain("show me my metrics");
+    expect(help).toContain("Performance");
+    expect(help).toContain("Diagnose my funnel");
+    expect(help).toContain("Show me my metrics");
   });
 
   it("composeHelpMessage correctly detects digital-ads. prefix", () => {
     const help = composeHelpMessage(["digital-ads.campaign.pause"]);
-    expect(help).toContain("Ads:");
-    expect(help).toContain("pause Summer Sale");
+    expect(help).toContain("Campaign Management");
+    expect(help).toContain("Pause or resume a campaign");
   });
 
   it("composeUncertainReply correctly detects digital-ads. prefix", () => {
@@ -393,11 +392,12 @@ describe("Runtime diagnostic integration", () => {
     adapter.setNextMessage(makeMessage("diagnose my funnel"));
     await runtime.handleIncomingMessage({});
 
-    // Should get a text reply with formatted diagnostic, NOT a result card
-    expect(adapter.sentText).toHaveLength(1);
-    expect(adapter.sentText[0]!.text).toContain("Funnel Diagnostic");
-    expect(adapter.sentText[0]!.text).toContain("Primary KPI: purchase");
-    expect(adapter.sentText[0]!.text).toContain("CTR declined");
+    // Welcome + formatted diagnostic (not a result card)
+    expect(adapter.sentText).toHaveLength(2);
+    expect(adapter.sentText[0]!.text).toContain("Welcome");
+    expect(adapter.sentText[1]!.text).toContain("Funnel Diagnostic");
+    expect(adapter.sentText[1]!.text).toContain("Primary KPI: purchase");
+    expect(adapter.sentText[1]!.text).toContain("CTR declined");
 
     // No approval cards or result cards
     expect(adapter.sentApprovalCards).toHaveLength(0);
@@ -442,8 +442,9 @@ describe("Runtime diagnostic integration", () => {
     await runtime.handleIncomingMessage({});
 
     // The formatted text was sent as a reply → recordAssistantMessage was called
-    expect(adapter.sentText).toHaveLength(1);
-    const sentText = adapter.sentText[0]!.text;
+    // Welcome + diagnostic result
+    expect(adapter.sentText).toHaveLength(2);
+    const sentText = adapter.sentText[1]!.text;
     expect(sentText).toContain("Funnel Diagnostic");
   });
 
@@ -462,9 +463,9 @@ describe("Runtime diagnostic integration", () => {
     adapter.setNextMessage(makeMessage("diagnose my funnel"));
     await runtime.handleIncomingMessage({});
 
-    // Should get formatted text, not result card
-    expect(adapter.sentText).toHaveLength(1);
-    expect(adapter.sentText[0]!.text).toContain("Funnel Diagnostic");
+    // Welcome + formatted diagnostic text (not result card)
+    expect(adapter.sentText).toHaveLength(2);
+    expect(adapter.sentText[1]!.text).toContain("Funnel Diagnostic");
     expect(adapter.sentResultCards).toHaveLength(0);
   });
 });

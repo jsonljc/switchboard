@@ -76,7 +76,8 @@
       "pipeline": "patient journey",
       "stage": "journey stage",
       "activity": "interaction"
-    }
+    },
+    "welcomeMessage": "Welcome to {{businessName}}! I'm your clinic assistant. I can help you book appointments, send reminders, and manage patient records.\n\nType 'help' to see everything I can do, or just tell me what you need!"
   },
 
   "playbooks": [

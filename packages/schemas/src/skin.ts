@@ -54,6 +54,8 @@ export const SkinLanguageSchema = z.object({
   replyTemplates: z.record(z.string(), z.string()).optional(),
   /** Terminology substitutions (e.g. "campaign" → "treatment plan"). */
   terminology: z.record(z.string(), z.string()).optional(),
+  /** Welcome message sent on first contact. Supports {{businessName}} substitution. */
+  welcomeMessage: z.string().optional(),
 });
 export type SkinLanguage = z.infer<typeof SkinLanguageSchema>;
 
