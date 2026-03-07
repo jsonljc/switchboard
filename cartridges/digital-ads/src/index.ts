@@ -114,6 +114,10 @@ export {
 // Advisor registry
 export { resolveAdvisors } from "./advisors/registry.js";
 
+// Recommendation engine
+export { generateRecommendations } from "./advisors/recommendation-engine.js";
+export type { ActionProposal, RecommendationResult } from "./advisors/recommendation-engine.js";
+
 // Orchestrator
 export type {
   MultiPlatformResult,
@@ -175,6 +179,9 @@ export type {
   CampaignInfo,
   AdSetInfo,
   MetaAdsWriteProvider,
+  CreateCampaignParams,
+  CreateAdSetParams,
+  CreateAdParams,
   ConnectParams,
   DiagnoseFunnelParams,
   DiagnosePortfolioParams,

@@ -77,3 +77,39 @@ export function buildAdSetResumeUndoRecipe(adSetId: string): UndoRecipe {
     undoApprovalRequired: "none",
   };
 }
+
+export function buildCreateCampaignUndoRecipe(campaignId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.campaign.pause",
+    reverseParameters: { campaignId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "high",
+    undoApprovalRequired: "standard",
+  };
+}
+
+export function buildCreateAdSetUndoRecipe(adSetId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.adset.pause",
+    reverseParameters: { adSetId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "high",
+    undoApprovalRequired: "standard",
+  };
+}
+
+export function buildCreateAdUndoRecipe(adId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.campaign.pause",
+    reverseParameters: { campaignId: adId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "high",
+    undoApprovalRequired: "standard",
+  };
+}
