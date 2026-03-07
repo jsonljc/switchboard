@@ -5,7 +5,15 @@
 // ad set mutation support via the Meta Graph API.
 // ---------------------------------------------------------------------------
 
-import type { CampaignInfo, AdSetInfo, ConnectionHealth, MetaAdsWriteProvider } from "../types.js";
+import type {
+  CampaignInfo,
+  AdSetInfo,
+  ConnectionHealth,
+  MetaAdsWriteProvider,
+  CreateCampaignParams,
+  CreateAdSetParams,
+  CreateAdParams,
+} from "../types.js";
 
 export interface MetaAdsWriteConfig {
   accessToken: string;
@@ -175,6 +183,92 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     });
 
     return { success: true };
+  }
+
+  async createCampaign(params: CreateCampaignParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/campaigns?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      objective: params.objective,
+      status: params.status ?? "PAUSED",
+      special_ad_categories: params.specialAdCategories ?? [],
+    };
+
+    // Budget is in cents for the API
+    body.daily_budget = String(Math.round(params.dailyBudget * 100));
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async createAdSet(params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/adsets?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      campaign_id: params.campaignId,
+      name: params.name,
+      daily_budget: String(Math.round(params.dailyBudget * 100)),
+      targeting: params.targeting,
+      optimization_goal: params.optimizationGoal ?? "NONE",
+      billing_event: params.billingEvent ?? "IMPRESSIONS",
+      status: params.status ?? "PAUSED",
+    };
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async createAd(params: CreateAdParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+
+    // First create the ad creative
+    const creativeUrl = `${this.baseUrl}/${accountId}/adcreatives?access_token=${this.accessToken}`;
+    const creativeBody: Record<string, unknown> = {
+      name: `${params.name} Creative`,
+      object_story_spec: params.creative,
+    };
+
+    const creativeData = await this.executeWithRetry(creativeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(creativeBody),
+    });
+
+    // Then create the ad referencing the creative
+    const adUrl = `${this.baseUrl}/${accountId}/ads?access_token=${this.accessToken}`;
+    const adBody: Record<string, unknown> = {
+      name: params.name,
+      adset_id: params.adSetId,
+      creative: { creative_id: String(creativeData.id) },
+      status: params.status ?? "PAUSED",
+    };
+
+    const data = await this.executeWithRetry(adUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(adBody),
+    });
+
+    return { id: String(data.id), success: true };
   }
 
   async healthCheck(): Promise<ConnectionHealth> {
@@ -380,6 +474,18 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     _targetingSpec: Record<string, unknown>,
   ): Promise<{ success: boolean }> {
     return { success: true };
+  }
+
+  async createCampaign(_params: CreateCampaignParams): Promise<{ id: string; success: boolean }> {
+    return { id: "campaign_new_1", success: true };
+  }
+
+  async createAdSet(_params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
+    return { id: "adset_new_1", success: true };
+  }
+
+  async createAd(_params: CreateAdParams): Promise<{ id: string; success: boolean }> {
+    return { id: "ad_new_1", success: true };
   }
 
   async healthCheck(): Promise<ConnectionHealth> {

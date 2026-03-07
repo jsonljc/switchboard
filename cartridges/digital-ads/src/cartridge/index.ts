@@ -57,6 +57,11 @@ import {
   executeAdSetAdjustBudget,
   executeTargetingModify,
 } from "./actions/adset-mutations.js";
+import {
+  executeCampaignCreate,
+  executeAdSetCreate,
+  executeAdCreate,
+} from "./actions/creation-mutations.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,6 +364,12 @@ export class DigitalAdsCartridge implements Cartridge {
         return executeAdSetAdjustBudget(parameters, this.writeProvider);
       case "digital-ads.targeting.modify":
         return executeTargetingModify(parameters, this.writeProvider);
+      case "digital-ads.campaign.create":
+        return executeCampaignCreate(parameters, this.writeProvider);
+      case "digital-ads.adset.create":
+        return executeAdSetCreate(parameters, this.writeProvider);
+      case "digital-ads.ad.create":
+        return executeAdCreate(parameters, this.writeProvider);
       default:
         return failResult(`Unknown action type: ${actionType}`, "dispatch", `Unknown action type`);
     }
