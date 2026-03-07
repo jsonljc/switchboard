@@ -19,6 +19,7 @@ import {
   creativeWinLossAdvisor,
   deviceBreakdownAdvisor,
   attributionAwarenessAdvisor,
+  headroomAdvisor,
 } from "./shared/index.js";
 
 // Platform-specific advisors
@@ -118,6 +119,9 @@ export function resolveAdvisors(platform: PlatformType, vertical: VerticalType):
 
   // Attribution awareness advisor (pre-check for measurement changes)
   advisors.push(attributionAwarenessAdvisor);
+
+  // Headroom advisor (spend response curve analysis — requires 21+ days of daily data)
+  advisors.push(headroomAdvisor);
 
   // 2. Platform-specific advisors
   if (platform === "meta") {

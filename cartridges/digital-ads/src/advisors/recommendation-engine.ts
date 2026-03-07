@@ -243,6 +243,43 @@ const BID_STRATEGY_MATCHER: FindingMatcher = {
   },
 };
 
+const HEADROOM_SCALING_MATCHER: FindingMatcher = {
+  matches(finding: Finding): boolean {
+    const msg = finding.message.toLowerCase();
+    return (
+      msg.includes("headroom") &&
+      (finding.severity === "healthy" || finding.severity === "info") &&
+      (msg.includes("scaling") || msg.includes("scale"))
+    );
+  },
+  propose(finding: Finding, context: DiagnosticResult): ActionProposal | null {
+    if (!context.entityId) return null;
+
+    // Extract headroom percentage from message
+    const headroomMatch = finding.message.match(/(\d+)%\s*scaling/);
+    const headroomPercent = headroomMatch ? parseInt(headroomMatch[1]!, 10) : 0;
+    const isHighConfidence = finding.message.includes("High-confidence");
+
+    return {
+      finding,
+      actionType: "digital-ads.budget.scale",
+      parameters: {
+        platform: context.platform ?? "meta",
+        entityId: context.entityId,
+        vertical: context.vertical,
+        headroomPercent,
+        stepSize: Math.min(headroomPercent, 20),
+      },
+      confidence: isHighConfidence ? 0.8 : 0.55,
+      rationale:
+        `Headroom analysis identified ${headroomPercent}% scaling opportunity based on the spend-conversion response curve. ` +
+        "Incremental budget increases should be applied in 15-20% steps to avoid learning phase disruption.",
+      expectedImpact: `Potential ${headroomPercent}% increase in daily conversions through budget scaling`,
+      riskLevel: headroomPercent > 50 ? "medium" : "low",
+    };
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Registry of all matchers
 // ---------------------------------------------------------------------------
@@ -254,6 +291,7 @@ const MATCHERS: FindingMatcher[] = [
   ROAS_EFFICIENCY_MATCHER,
   AUDIENCE_SATURATION_MATCHER,
   BID_STRATEGY_MATCHER,
+  HEADROOM_SCALING_MATCHER,
 ];
 
 // ---------------------------------------------------------------------------
@@ -275,8 +313,9 @@ export function generateRecommendations(diagnostic: DiagnosticResult): Recommend
   const unactionable: Array<{ finding: Finding; reason: string }> = [];
 
   for (const finding of diagnostic.findings) {
-    // Skip low-severity findings
-    if (!ACTIONABLE_SEVERITIES.has(finding.severity)) {
+    // Skip low-severity findings — but allow headroom scaling findings through
+    const isHeadroomFinding = finding.stage === "headroom";
+    if (!ACTIONABLE_SEVERITIES.has(finding.severity) && !isHeadroomFinding) {
       unactionable.push({
         finding,
         reason: `Severity "${finding.severity}" is below actionable threshold`,
