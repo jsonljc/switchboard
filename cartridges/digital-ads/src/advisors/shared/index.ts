@@ -31,3 +31,5 @@ export { creativeWinLossAdvisor } from "./creative-win-loss.js";
 export { deviceBreakdownAdvisor } from "./device-breakdown.js";
 
 export { attributionAwarenessAdvisor } from "./attribution-awareness.js";
+
+export { headroomAdvisor, createHeadroomAdvisor } from "./headroom.js";

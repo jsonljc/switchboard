@@ -207,9 +207,9 @@ export interface MetaAdsWriteProvider {
     adSetId: string,
     targetingSpec: Record<string, unknown>,
   ): Promise<{ success: boolean }>;
-  createCampaign?(params: CreateCampaignParams): Promise<{ id: string; success: boolean }>;
-  createAdSet?(params: CreateAdSetParams): Promise<{ id: string; success: boolean }>;
-  createAd?(params: CreateAdParams): Promise<{ id: string; success: boolean }>;
+  createCampaign(params: CreateCampaignParams): Promise<{ id: string; success: boolean }>;
+  createAdSet(params: CreateAdSetParams): Promise<{ id: string; success: boolean }>;
+  createAd(params: CreateAdParams): Promise<{ id: string; success: boolean }>;
   healthCheck(): Promise<import("@switchboard/schemas").ConnectionHealth>;
 }
 

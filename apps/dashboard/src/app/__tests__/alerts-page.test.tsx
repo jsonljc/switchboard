@@ -4,6 +4,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import type { ReactNode } from "react";
 
+// Mock next-auth/react so useSession doesn't require a SessionProvider
+vi.mock("next-auth/react", () => ({
+  useSession: vi.fn(() => ({ status: "authenticated", data: { user: { name: "Test" } } })),
+  SessionProvider: ({ children }: { children: ReactNode }) => children,
+}));
+
+// Mock next/navigation
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  useSearchParams: vi.fn(() => new URLSearchParams()),
+}));
+
 // Mock the hooks
 vi.mock("@/hooks/use-alerts", () => ({
   useAlerts: vi.fn(),

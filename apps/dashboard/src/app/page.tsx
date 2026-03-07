@@ -17,12 +17,31 @@ import { useIdentity } from "@/hooks/use-identity";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { Activity, ShieldCheck, XCircle, Zap, AlertTriangle } from "lucide-react";
+import {
+  Activity,
+  ShieldCheck,
+  XCircle,
+  Zap,
+  AlertTriangle,
+  Users,
+  DollarSign,
+  Bot,
+} from "lucide-react";
 
 export default function HomePage() {
   const { status } = useSession();
-  const { data: spend, isLoading: spendLoading, isError: spendError, refetch: refetchSpend } = useSpend();
-  const { data: identity, isLoading: identityLoading, isError: identityError, refetch: refetchIdentity } = useIdentity();
+  const {
+    data: spend,
+    isLoading: spendLoading,
+    isError: spendError,
+    refetch: refetchSpend,
+  } = useSpend();
+  const {
+    data: identity,
+    isLoading: identityLoading,
+    isError: identityError,
+    refetch: refetchIdentity,
+  } = useIdentity();
   const pendingCount = useApprovalCount();
   const { data: tokenUsage, isLoading: tokenUsageLoading } = useTokenUsage();
   const { data: healthData } = useQuery({
@@ -33,6 +52,24 @@ export default function HomePage() {
       return res.json();
     },
     refetchInterval: 60_000,
+  });
+
+  const { data: crmContacts, isLoading: contactsLoading } = useQuery({
+    queryKey: queryKeys.crm.contacts(),
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/crm/contacts");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  const { data: crmDeals, isLoading: dealsLoading } = useQuery({
+    queryKey: queryKeys.crm.deals(),
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/crm/deals");
+      if (!res.ok) return null;
+      return res.json();
+    },
   });
 
   if (status === "unauthenticated") redirect("/login");
@@ -61,7 +98,14 @@ export default function HomePage() {
           <p className="text-sm text-muted-foreground mb-4">
             Could not connect to the server. Please try again.
           </p>
-          <Button variant="outline" size="sm" onClick={() => { refetchSpend(); refetchIdentity(); }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              refetchSpend();
+              refetchIdentity();
+            }}
+          >
             Retry
           </Button>
         </CardContent>
@@ -78,10 +122,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <Link href="/settings/system">
-          <Badge
-            variant={isHealthy ? "outline" : "destructive"}
-            className="gap-1 cursor-pointer"
-          >
+          <Badge variant={isHealthy ? "outline" : "destructive"} className="gap-1 cursor-pointer">
             <Zap className="h-3 w-3" />
             {isHealthy ? "AI active" : "Needs attention"}
           </Badge>
@@ -97,11 +138,7 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-          <SpendCard
-            title="Today"
-            spent={spend?.today ?? 0}
-            limit={limits?.daily ?? null}
-          />
+          <SpendCard title="Today" spent={spend?.today ?? 0} limit={limits?.daily ?? null} />
           <SpendCard
             title="This Week"
             spent={spend?.thisWeek ?? 0}
@@ -156,6 +193,77 @@ export default function HomePage() {
         <TokenUsageChart data={tokenUsage?.trend ?? []} />
       )}
 
+      {/* CRM Overview */}
+      <h2 className="text-lg font-semibold mt-2">CRM Pipeline</h2>
+      {contactsLoading || dealsLoading ? (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <Link href="/leads" className="block">
+            <Card className="hover:border-primary/50 transition-colors h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Total Contacts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {(crmContacts?.data as unknown[])?.length ?? 0}
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/leads" className="block">
+            <Card className="hover:border-primary/50 transition-colors h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Pipeline Value
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  $
+                  {((crmDeals?.data as Array<{ amount?: number; stage?: string }>) ?? [])
+                    .filter((d) => d.stage !== "closed_lost" && d.stage !== "service_completed")
+                    .reduce((sum, d) => sum + (d.amount ?? 0), 0)
+                    .toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {
+                    ((crmDeals?.data as Array<{ stage?: string }>) ?? []).filter(
+                      (d) => d.stage !== "closed_lost" && d.stage !== "service_completed",
+                    ).length
+                  }{" "}
+                  active deals
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/activity" className="block">
+            <Card className="hover:border-primary/50 transition-colors h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Actions (30d)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {spendLoading ? <Skeleton className="h-8 w-12" /> : (spend?.actionsToday ?? 0)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Bookings, messages, follow-ups</p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      )}
+
       {/* Quick stats */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <Link href="/activity" className="block">
@@ -168,7 +276,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {spendLoading ? <Skeleton className="h-8 w-12" /> : spend?.actionsToday ?? 0}
+                {spendLoading ? <Skeleton className="h-8 w-12" /> : (spend?.actionsToday ?? 0)}
               </div>
             </CardContent>
           </Card>
@@ -196,7 +304,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {spendLoading ? <Skeleton className="h-8 w-12" /> : spend?.deniedToday ?? 0}
+                {spendLoading ? <Skeleton className="h-8 w-12" /> : (spend?.deniedToday ?? 0)}
               </div>
             </CardContent>
           </Card>
