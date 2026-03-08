@@ -8,12 +8,18 @@
 import type { AdsOperatorConfig } from "@switchboard/schemas";
 import type { RuntimeOrchestrator } from "../orchestrator/index.js";
 import type { StorageContext } from "../storage/index.js";
+import type { ResolvedProfile } from "../profile/resolver.js";
+import type { ResolvedSkin } from "../skin/resolver.js";
 
 export interface AgentContext {
   config: AdsOperatorConfig;
   orchestrator: RuntimeOrchestrator;
   storage: StorageContext;
   notifier: AgentNotifier;
+  /** Business profile context (optional — required by StrategistAgent). */
+  profile?: ResolvedProfile;
+  /** Skin context (optional — required by StrategistAgent for funnelMode). */
+  skin?: ResolvedSkin;
 }
 
 export interface AgentTickResult {

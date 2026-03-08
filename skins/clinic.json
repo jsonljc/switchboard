@@ -1,12 +1,37 @@
 {
   "id": "clinic",
   "name": "Dental Clinic",
-  "version": "1.0.0",
-  "description": "Vertical skin for dental clinic patient engagement. Exposes appointment, reminder, cadence, treatment, and review tools with guarded governance and WhatsApp as the primary channel.",
+  "version": "2.0.0",
+  "description": "Vertical skin for dental clinic ad operations and patient engagement. Exposes digital ads management (lead gen mode), speed-to-lead tools, appointment booking, and patient communications with guarded governance.",
 
   "tools": {
-    "include": ["customer-engagement.*"],
-    "exclude": ["customer-engagement.pipeline.*"],
+    "include": [
+      "customer-engagement.*",
+      "digital-ads.platform.*",
+      "digital-ads.health.*",
+      "digital-ads.snapshot.*",
+      "digital-ads.funnel.*",
+      "digital-ads.portfolio.*",
+      "digital-ads.structure.*",
+      "digital-ads.campaign.*",
+      "digital-ads.adset.*",
+      "digital-ads.ad.*",
+      "digital-ads.targeting.*",
+      "digital-ads.creative.generate",
+      "digital-ads.creative.generate_brief",
+      "digital-ads.report.performance",
+      "digital-ads.report.creative",
+      "digital-ads.signal.*",
+      "digital-ads.pacing.check",
+      "digital-ads.alert.anomaly_scan",
+      "digital-ads.alert.budget_forecast",
+      "crm.*"
+    ],
+    "exclude": [
+      "customer-engagement.pipeline.*",
+      "digital-ads.campaign.setup_guided",
+      "digital-ads.campaign.update_objective"
+    ],
     "aliases": {
       "book_appointment": "customer-engagement.appointment.book",
       "cancel_appointment": "customer-engagement.appointment.cancel",
@@ -22,7 +47,11 @@
       "update_stage": "customer-engagement.journey.update_stage",
       "score_ltv": "customer-engagement.contact.score_ltv",
       "handle_objection": "customer-engagement.conversation.handle_objection",
-      "escalate": "customer-engagement.conversation.escalate"
+      "escalate": "customer-engagement.conversation.escalate",
+      "check_ads": "digital-ads.funnel.diagnose",
+      "create_campaign": "digital-ads.campaign.create",
+      "pause_campaign": "digital-ads.campaign.pause",
+      "adjust_budget": "digital-ads.campaign.adjust_budget"
     }
   },
 
@@ -44,6 +73,14 @@
           "actionType": "customer-engagement.review.respond"
         },
         "effect": "require_approval"
+      },
+      {
+        "name": "clinic-campaign-create-approval",
+        "description": "Campaign creation always requires owner approval",
+        "rule": {
+          "actionType": "digital-ads.campaign.create"
+        },
+        "effect": "require_approval"
       }
     ],
     "spendLimits": {
@@ -52,13 +89,13 @@
       "monthlyUsd": 3000
     },
     "approvalRouting": {
-      "channelPreference": "whatsapp"
+      "channelPreference": "telegram"
     }
   },
 
   "language": {
     "locale": "en",
-    "interpreterSystemPrompt": "You are a helpful dental clinic assistant. Help staff manage appointments, patient communications, and treatment records. Use clear, professional language appropriate for a healthcare setting.",
+    "interpreterSystemPrompt": "You are an AI operator for a dental clinic. You manage ad campaigns to attract new patients and handle speed-to-lead responses when enquiries come in. You also help staff with appointment booking and patient communications. Use clear, professional language appropriate for a healthcare setting.",
     "replyTemplates": {
       "appointment_booked": "Appointment confirmed for {{contactName}} on {{date}} at {{time}}.",
       "appointment_cancelled": "Appointment for {{contactName}} on {{date}} has been cancelled.",
@@ -66,10 +103,13 @@
       "treatment_logged": "Treatment record saved for {{contactName}}: {{treatmentType}}.",
       "review_requested": "Review request sent to {{contactName}}.",
       "cadence_started": "Outreach cadence started for {{contactName}}.",
-      "cadence_stopped": "Outreach cadence stopped for {{contactName}}."
+      "cadence_stopped": "Outreach cadence stopped for {{contactName}}.",
+      "campaign_created": "Campaign '{{campaignName}}' created with ${{dailyBudget}}/day budget.",
+      "campaign_paused": "Campaign '{{campaignName}}' has been paused.",
+      "budget_adjusted": "Budget for '{{campaignName}}' updated to ${{newBudget}}/day."
     },
     "terminology": {
-      "campaign": "treatment plan",
+      "campaign": "ad campaign",
       "lead": "prospective patient",
       "deal": "treatment case",
       "contact": "patient",
@@ -77,8 +117,11 @@
       "stage": "journey stage",
       "activity": "interaction"
     },
-    "welcomeMessage": "Welcome to {{businessName}}! I'm your clinic assistant. I can help you book appointments, send reminders, and manage patient records.\n\nType 'help' to see everything I can do, or just tell me what you need!"
+    "welcomeMessage": "Welcome to {{businessName}}! I'm your AI operator. I manage your ad campaigns to attract new patients and respond to enquiries instantly.\n\nI can also help with appointments, reminders, and patient records.\n\nType 'help' to see everything I can do, or just tell me what you need!"
   },
+
+  "funnelMode": "lead_gen",
+  "leadChannel": "telegram",
 
   "playbooks": [
     {
@@ -123,11 +166,11 @@
     }
   ],
 
-  "requiredCartridges": ["customer-engagement"],
+  "requiredCartridges": ["digital-ads", "customer-engagement", "crm"],
 
   "channels": {
-    "primary": "whatsapp",
-    "enabled": ["whatsapp", "telegram", "instagram", "messenger"]
+    "primary": "telegram",
+    "enabled": ["telegram", "whatsapp", "instagram", "messenger"]
   },
 
   "config": {

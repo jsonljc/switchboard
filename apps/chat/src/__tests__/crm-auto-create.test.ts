@@ -85,6 +85,7 @@ function createMockCrmProvider(overrides?: Partial<CrmProvider>): CrmProvider {
       status: "active",
       assignedStaffId: null,
       sourceAdId: null,
+      sourceCampaignId: null,
       utmSource: null,
       createdAt: now,
       updatedAt: now,
@@ -261,6 +262,7 @@ describe("CRM auto-create from chat", () => {
       status: "active",
       assignedStaffId: null,
       sourceAdId: null,
+      sourceCampaignId: null,
       utmSource: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -453,6 +455,7 @@ describe("Telegram adapter metadata extraction", () => {
       firstName: "Alice",
       lastName: "Smith",
       username: "alicesmith",
+      contactName: "Alice Smith",
     });
   });
 
@@ -482,7 +485,7 @@ describe("Telegram adapter metadata extraction", () => {
     });
   });
 
-  it("omits metadata when no profile info available", () => {
+  it("returns empty metadata when no profile info available", () => {
     const adapter = new TelegramAdapter("test-token", undefined, undefined);
     const payload = {
       message: {
@@ -497,6 +500,6 @@ describe("Telegram adapter metadata extraction", () => {
     const result = adapter.parseIncomingMessage(payload);
 
     expect(result).not.toBeNull();
-    expect(result!.metadata).toBeUndefined();
+    expect(result!.metadata).toEqual({});
   });
 });

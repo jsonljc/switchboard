@@ -90,6 +90,11 @@ export const SkinManifestSchema = z.object({
   governance: SkinGovernanceSchema,
   language: SkinLanguageSchema,
 
+  /** Funnel mode: determines ad optimization strategy. */
+  funnelMode: z.enum(["lead_gen", "conversions", "awareness"]).optional(),
+  /** Channel for lead responses (e.g. "telegram" for speed-to-lead). */
+  leadChannel: z.enum(["telegram", "whatsapp", "slack"]).optional(),
+
   playbooks: z.array(SkinPlaybookSchema).optional(),
   requiredCartridges: z.array(z.string()).min(1),
   channels: SkinChannelsSchema.optional(),

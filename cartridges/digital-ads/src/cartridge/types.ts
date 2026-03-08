@@ -251,6 +251,26 @@ export interface MetaAdsWriteProvider {
   // --- Rule methods (Phase 7) ---
   createAdRule(params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }>;
   deleteAdRule(ruleId: string): Promise<{ success: boolean }>;
+
+  // --- Lead Forms API (for speed-to-lead) ---
+  getLeadForms(pageId: string): Promise<LeadFormInfo[]>;
+  getLeadFormData(formId: string, options?: { since?: number }): Promise<LeadFormEntry[]>;
+
+  // --- Conversions API (CAPI) ---
+  sendConversionEvent(
+    pixelId: string,
+    event: ConversionEvent,
+  ): Promise<{ eventsReceived: number; success: boolean }>;
+
+  // --- Insights API ---
+  getAccountInsights(
+    accountId: string,
+    options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]>;
+  getCampaignInsights(
+    campaignId: string,
+    options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]>;
 }
 
 export interface CreateCampaignParams {
@@ -321,6 +341,46 @@ export interface CreateAdRuleWriteParams {
   evaluationSpec: Record<string, unknown>;
   executionSpec: Record<string, unknown>;
   scheduleSpec?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Lead Forms & CAPI types
+// ---------------------------------------------------------------------------
+
+export interface LeadFormInfo {
+  id: string;
+  name: string;
+  status: string;
+  createdTime: string;
+  pageId: string;
+}
+
+export interface LeadFormEntry {
+  id: string;
+  createdTime: string;
+  fieldData: Array<{ name: string; values: string[] }>;
+}
+
+export interface ConversionEvent {
+  eventName: string;
+  eventTime: number;
+  userData: {
+    em?: string[];
+    ph?: string[];
+    fn?: string[];
+    ln?: string[];
+    externalId?: string[];
+  };
+  customData?: Record<string, unknown>;
+  eventSourceUrl?: string;
+  actionSource: "website" | "app" | "phone_call" | "chat" | "email" | "system_generated" | "other";
+}
+
+export interface InsightsOptions {
+  dateRange: { since: string; until: string };
+  fields: string[];
+  breakdowns?: string[];
+  level?: "account" | "campaign" | "adset" | "ad";
 }
 
 // ---------------------------------------------------------------------------

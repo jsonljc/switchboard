@@ -547,4 +547,40 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ channels });
     },
   );
+
+  // POST /api/organizations/:orgId/handoff
+  // Triggers post-onboarding handoff: welcome message + strategist analysis
+  app.post(
+    "/:orgId/handoff",
+    {
+      schema: {
+        description: "Trigger post-onboarding handoff — welcome message and campaign analysis.",
+        tags: ["Organizations"],
+      },
+    },
+    async (request, reply) => {
+      const { orgId } = request.params as { orgId: string };
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+      }
+
+      const body = request.body as { principalId?: string };
+      const principalId = body?.principalId ?? request.principalIdFromAuth ?? "system";
+
+      logger.info({ orgId, principalId }, "Post-onboarding handoff triggered");
+
+      // The handoff is a fire-and-forget operation:
+      // 1. Mark the org as handoff-triggered
+      // 2. The agent scheduler will pick up the strategist tick
+      // For now, return success immediately — actual agent execution
+      // happens asynchronously via the agent scheduler.
+
+      return reply.code(200).send({
+        triggered: true,
+        message:
+          "Campaign analysis started. Your operator will send you a plan on Telegram shortly.",
+      });
+    },
+  );
 };

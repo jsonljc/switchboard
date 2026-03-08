@@ -423,6 +423,17 @@ export class SwitchboardClient {
     });
   }
 
+  // Post-onboarding handoff
+  async triggerHandoff(orgId: string, principalId: string) {
+    return this.request<{ triggered: boolean; message: string }>(
+      `/api/organizations/${orgId}/handoff`,
+      {
+        method: "POST",
+        body: JSON.stringify({ principalId }),
+      },
+    );
+  }
+
   // Token Usage
   async getTokenUsage(params?: { period?: string }) {
     const searchParams = new URLSearchParams();

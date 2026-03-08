@@ -73,8 +73,8 @@ describe("clinic skin manifest (detailed)", () => {
     expect(parsed.tools.exclude).toContain("customer-engagement.pipeline.*");
   });
 
-  it("declares WhatsApp as primary channel", () => {
-    expect(parsed.channels.primary).toBe("whatsapp");
+  it("declares Telegram as primary channel", () => {
+    expect(parsed.channels.primary).toBe("telegram");
   });
 
   it("uses guarded governance profile", () => {
@@ -106,7 +106,7 @@ describe("clinic skin manifest (detailed)", () => {
 
   it("defines clinic-specific terminology", () => {
     expect(parsed.language.terminology.contact).toBe("patient");
-    expect(parsed.language.terminology.campaign).toBe("treatment plan");
+    expect(parsed.language.terminology.campaign).toBe("ad campaign");
     expect(parsed.language.terminology.lead).toBe("prospective patient");
   });
 

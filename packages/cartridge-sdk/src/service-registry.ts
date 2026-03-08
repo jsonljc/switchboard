@@ -34,23 +34,6 @@ export const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
     description: "Manage ad campaigns, budgets, and audience targeting.",
   },
   {
-    serviceId: "broker-api",
-    displayName: "Broker API",
-    authType: "api_key",
-    requiredFields: [
-      { key: "apiKey", label: "API Key", type: "password" },
-      { key: "apiSecret", label: "API Secret", type: "password" },
-      {
-        key: "baseUrl",
-        label: "Base URL",
-        type: "text",
-        placeholder: "https://api.broker.example.com",
-      },
-    ],
-    cartridgeId: "quant-trading",
-    description: "Execute trades, manage portfolios, and access market data.",
-  },
-  {
     serviceId: "crm-builtin",
     displayName: "Built-in CRM",
     authType: "api_key",

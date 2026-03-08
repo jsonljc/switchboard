@@ -112,6 +112,10 @@ export type {
   ConversationSessionStore,
 } from "./conversation/session-store.js";
 
+// Conversation flow templates (for lead bot qualification)
+export { qualificationFlow } from "./conversation/templates/qualification.js";
+export { bookingFlow } from "./conversation/templates/booking.js";
+
 // Cadence engine
 export { evaluateCadenceStep } from "./cadence/engine.js";
 export type { CadenceEvaluation } from "./cadence/engine.js";

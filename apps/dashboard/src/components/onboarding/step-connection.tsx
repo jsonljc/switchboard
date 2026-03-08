@@ -39,18 +39,6 @@ const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
     cartridgeId: "digital-ads",
     description: "Manage ad campaigns, budgets, and audience targeting.",
   },
-  {
-    serviceId: "broker-api",
-    displayName: "Broker API",
-    authType: "api_key",
-    requiredFields: [
-      { key: "apiKey", label: "API Key", type: "password" },
-      { key: "apiSecret", label: "API Secret", type: "password" },
-      { key: "baseUrl", label: "Base URL", type: "text", placeholder: "https://api.broker.example.com" },
-    ],
-    cartridgeId: "quant-trading",
-    description: "Execute trades, manage portfolios, and access market data.",
-  },
 ];
 
 interface StepConnectionProps {
@@ -113,9 +101,7 @@ export function StepConnection({ cartridgeId, onConnectionCreated }: StepConnect
             type={field.type === "password" ? "password" : "text"}
             placeholder={field.placeholder}
             value={credentials[field.key] ?? ""}
-            onChange={(e) =>
-              setCredentials((prev) => ({ ...prev, [field.key]: e.target.value }))
-            }
+            onChange={(e) => setCredentials((prev) => ({ ...prev, [field.key]: e.target.value }))}
           />
         </div>
       ))}
@@ -161,7 +147,9 @@ export function StepConnection({ cartridgeId, onConnectionCreated }: StepConnect
       )}
 
       {testResult && (
-        <div className={`flex items-center gap-2 text-sm ${testResult.healthy ? "text-green-600" : "text-red-600"}`}>
+        <div
+          className={`flex items-center gap-2 text-sm ${testResult.healthy ? "text-green-600" : "text-red-600"}`}
+        >
           {testResult.healthy ? (
             <CheckCircle2 className="h-4 w-4" />
           ) : (

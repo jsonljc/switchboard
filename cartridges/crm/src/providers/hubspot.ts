@@ -358,6 +358,9 @@ export class HubSpotCrmProvider implements CrmProvider {
     company?: string;
     phone?: string;
     channel?: string;
+    sourceAdId?: string;
+    sourceCampaignId?: string;
+    utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     return this.call(async () => {
@@ -368,6 +371,9 @@ export class HubSpotCrmProvider implements CrmProvider {
       if (data.company) properties["company"] = data.company;
       if (data.phone) properties["phone"] = data.phone;
       if (data.channel) properties["hs_lead_status"] = data.channel;
+      if (data.sourceAdId) properties["hs_analytics_source_data_1"] = data.sourceAdId;
+      if (data.sourceCampaignId) properties["hs_analytics_source_data_2"] = data.sourceCampaignId;
+      if (data.utmSource) properties["hs_analytics_source"] = data.utmSource;
 
       const response = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts`, {
         method: "POST",
@@ -631,6 +637,7 @@ export class HubSpotCrmProvider implements CrmProvider {
       status: "active",
       assignedStaffId: raw.properties["hubspot_owner_id"] ?? null,
       sourceAdId: raw.properties["hs_analytics_source_data_1"] ?? null,
+      sourceCampaignId: raw.properties["hs_analytics_source_data_2"] ?? null,
       utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,

@@ -64,7 +64,7 @@ export function generateToolsFromRegistry(
 /**
  * Normalize the parametersSchema from a cartridge action definition.
  *
- * Patient-engagement and quant-trading use a flat format where the schema
+ * Patient-engagement uses a flat format where the schema
  * is `{ paramName: { type: "string" }, ... }` rather than a full JSON Schema
  * with `type: "object"` wrapper. We detect this and wrap it.
  */

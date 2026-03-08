@@ -19,7 +19,6 @@
     "@switchboard/digital-ads": "workspace:*",
     "@switchboard/customer-engagement": "workspace:*",
     "@switchboard/payments": "workspace:*",
-    "@switchboard/quant-trading": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "zod": "^3.23.0"
   },

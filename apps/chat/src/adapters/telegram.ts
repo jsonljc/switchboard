@@ -110,6 +110,36 @@ export class TelegramAdapter implements ChannelAdapter {
       if (from["last_name"]) metadata["lastName"] = from["last_name"];
       if (from["username"]) metadata["username"] = from["username"];
 
+      let text = (message["text"] as string) ?? "";
+
+      // Parse /start deep link parameters for ad attribution
+      // Format: /start ad_{adId}_{campaignId}  or  /start ref_{referralCode}
+      const startMatch = text.match(/^\/start\s+(.+)$/);
+      if (startMatch) {
+        const startPayload = startMatch[1]!;
+        metadata["startPayload"] = startPayload;
+
+        // Parse ad attribution: ad_{adId}_{campaignId}
+        const adMatch = startPayload.match(/^ad_([^_]+)_(.+)$/);
+        if (adMatch) {
+          metadata["sourceAdId"] = adMatch[1];
+          metadata["sourceCampaignId"] = adMatch[2];
+          metadata["utmSource"] = "meta_ads";
+        }
+
+        // Replace /start command with a clean greeting for the flow
+        text = "hi";
+      }
+
+      // Build contact name for display
+      const contactNameParts = [
+        from["first_name"] as string | undefined,
+        from["last_name"] as string | undefined,
+      ].filter(Boolean);
+      if (contactNameParts.length > 0) {
+        metadata["contactName"] = contactNameParts.join(" ");
+      }
+
       return {
         id: `tg_${message["message_id"]}`,
         channel: "telegram",
@@ -117,10 +147,10 @@ export class TelegramAdapter implements ChannelAdapter {
         threadId: String(chat["id"]),
         principalId: String(from["id"]),
         organizationId: null, // resolved async via resolveOrganizationId
-        text: (message["text"] as string) ?? "",
+        text,
         attachments: [],
         timestamp: new Date((message["date"] as number) * 1000),
-        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+        metadata,
       };
     }
 

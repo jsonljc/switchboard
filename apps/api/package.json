@@ -25,7 +25,6 @@
     "@switchboard/digital-ads": "workspace:*",
     "@switchboard/customer-engagement": "workspace:*",
     "@switchboard/payments": "workspace:*",
-    "@switchboard/quant-trading": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/crm": "workspace:*",

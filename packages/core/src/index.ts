@@ -314,5 +314,34 @@ export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
 export { matchGlob, matchesAny } from "./tool-registry/index.js";
 
 // Agents (autonomous ads operator layer)
-export { OptimizerAgent, ReporterAgent, StrategistAgent } from "./agents/index.js";
-export type { AdsAgent, AgentContext, AgentTickResult, AgentNotifier } from "./agents/index.js";
+export { OptimizerAgent, ReporterAgent, StrategistAgent, MonitorAgent } from "./agents/index.js";
+export {
+  DEFAULT_ALERT_CONDITIONS,
+  DEFAULT_ALERT_TEMPLATES,
+  buildDefaultAlertRules,
+  ProgressiveAutonomyController,
+  DEFAULT_AUTONOMY_THRESHOLDS,
+} from "./agents/index.js";
+export type {
+  AdsAgent,
+  AgentContext,
+  AgentTickResult,
+  AgentNotifier,
+  AlertCondition,
+  AlertResult,
+  AlertRuleTemplate,
+  MonitorSnapshot,
+  CampaignSnapshot,
+  AutonomyThresholds,
+  AutonomyAssessment,
+  CompetenceSnapshot,
+} from "./agents/index.js";
+
+// Event bus (conversion feedback loop)
+export { InMemoryConversionBus } from "./events/conversion-bus.js";
+export type {
+  ConversionBus,
+  ConversionEvent,
+  ConversionEventType,
+  ConversionEventHandler,
+} from "./events/conversion-bus.js";
