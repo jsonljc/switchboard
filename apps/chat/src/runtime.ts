@@ -47,6 +47,7 @@ import {
   handlePauseCommand,
   handleResumeCommand,
   handleAutonomyCommand,
+  handleAutonomyStatusCommand,
 } from "./handlers/cockpit-commands.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
@@ -468,6 +469,11 @@ export class ChatRuntime {
 
     if (/^\/?resume$/i.test(trimmedText)) {
       await handleResumeCommand(ctx, threadId, message.principalId, message.organizationId);
+      return;
+    }
+
+    if (/^\/?autonomy[-_]?status$/i.test(trimmedText)) {
+      await handleAutonomyStatusCommand(ctx, threadId, message.principalId, message.organizationId);
       return;
     }
 

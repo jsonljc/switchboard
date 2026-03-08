@@ -6,6 +6,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { AdsOperatorConfigSchema } from "@switchboard/schemas";
 import type { AdsOperatorConfig } from "@switchboard/schemas";
 import { PrismaAdsOperatorConfigStore } from "@switchboard/db";
+import { ProgressiveAutonomyController, automationLevelToProfile } from "@switchboard/core";
+import type { CompetenceSnapshot } from "@switchboard/core";
 
 export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/operator-config — create config
@@ -130,6 +132,62 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
 
       const config = await store.update(existing.id, updates);
       return reply.code(200).send({ config });
+    },
+  );
+
+  // GET /api/operator-config/:orgId/autonomy — autonomy assessment
+  app.get(
+    "/:orgId/autonomy",
+    {
+      schema: {
+        description: "Get autonomy assessment for an organization's operator config.",
+        tags: ["Agents"],
+      },
+    },
+    async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const { orgId } = request.params as { orgId: string };
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+      }
+
+      const store = new PrismaAdsOperatorConfigStore(app.prisma);
+      const opConfig = await store.getByOrg(orgId);
+
+      if (!opConfig) {
+        return reply.code(404).send({ error: "Operator config not found", statusCode: 404 });
+      }
+
+      // Aggregate competence records for this principal
+      const records = await app.storageContext.competence.listRecords(opConfig.principalId);
+
+      const snapshot: CompetenceSnapshot = {
+        score: 0,
+        successCount: 0,
+        failureCount: 0,
+        rollbackCount: 0,
+      };
+
+      for (const r of records) {
+        snapshot.successCount += r.successCount;
+        snapshot.failureCount += r.failureCount;
+        snapshot.rollbackCount += r.rollbackCount;
+        snapshot.score += r.score;
+      }
+
+      if (records.length > 0) {
+        snapshot.score = snapshot.score / records.length;
+      }
+
+      const controller = new ProgressiveAutonomyController();
+      const currentProfile = automationLevelToProfile(opConfig.automationLevel);
+      const assessment = controller.assess(currentProfile, snapshot);
+
+      return reply.code(200).send({ assessment });
     },
   );
 };

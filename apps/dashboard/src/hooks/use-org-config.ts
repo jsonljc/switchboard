@@ -21,11 +21,12 @@ async function fetchOrgConfig(): Promise<{ config: OrgConfig }> {
   return res.json();
 }
 
-export function useOrgConfig() {
+export function useOrgConfig(enabled = true) {
   return useQuery({
     queryKey: queryKeys.orgConfig.current(),
     queryFn: fetchOrgConfig,
     retry: false,
+    enabled,
   });
 }
 

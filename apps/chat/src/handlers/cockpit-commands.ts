@@ -71,6 +71,7 @@ export async function handleStatusCommand(
   lines.push("/pause — Pause all agents");
   lines.push("/resume — Resume agents");
   lines.push("/autonomy [copilot|supervised|autonomous] — Set automation level");
+  lines.push("/autonomy-status — View autonomy progression and competence stats");
 
   await ctx.sendFilteredReply(threadId, lines.join("\n"));
 }
@@ -176,4 +177,91 @@ export async function handleAutonomyCommand(
     threadId,
     `Automation level set to: ${normalized}\n\n${descriptions[normalized]}`,
   );
+}
+
+/**
+ * Handle /autonomy-status command — shows progressive autonomy assessment.
+ */
+export async function handleAutonomyStatusCommand(
+  ctx: HandlerContext,
+  threadId: string,
+  _principalId: string,
+  organizationId: string | null,
+): Promise<void> {
+  if (!ctx.apiBaseUrl || !organizationId) {
+    await ctx.sendFilteredReply(
+      threadId,
+      `Current level: ${ctx.operatorState.automationLevel}\n\nAutonomy assessment requires API connection. Progress data is not available in dev mode.`,
+    );
+    return;
+  }
+
+  try {
+    const res = await fetch(`${ctx.apiBaseUrl}/api/operator-config/${organizationId}/autonomy`);
+
+    if (!res.ok) {
+      await ctx.sendFilteredReply(
+        threadId,
+        `Current level: ${ctx.operatorState.automationLevel}\n\nCould not fetch autonomy assessment. The API returned status ${res.status}.`,
+      );
+      return;
+    }
+
+    const data = (await res.json()) as {
+      assessment?: {
+        currentProfile: string;
+        recommendedProfile: string;
+        autonomousEligible: boolean;
+        reason: string;
+        progressPercent: number;
+        stats: {
+          totalSuccesses: number;
+          totalFailures: number;
+          competenceScore: number;
+          failureRate: number;
+        };
+      };
+    };
+
+    if (!data.assessment) {
+      await ctx.sendFilteredReply(threadId, "No assessment data available.");
+      return;
+    }
+
+    const a = data.assessment;
+    const lines: string[] = ["Autonomy Assessment"];
+    lines.push("");
+    lines.push(`Profile: ${a.currentProfile}`);
+
+    if (a.recommendedProfile !== a.currentProfile) {
+      lines.push(`Upgrade available: ${a.currentProfile} -> ${a.recommendedProfile}`);
+    }
+
+    if (a.autonomousEligible) {
+      lines.push("Autonomous mode: Eligible");
+    }
+
+    lines.push("");
+    lines.push(`Progress: ${a.progressPercent}%`);
+    const progressBar =
+      "[" +
+      "#".repeat(Math.round(a.progressPercent / 5)) +
+      "-".repeat(20 - Math.round(a.progressPercent / 5)) +
+      "]";
+    lines.push(progressBar);
+    lines.push("");
+    lines.push(`Score: ${a.stats.competenceScore.toFixed(0)}`);
+    lines.push(
+      `Track record: ${a.stats.totalSuccesses} successes, ${a.stats.totalFailures} failures (${(a.stats.failureRate * 100).toFixed(0)}% failure rate)`,
+    );
+    lines.push("");
+    lines.push(a.reason);
+
+    await ctx.sendFilteredReply(threadId, lines.join("\n"));
+  } catch {
+    await ctx.sendFilteredReply(
+      threadId,
+      `Current level: ${ctx.operatorState.automationLevel}\n\nCould not reach the API server for autonomy assessment.`,
+    );
+  }
 }

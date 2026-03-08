@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   handleStatusCommand,
   handlePauseCommand,
   handleResumeCommand,
   handleAutonomyCommand,
+  handleAutonomyStatusCommand,
 } from "../handlers/cockpit-commands.js";
 import type { HandlerContext } from "../handlers/handler-context.js";
 import type { ChannelAdapter } from "../adapters/adapter.js";
@@ -58,6 +59,7 @@ describe("handleStatusCommand", () => {
     expect(reply).toContain("Active");
     expect(reply).toContain("supervised");
     expect(reply).toContain("Commands:");
+    expect(reply).toContain("/autonomy-status");
   });
 
   it("shows paused status when operator is paused", async () => {
@@ -171,5 +173,83 @@ describe("handleAutonomyCommand", () => {
     expect(ctx.operatorState.automationLevel).toBe("copilot");
     const reply = getReplyText(ctx);
     expect(reply).toContain("copilot");
+  });
+});
+
+describe("handleAutonomyStatusCommand", () => {
+  let ctx: HandlerContext;
+  let mockFetchFn: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    ctx = createMockContext();
+    mockFetchFn = vi.fn();
+    vi.stubGlobal("fetch", mockFetchFn);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows fallback when no apiBaseUrl", async () => {
+    await handleAutonomyStatusCommand(ctx, "thread_1", "principal_1", null);
+
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("supervised");
+    expect(reply).toContain("dev mode");
+  });
+
+  it("shows assessment from API", async () => {
+    ctx.apiBaseUrl = "http://localhost:3000";
+    mockFetchFn.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          assessment: {
+            currentProfile: "guarded",
+            recommendedProfile: "observe",
+            autonomousEligible: false,
+            reason: "10 successful adjustments with score 65. Ready for observe mode.",
+            progressPercent: 100,
+            stats: {
+              totalSuccesses: 10,
+              totalFailures: 1,
+              competenceScore: 65,
+              failureRate: 0.09,
+            },
+          },
+        }),
+    });
+
+    await handleAutonomyStatusCommand(ctx, "thread_1", "principal_1", "org_1");
+
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("Autonomy Assessment");
+    expect(reply).toContain("guarded");
+    expect(reply).toContain("observe");
+    expect(reply).toContain("100%");
+    expect(reply).toContain("10 successes");
+    expect(reply).toContain("1 failures");
+    expect(reply).toContain("65");
+  });
+
+  it("handles API errors gracefully", async () => {
+    ctx.apiBaseUrl = "http://localhost:3000";
+    mockFetchFn.mockResolvedValue({ ok: false, status: 500 });
+
+    await handleAutonomyStatusCommand(ctx, "thread_1", "principal_1", "org_1");
+
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("supervised");
+    expect(reply).toContain("500");
+  });
+
+  it("handles network errors gracefully", async () => {
+    ctx.apiBaseUrl = "http://localhost:3000";
+    mockFetchFn.mockRejectedValue(new Error("connection refused"));
+
+    await handleAutonomyStatusCommand(ctx, "thread_1", "principal_1", "org_1");
+
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("Could not reach");
   });
 });

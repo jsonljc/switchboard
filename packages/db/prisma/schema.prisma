@@ -566,6 +566,26 @@ model AlertHistory {
   @@index([organizationId, triggeredAt])
 }
 
+// ── Ads Operator Config (per-org agent configuration) ──
+
+model AdsOperatorConfig {
+  id                  String   @id @default(uuid())
+  organizationId      String
+  adAccountIds        String[]
+  platforms           String[]   // "meta", "google", "tiktok"
+  automationLevel     String     // "copilot", "supervised", "autonomous"
+  targets             Json       // { cpa?, roas?, dailyBudgetCap? }
+  schedule            Json       // { optimizerCronHour, reportCronHour, strategistCronDay?, timezone }
+  notificationChannel Json       // { type, chatId }
+  principalId         String
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([active])
+}
+
 // ── Cadence persistence (runtime state) ──
 
 model CadenceInstance {

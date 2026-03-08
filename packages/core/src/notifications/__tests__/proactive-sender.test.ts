@@ -166,5 +166,34 @@ describe("ProactiveSender", () => {
         "network down",
       );
     });
+
+    it("throws on non-2xx Telegram response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 403, statusText: "Forbidden" });
+      const sender = new ProactiveSender({ telegram: { botToken: "t" } });
+
+      await expect(sender.sendProactive("chat_1", "telegram", "test")).rejects.toThrow(
+        "Telegram API error: 403 Forbidden",
+      );
+    });
+
+    it("throws on non-2xx Slack response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: "Internal Server Error" });
+      const sender = new ProactiveSender({ slack: { botToken: "xoxb-test" } });
+
+      await expect(sender.sendProactive("C12345", "slack", "test")).rejects.toThrow(
+        "Slack API error: 500 Internal Server Error",
+      );
+    });
+
+    it("throws on non-2xx WhatsApp response", async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 401, statusText: "Unauthorized" });
+      const sender = new ProactiveSender({
+        whatsapp: { token: "wa-token", phoneNumberId: "phone_1" },
+      });
+
+      await expect(sender.sendProactive("+15551234567", "whatsapp", "test")).rejects.toThrow(
+        "WhatsApp API error: 401 Unauthorized",
+      );
+    });
   });
 });

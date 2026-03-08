@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ConversionBus } from "@switchboard/core";
 import type { CalendarProvider } from "../providers/provider.js";
 import { buildBookingUndoRecipe } from "./undo-recipes.js";
 
@@ -10,6 +11,7 @@ export async function executeBookAppointment(
   params: Record<string, unknown>,
   calendar: CalendarProvider,
   calendarId: string,
+  options?: { conversionBus?: ConversionBus; organizationId?: string },
 ): Promise<ExecuteResult> {
   const start = Date.now();
   const contactId = params.contactId as string;
@@ -47,6 +49,20 @@ export async function executeBookAppointment(
       `${serviceType} - Patient ${contactId}`,
       params.notes as string | undefined,
     );
+
+    // Emit conversion event on successful booking
+    if (options?.conversionBus && options.organizationId) {
+      options.conversionBus.emit({
+        type: "booked",
+        contactId,
+        organizationId: options.organizationId,
+        value: Number(params.conversionValue ?? 50),
+        sourceAdId: params.sourceAdId as string | undefined,
+        sourceCampaignId: params.sourceCampaignId as string | undefined,
+        timestamp: new Date(),
+        metadata: { serviceType, appointmentId: appointment.appointmentId },
+      });
+    }
 
     return {
       success: true,

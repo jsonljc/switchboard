@@ -234,4 +234,44 @@ describe("startAgentRunner", () => {
 
     cleanup();
   });
+
+  it("uses configLoader when provided to fetch configs dynamically", async () => {
+    // Set hour to 6 so agents tick
+    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+
+    const dynamicConfig = makeConfig({ id: "dynamic_1" });
+    const configLoader = vi.fn().mockResolvedValue([dynamicConfig]);
+
+    const cfg = makeRunnerConfig({
+      operatorConfigs: [], // empty static configs
+      configLoader,
+    });
+
+    const cleanup = startAgentRunner(cfg);
+
+    // Flush the immediate cycle
+    await vi.advanceTimersByTimeAsync(150);
+
+    // configLoader should have been called to fetch configs
+    expect(configLoader).toHaveBeenCalled();
+    // Agents should have ticked because configLoader returned a config
+    expect(mockTick).toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it("falls back to static operatorConfigs when configLoader is not set", async () => {
+    // Set hour to 6
+    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+
+    const cfg = makeRunnerConfig({ operatorConfigs: [makeConfig()] });
+
+    const cleanup = startAgentRunner(cfg);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Agents should tick from static config
+    expect(mockTick).toHaveBeenCalled();
+
+    cleanup();
+  });
 });

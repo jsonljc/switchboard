@@ -2,8 +2,9 @@
 // Background job startup — cron jobs, agent runner, etc.
 // ---------------------------------------------------------------------------
 
-import type { LifecycleOrchestrator } from "@switchboard/core";
+import type { LifecycleOrchestrator, ResolvedSkin } from "@switchboard/core";
 import type { StorageContext } from "@switchboard/core";
+import type { AgentNotifier } from "@switchboard/core";
 import { startApprovalExpiryJob } from "../jobs/approval-expiry.js";
 import { startChainVerificationJob } from "../jobs/chain-verification.js";
 import { startDiagnosticScanner } from "../jobs/diagnostic-scanner.js";
@@ -19,6 +20,7 @@ interface JobDeps {
   ledger: AuditLedger;
   orchestrator: LifecycleOrchestrator;
   prismaClient: import("@switchboard/db").PrismaClient | null;
+  resolvedSkin?: ResolvedSkin | null;
   logger: {
     info: (...args: unknown[]) => void;
     warn: (...args: unknown[]) => void;
@@ -27,10 +29,12 @@ interface JobDeps {
 }
 
 /**
- * Start all background jobs and return a single cleanup function.
+ * Start all background jobs and return a cleanup function + agentNotifier.
  */
-export async function startBackgroundJobs(deps: JobDeps): Promise<() => void> {
-  const { storage, ledger, orchestrator, prismaClient, logger } = deps;
+export async function startBackgroundJobs(
+  deps: JobDeps,
+): Promise<{ stop: () => void; agentNotifier: AgentNotifier }> {
+  const { storage, ledger, orchestrator, prismaClient, resolvedSkin, logger } = deps;
 
   const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger });
   const stopChainVerify = startChainVerificationJob({ ledger, logger });
@@ -78,22 +82,36 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<() => void> {
           }
         : undefined,
   });
+
+  // Build async config loader that fetches active configs from DB each cycle
+  let configLoader: (() => Promise<import("@switchboard/schemas").AdsOperatorConfig[]>) | undefined;
+  if (prismaClient) {
+    const { PrismaAdsOperatorConfigStore } = await import("@switchboard/db");
+    const configStore = new PrismaAdsOperatorConfigStore(prismaClient);
+    configLoader = () => configStore.listActive();
+  }
+
   const stopAgentRunner = startAgentRunner({
     storageContext: storage,
     orchestrator,
     notifier: agentNotifier,
+    configLoader,
+    resolvedSkin: resolvedSkin ?? null,
     intervalMs: 60_000,
     logger,
   });
 
-  return () => {
-    stopExpiryJob();
-    stopChainVerify();
-    stopDiagnosticScanner();
-    stopScheduledReports();
-    stopTokenRefresh();
-    stopTtlCleanup();
-    stopCadenceRunner();
-    stopAgentRunner();
+  return {
+    stop: () => {
+      stopExpiryJob();
+      stopChainVerify();
+      stopDiagnosticScanner();
+      stopScheduledReports();
+      stopTokenRefresh();
+      stopTtlCleanup();
+      stopCadenceRunner();
+      stopAgentRunner();
+    },
+    agentNotifier,
   };
 }
