@@ -18,6 +18,10 @@
       "digital-ads.targeting.*",
       "digital-ads.creative.generate",
       "digital-ads.creative.generate_brief",
+      "digital-ads.creative.upload",
+      "digital-ads.creative.list",
+      "digital-ads.creative.analyze",
+      "digital-ads.creative.score_assets",
       "digital-ads.report.performance",
       "digital-ads.report.creative",
       "digital-ads.signal.*",
@@ -77,6 +81,9 @@
     "welcomeMessage": "Welcome to {{businessName}}! I'm your AI ad operator. I can help you create, monitor, and optimize your ad campaigns.\n\nType 'help' to see everything I can do, or just tell me what you need!"
   },
 
+  "funnelMode": "lead_gen",
+  "funnelModeHint": "auto-detect from onboarding: ask 'Do customers contact you before buying?' → lead_gen, otherwise → conversions",
+
   "playbooks": [],
 
   "requiredCartridges": ["digital-ads", "crm"],
@@ -84,6 +91,12 @@
   "channels": {
     "primary": "telegram",
     "enabled": ["telegram", "whatsapp"]
+  },
+
+  "conversionValueMap": {
+    "inquiry": 0,
+    "qualified": 5,
+    "converted": 50
   },
 
   "config": {

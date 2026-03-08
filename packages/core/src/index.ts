@@ -314,11 +314,18 @@ export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
 export { matchGlob, matchesAny } from "./tool-registry/index.js";
 
 // Agents (autonomous ads operator layer)
-export { OptimizerAgent, ReporterAgent, StrategistAgent, MonitorAgent } from "./agents/index.js";
+export {
+  OptimizerAgent,
+  ReporterAgent,
+  StrategistAgent,
+  MonitorAgent,
+  GuardrailAgent,
+} from "./agents/index.js";
 export {
   DEFAULT_ALERT_CONDITIONS,
   DEFAULT_ALERT_TEMPLATES,
   buildDefaultAlertRules,
+  DEFAULT_GUARDRAIL_RULES,
   ProgressiveAutonomyController,
   DEFAULT_AUTONOMY_THRESHOLDS,
 } from "./agents/index.js";
@@ -332,6 +339,9 @@ export type {
   AlertRuleTemplate,
   MonitorSnapshot,
   CampaignSnapshot,
+  GuardrailViolation,
+  GuardrailRule,
+  CampaignGuardrailData,
   AutonomyThresholds,
   AutonomyAssessment,
   CompetenceSnapshot,

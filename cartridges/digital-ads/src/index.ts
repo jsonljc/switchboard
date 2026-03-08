@@ -318,6 +318,25 @@ export type {
 } from "./creative/creative-analyzer.js";
 export type { RotationPlan, AdPerformance } from "./creative/rotation-engine.js";
 
+// Creative — Ad copy generation + asset management
+export { AdCopyGenerator } from "./creative/copy-generator.js";
+export type {
+  BusinessContext,
+  CampaignContext,
+  AdCopyPackage,
+  HeadlineOption,
+  PrimaryTextOption,
+  MetaCTA,
+  AdFormat,
+  CopyGeneratorConfig,
+} from "./creative/copy-generator.js";
+export { CreativeAssetRegistry } from "./creative/asset-handler.js";
+export type {
+  CreativeAsset,
+  AssetSelectionCriteria,
+  AssetMatch,
+} from "./creative/asset-handler.js";
+
 // A/B Testing (Meta Studies)
 export { MetaStudiesClient } from "./ab-testing/meta-studies-client.js";
 export type { AdStudy, CreateStudyParams } from "./ab-testing/meta-studies-client.js";

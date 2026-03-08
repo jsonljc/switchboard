@@ -80,6 +80,17 @@ export const SkinChannelsSchema = z.object({
 });
 export type SkinChannels = z.infer<typeof SkinChannelsSchema>;
 
+export const SkinCampaignTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  service: z.string(),
+  objective: z.enum(["awareness", "traffic", "leads", "conversions", "engagement"]),
+  suggestedDailyBudget: z.number().nonnegative().optional(),
+  targetingHints: z.array(z.string()).optional(),
+  creativeAngles: z.array(z.string()).optional(),
+});
+export type SkinCampaignTemplate = z.infer<typeof SkinCampaignTemplateSchema>;
+
 export const SkinManifestSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -92,12 +103,20 @@ export const SkinManifestSchema = z.object({
 
   /** Funnel mode: determines ad optimization strategy. */
   funnelMode: z.enum(["lead_gen", "conversions", "awareness"]).optional(),
-  /** Channel for lead responses (e.g. "telegram" for speed-to-lead). */
-  leadChannel: z.enum(["telegram", "whatsapp", "slack"]).optional(),
+  /** Hint for auto-detecting funnel mode during onboarding. */
+  funnelModeHint: z.string().optional(),
+  /** Channel for lead responses (null = no speed-to-lead). */
+  leadChannel: z.enum(["telegram", "whatsapp", "slack"]).nullable().optional(),
 
   playbooks: z.array(SkinPlaybookSchema).optional(),
   requiredCartridges: z.array(z.string()).min(1),
   channels: SkinChannelsSchema.optional(),
+
+  /** Pre-built campaign templates for common services. */
+  campaignTemplates: z.array(SkinCampaignTemplateSchema).optional(),
+  /** Conversion event → dollar value mapping ("dynamic" for ROAS-based). */
+  conversionValueMap: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
+
   /** Arbitrary skin-specific configuration (e.g. bannedPhrases, bookingUrl). */
   config: z.record(z.string(), z.unknown()).optional(),
 });

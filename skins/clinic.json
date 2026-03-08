@@ -19,12 +19,19 @@
       "digital-ads.targeting.*",
       "digital-ads.creative.generate",
       "digital-ads.creative.generate_brief",
+      "digital-ads.creative.upload",
+      "digital-ads.creative.list",
+      "digital-ads.creative.analyze",
+      "digital-ads.creative.score_assets",
       "digital-ads.report.performance",
       "digital-ads.report.creative",
       "digital-ads.signal.*",
       "digital-ads.pacing.check",
       "digital-ads.alert.anomaly_scan",
       "digital-ads.alert.budget_forecast",
+      "digital-ads.memory.*",
+      "digital-ads.compliance.review_status",
+      "digital-ads.compliance.audit",
       "crm.*"
     ],
     "exclude": [
@@ -171,6 +178,43 @@
   "channels": {
     "primary": "telegram",
     "enabled": ["telegram", "whatsapp", "instagram", "messenger"]
+  },
+
+  "campaignTemplates": [
+    {
+      "id": "teeth-whitening-leads",
+      "name": "Teeth Whitening — Lead Gen",
+      "service": "Teeth Whitening",
+      "objective": "leads",
+      "suggestedDailyBudget": 15,
+      "targetingHints": ["cosmetic dentistry interest", "25-54 age range", "10mi radius"],
+      "creativeAngles": ["confidence boost", "professional results", "limited-time offer"]
+    },
+    {
+      "id": "general-dentistry-awareness",
+      "name": "General Dentistry — New Patients",
+      "service": "General Dentistry",
+      "objective": "leads",
+      "suggestedDailyBudget": 10,
+      "targetingHints": ["dental care interest", "families", "10mi radius"],
+      "creativeAngles": ["family-friendly", "modern facilities", "gentle care"]
+    },
+    {
+      "id": "emergency-dental",
+      "name": "Emergency Dental — Urgent Leads",
+      "service": "Emergency Dental",
+      "objective": "leads",
+      "suggestedDailyBudget": 20,
+      "targetingHints": ["dental emergency", "toothache", "5mi radius"],
+      "creativeAngles": ["same-day availability", "pain relief", "no wait"]
+    }
+  ],
+
+  "conversionValueMap": {
+    "inquiry": 0,
+    "qualified": 5,
+    "booked": 50,
+    "completed": 280
   },
 
   "config": {
