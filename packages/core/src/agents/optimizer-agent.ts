@@ -89,10 +89,7 @@ export class OptimizerAgent implements AdsAgent {
     let denied = 0;
 
     for (const adj of adjustments) {
-      const actionType =
-        adj.action === "decrease_budget"
-          ? "digital-ads.campaign.updateBudget"
-          : "digital-ads.campaign.updateBudget";
+      const actionType = "digital-ads.campaign.updateBudget";
 
       try {
         const proposeResult = await orchestrator.resolveAndPropose({

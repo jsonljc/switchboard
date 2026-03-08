@@ -147,8 +147,17 @@ export {
   buildApprovalNotification,
   EmailApprovalNotifier,
   WebhookApprovalNotifier,
+  TelegramApprovalNotifier,
+  SlackApprovalNotifier,
+  WhatsAppApprovalNotifier,
+  ProactiveSender,
 } from "./notifications/index.js";
-export type { ApprovalNotifier, ApprovalNotification } from "./notifications/index.js";
+export type {
+  ApprovalNotifier,
+  ApprovalNotification,
+  WhatsAppNotifierConfig,
+  ChannelCredentials,
+} from "./notifications/index.js";
 
 // Guardrail State Store
 export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";
@@ -222,6 +231,9 @@ export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-w
 // Pagination
 export { paginationParams, paginate } from "./utils/pagination.js";
 export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";
+
+// Nested value traversal
+export { getNestedValue } from "./utils/nested-value.js";
 
 // Cross-Cartridge Enrichment
 export { DefaultCrossCartridgeEnricher, DEFAULT_ENRICHMENT_MAPPINGS } from "./enrichment/index.js";
@@ -302,5 +314,5 @@ export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
 export { matchGlob, matchesAny } from "./tool-registry/index.js";
 
 // Agents (autonomous ads operator layer)
-export { OptimizerAgent, ReporterAgent } from "./agents/index.js";
+export { OptimizerAgent, ReporterAgent, StrategistAgent } from "./agents/index.js";
 export type { AdsAgent, AgentContext, AgentTickResult, AgentNotifier } from "./agents/index.js";
