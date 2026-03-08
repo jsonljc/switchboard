@@ -22,6 +22,7 @@ function createMockContext(): HandlerContext {
     failedMessageStore: null,
     humanizer: {} as ResponseHumanizer,
     operatorState: { active: true, automationLevel: "supervised" },
+    apiBaseUrl: null,
     composeResponse: vi.fn(),
     sendFilteredReply: vi.fn(),
     filterCardText: vi.fn((card) => card),
@@ -86,7 +87,7 @@ describe("handlePauseCommand", () => {
   });
 
   it("pauses and acknowledges", async () => {
-    await handlePauseCommand(ctx, "thread_1", "principal_1");
+    await handlePauseCommand(ctx, "thread_1", "principal_1", "org_1");
 
     expect(ctx.operatorState.active).toBe(false);
     const reply = getReplyText(ctx);
@@ -97,7 +98,7 @@ describe("handlePauseCommand", () => {
   it("reports already paused when already inactive", async () => {
     ctx.operatorState.active = false;
 
-    await handlePauseCommand(ctx, "thread_1", "principal_1");
+    await handlePauseCommand(ctx, "thread_1", "principal_1", "org_1");
 
     expect(ctx.operatorState.active).toBe(false);
     const reply = getReplyText(ctx);
@@ -115,7 +116,7 @@ describe("handleResumeCommand", () => {
   it("resumes and acknowledges", async () => {
     ctx.operatorState.active = false;
 
-    await handleResumeCommand(ctx, "thread_1", "principal_1");
+    await handleResumeCommand(ctx, "thread_1", "principal_1", "org_1");
 
     expect(ctx.operatorState.active).toBe(true);
     const reply = getReplyText(ctx);
@@ -123,7 +124,7 @@ describe("handleResumeCommand", () => {
   });
 
   it("reports already running when already active", async () => {
-    await handleResumeCommand(ctx, "thread_1", "principal_1");
+    await handleResumeCommand(ctx, "thread_1", "principal_1", "org_1");
 
     expect(ctx.operatorState.active).toBe(true);
     const reply = getReplyText(ctx);
@@ -139,7 +140,7 @@ describe("handleAutonomyCommand", () => {
   });
 
   it("shows current level and options when no level provided", async () => {
-    await handleAutonomyCommand(ctx, "thread_1", "principal_1");
+    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "org_1");
 
     const reply = getReplyText(ctx);
     expect(reply).toContain("Current level: supervised");
@@ -148,7 +149,7 @@ describe("handleAutonomyCommand", () => {
   });
 
   it("updates automation level on valid input", async () => {
-    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "autonomous");
+    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "org_1", "autonomous");
 
     expect(ctx.operatorState.automationLevel).toBe("autonomous");
     const reply = getReplyText(ctx);
@@ -157,7 +158,7 @@ describe("handleAutonomyCommand", () => {
   });
 
   it("rejects invalid level", async () => {
-    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "invalid");
+    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "org_1", "invalid");
 
     expect(ctx.operatorState.automationLevel).toBe("supervised"); // unchanged
     const reply = getReplyText(ctx);
@@ -165,7 +166,7 @@ describe("handleAutonomyCommand", () => {
   });
 
   it("normalizes case", async () => {
-    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "COPILOT");
+    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "org_1", "COPILOT");
 
     expect(ctx.operatorState.automationLevel).toBe("copilot");
     const reply = getReplyText(ctx);

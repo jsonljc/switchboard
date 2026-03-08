@@ -1,8 +1,35 @@
 // ---------------------------------------------------------------------------
 // Cockpit Commands — agent management handlers (status, pause, resume, autonomy)
 // ---------------------------------------------------------------------------
+// These commands are intercepted before the LLM interpreter so they execute
+// deterministically. When SWITCHBOARD_API_URL is configured, changes are
+// persisted to the API server (which the agent-runner reads each cycle).
+// ---------------------------------------------------------------------------
 
 import type { HandlerContext } from "./handler-context.js";
+
+/**
+ * Persist an operator config update via the API server.
+ * Falls back silently if apiBaseUrl is not set (dev mode).
+ */
+async function persistConfigUpdate(
+  ctx: HandlerContext,
+  organizationId: string | null,
+  updates: Record<string, unknown>,
+): Promise<boolean> {
+  if (!ctx.apiBaseUrl || !organizationId) return false;
+
+  try {
+    const res = await fetch(`${ctx.apiBaseUrl}/api/operator-config/${organizationId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Handle /status command — shows current operator state and available commands.
@@ -11,14 +38,33 @@ export async function handleStatusCommand(
   ctx: HandlerContext,
   threadId: string,
   _principalId: string,
-  _organizationId: string | null,
+  organizationId: string | null,
 ): Promise<void> {
   const { active, automationLevel } = ctx.operatorState;
 
+  // Try to fetch live config from API if available
+  if (ctx.apiBaseUrl && organizationId) {
+    try {
+      const res = await fetch(`${ctx.apiBaseUrl}/api/operator-config/${organizationId}`);
+      if (res.ok) {
+        const data = (await res.json()) as {
+          config?: { active?: boolean; automationLevel?: string };
+        };
+        if (data.config) {
+          ctx.operatorState.active = data.config.active ?? active;
+          ctx.operatorState.automationLevel =
+            (data.config.automationLevel as typeof automationLevel) ?? automationLevel;
+        }
+      }
+    } catch {
+      // Use in-memory state as fallback
+    }
+  }
+
   const lines: string[] = ["Agent Status"];
   lines.push("");
-  lines.push(`Status: ${active ? "Active" : "Paused"}`);
-  lines.push(`Automation: ${automationLevel}`);
+  lines.push(`Status: ${ctx.operatorState.active ? "Active" : "Paused"}`);
+  lines.push(`Automation: ${ctx.operatorState.automationLevel}`);
   lines.push("Agents: Optimizer, Reporter, Monitor, Strategist, Guardrail");
   lines.push("");
   lines.push("Commands:");
@@ -36,6 +82,7 @@ export async function handlePauseCommand(
   ctx: HandlerContext,
   threadId: string,
   _principalId: string,
+  organizationId: string | null,
 ): Promise<void> {
   if (!ctx.operatorState.active) {
     await ctx.sendFilteredReply(threadId, "Agents are already paused.\n\nUse /resume to restart.");
@@ -43,6 +90,7 @@ export async function handlePauseCommand(
   }
 
   ctx.operatorState.active = false;
+  await persistConfigUpdate(ctx, organizationId, { active: false });
 
   await ctx.sendFilteredReply(
     threadId,
@@ -57,6 +105,7 @@ export async function handleResumeCommand(
   ctx: HandlerContext,
   threadId: string,
   _principalId: string,
+  organizationId: string | null,
 ): Promise<void> {
   if (ctx.operatorState.active) {
     await ctx.sendFilteredReply(threadId, "Agents are already running.");
@@ -64,6 +113,7 @@ export async function handleResumeCommand(
   }
 
   ctx.operatorState.active = true;
+  await persistConfigUpdate(ctx, organizationId, { active: true });
 
   await ctx.sendFilteredReply(
     threadId,
@@ -78,6 +128,7 @@ export async function handleAutonomyCommand(
   ctx: HandlerContext,
   threadId: string,
   _principalId: string,
+  organizationId: string | null,
   level?: string,
 ): Promise<void> {
   const validLevels = ["copilot", "supervised", "autonomous"] as const;
@@ -109,7 +160,9 @@ export async function handleAutonomyCommand(
     return;
   }
 
-  ctx.operatorState.automationLevel = normalized as (typeof validLevels)[number];
+  const newLevel = normalized as (typeof validLevels)[number];
+  ctx.operatorState.automationLevel = newLevel;
+  await persistConfigUpdate(ctx, organizationId, { automationLevel: newLevel });
 
   const descriptions: Record<string, string> = {
     copilot: "All actions will require your approval via Telegram.",

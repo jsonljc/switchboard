@@ -26,6 +26,7 @@ import type {
   ResolvedSkin,
   ResolvedProfile,
   DataFlowExecutor,
+  ConversionBus,
 } from "@switchboard/core";
 import { inferCartridgeId, matchesAny } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
@@ -81,6 +82,8 @@ export interface ChatRuntimeConfig {
   isLeadBot?: boolean;
   /** ConversationRouter for lead bot message handling (required when isLeadBot = true). */
   leadRouter?: ConversationRouter | null;
+  /** Optional ConversionBus for emitting conversion events (CRM → ads feedback loop). */
+  conversionBus?: ConversionBus | null;
 }
 
 export class ChatRuntime {
@@ -102,6 +105,7 @@ export class ChatRuntime {
   private dataFlowExecutor: DataFlowExecutor | null;
   private isLeadBot: boolean;
   private leadRouter: ConversationRouter | null;
+  private conversionBus: ConversionBus | null;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
@@ -132,6 +136,7 @@ export class ChatRuntime {
     this.dataFlowExecutor = config.dataFlowExecutor ?? null;
     this.isLeadBot = config.isLeadBot ?? false;
     this.leadRouter = config.leadRouter ?? null;
+    this.conversionBus = config.conversionBus ?? null;
 
     // Initialize banned phrase filter from skin config
     const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
@@ -317,6 +322,7 @@ export class ChatRuntime {
       failedMessageStore: this.failedMessageStore,
       humanizer: this.humanizer,
       operatorState: this.operatorState,
+      apiBaseUrl: process.env["SWITCHBOARD_API_URL"] ?? null,
       composeResponse: (ctx, orgId) => this.composeResponse(ctx, orgId),
       sendFilteredReply: (tid, txt) => this.sendFilteredReply(tid, txt),
       filterCardText: (card) => this.filterCardText(card),
@@ -387,6 +393,20 @@ export class ChatRuntime {
               body: `Created from ${message.channel} conversation`,
               contactIds: [contact.id],
             });
+
+            // Emit inquiry conversion event for ad attribution feedback
+            if (this.conversionBus && message.organizationId) {
+              this.conversionBus.emit({
+                type: "inquiry",
+                contactId: contact.id,
+                organizationId: message.organizationId,
+                value: 1,
+                sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
+                sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
+                timestamp: new Date(),
+                metadata: { channel: message.channel, source: "chat_auto_create" },
+              });
+            }
           }
         } catch {
           // Non-critical — continue without CRM link
@@ -442,18 +462,24 @@ export class ChatRuntime {
     }
 
     if (/^\/?pause$/i.test(trimmedText)) {
-      await handlePauseCommand(ctx, threadId, message.principalId);
+      await handlePauseCommand(ctx, threadId, message.principalId, message.organizationId);
       return;
     }
 
     if (/^\/?resume$/i.test(trimmedText)) {
-      await handleResumeCommand(ctx, threadId, message.principalId);
+      await handleResumeCommand(ctx, threadId, message.principalId, message.organizationId);
       return;
     }
 
     const autonomyMatch = trimmedText.match(/^\/?autonomy(?:\s+(.+))?$/i);
     if (autonomyMatch) {
-      await handleAutonomyCommand(ctx, threadId, message.principalId, autonomyMatch[1]);
+      await handleAutonomyCommand(
+        ctx,
+        threadId,
+        message.principalId,
+        message.organizationId,
+        autonomyMatch[1],
+      );
       return;
     }
 

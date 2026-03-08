@@ -26,6 +26,8 @@ export interface HandlerContext {
   failedMessageStore: FailedMessageStore | null;
   humanizer: ResponseHumanizer;
   operatorState: OperatorState;
+  /** API server base URL for persisting config changes (e.g. "http://localhost:3000"). */
+  apiBaseUrl: string | null;
 
   /** Compose a user-facing response (LLM or template fallback). */
   composeResponse(context: ResponseContext, orgId?: string): Promise<GeneratedResponse>;
