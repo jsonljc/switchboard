@@ -8,7 +8,7 @@ import {
 import type { HandlerContext } from "../handlers/handler-context.js";
 import type { ChannelAdapter } from "../adapters/adapter.js";
 import type { ResponseHumanizer } from "../composer/humanize.js";
-import type { RuntimeOrchestrator, StorageContext } from "@switchboard/core";
+import type { RuntimeOrchestrator } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Mock HandlerContext factory
@@ -21,6 +21,7 @@ function createMockContext(): HandlerContext {
     storage: null,
     failedMessageStore: null,
     humanizer: {} as ResponseHumanizer,
+    operatorState: { active: true, automationLevel: "supervised" },
     composeResponse: vi.fn(),
     sendFilteredReply: vi.fn(),
     filterCardText: vi.fn((card) => card),
@@ -48,31 +49,32 @@ describe("handleStatusCommand", () => {
     ctx = createMockContext();
   });
 
-  it("shows status with available commands", async () => {
-    ctx.storage = {} as unknown as StorageContext;
-
+  it("shows current status and automation level", async () => {
     await handleStatusCommand(ctx, "thread_1", "principal_1", null);
 
     const reply = getReplyText(ctx);
     expect(reply).toContain("Agent Status");
+    expect(reply).toContain("Active");
+    expect(reply).toContain("supervised");
     expect(reply).toContain("Commands:");
   });
 
-  it("shows setup message when storage is null", async () => {
-    await handleStatusCommand(ctx, "thread_1", "principal_1", null);
+  it("shows paused status when operator is paused", async () => {
+    ctx.operatorState.active = false;
+
+    await handleStatusCommand(ctx, "thread_1", "principal_1", "org_1");
 
     const reply = getReplyText(ctx);
-    expect(reply).toContain("No agent configuration found");
+    expect(reply).toContain("Paused");
   });
 
-  it("shows agent list when storage exists", async () => {
-    ctx.storage = {} as unknown as StorageContext;
-
+  it("lists all agents", async () => {
     await handleStatusCommand(ctx, "thread_1", "principal_1", "org_1");
 
     const reply = getReplyText(ctx);
     expect(reply).toContain("Optimizer");
     expect(reply).toContain("Reporter");
+    expect(reply).toContain("Guardrail");
   });
 });
 
@@ -83,12 +85,23 @@ describe("handlePauseCommand", () => {
     ctx = createMockContext();
   });
 
-  it("acknowledges pause", async () => {
+  it("pauses and acknowledges", async () => {
     await handlePauseCommand(ctx, "thread_1", "principal_1");
 
+    expect(ctx.operatorState.active).toBe(false);
     const reply = getReplyText(ctx);
     expect(reply.toLowerCase()).toContain("paused");
     expect(reply).toContain("/resume");
+  });
+
+  it("reports already paused when already inactive", async () => {
+    ctx.operatorState.active = false;
+
+    await handlePauseCommand(ctx, "thread_1", "principal_1");
+
+    expect(ctx.operatorState.active).toBe(false);
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("already paused");
   });
 });
 
@@ -99,11 +112,22 @@ describe("handleResumeCommand", () => {
     ctx = createMockContext();
   });
 
-  it("acknowledges resume", async () => {
+  it("resumes and acknowledges", async () => {
+    ctx.operatorState.active = false;
+
     await handleResumeCommand(ctx, "thread_1", "principal_1");
 
+    expect(ctx.operatorState.active).toBe(true);
     const reply = getReplyText(ctx);
     expect(reply.toLowerCase()).toContain("resumed");
+  });
+
+  it("reports already running when already active", async () => {
+    await handleResumeCommand(ctx, "thread_1", "principal_1");
+
+    expect(ctx.operatorState.active).toBe(true);
+    const reply = getReplyText(ctx);
+    expect(reply).toContain("already running");
   });
 });
 
@@ -114,25 +138,28 @@ describe("handleAutonomyCommand", () => {
     ctx = createMockContext();
   });
 
-  it("shows options when no level provided", async () => {
+  it("shows current level and options when no level provided", async () => {
     await handleAutonomyCommand(ctx, "thread_1", "principal_1");
 
     const reply = getReplyText(ctx);
+    expect(reply).toContain("Current level: supervised");
     expect(reply).toContain("copilot");
-    expect(reply).toContain("supervised");
     expect(reply).toContain("autonomous");
   });
 
-  it("accepts valid level", async () => {
-    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "supervised");
+  it("updates automation level on valid input", async () => {
+    await handleAutonomyCommand(ctx, "thread_1", "principal_1", "autonomous");
 
+    expect(ctx.operatorState.automationLevel).toBe("autonomous");
     const reply = getReplyText(ctx);
-    expect(reply).toContain("supervised");
+    expect(reply).toContain("autonomous");
+    expect(reply).toContain("auto-execute");
   });
 
   it("rejects invalid level", async () => {
     await handleAutonomyCommand(ctx, "thread_1", "principal_1", "invalid");
 
+    expect(ctx.operatorState.automationLevel).toBe("supervised"); // unchanged
     const reply = getReplyText(ctx);
     expect(reply).toContain("Invalid level");
   });
@@ -140,6 +167,7 @@ describe("handleAutonomyCommand", () => {
   it("normalizes case", async () => {
     await handleAutonomyCommand(ctx, "thread_1", "principal_1", "COPILOT");
 
+    expect(ctx.operatorState.automationLevel).toBe("copilot");
     const reply = getReplyText(ctx);
     expect(reply).toContain("copilot");
   });

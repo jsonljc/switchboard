@@ -5,7 +5,7 @@
 import type { HandlerContext } from "./handler-context.js";
 
 /**
- * Handle /status command — shows agent status and last-run info.
+ * Handle /status command — shows current operator state and available commands.
  */
 export async function handleStatusCommand(
   ctx: HandlerContext,
@@ -13,24 +13,13 @@ export async function handleStatusCommand(
   _principalId: string,
   _organizationId: string | null,
 ): Promise<void> {
-  // Query storage for operator config if available
-  // Format: automation level, active agents, last tick times
-  // Fall back to a sensible default if no config found
+  const { active, automationLevel } = ctx.operatorState;
 
   const lines: string[] = ["Agent Status"];
   lines.push("");
-
-  if (!ctx.storage) {
-    lines.push("No agent configuration found.");
-    lines.push("Use the dashboard to configure your AI operator.");
-    await ctx.sendFilteredReply(threadId, lines.join("\n"));
-    return;
-  }
-
-  // Try to load operator config from storage
-  // For now, show a status card with available info
+  lines.push(`Status: ${active ? "Active" : "Paused"}`);
+  lines.push(`Automation: ${automationLevel}`);
   lines.push("Agents: Optimizer, Reporter, Monitor, Strategist, Guardrail");
-  lines.push("Mode: supervised (default)");
   lines.push("");
   lines.push("Commands:");
   lines.push("/pause — Pause all agents");
@@ -48,8 +37,13 @@ export async function handlePauseCommand(
   threadId: string,
   _principalId: string,
 ): Promise<void> {
-  // In a full implementation, this would update the AdsOperatorConfig.active = false
-  // For now, acknowledge the command
+  if (!ctx.operatorState.active) {
+    await ctx.sendFilteredReply(threadId, "Agents are already paused.\n\nUse /resume to restart.");
+    return;
+  }
+
+  ctx.operatorState.active = false;
+
   await ctx.sendFilteredReply(
     threadId,
     "Agent operations paused. All scheduled optimization and monitoring is suspended.\n\nUse /resume to restart.",
@@ -64,6 +58,13 @@ export async function handleResumeCommand(
   threadId: string,
   _principalId: string,
 ): Promise<void> {
+  if (ctx.operatorState.active) {
+    await ctx.sendFilteredReply(threadId, "Agents are already running.");
+    return;
+  }
+
+  ctx.operatorState.active = true;
+
   await ctx.sendFilteredReply(
     threadId,
     "Agent operations resumed. Optimizer and Monitor will run on schedule.",
@@ -79,11 +80,13 @@ export async function handleAutonomyCommand(
   _principalId: string,
   level?: string,
 ): Promise<void> {
-  const validLevels = ["copilot", "supervised", "autonomous"];
+  const validLevels = ["copilot", "supervised", "autonomous"] as const;
 
   if (!level) {
-    // Show current level and explain options
+    const { automationLevel } = ctx.operatorState;
     const lines: string[] = [
+      `Current level: ${automationLevel}`,
+      "",
       "Automation Levels:",
       "",
       "copilot — All actions require your approval",
@@ -98,7 +101,7 @@ export async function handleAutonomyCommand(
   }
 
   const normalized = level.trim().toLowerCase();
-  if (!validLevels.includes(normalized)) {
+  if (!validLevels.includes(normalized as (typeof validLevels)[number])) {
     await ctx.sendFilteredReply(
       threadId,
       `Invalid level "${level}". Choose: copilot, supervised, or autonomous.`,
@@ -106,7 +109,8 @@ export async function handleAutonomyCommand(
     return;
   }
 
-  // In full implementation: update AdsOperatorConfig.automationLevel
+  ctx.operatorState.automationLevel = normalized as (typeof validLevels)[number];
+
   const descriptions: Record<string, string> = {
     copilot: "All actions will require your approval via Telegram.",
     supervised:

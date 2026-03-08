@@ -36,6 +36,7 @@ import type { ConversationRouter } from "@switchboard/customer-engagement";
 
 // Extracted handlers
 import type { HandlerContext } from "./handlers/handler-context.js";
+import type { OperatorState } from "./handlers/handler-context.js";
 import { handleProposeResult, handlePlanResult } from "./handlers/proposal-handler.js";
 import { handleUndo, handleKillSwitch } from "./handlers/system-commands.js";
 import { handleCallbackQuery, extractCallbackQueryId } from "./handlers/callback-handler.js";
@@ -107,6 +108,8 @@ export class ChatRuntime {
   private lastExecutedEnvelopeFallback = new Map<string, string>();
   // Per-principal proposal rate limiting (defense against compute DoS via denied proposals)
   private proposalCounts = new Map<string, { count: number; windowStart: number }>();
+  // Mutable operator state for cockpit commands (in-memory; DB-backed in production)
+  private operatorState: OperatorState = { active: true, automationLevel: "supervised" };
   private static readonly PROPOSAL_RATE_LIMIT = 30;
   private static readonly PROPOSAL_RATE_WINDOW_MS = 60_000;
 
@@ -313,6 +316,7 @@ export class ChatRuntime {
       storage: this.storage,
       failedMessageStore: this.failedMessageStore,
       humanizer: this.humanizer,
+      operatorState: this.operatorState,
       composeResponse: (ctx, orgId) => this.composeResponse(ctx, orgId),
       sendFilteredReply: (tid, txt) => this.sendFilteredReply(tid, txt),
       filterCardText: (card) => this.filterCardText(card),

@@ -14,7 +14,7 @@ export async function GET() {
       return NextResponse.json({ error: "Operator config not found" }, { status: 404 });
     }
 
-    return NextResponse.json(config);
+    return NextResponse.json({ config });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     configStore.set(session.organizationId, config);
 
-    return NextResponse.json(config, { status: 201 });
+    return NextResponse.json({ config }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
@@ -79,7 +79,7 @@ export async function PUT(request: NextRequest) {
 
     configStore.set(session.organizationId, updated);
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ config: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(

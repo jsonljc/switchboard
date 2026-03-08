@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, ShieldCheck, Activity, Settings } from "lucide-react";
+import { LayoutDashboard, Users, ShieldCheck, Activity, Bot, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useOrgConfig } from "@/hooks/use-org-config";
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/team", label: "AI Team", icon: Users },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/agents", label: "AI Agents", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
