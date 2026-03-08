@@ -12,11 +12,11 @@ export const AGENT_ICONS: Record<string, LucideIcon> = {
 };
 
 export const AGENT_ROLE_LABELS: Record<string, string> = {
-  strategist: "Campaign Strategist",
-  monitor: "Performance Monitor",
-  responder: "Lead Responder",
-  optimizer: "Bid Optimizer",
-  booker: "Appointment Booker",
-  guardian: "Compliance Guardian",
-  primary_operator: "Growth Operator",
+  strategist: "Strategist",
+  monitor: "Monitor",
+  responder: "Responder",
+  optimizer: "Optimizer",
+  booker: "Booker",
+  guardian: "Guardian",
+  primary_operator: "Operator",
 };

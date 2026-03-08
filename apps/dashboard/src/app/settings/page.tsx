@@ -2,11 +2,11 @@
 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { SpendLimitsForm } from "@/components/settings/spend-limits-form";
 import { ForbiddenList } from "@/components/settings/forbidden-list";
 import { GovernanceMode } from "@/components/settings/governance-mode";
 import { ChannelManagement } from "@/components/settings/channel-management";
+import { ConnectionsList } from "@/components/settings/connections-list";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,7 @@ import { useAgentRoster, useUpdateAgentRoster } from "@/hooks/use-agents";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
 export default function SettingsPage() {
@@ -119,7 +119,6 @@ export default function SettingsPage() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="boundaries">Boundaries</TabsTrigger>
           <TabsTrigger value="connections">Connections</TabsTrigger>
-          <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 mt-4">
@@ -184,23 +183,8 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="connections" className="space-y-6 mt-4">
+          <ConnectionsList />
           <ChannelManagement />
-        </TabsContent>
-
-        <TabsContent value="advanced" className="mt-4">
-          <Link href="/settings/advanced">
-            <Card className="hover:border-primary/30 transition-colors cursor-pointer">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Advanced Settings</p>
-                  <p className="text-xs text-muted-foreground">
-                    Policies, Simulate, DLQ, Competence, Cartridges, and more.
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
         </TabsContent>
       </Tabs>
     </div>
