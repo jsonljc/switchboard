@@ -5,10 +5,21 @@
 // Evaluates AdsOperatorConfig schedules and dispatches agent ticks.
 // ---------------------------------------------------------------------------
 
-import { OptimizerAgent, ReporterAgent, MonitorAgent, GuardrailAgent } from "@switchboard/core";
+import {
+  OptimizerAgent,
+  ReporterAgent,
+  MonitorAgent,
+  GuardrailAgent,
+  StrategistAgent,
+} from "@switchboard/core";
 import type { AgentNotifier, AgentContext, AdsAgent } from "@switchboard/core";
 import type { AdsOperatorConfig } from "@switchboard/schemas";
-import type { StorageContext, RuntimeOrchestrator } from "@switchboard/core";
+import type {
+  StorageContext,
+  RuntimeOrchestrator,
+  ResolvedProfile,
+  ResolvedSkin,
+} from "@switchboard/core";
 import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
 
@@ -18,6 +29,10 @@ export interface AgentRunnerConfig {
   notifier: AgentNotifier;
   /** In-memory operator configs for dev; DB-backed in production. */
   operatorConfigs?: AdsOperatorConfig[];
+  /** Resolved business profile for StrategistAgent context (optional). */
+  resolvedProfile?: ResolvedProfile | null;
+  /** Resolved skin for StrategistAgent context (optional). */
+  resolvedSkin?: ResolvedSkin | null;
   /** Interval between schedule checks (default: 60s) */
   intervalMs?: number;
   logger?: Logger;
@@ -42,6 +57,8 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
     orchestrator,
     notifier,
     operatorConfigs = [],
+    resolvedProfile = null,
+    resolvedSkin = null,
     intervalMs = 60_000,
     logger = createLogger("agent-runner"),
   } = config;
@@ -58,18 +75,22 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
     new ReporterAgent(),
     new MonitorAgent(),
     new GuardrailAgent(),
+    new StrategistAgent(),
   ];
 
   function getConfigs(): AdsOperatorConfig[] {
     return operatorConfigs.filter((c) => c.active);
   }
 
-  function isDue(agentId: string, configId: string, cronHour: number): boolean {
+  function isDue(agentId: string, configId: string, cronHour: number, cronDay?: number): boolean {
     const key = `${agentId}:${configId}`;
     const now = new Date();
     const currentHour = now.getHours();
 
     if (currentHour !== cronHour) return false;
+
+    // Weekly agents (e.g. strategist) only run on the specified day
+    if (cronDay !== undefined && now.getDay() !== cronDay) return false;
 
     const lastRun = lastRuns.get(key);
     if (!lastRun) return true;
@@ -97,19 +118,28 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
         for (const agent of agents) {
           if (stopped) break;
 
-          // Determine cron hour based on agent type
-          const cronHour =
-            agent.id === "reporter"
-              ? opConfig.schedule.reportCronHour
-              : opConfig.schedule.optimizerCronHour;
+          // Determine schedule based on agent type
+          let cronHour: number;
+          let cronDay: number | undefined;
 
-          if (!isDue(agent.id, opConfig.id, cronHour)) continue;
+          if (agent.id === "reporter" || agent.id === "monitor") {
+            cronHour = opConfig.schedule.reportCronHour;
+          } else if (agent.id === "strategist") {
+            cronHour = opConfig.schedule.reportCronHour;
+            cronDay = opConfig.schedule.strategistCronDay ?? 1; // default Monday
+          } else {
+            cronHour = opConfig.schedule.optimizerCronHour;
+          }
+
+          if (!isDue(agent.id, opConfig.id, cronHour, cronDay)) continue;
 
           const ctx: AgentContext = {
             config: opConfig,
             orchestrator: orchestrator as AgentContext["orchestrator"],
             storage: storageContext,
             notifier,
+            profile: resolvedProfile ?? undefined,
+            skin: resolvedSkin ?? undefined,
           };
 
           try {
