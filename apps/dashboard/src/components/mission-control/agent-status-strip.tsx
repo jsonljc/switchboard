@@ -40,19 +40,30 @@ export function AgentStatusStrip() {
   const roster = rosterData?.roster ?? [];
   const activeAgents = roster.filter((a) => a.status === "active");
   const stateMap = new Map(stateData?.states?.map((s) => [s.agentRosterId, s]) ?? []);
-  // Also build a role-based map from derived state
   const roleStateMap = new Map(
     stateData?.states?.map((s) => [(s as unknown as { agentRole?: string }).agentRole ?? "", s]) ??
       [],
   );
 
+  // Only show agents that are actively working (not idle)
+  const workingAgents = activeAgents.filter((agent) => {
+    const state = stateMap.get(agent.id) ?? agent.agentState;
+    const derivedState = roleStateMap.get(agent.agentRole);
+    const activityStatus =
+      (state?.activityStatus as string) ?? (derivedState?.activityStatus as string) ?? "idle";
+    return activityStatus !== "idle";
+  });
+
+  if (workingAgents.length === 0) {
+    return <p className="text-sm text-muted-foreground py-2">All specialists are idle</p>;
+  }
+
   return (
     <Link href="/team">
       <div className="flex gap-2 overflow-x-auto pb-2 cursor-pointer">
-        {activeAgents.map((agent) => {
+        {workingAgents.map((agent) => {
           const Icon = ROLE_ICONS[agent.agentRole] ?? Sparkles;
           const state = stateMap.get(agent.id) ?? agent.agentState;
-          // Fall back to role-based derived state
           const derivedState = roleStateMap.get(agent.agentRole);
           const activityStatus =
             (state?.activityStatus as string) ?? (derivedState?.activityStatus as string) ?? "idle";

@@ -9,23 +9,23 @@ import { Button } from "@/components/ui/button";
 const modes = [
   {
     value: "observe",
-    label: "Observe",
-    description: "Most permissive. AI acts freely with minimal oversight. Good for testing.",
+    label: "Observer",
+    description: "Handles everything independently.",
   },
   {
     value: "guarded",
-    label: "Guarded",
-    description: "Default mode. Normal guardrails apply, approval required for risky actions.",
+    label: "Guided",
+    description: "Asks before risky actions.",
   },
   {
     value: "strict",
-    label: "Strict",
-    description: "Elevated oversight. More actions require approval. Recommended for new setups.",
+    label: "Careful",
+    description: "More actions need approval.",
   },
   {
     value: "locked",
-    label: "Locked",
-    description: "Maximum security. All actions require approval. Use during incidents or audits.",
+    label: "Manual",
+    description: "Every action needs approval.",
   },
 ];
 
@@ -41,14 +41,10 @@ export function GovernanceMode({ currentMode, onSave, isLoading }: GovernanceMod
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Governance Profile</CardTitle>
+        <CardTitle className="text-base">Autonomy Level</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <RadioGroup
-          value={selected}
-          onValueChange={setSelected}
-          className="space-y-3"
-        >
+        <RadioGroup value={selected} onValueChange={setSelected} className="space-y-3">
           {modes.map((mode) => (
             <div
               key={mode.value}
@@ -57,9 +53,7 @@ export function GovernanceMode({ currentMode, onSave, isLoading }: GovernanceMod
               <RadioGroupItem value={mode.value} id={mode.value} className="mt-0.5" />
               <Label htmlFor={mode.value} className="cursor-pointer flex-1">
                 <span className="font-medium">{mode.label}</span>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {mode.description}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{mode.description}</p>
               </Label>
             </div>
           ))}
@@ -69,7 +63,7 @@ export function GovernanceMode({ currentMode, onSave, isLoading }: GovernanceMod
           disabled={isLoading || selected === currentMode}
           onClick={() => onSave(selected)}
         >
-          {isLoading ? "Saving..." : "Save Governance Profile"}
+          {isLoading ? "Saving..." : "Save"}
         </Button>
       </CardContent>
     </Card>

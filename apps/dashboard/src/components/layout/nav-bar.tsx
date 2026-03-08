@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, ShieldCheck, Activity, Bot, Settings } from "lucide-react";
+import { LayoutDashboard, Users, ShieldCheck, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useOrgConfig } from "@/hooks/use-org-config";
@@ -11,8 +11,6 @@ const navItems = [
   { href: "/", label: "Mission Control", icon: LayoutDashboard },
   { href: "/team", label: "AI Team", icon: Users },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
-  { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/agents", label: "AI Agents", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -24,7 +22,7 @@ export function NavBar() {
 
   return (
     <>
-      {/* Mobile bottom tab bar — 5 items fit without a "More" sheet */}
+      {/* Mobile bottom tab bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
         <div className="flex items-center justify-around h-16">
           {navItems.map((item) => {
