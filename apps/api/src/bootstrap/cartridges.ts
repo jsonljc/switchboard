@@ -9,6 +9,7 @@ import {
   DEFAULT_DIGITAL_ADS_POLICIES,
   createSnapshotCacheStore,
 } from "@switchboard/digital-ads";
+import type { MetaAdsWriteProvider } from "@switchboard/digital-ads";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import {
@@ -57,12 +58,16 @@ export async function resolveCartridgeCredentials(
   return { adsAccessToken, adsAccountId, stripeSecretKey };
 }
 
+export interface CartridgeBootstrapResult {
+  adsWriteProvider: MetaAdsWriteProvider | null;
+}
+
 export async function registerCartridges(
   storage: StorageContext,
   credentials: CartridgeCredentials,
   redis: Redis | null,
   logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void },
-): Promise<void> {
+): Promise<CartridgeBootstrapResult> {
   const isProd = process.env.NODE_ENV === "production";
 
   // Register digital-ads cartridge
@@ -74,6 +79,7 @@ export async function registerCartridges(
   });
   storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
+  const adsWriteProvider = adsCartridge.getWriteProvider();
 
   // Register payments cartridge
   const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
@@ -115,6 +121,8 @@ export async function registerCartridges(
     new GuardedCartridge(peCartridge, peInterceptors),
   );
   await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
+
+  return { adsWriteProvider };
 }
 
 export async function wireEscalationNotifier(): Promise<void> {

@@ -10,6 +10,7 @@
 
 import type { AdsAgent, AgentContext, AgentTickResult } from "./types.js";
 import type { AdsOperatorConfig } from "@switchboard/schemas";
+import { fetchAccountSnapshots } from "./shared.js";
 
 // ── Guardrail data types ──────────────────────────────────────────────────
 
@@ -215,44 +216,13 @@ export class GuardrailAgent implements AdsAgent {
 
     // ── 1. Observe — fetch campaign snapshots for each account ─────────
 
-    const allCampaigns: CampaignGuardrailData[] = [];
+    const { campaigns: rawCampaigns, actions: fetchActions } = await fetchAccountSnapshots(
+      ctx,
+      "guardrail",
+    );
+    actions.push(...fetchActions);
 
-    for (const accountId of config.adAccountIds) {
-      try {
-        const proposeResult = await orchestrator.resolveAndPropose({
-          actionType: "digital-ads.snapshot.fetch",
-          parameters: { adAccountId: accountId },
-          principalId: config.principalId,
-          cartridgeId: "digital-ads",
-          entityRefs: [],
-          message: `Agent guardrail: fetch compliance snapshot for ${accountId}`,
-          organizationId: config.organizationId,
-        });
-
-        if ("denied" in proposeResult && !proposeResult.denied && proposeResult.envelope) {
-          const execResult = await orchestrator.executeApproved(proposeResult.envelope.id);
-          if (execResult.success && execResult.data) {
-            const campaigns = execResult.data as Array<{
-              id: string;
-              name: string;
-              metrics: Record<string, number>;
-              budget: number;
-              status: string;
-            }>;
-
-            const guardrailData = this.buildGuardrailData(campaigns);
-            allCampaigns.push(...guardrailData);
-            actions.push({ actionType: "guardrail.fetch", outcome: "fetched" });
-          } else {
-            actions.push({ actionType: "guardrail.fetch", outcome: "no_data" });
-          }
-        } else {
-          actions.push({ actionType: "guardrail.fetch", outcome: "denied" });
-        }
-      } catch {
-        actions.push({ actionType: "guardrail.fetch", outcome: "error" });
-      }
-    }
+    const allCampaigns = this.buildGuardrailData(rawCampaigns);
 
     if (allCampaigns.length === 0) {
       const summary = "No campaign data available. Skipping guardrail checks.";

@@ -50,3 +50,4 @@ export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
 export { deriveAgentStates } from "./storage/agent-state-deriver.js";
 export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
+export { PrismaAdsOperatorConfigStore } from "./ads-operator-config/store.js";

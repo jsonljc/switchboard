@@ -70,7 +70,7 @@ export class ProactiveSender implements AgentNotifier {
       return;
     }
 
-    await fetch(`https://api.telegram.org/bot${creds.botToken}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${creds.botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -79,6 +79,10 @@ export class ProactiveSender implements AgentNotifier {
         parse_mode: "Markdown",
       }),
     });
+
+    if (!res.ok) {
+      throw new Error(`Telegram API error: ${res.status} ${res.statusText}`);
+    }
   }
 
   private async sendSlack(channel: string, message: string): Promise<void> {
@@ -88,7 +92,7 @@ export class ProactiveSender implements AgentNotifier {
       return;
     }
 
-    await fetch("https://slack.com/api/chat.postMessage", {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -96,6 +100,10 @@ export class ProactiveSender implements AgentNotifier {
       },
       body: JSON.stringify({ channel, text: message }),
     });
+
+    if (!res.ok) {
+      throw new Error(`Slack API error: ${res.status} ${res.statusText}`);
+    }
   }
 
   private async sendWhatsApp(to: string, message: string): Promise<void> {
@@ -105,7 +113,7 @@ export class ProactiveSender implements AgentNotifier {
       return;
     }
 
-    await fetch(`https://graph.facebook.com/v18.0/${creds.phoneNumberId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v18.0/${creds.phoneNumberId}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -118,5 +126,9 @@ export class ProactiveSender implements AgentNotifier {
         text: { body: message },
       }),
     });
+
+    if (!res.ok) {
+      throw new Error(`WhatsApp API error: ${res.status} ${res.statusText}`);
+    }
   }
 }

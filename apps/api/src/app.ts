@@ -21,6 +21,7 @@ import type {
   ApprovalNotifier,
   TierStore,
   ResolvedSkin,
+  AgentNotifier,
 } from "@switchboard/core";
 import type { Policy } from "@switchboard/schemas";
 import { SmbActivityLog, AuditLedger } from "@switchboard/core";
@@ -56,6 +57,8 @@ declare module "fastify" {
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
     resolvedSkin: ResolvedSkin | null;
+    agentNotifier: AgentNotifier | null;
+    conversionBus: import("@switchboard/core").ConversionBus | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -218,7 +221,7 @@ export async function buildServer() {
 
   // --- Resolve credentials and register cartridges ---
   const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
-  await registerCartridges(storage, credentials, redis, app.log);
+  const { adsWriteProvider } = await registerCartridges(storage, credentials, redis, app.log);
   await wireEscalationNotifier();
 
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
@@ -284,6 +287,27 @@ export async function buildServer() {
         "Skin policy overrides seeded",
       );
     }
+  }
+
+  // --- ConversionBus wiring (CRM → ads feedback loop) ---
+  const { InMemoryConversionBus } = await import("@switchboard/core");
+  const conversionBus = new InMemoryConversionBus();
+
+  if (adsWriteProvider && prismaClient) {
+    const { CAPIDispatcher, OutcomeTracker } = await import("@switchboard/digital-ads");
+    const { PrismaCrmProvider } = await import("@switchboard/db");
+
+    const dispatcher = new CAPIDispatcher({
+      adsProvider: adsWriteProvider,
+      crmProvider: new PrismaCrmProvider(prismaClient),
+      pixelId: process.env["META_PIXEL_ID"] ?? "",
+    });
+    dispatcher.register(conversionBus);
+
+    const outcomeTracker = new OutcomeTracker();
+    outcomeTracker.register(conversionBus);
+
+    app.log.info("ConversionBus wired: CAPIDispatcher + OutcomeTracker registered");
   }
 
   // --- Execution queue setup ---
@@ -363,11 +387,12 @@ export async function buildServer() {
   }
 
   // --- Start background jobs ---
-  const stopAllJobs = await startBackgroundJobs({
+  const { stop: stopAllJobs, agentNotifier } = await startBackgroundJobs({
     storage,
     ledger,
     orchestrator,
     prismaClient,
+    resolvedSkin,
     logger: app.log,
   });
 
@@ -386,6 +411,8 @@ export async function buildServer() {
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
   app.decorate("resolvedSkin", resolvedSkin);
+  app.decorate("agentNotifier", agentNotifier);
+  app.decorate("conversionBus", conversionBus);
 
   // Resource cleanup on close — order: jobs → worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {

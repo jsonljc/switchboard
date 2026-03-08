@@ -6,16 +6,21 @@
 // ---------------------------------------------------------------------------
 
 import type { AdsAgent, AgentContext, AgentTickResult } from "./types.js";
+import { fetchAccountSnapshots } from "./shared.js";
 
 export class ReporterAgent implements AdsAgent {
   readonly id = "reporter";
   readonly name = "Reporter Agent";
 
   async tick(ctx: AgentContext): Promise<AgentTickResult> {
-    const { config, orchestrator, notifier } = ctx;
+    const { config, notifier } = ctx;
     const actions: Array<{ actionType: string; outcome: string }> = [];
 
     // Fetch snapshot data for each managed account
+    const { campaigns, actions: fetchActions } = await fetchAccountSnapshots(ctx, "reporter");
+    actions.push(...fetchActions);
+
+    // Aggregate per-account summaries from the combined campaign data
     const accountSummaries: Array<{
       accountId: string;
       spend: number;
@@ -26,41 +31,10 @@ export class ReporterAgent implements AdsAgent {
       alerts: string[];
     }> = [];
 
-    for (const accountId of config.adAccountIds) {
-      try {
-        const proposeResult = await orchestrator.resolveAndPropose({
-          actionType: "digital-ads.snapshot.fetch",
-          parameters: { adAccountId: accountId },
-          principalId: config.principalId,
-          cartridgeId: "digital-ads",
-          entityRefs: [],
-          message: `Agent reporter: fetch daily snapshot for ${accountId}`,
-          organizationId: config.organizationId,
-        });
-
-        if ("denied" in proposeResult && !proposeResult.denied && proposeResult.envelope) {
-          const execResult = await orchestrator.executeApproved(proposeResult.envelope.id);
-          if (execResult.success && execResult.data) {
-            const campaigns = execResult.data as Array<{
-              id: string;
-              name: string;
-              metrics: Record<string, number>;
-              budget: number;
-              status: string;
-            }>;
-
-            const summary = this.aggregateAccountMetrics(accountId, campaigns, config.targets);
-            accountSummaries.push(summary);
-            actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "fetched" });
-          } else {
-            actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "no_data" });
-          }
-        } else {
-          actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "denied" });
-        }
-      } catch {
-        actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "error" });
-      }
+    if (campaigns.length > 0) {
+      // Group campaigns by a single aggregate since snapshot fetch returns flat list
+      const summary = this.aggregateAccountMetrics("all", campaigns, config.targets);
+      accountSummaries.push(summary);
     }
 
     // Format and send report

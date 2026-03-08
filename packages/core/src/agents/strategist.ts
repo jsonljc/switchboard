@@ -15,6 +15,7 @@ import type {
   FunnelMode,
   EstimatedMetrics,
 } from "@switchboard/schemas";
+import { fetchAccountSnapshots } from "./shared.js";
 
 export class StrategistAgent implements AdsAgent {
   readonly id = "strategist";
@@ -31,7 +32,7 @@ export class StrategistAgent implements AdsAgent {
     if (!profile) {
       const summary = "No business profile available. Cannot generate campaign plan.";
       await this.notify(ctx, summary);
-      return { agentId: this.id, actions, summary };
+      return { agentId: this.id, actions, summary, nextTickAt: this.nextWeeklyTick(config) };
     }
 
     const funnelMode: FunnelMode = (skin?.manifest.funnelMode as FunnelMode) ?? "lead_gen";
@@ -39,44 +40,11 @@ export class StrategistAgent implements AdsAgent {
     const businessName = profile.profile.business.name;
 
     // ── 2. Observe — fetch existing campaigns ──────────────────────────
-    const existingCampaigns: Array<{
-      id: string;
-      name: string;
-      metrics: Record<string, number>;
-      budget: number;
-      status: string;
-    }> = [];
-
-    for (const accountId of config.adAccountIds) {
-      try {
-        const proposeResult = await orchestrator.resolveAndPropose({
-          actionType: "digital-ads.snapshot.fetch",
-          parameters: { adAccountId: accountId },
-          principalId: config.principalId,
-          cartridgeId: "digital-ads",
-          entityRefs: [],
-          message: `Agent strategist: fetch snapshot for ${accountId}`,
-          organizationId: config.organizationId,
-        });
-
-        if ("denied" in proposeResult && !proposeResult.denied && proposeResult.envelope) {
-          const execResult = await orchestrator.executeApproved(proposeResult.envelope.id);
-          if (execResult.success && execResult.data) {
-            const snapCampaigns = execResult.data as Array<{
-              id: string;
-              name: string;
-              metrics: Record<string, number>;
-              budget: number;
-              status: string;
-            }>;
-            existingCampaigns.push(...snapCampaigns);
-          }
-        }
-        actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "observed" });
-      } catch {
-        actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "error" });
-      }
-    }
+    const { campaigns: existingCampaigns, actions: fetchActions } = await fetchAccountSnapshots(
+      ctx,
+      "strategist",
+    );
+    actions.push(...fetchActions);
 
     const hasExisting =
       existingCampaigns.filter((c) => c.status === "ACTIVE" || c.status === "active").length > 0;
@@ -135,21 +103,27 @@ export class StrategistAgent implements AdsAgent {
         actions.push({ actionType: "digital-ads.campaign.create", outcome: "denied" });
         const summary = `Campaign plan "${plan.name}" was denied by governance. ${proposeResult.explanation ?? ""}`;
         await this.notify(ctx, summary);
-        return { agentId: this.id, actions, summary };
+        return { agentId: this.id, actions, summary, nextTickAt: this.nextWeeklyTick(config) };
       }
 
       if ("approvalRequest" in proposeResult && proposeResult.approvalRequest) {
         actions.push({ actionType: "digital-ads.campaign.create", outcome: "pending_approval" });
         const summary = this.formatPlanSummary(plan, "pending_approval");
         await this.notify(ctx, summary);
-        return { agentId: this.id, actions, summary };
+        return { agentId: this.id, actions, summary, nextTickAt: this.nextWeeklyTick(config) };
       }
 
       if ("envelope" in proposeResult && proposeResult.envelope) {
-        actions.push({ actionType: "digital-ads.campaign.create", outcome: "approved" });
+        // Execute the approved plan through the orchestrator
+        try {
+          await orchestrator.executeApproved(proposeResult.envelope.id);
+          actions.push({ actionType: "digital-ads.campaign.create", outcome: "executed" });
+        } catch {
+          actions.push({ actionType: "digital-ads.campaign.create", outcome: "execution_failed" });
+        }
         const summary = this.formatPlanSummary(plan, "approved");
         await this.notify(ctx, summary);
-        return { agentId: this.id, actions, summary };
+        return { agentId: this.id, actions, summary, nextTickAt: this.nextWeeklyTick(config) };
       }
     } catch {
       actions.push({ actionType: "digital-ads.campaign.create", outcome: "error" });
@@ -157,7 +131,7 @@ export class StrategistAgent implements AdsAgent {
 
     const summary = `Campaign plan generated but could not be submitted. ${plan.campaigns.length} campaign(s) planned.`;
     await this.notify(ctx, summary);
-    return { agentId: this.id, actions, summary };
+    return { agentId: this.id, actions, summary, nextTickAt: this.nextWeeklyTick(config) };
   }
 
   // ── Budget inference ─────────────────────────────────────────────────
@@ -583,6 +557,13 @@ export class StrategistAgent implements AdsAgent {
   }
 
   // ── Notification helper ──────────────────────────────────────────────
+
+  private nextWeeklyTick(config: AgentContext["config"]): Date {
+    const next = new Date();
+    next.setDate(next.getDate() + 7);
+    next.setHours(config.schedule.reportCronHour, 0, 0, 0);
+    return next;
+  }
 
   private async notify(ctx: AgentContext, summary: string): Promise<void> {
     try {

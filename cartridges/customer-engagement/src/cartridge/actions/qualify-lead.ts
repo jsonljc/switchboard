@@ -3,10 +3,14 @@
 // ---------------------------------------------------------------------------
 
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { ConversionBus } from "@switchboard/core";
 import { computeLeadScore } from "../../core/scoring/lead-score.js";
 import type { LeadScoreInput } from "../../core/types.js";
 
-export async function executeQualifyLead(params: Record<string, unknown>): Promise<ExecuteResult> {
+export async function executeQualifyLead(
+  params: Record<string, unknown>,
+  options?: { conversionBus?: ConversionBus; organizationId?: string },
+): Promise<ExecuteResult> {
   const start = Date.now();
   const contactId = params.contactId as string;
 
@@ -25,6 +29,20 @@ export async function executeQualifyLead(params: Record<string, unknown>): Promi
 
   const result = computeLeadScore(scoreInput);
   const qualified = result.score >= 40;
+
+  // Emit conversion event when lead qualifies
+  if (qualified && options?.conversionBus && options.organizationId) {
+    options.conversionBus.emit({
+      type: "qualified",
+      contactId,
+      organizationId: options.organizationId,
+      value: 5,
+      sourceAdId: params.sourceAdId as string | undefined,
+      sourceCampaignId: params.sourceCampaignId as string | undefined,
+      timestamp: new Date(),
+      metadata: { score: result.score, tier: result.tier },
+    });
+  }
 
   return {
     success: true,

@@ -20,6 +20,8 @@ export type AdsOperatorTargets = z.infer<typeof AdsOperatorTargetsSchema>;
 export const AdsOperatorScheduleSchema = z.object({
   optimizerCronHour: z.number().int().min(0).max(23),
   reportCronHour: z.number().int().min(0).max(23),
+  /** Day of week for Strategist Agent (0=Sunday, 1=Monday, ..., 6=Saturday). Defaults to 1 (Monday). */
+  strategistCronDay: z.number().int().min(0).max(6).optional(),
   timezone: z.string(),
 });
 export type AdsOperatorSchedule = z.infer<typeof AdsOperatorScheduleSchema>;

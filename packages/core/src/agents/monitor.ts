@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AdsAgent, AgentContext, AgentTickResult } from "./types.js";
+import { fetchAccountSnapshots } from "./shared.js";
 
 // ── Alert condition types ───────────────────────────────────────────────────
 
@@ -143,47 +144,18 @@ export class MonitorAgent implements AdsAgent {
   }
 
   async tick(ctx: AgentContext): Promise<AgentTickResult> {
-    const { config, orchestrator, notifier } = ctx;
+    const { config, notifier } = ctx;
     const actions: Array<{ actionType: string; outcome: string }> = [];
     const snapshots: MonitorSnapshot[] = [];
 
     // ── 1. Fetch campaign performance for each account ──────────────
 
-    for (const accountId of config.adAccountIds) {
-      try {
-        const proposeResult = await orchestrator.resolveAndPropose({
-          actionType: "digital-ads.snapshot.fetch",
-          parameters: { adAccountId: accountId },
-          principalId: config.principalId,
-          cartridgeId: "digital-ads",
-          entityRefs: [],
-          message: `Agent monitor: fetch performance snapshot for ${accountId}`,
-          organizationId: config.organizationId,
-        });
+    const { campaigns, actions: fetchActions } = await fetchAccountSnapshots(ctx, "monitor");
+    actions.push(...fetchActions);
 
-        if ("denied" in proposeResult && !proposeResult.denied && proposeResult.envelope) {
-          const execResult = await orchestrator.executeApproved(proposeResult.envelope.id);
-          if (execResult.success && execResult.data) {
-            const campaigns = execResult.data as Array<{
-              id: string;
-              name: string;
-              metrics: Record<string, number>;
-              budget: number;
-              status: string;
-            }>;
-
-            const snapshot = this.buildSnapshot(accountId, campaigns, config.targets);
-            snapshots.push(snapshot);
-            actions.push({ actionType: "monitor.fetch", outcome: "fetched" });
-          } else {
-            actions.push({ actionType: "monitor.fetch", outcome: "no_data" });
-          }
-        } else {
-          actions.push({ actionType: "monitor.fetch", outcome: "denied" });
-        }
-      } catch {
-        actions.push({ actionType: "monitor.fetch", outcome: "error" });
-      }
+    if (campaigns.length > 0) {
+      const snapshot = this.buildSnapshot("all", campaigns, config.targets);
+      snapshots.push(snapshot);
     }
 
     // ── 2. Evaluate alert conditions ────────────────────────────────

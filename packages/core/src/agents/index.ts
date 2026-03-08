@@ -1,4 +1,6 @@
 export type { AdsAgent, AgentContext, AgentTickResult, AgentNotifier } from "./types.js";
+export { fetchAccountSnapshots } from "./shared.js";
+export type { SnapshotCampaign } from "./shared.js";
 export { OptimizerAgent } from "./optimizer-agent.js";
 export { ReporterAgent } from "./reporter-agent.js";
 export { StrategistAgent } from "./strategist.js";

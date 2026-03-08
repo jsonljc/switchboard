@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
-import { generateIntegrationGuide } from "@switchboard/core";
+import { generateIntegrationGuide, StrategistAgent } from "@switchboard/core";
+import type { AgentContext } from "@switchboard/core";
+import { PrismaAdsOperatorConfigStore } from "@switchboard/db";
 import { getConnectionStore } from "../utils/connection-store.js";
 import { createLogger } from "../logger.js";
 
@@ -565,16 +567,37 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
-      const body = request.body as { principalId?: string };
-      const principalId = body?.principalId ?? request.principalIdFromAuth ?? "system";
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
 
-      logger.info({ orgId, principalId }, "Post-onboarding handoff triggered");
+      // 1. Load AdsOperatorConfig for this org
+      const configStore = new PrismaAdsOperatorConfigStore(app.prisma);
+      const opConfig = await configStore.getByOrg(orgId);
+      if (!opConfig) {
+        return reply.code(400).send({
+          error: "No operator config found. Complete the setup wizard first.",
+          statusCode: 400,
+        });
+      }
 
-      // The handoff is a fire-and-forget operation:
-      // 1. Mark the org as handoff-triggered
-      // 2. The agent scheduler will pick up the strategist tick
-      // For now, return success immediately — actual agent execution
-      // happens asynchronously via the agent scheduler.
+      // 2. Build AgentContext and fire-and-forget strategist tick
+      const ctx: AgentContext = {
+        config: opConfig,
+        orchestrator: app.orchestrator as AgentContext["orchestrator"],
+        storage: app.storageContext,
+        notifier: app.agentNotifier ?? {
+          sendProactive: async (_chatId: string, _channelType: string, _message: string) => {},
+        },
+        skin: app.resolvedSkin ?? undefined,
+      };
+
+      const strategist = new StrategistAgent();
+      void strategist
+        .tick(ctx)
+        .catch((err) => logger.error({ err, orgId }, "Handoff strategist tick failed"));
+
+      logger.info({ orgId }, "Post-onboarding handoff triggered — strategist tick started");
 
       return reply.code(200).send({
         triggered: true,

@@ -1,4 +1,10 @@
-import type { IdentitySpec, AuditEntry, Policy, CartridgeManifest } from "@switchboard/schemas";
+import type {
+  IdentitySpec,
+  AuditEntry,
+  Policy,
+  CartridgeManifest,
+  AdsOperatorConfig,
+} from "@switchboard/schemas";
 
 export interface AgentRosterEntry {
   id: string;
@@ -753,5 +759,29 @@ export class SwitchboardClient {
         body: JSON.stringify(body ?? {}),
       },
     );
+  }
+
+  // Operator Config
+  async createOperatorConfig(data: Omit<AdsOperatorConfig, "id" | "createdAt" | "updatedAt">) {
+    return this.request<{ config: AdsOperatorConfig }>("/api/operator-config", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getOperatorConfig(orgId: string) {
+    return this.request<{ config: AdsOperatorConfig }>(`/api/operator-config/${orgId}`);
+  }
+
+  async updateOperatorConfig(
+    orgId: string,
+    updates: Partial<
+      Omit<AdsOperatorConfig, "id" | "organizationId" | "principalId" | "createdAt" | "updatedAt">
+    >,
+  ) {
+    return this.request<{ config: AdsOperatorConfig }>(`/api/operator-config/${orgId}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
   }
 }

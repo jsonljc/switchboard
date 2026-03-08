@@ -12,6 +12,12 @@ import type {
 } from "@switchboard/core";
 import type { FailedMessageStore } from "../dlq/failed-message-store.js";
 
+/** Mutable operator state tracked in-memory by ChatRuntime. */
+export interface OperatorState {
+  active: boolean;
+  automationLevel: "copilot" | "supervised" | "autonomous";
+}
+
 export interface HandlerContext {
   adapter: ChannelAdapter;
   orchestrator: RuntimeOrchestrator;
@@ -19,6 +25,9 @@ export interface HandlerContext {
   storage: StorageContext | null;
   failedMessageStore: FailedMessageStore | null;
   humanizer: ResponseHumanizer;
+  operatorState: OperatorState;
+  /** API server base URL for persisting config changes (e.g. "http://localhost:3000"). */
+  apiBaseUrl: string | null;
 
   /** Compose a user-facing response (LLM or template fallback). */
   composeResponse(context: ResponseContext, orgId?: string): Promise<GeneratedResponse>;

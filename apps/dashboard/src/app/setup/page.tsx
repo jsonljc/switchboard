@@ -6,40 +6,31 @@ import { redirect, useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { WizardShell } from "@/components/onboarding/wizard-shell";
 import { StepBusinessType } from "@/components/onboarding/step-business-type";
+import { StepOperator } from "@/components/onboarding/step-operator";
+import { StepCapabilities } from "@/components/onboarding/step-capabilities";
+import { StepGovernanceSimple } from "@/components/onboarding/step-governance-simple";
 import { StepConnection } from "@/components/onboarding/step-connection";
-import { StepBudget } from "@/components/onboarding/step-budget";
-import { StepTelegram } from "@/components/onboarding/step-telegram";
-import { StepAllSet } from "@/components/onboarding/step-all-set";
+import { StepWelcomeTeam } from "@/components/onboarding/step-welcome-team";
 import { SKIN_CATALOG } from "@/lib/skin-catalog";
-
-// New business → guarded governance profile (all campaign changes require approval)
-const GUARDED_PRESET = {
-  riskTolerance: {
-    none: "none",
-    low: "none",
-    medium: "standard",
-    high: "elevated",
-    critical: "mandatory",
-  },
-  spendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
-  forbiddenBehaviors: [],
-  trustBehaviors: [],
-};
+import { useInitializeRoster, useAgentRoster } from "@/hooks/use-agents";
 
 const STEP_LABELS = [
   "About your business",
-  "Connect Meta Ads",
-  "Set your budget",
-  "Connect Telegram",
-  "You're all set!",
+  "Name your operator",
+  "Choose capabilities",
+  "How much freedom?",
+  "Connect your tools",
+  "Meet your team",
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 export default function SetupPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
+  const initializeRoster = useInitializeRoster();
+  const { data: rosterData } = useAgentRoster();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -47,20 +38,21 @@ export default function SetupPage() {
   const [businessName, setBusinessName] = useState("");
   const [selectedSkin, setSelectedSkin] = useState("generic");
 
-  // Step 1: Meta Ads connection
+  // Step 1: Operator
+  const [operatorName, setOperatorName] = useState("Ava");
+  const [workingStyle, setWorkingStyle] = useState("friendly");
+
+  // Step 2: Capabilities
+  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
+  const [capabilitiesInitialized, setCapabilitiesInitialized] = useState(false);
+
+  // Step 3: Governance
+  const [governanceMode, setGovernanceMode] = useState("guarded");
+
+  // Step 4: Connection
   const [_connectionId, setConnectionId] = useState<string | null>(null);
 
-  // Step 2: Budget
-  const [monthlyBudget, setMonthlyBudget] = useState(500);
-
-  // Step 3: Telegram
-  const [ownerBotConnected, setOwnerBotConnected] = useState(false);
-  const [leadBotToken, setLeadBotToken] = useState("");
-  const [skipLeadBot, setSkipLeadBot] = useState(false);
-
-  // Step 4: Completion
-  const [isHandoffTriggered, setIsHandoffTriggered] = useState(false);
-  const [isHandoffLoading, setIsHandoffLoading] = useState(false);
+  // Step 5: Welcome team — initialized during handleNext for step 4→5
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -68,10 +60,31 @@ export default function SetupPage() {
   const principalId = (session as unknown as { principalId?: string })?.principalId ?? "";
 
   const skin = SKIN_CATALOG.find((s) => s.id === selectedSkin);
-  // Use digital-ads cartridge for Meta Ads connection
-  const connectionCartridge = skin?.requiredCartridges?.includes("digital-ads")
+  const requiredCartridges = skin?.requiredCartridges ?? [];
+
+  // Use digital-ads cartridge for connection step
+  const connectionCartridge = requiredCartridges.includes("digital-ads")
     ? "digital-ads"
-    : (skin?.requiredCartridges?.[0] ?? "digital-ads");
+    : (requiredCartridges[0] ?? "digital-ads");
+
+  const canProceed = (() => {
+    switch (step) {
+      case 0:
+        return businessName.trim().length > 0 && selectedSkin !== "";
+      case 1:
+        return operatorName.trim().length > 0 && workingStyle !== "";
+      case 2:
+        return selectedCapabilities.length > 0;
+      case 3:
+        return governanceMode !== "";
+      case 4:
+        return true; // Connection is optional
+      case 5:
+        return true;
+      default:
+        return false;
+    }
+  })();
 
   const saveStep = async (stepIndex: number) => {
     try {
@@ -83,12 +96,41 @@ export default function SetupPage() {
         });
       }
     } catch {
-      // Silently continue
+      // Silently continue — will be saved on complete
     }
   };
 
   const handleNext = async () => {
     await saveStep(step);
+
+    // Initialize capabilities defaults when moving from step 0 → step 2
+    if (step === 0 && !capabilitiesInitialized) {
+      // Default: select all capabilities for the chosen skin
+      const allCaps = getAllCapabilityIds(requiredCartridges);
+      setSelectedCapabilities(allCaps);
+      setCapabilitiesInitialized(true);
+    }
+
+    // Initialize roster when transitioning to the welcome step
+    if (step === 4) {
+      try {
+        await initializeRoster.mutateAsync({
+          operatorName: operatorName.trim() || "Ava",
+          operatorConfig: {
+            tone: workingStyle,
+            workingStyle:
+              workingStyle === "concise"
+                ? "Concise & Direct"
+                : workingStyle === "friendly"
+                  ? "Friendly & Warm"
+                  : "Professional & Detailed",
+          },
+        });
+      } catch {
+        // Non-critical — roster can be initialized later
+      }
+    }
+
     setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
   };
 
@@ -96,54 +138,23 @@ export default function SetupPage() {
     setStep((s) => Math.max(s - 1, 0));
   };
 
-  const canProceed = (() => {
-    switch (step) {
-      case 0:
-        return businessName.trim().length > 0 && selectedSkin !== "";
-      case 1:
-        return true; // Meta Ads connection is optional at onboarding
-      case 2:
-        return monthlyBudget >= 200;
-      case 3:
-        return true; // Telegram is optional (can connect later)
-      case 4:
-        return true;
-      default:
-        return false;
-    }
-  })();
-
   const handleComplete = async () => {
     setIsSubmitting(true);
     try {
-      // Derive spend limits from monthly budget
-      const dailyBudget = Math.round((monthlyBudget / 30) * 100) / 100;
-      const weeklyBudget = Math.round(dailyBudget * 7 * 100) / 100;
-
-      // 1. Finalize org config
+      // 1. Save skinId and governance to OrganizationConfig
       await fetch("/api/dashboard/organizations", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: businessName,
           skinId: selectedSkin,
-          governanceProfile: "guarded",
+          governanceProfile: governanceMode,
           runtimeType: "managed",
           onboardingComplete: true,
         }),
       });
 
-      // 2. Create identity spec with budget-derived spend limits
-      const preset = {
-        ...GUARDED_PRESET,
-        spendLimits: {
-          daily: dailyBudget,
-          weekly: weeklyBudget,
-          monthly: monthlyBudget,
-          perAction: Math.round(dailyBudget * 0.5 * 100) / 100,
-        },
-      };
-
+      // 2. Create identity spec
       await fetch("/api/dashboard/identity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -152,53 +163,39 @@ export default function SetupPage() {
           organizationId,
           name: businessName,
           description: `AI marketing operator for ${businessName}`,
-          riskTolerance: preset.riskTolerance,
-          globalSpendLimits: preset.spendLimits,
+          riskTolerance: {
+            none: "none",
+            low: "none",
+            medium: "standard",
+            high: "elevated",
+            critical: "mandatory",
+          },
+          globalSpendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
           cartridgeSpendLimits: {},
-          forbiddenBehaviors: preset.forbiddenBehaviors,
-          trustBehaviors: preset.trustBehaviors,
+          forbiddenBehaviors: [],
+          trustBehaviors: [],
         }),
       });
 
-      // 3. Provision Telegram channels if configured
-      if (ownerBotConnected || leadBotToken) {
-        const channels: string[] = [];
-        const channelCredentials: Record<string, Record<string, string>> = {};
-
-        if (ownerBotConnected) {
-          channels.push("telegram");
-        }
-
-        if (leadBotToken) {
-          channelCredentials["telegram-lead"] = { botToken: leadBotToken };
-        }
-
-        if (channels.length > 0) {
-          await fetch("/api/dashboard/organizations/provision", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ channels, channelCredentials }),
-          });
-        }
-      }
-
-      // 4. Initialize agent roster
+      // 3. Initialize agent roster (if not already done in handleNext)
       try {
-        await fetch("/api/dashboard/agents/roster", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            operatorName: "Ava",
-            operatorConfig: {
-              tone: "friendly",
-              workingStyle: "Friendly & Warm",
-            },
-          }),
+        await initializeRoster.mutateAsync({
+          operatorName: operatorName.trim() || "Ava",
+          operatorConfig: {
+            tone: workingStyle,
+            workingStyle:
+              workingStyle === "concise"
+                ? "Concise & Direct"
+                : workingStyle === "friendly"
+                  ? "Friendly & Warm"
+                  : "Professional & Detailed",
+          },
         });
       } catch {
-        // Non-critical
+        // May already be initialized — that's fine
       }
 
+      // 4. Set onboarding complete and redirect to Mission Control
       router.push("/");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -211,25 +208,7 @@ export default function SetupPage() {
     }
   };
 
-  const handleTriggerHandoff = async () => {
-    setIsHandoffLoading(true);
-    try {
-      await fetch("/api/dashboard/organizations/handoff", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId }),
-      });
-      setIsHandoffTriggered(true);
-    } catch {
-      toast({
-        title: "Handoff failed",
-        description: "Could not start campaign analysis. You can try again from Settings.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsHandoffLoading(false);
-    }
-  };
+  const roster = rosterData?.roster ?? [];
 
   return (
     <WizardShell
@@ -247,33 +226,52 @@ export default function SetupPage() {
           businessName={businessName}
           onNameChange={setBusinessName}
           selectedSkin={selectedSkin}
-          onSkinChange={setSelectedSkin}
+          onSkinChange={(skinId) => {
+            setSelectedSkin(skinId);
+            setCapabilitiesInitialized(false);
+          }}
         />
       )}
       {step === 1 && (
-        <StepConnection cartridgeId={connectionCartridge} onConnectionCreated={setConnectionId} />
-      )}
-      {step === 2 && <StepBudget monthlyBudget={monthlyBudget} onBudgetChange={setMonthlyBudget} />}
-      {step === 3 && (
-        <StepTelegram
-          organizationId={organizationId}
-          ownerBotConnected={ownerBotConnected}
-          onOwnerBotConnected={() => setOwnerBotConnected(true)}
-          leadBotToken={leadBotToken}
-          onLeadBotTokenChange={setLeadBotToken}
-          skipLeadBot={skipLeadBot}
-          onSkipLeadBot={setSkipLeadBot}
+        <StepOperator
+          operatorName={operatorName}
+          onNameChange={setOperatorName}
+          workingStyle={workingStyle}
+          onStyleChange={setWorkingStyle}
         />
+      )}
+      {step === 2 && (
+        <StepCapabilities
+          requiredCartridges={requiredCartridges}
+          selectedCapabilities={selectedCapabilities}
+          onCapabilitiesChange={setSelectedCapabilities}
+        />
+      )}
+      {step === 3 && (
+        <StepGovernanceSimple selected={governanceMode} onChange={setGovernanceMode} />
       )}
       {step === 4 && (
-        <StepAllSet
-          businessName={businessName}
-          organizationId={organizationId}
-          isHandoffTriggered={isHandoffTriggered}
-          isHandoffLoading={isHandoffLoading}
-          onTriggerHandoff={handleTriggerHandoff}
-        />
+        <StepConnection cartridgeId={connectionCartridge} onConnectionCreated={setConnectionId} />
+      )}
+      {step === 5 && (
+        <StepWelcomeTeam operatorName={operatorName.trim() || "Ava"} roster={roster} />
       )}
     </WizardShell>
   );
+}
+
+/** Get all capability IDs for a set of cartridges */
+function getAllCapabilityIds(cartridgeIds: string[]): string[] {
+  const CARTRIDGE_CAPABILITIES: Record<string, string[]> = {
+    "digital-ads": ["campaign-management", "budget-optimization", "performance-monitoring"],
+    "customer-engagement": ["lead-response", "lead-qualification", "follow-up"],
+    crm: ["contact-management", "deal-tracking"],
+    payments: ["payment-processing", "invoice-management"],
+  };
+  const ids: string[] = [];
+  for (const cartridgeId of cartridgeIds) {
+    const caps = CARTRIDGE_CAPABILITIES[cartridgeId];
+    if (caps) ids.push(...caps);
+  }
+  return ids;
 }
