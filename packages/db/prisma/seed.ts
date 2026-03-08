@@ -1616,6 +1616,92 @@ async function main() {
     });
   }
   console.log("Seeded", scheduledReports.length, "scheduled reports");
+
+  // ── Agent Roster ──
+  const agentDefaults = [
+    {
+      agentRole: "primary_operator",
+      displayName: "Ava",
+      description:
+        "Your AI growth operator — coordinates all tasks and communicates with your team.",
+      status: "active",
+      tier: "starter",
+      config: { tone: "friendly", workingStyle: "Friendly & Warm" },
+    },
+    {
+      agentRole: "monitor",
+      displayName: "Monitor",
+      description: "Watches your ad performance, alerts you to anomalies and pacing issues.",
+      status: "active",
+      tier: "starter",
+      config: {},
+    },
+    {
+      agentRole: "responder",
+      displayName: "Responder",
+      description: "Handles inbound leads, qualifies prospects, and manages conversations.",
+      status: "active",
+      tier: "starter",
+      config: {},
+    },
+    {
+      agentRole: "strategist",
+      displayName: "Strategist",
+      description: "Plans campaigns, allocates budgets, and develops growth strategies.",
+      status: "locked",
+      tier: "pro",
+      config: {},
+    },
+    {
+      agentRole: "optimizer",
+      displayName: "Optimizer",
+      description: "Fine-tunes bids, targeting, and creative rotation for better performance.",
+      status: "locked",
+      tier: "pro",
+      config: {},
+    },
+    {
+      agentRole: "booker",
+      displayName: "Booker",
+      description: "Manages appointments, scheduling, and calendar coordination.",
+      status: "locked",
+      tier: "business",
+      config: {},
+    },
+    {
+      agentRole: "guardian",
+      displayName: "Guardian",
+      description: "Enforces governance rules, spending limits, and compliance policies.",
+      status: "locked",
+      tier: "business",
+      config: {},
+    },
+  ];
+
+  for (const entry of agentDefaults) {
+    const agent = await prisma.agentRoster.upsert({
+      where: {
+        organizationId_agentRole: { organizationId: "org_dev", agentRole: entry.agentRole },
+      },
+      update: {},
+      create: {
+        organizationId: "org_dev",
+        ...entry,
+        config: entry.config as object,
+      },
+    });
+    await prisma.agentState.upsert({
+      where: { agentRosterId: agent.id },
+      update: {},
+      create: {
+        agentRosterId: agent.id,
+        organizationId: "org_dev",
+        activityStatus: "idle",
+        metrics: { actionsToday: 0 } as object,
+      },
+    });
+  }
+  console.log("Seeded agent roster (7 agents) for org_dev");
 }
 
 main()

@@ -147,6 +147,7 @@ export async function buildServer() {
         { name: "Campaigns", description: "Campaign read operations via digital-ads cartridge" },
         { name: "Reports", description: "Clinic and vertical reporting endpoints" },
         { name: "Conversations", description: "Conversation listing and management" },
+        { name: "Agents", description: "Agent roster and activity state management" },
       ],
       components: {
         securitySchemes: {

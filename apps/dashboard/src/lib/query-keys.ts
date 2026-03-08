@@ -70,4 +70,9 @@ export const queryKeys = {
     contacts: () => ["crm", "contacts"] as const,
     deals: () => ["crm", "deals"] as const,
   },
+  agents: {
+    all: ["agents"] as const,
+    roster: () => ["agents", "roster"] as const,
+    state: () => ["agents", "state"] as const,
+  },
 };

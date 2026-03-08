@@ -9,6 +9,7 @@ export interface OrgConfig {
   runtimeType: string;
   runtimeConfig: Record<string, unknown>;
   governanceProfile: string;
+  skinId: string | null;
   onboardingComplete: boolean;
   managedChannels: string[];
   provisioningStatus: string;

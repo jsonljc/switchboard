@@ -63,6 +63,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         runtimeConfig?: Record<string, unknown>;
         governanceProfile?: string;
         selectedCartridgeId?: string;
+        skinId?: string;
         onboardingComplete?: boolean;
       };
 
@@ -75,6 +76,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
           runtimeConfig: (body.runtimeConfig ?? {}) as object,
           governanceProfile: body.governanceProfile ?? "guarded",
           selectedCartridgeId: body.selectedCartridgeId ?? null,
+          skinId: body.skinId ?? null,
           onboardingComplete: body.onboardingComplete ?? false,
         },
         update: {
@@ -87,6 +89,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
           ...(body.selectedCartridgeId !== undefined && {
             selectedCartridgeId: body.selectedCartridgeId,
           }),
+          ...(body.skinId !== undefined && { skinId: body.skinId }),
           ...(body.onboardingComplete !== undefined && {
             onboardingComplete: body.onboardingComplete,
           }),

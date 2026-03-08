@@ -10,31 +10,18 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Switchboard Dashboard",
-  description: "Monitor and manage your AI ad agents",
+  title: "Switchboard Mission Control",
+  description: "AI Team Mission Control for your business",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`,
-          }}
-        />
-      </head>
+    <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
           <QueryProvider>
             <ErrorBoundary>
-              <AppShell>
-                {children}
-              </AppShell>
+              <AppShell>{children}</AppShell>
             </ErrorBoundary>
             <Toaster />
           </QueryProvider>
