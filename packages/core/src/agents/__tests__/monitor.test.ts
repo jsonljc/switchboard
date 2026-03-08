@@ -70,7 +70,10 @@ describe("MonitorAgent", () => {
       const result = await agent.tick(ctx);
 
       expect(result.agentId).toBe("monitor");
-      expect(result.actions).toContainEqual({ actionType: "monitor.fetch", outcome: "fetched" });
+      expect(result.actions).toContainEqual({
+        actionType: "digital-ads.snapshot.fetch",
+        outcome: "fetched",
+      });
       expect(result.actions).toContainEqual({ actionType: "monitor.report", outcome: "sent" });
       expect(ctx.notifier.sendProactive).toHaveBeenCalledTimes(1);
     });
@@ -122,7 +125,10 @@ describe("MonitorAgent", () => {
 
       const result = await agent.tick(ctx);
 
-      expect(result.actions).toContainEqual({ actionType: "monitor.fetch", outcome: "denied" });
+      expect(result.actions).toContainEqual({
+        actionType: "digital-ads.snapshot.fetch",
+        outcome: "denied",
+      });
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
       expect(reportText).toContain("No performance data available");
@@ -136,7 +142,10 @@ describe("MonitorAgent", () => {
 
       const result = await agent.tick(ctx);
 
-      expect(result.actions).toContainEqual({ actionType: "monitor.fetch", outcome: "error" });
+      expect(result.actions).toContainEqual({
+        actionType: "digital-ads.snapshot.fetch",
+        outcome: "error",
+      });
     });
 
     it("handles notification send error", async () => {

@@ -7,6 +7,7 @@
 
 import type { AdsAgent, AgentContext, AgentTickResult } from "./types.js";
 import { automationLevelToProfile } from "../identity/governance-presets.js";
+import { fetchAccountSnapshots } from "./shared.js";
 
 export class OptimizerAgent implements AdsAgent {
   readonly id = "optimizer";
@@ -18,44 +19,8 @@ export class OptimizerAgent implements AdsAgent {
     const governanceProfile = automationLevelToProfile(config.automationLevel);
 
     // Step 1: Observe — fetch current metrics for all managed accounts
-    const campaigns: Array<{
-      id: string;
-      name: string;
-      metrics: Record<string, number>;
-      budget: number;
-      status: string;
-    }> = [];
-
-    for (const accountId of config.adAccountIds) {
-      try {
-        const proposeResult = await orchestrator.resolveAndPropose({
-          actionType: "digital-ads.snapshot.fetch",
-          parameters: { adAccountId: accountId },
-          principalId: config.principalId,
-          cartridgeId: "digital-ads",
-          entityRefs: [],
-          message: `Agent optimizer: fetch snapshot for ${accountId}`,
-          organizationId: config.organizationId,
-        });
-
-        if ("denied" in proposeResult && !proposeResult.denied && proposeResult.envelope) {
-          const execResult = await orchestrator.executeApproved(proposeResult.envelope.id);
-          if (execResult.success && execResult.data) {
-            const snapCampaigns = execResult.data as Array<{
-              id: string;
-              name: string;
-              metrics: Record<string, number>;
-              budget: number;
-              status: string;
-            }>;
-            campaigns.push(...snapCampaigns);
-          }
-        }
-        actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "observed" });
-      } catch {
-        actions.push({ actionType: "digital-ads.snapshot.fetch", outcome: "error" });
-      }
-    }
+    const { campaigns, actions: fetchActions } = await fetchAccountSnapshots(ctx, "optimizer");
+    actions.push(...fetchActions);
 
     if (campaigns.length === 0) {
       const summary = "No campaign data available. Skipping optimization.";
@@ -146,7 +111,12 @@ export class OptimizerAgent implements AdsAgent {
 
     await this.notify(ctx, summary);
 
-    return { agentId: this.id, actions, summary };
+    // Compute next tick time — tomorrow at optimizer hour
+    const nextTick = new Date();
+    nextTick.setDate(nextTick.getDate() + 1);
+    nextTick.setHours(config.schedule.optimizerCronHour, 0, 0, 0);
+
+    return { agentId: this.id, actions, summary, nextTickAt: nextTick };
   }
 
   private computeAdjustments(

@@ -228,7 +228,7 @@ describe("GuardrailAgent", () => {
 
     expect(result.agentId).toBe("guardrail");
     expect(result.actions).toContainEqual(
-      expect.objectContaining({ actionType: "guardrail.fetch", outcome: "error" }),
+      expect.objectContaining({ actionType: "digital-ads.snapshot.fetch", outcome: "error" }),
     );
   });
 

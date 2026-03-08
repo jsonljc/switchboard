@@ -457,7 +457,7 @@ describe("StrategistAgent", () => {
 
       const result = await agent.tick(ctx);
 
-      expect(result.actions.some((a) => a.outcome === "approved")).toBe(true);
+      expect(result.actions.some((a) => a.outcome === "executed")).toBe(true);
       expect(notifier.calls[0]!.message).toContain("Approved");
     });
 
