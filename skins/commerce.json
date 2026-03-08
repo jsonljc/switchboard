@@ -1,0 +1,95 @@
+{
+  "id": "commerce",
+  "name": "E-Commerce",
+  "version": "1.0.0",
+  "description": "Vertical skin for e-commerce businesses. Exposes digital ads management in conversions mode with catalog and creative tools. No speed-to-lead — optimizes for direct purchases.",
+
+  "tools": {
+    "include": [
+      "digital-ads.platform.*",
+      "digital-ads.health.*",
+      "digital-ads.snapshot.*",
+      "digital-ads.funnel.*",
+      "digital-ads.portfolio.*",
+      "digital-ads.structure.*",
+      "digital-ads.campaign.*",
+      "digital-ads.adset.*",
+      "digital-ads.ad.*",
+      "digital-ads.targeting.*",
+      "digital-ads.creative.generate",
+      "digital-ads.creative.generate_brief",
+      "digital-ads.report.performance",
+      "digital-ads.report.creative",
+      "digital-ads.signal.*",
+      "digital-ads.pacing.check",
+      "digital-ads.alert.anomaly_scan",
+      "digital-ads.alert.budget_forecast",
+      "crm.*"
+    ],
+    "exclude": ["digital-ads.campaign.setup_guided", "digital-ads.campaign.update_objective"],
+    "aliases": {
+      "check_ads": "digital-ads.funnel.diagnose",
+      "create_campaign": "digital-ads.campaign.create",
+      "pause_campaign": "digital-ads.campaign.pause",
+      "adjust_budget": "digital-ads.campaign.adjust_budget"
+    }
+  },
+
+  "governance": {
+    "profile": "guarded",
+    "policyOverrides": [
+      {
+        "name": "commerce-campaign-create-approval",
+        "description": "Campaign creation always requires owner approval",
+        "rule": {
+          "actionType": "digital-ads.campaign.create"
+        },
+        "effect": "require_approval"
+      }
+    ],
+    "spendLimits": {
+      "dailyUsd": 500,
+      "weeklyUsd": 2500,
+      "monthlyUsd": 8000
+    },
+    "approvalRouting": {
+      "channelPreference": "telegram"
+    }
+  },
+
+  "language": {
+    "locale": "en",
+    "interpreterSystemPrompt": "You are an AI operator for an e-commerce business. You manage ad campaigns to drive product sales and optimize for return on ad spend. Focus on conversion performance, creative fatigue, and budget efficiency.",
+    "replyTemplates": {
+      "campaign_created": "Campaign '{{campaignName}}' created with ${{dailyBudget}}/day budget.",
+      "campaign_paused": "Campaign '{{campaignName}}' has been paused.",
+      "budget_adjusted": "Budget for '{{campaignName}}' updated to ${{newBudget}}/day.",
+      "alert_anomaly": "Alert: {{anomalyType}} detected on '{{campaignName}}' — {{details}}."
+    },
+    "terminology": {
+      "campaign": "ad campaign",
+      "lead": "customer",
+      "deal": "order",
+      "contact": "customer",
+      "pipeline": "purchase funnel",
+      "stage": "funnel stage",
+      "activity": "interaction"
+    },
+    "welcomeMessage": "Welcome to {{businessName}}! I'm your AI ad operator. I manage your campaigns to drive sales and maximize your return on ad spend.\n\nType 'help' to see everything I can do, or just tell me what you need!"
+  },
+
+  "funnelMode": "conversions",
+
+  "playbooks": [],
+
+  "requiredCartridges": ["digital-ads", "crm"],
+
+  "channels": {
+    "primary": "telegram",
+    "enabled": ["telegram", "whatsapp"]
+  },
+
+  "config": {
+    "bannedPhrases": []
+  }
+}

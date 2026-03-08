@@ -86,9 +86,6 @@ importers:
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
-      '@switchboard/quant-trading':
-        specifier: workspace:*
-        version: link:../../cartridges/quant-trading
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -153,9 +150,6 @@ importers:
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
-      '@switchboard/quant-trading':
-        specifier: workspace:*
-        version: link:../../cartridges/quant-trading
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -335,9 +329,6 @@ importers:
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
-      '@switchboard/quant-trading':
-        specifier: workspace:*
-        version: link:../../cartridges/quant-trading
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

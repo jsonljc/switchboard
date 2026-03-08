@@ -1,5 +1,31 @@
 import type { IdentitySpec, AuditEntry, Policy, CartridgeManifest } from "@switchboard/schemas";
 
+export interface AgentRosterEntry {
+  id: string;
+  organizationId: string;
+  agentRole: string;
+  displayName: string;
+  description: string;
+  status: string;
+  tier: string;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  agentState?: AgentStateEntry | null;
+}
+
+export interface AgentStateEntry {
+  id: string;
+  agentRosterId: string;
+  organizationId: string;
+  activityStatus: string;
+  currentTask: string | null;
+  lastActionAt: string | null;
+  lastActionSummary: string | null;
+  metrics: Record<string, unknown>;
+  updatedAt: string;
+}
+
 export interface AlertRule {
   id: string;
   organizationId: string;
@@ -333,6 +359,7 @@ export class SwitchboardClient {
       runtimeType?: string;
       runtimeConfig?: Record<string, unknown>;
       governanceProfile?: string;
+      skinId?: string;
       onboardingComplete?: boolean;
     },
   ) {
@@ -394,6 +421,17 @@ export class SwitchboardClient {
     return this.request<{ deleted: boolean }>(`/api/organizations/${orgId}/channels/${channelId}`, {
       method: "DELETE",
     });
+  }
+
+  // Post-onboarding handoff
+  async triggerHandoff(orgId: string, principalId: string) {
+    return this.request<{ triggered: boolean; message: string }>(
+      `/api/organizations/${orgId}/handoff`,
+      {
+        method: "POST",
+        body: JSON.stringify({ principalId }),
+      },
+    );
   }
 
   // Token Usage
@@ -677,6 +715,43 @@ export class SwitchboardClient {
     const qs = params.toString();
     return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
       `/api/crm/deals${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  // Agent Roster & State
+  async getAgentRoster() {
+    return this.request<{ roster: AgentRosterEntry[] }>("/api/agents/roster");
+  }
+
+  async updateAgentRoster(
+    id: string,
+    body: {
+      displayName?: string;
+      description?: string;
+      status?: string;
+      config?: Record<string, unknown>;
+    },
+  ) {
+    return this.request<{ agent: AgentRosterEntry }>(`/api/agents/roster/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  }
+
+  async getAgentState() {
+    return this.request<{ states: AgentStateEntry[] }>("/api/agents/state");
+  }
+
+  async initializeRoster(body?: {
+    operatorName?: string;
+    operatorConfig?: Record<string, unknown>;
+  }) {
+    return this.request<{ roster: AgentRosterEntry[]; alreadyInitialized?: boolean }>(
+      "/api/agents/roster/initialize",
+      {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      },
     );
   }
 }

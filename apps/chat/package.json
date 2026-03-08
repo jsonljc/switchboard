@@ -20,7 +20,6 @@
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/digital-ads": "workspace:*",
-    "@switchboard/quant-trading": "workspace:*",
     "@switchboard/payments": "workspace:*",
     "@switchboard/crm": "workspace:*",
     "@switchboard/customer-engagement": "workspace:*",

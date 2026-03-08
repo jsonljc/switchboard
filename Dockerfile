@@ -16,7 +16,6 @@ COPY cartridges/digital-ads/package.json cartridges/digital-ads/
 COPY cartridges/crm/package.json cartridges/crm/
 COPY cartridges/payments/package.json cartridges/payments/
 COPY cartridges/customer-engagement/package.json cartridges/customer-engagement/
-COPY cartridges/quant-trading/package.json cartridges/quant-trading/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/

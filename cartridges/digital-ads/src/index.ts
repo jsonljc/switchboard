@@ -397,3 +397,10 @@ export type {
   AccountMemorySnapshot,
   MemoryRecommendation,
 } from "./core/account-memory.js";
+
+// Tracking — Conversion feedback loop (CAPI dispatcher + outcome tracker)
+export { CAPIDispatcher } from "./tracking/capi-dispatcher.js";
+export type { CAPIDispatcherConfig, CAPIDispatchResult } from "./tracking/capi-dispatcher.js";
+export { hashForCAPI, buildUserData } from "./tracking/capi-dispatcher.js";
+export { OutcomeTracker } from "./tracking/outcome-tracker.js";
+export type { OutcomeMetrics, CampaignOutcome } from "./tracking/outcome-tracker.js";

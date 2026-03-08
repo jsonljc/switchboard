@@ -44,5 +44,8 @@ export * from "./skin.js";
 // Business profiles (per-business instance knowledge)
 export * from "./business-profile.js";
 
+// Campaign plan (strategist agent output)
+export * from "./campaign-plan.js";
+
 // Ads operator config (per-business agent configuration)
 export * from "./ads-operator.js";

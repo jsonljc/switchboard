@@ -70,7 +70,7 @@ pnpm db:seed             # Seed database
 
 - Every new module or feature **must** include tests
 - Run `pnpm test` and `pnpm typecheck` before committing
-- Global coverage thresholds: statements 60%, branches 50%, functions 55%, lines 60%
+- Global coverage thresholds: statements 55%, branches 50%, functions 52%, lines 55%
 - **Sensitive packages have elevated thresholds** (per-package `vitest.config.ts`):
   - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
   - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)

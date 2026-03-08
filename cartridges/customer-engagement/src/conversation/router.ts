@@ -11,7 +11,7 @@ export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
   channelId: string;
   /** Channel type */
-  channelType: "sms" | "web_chat" | "instagram_dm" | "facebook_messenger" | "whatsapp";
+  channelType: "sms" | "web_chat" | "instagram_dm" | "facebook_messenger" | "whatsapp" | "telegram";
   /** Message body text */
   body: string;
   /** Sender identifier */

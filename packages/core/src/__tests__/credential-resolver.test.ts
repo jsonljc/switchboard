@@ -14,7 +14,7 @@ describe("NoOpCredentialResolver", () => {
     const resolver = new NoOpCredentialResolver();
 
     const r1 = await resolver.resolve("payments", null);
-    const r2 = await resolver.resolve("quant-trading", "org_999");
+    const r2 = await resolver.resolve("digital-ads", "org_999");
     const r3 = await resolver.resolve("", null);
 
     expect(r1).toEqual({});

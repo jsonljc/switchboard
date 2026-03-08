@@ -48,3 +48,5 @@ export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
+export { deriveAgentStates } from "./storage/agent-state-deriver.js";
+export type { DerivedAgentState } from "./storage/agent-state-deriver.js";

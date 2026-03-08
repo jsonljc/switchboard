@@ -330,11 +330,48 @@ model OrganizationConfig {
   smbAllowedActions    String[] @default([])
   smbBlockedActions    String[] @default([])
   selectedCartridgeId  String?
+  skinId               String?
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// ── Agent Roster & State (Mission Control dashboard) ──
+
+model AgentRoster {
+  id             String   @id @default(uuid())
+  organizationId String
+  agentRole      String   // strategist, monitor, responder, optimizer, booker, guardian, primary_operator
+  displayName    String
+  description    String
+  status         String   @default("active") // active, locked, disabled
+  tier           String   @default("starter") // starter, pro, business
+  config         Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  agentState AgentState?
+
+  @@unique([organizationId, agentRole])
+  @@index([organizationId])
+}
+
+model AgentState {
+  id                String    @id @default(uuid())
+  agentRosterId     String    @unique
+  organizationId    String
+  activityStatus    String    @default("idle") // idle, working, analyzing, waiting_approval, error
+  currentTask       String?
+  lastActionAt      DateTime?
+  lastActionSummary String?
+  metrics           Json      @default("{}")
+  updatedAt         DateTime  @updatedAt
+
+  agentRoster AgentRoster @relation(fields: [agentRosterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model SmbActivityLogEntry {
@@ -413,6 +450,7 @@ model CrmContact {
   organizationId  String?
   assignedStaffId String?
   sourceAdId      String?
+  sourceCampaignId String?
   utmSource       String?
   properties      Json      @default("{}")
   createdAt       DateTime  @default(now())

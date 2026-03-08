@@ -15,14 +15,10 @@ import type {
   ResponseContext,
   GeneratedResponse,
 } from "./composer/response-generator.js";
-import { buildApprovalCard } from "./composer/approval-card.js";
-import { buildResultCard } from "./composer/result-card.js";
 import { ResponseHumanizer } from "./composer/humanize.js";
 import { handleReadIntent } from "./clinic/read-handler.js";
-import { formatDiagnosticResult, isDiagnosticAction } from "./formatters/diagnostic-formatter.js";
 import type {
   RuntimeOrchestrator,
-  ProposeResult,
   StorageContext,
   CartridgeReadAdapter as CartridgeReadAdapterType,
   CapabilityRegistry,
@@ -30,13 +26,20 @@ import type {
   ResolvedSkin,
   ResolvedProfile,
   DataFlowExecutor,
-  DataFlowExecutionResult,
 } from "@switchboard/core";
 import { inferCartridgeId, matchesAny } from "@switchboard/core";
-import type { UndoRecipe, CrmProvider } from "@switchboard/schemas";
+import type { CrmProvider } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
+import type { ConversationRouter } from "@switchboard/customer-engagement";
+
+// Extracted handlers
+import type { HandlerContext } from "./handlers/handler-context.js";
+import { handleProposeResult, handlePlanResult } from "./handlers/proposal-handler.js";
+import { handleUndo, handleKillSwitch } from "./handlers/system-commands.js";
+import { handleCallbackQuery, extractCallbackQueryId } from "./handlers/callback-handler.js";
+import { handleLeadMessage } from "./handlers/lead-handler.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
@@ -67,6 +70,10 @@ export interface ChatRuntimeConfig {
   responseGenerator?: ResponseGenerator | null;
   /** Optional DataFlowExecutor for multi-step plan execution. */
   dataFlowExecutor?: DataFlowExecutor | null;
+  /** Whether this runtime operates as a lead-facing bot (vs. owner/operator bot). */
+  isLeadBot?: boolean;
+  /** ConversationRouter for lead bot message handling (required when isLeadBot = true). */
+  leadRouter?: ConversationRouter | null;
 }
 
 export class ChatRuntime {
@@ -86,6 +93,8 @@ export class ChatRuntime {
   private crmProvider: CrmProvider | null;
   private responseGenerator: ResponseGenerator | null;
   private dataFlowExecutor: DataFlowExecutor | null;
+  private isLeadBot: boolean;
+  private leadRouter: ConversationRouter | null;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
@@ -112,6 +121,8 @@ export class ChatRuntime {
     this.crmProvider = config.crmProvider ?? null;
     this.responseGenerator = config.responseGenerator ?? null;
     this.dataFlowExecutor = config.dataFlowExecutor ?? null;
+    this.isLeadBot = config.isLeadBot ?? false;
+    this.leadRouter = config.leadRouter ?? null;
 
     // Initialize banned phrase filter from skin config
     const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
@@ -138,6 +149,10 @@ export class ChatRuntime {
   getAdapter(): ChannelAdapter {
     return this.adapter;
   }
+
+  // ---------------------------------------------------------------------------
+  // Shared helpers (used by this class and passed to extracted handlers)
+  // ---------------------------------------------------------------------------
 
   /** Send text reply with banned phrase filtering applied. */
   private async sendFilteredReply(threadId: string, text: string): Promise<void> {
@@ -283,6 +298,28 @@ export class ChatRuntime {
     return true;
   }
 
+  /** Build handler context from current runtime state for extracted handlers. */
+  private buildHandlerContext(): HandlerContext {
+    return {
+      adapter: this.adapter,
+      orchestrator: this.orchestrator,
+      readAdapter: this.readAdapter,
+      storage: this.storage,
+      failedMessageStore: this.failedMessageStore,
+      humanizer: this.humanizer,
+      composeResponse: (ctx, orgId) => this.composeResponse(ctx, orgId),
+      sendFilteredReply: (tid, txt) => this.sendFilteredReply(tid, txt),
+      filterCardText: (card) => this.filterCardText(card),
+      recordAssistantMessage: (tid, txt) => this.recordAssistantMessage(tid, txt),
+      trackLastExecuted: (tid, eid) => this.trackLastExecuted(tid, eid),
+      getLastExecutedEnvelopeId: (tid) => this.getLastExecutedEnvelopeId(tid),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main message handler
+  // ---------------------------------------------------------------------------
+
   async handleIncomingMessage(rawPayload: unknown): Promise<void> {
     const message = this.adapter.parseIncomingMessage(rawPayload);
     if (!message) return;
@@ -293,6 +330,7 @@ export class ChatRuntime {
     }
 
     const threadId = message.threadId ?? message.id;
+    const ctx = this.buildHandlerContext();
 
     // Get or create conversation
     let conversation = await getThread(threadId);
@@ -318,6 +356,8 @@ export class ChatRuntime {
               lastName: message.metadata?.["lastName"] as string | undefined,
               phone,
               sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
+              sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
+              utmSource: message.metadata?.["utmSource"] as string | undefined,
               properties: {
                 source: "chat",
                 ...(message.metadata?.["username"]
@@ -357,6 +397,12 @@ export class ChatRuntime {
       isNewConversation = true;
     }
 
+    // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
+    if (this.isLeadBot && this.leadRouter) {
+      await handleLeadMessage(ctx, this.leadRouter, message, threadId);
+      return;
+    }
+
     // Record the incoming user message for conversation memory
     conversation = transitionConversation(conversation, {
       type: "add_message",
@@ -384,11 +430,11 @@ export class ChatRuntime {
       message.text.includes('"approvalId"')
     ) {
       // Dismiss the button loading spinner in Telegram
-      const cbqId = this.extractCallbackQueryId(rawPayload);
+      const cbqId = extractCallbackQueryId(rawPayload);
       if (cbqId && this.adapter.answerCallbackQuery) {
         await this.adapter.answerCallbackQuery(cbqId);
       }
-      await this.handleCallbackQuery(threadId, message.text, message.principalId);
+      await handleCallbackQuery(ctx, threadId, message.text, message.principalId);
       return;
     }
 
@@ -515,7 +561,7 @@ export class ChatRuntime {
             organizationId: message.organizationId ?? undefined,
           });
 
-          await this.handlePlanResult(threadId, planResult, message.principalId);
+          await handlePlanResult(ctx, threadId, planResult, message.principalId);
           return;
         }
         // No DataFlowExecutor — fall through to single-action proposal
@@ -530,13 +576,13 @@ export class ChatRuntime {
 
     // Handle undo command
     if (result.proposals[0]?.actionType === "system.undo") {
-      await this.handleUndo(threadId, message.principalId);
+      await handleUndo(ctx, threadId, message.principalId);
       return;
     }
 
     // Handle kill switch (emergency pause all)
     if (result.proposals[0]?.actionType === "system.kill_switch") {
-      await this.handleKillSwitch(threadId, message.principalId, message.organizationId);
+      await handleKillSwitch(ctx, threadId, message.principalId, message.organizationId);
       return;
     }
 
@@ -617,7 +663,7 @@ export class ChatRuntime {
         } else if ("notFound" in proposeResult) {
           await this.sendFilteredReply(threadId, proposeResult.explanation);
         } else {
-          await this.handleProposeResult(threadId, proposeResult, message.principalId);
+          await handleProposeResult(ctx, threadId, proposeResult, message.principalId);
         }
       } catch (err) {
         console.error("Proposal processing error:", err);
@@ -637,305 +683,6 @@ export class ChatRuntime {
         );
       }
     }
-  }
-
-  private async handleProposeResult(
-    threadId: string,
-    result: ProposeResult,
-    _principalId: string,
-  ): Promise<void> {
-    if (result.denied) {
-      // Denied — produce conversational denial text via ResponseGenerator
-      const deniedCheck = result.decisionTrace.checks.find((c) => c.matched && c.effect === "deny");
-      const denialResponse = await this.composeResponse({
-        type: "denial",
-        explanation: result.decisionTrace.explanation,
-        denialDetail: deniedCheck?.humanDetail,
-      });
-      await this.adapter.sendTextReply(threadId, denialResponse.text);
-      await this.recordAssistantMessage(threadId, denialResponse.text);
-      return;
-    }
-
-    if (result.approvalRequest) {
-      // Needs approval - send approval card
-      const conversation = await getThread(threadId);
-      if (conversation) {
-        const updated = transitionConversation(conversation, {
-          type: "set_awaiting_approval",
-          approvalIds: [result.approvalRequest.id],
-        });
-        await setThread(updated);
-      }
-
-      const actionType = result.envelope.proposals[0]?.actionType;
-      const rawCard = buildApprovalCard(
-        result.approvalRequest.summary,
-        result.approvalRequest.riskCategory,
-        result.explanation,
-        result.approvalRequest.id,
-        result.approvalRequest.bindingHash,
-        actionType,
-      );
-      const card = this.filterCardText(this.humanizer.humanizeApprovalCard(rawCard));
-      await this.adapter.sendApprovalCard(threadId, card);
-      await this.recordAssistantMessage(
-        threadId,
-        `[Approval Required] ${result.approvalRequest.summary}`,
-      );
-      return;
-    }
-
-    // Auto-approved - execute immediately
-    try {
-      const executeResult = await this.orchestrator.executeApproved(result.envelope.id);
-      await this.trackLastExecuted(threadId, result.envelope.id);
-
-      // Diagnostic actions → formatted text reply (not result card)
-      const actionType = result.envelope.proposals[0]?.actionType ?? "";
-      if (isDiagnosticAction(actionType) && executeResult.data) {
-        const formatted = formatDiagnosticResult(actionType, executeResult.data);
-        const diagnosticResponse = await this.composeResponse({
-          type: "diagnostic",
-          actionType,
-          data: formatted,
-        });
-        await this.adapter.sendTextReply(threadId, diagnosticResponse.text);
-        await this.recordAssistantMessage(threadId, diagnosticResponse.text);
-        return;
-      }
-
-      const undoRecipe = executeResult.undoRecipe as UndoRecipe | null;
-
-      // Generate summary text via ResponseGenerator before building the card
-      const responseType = executeResult.success ? "result_success" : "result_failure";
-      const summaryResponse = await this.composeResponse({
-        type: responseType,
-        actionType,
-        summary: executeResult.summary,
-      });
-
-      const rawCard = buildResultCard(
-        summaryResponse.text,
-        executeResult.success,
-        result.envelope.auditEntryIds[0] ?? result.envelope.id,
-        result.decisionTrace.computedRiskScore.category,
-        executeResult.rollbackAvailable,
-        undoRecipe?.undoExpiresAt ?? null,
-      );
-      // Skip humanizer on the card since composeResponse already applied terminology
-      const card = this.filterCardText(rawCard);
-      await this.adapter.sendResultCard(threadId, card);
-      await this.recordAssistantMessage(threadId, card.summary);
-    } catch (err) {
-      console.error("Execution error:", err);
-      this.failedMessageStore
-        ?.record({
-          channel: this.adapter.channel,
-          rawPayload: { envelopeId: result.envelope.id },
-          stage: "execute",
-          errorMessage: safeErrorMessage(err),
-          errorStack: err instanceof Error ? err.stack : undefined,
-        })
-        .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
-      const errText = `Execution failed: ${safeErrorMessage(err)}`;
-      await this.sendFilteredReply(threadId, errText);
-      await this.recordAssistantMessage(threadId, errText);
-    }
-  }
-
-  private async handlePlanResult(
-    threadId: string,
-    planResult: DataFlowExecutionResult,
-    _principalId: string,
-  ): Promise<void> {
-    const executed = planResult.stepResults.filter((s) => s.outcome === "executed");
-    const pending = planResult.stepResults.filter((s) => s.outcome === "pending_approval");
-    const denied = planResult.stepResults.filter((s) => s.outcome === "denied");
-    const errors = planResult.stepResults.filter((s) => s.outcome === "error");
-
-    const parts: string[] = [
-      `Plan ${planResult.overallOutcome} (${planResult.stepResults.length} steps):`,
-    ];
-
-    if (executed.length > 0) {
-      parts.push(`${executed.length} executed`);
-    }
-    if (pending.length > 0) {
-      parts.push(`${pending.length} awaiting approval`);
-    }
-    if (denied.length > 0) {
-      parts.push(`${denied.length} denied`);
-    }
-    if (errors.length > 0) {
-      parts.push(`${errors.length} failed`);
-    }
-
-    const summaryText = parts.join(", ");
-    const responseType =
-      planResult.overallOutcome === "completed" ? "result_success" : "result_failure";
-    const response = await this.composeResponse({ type: responseType, summary: summaryText });
-    await this.adapter.sendTextReply(threadId, response.text);
-    await this.recordAssistantMessage(threadId, response.text);
-  }
-
-  private async handleCallbackQuery(
-    threadId: string,
-    callbackData: string,
-    principalId: string,
-  ): Promise<void> {
-    let parsed: {
-      action: "approve" | "reject" | "patch";
-      approvalId: string;
-      bindingHash?: string;
-      patchValue?: Record<string, unknown>;
-    };
-
-    try {
-      parsed = JSON.parse(callbackData);
-    } catch {
-      return;
-    }
-
-    try {
-      const response = await this.orchestrator.respondToApproval({
-        approvalId: parsed.approvalId,
-        action: parsed.action,
-        respondedBy: principalId,
-        bindingHash: parsed.bindingHash ?? "",
-        patchValue: parsed.patchValue,
-      });
-
-      if (parsed.action === "approve" || parsed.action === "patch") {
-        if (response.executionResult) {
-          await this.trackLastExecuted(threadId, response.envelope.id);
-
-          const undoRecipe = response.executionResult.undoRecipe as UndoRecipe | null;
-
-          const rawCard = buildResultCard(
-            response.executionResult.summary,
-            response.executionResult.success,
-            response.envelope.auditEntryIds[0] ?? response.envelope.id,
-            response.envelope.decisions[0]?.computedRiskScore.category ?? "low",
-            response.executionResult.rollbackAvailable,
-            undoRecipe?.undoExpiresAt ?? null,
-          );
-          const card = this.filterCardText(this.humanizer.humanizeResultCard(rawCard));
-          await this.adapter.sendResultCard(threadId, card);
-          await this.recordAssistantMessage(threadId, card.summary);
-        }
-      } else if (parsed.action === "reject") {
-        const rejectText = `Action rejected by ${principalId}.`;
-        await this.sendFilteredReply(threadId, rejectText);
-        await this.recordAssistantMessage(threadId, rejectText);
-      }
-    } catch (err) {
-      console.error("Approval callback error:", err);
-      await this.sendFilteredReply(threadId, `Error: ${safeErrorMessage(err)}`);
-    }
-  }
-
-  private async handleUndo(threadId: string, principalId: string): Promise<void> {
-    const lastEnvelopeId = await this.getLastExecutedEnvelopeId(threadId);
-    if (!lastEnvelopeId) {
-      await this.sendFilteredReply(threadId, "No recent action to undo.");
-      return;
-    }
-
-    try {
-      const undoResult = await this.orchestrator.requestUndo(lastEnvelopeId);
-      await this.handleProposeResult(threadId, undoResult, principalId);
-    } catch (err) {
-      console.error("Undo error:", err);
-      await this.sendFilteredReply(threadId, `Cannot undo: ${safeErrorMessage(err)}`);
-    }
-  }
-
-  private async handleKillSwitch(
-    threadId: string,
-    principalId: string,
-    organizationId: string | null,
-  ): Promise<void> {
-    if (!this.readAdapter) {
-      await this.sendFilteredReply(
-        threadId,
-        "Cannot execute kill switch: read adapter not configured.",
-      );
-      return;
-    }
-
-    try {
-      // Query all campaigns
-      const queryResult = await this.readAdapter.query({
-        cartridgeId: "digital-ads",
-        operation: "searchCampaigns",
-        parameters: { query: "" },
-        actorId: principalId,
-        organizationId,
-      });
-
-      const campaigns = queryResult.data as Array<{ id: string; name: string; status: string }>;
-      const activeCampaigns = campaigns.filter(
-        (c) => c.status === "ACTIVE" || c.status === "active",
-      );
-
-      if (activeCampaigns.length === 0) {
-        await this.sendFilteredReply(threadId, "No active campaigns to pause.");
-        return;
-      }
-
-      await this.sendFilteredReply(
-        threadId,
-        `Emergency: pausing ${activeCampaigns.length} active campaign(s)...`,
-      );
-
-      const failures: string[] = [];
-      for (const campaign of activeCampaigns) {
-        try {
-          const killSwitchIdempotencyKey = createHash("sha256")
-            .update(principalId)
-            .update("kill-switch")
-            .update(campaign.id)
-            .digest("hex");
-
-          const proposeResult = await this.orchestrator.resolveAndPropose({
-            actionType: "digital-ads.campaign.pause",
-            parameters: { campaignId: campaign.id, entityId: campaign.id },
-            principalId,
-            cartridgeId: "digital-ads",
-            entityRefs: [],
-            message: `Emergency kill switch: pause ${campaign.name}`,
-            organizationId,
-            emergencyOverride: true,
-            idempotencyKey: killSwitchIdempotencyKey,
-          });
-
-          if (!("needsClarification" in proposeResult) && !("notFound" in proposeResult)) {
-            await this.handleProposeResult(threadId, proposeResult, principalId);
-          }
-        } catch (err) {
-          console.error(`Kill switch error for campaign ${campaign.name}:`, err);
-          failures.push(`${campaign.name}: ${safeErrorMessage(err)}`);
-        }
-      }
-
-      if (failures.length > 0) {
-        await this.sendFilteredReply(
-          threadId,
-          `Kill switch failures:\n${failures.map((f) => `- ${f}`).join("\n")}`,
-        );
-      }
-    } catch (err) {
-      console.error("Kill switch error:", err);
-      await this.sendFilteredReply(threadId, `Kill switch error: ${safeErrorMessage(err)}`);
-    }
-  }
-
-  private extractCallbackQueryId(rawPayload: unknown): string | null {
-    const payload = rawPayload as Record<string, unknown> | undefined;
-    if (!payload) return null;
-    const callbackQuery = payload["callback_query"] as Record<string, unknown> | undefined;
-    return callbackQuery ? String(callbackQuery["id"]) : null;
   }
 }
 

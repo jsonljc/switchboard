@@ -187,7 +187,7 @@ export function createApiStorage(client: McpApiClient): MinimalStorage {
         return undefined;
       },
       list() {
-        return ["digital-ads", "quant-trading", "payments", "crm"];
+        return ["digital-ads", "payments", "crm", "customer-engagement"];
       },
     },
   };

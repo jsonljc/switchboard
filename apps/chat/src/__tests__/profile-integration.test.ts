@@ -12,6 +12,8 @@ import {
 import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
 import { BusinessProfileSchema } from "@switchboard/schemas";
 import { bootstrapCustomerEngagementCartridge } from "@switchboard/customer-engagement";
+import { bootstrapDigitalAdsCartridge } from "@switchboard/digital-ads";
+import { bootstrapCrmCartridge } from "@switchboard/crm";
 import { SkinAwareInterpreter } from "../interpreter/skin-aware-interpreter.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -26,12 +28,19 @@ async function loadSkinAndProfile(
   skinId: string,
   profileId: string,
 ): Promise<{ resolvedSkin: ResolvedSkin; resolvedProfile: ResolvedProfile }> {
-  // Bootstrap the customer-engagement cartridge to get its manifest
+  // Bootstrap cartridges to get their manifests
   const { cartridge } = await bootstrapCustomerEngagementCartridge();
+  const { cartridge: adsCartridge } = await bootstrapDigitalAdsCartridge({
+    accessToken: "mock-token",
+    adAccountId: "act_mock",
+  });
+  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
 
   // Build tool registry
   const toolRegistry = new ToolRegistry();
   toolRegistry.registerCartridge("customer-engagement", cartridge.manifest);
+  toolRegistry.registerCartridge("digital-ads", adsCartridge.manifest);
+  toolRegistry.registerCartridge("crm", crmCartridge.manifest);
 
   // Load and resolve skin
   const skinLoader = new SkinLoader(SKINS_DIR);
@@ -121,14 +130,15 @@ describe("Profile Integration — Multi-Vertical", () => {
       expect(resolvedSkin.governance.profile).toBe("guarded");
     });
 
-    it("clinic skin has customer-engagement tools", async () => {
+    it("clinic skin has customer-engagement and digital-ads tools", async () => {
       if (!resolvedSkin) {
         const result = await loadSkinAndProfile("clinic", "clinic-demo");
         resolvedSkin = result.resolvedSkin;
       }
       expect(resolvedSkin.tools.length).toBeGreaterThan(0);
       const actionTypes = resolvedSkin.tools.map((t) => t.actionType);
-      expect(actionTypes.every((at) => at.startsWith("customer-engagement."))).toBe(true);
+      expect(actionTypes.some((at) => at.startsWith("customer-engagement."))).toBe(true);
+      expect(actionTypes.some((at) => at.startsWith("digital-ads."))).toBe(true);
     });
 
     it("clinic system prompt includes business context", async () => {
@@ -211,14 +221,15 @@ describe("Profile Integration — Multi-Vertical", () => {
       expect(resolvedSkin.governance.profile).toBe("observe");
     });
 
-    it("gym skin has customer-engagement tools", async () => {
+    it("gym skin has customer-engagement and digital-ads tools", async () => {
       if (!resolvedSkin) {
         const result = await loadSkinAndProfile("gym", "gym-demo");
         resolvedSkin = result.resolvedSkin;
       }
       expect(resolvedSkin.tools.length).toBeGreaterThan(0);
       const actionTypes = resolvedSkin.tools.map((t) => t.actionType);
-      expect(actionTypes.every((at) => at.startsWith("customer-engagement."))).toBe(true);
+      expect(actionTypes.some((at) => at.startsWith("customer-engagement."))).toBe(true);
+      expect(actionTypes.some((at) => at.startsWith("digital-ads."))).toBe(true);
       // Gym excludes treatment.* tools
       expect(actionTypes.some((at) => at.includes(".treatment."))).toBe(false);
     });
@@ -236,21 +247,21 @@ describe("Profile Integration — Multi-Vertical", () => {
     });
   });
 
-  describe("both verticals use customer-engagement action types", () => {
-    it("clinic and gym both use customer-engagement.* action types", async () => {
+  describe("both verticals expose multi-cartridge action types", () => {
+    it("clinic and gym both include customer-engagement and digital-ads actions", async () => {
       const clinic = await loadSkinAndProfile("clinic", "clinic-demo");
       const gym = await loadSkinAndProfile("gym", "gym-demo");
 
       const clinicActions = clinic.resolvedSkin.tools.map((t) => t.actionType);
       const gymActions = gym.resolvedSkin.tools.map((t) => t.actionType);
 
-      // Both use customer-engagement prefix
-      for (const action of clinicActions) {
-        expect(action).toMatch(/^customer-engagement\./);
-      }
-      for (const action of gymActions) {
-        expect(action).toMatch(/^customer-engagement\./);
-      }
+      // Both include customer-engagement actions
+      expect(clinicActions.some((a) => a.startsWith("customer-engagement."))).toBe(true);
+      expect(gymActions.some((a) => a.startsWith("customer-engagement."))).toBe(true);
+
+      // Both include digital-ads actions
+      expect(clinicActions.some((a) => a.startsWith("digital-ads."))).toBe(true);
+      expect(gymActions.some((a) => a.startsWith("digital-ads."))).toBe(true);
 
       // They share common actions (appointment, lead, etc.)
       const commonActions = clinicActions.filter((a) => gymActions.includes(a));

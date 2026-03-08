@@ -74,6 +74,58 @@
       }
     },
     {
+      "files": ["packages/db/src/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/cartridge-sdk", "@switchboard/cartridge-sdk/*"],
+                "message": "db cannot import from cartridge-sdk."
+              },
+              {
+                "group": ["@switchboard/digital-ads", "@switchboard/digital-ads/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
+                "group": ["@switchboard/customer-engagement", "@switchboard/customer-engagement/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
+                "group": ["@switchboard/payments", "@switchboard/payments/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
+                "group": ["@switchboard/crm", "@switchboard/crm/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
+                "group": ["@switchboard/quant-trading", "@switchboard/quant-trading/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
+                "group": ["@switchboard/api", "@switchboard/api/*"],
+                "message": "db cannot import from apps."
+              },
+              {
+                "group": ["@switchboard/chat", "@switchboard/chat/*"],
+                "message": "db cannot import from apps."
+              },
+              {
+                "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
+                "message": "db cannot import from apps."
+              },
+              {
+                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
+                "message": "db cannot import from apps."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/core/src/**/*.ts"],
       "rules": {
         "no-restricted-imports": [

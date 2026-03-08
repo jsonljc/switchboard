@@ -10,10 +10,6 @@ import {
   DEFAULT_DIGITAL_ADS_POLICIES,
   createSnapshotCacheStore,
 } from "@switchboard/digital-ads";
-import {
-  bootstrapQuantTradingCartridge,
-  DEFAULT_TRADING_POLICIES,
-} from "@switchboard/quant-trading";
 import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
 import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
 import type { CrmProviderOptions, CrmProvider } from "@switchboard/crm";
@@ -46,11 +42,6 @@ export async function registerAllCartridges(
     new GuardedCartridge(adsCartridge as any, interceptors),
   );
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
-
-  // Quant trading
-  const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
-  storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
-  await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
 
   // Payments
   const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
@@ -104,15 +95,6 @@ export const DEFAULT_CHAT_AVAILABLE_ACTIONS: string[] = [
   "digital-ads.portfolio.diagnose",
   "digital-ads.snapshot.fetch",
   "digital-ads.structure.analyze",
-  // Trading
-  "trading.order.market_buy",
-  "trading.order.market_sell",
-  "trading.order.limit_buy",
-  "trading.order.limit_sell",
-  "trading.order.cancel",
-  "trading.position.close",
-  "trading.portfolio.rebalance",
-  "trading.risk.set_stop_loss",
   // Payments
   "payments.invoice.create",
   "payments.invoice.void",

@@ -2,6 +2,9 @@ import { z } from "zod";
 import { RiskCategorySchema } from "./risk.js";
 import { ExecutorTypeSchema, StepTypeSchema } from "./capability.js";
 
+export const ActionTierSchema = z.enum(["core", "advanced"]).optional();
+export type ActionTier = z.infer<typeof ActionTierSchema>;
+
 export const ActionDefinitionSchema = z.object({
   actionType: z.string(),
   name: z.string(),
@@ -9,6 +12,8 @@ export const ActionDefinitionSchema = z.object({
   parametersSchema: z.record(z.string(), z.unknown()),
   baseRiskCategory: RiskCategorySchema,
   reversible: z.boolean(),
+  /** Optional tier classification: "core" = v1 surface, "advanced" = gated behind skins */
+  tier: ActionTierSchema,
   /** Optional hint for executor routing (deterministic, l1-llm, l2-llm, l3-llm, human) */
   executorHint: ExecutorTypeSchema.optional(),
   /** Optional semantic step type for plan decomposition */

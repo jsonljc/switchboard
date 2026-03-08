@@ -22,7 +22,6 @@ const CARTRIDGE_TO_SERVICES: Record<string, Array<{ serviceId: string; platformK
     { serviceId: "tiktok-ads", platformKey: "tiktok" },
   ],
   payments: [{ serviceId: "stripe", platformKey: "stripe" }],
-  "quant-trading": [{ serviceId: "broker-api", platformKey: "broker" }],
 };
 
 /**

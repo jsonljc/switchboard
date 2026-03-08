@@ -23,6 +23,7 @@ const SEED_CONTACTS: CrmContact[] = [
     status: "active",
     assignedStaffId: null,
     sourceAdId: null,
+    sourceCampaignId: null,
     utmSource: null,
     createdAt: new Date(Date.now() - 90 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
@@ -41,6 +42,7 @@ const SEED_CONTACTS: CrmContact[] = [
     status: "active",
     assignedStaffId: null,
     sourceAdId: null,
+    sourceCampaignId: null,
     utmSource: null,
     createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
@@ -59,6 +61,7 @@ const SEED_CONTACTS: CrmContact[] = [
     status: "active",
     assignedStaffId: null,
     sourceAdId: null,
+    sourceCampaignId: null,
     utmSource: null,
     createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
@@ -77,6 +80,7 @@ const SEED_CONTACTS: CrmContact[] = [
     status: "active",
     assignedStaffId: null,
     sourceAdId: null,
+    sourceCampaignId: null,
     utmSource: null,
     createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
     updatedAt: new Date(Date.now() - 15 * 86400000).toISOString(),
@@ -312,6 +316,7 @@ export class InMemoryCrmProvider implements CrmProvider {
     channel?: string;
     assignedStaffId?: string;
     sourceAdId?: string;
+    sourceCampaignId?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
@@ -329,6 +334,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       status: "active",
       assignedStaffId: data.assignedStaffId ?? null,
       sourceAdId: data.sourceAdId ?? null,
+      sourceCampaignId: data.sourceCampaignId ?? null,
       utmSource: data.utmSource ?? null,
       createdAt: now,
       updatedAt: now,
@@ -353,6 +359,7 @@ export class InMemoryCrmProvider implements CrmProvider {
       "status",
       "assignedStaffId",
       "sourceAdId",
+      "sourceCampaignId",
       "utmSource",
     ] as const;
     for (const key of updatable) {

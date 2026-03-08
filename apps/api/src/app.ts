@@ -6,95 +6,38 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { actionsRoutes } from "./routes/actions.js";
-import { executeRoutes } from "./routes/execute.js";
-import { approvalsRoutes } from "./routes/approvals.js";
-import { policiesRoutes } from "./routes/policies.js";
-import { auditRoutes } from "./routes/audit.js";
-import { identityRoutes } from "./routes/identity.js";
-import { simulateRoutes } from "./routes/simulate.js";
-import { healthRoutes } from "./routes/health.js";
-import { interpretersRoutes } from "./routes/interpreters.js";
-import { cartridgesRoutes } from "./routes/cartridges.js";
-import { connectionsRoutes } from "./routes/connections.js";
-import { organizationsRoutes } from "./routes/organizations.js";
-import { dlqRoutes } from "./routes/dlq.js";
-import { tokenUsageRoutes } from "./routes/token-usage.js";
-import { alertsRoutes } from "./routes/alerts.js";
-import { scheduledReportsRoutes } from "./routes/scheduled-reports.js";
-import { crmRoutes } from "./routes/crm.js";
-import { competenceRoutes } from "./routes/competence.js";
-import { webhooksRoutes } from "./routes/webhooks.js";
-import { inboundWebhooksRoutes } from "./routes/inbound-webhooks.js";
-import { inboundMessagesRoutes } from "./routes/inbound-messages.js";
-import { smbRoutes } from "./routes/smb.js";
-import { governanceRoutes } from "./routes/governance.js";
-import { campaignsRoutes } from "./routes/campaigns.js";
-import { reportsRoutes } from "./routes/reports.js";
-import { conversationsRoutes } from "./routes/conversations.js";
-import { idempotencyMiddleware } from "./middleware/idempotency.js";
-import apiVersionPlugin from "./versioning.js";
-import { authMiddleware } from "./middleware/auth.js";
 import {
   LifecycleOrchestrator,
-  createInMemoryStorage,
-  seedDefaultStorage,
-  InMemoryLedgerStorage,
-  AuditLedger,
-  createGuardrailState,
-  DEFAULT_REDACTION_CONFIG,
-  GuardedCartridge,
-  InMemoryPolicyCache,
-  InMemoryGovernanceProfileStore,
   ExecutionService,
-  setMetrics,
   CompositeNotifier,
-  InMemoryTierStore,
-  SmbActivityLog,
-  InMemorySmbActivityLogStorage,
   SkinLoader,
   SkinResolver,
   ToolRegistry,
-  ProfileLoader,
+  setMetrics,
 } from "@switchboard/core";
-import type { Policy } from "@switchboard/schemas";
 import type {
   StorageContext,
-  LedgerStorage,
   PolicyCache,
   ApprovalNotifier,
   TierStore,
-  GovernanceProfileStore,
   ResolvedSkin,
 } from "@switchboard/core";
-import {
-  bootstrapDigitalAdsCartridge,
-  DEFAULT_DIGITAL_ADS_POLICIES,
-  createSnapshotCacheStore,
-} from "@switchboard/digital-ads";
-import {
-  bootstrapQuantTradingCartridge,
-  DEFAULT_TRADING_POLICIES,
-} from "@switchboard/quant-trading";
-import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
-import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
-import {
-  bootstrapCustomerEngagementCartridge,
-  DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
-  setEscalationNotifier,
-} from "@switchboard/customer-engagement";
-import { createGuardrailStateStore } from "./guardrail-state/index.js";
+import type { Policy } from "@switchboard/schemas";
+import { SmbActivityLog, AuditLedger } from "@switchboard/core";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
-import { startApprovalExpiryJob } from "./jobs/approval-expiry.js";
-import { startChainVerificationJob } from "./jobs/chain-verification.js";
-import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
-import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
-import { startTokenRefreshJob } from "./jobs/token-refresh.js";
-import { startCadenceRunner } from "./jobs/cadence-runner.js";
-import { startAgentRunner } from "./jobs/agent-runner.js";
-import { startTtlCleanupJob } from "./jobs/ttl-cleanup.js";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
+import { authMiddleware } from "./middleware/auth.js";
+import apiVersionPlugin from "./versioning.js";
+import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import { bootstrapStorage } from "./bootstrap/storage.js";
+import {
+  resolveCartridgeCredentials,
+  registerCartridges,
+  wireEscalationNotifier,
+} from "./bootstrap/cartridges.js";
+import { startBackgroundJobs } from "./bootstrap/jobs.js";
+import { registerRoutes } from "./bootstrap/routes.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
@@ -204,6 +147,7 @@ export async function buildServer() {
         { name: "Campaigns", description: "Campaign read operations via digital-ads cartridge" },
         { name: "Reports", description: "Clinic and vertical reporting endpoints" },
         { name: "Conversations", description: "Conversation listing and management" },
+        { name: "Agents", description: "Agent roster and activity state management" },
       ],
       components: {
         securitySchemes: {
@@ -258,197 +202,24 @@ export async function buildServer() {
     );
   }
 
-  // Create storage and orchestrator — with degraded mode fallback
-  let storage: StorageContext;
-  let ledgerStorage: LedgerStorage;
-  let prismaClient: import("@switchboard/db").PrismaClient | null = null;
+  // --- Bootstrap storage layer ---
+  const {
+    storage,
+    ledger,
+    guardrailState,
+    guardrailStateStore,
+    policyCache,
+    governanceProfileStore,
+    tierStore,
+    smbActivityLog,
+    prismaClient,
+    redis,
+  } = await bootstrapStorage(app.log);
 
-  if (process.env["DATABASE_URL"]) {
-    try {
-      const { getDb, createPrismaStorage, PrismaLedgerStorage } = await import("@switchboard/db");
-      prismaClient = getDb() as import("@switchboard/db").PrismaClient;
-      await prismaClient.$queryRaw`SELECT 1`; // verify connectivity
-      storage = createPrismaStorage(prismaClient as Parameters<typeof createPrismaStorage>[0]);
-      ledgerStorage = new PrismaLedgerStorage(
-        prismaClient as ConstructorParameters<typeof PrismaLedgerStorage>[0],
-      );
-    } catch (err) {
-      app.log.error(
-        { err },
-        "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)",
-      );
-      storage = createInMemoryStorage();
-      ledgerStorage = new InMemoryLedgerStorage();
-      prismaClient = null;
-    }
-  } else {
-    storage = createInMemoryStorage();
-    ledgerStorage = new InMemoryLedgerStorage();
-  }
-
-  const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
-  const guardrailState = createGuardrailState();
-
-  // Shared Redis connection when REDIS_URL is available — created early so
-  // guardrail state store can reuse it instead of opening its own connection.
-  const redisUrl = process.env["REDIS_URL"];
-  let redis: Redis | null = null;
-
-  if (redisUrl) {
-    const { default: IORedis } = await import("ioredis");
-    redis = new IORedis(redisUrl);
-  }
-
-  const guardrailStateStore = createGuardrailStateStore(redis ?? undefined);
-  const policyCache = new InMemoryPolicyCache();
-
-  // Governance profile store: Prisma-backed when DB available, in-memory fallback
-  let governanceProfileStore: GovernanceProfileStore;
-  if (prismaClient) {
-    const { PrismaGovernanceProfileStore } = await import("@switchboard/db");
-    governanceProfileStore = new PrismaGovernanceProfileStore(prismaClient);
-  } else {
-    governanceProfileStore = new InMemoryGovernanceProfileStore();
-  }
-
-  // --- Cartridge credential resolution: DB first, env-var fallback ---
-  let adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
-  let adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
-  let stripeSecretKey = process.env["STRIPE_SECRET_KEY"];
-
-  if (prismaClient) {
-    try {
-      const { PrismaConnectionStore } = await import("@switchboard/db");
-      const connStore = new PrismaConnectionStore(prismaClient);
-
-      const adsCon = await connStore.getByService("meta-ads");
-      if (adsCon) {
-        adsAccessToken =
-          (adsCon.credentials as Record<string, string>).accessToken ?? adsAccessToken;
-        adsAccountId = (adsCon.credentials as Record<string, string>).adAccountId ?? adsAccountId;
-      }
-
-      const stripeCon = await connStore.getByService("stripe");
-      if (stripeCon) {
-        stripeSecretKey =
-          (stripeCon.credentials as Record<string, string>).secretKey ?? stripeSecretKey;
-      }
-    } catch (err) {
-      app.log.warn({ err }, "Failed to load cartridge credentials from DB, using env vars");
-    }
-  }
-
-  // Register digital-ads cartridge
-  const isProd = process.env.NODE_ENV === "production";
-  const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
-    accessToken: adsAccessToken ?? (isProd ? "" : "mock-token-dev-only"),
-    adAccountId: adsAccountId ?? (isProd ? "" : "act_mock_dev_only"),
-    requireCredentials: isProd,
-    cacheStore: createSnapshotCacheStore(redis ?? undefined),
-  });
-  storage.cartridges.register("digital-ads", new GuardedCartridge(adsCartridge, interceptors));
-  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
-
-  // Register quant-trading cartridge
-  const { cartridge: tradingCartridge } = await bootstrapQuantTradingCartridge();
-  storage.cartridges.register("quant-trading", new GuardedCartridge(tradingCartridge));
-  await seedDefaultStorage(storage, DEFAULT_TRADING_POLICIES);
-
-  // Register payments cartridge
-  const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
-    secretKey: stripeSecretKey ?? (isProd ? "" : "mock-key-dev-only"),
-    requireCredentials: isProd,
-  });
-  storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
-  await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
-
-  // Register CRM cartridge (built-in, no external credentials needed)
-  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
-  storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
-  await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
-
-  // Register customer-engagement cartridge (uses credential resolver for Google Calendar + Twilio)
-  // Optionally load a business profile for profile-driven configuration
-  let businessProfile: import("@switchboard/schemas").BusinessProfile | undefined;
-  const profileId = process.env["PROFILE_ID"];
-  if (profileId) {
-    const profilesDir = new URL("../../../profiles", import.meta.url).pathname;
-    const profileLoader = new ProfileLoader(profilesDir);
-    try {
-      businessProfile = await profileLoader.load(profileId);
-      app.log.info({ profileId }, `Business profile "${profileId}" loaded`);
-    } catch (err) {
-      app.log.warn(
-        { err, profileId },
-        `Failed to load business profile "${profileId}" — using defaults`,
-      );
-    }
-  }
-
-  const { cartridge: peCartridge, interceptors: peInterceptors } =
-    await bootstrapCustomerEngagementCartridge(
-      {
-        requireCredentials: process.env.NODE_ENV === "production",
-      },
-      businessProfile,
-    );
-  storage.cartridges.register(
-    "customer-engagement",
-    new GuardedCartridge(peCartridge, peInterceptors),
-  );
-  await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
-
-  // Wire escalation notifier for customer-engagement cartridge
-  // Uses the proactive notification infrastructure to alert staff on configured channels
-  {
-    const { sendProactiveNotification } = await import("./alerts/notifier.js");
-    setEscalationNotifier({
-      async notify(escalation) {
-        const escalationCredentials = {
-          slack: process.env["SLACK_BOT_TOKEN"]
-            ? { botToken: process.env["SLACK_BOT_TOKEN"] }
-            : undefined,
-          telegram: process.env["TELEGRAM_BOT_TOKEN"]
-            ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
-            : undefined,
-          whatsapp:
-            process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
-              ? {
-                  token: process.env["WHATSAPP_TOKEN"],
-                  phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
-                }
-              : undefined,
-        };
-
-        // Determine delivery channels and recipients from skin config or env
-        const channels = process.env["ESCALATION_CHANNELS"]?.split(",") ?? ["telegram"];
-        const recipients = process.env["ESCALATION_RECIPIENTS"]?.split(",") ?? [];
-
-        if (recipients.length === 0) {
-          console.warn("[escalation] No ESCALATION_RECIPIENTS configured — notification skipped");
-          return;
-        }
-
-        await sendProactiveNotification(
-          {
-            title: "Customer Escalation",
-            body: [
-              `Patient: ${escalation.contactId}`,
-              `Reason: ${escalation.reason}`,
-              escalation.conversationId ? `Conversation: ${escalation.conversationId}` : null,
-              `Time: ${escalation.escalatedAt}`,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-            severity: "warning",
-            channels,
-            recipients,
-          },
-          escalationCredentials,
-        );
-      },
-    });
-  }
+  // --- Resolve credentials and register cartridges ---
+  const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
+  await registerCartridges(storage, credentials, redis, app.log);
+  await wireEscalationNotifier();
 
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
   let resolvedSkin: ResolvedSkin | null = null;
@@ -459,7 +230,6 @@ export async function buildServer() {
     const skinResolver = new SkinResolver();
     const toolRegistry = new ToolRegistry();
 
-    // Register all cartridge manifests in the tool registry
     for (const cartridgeId of storage.cartridges.list()) {
       const cartridge = storage.cartridges.get(cartridgeId);
       if (cartridge) {
@@ -487,9 +257,6 @@ export async function buildServer() {
       const now = new Date();
       for (let i = 0; i < resolvedSkin.governance.policyOverrides.length; i++) {
         const override = resolvedSkin.governance.policyOverrides[i]!;
-        // Extract approvalRequirement from effectParams or default to "standard"
-        // when the effect is "require_approval" — without this, the policy engine
-        // silently ignores the approval intent (see PolicyEngine step 7).
         const approvalRequirement =
           override.effect === "require_approval"
             ? ((override.effectParams?.["approvalRequirement"] as Policy["approvalRequirement"]) ??
@@ -519,9 +286,11 @@ export async function buildServer() {
     }
   }
 
+  // --- Execution queue setup ---
   let queue: Queue | null = null;
   let worker: Worker | null = null;
   let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
+  const redisUrl = process.env["REDIS_URL"];
   const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
 
   if (redisUrl) {
@@ -535,7 +304,7 @@ export async function buildServer() {
     };
   }
 
-  // Wire approval notifiers from env vars
+  // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
   if (process.env["TELEGRAM_BOT_TOKEN"]) {
     const { TelegramApprovalNotifier } = await import("./notifications/telegram-notifier.js");
@@ -561,19 +330,7 @@ export async function buildServer() {
         ? approvalNotifiers[0]
         : undefined;
 
-  // SMB tier store and activity log
-  let tierStore: TierStore | undefined;
-  let smbActivityLog: SmbActivityLog | undefined;
-  if (prismaClient) {
-    const { PrismaTierStore } = await import("@switchboard/db");
-    const { PrismaSmbActivityLogStorage } = await import("@switchboard/db");
-    tierStore = new PrismaTierStore(prismaClient);
-    smbActivityLog = new SmbActivityLog(new PrismaSmbActivityLogStorage(prismaClient));
-  } else {
-    tierStore = new InMemoryTierStore();
-    smbActivityLog = new SmbActivityLog(new InMemorySmbActivityLogStorage());
-  }
-
+  // --- Build orchestrator ---
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -605,65 +362,16 @@ export async function buildServer() {
     });
   }
 
-  // Start approval expiry background job
-  const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger: app.log });
-
-  // Start daily audit chain verification job
-  const stopChainVerify = startChainVerificationJob({ ledger, logger: app.log });
-
-  // Start diagnostic scanner + scheduled report jobs (require DB)
-  const stopDiagnosticScanner = prismaClient
-    ? startDiagnosticScanner({ prisma: prismaClient, storageContext: storage, logger: app.log })
-    : () => {};
-  const stopScheduledReports = prismaClient
-    ? startScheduledReportJob({ prisma: prismaClient, storageContext: storage, logger: app.log })
-    : () => {};
-  const stopTokenRefresh = prismaClient
-    ? startTokenRefreshJob({ prisma: prismaClient, logger: app.log })
-    : () => {};
-  const stopTtlCleanup = prismaClient
-    ? startTtlCleanupJob({ prisma: prismaClient, logger: app.log })
-    : () => {};
-
-  // Start cadence cron runner (evaluates pending cadences on schedule)
-  let cadenceStore: import("@switchboard/db").CadenceStore | undefined;
-  if (prismaClient) {
-    const { PrismaCadenceStore } = await import("@switchboard/db");
-    cadenceStore = new PrismaCadenceStore(prismaClient);
-  }
-  const stopCadenceRunner = startCadenceRunner({
-    storageContext: storage,
-    cadenceStore,
-    intervalMs: 60_000,
-    logger: app.log,
-  });
-
-  // Start agent runner (autonomous ads operator agents)
-  const { ProactiveSender } = await import("./notifications/proactive-sender.js");
-  const agentNotifier = new ProactiveSender({
-    telegram: process.env["TELEGRAM_BOT_TOKEN"]
-      ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
-      : undefined,
-    slack: process.env["SLACK_BOT_TOKEN"]
-      ? { botToken: process.env["SLACK_BOT_TOKEN"] }
-      : undefined,
-    whatsapp:
-      process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
-        ? {
-            token: process.env["WHATSAPP_TOKEN"],
-            phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
-          }
-        : undefined,
-  });
-  const stopAgentRunner = startAgentRunner({
-    storageContext: storage,
+  // --- Start background jobs ---
+  const stopAllJobs = await startBackgroundJobs({
+    storage,
+    ledger,
     orchestrator,
-    notifier: agentNotifier,
-    intervalMs: 60_000,
+    prismaClient,
     logger: app.log,
   });
 
-  // Decorate Fastify with shared instances
+  // --- Decorate Fastify with shared instances ---
   const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
@@ -679,16 +387,9 @@ export async function buildServer() {
   app.decorate("governanceProfileStore", governanceProfileStore);
   app.decorate("resolvedSkin", resolvedSkin);
 
-  // Resource cleanup on close — order: worker → queue → Redis → Prisma
+  // Resource cleanup on close — order: jobs → worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
-    stopExpiryJob();
-    stopChainVerify();
-    stopDiagnosticScanner();
-    stopScheduledReports();
-    stopTokenRefresh();
-    stopTtlCleanup();
-    stopCadenceRunner();
-    stopAgentRunner();
+    stopAllJobs();
 
     if (worker) {
       await worker.close();
@@ -759,33 +460,8 @@ export async function buildServer() {
   // Prometheus metrics endpoint (excluded from auth like /health)
   app.get("/metrics", metricsRoute);
 
-  // Register routes
-  await app.register(actionsRoutes, { prefix: "/api/actions" });
-  await app.register(executeRoutes, { prefix: "/api" });
-  await app.register(approvalsRoutes, { prefix: "/api/approvals" });
-  await app.register(policiesRoutes, { prefix: "/api/policies" });
-  await app.register(auditRoutes, { prefix: "/api/audit" });
-  await app.register(identityRoutes, { prefix: "/api/identity" });
-  await app.register(simulateRoutes, { prefix: "/api/simulate" });
-  await app.register(healthRoutes, { prefix: "/api/health" });
-  await app.register(interpretersRoutes, { prefix: "/api/interpreters" });
-  await app.register(cartridgesRoutes, { prefix: "/api/cartridges" });
-  await app.register(connectionsRoutes, { prefix: "/api/connections" });
-  await app.register(organizationsRoutes, { prefix: "/api/organizations" });
-  await app.register(dlqRoutes, { prefix: "/api/dlq" });
-  await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
-  await app.register(alertsRoutes, { prefix: "/api/alerts" });
-  await app.register(scheduledReportsRoutes, { prefix: "/api/scheduled-reports" });
-  await app.register(crmRoutes, { prefix: "/api/crm" });
-  await app.register(competenceRoutes, { prefix: "/api/competence" });
-  await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
-  await app.register(inboundWebhooksRoutes, { prefix: "/api/inbound" });
-  await app.register(inboundMessagesRoutes, { prefix: "/api/messages" });
-  await app.register(smbRoutes, { prefix: "/api/smb" });
-  await app.register(governanceRoutes, { prefix: "/api/governance" });
-  await app.register(campaignsRoutes, { prefix: "/api/campaigns" });
-  await app.register(reportsRoutes, { prefix: "/api/reports" });
-  await app.register(conversationsRoutes, { prefix: "/api/conversations" });
+  // --- Register all API routes ---
+  await registerRoutes(app);
 
   return app;
 }

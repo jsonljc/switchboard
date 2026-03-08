@@ -391,9 +391,9 @@ describe("createApiStorage", () => {
       const storage = createApiStorage(client);
       expect(storage.cartridges.list()).toEqual([
         "digital-ads",
-        "quant-trading",
         "payments",
         "crm",
+        "customer-engagement",
       ]);
     });
   });

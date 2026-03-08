@@ -1,4 +1,5 @@
 import type { PolicyCondition, PolicyConditionOperator, PolicyRule } from "@switchboard/schemas";
+import { getNestedValue } from "../utils/nested-value.js";
 
 export interface EvaluationContext {
   actionType: string;
@@ -21,17 +22,6 @@ export interface ConditionResult {
 export interface RuleResult {
   matched: boolean;
   conditionResults: ConditionResult[];
-}
-
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  const parts = path.split(".");
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (current === null || current === undefined) return undefined;
-    if (typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
 }
 
 function evaluateCondition(

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { ToolRegistry } from "@switchboard/core";
 import type { CartridgeManifest } from "@switchboard/schemas";
 import { DIGITAL_ADS_MANIFEST } from "@switchboard/digital-ads";
-import { QUANT_TRADING_MANIFEST } from "@switchboard/quant-trading";
 import { PAYMENTS_MANIFEST } from "@switchboard/payments";
 import { CRM_MANIFEST } from "@switchboard/crm";
 import { CUSTOMER_ENGAGEMENT_MANIFEST } from "@switchboard/customer-engagement";
@@ -15,7 +14,6 @@ import { CUSTOMER_ENGAGEMENT_MANIFEST } from "@switchboard/customer-engagement";
 
 const ALL_MANIFESTS: Array<{ id: string; manifest: CartridgeManifest }> = [
   { id: "digital-ads", manifest: DIGITAL_ADS_MANIFEST as CartridgeManifest },
-  { id: "quant-trading", manifest: QUANT_TRADING_MANIFEST as CartridgeManifest },
   { id: "payments", manifest: PAYMENTS_MANIFEST as CartridgeManifest },
   { id: "crm", manifest: CRM_MANIFEST as CartridgeManifest },
   { id: "customer-engagement", manifest: CUSTOMER_ENGAGEMENT_MANIFEST as CartridgeManifest },

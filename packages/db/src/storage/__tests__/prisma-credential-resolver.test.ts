@@ -146,9 +146,5 @@ describe("PrismaCredentialResolver", () => {
     connectionStore.getByService.mockClear();
     await resolver.resolve("payments", "org_1");
     expect(connectionStore.getByService).toHaveBeenCalledWith("stripe", "org_1");
-
-    connectionStore.getByService.mockClear();
-    await resolver.resolve("quant-trading", "org_1");
-    expect(connectionStore.getByService).toHaveBeenCalledWith("broker-api", "org_1");
   });
 });

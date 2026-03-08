@@ -18,6 +18,10 @@ import type {
   CreateAdCreativeWriteParams,
   CreateAdStudyWriteParams,
   CreateAdRuleWriteParams,
+  LeadFormInfo,
+  LeadFormEntry,
+  ConversionEvent,
+  InsightsOptions,
 } from "../types.js";
 
 export interface MetaAdsWriteConfig {
@@ -542,6 +546,124 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true };
   }
 
+  // ---------------------------------------------------------------------------
+  // Lead Forms API (speed-to-lead)
+  // ---------------------------------------------------------------------------
+
+  async getLeadForms(pageId: string): Promise<LeadFormInfo[]> {
+    const url =
+      `${this.baseUrl}/${pageId}/leadgen_forms?fields=id,name,status,created_time` +
+      `&access_token=${this.accessToken}`;
+    const data = await this.executeWithRetry(url);
+    const forms = (data.data ?? []) as Record<string, unknown>[];
+    return forms.map((f) => ({
+      id: String(f.id),
+      name: String(f.name ?? ""),
+      status: String(f.status ?? "ACTIVE"),
+      createdTime: String(f.created_time ?? ""),
+      pageId,
+    }));
+  }
+
+  async getLeadFormData(formId: string, options?: { since?: number }): Promise<LeadFormEntry[]> {
+    let url =
+      `${this.baseUrl}/${formId}/leads?fields=id,created_time,field_data` +
+      `&access_token=${this.accessToken}`;
+    if (options?.since) {
+      url += `&filtering=[{"field":"time_created","operator":"GREATER_THAN","value":${options.since}}]`;
+    }
+
+    const entries: LeadFormEntry[] = [];
+    let nextUrl: string | null = url;
+
+    while (nextUrl) {
+      const data = await this.executeWithRetry(nextUrl);
+      if (data.data) {
+        for (const item of data.data as Record<string, unknown>[]) {
+          entries.push({
+            id: String(item.id),
+            createdTime: String(item.created_time ?? ""),
+            fieldData: (item.field_data ?? []) as LeadFormEntry["fieldData"],
+          });
+        }
+      }
+      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
+    }
+
+    return entries;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversions API (CAPI)
+  // ---------------------------------------------------------------------------
+
+  async sendConversionEvent(
+    pixelId: string,
+    event: ConversionEvent,
+  ): Promise<{ eventsReceived: number; success: boolean }> {
+    const url = `${this.baseUrl}/${pixelId}/events?access_token=${this.accessToken}`;
+
+    const eventData: Record<string, unknown> = {
+      event_name: event.eventName,
+      event_time: event.eventTime,
+      action_source: event.actionSource,
+      user_data: event.userData,
+    };
+    if (event.customData) eventData.custom_data = event.customData;
+    if (event.eventSourceUrl) eventData.event_source_url = event.eventSourceUrl;
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: [eventData] }),
+    });
+
+    return {
+      eventsReceived: (data.events_received as number) ?? 1,
+      success: true,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Insights API
+  // ---------------------------------------------------------------------------
+
+  async getAccountInsights(
+    accountId: string,
+    options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    const acctId = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
+    return this.fetchInsightsEndpoint(`${acctId}/insights`, options);
+  }
+
+  async getCampaignInsights(
+    campaignId: string,
+    options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    return this.fetchInsightsEndpoint(`${campaignId}/insights`, options);
+  }
+
+  private async fetchInsightsEndpoint(
+    path: string,
+    options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    const params = new URLSearchParams({
+      fields: options.fields.join(","),
+      time_range: JSON.stringify(options.dateRange),
+      access_token: this.accessToken,
+    });
+    if (options.breakdowns?.length) {
+      params.set("breakdowns", options.breakdowns.join(","));
+    }
+    if (options.level) {
+      params.set("level", options.level);
+    }
+
+    const url = `${this.baseUrl}/${path}?${params.toString()}`;
+    const data = await this.executeWithRetry(url);
+    return (data.data ?? []) as Record<string, unknown>[];
+  }
+
   async healthCheck(): Promise<ConnectionHealth> {
     const start = Date.now();
     try {
@@ -849,6 +971,59 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
 
   async deleteAdRule(_ruleId: string): Promise<{ success: boolean }> {
     return { success: true };
+  }
+
+  // --- Lead Forms API ---
+
+  async getLeadForms(_pageId: string): Promise<LeadFormInfo[]> {
+    return [
+      {
+        id: "form_1",
+        name: "Contact Form",
+        status: "ACTIVE",
+        createdTime: "2026-01-01T00:00:00+0000",
+        pageId: _pageId,
+      },
+    ];
+  }
+
+  async getLeadFormData(_formId: string, _options?: { since?: number }): Promise<LeadFormEntry[]> {
+    return [
+      {
+        id: "lead_1",
+        createdTime: "2026-03-01T10:00:00+0000",
+        fieldData: [
+          { name: "full_name", values: ["John Doe"] },
+          { name: "email", values: ["john@example.com"] },
+          { name: "phone_number", values: ["+1234567890"] },
+        ],
+      },
+    ];
+  }
+
+  // --- Conversions API (CAPI) ---
+
+  async sendConversionEvent(
+    _pixelId: string,
+    _event: ConversionEvent,
+  ): Promise<{ eventsReceived: number; success: boolean }> {
+    return { eventsReceived: 1, success: true };
+  }
+
+  // --- Insights API ---
+
+  async getAccountInsights(
+    _accountId: string,
+    _options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    return [{ spend: "1000.00", impressions: "50000", clicks: "2500", ctr: "5.0" }];
+  }
+
+  async getCampaignInsights(
+    _campaignId: string,
+    _options: InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    return [{ spend: "500.00", impressions: "25000", clicks: "1250", ctr: "5.0" }];
   }
 
   async healthCheck(): Promise<ConnectionHealth> {

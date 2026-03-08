@@ -2,7 +2,6 @@ import type { Config } from "tailwindcss";
 import tailwindAnimate from "tailwindcss-animate";
 
 const config: Config = {
-  darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -35,6 +34,12 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        agent: {
+          active: "hsl(var(--agent-active))",
+          idle: "hsl(var(--agent-idle))",
+          attention: "hsl(var(--agent-attention))",
+          locked: "hsl(var(--agent-locked))",
         },
       },
       borderRadius: {

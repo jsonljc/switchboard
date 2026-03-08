@@ -13,6 +13,7 @@ export interface CrmContact {
   status: "active" | "archived";
   assignedStaffId: string | null;
   sourceAdId: string | null;
+  sourceCampaignId: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;
@@ -79,6 +80,7 @@ export interface CrmProvider {
     channel?: string;
     assignedStaffId?: string;
     sourceAdId?: string;
+    sourceCampaignId?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact>;

@@ -361,6 +361,40 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
     throw new Error("deleteAdRule not yet implemented for Google Ads");
   }
 
+  // --- Lead Forms / CAPI / Insights stubs (Meta-specific, not applicable to Google) ---
+
+  async getLeadForms(_pageId: string): Promise<import("../types.js").LeadFormInfo[]> {
+    throw new Error("getLeadForms not applicable to Google Ads");
+  }
+
+  async getLeadFormData(
+    _formId: string,
+    _options?: { since?: number },
+  ): Promise<import("../types.js").LeadFormEntry[]> {
+    throw new Error("getLeadFormData not applicable to Google Ads");
+  }
+
+  async sendConversionEvent(
+    _pixelId: string,
+    _event: import("../types.js").ConversionEvent,
+  ): Promise<{ eventsReceived: number; success: boolean }> {
+    throw new Error("sendConversionEvent not yet implemented for Google Ads");
+  }
+
+  async getAccountInsights(
+    _accountId: string,
+    _options: import("../types.js").InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    throw new Error("getAccountInsights not yet implemented for Google Ads");
+  }
+
+  async getCampaignInsights(
+    _campaignId: string,
+    _options: import("../types.js").InsightsOptions,
+  ): Promise<Record<string, unknown>[]> {
+    throw new Error("getCampaignInsights not yet implemented for Google Ads");
+  }
+
   // ── Private helpers ──
 
   private async search(gaql: string): Promise<Record<string, unknown>[]> {

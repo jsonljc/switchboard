@@ -1,4 +1,5 @@
 import type { StepExecutionResult } from "./types.js";
+import { getNestedValue } from "../utils/nested-value.js";
 
 /** Minimal interface for entity graph resolution (full impl lives in entity-graph module). */
 export interface EntityGraphService {
@@ -169,15 +170,4 @@ async function resolveEntityBinding(expr: string, context: BindingContext): Prom
   // This will be resolved during execution when we have the step's entity context.
   // For now, return a marker that the executor can resolve.
   return `__entity_resolve__:${targetCartridgeId}:${targetEntityType}`;
-}
-
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  const parts = path.split(".");
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (current === null || current === undefined) return undefined;
-    if (typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
 }
