@@ -91,6 +91,7 @@ import { startDiagnosticScanner } from "./jobs/diagnostic-scanner.js";
 import { startScheduledReportJob } from "./jobs/scheduled-reports.js";
 import { startTokenRefreshJob } from "./jobs/token-refresh.js";
 import { startCadenceRunner } from "./jobs/cadence-runner.js";
+import { startAgentRunner } from "./jobs/agent-runner.js";
 import { startTtlCleanupJob } from "./jobs/ttl-cleanup.js";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
@@ -637,6 +638,31 @@ export async function buildServer() {
     logger: app.log,
   });
 
+  // Start agent runner (autonomous ads operator agents)
+  const { ProactiveSender } = await import("./notifications/proactive-sender.js");
+  const agentNotifier = new ProactiveSender({
+    telegram: process.env["TELEGRAM_BOT_TOKEN"]
+      ? { botToken: process.env["TELEGRAM_BOT_TOKEN"] }
+      : undefined,
+    slack: process.env["SLACK_BOT_TOKEN"]
+      ? { botToken: process.env["SLACK_BOT_TOKEN"] }
+      : undefined,
+    whatsapp:
+      process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+        ? {
+            token: process.env["WHATSAPP_TOKEN"],
+            phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+          }
+        : undefined,
+  });
+  const stopAgentRunner = startAgentRunner({
+    storageContext: storage,
+    orchestrator,
+    notifier: agentNotifier,
+    intervalMs: 60_000,
+    logger: app.log,
+  });
+
   // Decorate Fastify with shared instances
   const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
@@ -662,6 +688,7 @@ export async function buildServer() {
     stopTokenRefresh();
     stopTtlCleanup();
     stopCadenceRunner();
+    stopAgentRunner();
 
     if (worker) {
       await worker.close();

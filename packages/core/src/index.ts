@@ -35,7 +35,10 @@ export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js"
 export type { ResolvedIdentity } from "./identity/spec.js";
 export { getActiveOverlays } from "./identity/overlay.js";
 export { canActAs, resolveApprovers } from "./identity/principals.js";
-export { GOVERNANCE_PROFILE_PRESETS } from "./identity/governance-presets.js";
+export {
+  GOVERNANCE_PROFILE_PRESETS,
+  automationLevelToProfile,
+} from "./identity/governance-presets.js";
 export type { GovernanceProfilePreset } from "./identity/governance-presets.js";
 
 // Approval
@@ -297,3 +300,7 @@ export type { ResolvedProfile } from "./profile/index.js";
 export { ToolRegistry } from "./tool-registry/index.js";
 export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
 export { matchGlob, matchesAny } from "./tool-registry/index.js";
+
+// Agents (autonomous ads operator layer)
+export { OptimizerAgent, ReporterAgent } from "./agents/index.js";
+export type { AdsAgent, AgentContext, AgentTickResult, AgentNotifier } from "./agents/index.js";

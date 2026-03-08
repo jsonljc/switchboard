@@ -18,6 +18,7 @@ import {
   CartridgeReadAdapter,
   CapabilityRegistry,
   PlanGraphBuilder,
+  DataFlowExecutor,
   SkinLoader,
   SkinResolver,
   ToolRegistry,
@@ -25,7 +26,7 @@ import {
   ProfileLoader,
   ProfileResolver,
 } from "@switchboard/core";
-import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
+import type { ResolvedSkin, ResolvedProfile, AgentNotifier } from "@switchboard/core";
 import type { BusinessProfile, CrmProvider } from "@switchboard/schemas";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
@@ -38,6 +39,8 @@ import type { ChatRuntimeConfig } from "./runtime.js";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerAllCartridges, DEFAULT_CHAT_AVAILABLE_ACTIONS } from "./cartridge-registrar.js";
+import { ResponseGenerator } from "./composer/response-generator.js";
+import { ProactiveSender } from "./notifications/proactive-sender.js";
 
 /** Configuration for clinic mode (LLM interpreter + read tools). */
 export interface ClinicConfig {
@@ -51,6 +54,8 @@ export interface ChatBootstrapResult {
   runtime: ChatRuntime;
   cleanup: () => void;
   failedMessageStore: FailedMessageStore | null;
+  /** AgentNotifier for proactive messaging from background agents. */
+  agentNotifier: AgentNotifier | null;
 }
 
 export async function createChatRuntime(
@@ -220,6 +225,7 @@ export async function createChatRuntime(
   // ClinicInterpreter (legacy clinicConfig). Activated by skinIdEnv or clinicConfig.
   const useLlmInterpreter = skinIdEnv || clinicConfig;
   let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let responseGenerator: ResponseGenerator | null = null;
 
   if (useLlmInterpreter && !interpreter) {
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
@@ -278,6 +284,17 @@ export async function createChatRuntime(
       llmInterpreter = new ClinicInterpreter(llmConfig, clinicContext, modelRouter);
     }
     interpreter = llmInterpreter;
+
+    // Construct LLM-powered response generator (shares modelRouter with interpreter)
+    if (llmConfig.apiKey) {
+      responseGenerator = new ResponseGenerator({
+        llmConfig: { ...llmConfig, maxTokens: 256, temperature: 0.4 },
+        resolvedProfile,
+        resolvedSkin,
+        modelRouter,
+      });
+      console.warn("[Chat] ResponseGenerator initialized (LLM response generation enabled)");
+    }
 
     // Create CartridgeReadAdapter for read intents
     if (storage && ledger && !readAdapter) {
@@ -354,6 +371,29 @@ export async function createChatRuntime(
   }
   const planGraphBuilder = new PlanGraphBuilder();
 
+  // Create DataFlowExecutor for multi-step plan execution
+  let dataFlowExecutor: InstanceType<typeof DataFlowExecutor> | null = null;
+  if (orchestrator && "propose" in orchestrator) {
+    dataFlowExecutor = new DataFlowExecutor({
+      orchestrator: orchestrator as unknown as import("@switchboard/core").DataFlowOrchestrator,
+    });
+  }
+
+  // Create ProactiveSender for agent notifications
+  const agentNotifier: AgentNotifier = new ProactiveSender({
+    telegram: botToken ? { botToken } : undefined,
+    slack: process.env["SLACK_BOT_TOKEN"]
+      ? { botToken: process.env["SLACK_BOT_TOKEN"] }
+      : undefined,
+    whatsapp:
+      process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]
+        ? {
+            token: process.env["WHATSAPP_TOKEN"],
+            phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+          }
+        : undefined,
+  });
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -368,6 +408,8 @@ export async function createChatRuntime(
     resolvedSkin,
     resolvedProfile,
     crmProvider,
+    responseGenerator,
+    dataFlowExecutor,
   });
 
   const cleanup = () => {
@@ -376,7 +418,7 @@ export async function createChatRuntime(
     }
   };
 
-  return { runtime, cleanup, failedMessageStore };
+  return { runtime, cleanup, failedMessageStore, agentNotifier };
 }
 
 /**
