@@ -5,6 +5,12 @@ export { StrategistAgent } from "./strategist.js";
 export { MonitorAgent } from "./monitor.js";
 export type { AlertCondition, AlertResult, MonitorSnapshot, CampaignSnapshot } from "./monitor.js";
 export { DEFAULT_ALERT_CONDITIONS } from "./monitor.js";
+export { GuardrailAgent, DEFAULT_GUARDRAIL_RULES } from "./guardrail-agent.js";
+export type {
+  GuardrailViolation,
+  GuardrailRule,
+  CampaignGuardrailData,
+} from "./guardrail-agent.js";
 export { DEFAULT_ALERT_TEMPLATES, buildDefaultAlertRules } from "./alert-defaults.js";
 export type { AlertRuleTemplate } from "./alert-defaults.js";
 export {

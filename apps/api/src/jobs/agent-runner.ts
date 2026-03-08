@@ -5,7 +5,7 @@
 // Evaluates AdsOperatorConfig schedules and dispatches agent ticks.
 // ---------------------------------------------------------------------------
 
-import { OptimizerAgent, ReporterAgent } from "@switchboard/core";
+import { OptimizerAgent, ReporterAgent, MonitorAgent, GuardrailAgent } from "@switchboard/core";
 import type { AgentNotifier, AgentContext, AdsAgent } from "@switchboard/core";
 import type { AdsOperatorConfig } from "@switchboard/schemas";
 import type { StorageContext, RuntimeOrchestrator } from "@switchboard/core";
@@ -53,7 +53,12 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
   const lastRuns = new Map<string, AgentLastRun>();
 
   // Registered agent types
-  const agents: AdsAgent[] = [new OptimizerAgent(), new ReporterAgent()];
+  const agents: AdsAgent[] = [
+    new OptimizerAgent(),
+    new ReporterAgent(),
+    new MonitorAgent(),
+    new GuardrailAgent(),
+  ];
 
   function getConfigs(): AdsOperatorConfig[] {
     return operatorConfigs.filter((c) => c.active);

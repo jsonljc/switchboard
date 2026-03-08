@@ -40,6 +40,12 @@ import { handleProposeResult, handlePlanResult } from "./handlers/proposal-handl
 import { handleUndo, handleKillSwitch } from "./handlers/system-commands.js";
 import { handleCallbackQuery, extractCallbackQueryId } from "./handlers/callback-handler.js";
 import { handleLeadMessage } from "./handlers/lead-handler.js";
+import {
+  handleStatusCommand,
+  handlePauseCommand,
+  handleResumeCommand,
+  handleAutonomyCommand,
+} from "./handlers/cockpit-commands.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
@@ -420,6 +426,30 @@ export class ChatRuntime {
       );
       await this.sendFilteredReply(threadId, helpText);
       await this.recordAssistantMessage(threadId, helpText);
+      return;
+    }
+
+    // Handle cockpit commands (agent management)
+    const trimmedText = message.text.trim();
+
+    if (/^\/?status$/i.test(trimmedText)) {
+      await handleStatusCommand(ctx, threadId, message.principalId, message.organizationId);
+      return;
+    }
+
+    if (/^\/?pause$/i.test(trimmedText)) {
+      await handlePauseCommand(ctx, threadId, message.principalId);
+      return;
+    }
+
+    if (/^\/?resume$/i.test(trimmedText)) {
+      await handleResumeCommand(ctx, threadId, message.principalId);
+      return;
+    }
+
+    const autonomyMatch = trimmedText.match(/^\/?autonomy(?:\s+(.+))?$/i);
+    if (autonomyMatch) {
+      await handleAutonomyCommand(ctx, threadId, message.principalId, autonomyMatch[1]);
       return;
     }
 
