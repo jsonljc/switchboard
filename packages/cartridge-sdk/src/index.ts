@@ -4,6 +4,7 @@ export type {
   CartridgeInterceptor,
   ExecuteResult,
 } from "./cartridge.js";
+export { ExecuteResultBuilder, failResult } from "./result-builder.js";
 export { ActionBuilder, action } from "./action-builder.js";
 export { validateConnection } from "./context.js";
 export type { CartridgeConnectionConfig } from "./context.js";
