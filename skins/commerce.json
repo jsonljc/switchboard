@@ -18,6 +18,10 @@
       "digital-ads.targeting.*",
       "digital-ads.creative.generate",
       "digital-ads.creative.generate_brief",
+      "digital-ads.creative.upload",
+      "digital-ads.creative.list",
+      "digital-ads.creative.analyze",
+      "digital-ads.creative.score_assets",
       "digital-ads.report.performance",
       "digital-ads.report.creative",
       "digital-ads.signal.*",
@@ -26,12 +30,18 @@
       "digital-ads.alert.budget_forecast",
       "crm.*"
     ],
-    "exclude": ["digital-ads.campaign.setup_guided", "digital-ads.campaign.update_objective"],
+    "exclude": [
+      "customer-engagement.*",
+      "digital-ads.campaign.setup_guided",
+      "digital-ads.campaign.update_objective"
+    ],
     "aliases": {
       "check_ads": "digital-ads.funnel.diagnose",
       "create_campaign": "digital-ads.campaign.create",
       "pause_campaign": "digital-ads.campaign.pause",
-      "adjust_budget": "digital-ads.campaign.adjust_budget"
+      "adjust_budget": "digital-ads.campaign.adjust_budget",
+      "run_ads": "digital-ads.campaign.create",
+      "check_performance": "digital-ads.funnel.diagnose"
     }
   },
 
@@ -79,6 +89,7 @@
   },
 
   "funnelMode": "conversions",
+  "leadChannel": null,
 
   "playbooks": [],
 
@@ -87,6 +98,10 @@
   "channels": {
     "primary": "telegram",
     "enabled": ["telegram", "whatsapp"]
+  },
+
+  "conversionValueMap": {
+    "purchased": "dynamic"
   },
 
   "config": {
