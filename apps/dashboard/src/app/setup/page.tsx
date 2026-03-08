@@ -199,6 +199,35 @@ export default function SetupPage() {
         // Non-critical
       }
 
+      // 5. Create AdsOperatorConfig for the agent runner
+      try {
+        const dailyBudget = Math.round((monthlyBudget / 30) * 100) / 100;
+        await fetch("/api/dashboard/operator-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            adAccountIds: [],
+            platforms: ["meta"],
+            automationLevel: "supervised",
+            targets: {
+              dailyBudgetCap: dailyBudget,
+            },
+            schedule: {
+              optimizerCronHour: 6,
+              reportCronHour: 9,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+            notificationChannel: {
+              type: "telegram",
+              chatId: organizationId || "pending",
+            },
+            active: true,
+          }),
+        });
+      } catch {
+        // Non-critical — operator config can be created later from the dashboard
+      }
+
       router.push("/");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
