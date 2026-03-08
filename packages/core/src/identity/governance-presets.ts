@@ -1,4 +1,9 @@
-import type { GovernanceProfile, RiskTolerance, SpendLimits } from "@switchboard/schemas";
+import type {
+  GovernanceProfile,
+  RiskTolerance,
+  SpendLimits,
+  AutomationLevel,
+} from "@switchboard/schemas";
 
 export interface GovernanceProfilePreset {
   riskTolerance: RiskTolerance;
@@ -77,3 +82,19 @@ export const GOVERNANCE_PROFILE_PRESETS: Record<GovernanceProfile, GovernancePro
     trustBehaviors: [],
   },
 };
+
+/**
+ * Map an automation level to the corresponding governance profile.
+ * - copilot: locked (all actions require manual approval)
+ * - supervised: guarded (low risk auto-executes, medium+ requires approval)
+ * - autonomous: observe (everything auto-executes, still logged)
+ */
+const AUTOMATION_LEVEL_TO_PROFILE: Record<AutomationLevel, GovernanceProfile> = {
+  copilot: "locked",
+  supervised: "guarded",
+  autonomous: "observe",
+};
+
+export function automationLevelToProfile(level: AutomationLevel): GovernanceProfile {
+  return AUTOMATION_LEVEL_TO_PROFILE[level];
+}

@@ -10,6 +10,11 @@ import {
   composeUncertainReply,
   composeWelcomeMessage,
 } from "./composer/reply.js";
+import type {
+  ResponseGenerator,
+  ResponseContext,
+  GeneratedResponse,
+} from "./composer/response-generator.js";
 import { buildApprovalCard } from "./composer/approval-card.js";
 import { buildResultCard } from "./composer/result-card.js";
 import { ResponseHumanizer } from "./composer/humanize.js";
@@ -24,6 +29,8 @@ import type {
   PlanGraphBuilder,
   ResolvedSkin,
   ResolvedProfile,
+  DataFlowExecutor,
+  DataFlowExecutionResult,
 } from "@switchboard/core";
 import { inferCartridgeId, matchesAny } from "@switchboard/core";
 import type { UndoRecipe, CrmProvider } from "@switchboard/schemas";
@@ -56,6 +63,10 @@ export interface ChatRuntimeConfig {
   resolvedProfile?: ResolvedProfile | null;
   /** Optional CRM provider for auto-linking conversations to contacts. */
   crmProvider?: CrmProvider | null;
+  /** Optional LLM-powered response generator for natural language replies. */
+  responseGenerator?: ResponseGenerator | null;
+  /** Optional DataFlowExecutor for multi-step plan execution. */
+  dataFlowExecutor?: DataFlowExecutor | null;
 }
 
 export class ChatRuntime {
@@ -73,6 +84,8 @@ export class ChatRuntime {
   private resolvedSkin: ResolvedSkin | null;
   private resolvedProfile: ResolvedProfile | null;
   private crmProvider: CrmProvider | null;
+  private responseGenerator: ResponseGenerator | null;
+  private dataFlowExecutor: DataFlowExecutor | null;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
@@ -97,6 +110,8 @@ export class ChatRuntime {
     this.resolvedSkin = config.resolvedSkin ?? null;
     this.resolvedProfile = config.resolvedProfile ?? null;
     this.crmProvider = config.crmProvider ?? null;
+    this.responseGenerator = config.responseGenerator ?? null;
+    this.dataFlowExecutor = config.dataFlowExecutor ?? null;
 
     // Initialize banned phrase filter from skin config
     const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
@@ -138,6 +153,83 @@ export class ChatRuntime {
         ? { explanation: this.filterOutgoing(card.explanation) }
         : {}),
     };
+  }
+
+  /**
+   * Compose a user-facing response: LLM-generated when available, template fallback otherwise.
+   * Applies terminology substitution and banned phrase filtering.
+   */
+  private async composeResponse(
+    context: ResponseContext,
+    orgId?: string,
+  ): Promise<GeneratedResponse> {
+    let result: GeneratedResponse;
+    if (this.responseGenerator) {
+      result = await this.responseGenerator.generate(context, orgId);
+    } else {
+      result = this.templateFallback(context);
+    }
+    // Post-process: terminology substitution, then banned phrase filter
+    result.text = this.filterOutgoing(this.humanizer.applyTerminology(result.text));
+    return result;
+  }
+
+  /**
+   * Template-based fallback preserving exact current behavior per response type.
+   */
+  private templateFallback(context: ResponseContext): GeneratedResponse {
+    let text: string;
+
+    switch (context.type) {
+      case "welcome":
+        text = composeWelcomeMessage(
+          this.resolvedSkin,
+          this.resolvedProfile?.profile?.business?.name ?? undefined,
+          context.availableActions,
+        );
+        break;
+
+      case "uncertain":
+        text = composeUncertainReply(context.availableActions);
+        break;
+
+      case "clarification":
+        text = context.clarificationQuestion ?? composeUncertainReply(context.availableActions);
+        break;
+
+      case "denial": {
+        const detail = context.denialDetail ?? context.explanation ?? "that action is not allowed";
+        text = `I can't do that \u2014 ${lowercaseFirst(detail)}.`;
+        break;
+      }
+
+      case "result_success":
+        text = `All set! ${context.summary ?? "Action completed."}`;
+        break;
+
+      case "result_failure":
+        text = `Something went wrong: ${lowercaseFirst(context.summary ?? "the action failed")}.`;
+        break;
+
+      case "diagnostic":
+        text = context.data ?? "No diagnostic data available.";
+        break;
+
+      case "read_data":
+        text = context.data ?? "No data available.";
+        break;
+
+      case "error":
+        text = context.errorMessage
+          ? `Error: ${context.errorMessage}`
+          : "An unexpected error occurred.";
+        break;
+
+      default:
+        text = "I'm not sure how to respond to that.";
+    }
+
+    return { text, usedLLM: false };
   }
 
   private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
@@ -253,17 +345,15 @@ export class ChatRuntime {
       await setThread(conversation);
 
       // Welcome message for first-time users
-      const businessName =
-        this.resolvedProfile?.profile?.business?.name ??
-        this.resolvedSkin?.manifest?.name ??
-        undefined;
-      const welcomeText = composeWelcomeMessage(
-        this.resolvedSkin,
-        businessName,
-        this.availableActions,
+      const welcomeResponse = await this.composeResponse(
+        {
+          type: "welcome",
+          availableActions: this.availableActions,
+        },
+        message.organizationId ?? undefined,
       );
-      await this.sendFilteredReply(threadId, welcomeText);
-      await this.recordAssistantMessage(threadId, welcomeText);
+      await this.adapter.sendTextReply(threadId, welcomeResponse.text);
+      await this.recordAssistantMessage(threadId, welcomeResponse.text);
       isNewConversation = true;
     }
 
@@ -332,9 +422,16 @@ export class ChatRuntime {
     const guard = guardInterpreterOutput(rawResult);
     if (!guard.valid || !guard.data) {
       console.error("Interpreter output failed schema guard:", guard.errors);
-      const uncertainReply = composeUncertainReply(this.availableActions);
-      await this.sendFilteredReply(threadId, uncertainReply);
-      await this.recordAssistantMessage(threadId, uncertainReply);
+      const uncertainResponse = await this.composeResponse(
+        {
+          type: "uncertain",
+          userMessage: message.text,
+          availableActions: this.availableActions,
+        },
+        message.organizationId ?? undefined,
+      );
+      await this.adapter.sendTextReply(threadId, uncertainResponse.text);
+      await this.recordAssistantMessage(threadId, uncertainResponse.text);
       return;
     }
     const result = guard.data;
@@ -369,20 +466,36 @@ export class ChatRuntime {
       if (isNewConversation && result.confidence === 0) {
         return;
       }
-      const question = result.clarificationQuestion ?? composeUncertainReply(this.availableActions);
+      const clarifyResponse = await this.composeResponse(
+        {
+          type: "clarification",
+          clarificationQuestion: result.clarificationQuestion ?? undefined,
+          userMessage: message.text,
+          availableActions: this.availableActions,
+        },
+        message.organizationId ?? undefined,
+      );
       conversation = transitionConversation(conversation, {
         type: "set_clarifying",
-        question,
+        question: clarifyResponse.text,
       });
       await setThread(conversation);
-      await this.sendFilteredReply(threadId, question);
+      await this.adapter.sendTextReply(threadId, clarifyResponse.text);
       return;
     }
 
     // If no proposals, uncertain
     if (result.proposals.length === 0) {
       if (isNewConversation) return;
-      await this.sendFilteredReply(threadId, composeUncertainReply(this.availableActions));
+      const noProposalResponse = await this.composeResponse(
+        {
+          type: "uncertain",
+          userMessage: message.text,
+          availableActions: this.availableActions,
+        },
+        message.organizationId ?? undefined,
+      );
+      await this.adapter.sendTextReply(threadId, noProposalResponse.text);
       return;
     }
 
@@ -396,16 +509,21 @@ export class ChatRuntime {
           cartridgeId: "digital-ads",
         });
 
-        if (plan && plan.steps.length > 0) {
-          // Multi-step plan execution is not yet supported — executePlan is not
-          // implemented on the orchestrator. Log and fall through to single-action proposal.
-          console.warn(
-            "[ChatRuntime] Multi-step plan produced but executePlan not available; falling through to single-action.",
-          );
-          // Continue with single-action proposal below
+        if (plan && plan.steps.length > 0 && this.dataFlowExecutor) {
+          const planResult = await this.dataFlowExecutor.execute(plan, {
+            principalId: message.principalId,
+            organizationId: message.organizationId ?? undefined,
+          });
+
+          await this.handlePlanResult(threadId, planResult, message.principalId);
+          return;
         }
+        // No DataFlowExecutor — fall through to single-action proposal
       } catch (err) {
-        console.warn("[Runtime] Plan building failed, falling through to proposal flow:", err);
+        console.warn(
+          "[Runtime] Plan building/execution failed, falling through to proposal flow:",
+          err,
+        );
         // Fall through to single-proposal flow
       }
     }
@@ -527,14 +645,15 @@ export class ChatRuntime {
     _principalId: string,
   ): Promise<void> {
     if (result.denied) {
-      // Denied — produce conversational denial text
+      // Denied — produce conversational denial text via ResponseGenerator
       const deniedCheck = result.decisionTrace.checks.find((c) => c.matched && c.effect === "deny");
-      const denialText = this.humanizer.humanizeDenial(
-        result.decisionTrace.explanation,
-        deniedCheck?.humanDetail,
-      );
-      await this.sendFilteredReply(threadId, denialText);
-      await this.recordAssistantMessage(threadId, denialText);
+      const denialResponse = await this.composeResponse({
+        type: "denial",
+        explanation: result.decisionTrace.explanation,
+        denialDetail: deniedCheck?.humanDetail,
+      });
+      await this.adapter.sendTextReply(threadId, denialResponse.text);
+      await this.recordAssistantMessage(threadId, denialResponse.text);
       return;
     }
 
@@ -576,22 +695,36 @@ export class ChatRuntime {
       const actionType = result.envelope.proposals[0]?.actionType ?? "";
       if (isDiagnosticAction(actionType) && executeResult.data) {
         const formatted = formatDiagnosticResult(actionType, executeResult.data);
-        await this.sendFilteredReply(threadId, formatted);
-        await this.recordAssistantMessage(threadId, formatted);
+        const diagnosticResponse = await this.composeResponse({
+          type: "diagnostic",
+          actionType,
+          data: formatted,
+        });
+        await this.adapter.sendTextReply(threadId, diagnosticResponse.text);
+        await this.recordAssistantMessage(threadId, diagnosticResponse.text);
         return;
       }
 
       const undoRecipe = executeResult.undoRecipe as UndoRecipe | null;
 
+      // Generate summary text via ResponseGenerator before building the card
+      const responseType = executeResult.success ? "result_success" : "result_failure";
+      const summaryResponse = await this.composeResponse({
+        type: responseType,
+        actionType,
+        summary: executeResult.summary,
+      });
+
       const rawCard = buildResultCard(
-        executeResult.summary,
+        summaryResponse.text,
         executeResult.success,
         result.envelope.auditEntryIds[0] ?? result.envelope.id,
         result.decisionTrace.computedRiskScore.category,
         executeResult.rollbackAvailable,
         undoRecipe?.undoExpiresAt ?? null,
       );
-      const card = this.filterCardText(this.humanizer.humanizeResultCard(rawCard));
+      // Skip humanizer on the card since composeResponse already applied terminology
+      const card = this.filterCardText(rawCard);
       await this.adapter.sendResultCard(threadId, card);
       await this.recordAssistantMessage(threadId, card.summary);
     } catch (err) {
@@ -609,6 +742,41 @@ export class ChatRuntime {
       await this.sendFilteredReply(threadId, errText);
       await this.recordAssistantMessage(threadId, errText);
     }
+  }
+
+  private async handlePlanResult(
+    threadId: string,
+    planResult: DataFlowExecutionResult,
+    _principalId: string,
+  ): Promise<void> {
+    const executed = planResult.stepResults.filter((s) => s.outcome === "executed");
+    const pending = planResult.stepResults.filter((s) => s.outcome === "pending_approval");
+    const denied = planResult.stepResults.filter((s) => s.outcome === "denied");
+    const errors = planResult.stepResults.filter((s) => s.outcome === "error");
+
+    const parts: string[] = [
+      `Plan ${planResult.overallOutcome} (${planResult.stepResults.length} steps):`,
+    ];
+
+    if (executed.length > 0) {
+      parts.push(`${executed.length} executed`);
+    }
+    if (pending.length > 0) {
+      parts.push(`${pending.length} awaiting approval`);
+    }
+    if (denied.length > 0) {
+      parts.push(`${denied.length} denied`);
+    }
+    if (errors.length > 0) {
+      parts.push(`${errors.length} failed`);
+    }
+
+    const summaryText = parts.join(", ");
+    const responseType =
+      planResult.overallOutcome === "completed" ? "result_success" : "result_failure";
+    const response = await this.composeResponse({ type: responseType, summary: summaryText });
+    await this.adapter.sendTextReply(threadId, response.text);
+    await this.recordAssistantMessage(threadId, response.text);
   }
 
   private async handleCallbackQuery(
@@ -769,4 +937,9 @@ export class ChatRuntime {
     const callbackQuery = payload["callback_query"] as Record<string, unknown> | undefined;
     return callbackQuery ? String(callbackQuery["id"]) : null;
   }
+}
+
+function lowercaseFirst(s: string): string {
+  if (!s) return s;
+  return s[0]!.toLowerCase() + s.slice(1);
 }
