@@ -66,8 +66,8 @@ function makeCampaignData(overrides?: Partial<CampaignGuardrailData>): CampaignG
     impressions: 10000,
     clicks: 200,
     conversions: 10,
+    ctr: 2.0,
     status: "ACTIVE",
-    accountPrefix: "act_123",
     ...overrides,
   };
 }
@@ -102,9 +102,7 @@ describe("GuardrailAgent", () => {
     const result = await agent.tick(ctx);
 
     expect(result.agentId).toBe("guardrail");
-    expect(result.actions).toContainEqual(
-      expect.objectContaining({ actionType: "guardrail.check", outcome: "violations_found" }),
-    );
+    expect(result.summary).toContain("violation");
   });
 
   it("detects zero-conversion spend", async () => {
@@ -125,9 +123,7 @@ describe("GuardrailAgent", () => {
     const result = await agent.tick(ctx);
 
     expect(result.agentId).toBe("guardrail");
-    expect(result.actions).toContainEqual(
-      expect.objectContaining({ actionType: "guardrail.check", outcome: "violations_found" }),
-    );
+    expect(result.summary).toContain("violation");
   });
 
   it("detects CTR anomaly", async () => {
@@ -148,14 +144,11 @@ describe("GuardrailAgent", () => {
     const result = await agent.tick(ctx);
 
     expect(result.agentId).toBe("guardrail");
-    expect(result.actions).toContainEqual(
-      expect.objectContaining({ actionType: "guardrail.check", outcome: "violations_found" }),
-    );
+    expect(result.summary).toContain("violation");
   });
 
   it("reports no violations when all healthy", async () => {
     const ctx = makeMockContext();
-    // Default mock data has healthy campaigns
     (ctx.orchestrator.executeApproved as ReturnType<typeof vi.fn>).mockResolvedValue({
       success: true,
       data: [
@@ -172,9 +165,7 @@ describe("GuardrailAgent", () => {
     const result = await agent.tick(ctx);
 
     expect(result.agentId).toBe("guardrail");
-    expect(result.actions).toContainEqual(
-      expect.objectContaining({ actionType: "guardrail.check", outcome: "clean" }),
-    );
+    expect(result.summary).toContain("compliant");
   });
 
   it("proposes pause action for critical violations", async () => {
@@ -252,6 +243,8 @@ describe("GuardrailAgent", () => {
 });
 
 describe("DEFAULT_GUARDRAIL_RULES", () => {
+  const config = makeConfig();
+
   it("has 4 default rules", () => {
     expect(DEFAULT_GUARDRAIL_RULES).toHaveLength(4);
   });
@@ -260,85 +253,82 @@ describe("DEFAULT_GUARDRAIL_RULES", () => {
     const spendCap = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "spend_cap")!;
     const campaign = makeCampaignData({ spend: 135, budget: 100 });
 
-    const result = spendCap.evaluate(campaign);
+    const results = spendCap.evaluate([campaign], config);
 
-    expect(result).not.toBeNull();
-    expect(result!.severity).toBe("critical");
-    expect(result!.ruleId).toBe("spend_cap");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.severity).toBe("critical");
+    expect(results[0]!.ruleId).toBe("spend_cap");
   });
 
   it("spend_cap: triggers warning at 110-130%", () => {
     const spendCap = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "spend_cap")!;
     const campaign = makeCampaignData({ spend: 115, budget: 100 });
 
-    const result = spendCap.evaluate(campaign);
+    const results = spendCap.evaluate([campaign], config);
 
-    expect(result).not.toBeNull();
-    expect(result!.severity).toBe("warning");
-    expect(result!.ruleId).toBe("spend_cap");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.severity).toBe("warning");
+    expect(results[0]!.ruleId).toBe("spend_cap");
   });
 
   it("spend_cap: passes at 100%", () => {
     const spendCap = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "spend_cap")!;
     const campaign = makeCampaignData({ spend: 100, budget: 100 });
 
-    const result = spendCap.evaluate(campaign);
+    const results = spendCap.evaluate([campaign], config);
 
-    expect(result).toBeNull();
+    expect(results).toHaveLength(0);
   });
 
   it("zero_conversion_spend: triggers at $50+ spend with 0 conversions", () => {
     const zeroConv = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "zero_conversion_spend")!;
     const campaign = makeCampaignData({ spend: 60, conversions: 0 });
 
-    const result = zeroConv.evaluate(campaign);
+    const results = zeroConv.evaluate([campaign], config);
 
-    expect(result).not.toBeNull();
-    expect(result!.severity).toBe("warning");
-    expect(result!.ruleId).toBe("zero_conversion_spend");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.severity).toBe("warning");
+    expect(results[0]!.ruleId).toBe("zero_conversion_spend");
   });
 
   it("zero_conversion_spend: passes with conversions", () => {
     const zeroConv = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "zero_conversion_spend")!;
     const campaign = makeCampaignData({ spend: 60, conversions: 5 });
 
-    const result = zeroConv.evaluate(campaign);
+    const results = zeroConv.evaluate([campaign], config);
 
-    expect(result).toBeNull();
+    expect(results).toHaveLength(0);
   });
 
   it("ctr_anomaly: triggers below 0.5%", () => {
     const ctrAnomaly = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "ctr_anomaly")!;
-    // CTR = clicks / impressions = 30 / 10000 = 0.3%
-    const campaign = makeCampaignData({ impressions: 10000, clicks: 30 });
+    // CTR = clicks / impressions * 100 = 30 / 10000 * 100 = 0.3%
+    const campaign = makeCampaignData({ impressions: 10000, clicks: 30, ctr: 0.3 });
 
-    const result = ctrAnomaly.evaluate(campaign);
+    const results = ctrAnomaly.evaluate([campaign], config);
 
-    expect(result).not.toBeNull();
-    expect(result!.severity).toBe("warning");
-    expect(result!.ruleId).toBe("ctr_anomaly");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.severity).toBe("warning");
+    expect(results[0]!.ruleId).toBe("ctr_anomaly");
   });
 
   it("ctr_anomaly: passes at normal CTR", () => {
     const ctrAnomaly = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "ctr_anomaly")!;
-    // CTR = clicks / impressions = 200 / 10000 = 2%
-    const campaign = makeCampaignData({ impressions: 10000, clicks: 200 });
+    // CTR = clicks / impressions * 100 = 200 / 10000 * 100 = 2%
+    const campaign = makeCampaignData({ impressions: 10000, clicks: 200, ctr: 2.0 });
 
-    const result = ctrAnomaly.evaluate(campaign);
+    const results = ctrAnomaly.evaluate([campaign], config);
 
-    expect(result).toBeNull();
+    expect(results).toHaveLength(0);
   });
 
   it("naming_convention: triggers when name missing account prefix", () => {
     const naming = DEFAULT_GUARDRAIL_RULES.find((r) => r.id === "naming_convention")!;
-    const campaign = makeCampaignData({
-      name: "Bad_Campaign_Name",
-      accountPrefix: "act_123",
-    });
+    const campaign = makeCampaignData({ name: "Bad_Campaign_Name" });
 
-    const result = naming.evaluate(campaign);
+    const results = naming.evaluate([campaign], config);
 
-    expect(result).not.toBeNull();
-    expect(result!.ruleId).toBe("naming_convention");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.ruleId).toBe("naming_convention");
   });
 });
