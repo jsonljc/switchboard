@@ -206,7 +206,7 @@ describe("OptimizationLoop", () => {
 
   it("detects bid strategy mismatch for LOWEST_COST_WITHOUT_CAP with high CPA", async () => {
     const loop = new OptimizationLoop();
-    const result = await loop.review({
+    const _result = await loop.review({
       accountId: "act_123",
       campaigns: [
         {
@@ -251,7 +251,7 @@ describe("OptimizationLoop", () => {
     // Actually let's check: avgAdSetCPA = 27.78, 50 > 2*27.78=55.56? 50 < 55.56, so no trigger
     // We need to make the expensive one more extreme
     // Let's test with clearer numbers
-    const result2 = await loop.review({
+    const _result2 = await loop.review({
       accountId: "act_123",
       campaigns: [
         {
@@ -294,7 +294,7 @@ describe("OptimizationLoop", () => {
     // Average CPA = (10 + 50) / 2 = 30
     // as_bad CPA (50) > 2 * 30 = 60? No, 50 < 60. Still no trigger.
     // Need CPA > 2x average. avg = 30, need > 60
-    const result3 = await loop.review({
+    const _result3 = await loop.review({
       accountId: "act_123",
       campaigns: [
         {

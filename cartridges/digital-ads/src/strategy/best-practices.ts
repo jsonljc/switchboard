@@ -114,7 +114,7 @@ export class BestPracticesEngine {
   private assessCAPI(data: AccountData) {
     const issues: string[] = [];
     const recommendations: string[] = [];
-    let score = data.hasCapiEnabled ? 100 : 0;
+    const score = data.hasCapiEnabled ? 100 : 0;
 
     if (!data.hasCapiEnabled) {
       issues.push("Conversions API not detected");
@@ -128,7 +128,7 @@ export class BestPracticesEngine {
   private assessValidation(data: AccountData) {
     const issues: string[] = [];
     const recommendations: string[] = [];
-    let score = data.hasConversionLiftStudy ? 100 : 30;
+    const score = data.hasConversionLiftStudy ? 100 : 30;
 
     if (!data.hasConversionLiftStudy) {
       issues.push("No conversion lift study detected");

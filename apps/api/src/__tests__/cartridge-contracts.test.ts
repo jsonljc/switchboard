@@ -37,6 +37,16 @@ const READ_ONLY_PATTERNS = [
   /\.qualify$/, // lead qualification (read-only classification)
   /\.handle_objection$/, // conversation handling (read-only NLP)
   /\.escalate$/, // escalation routing (no side-effect)
+  /\.insights$/, // read-only aggregation/analysis
+  /\.recommend$/, // read-only recommendation computation
+  /\.export$/, // read-only data export
+  /\.estimate$/, // read-only estimation
+  /\.compare$/, // read-only comparison
+  /\.compute$/, // read-only computation
+  /\.power$/, // read-only power analysis
+  /\.design$/, // read-only experiment design
+  /\.events$/, // read-only event listing
+  /\.calendar$/, // read-only calendar lookup
 ];
 
 function isReadOnly(actionType: string): boolean {

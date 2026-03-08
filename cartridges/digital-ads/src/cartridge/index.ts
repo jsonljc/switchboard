@@ -574,7 +574,7 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.alert.configure_notifications":
       case "digital-ads.forecast.budget_scenario":
       case "digital-ads.forecast.diminishing_returns":
-      // Annual planning — no API needed, local computation
+      // falls through — Annual planning also needs no API
       case "digital-ads.plan.annual":
       case "digital-ads.plan.quarterly":
         break;

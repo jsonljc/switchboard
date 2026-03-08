@@ -11,9 +11,9 @@ import {
   SeasonalCalendar,
 } from "../seasonality.js";
 import type {
-  EnhancedSeasonalEvent,
-  EventRegion,
-  EventCategory,
+  EnhancedSeasonalEvent as _EnhancedSeasonalEvent,
+  EventRegion as _EventRegion,
+  EventCategory as _EventCategory,
 } from "../seasonality.js";
 
 // ---------------------------------------------------------------------------
