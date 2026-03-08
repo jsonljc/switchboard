@@ -113,3 +113,91 @@ export function buildCreateAdUndoRecipe(adId: string): UndoRecipe {
     undoApprovalRequired: "standard",
   };
 }
+
+export function buildAudienceCreateUndoRecipe(audienceId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.audience.delete",
+    reverseParameters: { audienceId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "critical",
+    undoApprovalRequired: "standard",
+  };
+}
+
+export function buildBidStrategyUndoRecipe(
+  adSetId: string,
+  previousStrategy: string,
+  previousBidAmount: number | null,
+): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.bid.update_strategy",
+    reverseParameters: { adSetId, bidStrategy: previousStrategy, bidAmount: previousBidAmount },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "high",
+    undoApprovalRequired: "standard",
+  };
+}
+
+export function buildScheduleUndoRecipe(adSetId: string, previousSchedule: unknown): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.schedule.set",
+    reverseParameters: { adSetId, schedule: previousSchedule },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "medium",
+    undoApprovalRequired: "none",
+  };
+}
+
+export function buildCreativeUploadUndoRecipe(creativeId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.campaign.pause",
+    reverseParameters: { campaignId: creativeId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "medium",
+    undoApprovalRequired: "none",
+  };
+}
+
+export function buildRuleCreateUndoRecipe(ruleId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.rule.delete",
+    reverseParameters: { ruleId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "medium",
+    undoApprovalRequired: "none",
+  };
+}
+
+export function buildGuidedSetupUndoRecipe(campaignId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.campaign.pause",
+    reverseParameters: { campaignId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "high",
+    undoApprovalRequired: "standard",
+  };
+}
+
+export function buildExperimentCreateUndoRecipe(studyId: string): UndoRecipe {
+  return {
+    originalActionId: "",
+    originalEnvelopeId: "",
+    reverseActionType: "digital-ads.experiment.conclude",
+    reverseParameters: { experimentId: studyId },
+    undoExpiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    undoRiskCategory: "medium",
+    undoApprovalRequired: "standard",
+  };
+}

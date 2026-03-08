@@ -23,8 +23,8 @@ describe("CartridgeManifest", () => {
     expect(DIGITAL_ADS_MANIFEST.defaultPolicies).toEqual(["digital-ads-default"]);
   });
 
-  it("defines exactly 16 actions (6 read + 10 write)", () => {
-    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(16);
+  it("defines exactly 111 actions (69 read + 42 write)", () => {
+    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(111);
   });
 
   it("has correct read action types", () => {
@@ -118,8 +118,21 @@ describe("CartridgeManifest", () => {
   });
 
   it("marks all other actions as reversible", () => {
+    const irreversibleTypes = new Set([
+      "digital-ads.targeting.modify",
+      "digital-ads.audience.delete",
+      "digital-ads.campaign.update_objective",
+      "digital-ads.experiment.conclude",
+      "digital-ads.rule.delete",
+      "digital-ads.measurement.lift_study.create",
+      "digital-ads.creative.test_conclude",
+      "digital-ads.memory.record",
+      "digital-ads.memory.record_outcome",
+      "digital-ads.memory.import",
+      "digital-ads.geo_experiment.conclude",
+    ]);
     const reversibleActions = DIGITAL_ADS_MANIFEST.actions.filter(
-      (a) => a.actionType !== "digital-ads.targeting.modify",
+      (a) => !irreversibleTypes.has(a.actionType),
     );
     for (const action of reversibleActions) {
       expect(action.reversible).toBe(true);

@@ -19,7 +19,6 @@ import {
   creativeWinLossAdvisor,
   deviceBreakdownAdvisor,
   attributionAwarenessAdvisor,
-  headroomAdvisor,
 } from "./shared/index.js";
 
 // Platform-specific advisors
@@ -34,6 +33,13 @@ import {
   budgetPacingAdvisor,
   creativeDiversityAdvisor,
 } from "./structural/index.js";
+
+// Signal & optimization advisors
+import { signalQualityAdvisor } from "./shared/signal-quality.js";
+import { learningPhaseHealthAdvisor } from "./shared/learning-phase-health.js";
+import { autoBudgetAdvisor } from "./optimization/auto-budget.js";
+import { autoBidAdvisor } from "./optimization/auto-bid.js";
+import { autoCreativeAdvisor } from "./optimization/auto-creative.js";
 
 // Vertical-specific advisors
 import { productPageAdvisor, checkoutFrictionAdvisor } from "./vertical/commerce/index.js";
@@ -120,8 +126,12 @@ export function resolveAdvisors(platform: PlatformType, vertical: VerticalType):
   // Attribution awareness advisor (pre-check for measurement changes)
   advisors.push(attributionAwarenessAdvisor);
 
-  // Headroom advisor (spend response curve analysis — requires 21+ days of daily data)
-  advisors.push(headroomAdvisor);
+  // 4. Signal & optimization advisors (universal)
+  advisors.push(signalQualityAdvisor);
+  advisors.push(learningPhaseHealthAdvisor);
+  advisors.push(autoBudgetAdvisor);
+  advisors.push(autoBidAdvisor);
+  advisors.push(autoCreativeAdvisor);
 
   // 2. Platform-specific advisors
   if (platform === "meta") {

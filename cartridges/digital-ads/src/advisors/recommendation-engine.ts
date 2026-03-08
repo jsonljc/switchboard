@@ -243,39 +243,107 @@ const BID_STRATEGY_MATCHER: FindingMatcher = {
   },
 };
 
-const HEADROOM_SCALING_MATCHER: FindingMatcher = {
+const SIGNAL_QUALITY_MATCHER: FindingMatcher = {
   matches(finding: Finding): boolean {
     const msg = finding.message.toLowerCase();
     return (
-      msg.includes("headroom") &&
-      (finding.severity === "healthy" || finding.severity === "info") &&
-      (msg.includes("scaling") || msg.includes("scale"))
+      (msg.includes("signal") ||
+        msg.includes("pixel") ||
+        msg.includes("capi") ||
+        msg.includes("conversion event")) &&
+      (finding.severity === "critical" || finding.severity === "warning")
     );
   },
   propose(finding: Finding, context: DiagnosticResult): ActionProposal | null {
     if (!context.entityId) return null;
 
-    // Extract headroom percentage from message
-    const headroomMatch = finding.message.match(/(\d+)%\s*scaling/);
-    const headroomPercent = headroomMatch ? parseInt(headroomMatch[1]!, 10) : 0;
-    const isHighConfidence = finding.message.includes("High-confidence");
+    return {
+      finding,
+      actionType: "digital-ads.signal.pixel.diagnose",
+      parameters: { adAccountId: context.entityId },
+      confidence: finding.severity === "critical" ? 0.9 : 0.7,
+      rationale:
+        "Signal quality issue detected — pixel or CAPI events may be missing or misconfigured. " +
+        "A pixel diagnostic will identify which events are firing and which are missing.",
+      expectedImpact: "Identify and fix tracking gaps to improve optimization signals",
+      riskLevel: "low",
+    };
+  },
+};
+
+const LEARNING_PHASE_MATCHER: FindingMatcher = {
+  matches(finding: Finding): boolean {
+    const msg = finding.message.toLowerCase();
+    return (
+      (msg.includes("learning phase") || msg.includes("learning limited")) &&
+      (finding.severity === "critical" || finding.severity === "warning")
+    );
+  },
+  propose(finding: Finding, context: DiagnosticResult): ActionProposal | null {
+    if (!context.entityId) return null;
 
     return {
       finding,
-      actionType: "digital-ads.budget.scale",
-      parameters: {
-        platform: context.platform ?? "meta",
-        entityId: context.entityId,
-        vertical: context.vertical,
-        headroomPercent,
-        stepSize: Math.min(headroomPercent, 20),
-      },
-      confidence: isHighConfidence ? 0.8 : 0.55,
+      actionType: "digital-ads.account.learning_phase",
+      parameters: { adAccountId: context.entityId },
+      confidence: 0.8,
       rationale:
-        `Headroom analysis identified ${headroomPercent}% scaling opportunity based on the spend-conversion response curve. ` +
-        "Incremental budget increases should be applied in 15-20% steps to avoid learning phase disruption.",
-      expectedImpact: `Potential ${headroomPercent}% increase in daily conversions through budget scaling`,
-      riskLevel: headroomPercent > 50 ? "medium" : "low",
+        "Learning phase issues detected — ad sets may be stuck or in learning limited. " +
+        "A learning phase check will identify which ad sets need attention.",
+      expectedImpact: "Identify stuck ad sets and recommend consolidation or budget changes",
+      riskLevel: "low",
+    };
+  },
+};
+
+const CREATIVE_ROTATION_MATCHER: FindingMatcher = {
+  matches(finding: Finding): boolean {
+    const msg = finding.message.toLowerCase();
+    return (
+      (msg.includes("creative") &&
+        (msg.includes("rotation") || msg.includes("fatigue") || msg.includes("zero conversions"))) &&
+      (finding.severity === "critical" || finding.severity === "warning")
+    );
+  },
+  propose(finding: Finding, context: DiagnosticResult): ActionProposal | null {
+    if (!context.entityId) return null;
+
+    return {
+      finding,
+      actionType: "digital-ads.creative.analyze",
+      parameters: { adAccountId: context.entityId },
+      confidence: finding.severity === "critical" ? 0.85 : 0.7,
+      rationale:
+        "Creative performance issues detected — some ads may need to be paused or rotated. " +
+        "A creative analysis will identify top/bottom performers and recommend rotation.",
+      expectedImpact: "Identify and replace underperforming creatives to reduce wasted spend",
+      riskLevel: "low",
+    };
+  },
+};
+
+const BUDGET_REALLOCATION_MATCHER: FindingMatcher = {
+  matches(finding: Finding): boolean {
+    const msg = finding.message.toLowerCase();
+    return (
+      (msg.includes("budget") &&
+        (msg.includes("zero conversions") || msg.includes("over-funded") || msg.includes("under-funded"))) &&
+      (finding.severity === "critical" || finding.severity === "warning")
+    );
+  },
+  propose(finding: Finding, context: DiagnosticResult): ActionProposal | null {
+    if (!context.entityId) return null;
+
+    return {
+      finding,
+      actionType: "digital-ads.budget.recommend",
+      parameters: { adAccountId: context.entityId },
+      confidence: finding.severity === "critical" ? 0.8 : 0.65,
+      rationale:
+        "Budget allocation issue detected — some campaigns may be over or under-funded. " +
+        "A budget recommendation will analyze cross-campaign efficiency and suggest reallocation.",
+      expectedImpact: "Optimize budget distribution to maximize conversions per dollar",
+      riskLevel: "low",
     };
   },
 };
@@ -291,7 +359,10 @@ const MATCHERS: FindingMatcher[] = [
   ROAS_EFFICIENCY_MATCHER,
   AUDIENCE_SATURATION_MATCHER,
   BID_STRATEGY_MATCHER,
-  HEADROOM_SCALING_MATCHER,
+  SIGNAL_QUALITY_MATCHER,
+  LEARNING_PHASE_MATCHER,
+  CREATIVE_ROTATION_MATCHER,
+  BUDGET_REALLOCATION_MATCHER,
 ];
 
 // ---------------------------------------------------------------------------
@@ -313,9 +384,8 @@ export function generateRecommendations(diagnostic: DiagnosticResult): Recommend
   const unactionable: Array<{ finding: Finding; reason: string }> = [];
 
   for (const finding of diagnostic.findings) {
-    // Skip low-severity findings — but allow headroom scaling findings through
-    const isHeadroomFinding = finding.stage === "headroom";
-    if (!ACTIONABLE_SEVERITIES.has(finding.severity) && !isHeadroomFinding) {
+    // Skip low-severity findings
+    if (!ACTIONABLE_SEVERITIES.has(finding.severity)) {
       unactionable.push({
         finding,
         reason: `Severity "${finding.severity}" is below actionable threshold`,

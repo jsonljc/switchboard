@@ -29,6 +29,21 @@ export { analyzeFunnel } from "./core/analysis/funnel-walker.js";
 export type { FindingAdvisor, FunnelWalkerOptions } from "./core/analysis/funnel-walker.js";
 export { buildComparisonPeriods, buildTrailingPeriods } from "./core/analysis/comparator.js";
 export { isSignificantChange, zScore, percentChange } from "./core/analysis/significance.js";
+export {
+  chiSquaredTest,
+  proportionTest,
+  minimumSampleSize,
+  confidenceInterval,
+  isAdequateSampleSize,
+  adjustedSignificance,
+} from "./core/analysis/significance.js";
+export {
+  normalQuantile,
+  erf,
+  normalCDF,
+  chi2CDF,
+  wilsonScoreInterval,
+} from "./core/analysis/stats-utils.js";
 export { accountVariance, getEffectiveVariance } from "./core/analysis/thresholds.js";
 export type { AccountHistory } from "./core/analysis/thresholds.js";
 export {
@@ -38,6 +53,29 @@ export {
 } from "./core/analysis/economic-impact.js";
 export { buildDiagnosticContext } from "./core/analysis/context-builder.js";
 export type { ContextBuilderOptions } from "./core/analysis/context-builder.js";
+
+// Seasonality
+export {
+  SEASONAL_EVENTS,
+  getActiveSeasonalEvent,
+  getSeasonalCPMMultiplier,
+  dateRangesOverlap,
+  ENHANCED_SEASONAL_EVENTS,
+  getSeasonalEvents,
+  getMonthlySeasonalProfile,
+  getAnnualSeasonalCalendar,
+  SeasonalCalendar,
+} from "./core/analysis/seasonality.js";
+export type {
+  SeasonalEvent,
+  EventCategory,
+  EventRegion,
+  EventVertical,
+  EnhancedSeasonalEvent,
+  SeasonalEventFilterOptions,
+  MonthlySeasonalProfile,
+  AnnualCalendarMonth,
+} from "./core/analysis/seasonality.js";
 
 // Platform types
 export type {
@@ -188,6 +226,11 @@ export type {
   FetchSnapshotParams,
   AnalyzeStructureParams,
   HealthCheckParams,
+  CreateCustomAudienceWriteParams,
+  CreateLookalikeAudienceWriteParams,
+  CreateAdCreativeWriteParams,
+  CreateAdStudyWriteParams,
+  CreateAdRuleWriteParams,
 } from "./cartridge/types.js";
 export type { AdPlatformProvider } from "./cartridge/providers/provider.js";
 export { MockProvider, MockPlatformClient } from "./cartridge/providers/mock-provider.js";
@@ -201,3 +244,168 @@ export { CachedPlatformClient } from "./platforms/cache/cached-client.js";
 export { createSnapshotCacheStore } from "./platforms/cache/index.js";
 export type { SnapshotCacheStore } from "./platforms/cache/types.js";
 export type { RedisLike } from "./platforms/cache/redis-cache.js";
+
+// Reporting
+export { ReportBuilder } from "./reporting/report-builder.js";
+export { formatPerformanceReport } from "./reporting/formatters/performance-formatter.js";
+export { formatCreativeReport } from "./reporting/formatters/creative-formatter.js";
+export { formatComparisonReport } from "./reporting/formatters/comparison-formatter.js";
+export { REPORT_TEMPLATES, getReportTemplate } from "./reporting/templates/report-templates.js";
+export type {
+  GenerateReportParams,
+  CreativeReportParams,
+  AudienceReportParams,
+  PlacementReportParams,
+  ComparisonReportParams,
+  PerformanceReport,
+  CreativeReport,
+  AudienceReport,
+  PlacementReport,
+  ComparisonReport,
+  ReportRow,
+  ReportTimeRange,
+  ReportBreakdown,
+  ReportLevel,
+} from "./reporting/types.js";
+
+// Signal Health
+export { PixelDiagnosticsChecker } from "./signal-health/pixel-diagnostics.js";
+export { CAPIDiagnosticsChecker } from "./signal-health/capi-diagnostics.js";
+export { EMQChecker } from "./signal-health/emq-checker.js";
+export { LearningPhaseTracker } from "./signal-health/learning-phase-tracker.js";
+export type {
+  PixelDiagnostics,
+  CAPIDiagnostics,
+  EMQResult,
+  LearningPhaseInfo,
+  DeliveryDiagnostic,
+} from "./signal-health/types.js";
+
+// Audiences
+export { CustomAudienceBuilder } from "./audiences/custom-audience-builder.js";
+export { LookalikeBuilder } from "./audiences/lookalike-builder.js";
+export { AudienceInsightsChecker } from "./audiences/audience-insights.js";
+export type {
+  CreateCustomAudienceParams,
+  CreateLookalikeParams,
+  CustomAudienceInfo,
+  AudienceInsights,
+} from "./audiences/types.js";
+
+// Optimization
+export { BudgetAllocator } from "./optimization/budget-allocator.js";
+export type { CampaignPerformanceData, CampaignHistoricalData } from "./optimization/budget-allocator.js";
+export { BidStrategyEngine } from "./optimization/bid-strategy-engine.js";
+export { DaypartingEngine } from "./optimization/dayparting-engine.js";
+export { OptimizationLoop } from "./optimization/optimization-loop.js";
+export type {
+  BudgetReallocationPlan,
+  BudgetReallocationEntry,
+  BidStrategyRecommendation,
+  DaypartingRecommendation,
+  OptimizationReviewResult,
+} from "./optimization/types.js";
+
+// Creative (new modules)
+export { CreativeAnalyzer } from "./creative/creative-analyzer.js";
+export { CreativeRotationEngine } from "./creative/rotation-engine.js";
+export type { CreativeAnalysisResult, CreativePerformanceEntry } from "./creative/creative-analyzer.js";
+export type { RotationPlan, AdPerformance } from "./creative/rotation-engine.js";
+
+// A/B Testing (Meta Studies)
+export { MetaStudiesClient } from "./ab-testing/meta-studies-client.js";
+export type { AdStudy, CreateStudyParams } from "./ab-testing/meta-studies-client.js";
+
+// Rules
+export { RulesManager } from "./rules/rules-manager.js";
+export { RULE_TEMPLATES, getRuleTemplate, listRuleTemplates } from "./rules/rule-templates.js";
+export type { AdRule, CreateRuleParams } from "./rules/types.js";
+
+// Strategy
+export { StrategyEngine } from "./strategy/strategy-engine.js";
+export { MediaPlanner } from "./strategy/media-planner.js";
+export { BestPracticesEngine } from "./strategy/best-practices.js";
+export { GuidedSetup } from "./strategy/guided-setup.js";
+export type {
+  CampaignObjective,
+  StrategyRecommendation,
+  MediaPlan,
+  ReachEstimate,
+  GuidedSetupResult,
+  Performance5Assessment,
+} from "./strategy/types.js";
+
+// New advisors
+export { signalQualityAdvisor } from "./advisors/shared/signal-quality.js";
+export { learningPhaseHealthAdvisor } from "./advisors/shared/learning-phase-health.js";
+export { autoBudgetAdvisor } from "./advisors/optimization/auto-budget.js";
+export { autoBidAdvisor } from "./advisors/optimization/auto-bid.js";
+export { autoCreativeAdvisor } from "./advisors/optimization/auto-creative.js";
+
+// Compliance & Brand Safety
+export { ReviewChecker } from "./compliance/review-checker.js";
+export { ComplianceAuditor } from "./compliance/compliance-auditor.js";
+export { PublisherBlocklistManager } from "./compliance/publisher-blocklist.js";
+export type {
+  AdReviewStatus,
+  ComplianceAuditResult,
+  PublisherBlocklist,
+  ContentExclusionConfig,
+} from "./compliance/types.js";
+
+// Measurement & Attribution
+export { LiftStudyManager } from "./measurement/lift-study-manager.js";
+export { AttributionAnalyzer } from "./measurement/attribution-analyzer.js";
+export { MMMExporter } from "./measurement/mmm-exporter.js";
+export type {
+  LiftStudy,
+  AttributionComparison,
+  MMMExportData,
+} from "./measurement/types.js";
+
+// Pacing & Flight Management
+export { FlightManager } from "./pacing/flight-manager.js";
+export { PacingMonitor } from "./pacing/pacing-monitor.js";
+export type {
+  FlightPlan,
+  PacingStatus,
+  PacingAdjustment,
+} from "./pacing/types.js";
+
+// Anomaly Detection & Alerting
+export { AnomalyDetector } from "./alerting/anomaly-detector.js";
+export type { DailyMetrics } from "./alerting/anomaly-detector.js";
+export { BudgetForecaster } from "./alerting/budget-forecaster.js";
+export { PolicyScanner } from "./alerting/policy-scanner.js";
+export type {
+  AnomalyResult,
+  BudgetForecast,
+  PolicyScanResult,
+} from "./alerting/types.js";
+
+// Forecasting & Scenarios
+export { ScenarioModeler } from "./forecasting/scenario-modeler.js";
+export { DiminishingReturnsAnalyzer } from "./forecasting/diminishing-returns.js";
+export type {
+  BudgetScenario,
+  DiminishingReturnsResult,
+} from "./forecasting/types.js";
+
+// Catalog Health
+export { CatalogHealthChecker } from "./catalog/catalog-health.js";
+export { ProductSetManager } from "./catalog/product-sets.js";
+export type {
+  CatalogHealth,
+  ProductSet,
+} from "./catalog/types.js";
+
+// Account Memory — Historical learning / optimization records
+export { AccountMemory } from "./core/account-memory.js";
+export type {
+  OptimizationActionType,
+  OptimizationRecord,
+  OptimizationOutcome,
+  AccountInsight,
+  AccountMemorySnapshot,
+  MemoryRecommendation,
+} from "./core/account-memory.js";
