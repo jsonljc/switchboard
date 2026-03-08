@@ -346,8 +346,8 @@ export function fitPowerModel(x: number[], y: number[], weights: number[]): Fitt
   const wArr = valid.map((v) => v.w);
 
   const {
-    a: lnA,
-    b: elasticity,
+    a: elasticity,
+    b: lnA,
     rSquared: logSpaceR2,
   } = weightedLinearRegression(lnXArr, lnYArr, wArr);
 
