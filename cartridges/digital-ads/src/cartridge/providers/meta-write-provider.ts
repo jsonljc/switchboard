@@ -5,7 +5,20 @@
 // ad set mutation support via the Meta Graph API.
 // ---------------------------------------------------------------------------
 
-import type { CampaignInfo, AdSetInfo, ConnectionHealth, MetaAdsWriteProvider } from "../types.js";
+import type {
+  CampaignInfo,
+  AdSetInfo,
+  ConnectionHealth,
+  MetaAdsWriteProvider,
+  CreateCampaignParams,
+  CreateAdSetParams,
+  CreateAdParams,
+  CreateCustomAudienceWriteParams,
+  CreateLookalikeAudienceWriteParams,
+  CreateAdCreativeWriteParams,
+  CreateAdStudyWriteParams,
+  CreateAdRuleWriteParams,
+} from "../types.js";
 
 export interface MetaAdsWriteConfig {
   accessToken: string;
@@ -177,6 +190,358 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true };
   }
 
+  async createCampaign(params: CreateCampaignParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/campaigns?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      objective: params.objective,
+      status: params.status ?? "PAUSED",
+      special_ad_categories: params.specialAdCategories ?? [],
+    };
+
+    // Budget is in cents for the API
+    body.daily_budget = String(Math.round(params.dailyBudget * 100));
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async createAdSet(params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/adsets?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      campaign_id: params.campaignId,
+      name: params.name,
+      daily_budget: String(Math.round(params.dailyBudget * 100)),
+      targeting: params.targeting,
+      optimization_goal: params.optimizationGoal ?? "NONE",
+      billing_event: params.billingEvent ?? "IMPRESSIONS",
+      status: params.status ?? "PAUSED",
+    };
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async createAd(params: CreateAdParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+
+    // First create the ad creative
+    const creativeUrl = `${this.baseUrl}/${accountId}/adcreatives?access_token=${this.accessToken}`;
+    const creativeBody: Record<string, unknown> = {
+      name: `${params.name} Creative`,
+      object_story_spec: params.creative,
+    };
+
+    const creativeData = await this.executeWithRetry(creativeUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(creativeBody),
+    });
+
+    // Then create the ad referencing the creative
+    const adUrl = `${this.baseUrl}/${accountId}/ads?access_token=${this.accessToken}`;
+    const adBody: Record<string, unknown> = {
+      name: params.name,
+      adset_id: params.adSetId,
+      creative: { creative_id: String(creativeData.id) },
+      status: params.status ?? "PAUSED",
+    };
+
+    const data = await this.executeWithRetry(adUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(adBody),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Audience methods (Phase 3)
+  // ---------------------------------------------------------------------------
+
+  async createCustomAudience(
+    params: CreateCustomAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/customaudiences?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      subtype: params.subtype,
+      description: params.description ?? "",
+      customer_file_source: params.customerFileSource ?? "USER_PROVIDED_ONLY",
+    };
+    if (params.rule) body.rule = params.rule;
+    if (params.retentionDays) body.retention_days = params.retentionDays;
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async createLookalikeAudience(
+    params: CreateLookalikeAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/customaudiences?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      subtype: "LOOKALIKE",
+      origin_audience_id: params.sourceAudienceId,
+      lookalike_spec: JSON.stringify({
+        type: "similarity",
+        country: params.country,
+        ratio: params.ratio,
+      }),
+    };
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async deleteCustomAudience(audienceId: string): Promise<{ success: boolean }> {
+    const url = `${this.baseUrl}/${audienceId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, { method: "DELETE" });
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bid & Schedule methods (Phase 4)
+  // ---------------------------------------------------------------------------
+
+  async updateBidStrategy(
+    adSetId: string,
+    bidStrategy: string,
+    bidAmount?: number,
+  ): Promise<{ success: boolean; previousBidStrategy: string }> {
+    // Fetch current bid strategy before updating
+    const currentUrl =
+      `${this.baseUrl}/${adSetId}?fields=bid_strategy,bid_amount` +
+      `&access_token=${this.accessToken}`;
+    const current = await this.executeWithRetry(currentUrl);
+    const previousBidStrategy = (current.bid_strategy as string) ?? "LOWEST_COST_WITHOUT_CAP";
+
+    const body: Record<string, unknown> = { bid_strategy: bidStrategy };
+    if (bidAmount !== undefined) body.bid_amount = String(bidAmount);
+
+    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { success: true, previousBidStrategy };
+  }
+
+  async updateAdSetSchedule(
+    adSetId: string,
+    schedule: Array<Record<string, unknown>>,
+  ): Promise<{ success: boolean }> {
+    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        adset_schedule: schedule,
+        pacing_type: ["day_parting"],
+      }),
+    });
+    return { success: true };
+  }
+
+  async updateCampaignObjective(
+    campaignId: string,
+    objective: string,
+  ): Promise<{ success: boolean; previousObjective: string }> {
+    const campaign = await this.getCampaign(campaignId);
+    const previousObjective = campaign.objective ?? "UNKNOWN";
+
+    const url = `${this.baseUrl}/${campaignId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ objective }),
+    });
+
+    return { success: true, previousObjective };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Creative methods (Phase 5)
+  // ---------------------------------------------------------------------------
+
+  async createAdCreative(
+    params: CreateAdCreativeWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/adcreatives?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      object_story_spec: params.objectStorySpec,
+    };
+    if (params.degreesOfFreedomSpec) {
+      body.degrees_of_freedom_spec = params.degreesOfFreedomSpec;
+    }
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async updateAdStatus(
+    adId: string,
+    status: string,
+  ): Promise<{ success: boolean; previousStatus: string }> {
+    // Fetch current status
+    const currentUrl = `${this.baseUrl}/${adId}?fields=status&access_token=${this.accessToken}`;
+    const current = await this.executeWithRetry(currentUrl);
+    const previousStatus = (current.status as string) ?? "UNKNOWN";
+
+    const url = `${this.baseUrl}/${adId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+
+    return { success: true, previousStatus };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Experiment methods (Phase 6)
+  // ---------------------------------------------------------------------------
+
+  async createAdStudy(params: CreateAdStudyWriteParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/ad_studies?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      description: params.description ?? "",
+      start_time: params.startTime,
+      end_time: params.endTime,
+      type: "SPLIT_TEST",
+      cells: params.cells.map((cell) => ({
+        name: cell.name,
+        adsets: cell.adSetIds ?? [],
+        campaigns: cell.campaignIds ?? [],
+      })),
+    };
+    if (params.objective) body.objective = params.objective;
+    if (params.confidenceLevel) body.confidence_level = params.confidenceLevel;
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async concludeExperiment(studyId: string, winnerCellId: string): Promise<{ success: boolean }> {
+    // Get study cells to find the losers
+    const studyUrl =
+      `${this.baseUrl}/${studyId}?fields=cells{id,name,adsets}` +
+      `&access_token=${this.accessToken}`;
+    const study = await this.executeWithRetry(studyUrl);
+
+    const cells =
+      ((study.cells as Record<string, unknown>)?.data as Array<Record<string, unknown>>) ?? [];
+
+    // Pause ad sets in losing cells
+    for (const cell of cells) {
+      if (String(cell.id) === winnerCellId) continue;
+      const adSets = (cell.adsets as Array<Record<string, unknown>>) ?? [];
+      for (const adSet of adSets) {
+        try {
+          await this.pauseAdSet(String(adSet.id));
+        } catch {
+          // Best-effort pause
+        }
+      }
+    }
+
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rule methods (Phase 7)
+  // ---------------------------------------------------------------------------
+
+  async createAdRule(params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
+    const accountId = this.adAccountId.startsWith("act_")
+      ? this.adAccountId
+      : `act_${this.adAccountId}`;
+    const url = `${this.baseUrl}/${accountId}/adrules_library?access_token=${this.accessToken}`;
+
+    const body: Record<string, unknown> = {
+      name: params.name,
+      evaluation_spec: params.evaluationSpec,
+      execution_spec: params.executionSpec,
+    };
+    if (params.scheduleSpec) body.schedule_spec = params.scheduleSpec;
+
+    const data = await this.executeWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return { id: String(data.id), success: true };
+  }
+
+  async deleteAdRule(ruleId: string): Promise<{ success: boolean }> {
+    const url = `${this.baseUrl}/${ruleId}?access_token=${this.accessToken}`;
+    await this.executeWithRetry(url, { method: "DELETE" });
+    return { success: true };
+  }
+
   async healthCheck(): Promise<ConnectionHealth> {
     const start = Date.now();
     try {
@@ -185,7 +550,20 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
         status: "connected",
         latencyMs: Date.now() - start,
         error: null,
-        capabilities: ["campaigns", "adsets", "targeting"],
+        capabilities: [
+          "campaigns",
+          "adsets",
+          "targeting",
+          "reporting",
+          "signal_health",
+          "audiences",
+          "bid_strategy",
+          "budget_optimization",
+          "creatives",
+          "experiments",
+          "rules",
+          "strategy",
+        ],
       };
     } catch (err) {
       return {
@@ -382,12 +760,116 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true };
   }
 
+  async createCampaign(_params: CreateCampaignParams): Promise<{ id: string; success: boolean }> {
+    return { id: "campaign_new_1", success: true };
+  }
+
+  async createAdSet(_params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
+    return { id: "adset_new_1", success: true };
+  }
+
+  async createAd(_params: CreateAdParams): Promise<{ id: string; success: boolean }> {
+    return { id: "ad_new_1", success: true };
+  }
+
+  // --- Audience methods (Phase 3) ---
+
+  async createCustomAudience(
+    _params: CreateCustomAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    return { id: "audience_custom_1", success: true };
+  }
+
+  async createLookalikeAudience(
+    _params: CreateLookalikeAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    return { id: "audience_lal_1", success: true };
+  }
+
+  async deleteCustomAudience(_audienceId: string): Promise<{ success: boolean }> {
+    return { success: true };
+  }
+
+  // --- Bid & Schedule methods (Phase 4) ---
+
+  async updateBidStrategy(
+    _adSetId: string,
+    _bidStrategy: string,
+    _bidAmount?: number,
+  ): Promise<{ success: boolean; previousBidStrategy: string }> {
+    return { success: true, previousBidStrategy: "LOWEST_COST_WITHOUT_CAP" };
+  }
+
+  async updateAdSetSchedule(
+    _adSetId: string,
+    _schedule: Array<Record<string, unknown>>,
+  ): Promise<{ success: boolean }> {
+    return { success: true };
+  }
+
+  async updateCampaignObjective(
+    _campaignId: string,
+    _objective: string,
+  ): Promise<{ success: boolean; previousObjective: string }> {
+    return { success: true, previousObjective: "OUTCOME_SALES" };
+  }
+
+  // --- Creative methods (Phase 5) ---
+
+  async createAdCreative(
+    _params: CreateAdCreativeWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    return { id: "creative_new_1", success: true };
+  }
+
+  async updateAdStatus(
+    _adId: string,
+    _status: string,
+  ): Promise<{ success: boolean; previousStatus: string }> {
+    return { success: true, previousStatus: "ACTIVE" };
+  }
+
+  // --- Experiment methods (Phase 6) ---
+
+  async createAdStudy(
+    _params: CreateAdStudyWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    return { id: "study_new_1", success: true };
+  }
+
+  async concludeExperiment(_studyId: string, _winnerCellId: string): Promise<{ success: boolean }> {
+    return { success: true };
+  }
+
+  // --- Rule methods (Phase 7) ---
+
+  async createAdRule(_params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
+    return { id: "rule_new_1", success: true };
+  }
+
+  async deleteAdRule(_ruleId: string): Promise<{ success: boolean }> {
+    return { success: true };
+  }
+
   async healthCheck(): Promise<ConnectionHealth> {
     return {
       status: "connected",
       latencyMs: 5,
       error: null,
-      capabilities: ["campaigns", "adsets", "targeting"],
+      capabilities: [
+        "campaigns",
+        "adsets",
+        "targeting",
+        "reporting",
+        "signal_health",
+        "audiences",
+        "bid_strategy",
+        "budget_optimization",
+        "creatives",
+        "experiments",
+        "rules",
+        "strategy",
+      ],
     };
   }
 }

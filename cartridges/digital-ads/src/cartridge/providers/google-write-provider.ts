@@ -13,6 +13,11 @@ import type {
   CreateCampaignParams,
   CreateAdSetParams,
   CreateAdParams,
+  CreateCustomAudienceWriteParams,
+  CreateLookalikeAudienceWriteParams,
+  CreateAdCreativeWriteParams,
+  CreateAdStudyWriteParams,
+  CreateAdRuleWriteParams,
 } from "../types.js";
 import { CircuitBreaker } from "@switchboard/core";
 
@@ -283,6 +288,77 @@ export class RealGoogleAdsWriteProvider implements MetaAdsWriteProvider {
         capabilities: [],
       };
     }
+  }
+
+  // ── Extended interface methods (stubs — Google Ads equivalents) ──
+
+  async createCustomAudience(
+    _params: CreateCustomAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    throw new Error("createCustomAudience not yet implemented for Google Ads");
+  }
+
+  async createLookalikeAudience(
+    _params: CreateLookalikeAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    throw new Error("createLookalikeAudience not yet implemented for Google Ads");
+  }
+
+  async deleteCustomAudience(_audienceId: string): Promise<{ success: boolean }> {
+    throw new Error("deleteCustomAudience not yet implemented for Google Ads");
+  }
+
+  async updateBidStrategy(
+    _adSetId: string,
+    _bidStrategy: string,
+    _bidAmount?: number,
+  ): Promise<{ success: boolean; previousBidStrategy: string }> {
+    throw new Error("updateBidStrategy not yet implemented for Google Ads");
+  }
+
+  async updateAdSetSchedule(
+    _adSetId: string,
+    _schedule: Array<Record<string, unknown>>,
+  ): Promise<{ success: boolean }> {
+    throw new Error("updateAdSetSchedule not yet implemented for Google Ads");
+  }
+
+  async updateCampaignObjective(
+    _campaignId: string,
+    _objective: string,
+  ): Promise<{ success: boolean; previousObjective: string }> {
+    throw new Error("updateCampaignObjective not yet implemented for Google Ads");
+  }
+
+  async createAdCreative(
+    _params: CreateAdCreativeWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    throw new Error("createAdCreative not yet implemented for Google Ads");
+  }
+
+  async updateAdStatus(
+    _adId: string,
+    _status: string,
+  ): Promise<{ success: boolean; previousStatus: string }> {
+    throw new Error("updateAdStatus not yet implemented for Google Ads");
+  }
+
+  async createAdStudy(
+    _params: CreateAdStudyWriteParams,
+  ): Promise<{ id: string; success: boolean }> {
+    throw new Error("createAdStudy not yet implemented for Google Ads");
+  }
+
+  async concludeExperiment(_studyId: string, _winnerCellId: string): Promise<{ success: boolean }> {
+    throw new Error("concludeExperiment not yet implemented for Google Ads");
+  }
+
+  async createAdRule(_params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
+    throw new Error("createAdRule not yet implemented for Google Ads");
+  }
+
+  async deleteAdRule(_ruleId: string): Promise<{ success: boolean }> {
+    throw new Error("deleteAdRule not yet implemented for Google Ads");
   }
 
   // ── Private helpers ──

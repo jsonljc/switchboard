@@ -292,6 +292,7 @@ model DashboardUser {
   organizationId  String
   principalId     String
   apiKeyEncrypted String
+  passwordHash    String?
   apiKeyHash      String?   @unique
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

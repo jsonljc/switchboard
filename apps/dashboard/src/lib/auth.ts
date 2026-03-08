@@ -1,13 +1,46 @@
-import NextAuth from "next-auth";
+import NextAuth, { type NextAuthConfig } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaClient } from "@prisma/client";
 import { randomUUID, createHash } from "crypto";
 import { encryptApiKey } from "./crypto";
+import { verifyPassword } from "./password";
 
 const prisma = new PrismaClient();
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
+const providers: NextAuthConfig["providers"] = [
+  CredentialsProvider({
+    name: "Credentials",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) return null;
+
+      const email = credentials.email as string;
+      const password = credentials.password as string;
+
+      const user = await prisma.dashboardUser.findUnique({ where: { email } });
+      if (!user || !user.passwordHash) return null;
+
+      const valid = await verifyPassword(password, user.passwordHash);
+      if (!valid) return null;
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        organizationId: user.organizationId,
+        principalId: user.principalId,
+      };
+    },
+  }),
+];
+
+// Only include the email (magic link) provider when SMTP is configured
+if (process.env.EMAIL_SERVER_HOST) {
+  providers.push(
     EmailProvider({
       server: {
         host: process.env.EMAIL_SERVER_HOST,
@@ -19,7 +52,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       from: process.env.EMAIL_FROM || "noreply@switchboard.app",
     }),
-  ],
+  );
+}
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  providers,
   adapter: {
     async createUser(user) {
       // When a user first signs in via magic link, create the DashboardUser,
@@ -140,19 +177,45 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
     },
   },
-  session: { strategy: "database" },
+  session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
     verifyRequest: "/login?verify=true",
   },
   callbacks: {
-    async session({ session, user }) {
-      // Attach the organization and principal IDs to the session
-      const dashUser = await prisma.dashboardUser.findUnique({ where: { id: user.id } });
-      if (dashUser) {
-        (session as any).organizationId = dashUser.organizationId;
-        (session as any).principalId = dashUser.principalId;
+    async jwt({ token, user }) {
+      if (user) {
+        // Initial sign-in: populate JWT from user object
+        token.id = user.id;
+
+        // For credentials sign-in, organizationId/principalId are on the user object
+        const credUser = user as typeof user & {
+          organizationId?: string;
+          principalId?: string;
+        };
+        if (credUser.organizationId) {
+          token.organizationId = credUser.organizationId;
+          token.principalId = credUser.principalId;
+        } else {
+          // Magic link sign-in: look up from DB
+          const dashUser = await prisma.dashboardUser.findUnique({
+            where: { id: user.id },
+          });
+          if (dashUser) {
+            token.organizationId = dashUser.organizationId;
+            token.principalId = dashUser.principalId;
+          }
+        }
       }
+      return token;
+    },
+    async session({ session, token }) {
+      // Populate session from JWT token
+      if (token.id) {
+        session.user.id = token.id as string;
+      }
+      (session as any).organizationId = token.organizationId;
+      (session as any).principalId = token.principalId;
       return session;
     },
   },
