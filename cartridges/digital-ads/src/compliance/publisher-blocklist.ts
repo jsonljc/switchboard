@@ -24,9 +24,7 @@ export class PublisherBlocklistManager {
     return lists.map((item) => ({
       id: String(item.id),
       name: String(item.name ?? ""),
-      publishers: Array.isArray(item.app_publishers)
-        ? (item.app_publishers as string[])
-        : [],
+      publishers: Array.isArray(item.app_publishers) ? (item.app_publishers as string[]) : [],
       createdAt: (item.created_time as string) ?? null,
     }));
   }
@@ -39,8 +37,7 @@ export class PublisherBlocklistManager {
     const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
     const url =
-      `${this.baseUrl}/${accountId}/publisher_block_lists` +
-      `?access_token=${this.accessToken}`;
+      `${this.baseUrl}/${accountId}/publisher_block_lists` + `?access_token=${this.accessToken}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -51,9 +48,7 @@ export class PublisherBlocklistManager {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
 
     const result = (await response.json()) as Record<string, unknown>;
@@ -70,9 +65,7 @@ export class PublisherBlocklistManager {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

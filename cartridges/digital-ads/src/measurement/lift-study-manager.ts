@@ -25,9 +25,7 @@ export class LiftStudyManager {
   ): Promise<LiftStudy> {
     const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
-    const url =
-      `${this.baseUrl}/${accountId}/ad_studies` +
-      `?access_token=${this.accessToken}`;
+    const url = `${this.baseUrl}/${accountId}/ad_studies` + `?access_token=${this.accessToken}`;
 
     const body = {
       name: params.name,
@@ -50,9 +48,7 @@ export class LiftStudyManager {
     if (!response.ok) {
       const errBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = errBody.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
 
     const result = (await response.json()) as Record<string, unknown>;
@@ -79,18 +75,21 @@ export class LiftStudyManager {
     let results: LiftStudy["results"] = null;
     if (resultsData) {
       results = {
-        confidenceLevel: resultsData.confidence_level != null
-          ? Number(resultsData.confidence_level)
-          : (data.confidence_level != null ? Number(data.confidence_level) : null),
-        incrementalConversions: resultsData.incremental_conversions != null
-          ? Number(resultsData.incremental_conversions)
-          : null,
-        incrementalCostPerConversion: resultsData.incremental_cost_per_conversion != null
-          ? Number(resultsData.incremental_cost_per_conversion)
-          : null,
-        liftPercent: resultsData.lift_percent != null
-          ? Number(resultsData.lift_percent)
-          : null,
+        confidenceLevel:
+          resultsData.confidence_level != null
+            ? Number(resultsData.confidence_level)
+            : data.confidence_level != null
+              ? Number(data.confidence_level)
+              : null,
+        incrementalConversions:
+          resultsData.incremental_conversions != null
+            ? Number(resultsData.incremental_conversions)
+            : null,
+        incrementalCostPerConversion:
+          resultsData.incremental_cost_per_conversion != null
+            ? Number(resultsData.incremental_cost_per_conversion)
+            : null,
+        liftPercent: resultsData.lift_percent != null ? Number(resultsData.lift_percent) : null,
       };
     }
 
@@ -110,9 +109,7 @@ export class LiftStudyManager {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

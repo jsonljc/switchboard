@@ -6,11 +6,7 @@
 // email itself — there is no nodemailer / SMTP library in this package.
 // ---------------------------------------------------------------------------
 
-import type {
-  EmailChannelConfig,
-  NotificationPayload,
-  NotificationResult,
-} from "../types.js";
+import type { EmailChannelConfig, NotificationPayload, NotificationResult } from "../types.js";
 
 /**
  * Represents a fully constructed email ready for delivery by an
@@ -83,11 +79,12 @@ export class EmailChannel {
   // ---------------------------------------------------------------------------
 
   private buildSubject(payload: NotificationPayload): string {
-    const tag = payload.severity === "critical"
-      ? "[CRITICAL]"
-      : payload.severity === "warning"
-        ? "[WARNING]"
-        : "[INFO]";
+    const tag =
+      payload.severity === "critical"
+        ? "[CRITICAL]"
+        : payload.severity === "warning"
+          ? "[WARNING]"
+          : "[INFO]";
 
     return `${tag} ${payload.title} — Account ${payload.accountId}`;
   }

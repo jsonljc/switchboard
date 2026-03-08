@@ -6,17 +6,17 @@
 // Channel configuration
 // ---------------------------------------------------------------------------
 
-export type NotificationChannelType = 'webhook' | 'slack' | 'email';
+export type NotificationChannelType = "webhook" | "slack" | "email";
 
 export interface WebhookChannelConfig {
-  type: 'webhook';
+  type: "webhook";
   url: string;
   headers?: Record<string, string>;
-  method?: 'POST' | 'PUT';
+  method?: "POST" | "PUT";
 }
 
 export interface SlackChannelConfig {
-  type: 'slack';
+  type: "slack";
   webhookUrl: string;
   channel?: string;
   username?: string;
@@ -24,7 +24,7 @@ export interface SlackChannelConfig {
 }
 
 export interface EmailChannelConfig {
-  type: 'email';
+  type: "email";
   smtpHost: string;
   smtpPort: number;
   from: string;
@@ -33,15 +33,18 @@ export interface EmailChannelConfig {
   auth?: { user: string; pass: string };
 }
 
-export type NotificationChannelConfig = WebhookChannelConfig | SlackChannelConfig | EmailChannelConfig;
+export type NotificationChannelConfig =
+  | WebhookChannelConfig
+  | SlackChannelConfig
+  | EmailChannelConfig;
 
 // ---------------------------------------------------------------------------
 // Notification payload
 // ---------------------------------------------------------------------------
 
 export interface NotificationPayload {
-  alertType: 'anomaly' | 'budget_forecast' | 'policy_violation';
-  severity: 'critical' | 'warning' | 'info';
+  alertType: "anomaly" | "budget_forecast" | "policy_violation";
+  severity: "critical" | "warning" | "info";
   accountId: string;
   title: string;
   message: string;

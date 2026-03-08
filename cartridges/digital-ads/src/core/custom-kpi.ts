@@ -10,7 +10,7 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type KPIAggregation = 'sum' | 'average' | 'weighted_average' | 'ratio' | 'custom';
+export type KPIAggregation = "sum" | "average" | "weighted_average" | "ratio" | "custom";
 
 export interface CustomKPIDefinition {
   id: string;
@@ -29,7 +29,7 @@ export interface CustomKPIDefinition {
   /** For sum/average: list of metric keys to aggregate */
   metrics?: string[];
   /** Formatting */
-  format: 'number' | 'currency' | 'percentage' | 'multiplier';
+  format: "number" | "currency" | "percentage" | "multiplier";
   /** Whether higher is better (for ranking/comparison) */
   higherIsBetter: boolean;
   /** Optional target value for threshold alerts */
@@ -45,21 +45,37 @@ export interface KPIComputationResult {
   kpiName: string;
   value: number;
   formattedValue: string;
-  format: CustomKPIDefinition['format'];
-  status: 'on_target' | 'warning' | 'critical' | 'no_target';
+  format: CustomKPIDefinition["format"];
+  status: "on_target" | "warning" | "critical" | "no_target";
   target?: number;
   percentOfTarget?: number;
 }
 
 /** Available base metrics that can be used in KPI definitions */
 export const BASE_METRICS = [
-  'spend', 'impressions', 'clicks', 'conversions', 'revenue',
-  'ctr', 'cpc', 'cpm', 'cpa', 'roas', 'frequency',
-  'reach', 'video_views', 'video_completions',
-  'add_to_cart', 'checkout_initiated', 'purchases',
-  'leads', 'registrations', 'page_views', 'landing_page_views',
+  "spend",
+  "impressions",
+  "clicks",
+  "conversions",
+  "revenue",
+  "ctr",
+  "cpc",
+  "cpm",
+  "cpa",
+  "roas",
+  "frequency",
+  "reach",
+  "video_views",
+  "video_completions",
+  "add_to_cart",
+  "checkout_initiated",
+  "purchases",
+  "leads",
+  "registrations",
+  "page_views",
+  "landing_page_views",
 ] as const;
-export type BaseMetric = typeof BASE_METRICS[number];
+export type BaseMetric = (typeof BASE_METRICS)[number];
 
 // ---------------------------------------------------------------------------
 // Safe Expression Evaluator — recursive descent parser
@@ -69,7 +85,7 @@ export type BaseMetric = typeof BASE_METRICS[number];
 // ---------------------------------------------------------------------------
 
 /** Token types for the expression lexer */
-type TokenType = 'number' | 'identifier' | 'operator' | 'lparen' | 'rparen' | 'eof';
+type TokenType = "number" | "identifier" | "operator" | "lparen" | "rparen" | "eof";
 
 interface Token {
   type: TokenType;
@@ -88,61 +104,64 @@ function tokenize(expression: string): Token[] {
     const ch = expression[i]!;
 
     // Skip whitespace
-    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
       i++;
       continue;
     }
 
     // Numbers (integer or decimal)
-    if (ch >= '0' && ch <= '9') {
-      let num = '';
-      while (i < expression.length && ((expression[i]! >= '0' && expression[i]! <= '9') || expression[i] === '.')) {
+    if (ch >= "0" && ch <= "9") {
+      let num = "";
+      while (
+        i < expression.length &&
+        ((expression[i]! >= "0" && expression[i]! <= "9") || expression[i] === ".")
+      ) {
         num += expression[i]!;
         i++;
       }
-      tokens.push({ type: 'number', value: num });
+      tokens.push({ type: "number", value: num });
       continue;
     }
 
     // Identifiers (metric names: letters, digits, underscores)
-    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
-      let ident = '';
+    if ((ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch === "_") {
+      let ident = "";
       while (
         i < expression.length &&
-        ((expression[i]! >= 'a' && expression[i]! <= 'z') ||
-          (expression[i]! >= 'A' && expression[i]! <= 'Z') ||
-          (expression[i]! >= '0' && expression[i]! <= '9') ||
-          expression[i] === '_')
+        ((expression[i]! >= "a" && expression[i]! <= "z") ||
+          (expression[i]! >= "A" && expression[i]! <= "Z") ||
+          (expression[i]! >= "0" && expression[i]! <= "9") ||
+          expression[i] === "_")
       ) {
         ident += expression[i]!;
         i++;
       }
-      tokens.push({ type: 'identifier', value: ident });
+      tokens.push({ type: "identifier", value: ident });
       continue;
     }
 
     // Operators
-    if (ch === '+' || ch === '-' || ch === '*' || ch === '/') {
-      tokens.push({ type: 'operator', value: ch });
+    if (ch === "+" || ch === "-" || ch === "*" || ch === "/") {
+      tokens.push({ type: "operator", value: ch });
       i++;
       continue;
     }
 
     // Parentheses
-    if (ch === '(') {
-      tokens.push({ type: 'lparen', value: '(' });
+    if (ch === "(") {
+      tokens.push({ type: "lparen", value: "(" });
       i++;
       continue;
     }
-    if (ch === ')') {
-      tokens.push({ type: 'rparen', value: ')' });
+    if (ch === ")") {
+      tokens.push({ type: "rparen", value: ")" });
       i++;
       continue;
     }
 
     throw new Error(`Unexpected character in expression: '${ch}' at position ${i}`);
   }
-  tokens.push({ type: 'eof', value: '' });
+  tokens.push({ type: "eof", value: "" });
   return tokens;
 }
 
@@ -177,7 +196,7 @@ class ExpressionEvaluator {
 
   evaluate(): number {
     const result = this.parseExpression();
-    if (this.peek().type !== 'eof') {
+    if (this.peek().type !== "eof") {
       throw new Error(`Unexpected token after end of expression: '${this.peek().value}'`);
     }
     return result;
@@ -185,10 +204,13 @@ class ExpressionEvaluator {
 
   private parseExpression(): number {
     let left = this.parseTerm();
-    while (this.peek().type === 'operator' && (this.peek().value === '+' || this.peek().value === '-')) {
+    while (
+      this.peek().type === "operator" &&
+      (this.peek().value === "+" || this.peek().value === "-")
+    ) {
       const op = this.consume().value;
       const right = this.parseTerm();
-      if (op === '+') {
+      if (op === "+") {
         left = left + right;
       } else {
         left = left - right;
@@ -199,10 +221,13 @@ class ExpressionEvaluator {
 
   private parseTerm(): number {
     let left = this.parseFactor();
-    while (this.peek().type === 'operator' && (this.peek().value === '*' || this.peek().value === '/')) {
+    while (
+      this.peek().type === "operator" &&
+      (this.peek().value === "*" || this.peek().value === "/")
+    ) {
       const op = this.consume().value;
       const right = this.parseFactor();
-      if (op === '*') {
+      if (op === "*") {
         left = left * right;
       } else {
         if (right === 0) {
@@ -218,14 +243,14 @@ class ExpressionEvaluator {
     const token = this.peek();
 
     // Unary plus/minus
-    if (token.type === 'operator' && (token.value === '+' || token.value === '-')) {
+    if (token.type === "operator" && (token.value === "+" || token.value === "-")) {
       this.consume();
       const factor = this.parseFactor();
-      return token.value === '-' ? -factor : factor;
+      return token.value === "-" ? -factor : factor;
     }
 
     // Number literal
-    if (token.type === 'number') {
+    if (token.type === "number") {
       this.consume();
       const num = Number(token.value);
       if (isNaN(num)) {
@@ -235,7 +260,7 @@ class ExpressionEvaluator {
     }
 
     // Identifier (metric name)
-    if (token.type === 'identifier') {
+    if (token.type === "identifier") {
       this.consume();
       const value = this.metrics[token.value];
       if (value === undefined) {
@@ -245,11 +270,11 @@ class ExpressionEvaluator {
     }
 
     // Parenthesized sub-expression
-    if (token.type === 'lparen') {
+    if (token.type === "lparen") {
       this.consume();
       const result = this.parseExpression();
-      if (this.peek().type !== 'rparen') {
-        throw new Error('Missing closing parenthesis');
+      if (this.peek().type !== "rparen") {
+        throw new Error("Missing closing parenthesis");
       }
       this.consume();
       return result;
@@ -277,7 +302,7 @@ export function extractMetricRefs(expression: string): string[] {
   const tokens = tokenize(expression);
   const identifiers: string[] = [];
   for (const token of tokens) {
-    if (token.type === 'identifier' && !identifiers.includes(token.value)) {
+    if (token.type === "identifier" && !identifiers.includes(token.value)) {
       identifiers.push(token.value);
     }
   }
@@ -301,7 +326,7 @@ export class CustomKPIEngine {
    * Register a new custom KPI definition.
    * Auto-generates an ID and validates the definition.
    */
-  registerKPI(definition: Omit<CustomKPIDefinition, 'id'>): CustomKPIDefinition {
+  registerKPI(definition: Omit<CustomKPIDefinition, "id">): CustomKPIDefinition {
     this.validateDefinition(definition);
 
     const id = generateId();
@@ -354,71 +379,72 @@ export class CustomKPIEngine {
   getPresetKPIs(): CustomKPIDefinition[] {
     return [
       {
-        id: 'preset_blended_cpa',
-        name: 'Blended CPA',
-        description: 'Cost per acquisition across all conversions (spend / conversions)',
-        type: 'ratio',
-        numerator: 'spend',
-        denominator: 'conversions',
-        format: 'currency',
+        id: "preset_blended_cpa",
+        name: "Blended CPA",
+        description: "Cost per acquisition across all conversions (spend / conversions)",
+        type: "ratio",
+        numerator: "spend",
+        denominator: "conversions",
+        format: "currency",
         higherIsBetter: false,
       },
       {
-        id: 'preset_roas',
-        name: 'ROAS',
-        description: 'Return on ad spend (revenue / spend)',
-        type: 'ratio',
-        numerator: 'revenue',
-        denominator: 'spend',
-        format: 'multiplier',
+        id: "preset_roas",
+        name: "ROAS",
+        description: "Return on ad spend (revenue / spend)",
+        type: "ratio",
+        numerator: "revenue",
+        denominator: "spend",
+        format: "multiplier",
         higherIsBetter: true,
       },
       {
-        id: 'preset_cost_per_lpv',
-        name: 'Cost per Landing Page View',
-        description: 'Cost efficiency for driving landing page views (spend / landing_page_views)',
-        type: 'ratio',
-        numerator: 'spend',
-        denominator: 'landing_page_views',
-        format: 'currency',
+        id: "preset_cost_per_lpv",
+        name: "Cost per Landing Page View",
+        description: "Cost efficiency for driving landing page views (spend / landing_page_views)",
+        type: "ratio",
+        numerator: "spend",
+        denominator: "landing_page_views",
+        format: "currency",
         higherIsBetter: false,
       },
       {
-        id: 'preset_click_to_conversion',
-        name: 'Click-to-Conversion Rate',
-        description: 'Percentage of clicks that result in a conversion (conversions / clicks)',
-        type: 'ratio',
-        numerator: 'conversions',
-        denominator: 'clicks',
-        format: 'percentage',
+        id: "preset_click_to_conversion",
+        name: "Click-to-Conversion Rate",
+        description: "Percentage of clicks that result in a conversion (conversions / clicks)",
+        type: "ratio",
+        numerator: "conversions",
+        denominator: "clicks",
+        format: "percentage",
         higherIsBetter: true,
       },
       {
-        id: 'preset_revenue_per_click',
-        name: 'Revenue per Click',
-        description: 'Average revenue generated per click (revenue / clicks)',
-        type: 'ratio',
-        numerator: 'revenue',
-        denominator: 'clicks',
-        format: 'currency',
+        id: "preset_revenue_per_click",
+        name: "Revenue per Click",
+        description: "Average revenue generated per click (revenue / clicks)",
+        type: "ratio",
+        numerator: "revenue",
+        denominator: "clicks",
+        format: "currency",
         higherIsBetter: true,
       },
       {
-        id: 'preset_cpm_efficiency',
-        name: 'CPM Efficiency',
-        description: 'Conversions per thousand impressions (conversions / impressions * 1000)',
-        type: 'custom',
-        expression: 'conversions / impressions * 1000',
-        format: 'number',
+        id: "preset_cpm_efficiency",
+        name: "CPM Efficiency",
+        description: "Conversions per thousand impressions (conversions / impressions * 1000)",
+        type: "custom",
+        expression: "conversions / impressions * 1000",
+        format: "number",
         higherIsBetter: true,
       },
       {
-        id: 'preset_engagement_rate',
-        name: 'Engagement Rate',
-        description: 'Combined click and video view engagement rate ((clicks + video_views) / impressions)',
-        type: 'custom',
-        expression: '(clicks + video_views) / impressions',
-        format: 'percentage',
+        id: "preset_engagement_rate",
+        name: "Engagement Rate",
+        description:
+          "Combined click and video view engagement rate ((clicks + video_views) / impressions)",
+        type: "custom",
+        expression: "(clicks + video_views) / impressions",
+        format: "percentage",
         higherIsBetter: true,
       },
     ];
@@ -428,52 +454,58 @@ export class CustomKPIEngine {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  private validateDefinition(definition: Omit<CustomKPIDefinition, 'id'>): void {
+  private validateDefinition(definition: Omit<CustomKPIDefinition, "id">): void {
     if (!definition.name || definition.name.trim().length === 0) {
-      throw new Error('KPI name is required');
+      throw new Error("KPI name is required");
     }
     if (!definition.description || definition.description.trim().length === 0) {
-      throw new Error('KPI description is required');
+      throw new Error("KPI description is required");
     }
 
-    const validTypes: KPIAggregation[] = ['sum', 'average', 'weighted_average', 'ratio', 'custom'];
+    const validTypes: KPIAggregation[] = ["sum", "average", "weighted_average", "ratio", "custom"];
     if (!validTypes.includes(definition.type)) {
-      throw new Error(`Invalid KPI type: ${definition.type}. Must be one of: ${validTypes.join(', ')}`);
+      throw new Error(
+        `Invalid KPI type: ${definition.type}. Must be one of: ${validTypes.join(", ")}`,
+      );
     }
 
-    const validFormats = ['number', 'currency', 'percentage', 'multiplier'];
+    const validFormats = ["number", "currency", "percentage", "multiplier"];
     if (!validFormats.includes(definition.format)) {
-      throw new Error(`Invalid format: ${definition.format}. Must be one of: ${validFormats.join(', ')}`);
+      throw new Error(
+        `Invalid format: ${definition.format}. Must be one of: ${validFormats.join(", ")}`,
+      );
     }
 
     switch (definition.type) {
-      case 'ratio':
+      case "ratio":
         if (!definition.numerator) {
-          throw new Error('Ratio KPI requires a numerator metric');
+          throw new Error("Ratio KPI requires a numerator metric");
         }
         if (!definition.denominator) {
-          throw new Error('Ratio KPI requires a denominator metric');
+          throw new Error("Ratio KPI requires a denominator metric");
         }
         this.validateMetricRef(definition.numerator);
         this.validateMetricRef(definition.denominator);
         break;
 
-      case 'sum':
-      case 'average':
+      case "sum":
+      case "average":
         if (!definition.metrics || definition.metrics.length === 0) {
-          throw new Error(`${definition.type} KPI requires a metrics array with at least one metric`);
+          throw new Error(
+            `${definition.type} KPI requires a metrics array with at least one metric`,
+          );
         }
         for (const m of definition.metrics) {
           this.validateMetricRef(m);
         }
         break;
 
-      case 'weighted_average':
+      case "weighted_average":
         if (!definition.metrics || definition.metrics.length === 0) {
-          throw new Error('weighted_average KPI requires a metrics array with at least one metric');
+          throw new Error("weighted_average KPI requires a metrics array with at least one metric");
         }
         if (!definition.weightMetric) {
-          throw new Error('weighted_average KPI requires a weightMetric');
+          throw new Error("weighted_average KPI requires a weightMetric");
         }
         for (const m of definition.metrics) {
           this.validateMetricRef(m);
@@ -481,9 +513,9 @@ export class CustomKPIEngine {
         this.validateMetricRef(definition.weightMetric);
         break;
 
-      case 'custom':
+      case "custom":
         if (!definition.expression || definition.expression.trim().length === 0) {
-          throw new Error('Custom KPI requires an expression');
+          throw new Error("Custom KPI requires an expression");
         }
         // Validate expression by extracting identifiers and checking them
         try {
@@ -492,7 +524,9 @@ export class CustomKPIEngine {
             this.validateMetricRef(ref);
           }
         } catch (err) {
-          throw new Error(`Invalid expression: ${err instanceof Error ? err.message : String(err)}`);
+          throw new Error(
+            `Invalid expression: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         break;
     }
@@ -501,11 +535,15 @@ export class CustomKPIEngine {
     if (definition.warningThreshold !== undefined && definition.criticalThreshold !== undefined) {
       if (definition.higherIsBetter) {
         if (definition.warningThreshold < definition.criticalThreshold) {
-          throw new Error('For higherIsBetter KPIs, warningThreshold should be >= criticalThreshold');
+          throw new Error(
+            "For higherIsBetter KPIs, warningThreshold should be >= criticalThreshold",
+          );
         }
       } else {
         if (definition.warningThreshold > definition.criticalThreshold) {
-          throw new Error('For lowerIsBetter KPIs, warningThreshold should be <= criticalThreshold');
+          throw new Error(
+            "For lowerIsBetter KPIs, warningThreshold should be <= criticalThreshold",
+          );
         }
       }
     }
@@ -514,9 +552,7 @@ export class CustomKPIEngine {
   private validateMetricRef(metric: string): void {
     const allValid = BASE_METRICS as readonly string[];
     if (!allValid.includes(metric)) {
-      throw new Error(
-        `Unknown metric '${metric}'. Valid metrics: ${BASE_METRICS.join(', ')}`,
-      );
+      throw new Error(`Unknown metric '${metric}'. Valid metrics: ${BASE_METRICS.join(", ")}`);
     }
   }
 
@@ -524,7 +560,7 @@ export class CustomKPIEngine {
     let value: number;
 
     switch (kpi.type) {
-      case 'sum': {
+      case "sum": {
         value = 0;
         for (const m of kpi.metrics ?? []) {
           value += metrics[m] ?? 0;
@@ -532,7 +568,7 @@ export class CustomKPIEngine {
         break;
       }
 
-      case 'average': {
+      case "average": {
         const metricList = kpi.metrics ?? [];
         if (metricList.length === 0) {
           value = 0;
@@ -546,9 +582,9 @@ export class CustomKPIEngine {
         break;
       }
 
-      case 'weighted_average': {
+      case "weighted_average": {
         const metricList = kpi.metrics ?? [];
-        const weightKey = kpi.weightMetric ?? '';
+        const weightKey = kpi.weightMetric ?? "";
         const totalWeight = metrics[weightKey] ?? 0;
         if (totalWeight === 0 || metricList.length === 0) {
           value = 0;
@@ -562,16 +598,16 @@ export class CustomKPIEngine {
         break;
       }
 
-      case 'ratio': {
-        const num = metrics[kpi.numerator ?? ''] ?? 0;
-        const den = metrics[kpi.denominator ?? ''] ?? 0;
+      case "ratio": {
+        const num = metrics[kpi.numerator ?? ""] ?? 0;
+        const den = metrics[kpi.denominator ?? ""] ?? 0;
         value = den !== 0 ? num / den : 0;
         break;
       }
 
-      case 'custom': {
+      case "custom": {
         try {
-          value = evaluateExpression(kpi.expression ?? '', metrics);
+          value = evaluateExpression(kpi.expression ?? "", metrics);
         } catch {
           value = 0;
         }
@@ -589,9 +625,8 @@ export class CustomKPIEngine {
 
     const formattedValue = this.formatValue(value, kpi.format);
     const status = this.evaluateStatus(value, kpi);
-    const percentOfTarget = kpi.target !== undefined && kpi.target !== 0
-      ? (value / kpi.target) * 100
-      : undefined;
+    const percentOfTarget =
+      kpi.target !== undefined && kpi.target !== 0 ? (value / kpi.target) * 100 : undefined;
 
     return {
       kpiId: kpi.id,
@@ -605,48 +640,45 @@ export class CustomKPIEngine {
     };
   }
 
-  private formatValue(value: number, format: CustomKPIDefinition['format']): string {
+  private formatValue(value: number, format: CustomKPIDefinition["format"]): string {
     switch (format) {
-      case 'currency':
+      case "currency":
         return `$${value.toFixed(2)}`;
-      case 'percentage':
+      case "percentage":
         return `${(value * 100).toFixed(2)}%`;
-      case 'multiplier':
+      case "multiplier":
         return `${value.toFixed(2)}x`;
-      case 'number':
+      case "number":
       default:
         return value.toFixed(2);
     }
   }
 
-  private evaluateStatus(
-    value: number,
-    kpi: CustomKPIDefinition,
-  ): KPIComputationResult['status'] {
+  private evaluateStatus(value: number, kpi: CustomKPIDefinition): KPIComputationResult["status"] {
     if (kpi.target === undefined) {
-      return 'no_target';
+      return "no_target";
     }
 
     // Check critical threshold first
     if (kpi.criticalThreshold !== undefined) {
       if (kpi.higherIsBetter && value <= kpi.criticalThreshold) {
-        return 'critical';
+        return "critical";
       }
       if (!kpi.higherIsBetter && value >= kpi.criticalThreshold) {
-        return 'critical';
+        return "critical";
       }
     }
 
     // Check warning threshold
     if (kpi.warningThreshold !== undefined) {
       if (kpi.higherIsBetter && value <= kpi.warningThreshold) {
-        return 'warning';
+        return "warning";
       }
       if (!kpi.higherIsBetter && value >= kpi.warningThreshold) {
-        return 'warning';
+        return "warning";
       }
     }
 
-    return 'on_target';
+    return "on_target";
   }
 }

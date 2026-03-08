@@ -2,19 +2,9 @@
 // Audience Management Types
 // ---------------------------------------------------------------------------
 
-export type CustomAudienceSource =
-  | "website"
-  | "customer_list"
-  | "engagement"
-  | "app"
-  | "offline";
+export type CustomAudienceSource = "website" | "customer_list" | "engagement" | "app" | "offline";
 
-export type CustomAudienceSubtype =
-  | "CUSTOM"
-  | "LOOKALIKE"
-  | "WEBSITE"
-  | "ENGAGEMENT"
-  | "APP";
+export type CustomAudienceSubtype = "CUSTOM" | "LOOKALIKE" | "WEBSITE" | "ENGAGEMENT" | "APP";
 
 export interface CreateCustomAudienceParams {
   adAccountId: string;

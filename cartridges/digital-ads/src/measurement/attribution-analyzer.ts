@@ -10,10 +10,7 @@ export class AttributionAnalyzer {
     private readonly accessToken: string,
   ) {}
 
-  async compare(
-    adAccountId: string,
-    datePreset?: string,
-  ): Promise<AttributionComparison[]> {
+  async compare(adAccountId: string, datePreset?: string): Promise<AttributionComparison[]> {
     const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
     const preset = datePreset ?? "last_30d";
@@ -93,9 +90,7 @@ export class AttributionAnalyzer {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

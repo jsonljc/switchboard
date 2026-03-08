@@ -32,9 +32,7 @@ export class AudienceInsightsChecker {
     adAccountId: string,
     targetingSpec: Record<string, unknown>,
   ): Promise<{ dailyReach: { lower: number; upper: number } }> {
-    const accountId = adAccountId.startsWith("act_")
-      ? adAccountId
-      : `act_${adAccountId}`;
+    const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
     const url =
       `${this.baseUrl}/${accountId}/delivery_estimate?` +
       `targeting_spec=${encodeURIComponent(JSON.stringify(targetingSpec))}` +
@@ -48,9 +46,7 @@ export class AudienceInsightsChecker {
     const data = (await response.json()) as Record<string, unknown>;
     const estimates = (data.data as unknown[]) ?? [];
     const estimate = estimates[0] as Record<string, unknown> | undefined;
-    const curve = estimate?.daily_outcomes_curve as
-      | Array<Record<string, unknown>>
-      | undefined;
+    const curve = estimate?.daily_outcomes_curve as Array<Record<string, unknown>> | undefined;
 
     return {
       dailyReach: {

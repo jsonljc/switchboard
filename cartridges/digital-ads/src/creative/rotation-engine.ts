@@ -23,10 +23,7 @@ export interface AdPerformance {
 }
 
 export class CreativeRotationEngine {
-  generatePlan(
-    ads: AdPerformance[],
-    options?: { minSpendThreshold?: number },
-  ): RotationPlan {
+  generatePlan(ads: AdPerformance[], options?: { minSpendThreshold?: number }): RotationPlan {
     const minSpend = options?.minSpendThreshold ?? 10;
 
     const toPause: RotationPlan["toPause"] = [];
@@ -40,10 +37,7 @@ export class CreativeRotationEngine {
       .filter((a) => a.cpa !== null && a.spend >= minSpend)
       .map((a) => a.cpa!);
     activeCPAs.sort((a, b) => a - b);
-    const medianCPA =
-      activeCPAs.length > 0
-        ? activeCPAs[Math.floor(activeCPAs.length / 2)]!
-        : null;
+    const medianCPA = activeCPAs.length > 0 ? activeCPAs[Math.floor(activeCPAs.length / 2)]! : null;
 
     for (const ad of activeAds) {
       if (ad.fatigueScore > 0.8) {
@@ -56,11 +50,7 @@ export class CreativeRotationEngine {
           adId: ad.adId,
           reason: `Zero conversions after $${ad.spend.toFixed(2)} spend`,
         });
-      } else if (
-        medianCPA !== null &&
-        ad.cpa !== null &&
-        ad.cpa > medianCPA * 2
-      ) {
+      } else if (medianCPA !== null && ad.cpa !== null && ad.cpa > medianCPA * 2) {
         toPause.push({
           adId: ad.adId,
           reason: `CPA ($${ad.cpa.toFixed(2)}) is 2x+ median ($${medianCPA.toFixed(2)})`,
@@ -101,9 +91,7 @@ export class CreativeRotationEngine {
         await updateAdStatus(adId, "PAUSED");
         pausedCount++;
       } catch (err) {
-        errors.push(
-          `Failed to pause ${adId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        errors.push(`Failed to pause ${adId}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

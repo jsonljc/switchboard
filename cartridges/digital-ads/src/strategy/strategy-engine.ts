@@ -14,7 +14,12 @@ export class StrategyEngine {
   }): StrategyRecommendation {
     const objective = this.selectObjective(params.businessGoal);
     const budgetTier = this.getBudgetTier(params.monthlyBudget);
-    const structure = this.recommendStructure(objective, params.monthlyBudget, params.hasExistingCampaigns, budgetTier);
+    const structure = this.recommendStructure(
+      objective,
+      params.monthlyBudget,
+      params.hasExistingCampaigns,
+      budgetTier,
+    );
 
     return {
       objective,
@@ -36,11 +41,15 @@ export class StrategyEngine {
 
   private selectObjective(goal: string): CampaignObjective {
     const g = goal.toLowerCase();
-    if (g.includes("sale") || g.includes("purchase") || g.includes("revenue")) return "OUTCOME_SALES";
+    if (g.includes("sale") || g.includes("purchase") || g.includes("revenue"))
+      return "OUTCOME_SALES";
     if (g.includes("lead") || g.includes("sign") || g.includes("form")) return "OUTCOME_LEADS";
-    if (g.includes("traffic") || g.includes("visit") || g.includes("click")) return "OUTCOME_TRAFFIC";
-    if (g.includes("aware") || g.includes("reach") || g.includes("brand")) return "OUTCOME_AWARENESS";
-    if (g.includes("engag") || g.includes("like") || g.includes("comment")) return "OUTCOME_ENGAGEMENT";
+    if (g.includes("traffic") || g.includes("visit") || g.includes("click"))
+      return "OUTCOME_TRAFFIC";
+    if (g.includes("aware") || g.includes("reach") || g.includes("brand"))
+      return "OUTCOME_AWARENESS";
+    if (g.includes("engag") || g.includes("like") || g.includes("comment"))
+      return "OUTCOME_ENGAGEMENT";
     if (g.includes("app") || g.includes("install")) return "OUTCOME_APP_PROMOTION";
     return "OUTCOME_SALES"; // Default
   }
@@ -58,7 +67,8 @@ export class StrategyEngine {
           adSetsPerCampaign: 1,
           adsPerAdSet: 3,
           totalBudget: budget,
-          reasoning: "Under $500/month — single campaign with broad targeting and lowest cost bid strategy to maximize limited budget",
+          reasoning:
+            "Under $500/month — single campaign with broad targeting and lowest cost bid strategy to maximize limited budget",
         };
       case "small":
         return {
@@ -86,7 +96,8 @@ export class StrategyEngine {
           adSetsPerCampaign: 4,
           adsPerAdSet: 5,
           totalBudget: budget,
-          reasoning: "$25,000+/month — full ASC + manual campaign mix with measurement testing, 4 campaigns with 4 ad sets each",
+          reasoning:
+            "$25,000+/month — full ASC + manual campaign mix with measurement testing, 4 campaigns with 4 ad sets each",
         };
     }
   }
@@ -185,12 +196,16 @@ export class StrategyEngine {
     }
 
     if (vertical === "commerce") {
-      practices.push("Consider Advantage+ Shopping Campaigns (ASC) for automated e-commerce optimization");
+      practices.push(
+        "Consider Advantage+ Shopping Campaigns (ASC) for automated e-commerce optimization",
+      );
       practices.push("Use product catalog ads and dynamic creative for product-level targeting");
     }
     if (vertical === "leadgen") {
       practices.push("Use Instant Forms with conditional questions for lead quality filtering");
-      practices.push("Optimize for downstream events (qualified lead, sale) not just form submissions");
+      practices.push(
+        "Optimize for downstream events (qualified lead, sale) not just form submissions",
+      );
     }
 
     return practices;

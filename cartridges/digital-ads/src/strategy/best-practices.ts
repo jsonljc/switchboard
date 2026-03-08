@@ -30,7 +30,8 @@ export class BestPracticesEngine {
         advantagePlus.score +
         creativeDiversification.score +
         conversionsAPI.score +
-        resultsValidation.score) / 5
+        resultsValidation.score) /
+        5,
     );
 
     return {
@@ -99,7 +100,9 @@ export class BestPracticesEngine {
 
     if (data.avgCreativesPerAdSet < 3) {
       score -= 40;
-      issues.push(`Only ${data.avgCreativesPerAdSet.toFixed(1)} creatives per ad set (minimum 3 recommended)`);
+      issues.push(
+        `Only ${data.avgCreativesPerAdSet.toFixed(1)} creatives per ad set (minimum 3 recommended)`,
+      );
       recommendations.push("Add more creative variants to each ad set");
     }
     if (data.uniqueCreativeFormats < 2) {

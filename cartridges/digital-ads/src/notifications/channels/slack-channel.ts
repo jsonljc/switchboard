@@ -3,11 +3,7 @@
 //                 via incoming webhook
 // ---------------------------------------------------------------------------
 
-import type {
-  SlackChannelConfig,
-  NotificationPayload,
-  NotificationResult,
-} from "../types.js";
+import type { SlackChannelConfig, NotificationPayload, NotificationResult } from "../types.js";
 
 /** Severity-to-color mapping for the Slack attachment sidebar. */
 const SEVERITY_COLORS: Record<NotificationPayload["severity"], string> = {

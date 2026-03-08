@@ -11,13 +11,22 @@
 // ---------------------------------------------------------------------------
 
 export type OptimizationActionType =
-  | 'budget_increase' | 'budget_decrease' | 'budget_reallocate'
-  | 'bid_strategy_change' | 'targeting_change'
-  | 'creative_rotation' | 'creative_pause' | 'creative_launch'
-  | 'campaign_pause' | 'campaign_resume'
-  | 'adset_pause' | 'adset_resume'
-  | 'audience_change' | 'placement_change'
-  | 'dayparting_change' | 'rule_created';
+  | "budget_increase"
+  | "budget_decrease"
+  | "budget_reallocate"
+  | "bid_strategy_change"
+  | "targeting_change"
+  | "creative_rotation"
+  | "creative_pause"
+  | "creative_launch"
+  | "campaign_pause"
+  | "campaign_resume"
+  | "adset_pause"
+  | "adset_resume"
+  | "audience_change"
+  | "placement_change"
+  | "dayparting_change"
+  | "rule_created";
 
 export interface OptimizationRecord {
   id: string;
@@ -27,7 +36,7 @@ export interface OptimizationRecord {
   actionType: OptimizationActionType;
   /** The entity that was modified */
   entityId: string;
-  entityType: 'campaign' | 'adset' | 'ad' | 'account';
+  entityType: "campaign" | "adset" | "ad" | "account";
   /** Parameters of the change */
   changeDescription: string;
   parameters: Record<string, unknown>;
@@ -57,12 +66,12 @@ export interface OptimizationRecord {
 }
 
 export interface OptimizationOutcome {
-  status: 'positive' | 'negative' | 'neutral' | 'pending';
+  status: "positive" | "negative" | "neutral" | "pending";
   /** Primary metric change (e.g. CPA delta) */
   primaryMetricDelta: number;
   primaryMetricDeltaPercent: number;
   /** Confidence in the outcome */
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   /** Summary */
   summary: string;
 }
@@ -96,7 +105,7 @@ export interface MemoryRecommendation {
   confidence: string;
   recommendation: string;
   historicalSuccessRate: number;
-  recentTrend: 'improving' | 'declining' | 'stable';
+  recentTrend: "improving" | "declining" | "stable";
 }
 
 // ---------------------------------------------------------------------------
@@ -121,9 +130,7 @@ export class AccountMemory {
   // (a) recordOptimization
   // -------------------------------------------------------------------------
 
-  recordOptimization(
-    record: Omit<OptimizationRecord, 'id' | 'timestamp'>,
-  ): OptimizationRecord {
+  recordOptimization(record: Omit<OptimizationRecord, "id" | "timestamp">): OptimizationRecord {
     const full: OptimizationRecord = {
       ...record,
       id: generateId(),
@@ -146,7 +153,7 @@ export class AccountMemory {
 
   recordOutcome(
     recordId: string,
-    metricsAfter: OptimizationRecord['metricsAfter'],
+    metricsAfter: OptimizationRecord["metricsAfter"],
   ): OptimizationRecord {
     const record = this.findRecordById(recordId);
     if (!record) {
@@ -160,80 +167,88 @@ export class AccountMemory {
   }
 
   private computeOutcome(
-    before: OptimizationRecord['metricsBefore'],
-    after: OptimizationRecord['metricsAfter'],
+    before: OptimizationRecord["metricsBefore"],
+    after: OptimizationRecord["metricsAfter"],
   ): OptimizationOutcome {
     if (!after) {
       return {
-        status: 'pending',
+        status: "pending",
         primaryMetricDelta: 0,
         primaryMetricDeltaPercent: 0,
-        confidence: 'low',
-        summary: 'Awaiting post-change metrics',
+        confidence: "low",
+        summary: "Awaiting post-change metrics",
       };
     }
 
     // Determine confidence based on daysAfterChange
-    let confidence: 'high' | 'medium' | 'low';
+    let confidence: "high" | "medium" | "low";
     if (after.daysAfterChange > 7) {
-      confidence = 'high';
+      confidence = "high";
     } else if (after.daysAfterChange >= 3) {
-      confidence = 'medium';
+      confidence = "medium";
     } else {
-      confidence = 'low';
+      confidence = "low";
     }
 
     // Choose primary metric: CPA first, then ROAS, then CTR
     let delta = 0;
     let deltaPercent = 0;
-    let status: 'positive' | 'negative' | 'neutral' = 'neutral';
-    let metricName = '';
+    let status: "positive" | "negative" | "neutral" = "neutral";
+    let metricName = "";
 
     if (before.cpa !== undefined && before.cpa > 0 && after.cpa !== undefined && after.cpa > 0) {
-      metricName = 'CPA';
+      metricName = "CPA";
       delta = after.cpa - before.cpa;
       deltaPercent = (delta / before.cpa) * 100;
       // For CPA, decrease is positive (lower cost per acquisition is better)
       if (deltaPercent < -5) {
-        status = 'positive';
+        status = "positive";
       } else if (deltaPercent > 5) {
-        status = 'negative';
+        status = "negative";
       } else {
-        status = 'neutral';
+        status = "neutral";
       }
-    } else if (before.roas !== undefined && before.roas > 0 && after.roas !== undefined && after.roas > 0) {
-      metricName = 'ROAS';
+    } else if (
+      before.roas !== undefined &&
+      before.roas > 0 &&
+      after.roas !== undefined &&
+      after.roas > 0
+    ) {
+      metricName = "ROAS";
       delta = after.roas - before.roas;
       deltaPercent = (delta / before.roas) * 100;
       // For ROAS, increase is positive (higher return is better)
       if (deltaPercent > 5) {
-        status = 'positive';
+        status = "positive";
       } else if (deltaPercent < -5) {
-        status = 'negative';
+        status = "negative";
       } else {
-        status = 'neutral';
+        status = "neutral";
       }
-    } else if (before.ctr !== undefined && before.ctr > 0 && after.ctr !== undefined && after.ctr > 0) {
-      metricName = 'CTR';
+    } else if (
+      before.ctr !== undefined &&
+      before.ctr > 0 &&
+      after.ctr !== undefined &&
+      after.ctr > 0
+    ) {
+      metricName = "CTR";
       delta = after.ctr - before.ctr;
       deltaPercent = (delta / before.ctr) * 100;
       // For CTR, increase is positive
       if (deltaPercent > 5) {
-        status = 'positive';
+        status = "positive";
       } else if (deltaPercent < -5) {
-        status = 'negative';
+        status = "negative";
       } else {
-        status = 'neutral';
+        status = "neutral";
       }
     }
 
     const directionStr =
-      status === 'positive' ? 'improved' :
-      status === 'negative' ? 'worsened' :
-      'remained stable';
+      status === "positive" ? "improved" : status === "negative" ? "worsened" : "remained stable";
 
     const summary = metricName
-      ? `${metricName} ${directionStr} by ${Math.abs(deltaPercent).toFixed(1)}% (${delta >= 0 ? '+' : ''}${delta.toFixed(2)}) over ${after.daysAfterChange} day(s)`
+      ? `${metricName} ${directionStr} by ${Math.abs(deltaPercent).toFixed(1)}% (${delta >= 0 ? "+" : ""}${delta.toFixed(2)}) over ${after.daysAfterChange} day(s)`
       : `Insufficient metric data to determine outcome after ${after.daysAfterChange} day(s)`;
 
     return {
@@ -256,8 +271,8 @@ export class AccountMemory {
       return {
         accountId,
         totalRecords: 0,
-        oldestRecord: '',
-        newestRecord: '',
+        oldestRecord: "",
+        newestRecord: "",
         insights: [],
         overallSuccessRate: 0,
       };
@@ -285,12 +300,10 @@ export class AccountMemory {
     let totalWithOutcome = 0;
 
     for (const [actionType, group] of grouped) {
-      const positiveRecords = group.filter((r) => r.outcome?.status === 'positive');
-      const negativeRecords = group.filter((r) => r.outcome?.status === 'negative');
-      const neutralRecords = group.filter((r) => r.outcome?.status === 'neutral');
-      const pendingRecords = group.filter(
-        (r) => !r.outcome || r.outcome.status === 'pending',
-      );
+      const positiveRecords = group.filter((r) => r.outcome?.status === "positive");
+      const negativeRecords = group.filter((r) => r.outcome?.status === "negative");
+      const neutralRecords = group.filter((r) => r.outcome?.status === "neutral");
+      const pendingRecords = group.filter((r) => !r.outcome || r.outcome.status === "pending");
 
       const withOutcome = positiveRecords.length + negativeRecords.length + neutralRecords.length;
       const successRate = withOutcome > 0 ? positiveRecords.length / withOutcome : 0;
@@ -331,13 +344,13 @@ export class AccountMemory {
       // Generate recommendation
       let recommendation: string;
       if (withOutcome === 0) {
-        recommendation = 'No completed outcomes yet — continue monitoring';
+        recommendation = "No completed outcomes yet — continue monitoring";
       } else if (successRate > 0.7) {
-        recommendation = 'Continue this strategy — historically effective';
+        recommendation = "Continue this strategy — historically effective";
       } else if (successRate >= 0.4) {
-        recommendation = 'Mixed results — use with caution and monitor closely';
+        recommendation = "Mixed results — use with caution and monitor closely";
       } else {
-        recommendation = 'Historically underperforming — consider alternative approaches';
+        recommendation = "Historically underperforming — consider alternative approaches";
       }
 
       insights.push({
@@ -355,8 +368,7 @@ export class AccountMemory {
       });
     }
 
-    const overallSuccessRate =
-      totalWithOutcome > 0 ? totalPositive / totalWithOutcome : 0;
+    const overallSuccessRate = totalWithOutcome > 0 ? totalPositive / totalWithOutcome : 0;
 
     return {
       accountId,
@@ -384,24 +396,20 @@ export class AccountMemory {
 
     if (actionRecords.length === 0) {
       return {
-        confidence: 'low',
+        confidence: "low",
         recommendation:
-          'No historical data for this action type — proceed with standard monitoring',
+          "No historical data for this action type — proceed with standard monitoring",
         historicalSuccessRate: 0,
-        recentTrend: 'stable',
+        recentTrend: "stable",
       };
     }
 
     // Consider entity-specific history if entityId provided
-    const entityRecords = entityId
-      ? actionRecords.filter((r) => r.entityId === entityId)
-      : [];
+    const entityRecords = entityId ? actionRecords.filter((r) => r.entityId === entityId) : [];
 
     // Compute overall success rate for this action type
-    const withOutcome = actionRecords.filter(
-      (r) => r.outcome && r.outcome.status !== 'pending',
-    );
-    const positive = withOutcome.filter((r) => r.outcome!.status === 'positive');
+    const withOutcome = actionRecords.filter((r) => r.outcome && r.outcome.status !== "pending");
+    const positive = withOutcome.filter((r) => r.outcome!.status === "positive");
     const overallRate = withOutcome.length > 0 ? positive.length / withOutcome.length : 0;
 
     // Compute recent trend — compare last 5 outcomes vs overall
@@ -413,50 +421,46 @@ export class AccountMemory {
 
     if (entityRecords.length > 0) {
       const entityWithOutcome = entityRecords.filter(
-        (r) => r.outcome && r.outcome.status !== 'pending',
+        (r) => r.outcome && r.outcome.status !== "pending",
       );
-      const entityPositive = entityWithOutcome.filter(
-        (r) => r.outcome!.status === 'positive',
-      );
+      const entityPositive = entityWithOutcome.filter((r) => r.outcome!.status === "positive");
       const entityRate =
-        entityWithOutcome.length > 0
-          ? entityPositive.length / entityWithOutcome.length
-          : 0;
+        entityWithOutcome.length > 0 ? entityPositive.length / entityWithOutcome.length : 0;
 
       if (entityRate > 0.7) {
         recommendation = `This action has worked well for entity ${entityId} (${(entityRate * 100).toFixed(0)}% success rate across ${entityWithOutcome.length} attempts) — recommended`;
-        confidence = entityWithOutcome.length >= 5 ? 'high' : 'medium';
+        confidence = entityWithOutcome.length >= 5 ? "high" : "medium";
       } else if (entityRate >= 0.4) {
         recommendation = `Mixed results for entity ${entityId} (${(entityRate * 100).toFixed(0)}% success rate) — proceed with caution`;
-        confidence = 'medium';
+        confidence = "medium";
       } else if (entityWithOutcome.length > 0) {
         recommendation = `This action has underperformed for entity ${entityId} (${(entityRate * 100).toFixed(0)}% success rate) — consider alternatives`;
-        confidence = entityWithOutcome.length >= 3 ? 'high' : 'medium';
+        confidence = entityWithOutcome.length >= 3 ? "high" : "medium";
       } else {
         recommendation = `No completed outcomes for entity ${entityId} yet; account-wide rate is ${(overallRate * 100).toFixed(0)}%`;
-        confidence = 'low';
+        confidence = "low";
       }
     } else {
       if (overallRate > 0.7) {
         recommendation = `Historically effective for this account (${(overallRate * 100).toFixed(0)}% success rate across ${withOutcome.length} attempts) — recommended`;
-        confidence = withOutcome.length >= 5 ? 'high' : 'medium';
+        confidence = withOutcome.length >= 5 ? "high" : "medium";
       } else if (overallRate >= 0.4) {
         recommendation = `Mixed historical results (${(overallRate * 100).toFixed(0)}% success rate) — proceed with monitoring`;
-        confidence = 'medium';
+        confidence = "medium";
       } else if (withOutcome.length > 0) {
         recommendation = `Historically underperforming (${(overallRate * 100).toFixed(0)}% success rate) — consider alternative approaches`;
-        confidence = withOutcome.length >= 3 ? 'high' : 'medium';
+        confidence = withOutcome.length >= 3 ? "high" : "medium";
       } else {
-        recommendation = 'All outcomes still pending — no recommendation yet';
-        confidence = 'low';
+        recommendation = "All outcomes still pending — no recommendation yet";
+        confidence = "low";
       }
     }
 
     // Factor in recent trend
-    if (recentTrend === 'improving') {
-      recommendation += '. Recent trend is improving.';
-    } else if (recentTrend === 'declining') {
-      recommendation += '. Warning: recent trend is declining.';
+    if (recentTrend === "improving") {
+      recommendation += ". Recent trend is improving.";
+    } else if (recentTrend === "declining") {
+      recommendation += ". Warning: recent trend is declining.";
     }
 
     return {
@@ -470,9 +474,9 @@ export class AccountMemory {
   private computeRecentTrend(
     withOutcome: OptimizationRecord[],
     overallRate: number,
-  ): 'improving' | 'declining' | 'stable' {
+  ): "improving" | "declining" | "stable" {
     if (withOutcome.length < 5) {
-      return 'stable';
+      return "stable";
     }
 
     // Sort by timestamp descending, take last 5
@@ -480,15 +484,15 @@ export class AccountMemory {
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
     const recent = sorted.slice(0, 5);
-    const recentPositive = recent.filter((r) => r.outcome!.status === 'positive').length;
+    const recentPositive = recent.filter((r) => r.outcome!.status === "positive").length;
     const recentRate = recentPositive / recent.length;
 
     if (recentRate > overallRate + 0.15) {
-      return 'improving';
+      return "improving";
     } else if (recentRate < overallRate - 0.15) {
-      return 'declining';
+      return "declining";
     }
-    return 'stable';
+    return "stable";
   }
 
   // -------------------------------------------------------------------------
@@ -500,7 +504,7 @@ export class AccountMemory {
     filter?: {
       actionType?: OptimizationActionType;
       entityId?: string;
-      status?: OptimizationOutcome['status'];
+      status?: OptimizationOutcome["status"];
       limit?: number;
     },
   ): OptimizationRecord[] {
@@ -513,10 +517,8 @@ export class AccountMemory {
       records = records.filter((r) => r.entityId === filter.entityId);
     }
     if (filter?.status) {
-      if (filter.status === 'pending') {
-        records = records.filter(
-          (r) => !r.outcome || r.outcome.status === 'pending',
-        );
+      if (filter.status === "pending") {
+        records = records.filter((r) => !r.outcome || r.outcome.status === "pending");
       } else {
         records = records.filter((r) => r.outcome?.status === filter.status);
       }
@@ -559,7 +561,7 @@ export class AccountMemory {
     };
 
     if (!parsed.accountId || !Array.isArray(parsed.records)) {
-      throw new Error('Invalid memory export format: expected { accountId, records }');
+      throw new Error("Invalid memory export format: expected { accountId, records }");
     }
 
     const existing = this.records.get(parsed.accountId) ?? [];

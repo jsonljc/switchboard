@@ -228,9 +228,7 @@ export class MultiTouchAttributionEngine {
    * Analyze each channel's position distribution to determine if it's
    * primarily an introducer, influencer, or closer.
    */
-  identifyChannelRoles(
-    touchpoints: Touchpoint[],
-  ): Array<{
+  identifyChannelRoles(touchpoints: Touchpoint[]): Array<{
     channelId: string;
     channelName: string;
     role: string;
@@ -349,8 +347,7 @@ export class MultiTouchAttributionEngine {
       for (let i = 0; i < n; i++) {
         // Position 0 = first touch (oldest), n-1 = last touch (newest)
         // Days before conversion for position i
-        const daysBefore =
-          n === 1 ? 0 : ((n - 1 - i) / (n - 1)) * path.avgDaysToConvert;
+        const daysBefore = n === 1 ? 0 : ((n - 1 - i) / (n - 1)) * path.avgDaysToConvert;
         weights.push(Math.pow(2, -daysBefore / halfLife));
       }
 
@@ -478,13 +475,9 @@ export class MultiTouchAttributionEngine {
 
     for (const channelId of activeChannels) {
       // Paths containing this channel
-      const pathsWith = normalizedPaths.filter((p) =>
-        p.touchpoints.includes(channelId),
-      );
+      const pathsWith = normalizedPaths.filter((p) => p.touchpoints.includes(channelId));
       // Paths not containing this channel
-      const pathsWithout = normalizedPaths.filter(
-        (p) => !p.touchpoints.includes(channelId),
-      );
+      const pathsWithout = normalizedPaths.filter((p) => !p.touchpoints.includes(channelId));
 
       const convWith =
         pathsWith.length > 0
@@ -555,12 +548,9 @@ export class MultiTouchAttributionEngine {
             : 0;
 
       const attributedCPA =
-        tp.spend > 0 && attributed.conversions > 0
-          ? tp.spend / attributed.conversions
-          : null;
+        tp.spend > 0 && attributed.conversions > 0 ? tp.spend / attributed.conversions : null;
 
-      const attributedROAS =
-        tp.spend > 0 ? attributed.revenue / tp.spend : null;
+      const attributedROAS = tp.spend > 0 ? attributed.revenue / tp.spend : null;
 
       const roleScore = this.computeRoleScores(tp);
       const primaryRole = this.classifyRole(tp, roleScore);
@@ -664,10 +654,7 @@ export class MultiTouchAttributionEngine {
     const avgPathLength = totalPaths > 0 ? weightedPathLength / totalPaths : 0;
 
     // Average days to convert
-    const weightedDays = paths.reduce(
-      (sum, p) => sum + p.avgDaysToConvert * p.conversions,
-      0,
-    );
+    const weightedDays = paths.reduce((sum, p) => sum + p.avgDaysToConvert * p.conversions, 0);
     const avgDaysToConvert = totalPaths > 0 ? weightedDays / totalPaths : 0;
 
     // Find most over- and under-valued channels (comparing model vs last-click)

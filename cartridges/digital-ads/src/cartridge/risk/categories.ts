@@ -172,7 +172,10 @@ export function computeRiskInput(
     case "digital-ads.optimization.apply":
       return {
         baseRisk: "high",
-        exposure: { dollarsAtRisk: Number(parameters.totalBudgetAtRisk ?? 0), blastRadius: Number(parameters.actionCount ?? 1) },
+        exposure: {
+          dollarsAtRisk: Number(parameters.totalBudgetAtRisk ?? 0),
+          blastRadius: Number(parameters.actionCount ?? 1),
+        },
         reversibility: "partial",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
@@ -294,7 +297,11 @@ export function computeRiskInput(
     case "digital-ads.creative.test_create":
       return {
         baseRisk: "medium",
-        exposure: { dollarsAtRisk: Number(parameters.minBudgetPerVariant ?? 0) * Number(parameters.variantCount ?? 2), blastRadius: 1 },
+        exposure: {
+          dollarsAtRisk:
+            Number(parameters.minBudgetPerVariant ?? 0) * Number(parameters.variantCount ?? 2),
+          blastRadius: 1,
+        },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };

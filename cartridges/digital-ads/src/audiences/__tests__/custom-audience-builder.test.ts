@@ -131,7 +131,8 @@ describe("CustomAudienceBuilder", () => {
       ],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(page1),

@@ -63,7 +63,12 @@ export interface OptimizationReviewResult {
   audienceRecommendations: string[];
   overallScore: number;
   tier1Actions: Array<{ actionType: string; parameters: Record<string, unknown>; reason: string }>;
-  tier2Actions: Array<{ actionType: string; parameters: Record<string, unknown>; reason: string; riskLevel: string }>;
+  tier2Actions: Array<{
+    actionType: string;
+    parameters: Record<string, unknown>;
+    reason: string;
+    riskLevel: string;
+  }>;
 }
 
 export interface AutomatedRuleConfig {

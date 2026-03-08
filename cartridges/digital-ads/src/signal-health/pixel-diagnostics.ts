@@ -27,8 +27,7 @@ export class PixelDiagnosticsChecker {
       const pixelId = String(pixel.id);
 
       const statsUrl =
-        `${this.baseUrl}/${pixelId}/stats?aggregation=event` +
-        `&access_token=${this.accessToken}`;
+        `${this.baseUrl}/${pixelId}/stats?aggregation=event` + `&access_token=${this.accessToken}`;
 
       let eventBreakdown: PixelDiagnostics["eventBreakdown"] = [];
       let totalEvents = 0;
@@ -89,9 +88,7 @@ export class PixelDiagnosticsChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

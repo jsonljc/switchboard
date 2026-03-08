@@ -38,13 +38,8 @@ export class CreativeAnalyzer {
     private readonly accessToken: string,
   ) {}
 
-  async analyze(
-    adAccountId: string,
-    datePreset = "last_7d",
-  ): Promise<CreativeAnalysisResult> {
-    const accountId = adAccountId.startsWith("act_")
-      ? adAccountId
-      : `act_${adAccountId}`;
+  async analyze(adAccountId: string, datePreset = "last_7d"): Promise<CreativeAnalysisResult> {
+    const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
 
     const url =
       `${this.baseUrl}/${accountId}/ads?fields=` +
@@ -62,18 +57,14 @@ export class CreativeAnalyzer {
 
     const entries: CreativePerformanceEntry[] = ads.map((ad) => {
       const creative = ad.creative as Record<string, unknown> | undefined;
-      const insights = ad.insights as
-        | { data?: Record<string, unknown>[] }
-        | undefined;
+      const insights = ad.insights as { data?: Record<string, unknown>[] } | undefined;
       const row = insights?.data?.[0] ?? {};
       const actions = (row.actions ?? []) as Array<{
         action_type: string;
         value: string;
       }>;
       const conversions = actions
-        .filter((a) =>
-          ["purchase", "lead", "complete_registration"].includes(a.action_type),
-        )
+        .filter((a) => ["purchase", "lead", "complete_registration"].includes(a.action_type))
         .reduce((sum, a) => sum + Number(a.value), 0);
       const spend = Number(row.spend ?? 0);
       const frequency = Number(row.frequency ?? 1);
@@ -97,9 +88,7 @@ export class CreativeAnalyzer {
     });
 
     const withConversions = entries.filter((e) => e.conversions > 0);
-    const sorted = [...withConversions].sort(
-      (a, b) => (a.cpa ?? Infinity) - (b.cpa ?? Infinity),
-    );
+    const sorted = [...withConversions].sort((a, b) => (a.cpa ?? Infinity) - (b.cpa ?? Infinity));
 
     const topPerformers = sorted.slice(0, 5);
     const underperformers = sorted.slice(-5).reverse();
@@ -128,15 +117,12 @@ export class CreativeAnalyzer {
       }
       formatMap.set(fmt, existing);
     }
-    const formatMix = Array.from(formatMap.entries()).map(
-      ([format, fmtData]) => ({
-        format,
-        count: fmtData.count,
-        avgCPA:
-          fmtData.validCPA > 0 ? fmtData.totalCPA / fmtData.validCPA : null,
-        totalSpend: fmtData.totalSpend,
-      }),
-    );
+    const formatMix = Array.from(formatMap.entries()).map(([format, fmtData]) => ({
+      format,
+      count: fmtData.count,
+      avgCPA: fmtData.validCPA > 0 ? fmtData.totalCPA / fmtData.validCPA : null,
+      totalSpend: fmtData.totalSpend,
+    }));
 
     const recommendations: string[] = [];
     if (fatigued.length > 0) {
@@ -150,9 +136,7 @@ export class CreativeAnalyzer {
       );
     }
     if (entries.length < 3) {
-      recommendations.push(
-        "Fewer than 3 active creatives — add more for better optimization",
-      );
+      recommendations.push("Fewer than 3 active creatives — add more for better optimization");
     }
 
     return { topPerformers, underperformers, fatigued, formatMix, recommendations };

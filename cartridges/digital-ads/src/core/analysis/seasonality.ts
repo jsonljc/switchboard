@@ -134,7 +134,12 @@ export function getSeasonalCPMMultiplier(periodStart: string, periodEnd: string)
  * Check if two MM-DD date ranges overlap.
  * Properly handles year-boundary wrapping (e.g., 12-26 to 01-05).
  */
-export function dateRangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+export function dateRangesOverlap(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+): boolean {
   // Convert MM-DD to day-of-year number for comparison
   const a1 = mmddToDay(aStart);
   const a2 = mmddToDay(aEnd);
@@ -213,7 +218,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Post-holiday clearance sales drive moderate competition. Consumers redeem gift cards and look for deals.",
+    impact:
+      "Post-holiday clearance sales drive moderate competition. Consumers redeem gift cards and look for deals.",
     recommendedActions: [
       "Launch clearance campaigns with urgency messaging",
       "Target gift card holders with high-value product ads",
@@ -229,7 +235,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Gift-oriented shopping surge. Jewelry, flowers, dining, and experience verticals see peak competition.",
+    impact:
+      "Gift-oriented shopping surge. Jewelry, flowers, dining, and experience verticals see peak competition.",
     recommendedActions: [
       "Front-load gift-focused creatives 7-10 days before Feb 14",
       "Use countdown timers for shipping deadlines",
@@ -261,7 +268,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Spring shopping season with moderate CPM increase. Fashion, home, and garden categories rise.",
+    impact:
+      "Spring shopping season with moderate CPM increase. Fashion, home, and garden categories rise.",
     recommendedActions: [
       "Refresh creatives with spring/seasonal themes",
       "Target seasonal shoppers with new arrivals",
@@ -277,7 +285,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Broad spring retail promotions. Moderate competition with opportunities for cost-efficient prospecting.",
+    impact:
+      "Broad spring retail promotions. Moderate competition with opportunities for cost-efficient prospecting.",
     recommendedActions: [
       "Launch spring collection campaigns",
       "A/B test new creatives while CPMs are moderate",
@@ -293,7 +302,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Gift shopping surge. Flowers, jewelry, fashion, and experience categories see elevated competition.",
+    impact:
+      "Gift shopping surge. Flowers, jewelry, fashion, and experience categories see elevated competition.",
     recommendedActions: [
       "Front-load gift guide content 2 weeks before",
       "Target interest-based audiences for gift categories",
@@ -309,7 +319,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "us",
     verticals: ["commerce"],
-    impact: "Major US sale event marking summer start. Outdoor, furniture, and appliance categories peak.",
+    impact:
+      "Major US sale event marking summer start. Outdoor, furniture, and appliance categories peak.",
     recommendedActions: [
       "Launch summer-themed campaigns with sale messaging",
       "Increase budgets for outdoor/leisure product categories",
@@ -325,7 +336,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Gift-oriented shopping similar to Mother's Day. Electronics, tools, and experience verticals rise.",
+    impact:
+      "Gift-oriented shopping similar to Mother's Day. Electronics, tools, and experience verticals rise.",
     recommendedActions: [
       "Promote gift-focused product collections",
       "Target audiences with recent electronics/tools interest signals",
@@ -341,7 +353,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "us",
     verticals: ["commerce"],
-    impact: "US Independence Day sales. Outdoor, BBQ, fashion, and home categories see elevated activity.",
+    impact:
+      "US Independence Day sales. Outdoor, BBQ, fashion, and home categories see elevated activity.",
     recommendedActions: [
       "Run patriotic-themed creatives with sale messaging",
       "Target outdoor and summer activity interest groups",
@@ -357,7 +370,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Amazon Prime Day creates a halo effect across all e-commerce platforms. Significant CPM spike.",
+    impact:
+      "Amazon Prime Day creates a halo effect across all e-commerce platforms. Significant CPM spike.",
     recommendedActions: [
       "Counter-program with competing sales to capture demand spillover",
       "Increase retargeting budgets to capture comparison shoppers",
@@ -373,7 +387,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Extended back-to-school season drives sustained CPM elevation across electronics, apparel, and supplies.",
+    impact:
+      "Extended back-to-school season drives sustained CPM elevation across electronics, apparel, and supplies.",
     recommendedActions: [
       "Start campaigns early August to beat the rush",
       "Target parent and student demographics",
@@ -389,7 +404,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "us",
     verticals: ["commerce"],
-    impact: "End-of-summer US sale event. Furniture, mattress, and outdoor clearance categories peak.",
+    impact:
+      "End-of-summer US sale event. Furniture, mattress, and outdoor clearance categories peak.",
     recommendedActions: [
       "Promote end-of-summer clearance deals",
       "Target home improvement audiences with seasonal messaging",
@@ -405,7 +421,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "us",
     verticals: ["commerce"],
-    impact: "Minor US retail event combined with Canadian Thanksgiving. Moderate competition increase.",
+    impact:
+      "Minor US retail event combined with Canadian Thanksgiving. Moderate competition increase.",
     recommendedActions: [
       "Run modest sale promotions for fall merchandise",
       "Target Canadian audiences with Thanksgiving-themed content",
@@ -421,7 +438,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "us",
     verticals: ["commerce"],
-    impact: "Halloween-driven spending on costumes, candy, and decorations. Entertainment verticals see lift.",
+    impact:
+      "Halloween-driven spending on costumes, candy, and decorations. Entertainment verticals see lift.",
     recommendedActions: [
       "Launch themed creative with Halloween motifs",
       "Target costume, party supply, and candy interest groups",
@@ -437,7 +455,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "apac",
     verticals: ["commerce"],
-    impact: "The world's largest shopping event by GMV. APAC-focused but global e-commerce feels the impact.",
+    impact:
+      "The world's largest shopping event by GMV. APAC-focused but global e-commerce feels the impact.",
     recommendedActions: [
       "Coordinate with APAC inventory and logistics",
       "Run flash sale campaigns targeting APAC markets",
@@ -453,7 +472,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce", "all"],
-    impact: "Peak competition period. CPMs reach annual highs across all verticals. Critical planning required.",
+    impact:
+      "Peak competition period. CPMs reach annual highs across all verticals. Critical planning required.",
     recommendedActions: [
       "Pre-build warm audiences weeks before to reduce CPA during the spike",
       "Set aggressive ROAS targets and monitor hourly",
@@ -470,7 +490,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce", "all"],
-    impact: "Sustained high competition through December. Gift shopping peaks around shipping deadlines.",
+    impact:
+      "Sustained high competition through December. Gift shopping peaks around shipping deadlines.",
     recommendedActions: [
       "Shift to gift card and e-gift promotions after shipping cutoffs",
       "Increase retargeting frequency for cart abandoners",
@@ -486,7 +507,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "retail",
     region: "global",
     verticals: ["commerce"],
-    impact: "Post-holiday clearance with moderating but still elevated CPMs. Bargain hunters are active.",
+    impact:
+      "Post-holiday clearance with moderating but still elevated CPMs. Bargain hunters are active.",
     recommendedActions: [
       "Launch clearance and end-of-year sale campaigns",
       "Target deal-seeking audiences with markdown messaging",
@@ -504,7 +526,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "cultural",
     region: "apac",
     verticals: ["commerce"],
-    impact: "Major APAC shopping event. Gift-giving, travel, and luxury verticals see significant demand surges.",
+    impact:
+      "Major APAC shopping event. Gift-giving, travel, and luxury verticals see significant demand surges.",
     recommendedActions: [
       "Launch culturally appropriate red/gold themed creatives",
       "Target Chinese diaspora audiences globally",
@@ -521,7 +544,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "cultural",
     region: "mena",
     verticals: ["all"],
-    impact: "Extended period of elevated ad activity in MENA. Food, fashion, and gifting categories peak. Consumer behavior shifts with altered daily schedules.",
+    impact:
+      "Extended period of elevated ad activity in MENA. Food, fashion, and gifting categories peak. Consumer behavior shifts with altered daily schedules.",
     recommendedActions: [
       "Schedule ads for evening/night hours when engagement peaks",
       "Use culturally sensitive and Ramadan-themed creatives",
@@ -538,7 +562,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "cultural",
     region: "apac",
     verticals: ["commerce"],
-    impact: "Major Indian shopping festival. Electronics, fashion, home decor, and gold/jewelry categories surge.",
+    impact:
+      "Major Indian shopping festival. Electronics, fashion, home decor, and gold/jewelry categories surge.",
     recommendedActions: [
       "Launch festive-themed creatives with Diwali motifs",
       "Promote electronics, fashion, and home decor deals",
@@ -555,7 +580,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "cultural",
     region: "global",
     verticals: ["all"],
-    impact: "Global gift-giving season peak. All verticals experience elevated competition and consumer urgency.",
+    impact:
+      "Global gift-giving season peak. All verticals experience elevated competition and consumer urgency.",
     recommendedActions: [
       "Maximize retargeting on warm audiences built in November",
       "Shift to digital gift cards after shipping cutoffs",
@@ -574,7 +600,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "sports",
     region: "us",
     verticals: ["brand"],
-    impact: "Highest-profile US advertising event. Brand awareness campaigns spike. Food, beverage, and entertainment verticals see massive engagement lifts.",
+    impact:
+      "Highest-profile US advertising event. Brand awareness campaigns spike. Food, beverage, and entertainment verticals see massive engagement lifts.",
     recommendedActions: [
       "Align brand campaigns with Super Bowl cultural moment",
       "Capitalize on real-time engagement during the game",
@@ -591,7 +618,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "sports",
     region: "us",
     verticals: ["brand"],
-    impact: "Extended college basketball tournament drives sustained brand advertising. Sports betting, food, and beverage verticals see elevated competition.",
+    impact:
+      "Extended college basketball tournament drives sustained brand advertising. Sports betting, food, and beverage verticals see elevated competition.",
     recommendedActions: [
       "Run bracket-themed engagement campaigns",
       "Target college sports fan audiences",
@@ -608,7 +636,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "sports",
     region: "global",
     verticals: ["brand"],
-    impact: "Global event with massive reach. Brand awareness and sports merchandise verticals see significant competition increases worldwide.",
+    impact:
+      "Global event with massive reach. Brand awareness and sports merchandise verticals see significant competition increases worldwide.",
     recommendedActions: [
       "Align creative with World Cup themes and national pride",
       "Target country-specific audiences based on team progress",
@@ -627,7 +656,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "industry",
     region: "global",
     verticals: ["leadgen"],
-    impact: "Lower retail competition creates an opportunity window. B2B decision-makers are setting annual plans and budgets.",
+    impact:
+      "Lower retail competition creates an opportunity window. B2B decision-makers are setting annual plans and budgets.",
     recommendedActions: [
       "Increase leadgen budgets to capture lower CPMs",
       "Launch annual planning and strategy content campaigns",
@@ -644,7 +674,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "industry",
     region: "us",
     verticals: ["leadgen"],
-    impact: "US tax season drives demand for financial services, accounting software, and advisory. Moderate CPM increase in financial services vertical.",
+    impact:
+      "US tax season drives demand for financial services, accounting software, and advisory. Moderate CPM increase in financial services vertical.",
     recommendedActions: [
       "Target small business owners and self-employed audiences",
       "Promote tax preparation and financial planning services",
@@ -661,7 +692,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "industry",
     region: "global",
     verticals: ["leadgen"],
-    impact: "B2B buyers allocate remaining annual budgets. 'Use it or lose it' mentality drives procurement activity.",
+    impact:
+      "B2B buyers allocate remaining annual budgets. 'Use it or lose it' mentality drives procurement activity.",
     recommendedActions: [
       "Launch 'before year-end' procurement campaigns",
       "Target finance and procurement decision-makers",
@@ -678,7 +710,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "industry",
     region: "global",
     verticals: ["leadgen"],
-    impact: "Final push for B2B deal closing. Decision-makers rush to finalize purchases before fiscal year-end.",
+    impact:
+      "Final push for B2B deal closing. Decision-makers rush to finalize purchases before fiscal year-end.",
     recommendedActions: [
       "Accelerate pipeline deals with special year-end pricing",
       "Target active leads with closing-focused messaging",
@@ -697,7 +730,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "platform",
     region: "global",
     verticals: ["all"],
-    impact: "Periodic Meta platform updates can improve CPA through automation. Monitor for new Advantage+ Shopping, Creative, and Audience features.",
+    impact:
+      "Periodic Meta platform updates can improve CPA through automation. Monitor for new Advantage+ Shopping, Creative, and Audience features.",
     recommendedActions: [
       "Test Advantage+ Shopping campaigns for e-commerce accounts",
       "Enable Advantage+ Creative for automated creative optimization",
@@ -714,7 +748,8 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
     category: "platform",
     region: "global",
     verticals: ["all"],
-    impact: "Ongoing iOS privacy changes (ATT, SKAdNetwork) create measurement gaps. CPA may appear elevated due to underreported conversions.",
+    impact:
+      "Ongoing iOS privacy changes (ATT, SKAdNetwork) create measurement gaps. CPA may appear elevated due to underreported conversions.",
     recommendedActions: [
       "Ensure CAPI (Conversions API) is properly configured",
       "Use broad targeting to compensate for reduced signal",
@@ -729,8 +764,19 @@ export const ENHANCED_SEASONAL_EVENTS: EnhancedSeasonalEvent[] = [
 // ---------------------------------------------------------------------------
 
 const MONTH_NAMES = [
-  "", "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 // ---------------------------------------------------------------------------
@@ -748,7 +794,9 @@ export interface SeasonalEventFilterOptions {
  * Filter the enhanced events by region, vertical, month, and/or category.
  * Returns matching events sorted by CPM multiplier (highest first).
  */
-export function getSeasonalEvents(options: SeasonalEventFilterOptions = {}): EnhancedSeasonalEvent[] {
+export function getSeasonalEvents(
+  options: SeasonalEventFilterOptions = {},
+): EnhancedSeasonalEvent[] {
   const { region, vertical, month, category } = options;
 
   let filtered = ENHANCED_SEASONAL_EVENTS.filter((event) => {
@@ -758,7 +806,11 @@ export function getSeasonalEvents(options: SeasonalEventFilterOptions = {}): Enh
     }
 
     // Filter by vertical: match if event targets 'all' or includes the requested vertical
-    if (vertical && !event.verticals.includes("all") && !event.verticals.includes(vertical as EventVertical)) {
+    if (
+      vertical &&
+      !event.verticals.includes("all") &&
+      !event.verticals.includes(vertical as EventVertical)
+    ) {
       return false;
     }
 
@@ -828,9 +880,7 @@ export function getMonthlySeasonalProfile(
   const events = getSeasonalEvents({ month, vertical, region });
 
   // Filter out year-round platform events for multiplier calculation
-  const impactEvents = events.filter(
-    (e) => !(e.startMMDD === "01-01" && e.endMMDD === "12-31"),
-  );
+  const impactEvents = events.filter((e) => !(e.startMMDD === "01-01" && e.endMMDD === "12-31"));
 
   let avgCPM = 1.0;
   let avgCPA = 1.0;
@@ -962,7 +1012,9 @@ export class SeasonalCalendar {
   addCustomEvent(event: Omit<EnhancedSeasonalEvent, "name"> & { name: string }): void {
     // Validate MMDD format
     if (!/^\d{2}-\d{2}$/.test(event.startMMDD) || !/^\d{2}-\d{2}$/.test(event.endMMDD)) {
-      throw new Error(`Invalid date format. Expected MM-DD, got startMMDD="${event.startMMDD}", endMMDD="${event.endMMDD}"`);
+      throw new Error(
+        `Invalid date format. Expected MM-DD, got startMMDD="${event.startMMDD}", endMMDD="${event.endMMDD}"`,
+      );
     }
     this.customEvents.push(event as EnhancedSeasonalEvent);
   }
@@ -989,16 +1041,10 @@ export class SeasonalCalendar {
   /**
    * Get the monthly seasonal profile including custom events.
    */
-  getMonthlyProfile(
-    month: number,
-    vertical: string,
-    region?: EventRegion,
-  ): MonthlySeasonalProfile {
+  getMonthlyProfile(month: number, vertical: string, region?: EventRegion): MonthlySeasonalProfile {
     const events = this.getEvents({ month, vertical, region });
 
-    const impactEvents = events.filter(
-      (e) => !(e.startMMDD === "01-01" && e.endMMDD === "12-31"),
-    );
+    const impactEvents = events.filter((e) => !(e.startMMDD === "01-01" && e.endMMDD === "12-31"));
 
     let avgCPM = 1.0;
     let avgCPA = 1.0;
@@ -1024,10 +1070,7 @@ export class SeasonalCalendar {
   /**
    * Get the full annual calendar including custom events.
    */
-  getAnnualCalendar(
-    vertical: string,
-    region?: EventRegion,
-  ): AnnualCalendarMonth[] {
+  getAnnualCalendar(vertical: string, region?: EventRegion): AnnualCalendarMonth[] {
     const calendar: AnnualCalendarMonth[] = [];
 
     for (let month = 1; month <= 12; month++) {
@@ -1068,7 +1111,11 @@ function filterAndSortEvents(
     if (region && region !== "global" && event.region !== "global" && event.region !== region) {
       return false;
     }
-    if (vertical && !event.verticals.includes("all") && !event.verticals.includes(vertical as EventVertical)) {
+    if (
+      vertical &&
+      !event.verticals.includes("all") &&
+      !event.verticals.includes(vertical as EventVertical)
+    ) {
       return false;
     }
     if (category && event.category !== category) {

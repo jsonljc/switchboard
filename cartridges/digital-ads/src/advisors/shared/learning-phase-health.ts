@@ -30,9 +30,7 @@ export const learningPhaseHealthAdvisor: FindingAdvisor = (
 
   if (learningEntities.length > 0) {
     const learningPct =
-      totalEntities > 0
-        ? ((learningEntities.length / totalEntities) * 100).toFixed(0)
-        : "0";
+      totalEntities > 0 ? ((learningEntities.length / totalEntities) * 100).toFixed(0) : "0";
 
     if (learningEntities.length > totalEntities * 0.5) {
       findings.push({
@@ -54,9 +52,7 @@ export const learningPhaseHealthAdvisor: FindingAdvisor = (
   }
 
   // Check for ad sets with very low spend that may be stuck
-  const lowSpendInLearning = learningEntities.filter(
-    (e) => e.spend < (e.dailyBudget ?? 50) * 0.3,
-  );
+  const lowSpendInLearning = learningEntities.filter((e) => e.spend < (e.dailyBudget ?? 50) * 0.3);
   if (lowSpendInLearning.length > 0) {
     findings.push({
       severity: "warning" as Severity,

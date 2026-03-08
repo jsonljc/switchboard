@@ -50,7 +50,7 @@ export function erf(x: number): number {
   const a5 = 1.061405429;
 
   const t = 1 / (1 + p * a);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-a * a);
+  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-a * a);
 
   return sign * y;
 }

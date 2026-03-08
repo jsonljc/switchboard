@@ -300,8 +300,8 @@ const CREATIVE_ROTATION_MATCHER: FindingMatcher = {
   matches(finding: Finding): boolean {
     const msg = finding.message.toLowerCase();
     return (
-      (msg.includes("creative") &&
-        (msg.includes("rotation") || msg.includes("fatigue") || msg.includes("zero conversions"))) &&
+      msg.includes("creative") &&
+      (msg.includes("rotation") || msg.includes("fatigue") || msg.includes("zero conversions")) &&
       (finding.severity === "critical" || finding.severity === "warning")
     );
   },
@@ -326,8 +326,10 @@ const BUDGET_REALLOCATION_MATCHER: FindingMatcher = {
   matches(finding: Finding): boolean {
     const msg = finding.message.toLowerCase();
     return (
-      (msg.includes("budget") &&
-        (msg.includes("zero conversions") || msg.includes("over-funded") || msg.includes("under-funded"))) &&
+      msg.includes("budget") &&
+      (msg.includes("zero conversions") ||
+        msg.includes("over-funded") ||
+        msg.includes("under-funded")) &&
       (finding.severity === "critical" || finding.severity === "warning")
     );
   },

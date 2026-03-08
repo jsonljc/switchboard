@@ -5,11 +5,7 @@
 // statistical power calculator, and winner declaration system.
 // ---------------------------------------------------------------------------
 
-import {
-  normalQuantile,
-  chi2CDF,
-  wilsonScoreInterval,
-} from "../core/analysis/stats-utils.js";
+import { normalQuantile, chi2CDF, wilsonScoreInterval } from "../core/analysis/stats-utils.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,7 +105,7 @@ export class CreativeTestingQueue {
     estimatedCPM?: number;
   }): PowerCalculation {
     const alpha = params.significanceLevel ?? 0.05;
-    const beta = 1 - (params.power ?? 0.80);
+    const beta = 1 - (params.power ?? 0.8);
     const numVariants = params.numVariants ?? 2;
     const dailyTraffic = params.estimatedDailyTraffic ?? 1000;
     const cpm = params.estimatedCPM ?? 10;
@@ -140,7 +136,7 @@ export class CreativeTestingQueue {
       totalEstimatedBudget,
       baselineRate: p1,
       minimumDetectableEffect: params.minimumDetectableEffect,
-      statisticalPower: params.power ?? 0.80,
+      statisticalPower: params.power ?? 0.8,
       significanceLevel: alpha,
     };
   }
@@ -149,7 +145,10 @@ export class CreativeTestingQueue {
    * Add a test to the queue.
    */
   queueTest(
-    slot: Omit<CreativeTestSlot, "id" | "status" | "actualStartDate" | "endDate" | "winnerId" | "results">,
+    slot: Omit<
+      CreativeTestSlot,
+      "id" | "status" | "actualStartDate" | "endDate" | "winnerId" | "results"
+    >,
   ): CreativeTestSlot {
     const id = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const test: CreativeTestSlot = {
@@ -238,16 +237,15 @@ export class CreativeTestingQueue {
    * Performs a chi-squared test for conversion rate comparisons and
    * computes Wilson score confidence intervals for each variant.
    */
-  evaluateTest(
-    testId: string,
-    variantMetrics: VariantMetrics[],
-  ): CreativeTestResult {
+  evaluateTest(testId: string, variantMetrics: VariantMetrics[]): CreativeTestResult {
     const test = this.tests.get(testId);
     if (!test) {
       throw new Error(`Test not found: ${testId}`);
     }
     if (test.status !== "running" && test.status !== "queued") {
-      throw new Error(`Test ${testId} is not in a running or queued state (current: ${test.status})`);
+      throw new Error(
+        `Test ${testId} is not in a running or queued state (current: ${test.status})`,
+      );
     }
 
     const confidenceLevel = 0.95;
@@ -270,8 +268,11 @@ export class CreativeTestingQueue {
     // Chi-squared test for independence (conversion rates)
     // Generalized for N variants:
     // Build a 2xN contingency table: [conversions, non-conversions] x [variants]
-    const { chiSquared: _chiSquared, pValue } = this.chiSquaredTest(variantMetrics, test.primaryMetric);
-    const statisticalSignificance = pValue < (1 - confidenceLevel);
+    const { chiSquared: _chiSquared, pValue } = this.chiSquaredTest(
+      variantMetrics,
+      test.primaryMetric,
+    );
+    const statisticalSignificance = pValue < 1 - confidenceLevel;
 
     // Determine winner: the variant with the best primary metric value
     let winnerVariantId: string | null = null;
@@ -291,18 +292,25 @@ export class CreativeTestingQueue {
       const runnerUp = sorted[1];
 
       if (winnerResult && runnerUp) {
-        const lift = test.primaryMetric === "cpa"
-          ? ((runnerUp.primaryMetricValue - winnerResult.primaryMetricValue) / runnerUp.primaryMetricValue * 100)
-          : ((winnerResult.primaryMetricValue - runnerUp.primaryMetricValue) / runnerUp.primaryMetricValue * 100);
+        const lift =
+          test.primaryMetric === "cpa"
+            ? ((runnerUp.primaryMetricValue - winnerResult.primaryMetricValue) /
+                runnerUp.primaryMetricValue) *
+              100
+            : ((winnerResult.primaryMetricValue - runnerUp.primaryMetricValue) /
+                runnerUp.primaryMetricValue) *
+              100;
 
-        recommendation = `Winner: variant "${winnerVariantId}" with ${test.primaryMetric} = ${winnerResult.primaryMetricValue.toFixed(4)} ` +
+        recommendation =
+          `Winner: variant "${winnerVariantId}" with ${test.primaryMetric} = ${winnerResult.primaryMetricValue.toFixed(4)} ` +
           `(${lift.toFixed(1)}% better than runner-up, p=${pValue.toFixed(4)}). ` +
           `Scale the winner and pause losing variants.`;
       } else {
         recommendation = `Winner: variant "${winnerVariantId}" with statistical significance (p=${pValue.toFixed(4)}).`;
       }
     } else {
-      recommendation = `No statistically significant winner yet (p=${pValue.toFixed(4)}). ` +
+      recommendation =
+        `No statistically significant winner yet (p=${pValue.toFixed(4)}). ` +
         `Continue running the test to gather more data, or consider increasing budget/traffic.`;
     }
 

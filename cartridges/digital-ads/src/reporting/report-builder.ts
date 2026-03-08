@@ -114,11 +114,7 @@ export class ReportBuilder {
         action_type: string;
         value: string;
       }>;
-      const conversions = this.sumActions(actions, [
-        "purchase",
-        "lead",
-        "complete_registration",
-      ]);
+      const conversions = this.sumActions(actions, ["purchase", "lead", "complete_registration"]);
 
       return {
         adId: String(ad.id),
@@ -166,11 +162,7 @@ export class ReportBuilder {
           action_type: string;
           value: string;
         }>;
-        const conversions = this.sumActions(actions, [
-          "purchase",
-          "lead",
-          "complete_registration",
-        ]);
+        const conversions = this.sumActions(actions, ["purchase", "lead", "complete_registration"]);
         return {
           age: String(row.age ?? ""),
           gender: String(row.gender ?? ""),
@@ -187,11 +179,7 @@ export class ReportBuilder {
           action_type: string;
           value: string;
         }>;
-        const conversions = this.sumActions(actions, [
-          "purchase",
-          "lead",
-          "complete_registration",
-        ]);
+        const conversions = this.sumActions(actions, ["purchase", "lead", "complete_registration"]);
         return {
           country: String(row.country ?? ""),
           spend: Number(row.spend ?? 0),
@@ -224,11 +212,7 @@ export class ReportBuilder {
           action_type: string;
           value: string;
         }>;
-        const conversions = this.sumActions(actions, [
-          "purchase",
-          "lead",
-          "complete_registration",
-        ]);
+        const conversions = this.sumActions(actions, ["purchase", "lead", "complete_registration"]);
         return {
           platform: String(row.publisher_platform ?? ""),
           position: String(row.platform_position ?? ""),
@@ -355,11 +339,7 @@ export class ReportBuilder {
         action_type: string;
         value: string;
       }>;
-      totalConversions += this.sumActions(actions, [
-        "purchase",
-        "lead",
-        "complete_registration",
-      ]);
+      totalConversions += this.sumActions(actions, ["purchase", "lead", "complete_registration"]);
     }
     return {
       totalSpend,
@@ -391,8 +371,7 @@ export class ReportBuilder {
           rows.push(item);
         }
       }
-      nextUrl =
-        ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
+      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
     }
     return rows;
   }
@@ -402,9 +381,7 @@ export class ReportBuilder {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

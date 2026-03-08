@@ -190,9 +190,7 @@ describe("getSeasonalEvents", () => {
     const leadgenEvents = getSeasonalEvents({ vertical: "leadgen" });
     expect(leadgenEvents.length).toBeGreaterThan(0);
     for (const event of leadgenEvents) {
-      expect(
-        event.verticals.includes("leadgen") || event.verticals.includes("all"),
-      ).toBe(true);
+      expect(event.verticals.includes("leadgen") || event.verticals.includes("all")).toBe(true);
     }
   });
 

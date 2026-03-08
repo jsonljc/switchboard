@@ -219,10 +219,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   // ── API-dependent actions return errors without real API ────────────
 
   it("report.performance returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.report.performance",
       { adAccountId: "act_123" },
@@ -233,10 +230,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("signal.pixel.diagnose returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.signal.pixel.diagnose",
       { adAccountId: "act_123" },
@@ -247,10 +241,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("audience.list returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.audience.list",
       { adAccountId: "act_123" },
@@ -261,10 +252,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("creative.analyze returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.creative.analyze",
       { adAccountId: "act_123" },
@@ -275,10 +263,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("rule.list returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.rule.list",
       { adAccountId: "act_123" },
@@ -289,10 +274,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("experiment.list returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.experiment.list",
       { adAccountId: "act_123" },
@@ -303,10 +285,7 @@ describe("DigitalAdsCartridge — read dispatch", () => {
   });
 
   it("reach.estimate returns error when API not reachable", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("Network error")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
     const result = await cartridge.execute(
       "digital-ads.reach.estimate",
       {

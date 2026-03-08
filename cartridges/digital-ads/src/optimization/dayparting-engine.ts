@@ -46,9 +46,10 @@ export class DaypartingEngine {
       currentSchedule: null,
       recommendedSchedule: schedule,
       peakHours: peakHours.slice(0, 10),
-      summary: schedule.length > 0
-        ? `Recommend dayparting with ${schedule.length} time blocks targeting peak performance hours`
-        : "Insufficient data for dayparting recommendation — run on all hours",
+      summary:
+        schedule.length > 0
+          ? `Recommend dayparting with ${schedule.length} time blocks targeting peak performance hours`
+          : "Insufficient data for dayparting recommendation — run on all hours",
     };
   }
 

@@ -27,8 +27,7 @@ export class CatalogHealthChecker {
 
     // 2. Fetch diagnostic summary
     const diagUrl =
-      `${this.baseUrl}/${catalogId}/diagnostics?` +
-      `access_token=${this.accessToken}`;
+      `${this.baseUrl}/${catalogId}/diagnostics?` + `access_token=${this.accessToken}`;
 
     let diagnostics: CatalogHealth["diagnostics"] = [];
     try {
@@ -148,9 +147,7 @@ export class CatalogHealthChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

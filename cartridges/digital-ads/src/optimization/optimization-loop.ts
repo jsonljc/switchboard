@@ -71,9 +71,8 @@ export class OptimizationLoop {
     const adSetCPAs = params.adSets
       .filter((a) => a.cpa !== null && a.cpa > 0)
       .map((a) => a.cpa as number);
-    const avgAdSetCPA = adSetCPAs.length > 0
-      ? adSetCPAs.reduce((s, c) => s + c, 0) / adSetCPAs.length
-      : 0;
+    const avgAdSetCPA =
+      adSetCPAs.length > 0 ? adSetCPAs.reduce((s, c) => s + c, 0) / adSetCPAs.length : 0;
     if (avgAdSetCPA > 0) {
       for (const adSet of params.adSets) {
         if (
@@ -107,7 +106,8 @@ export class OptimizationLoop {
       if (adSet.spend > 500 && adSet.conversions === 0) {
         // Only add if not already covered by the zero-conversion check above
         const alreadyPaused = tier1Actions.some(
-          (a) => a.actionType === "digital-ads.adset.pause" &&
+          (a) =>
+            a.actionType === "digital-ads.adset.pause" &&
             (a.parameters as Record<string, unknown>).adSetId === adSet.adSetId,
         );
         if (!alreadyPaused) {
@@ -125,9 +125,10 @@ export class OptimizationLoop {
     const totalConversions = params.campaigns.reduce((s, c) => s + c.conversions, 0);
     const avgCPA = totalConversions > 0 ? totalSpend / totalConversions : 0;
     const learningCount = params.adSets.filter((a) => a.learningPhase).length;
-    const overallScore = Math.max(0, Math.min(100,
-      100 - (learningCount * 5) - (tier2Actions.length * 10) - (avgCPA > 100 ? 20 : 0)
-    ));
+    const overallScore = Math.max(
+      0,
+      Math.min(100, 100 - learningCount * 5 - tier2Actions.length * 10 - (avgCPA > 100 ? 20 : 0)),
+    );
 
     return {
       accountId: params.accountId,

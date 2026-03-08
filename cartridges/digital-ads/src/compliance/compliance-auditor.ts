@@ -54,9 +54,7 @@ export class ComplianceAuditor {
         `&access_token=${this.accessToken}`;
       const pixelsData = await this.fetchJson(pixelsUrl);
       const pixels = (pixelsData.data ?? []) as Record<string, unknown>[];
-      pixelHealthy = pixels.some(
-        (p) => !p.is_unavailable && p.last_fired_time != null,
-      );
+      pixelHealthy = pixels.some((p) => !p.is_unavailable && p.last_fired_time != null);
     } catch {
       // Non-blocking
     }
@@ -65,8 +63,7 @@ export class ComplianceAuditor {
     let capiConfigured = false;
     try {
       const pixelsUrl =
-        `${this.baseUrl}/${accountId}/adspixels?fields=id` +
-        `&access_token=${this.accessToken}`;
+        `${this.baseUrl}/${accountId}/adspixels?fields=id` + `&access_token=${this.accessToken}`;
       const pixelsData = await this.fetchJson(pixelsUrl);
       const pixels = (pixelsData.data ?? []) as Record<string, unknown>[];
       if (pixels.length > 0) {
@@ -76,9 +73,7 @@ export class ComplianceAuditor {
           `&access_token=${this.accessToken}`;
         const statsData = await this.fetchJson(statsUrl);
         const stats = (statsData.data ?? []) as Record<string, unknown>[];
-        capiConfigured = stats.some(
-          (s) => Number(s.count_server ?? 0) > 0,
-        );
+        capiConfigured = stats.some((s) => Number(s.count_server ?? 0) > 0);
       }
     } catch {
       // Non-blocking
@@ -133,9 +128,7 @@ export class ComplianceAuditor {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

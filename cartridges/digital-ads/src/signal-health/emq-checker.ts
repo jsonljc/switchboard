@@ -55,9 +55,7 @@ export class EMQChecker {
     const keyParams = ["em", "ph", "fn", "ln", "ct", "st", "zp", "country"];
     for (const key of keyParams) {
       if (!paramNames.has(key)) {
-        recommendations.push(
-          `Missing parameter: ${key} — adding this can improve match quality`,
-        );
+        recommendations.push(`Missing parameter: ${key} — adding this can improve match quality`);
       }
     }
 
@@ -69,9 +67,7 @@ export class EMQChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

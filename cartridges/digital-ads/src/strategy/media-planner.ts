@@ -26,15 +26,17 @@ export class MediaPlanner {
 
   private buildPhases(budget: number, days: number, objective: CampaignObjective) {
     if (days <= 14) {
-      return [{
-        name: "Full Flight",
-        startDay: 1,
-        endDay: days,
-        budgetAllocation: budget,
-        objective,
-        targeting: "Primary audience",
-        expectedReach: null,
-      }];
+      return [
+        {
+          name: "Full Flight",
+          startDay: 1,
+          endDay: days,
+          budgetAllocation: budget,
+          objective,
+          targeting: "Primary audience",
+          expectedReach: null,
+        },
+      ];
     }
 
     // Multi-phase for longer campaigns
@@ -64,7 +66,7 @@ export class MediaPlanner {
         name: "Optimize Phase",
         startDay: learningDays + scaleDays + 1,
         endDay: days,
-        budgetAllocation: Math.round(budget * 0.30),
+        budgetAllocation: Math.round(budget * 0.3),
         objective,
         targeting: "Top-performing audiences and creatives",
         expectedReach: null,
@@ -85,7 +87,8 @@ export class MediaPlanner {
     return {
       totalReach: Math.round(totalImpressions * 0.7), // ~70% unique reach
       estimatedConversions: Math.round(totalConversions),
-      estimatedCPA: totalConversions > 0 ? Math.round((budget / totalConversions) * 100) / 100 : null,
+      estimatedCPA:
+        totalConversions > 0 ? Math.round((budget / totalConversions) * 100) / 100 : null,
     };
   }
 }

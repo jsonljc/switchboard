@@ -48,9 +48,7 @@ export class CAPIDiagnosticsChecker {
 
     const totalEvents = serverEvents + browserEvents;
     const overallDedup =
-      totalEvents > 0
-        ? (totalEvents - Math.max(serverEvents, browserEvents)) / totalEvents
-        : 0;
+      totalEvents > 0 ? (totalEvents - Math.max(serverEvents, browserEvents)) / totalEvents : 0;
 
     const eventBreakdown = Array.from(eventMap.entries()).map(([name, counts]) => {
       const total = counts.server + counts.browser;
@@ -68,9 +66,7 @@ export class CAPIDiagnosticsChecker {
     if (serverEvents === 0) {
       issues.push("No server-side events detected — CAPI may not be configured");
     } else if (serverEvents < browserEvents * 0.5) {
-      issues.push(
-        "Server event volume is less than 50% of browser events — CAPI coverage is low",
-      );
+      issues.push("Server event volume is less than 50% of browser events — CAPI coverage is low");
     }
 
     if (overallDedup > 0.3) {
@@ -97,9 +93,7 @@ export class CAPIDiagnosticsChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

@@ -229,10 +229,7 @@ export class LTVOptimizer {
     });
 
     // Group by campaign and generate campaign-level recommendations
-    const campaignMap = new Map<
-      string,
-      { projections: LTVProjection[]; cpas: number[] }
-    >();
+    const campaignMap = new Map<string, { projections: LTVProjection[]; cpas: number[] }>();
     for (const { cohort, projection } of projections) {
       const campaignId = cohort.acquisitionCampaignId ?? "unknown";
       if (!campaignMap.has(campaignId)) {
@@ -245,8 +242,7 @@ export class LTVOptimizer {
 
     const campaignRecommendations = Array.from(campaignMap.entries()).map(
       ([campaignId, { projections: projs, cpas }]) => {
-        const avgLTV =
-          projs.reduce((s, p) => s + p.projectedLTV, 0) / projs.length;
+        const avgLTV = projs.reduce((s, p) => s + p.projectedLTV, 0) / projs.length;
         const avgCPA = cpas.reduce((s, c) => s + c, 0) / cpas.length;
         const ltvToCACRatio = avgCPA > 0 ? avgLTV / avgCPA : 0;
         const maxAcceptableCPA = avgLTV / targetRatio;
@@ -322,11 +318,8 @@ export class LTVOptimizer {
 
       if (campaignCohorts.length > 0) {
         const projections = campaignCohorts.map((c) => this.projectLTV(c));
-        projectedLTV =
-          projections.reduce((s, p) => s + p.projectedLTV, 0) /
-          projections.length;
-        ltvToCACRatio =
-          campaign.cpa > 0 ? projectedLTV / campaign.cpa : 0;
+        projectedLTV = projections.reduce((s, p) => s + p.projectedLTV, 0) / projections.length;
+        ltvToCACRatio = campaign.cpa > 0 ? projectedLTV / campaign.cpa : 0;
       }
 
       return {
@@ -338,17 +331,11 @@ export class LTVOptimizer {
     });
 
     // Compute total budget
-    const currentTotalBudget = campaigns.reduce(
-      (s, c) => s + c.dailyBudget,
-      0,
-    );
+    const currentTotalBudget = campaigns.reduce((s, c) => s + c.dailyBudget, 0);
     const budget = totalBudget ?? currentTotalBudget;
 
     // Allocate proportionally to LTV:CAC ratio
-    const totalRatio = campaignLTV.reduce(
-      (s, c) => s + Math.max(0, c.ltvToCACRatio),
-      0,
-    );
+    const totalRatio = campaignLTV.reduce((s, c) => s + Math.max(0, c.ltvToCACRatio), 0);
 
     const allocations: LTVBudgetAllocation[] = [];
 
@@ -367,16 +354,11 @@ export class LTVOptimizer {
       const maxChange = campaign.dailyBudget * (maxShift / 100);
       const change = recommendedBudget - campaign.dailyBudget;
       const cappedChange = Math.max(-maxChange, Math.min(maxChange, change));
-      recommendedBudget = Math.max(
-        minBudget,
-        campaign.dailyBudget + cappedChange,
-      );
+      recommendedBudget = Math.max(minBudget, campaign.dailyBudget + cappedChange);
 
       const changeDollars = recommendedBudget - campaign.dailyBudget;
       const changePercent =
-        campaign.dailyBudget > 0
-          ? (changeDollars / campaign.dailyBudget) * 100
-          : 0;
+        campaign.dailyBudget > 0 ? (changeDollars / campaign.dailyBudget) * 100 : 0;
 
       const reason = this.buildAllocationReason(
         campaign.ltvToCACRatio,
@@ -410,10 +392,7 @@ export class LTVOptimizer {
    *                         at that day (e.g. { day0: 10, day7: 25, ... }).
    * @returns The estimated payback day, or null if never reached within the data.
    */
-  calculatePaybackPeriod(
-    cpa: number,
-    revenueTimeline: Record<string, number>,
-  ): number | null {
+  calculatePaybackPeriod(cpa: number, revenueTimeline: Record<string, number>): number | null {
     if (cpa <= 0) return 0;
 
     const points = this.parseRevenueTimeline(revenueTimeline);
@@ -445,8 +424,7 @@ export class LTVOptimizer {
       const secondLast = points[points.length - 2]!;
       const dailyRate =
         last.days > secondLast.days
-          ? (last.revenue - secondLast.revenue) /
-            (last.days - secondLast.days)
+          ? (last.revenue - secondLast.revenue) / (last.days - secondLast.days)
           : 0;
 
       if (dailyRate > 0) {
@@ -493,9 +471,7 @@ export class LTVOptimizer {
    * Parse a revenue timeline object (e.g. { day0: 10, day7: 25 }) into sorted
    * data points.
    */
-  private parseRevenueTimeline(
-    timeline: Record<string, number>,
-  ): RevenueDataPoint[] {
+  private parseRevenueTimeline(timeline: Record<string, number>): RevenueDataPoint[] {
     const points: RevenueDataPoint[] = [];
 
     for (const [key, value] of Object.entries(timeline)) {
@@ -534,10 +510,7 @@ export class LTVOptimizer {
     // Reject negative coefficient (revenue should increase with time)
     if (a <= 0) return null;
 
-    const rSquared = this.computeRSquared(
-      points,
-      (p) => a * Math.log(p.days + 1) + b,
-    );
+    const rSquared = this.computeRSquared(points, (p) => a * Math.log(p.days + 1) + b);
 
     return {
       type: "log",
@@ -578,10 +551,7 @@ export class LTVOptimizer {
     // Reject negative exponent (revenue should increase with time)
     if (bCoef <= 0) return null;
 
-    const rSquared = this.computeRSquared(
-      points,
-      (p) => aCoef * Math.pow(p.days + 1, bCoef),
-    );
+    const rSquared = this.computeRSquared(points, (p) => aCoef * Math.pow(p.days + 1, bCoef));
 
     return {
       type: "power",
@@ -612,10 +582,7 @@ export class LTVOptimizer {
     const a = (n * sumXY - sumX * sumY) / denom;
     const b = (sumY - a * sumX) / n;
 
-    const rSquared = this.computeRSquared(
-      points,
-      (p) => a * p.days + b,
-    );
+    const rSquared = this.computeRSquared(points, (p) => a * p.days + b);
 
     return {
       type: "linear",
@@ -677,18 +644,11 @@ export class LTVOptimizer {
   ): number {
     if (points.length < 2) return 0;
 
-    const meanY =
-      points.reduce((s, p) => s + p.revenue, 0) / points.length;
+    const meanY = points.reduce((s, p) => s + p.revenue, 0) / points.length;
 
-    const ssTotal = points.reduce(
-      (s, p) => s + (p.revenue - meanY) ** 2,
-      0,
-    );
+    const ssTotal = points.reduce((s, p) => s + (p.revenue - meanY) ** 2, 0);
 
-    const ssResidual = points.reduce(
-      (s, p) => s + (p.revenue - predictFn(p)) ** 2,
-      0,
-    );
+    const ssResidual = points.reduce((s, p) => s + (p.revenue - predictFn(p)) ** 2, 0);
 
     if (ssTotal === 0) return 0;
     return Math.max(0, 1 - ssResidual / ssTotal);
@@ -716,9 +676,7 @@ export class LTVOptimizer {
   /**
    * Get the recommended action based on LTV:CAC ratio.
    */
-  private getAction(
-    ltvToCACRatio: number,
-  ): "scale" | "maintain" | "reduce" | "pause" {
+  private getAction(ltvToCACRatio: number): "scale" | "maintain" | "reduce" | "pause" {
     if (ltvToCACRatio > 4.0) return "scale";
     if (ltvToCACRatio >= 3.0) return "maintain";
     if (ltvToCACRatio >= 1.0) return "reduce";
@@ -728,10 +686,7 @@ export class LTVOptimizer {
   /**
    * Get a recommendation text string based on LTV:CAC ratio.
    */
-  private getRecommendationText(
-    ltvToCACRatio: number,
-    targetRatio: number,
-  ): string {
+  private getRecommendationText(ltvToCACRatio: number, targetRatio: number): string {
     if (ltvToCACRatio > 4.0) {
       return `Excellent LTV:CAC ratio (${ltvToCACRatio.toFixed(1)}x) — scale aggressively, room to increase CPA`;
     }
@@ -791,8 +746,7 @@ export class LTVOptimizer {
 
     // Average LTV
     const avgLTV =
-      projections.reduce((s, p) => s + p.projection.projectedLTV, 0) /
-      projections.length;
+      projections.reduce((s, p) => s + p.projection.projectedLTV, 0) / projections.length;
 
     // Average payback days (exclude nulls)
     const paybackValues = projections
@@ -800,16 +754,11 @@ export class LTVOptimizer {
       .filter((d): d is number => d !== null);
     const avgPaybackDays =
       paybackValues.length > 0
-        ? Math.round(
-            paybackValues.reduce((s, d) => s + d, 0) / paybackValues.length,
-          )
+        ? Math.round(paybackValues.reduce((s, d) => s + d, 0) / paybackValues.length)
         : null;
 
     // Best/worst segments
-    const segmentMap = new Map<
-      string,
-      { totalLTV: number; count: number }
-    >();
+    const segmentMap = new Map<string, { totalLTV: number; count: number }>();
     for (const { cohort, projection } of projections) {
       const segment = cohort.segment ?? "default";
       if (!segmentMap.has(segment)) {
@@ -850,9 +799,7 @@ export class LTVOptimizer {
     const ltvDistribution = ranges.map(({ range, min, max }) => ({
       range,
       count: projections.filter(
-        (p) =>
-          p.projection.projectedLTV >= min &&
-          p.projection.projectedLTV < max,
+        (p) => p.projection.projectedLTV >= min && p.projection.projectedLTV < max,
       ).length,
     }));
 
@@ -877,9 +824,7 @@ export class LTVOptimizer {
 
     const scaleCount = campaignRecs.filter((r) => r.action === "scale").length;
     const pauseCount = campaignRecs.filter((r) => r.action === "pause").length;
-    const reduceCount = campaignRecs.filter(
-      (r) => r.action === "reduce",
-    ).length;
+    const reduceCount = campaignRecs.filter((r) => r.action === "reduce").length;
 
     if (scaleCount > 0) {
       recommendations.push(
@@ -932,10 +877,8 @@ export class LTVOptimizer {
     );
     if (belowTarget.length > 0) {
       const avgGap =
-        belowTarget.reduce(
-          (s, r) => s + (r.maxAcceptableCPA - r.currentCPA),
-          0,
-        ) / belowTarget.length;
+        belowTarget.reduce((s, r) => s + (r.maxAcceptableCPA - r.currentCPA), 0) /
+        belowTarget.length;
       if (avgGap < 0) {
         recommendations.push(
           `${belowTarget.length} campaign(s) need to reduce CPA by an average of $${Math.abs(avgGap).toFixed(2)} to reach the ${targetRatio.toFixed(1)}x LTV:CAC target`,

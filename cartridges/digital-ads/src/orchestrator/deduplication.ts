@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export interface PlatformConversionData {
-  platform: 'meta' | 'google' | 'tiktok';
+  platform: "meta" | "google" | "tiktok";
   /** Daily conversion data */
   dailyData: Array<{
     date: string;
@@ -22,9 +22,9 @@ export interface PlatformConversionData {
     clicks: number;
   }>;
   /** Attribution window used */
-  attributionWindow: '1d_click' | '7d_click' | '28d_click' | '1d_view' | '7d_click_1d_view';
+  attributionWindow: "1d_click" | "7d_click" | "28d_click" | "1d_view" | "7d_click_1d_view";
   /** Whether this platform uses last-click attribution */
-  attributionModel: 'last_click' | 'data_driven' | 'first_click' | 'linear' | 'time_decay';
+  attributionModel: "last_click" | "data_driven" | "first_click" | "linear" | "time_decay";
 }
 
 export interface DeduplicationResult {
@@ -54,7 +54,7 @@ export interface DeduplicationResult {
     platforms: [string, string];
     estimatedOverlapRate: number;
     estimatedOverlappingConversions: number;
-    confidence: 'high' | 'medium' | 'low';
+    confidence: "high" | "medium" | "low";
     method: string;
   }>;
   /** Per-platform adjusted share */
@@ -75,7 +75,7 @@ export interface DeduplicationResult {
 
 export interface OverlapEstimationConfig {
   /** Method for estimating overlap */
-  method: 'statistical' | 'time_decay' | 'hybrid';
+  method: "statistical" | "time_decay" | "hybrid";
   /** Base overlap rate to use when insufficient data (default: 0.15 for Meta+Google) */
   defaultOverlapRates?: Record<string, number>;
   /** Minimum days of data required for statistical estimation */
@@ -87,12 +87,12 @@ export interface OverlapEstimationConfig {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_OVERLAP_RATES: Record<string, number> = {
-  'meta+google': 0.20,    // 15-25% overlap — broad reach overlap
-  'google+meta': 0.20,
-  'meta+tiktok': 0.15,    // 10-20% overlap — younger demo overlap
-  'tiktok+meta': 0.15,
-  'google+tiktok': 0.12,  // 8-15% overlap — less audience overlap
-  'tiktok+google': 0.12,
+  "meta+google": 0.2, // 15-25% overlap — broad reach overlap
+  "google+meta": 0.2,
+  "meta+tiktok": 0.15, // 10-20% overlap — younger demo overlap
+  "tiktok+meta": 0.15,
+  "google+tiktok": 0.12, // 8-15% overlap — less audience overlap
+  "tiktok+google": 0.12,
 };
 
 const THREE_WAY_OVERLAP_FRACTION = 0.35; // ~35% of smallest pairwise overlap
@@ -107,63 +107,78 @@ interface WindowOverlapFactor {
 }
 
 function getWindowOverlapFactor(
-  window1: PlatformConversionData['attributionWindow'],
-  window2: PlatformConversionData['attributionWindow'],
+  window1: PlatformConversionData["attributionWindow"],
+  window2: PlatformConversionData["attributionWindow"],
 ): WindowOverlapFactor {
   // Same-day click windows have minimal overlap
-  if (window1 === '1d_click' && window2 === '1d_click') {
-    return { overlapRate: 0.05, description: 'same-day click windows — minimal overlap' };
+  if (window1 === "1d_click" && window2 === "1d_click") {
+    return { overlapRate: 0.05, description: "same-day click windows — minimal overlap" };
   }
 
   // 7d_click overlapping with 1d_click: ~30% of 1d conversions re-counted
   if (
-    (window1 === '7d_click' && window2 === '1d_click') ||
-    (window1 === '1d_click' && window2 === '7d_click')
+    (window1 === "7d_click" && window2 === "1d_click") ||
+    (window1 === "1d_click" && window2 === "7d_click")
   ) {
-    return { overlapRate: 0.30, description: '7d_click vs 1d_click — moderate overlap from extended window' };
+    return {
+      overlapRate: 0.3,
+      description: "7d_click vs 1d_click — moderate overlap from extended window",
+    };
   }
 
   // 28d_click overlapping with 7d_click: ~40% of 7d conversions re-counted
   if (
-    (window1 === '28d_click' && window2 === '7d_click') ||
-    (window1 === '7d_click' && window2 === '28d_click')
+    (window1 === "28d_click" && window2 === "7d_click") ||
+    (window1 === "7d_click" && window2 === "28d_click")
   ) {
-    return { overlapRate: 0.40, description: '28d_click vs 7d_click — significant overlap from long window' };
+    return {
+      overlapRate: 0.4,
+      description: "28d_click vs 7d_click — significant overlap from long window",
+    };
   }
 
   // 28d_click overlapping with 1d_click: ~35% overlap
   if (
-    (window1 === '28d_click' && window2 === '1d_click') ||
-    (window1 === '1d_click' && window2 === '28d_click')
+    (window1 === "28d_click" && window2 === "1d_click") ||
+    (window1 === "1d_click" && window2 === "28d_click")
   ) {
-    return { overlapRate: 0.35, description: '28d_click vs 1d_click — significant window mismatch overlap' };
+    return {
+      overlapRate: 0.35,
+      description: "28d_click vs 1d_click — significant window mismatch overlap",
+    };
   }
 
   // View-through windows add ~15% to any click-based
-  if (window1 === '1d_view' || window2 === '1d_view') {
-    return { overlapRate: 0.15, description: 'view-through window adds incremental overlap' };
+  if (window1 === "1d_view" || window2 === "1d_view") {
+    return { overlapRate: 0.15, description: "view-through window adds incremental overlap" };
   }
 
   // 7d_click_1d_view is a combined window — higher overlap
-  if (window1 === '7d_click_1d_view' || window2 === '7d_click_1d_view') {
-    const otherWindow = window1 === '7d_click_1d_view' ? window2 : window1;
-    if (otherWindow === '7d_click' || otherWindow === '28d_click') {
-      return { overlapRate: 0.35, description: 'combined click+view window vs click window — high overlap' };
+  if (window1 === "7d_click_1d_view" || window2 === "7d_click_1d_view") {
+    const otherWindow = window1 === "7d_click_1d_view" ? window2 : window1;
+    if (otherWindow === "7d_click" || otherWindow === "28d_click") {
+      return {
+        overlapRate: 0.35,
+        description: "combined click+view window vs click window — high overlap",
+      };
     }
-    if (otherWindow === '1d_click') {
-      return { overlapRate: 0.25, description: 'combined click+view window vs 1d click — moderate overlap' };
+    if (otherWindow === "1d_click") {
+      return {
+        overlapRate: 0.25,
+        description: "combined click+view window vs 1d click — moderate overlap",
+      };
     }
     // Both are 7d_click_1d_view
-    return { overlapRate: 0.30, description: 'matching combined windows — significant overlap' };
+    return { overlapRate: 0.3, description: "matching combined windows — significant overlap" };
   }
 
   // Same windows (7d_click vs 7d_click, etc.)
   if (window1 === window2) {
-    return { overlapRate: 0.20, description: 'matching attribution windows — standard overlap' };
+    return { overlapRate: 0.2, description: "matching attribution windows — standard overlap" };
   }
 
   // Default fallback
-  return { overlapRate: 0.15, description: 'mixed attribution windows — estimated overlap' };
+  return { overlapRate: 0.15, description: "mixed attribution windows — estimated overlap" };
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +202,7 @@ export class ConversionDeduplicator {
     platforms: PlatformConversionData[],
     config?: OverlapEstimationConfig,
   ): DeduplicationResult {
-    const method = config?.method ?? 'hybrid';
+    const method = config?.method ?? "hybrid";
     const overlapRates = config?.defaultOverlapRates ?? DEFAULT_OVERLAP_RATES;
     const minDays = config?.minDaysForStatistical ?? 14;
     const methodology: string[] = [];
@@ -217,7 +232,7 @@ export class ConversionDeduplicator {
     );
 
     // Step 2: Estimate pairwise overlaps
-    const overlapEstimates: DeduplicationResult['overlapEstimates'] = [];
+    const overlapEstimates: DeduplicationResult["overlapEstimates"] = [];
     const pairwiseOverlaps = new Map<string, number>(); // "p1+p2" → overlapping conversions
 
     for (let i = 0; i < platforms.length; i++) {
@@ -234,14 +249,14 @@ export class ConversionDeduplicator {
           platforms: [p1.platform, p2.platform],
           estimatedOverlapRate: overlap.overlapRate,
           estimatedOverlappingConversions: overlap.overlappingConversions,
-          confidence: overlap.confidence as 'high' | 'medium' | 'low',
+          confidence: overlap.confidence as "high" | "medium" | "low",
           method: overlap.method,
         });
 
         methodology.push(
           `${p1.platform} + ${p2.platform}: estimated ${(overlap.overlapRate * 100).toFixed(1)}% overlap ` +
-          `(~${Math.round(overlap.overlappingConversions)} shared conversions) via ${overlap.method} method ` +
-          `[${overlap.confidence} confidence].`,
+            `(~${Math.round(overlap.overlappingConversions)} shared conversions) via ${overlap.method} method ` +
+            `[${overlap.confidence} confidence].`,
         );
       }
     }
@@ -267,7 +282,7 @@ export class ConversionDeduplicator {
 
       methodology.push(
         `Three-platform overlap estimated at ~${Math.round(tripleOverlap)} conversions ` +
-        `(${(THREE_WAY_OVERLAP_FRACTION * 100).toFixed(0)}% of smallest pairwise overlap).`,
+          `(${(THREE_WAY_OVERLAP_FRACTION * 100).toFixed(0)}% of smallest pairwise overlap).`,
       );
     }
 
@@ -279,21 +294,17 @@ export class ConversionDeduplicator {
     );
 
     // Apply same reduction ratio to revenue
-    const reductionRatio = naiveTotal.conversions > 0
-      ? deduplicatedConversions / naiveTotal.conversions
-      : 1;
+    const reductionRatio =
+      naiveTotal.conversions > 0 ? deduplicatedConversions / naiveTotal.conversions : 1;
     const deduplicatedRevenue = naiveTotal.revenue * reductionRatio;
 
     // Spend is real — no deduplication needed
     const deduplicatedSpend = naiveTotal.spend;
 
     // Blended metrics on deduplicated numbers
-    const blendedCPA = deduplicatedConversions > 0
-      ? deduplicatedSpend / deduplicatedConversions
-      : 0;
-    const blendedROAS = deduplicatedSpend > 0
-      ? deduplicatedRevenue / deduplicatedSpend
-      : null;
+    const blendedCPA =
+      deduplicatedConversions > 0 ? deduplicatedSpend / deduplicatedConversions : 0;
+    const blendedROAS = deduplicatedSpend > 0 ? deduplicatedRevenue / deduplicatedSpend : null;
 
     const deduplicatedTotal = {
       conversions: Math.round(deduplicatedConversions),
@@ -311,34 +322,36 @@ export class ConversionDeduplicator {
         rawConversions: r.totalConversions,
         adjustedConversions: Math.round(adjustedConversions),
         adjustmentFactor: Math.round(reductionRatio * 1000) / 1000,
-        estimatedTrueShare: deduplicatedConversions > 0
-          ? Math.round((adjustedConversions / deduplicatedConversions) * 1000) / 1000
-          : 0,
+        estimatedTrueShare:
+          deduplicatedConversions > 0
+            ? Math.round((adjustedConversions / deduplicatedConversions) * 1000) / 1000
+            : 0,
       };
     });
 
     // Overcounting factor
-    const overcountingFactor = deduplicatedConversions > 0
-      ? Math.round((naiveTotal.conversions / deduplicatedConversions) * 100) / 100
-      : 1;
+    const overcountingFactor =
+      deduplicatedConversions > 0
+        ? Math.round((naiveTotal.conversions / deduplicatedConversions) * 100) / 100
+        : 1;
 
     methodology.push(
       `Overcounting factor: ${overcountingFactor.toFixed(2)}x (naive ${naiveTotal.conversions.toLocaleString()} → ` +
-      `deduplicated ${deduplicatedTotal.conversions.toLocaleString()}).`,
+        `deduplicated ${deduplicatedTotal.conversions.toLocaleString()}).`,
     );
 
     // Step 5: Generate recommendations
     if (overcountingFactor > 1.3) {
       recommendations.push(
-        'Significant overcounting detected (>30%). Consider using a unified measurement tool ' +
-        '(e.g., MMM or incrementality tests) to validate these estimates.',
+        "Significant overcounting detected (>30%). Consider using a unified measurement tool " +
+          "(e.g., MMM or incrementality tests) to validate these estimates.",
       );
     }
 
     if (overcountingFactor > 1.5) {
       recommendations.push(
-        'Over 50% overcounting suggests heavy audience overlap. Evaluate whether all platforms ' +
-        'are targeting sufficiently distinct audiences, or consolidate to reduce wasted overlap.',
+        "Over 50% overcounting suggests heavy audience overlap. Evaluate whether all platforms " +
+          "are targeting sufficiently distinct audiences, or consolidate to reduce wasted overlap.",
       );
     }
 
@@ -346,8 +359,8 @@ export class ConversionDeduplicator {
     const windows = new Set(platforms.map((p) => p.attributionWindow));
     if (windows.size > 1) {
       recommendations.push(
-        'Attribution windows differ across platforms. Align windows where possible (e.g., all ' +
-        'using 7d_click) to improve comparability and reduce attribution-driven overcounting.',
+        "Attribution windows differ across platforms. Align windows where possible (e.g., all " +
+          "using 7d_click) to improve comparability and reduce attribution-driven overcounting.",
       );
     }
 
@@ -355,21 +368,19 @@ export class ConversionDeduplicator {
     const models = new Set(platforms.map((p) => p.attributionModel));
     if (models.size > 1) {
       recommendations.push(
-        'Attribution models differ across platforms. Last-click models on multiple platforms ' +
-        'will naturally overcount. Consider data-driven or first-click where available.',
+        "Attribution models differ across platforms. Last-click models on multiple platforms " +
+          "will naturally overcount. Consider data-driven or first-click where available.",
       );
     }
 
     // Blended CPA recommendation
     if (deduplicatedTotal.blendedCPA > 0) {
-      const naiveCPA = naiveTotal.conversions > 0
-        ? naiveTotal.spend / naiveTotal.conversions
-        : 0;
+      const naiveCPA = naiveTotal.conversions > 0 ? naiveTotal.spend / naiveTotal.conversions : 0;
       if (naiveCPA > 0) {
         const cpaIncrease = ((deduplicatedTotal.blendedCPA - naiveCPA) / naiveCPA) * 100;
         recommendations.push(
           `Deduplicated blended CPA ($${deduplicatedTotal.blendedCPA.toFixed(2)}) is ${cpaIncrease.toFixed(0)}% ` +
-          `higher than naive CPA ($${naiveCPA.toFixed(2)}). Use deduplicated CPA for accurate budget planning.`,
+            `higher than naive CPA ($${naiveCPA.toFixed(2)}). Use deduplicated CPA for accurate budget planning.`,
         );
       }
     }
@@ -379,8 +390,8 @@ export class ConversionDeduplicator {
       if (est.estimatedOverlapRate > 0.25) {
         recommendations.push(
           `High overlap between ${est.platforms[0]} and ${est.platforms[1]} ` +
-          `(${(est.estimatedOverlapRate * 100).toFixed(0)}%). Consider running a holdout test ` +
-          `on one platform to measure true incremental lift.`,
+            `(${(est.estimatedOverlapRate * 100).toFixed(0)}%). Consider running a holdout test ` +
+            `on one platform to measure true incremental lift.`,
         );
       }
     }
@@ -424,21 +435,15 @@ export class ConversionDeduplicator {
     const defaultRate = rates[pairKey] ?? DEFAULT_OVERLAP_RATES[pairKey] ?? 0.15;
 
     switch (method) {
-      case 'statistical':
-        return this.estimateStatistical(
-          platform1, platform2, smallerTotal, defaultRate, minDays,
-        );
+      case "statistical":
+        return this.estimateStatistical(platform1, platform2, smallerTotal, defaultRate, minDays);
 
-      case 'time_decay':
-        return this.estimateTimeDecay(
-          platform1, platform2, smallerTotal, defaultRate,
-        );
+      case "time_decay":
+        return this.estimateTimeDecay(platform1, platform2, smallerTotal, defaultRate);
 
-      case 'hybrid':
+      case "hybrid":
       default:
-        return this.estimateHybrid(
-          platform1, platform2, smallerTotal, defaultRate, minDays,
-        );
+        return this.estimateHybrid(platform1, platform2, smallerTotal, defaultRate, minDays);
     }
   }
 
@@ -466,9 +471,7 @@ export class ConversionDeduplicator {
     }
 
     const numerator = n * sumXY - sumX * sumY;
-    const denominator = Math.sqrt(
-      (n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY),
-    );
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
 
     if (denominator === 0) return 0;
 
@@ -498,9 +501,9 @@ export class ConversionDeduplicator {
       // Insufficient data — fall back to default rate
       return {
         overlapRate: defaultRate,
-        confidence: 'low',
+        confidence: "low",
         overlappingConversions: Math.round(smallerTotal * defaultRate),
-        method: 'statistical (insufficient data — used default rate)',
+        method: "statistical (insufficient data — used default rate)",
       };
     }
 
@@ -520,11 +523,11 @@ export class ConversionDeduplicator {
     // Determine confidence based on data quality
     let confidence: string;
     if (aligned.length >= 30 && Math.abs(r) > 0.5) {
-      confidence = 'high';
+      confidence = "high";
     } else if (aligned.length >= 14) {
-      confidence = 'medium';
+      confidence = "medium";
     } else {
-      confidence = 'low';
+      confidence = "low";
     }
 
     return {
@@ -557,7 +560,7 @@ export class ConversionDeduplicator {
 
     // Add view-through premium if applicable
     let viewThroughAdj = 0;
-    if (platform1.attributionWindow === '1d_view' || platform2.attributionWindow === '1d_view') {
+    if (platform1.attributionWindow === "1d_view" || platform2.attributionWindow === "1d_view") {
       viewThroughAdj = 0.15;
     }
 
@@ -565,7 +568,7 @@ export class ConversionDeduplicator {
 
     return {
       overlapRate: Math.round(finalRate * 1000) / 1000,
-      confidence: 'medium',
+      confidence: "medium",
       overlappingConversions: Math.round(smallerTotal * finalRate),
       method: `time_decay (${windowFactor.description}, blended rate=${(finalRate * 100).toFixed(1)}%)`,
     };
@@ -593,21 +596,23 @@ export class ConversionDeduplicator {
 
     // Get both estimates
     const statistical = this.estimateStatistical(
-      platform1, platform2, smallerTotal, defaultRate, minDays,
+      platform1,
+      platform2,
+      smallerTotal,
+      defaultRate,
+      minDays,
     );
-    const timeDecay = this.estimateTimeDecay(
-      platform1, platform2, smallerTotal, defaultRate,
-    );
+    const timeDecay = this.estimateTimeDecay(platform1, platform2, smallerTotal, defaultRate);
 
     // Weighted average: statistical gets more weight with more data
     const statisticalWeight = Math.min(aligned.length / 30, 0.7);
     const timeDecayWeight = 1 - statisticalWeight;
 
-    const blendedRate = statistical.overlapRate * statisticalWeight +
-      timeDecay.overlapRate * timeDecayWeight;
+    const blendedRate =
+      statistical.overlapRate * statisticalWeight + timeDecay.overlapRate * timeDecayWeight;
 
     // Confidence is the higher of the two
-    const confidenceOrder = ['low', 'medium', 'high'];
+    const confidenceOrder = ["low", "medium", "high"];
     const statIdx = confidenceOrder.indexOf(statistical.confidence);
     const tdIdx = confidenceOrder.indexOf(timeDecay.confidence);
     const confidence = confidenceOrder[Math.max(statIdx, tdIdx)]!;
@@ -616,7 +621,8 @@ export class ConversionDeduplicator {
       overlapRate: Math.round(blendedRate * 1000) / 1000,
       confidence,
       overlappingConversions: Math.round(smallerTotal * blendedRate),
-      method: `hybrid (statistical weight=${(statisticalWeight * 100).toFixed(0)}%, ` +
+      method:
+        `hybrid (statistical weight=${(statisticalWeight * 100).toFixed(0)}%, ` +
         `time_decay weight=${(timeDecayWeight * 100).toFixed(0)}%, ` +
         `blended rate=${(blendedRate * 100).toFixed(1)}%)`,
     };

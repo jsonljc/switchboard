@@ -70,7 +70,7 @@ export class PolicyScanner {
           const remaining = (spendCap - amountSpent) / 100; // cents to dollars
           issues.push(
             `Account spend limit is ${(spendRatio * 100).toFixed(1)}% utilized. ` +
-            `Only $${remaining.toFixed(2)} remaining.`,
+              `Only $${remaining.toFixed(2)} remaining.`,
           );
           policyWarnings.push({
             entityType: "account",
@@ -113,7 +113,8 @@ export class PolicyScanner {
       issues.push("Failed to check campaign policy warnings.");
     }
 
-    const overallHealthy = disapprovedAds.length === 0 && !spendLimitApproaching && issues.length === 0;
+    const overallHealthy =
+      disapprovedAds.length === 0 && !spendLimitApproaching && issues.length === 0;
 
     return {
       adAccountId: accountId,
@@ -135,9 +136,7 @@ export class PolicyScanner {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

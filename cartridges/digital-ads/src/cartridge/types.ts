@@ -214,8 +214,12 @@ export interface MetaAdsWriteProvider {
   healthCheck(): Promise<import("@switchboard/schemas").ConnectionHealth>;
 
   // --- Audience methods (Phase 3) ---
-  createCustomAudience(params: CreateCustomAudienceWriteParams): Promise<{ id: string; success: boolean }>;
-  createLookalikeAudience(params: CreateLookalikeAudienceWriteParams): Promise<{ id: string; success: boolean }>;
+  createCustomAudience(
+    params: CreateCustomAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }>;
+  createLookalikeAudience(
+    params: CreateLookalikeAudienceWriteParams,
+  ): Promise<{ id: string; success: boolean }>;
   deleteCustomAudience(audienceId: string): Promise<{ success: boolean }>;
 
   // --- Bid & Schedule methods (Phase 4) ---

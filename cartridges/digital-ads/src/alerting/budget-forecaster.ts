@@ -50,9 +50,8 @@ export class BudgetForecaster {
       }
 
       const dailyBudget = Number(campaign.daily_budget ?? 0) / 100; // API returns cents
-      const remainingBudget = campaign.budget_remaining != null
-        ? Number(campaign.budget_remaining) / 100
-        : null;
+      const remainingBudget =
+        campaign.budget_remaining != null ? Number(campaign.budget_remaining) / 100 : null;
 
       // Calculate days until exhaustion (only meaningful for lifetime budgets)
       let daysUntilExhaustion: number | null = null;
@@ -63,11 +62,7 @@ export class BudgetForecaster {
       const projectedMonthlySpend = dailySpendRate * 30;
 
       // Determine status
-      const status = this.determineStatus(
-        dailySpendRate,
-        dailyBudget,
-        daysUntilExhaustion,
-      );
+      const status = this.determineStatus(dailySpendRate, dailyBudget, daysUntilExhaustion);
 
       // Generate recommendations
       const recommendations = this.generateRecommendations(
@@ -144,9 +139,7 @@ export class BudgetForecaster {
         recommendations.push(
           `Daily spend ($${dailySpendRate.toFixed(2)}) exceeds daily budget ($${dailyBudget.toFixed(2)}).`,
         );
-        recommendations.push(
-          "Review bid strategies and audience targeting to control spend.",
-        );
+        recommendations.push("Review bid strategies and audience targeting to control spend.");
         break;
       case "underspending":
         recommendations.push(
@@ -169,9 +162,7 @@ export class BudgetForecaster {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

@@ -25,9 +25,7 @@ export const autoBudgetAdvisor: FindingAdvisor = (
 
   if (!context?.subEntities || context.subEntities.length < 2) return findings;
 
-  const noConversions = context.subEntities.filter(
-    (e) => e.conversions === 0 && e.spend > 50,
-  );
+  const noConversions = context.subEntities.filter((e) => e.conversions === 0 && e.spend > 50);
   if (noConversions.length > 0) {
     const totalWaste = noConversions.reduce((s, e) => s + e.spend, 0);
     findings.push({

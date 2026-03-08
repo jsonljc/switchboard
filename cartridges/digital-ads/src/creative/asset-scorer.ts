@@ -112,9 +112,9 @@ export interface CreativeBrief {
 const DIMENSION_WEIGHTS = {
   performance: 0.35,
   engagement: 0.25,
-  quality: 0.20,
-  fatigue: 0.10,
-  format: 0.10,
+  quality: 0.2,
+  fatigue: 0.1,
+  format: 0.1,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -207,7 +207,8 @@ export class CreativeAssetScorer {
           scoreDistribution: {},
           topPerformingAttributes: [],
           underperformingPatterns: [],
-          formatMixRecommendation: "No assets to analyze — start by creating ads across multiple formats.",
+          formatMixRecommendation:
+            "No assets to analyze — start by creating ads across multiple formats.",
           diversityScore: 0,
         },
         recommendations: ["No creative assets found. Begin by uploading image and video ads."],
@@ -356,8 +357,10 @@ export class CreativeAssetScorer {
 
       // Video retention curve
       if (asset.videoP25 !== undefined && asset.videoP50 !== undefined) {
-        const retentionDrop = (asset.videoP25 - (asset.videoP50 ?? 0)) / Math.max(asset.videoP25, 1);
-        if (retentionDrop < 0.3) score += 10; // good retention
+        const retentionDrop =
+          (asset.videoP25 - (asset.videoP50 ?? 0)) / Math.max(asset.videoP25, 1);
+        if (retentionDrop < 0.3)
+          score += 10; // good retention
         else if (retentionDrop > 0.6) score -= 10; // heavy drop-off
       }
 
@@ -486,7 +489,10 @@ export class CreativeAssetScorer {
 
           // Scene changes — moderate pacing
           if (visualAttrs.averageShotDurationSec !== undefined) {
-            if (visualAttrs.averageShotDurationSec >= 2 && visualAttrs.averageShotDurationSec <= 5) {
+            if (
+              visualAttrs.averageShotDurationSec >= 2 &&
+              visualAttrs.averageShotDurationSec <= 5
+            ) {
               score += 5; // dynamic but not chaotic
             } else if (visualAttrs.averageShotDurationSec < 1) {
               score -= 5; // too fast
@@ -526,9 +532,7 @@ export class CreativeAssetScorer {
   // Grading
   // -----------------------------------------------------------------------
 
-  private assignGrade(
-    score: number,
-  ): "A+" | "A" | "B+" | "B" | "C+" | "C" | "D" | "F" {
+  private assignGrade(score: number): "A+" | "A" | "B+" | "B" | "C+" | "C" | "D" | "F" {
     if (score >= 93) return "A+";
     if (score >= 85) return "A";
     if (score >= 78) return "B+";
@@ -590,7 +594,11 @@ export class CreativeAssetScorer {
       }
     }
 
-    if (asset.assetType === "video" && asset.thumbstopRate !== undefined && asset.thumbstopRate >= 0.25) {
+    if (
+      asset.assetType === "video" &&
+      asset.thumbstopRate !== undefined &&
+      asset.thumbstopRate >= 0.25
+    ) {
       strengths.push(`Strong thumbstop rate (${(asset.thumbstopRate * 100).toFixed(1)}%)`);
     }
 
@@ -707,9 +715,11 @@ export class CreativeAssetScorer {
   // Portfolio-level analysis helpers (private)
   // -----------------------------------------------------------------------
 
-  private computePeerMetrics(
-    assets: AssetPerformanceData[],
-  ): { avgCPA: number; avgCTR: number; avgFrequency: number } {
+  private computePeerMetrics(assets: AssetPerformanceData[]): {
+    avgCPA: number;
+    avgCTR: number;
+    avgFrequency: number;
+  } {
     const withConversions = assets.filter((a) => a.conversions > 0);
     const totalSpend = withConversions.reduce((s, a) => s + a.spend, 0);
     const totalConversions = withConversions.reduce((s, a) => s + a.conversions, 0);
@@ -720,9 +730,7 @@ export class CreativeAssetScorer {
     const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
 
     const avgFrequency =
-      assets.length > 0
-        ? assets.reduce((s, a) => s + a.frequency, 0) / assets.length
-        : 1;
+      assets.length > 0 ? assets.reduce((s, a) => s + a.frequency, 0) / assets.length : 1;
 
     return { avgCPA, avgCTR, avgFrequency };
   }
@@ -733,15 +741,15 @@ export class CreativeAssetScorer {
     visualAttributesMap?: Map<string, VisualAttributes>,
   ): string[] {
     if (!visualAttributesMap || visualAttributesMap.size === 0) {
-      return ["Visual attribute data not available — provide vision model outputs for deeper insights"];
+      return [
+        "Visual attribute data not available — provide vision model outputs for deeper insights",
+      ];
     }
 
     const topN = Math.max(1, Math.ceil(scoredAssets.length * 0.25));
     const bottomN = Math.max(1, Math.ceil(scoredAssets.length * 0.25));
     const topIds = new Set(scoredAssets.slice(0, topN).map((a) => a.adId));
-    const bottomIds = new Set(
-      scoredAssets.slice(-bottomN).map((a) => a.adId),
-    );
+    const bottomIds = new Set(scoredAssets.slice(-bottomN).map((a) => a.adId));
 
     const attributes: string[] = [];
 
@@ -890,10 +898,7 @@ export class CreativeAssetScorer {
     _assets: AssetPerformanceData[],
     scoredAssets: AssetScore[],
   ): string {
-    const formatPerf = new Map<
-      AssetType,
-      { count: number; totalScore: number }
-    >();
+    const formatPerf = new Map<AssetType, { count: number; totalScore: number }>();
     for (const scored of scoredAssets) {
       const existing = formatPerf.get(scored.assetType) ?? { count: 0, totalScore: 0 };
       existing.count++;
@@ -1038,7 +1043,9 @@ export class CreativeAssetScorer {
   // Creative brief helpers (private)
   // -----------------------------------------------------------------------
 
-  private recommendFormats(topPerformers: AssetScore[]): Array<{ format: AssetType; reason: string }> {
+  private recommendFormats(
+    topPerformers: AssetScore[],
+  ): Array<{ format: AssetType; reason: string }> {
     const formatScores = new Map<AssetType, { totalScore: number; count: number }>();
     for (const tp of topPerformers) {
       const existing = formatScores.get(tp.assetType) ?? { totalScore: 0, count: 0 };
@@ -1060,7 +1067,8 @@ export class CreativeAssetScorer {
     if (!formatScores.has("video")) {
       result.push({
         format: "video",
-        reason: "Video is not yet in your top performers — test short-form video (15-30s) with captions",
+        reason:
+          "Video is not yet in your top performers — test short-form video (15-30s) with captions",
       });
     }
 
@@ -1082,7 +1090,9 @@ export class CreativeAssetScorer {
       guidelines.push("Feature the product prominently in the hero visual");
     }
     if (strengthCounts.has("Includes human faces, which tend to boost engagement")) {
-      guidelines.push("Include authentic human faces — lifestyle imagery outperforms product-only shots");
+      guidelines.push(
+        "Include authentic human faces — lifestyle imagery outperforms product-only shots",
+      );
     }
     if (strengthCounts.has("High color contrast helps stand out in the feed")) {
       guidelines.push("Use high-contrast colors to stand out in the feed");
@@ -1129,12 +1139,12 @@ export class CreativeAssetScorer {
     );
 
     if (hasCommerce) {
-      recs.push("\"Shop Now\" or \"Buy Now\" for direct-response commerce ads");
-      recs.push("\"Learn More\" for consideration-stage ads");
+      recs.push('"Shop Now" or "Buy Now" for direct-response commerce ads');
+      recs.push('"Learn More" for consideration-stage ads');
     }
 
     recs.push("Match the CTA to the landing page action — avoid misleading CTAs");
-    recs.push("Test \"Get Offer\" vs \"Shop Now\" to find the best-converting CTA");
+    recs.push('Test "Get Offer" vs "Shop Now" to find the best-converting CTA');
 
     return recs;
   }
@@ -1174,9 +1184,10 @@ export class CreativeAssetScorer {
     return topPerformers.slice(0, 3).map((tp) => ({
       adId: tp.adId,
       adName: tp.adName,
-      why: tp.strengths.length > 0
-        ? tp.strengths.slice(0, 2).join("; ")
-        : `Overall score: ${tp.overallScore} (${tp.grade})`,
+      why:
+        tp.strengths.length > 0
+          ? tp.strengths.slice(0, 2).join("; ")
+          : `Overall score: ${tp.overallScore} (${tp.grade})`,
     }));
   }
 }

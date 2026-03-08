@@ -37,9 +37,7 @@ export class ProductSetManager {
     catalogId: string,
     params: { name: string; filter: Record<string, unknown> },
   ): Promise<ProductSet> {
-    const url =
-      `${this.baseUrl}/${catalogId}/product_sets?` +
-      `access_token=${this.accessToken}`;
+    const url = `${this.baseUrl}/${catalogId}/product_sets?` + `access_token=${this.accessToken}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -53,9 +51,7 @@ export class ProductSetManager {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
 
     const result = (await response.json()) as Record<string, unknown>;
@@ -77,9 +73,7 @@ export class ProductSetManager {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

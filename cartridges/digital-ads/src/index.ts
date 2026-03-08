@@ -294,7 +294,10 @@ export type {
 
 // Optimization
 export { BudgetAllocator } from "./optimization/budget-allocator.js";
-export type { CampaignPerformanceData, CampaignHistoricalData } from "./optimization/budget-allocator.js";
+export type {
+  CampaignPerformanceData,
+  CampaignHistoricalData,
+} from "./optimization/budget-allocator.js";
 export { BidStrategyEngine } from "./optimization/bid-strategy-engine.js";
 export { DaypartingEngine } from "./optimization/dayparting-engine.js";
 export { OptimizationLoop } from "./optimization/optimization-loop.js";
@@ -309,7 +312,10 @@ export type {
 // Creative (new modules)
 export { CreativeAnalyzer } from "./creative/creative-analyzer.js";
 export { CreativeRotationEngine } from "./creative/rotation-engine.js";
-export type { CreativeAnalysisResult, CreativePerformanceEntry } from "./creative/creative-analyzer.js";
+export type {
+  CreativeAnalysisResult,
+  CreativePerformanceEntry,
+} from "./creative/creative-analyzer.js";
 export type { RotationPlan, AdPerformance } from "./creative/rotation-engine.js";
 
 // A/B Testing (Meta Studies)
@@ -357,47 +363,29 @@ export type {
 export { LiftStudyManager } from "./measurement/lift-study-manager.js";
 export { AttributionAnalyzer } from "./measurement/attribution-analyzer.js";
 export { MMMExporter } from "./measurement/mmm-exporter.js";
-export type {
-  LiftStudy,
-  AttributionComparison,
-  MMMExportData,
-} from "./measurement/types.js";
+export type { LiftStudy, AttributionComparison, MMMExportData } from "./measurement/types.js";
 
 // Pacing & Flight Management
 export { FlightManager } from "./pacing/flight-manager.js";
 export { PacingMonitor } from "./pacing/pacing-monitor.js";
-export type {
-  FlightPlan,
-  PacingStatus,
-  PacingAdjustment,
-} from "./pacing/types.js";
+export type { FlightPlan, PacingStatus, PacingAdjustment } from "./pacing/types.js";
 
 // Anomaly Detection & Alerting
 export { AnomalyDetector } from "./alerting/anomaly-detector.js";
 export type { DailyMetrics } from "./alerting/anomaly-detector.js";
 export { BudgetForecaster } from "./alerting/budget-forecaster.js";
 export { PolicyScanner } from "./alerting/policy-scanner.js";
-export type {
-  AnomalyResult,
-  BudgetForecast,
-  PolicyScanResult,
-} from "./alerting/types.js";
+export type { AnomalyResult, BudgetForecast, PolicyScanResult } from "./alerting/types.js";
 
 // Forecasting & Scenarios
 export { ScenarioModeler } from "./forecasting/scenario-modeler.js";
 export { DiminishingReturnsAnalyzer } from "./forecasting/diminishing-returns.js";
-export type {
-  BudgetScenario,
-  DiminishingReturnsResult,
-} from "./forecasting/types.js";
+export type { BudgetScenario, DiminishingReturnsResult } from "./forecasting/types.js";
 
 // Catalog Health
 export { CatalogHealthChecker } from "./catalog/catalog-health.js";
 export { ProductSetManager } from "./catalog/product-sets.js";
-export type {
-  CatalogHealth,
-  ProductSet,
-} from "./catalog/types.js";
+export type { CatalogHealth, ProductSet } from "./catalog/types.js";
 
 // Account Memory — Historical learning / optimization records
 export { AccountMemory } from "./core/account-memory.js";

@@ -107,7 +107,8 @@ describe("OptimizationLoop", () => {
     });
 
     const pauseAction = result.tier1Actions.find(
-      (a) => a.actionType === "digital-ads.adset.pause" &&
+      (a) =>
+        a.actionType === "digital-ads.adset.pause" &&
         (a.parameters as Record<string, unknown>).adSetId === "as1",
     );
     expect(pauseAction).toBeDefined();

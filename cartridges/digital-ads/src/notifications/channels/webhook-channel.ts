@@ -2,11 +2,7 @@
 // Webhook Channel — Sends notification payloads via HTTP POST/PUT
 // ---------------------------------------------------------------------------
 
-import type {
-  WebhookChannelConfig,
-  NotificationPayload,
-  NotificationResult,
-} from "../types.js";
+import type { WebhookChannelConfig, NotificationPayload, NotificationResult } from "../types.js";
 
 export class WebhookChannel {
   constructor(private readonly config: WebhookChannelConfig) {}

@@ -81,8 +81,7 @@ export class MMMExporter {
           rows.push(item);
         }
       }
-      nextUrl =
-        ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
+      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
     }
     return rows;
   }
@@ -92,9 +91,7 @@ export class MMMExporter {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

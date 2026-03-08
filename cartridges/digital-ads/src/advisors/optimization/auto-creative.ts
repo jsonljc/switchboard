@@ -25,9 +25,7 @@ export const autoCreativeAdvisor: FindingAdvisor = (
 
   if (!context?.adBreakdowns || context.adBreakdowns.length === 0) return findings;
 
-  const formats = new Set(
-    context.adBreakdowns.map((ad) => ad.format).filter(Boolean),
-  );
+  const formats = new Set(context.adBreakdowns.map((ad) => ad.format).filter(Boolean));
   if (formats.size <= 1) {
     findings.push({
       severity: "warning" as Severity,

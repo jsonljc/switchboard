@@ -30,9 +30,7 @@ describe("RulesManager", () => {
       name: "Pause Low Performers",
       schedule: { type: "DAILY" },
       evaluation: {
-        filters: [
-          { field: "entity_type", operator: "EQUAL", value: "CAMPAIGN" },
-        ],
+        filters: [{ field: "entity_type", operator: "EQUAL", value: "CAMPAIGN" }],
         trigger: {
           type: "RESULT",
           field: "cost_per_result",
@@ -116,7 +114,8 @@ describe("RulesManager", () => {
       ],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(page1),

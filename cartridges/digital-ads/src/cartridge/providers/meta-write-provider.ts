@@ -436,8 +436,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     status: string,
   ): Promise<{ success: boolean; previousStatus: string }> {
     // Fetch current status
-    const currentUrl =
-      `${this.baseUrl}/${adId}?fields=status&access_token=${this.accessToken}`;
+    const currentUrl = `${this.baseUrl}/${adId}?fields=status&access_token=${this.accessToken}`;
     const current = await this.executeWithRetry(currentUrl);
     const previousStatus = (current.status as string) ?? "UNKNOWN";
 
@@ -455,9 +454,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // Experiment methods (Phase 6)
   // ---------------------------------------------------------------------------
 
-  async createAdStudy(
-    params: CreateAdStudyWriteParams,
-  ): Promise<{ id: string; success: boolean }> {
+  async createAdStudy(params: CreateAdStudyWriteParams): Promise<{ id: string; success: boolean }> {
     const accountId = this.adAccountId.startsWith("act_")
       ? this.adAccountId
       : `act_${this.adAccountId}`;
@@ -487,17 +484,15 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { id: String(data.id), success: true };
   }
 
-  async concludeExperiment(
-    studyId: string,
-    winnerCellId: string,
-  ): Promise<{ success: boolean }> {
+  async concludeExperiment(studyId: string, winnerCellId: string): Promise<{ success: boolean }> {
     // Get study cells to find the losers
     const studyUrl =
       `${this.baseUrl}/${studyId}?fields=cells{id,name,adsets}` +
       `&access_token=${this.accessToken}`;
     const study = await this.executeWithRetry(studyUrl);
 
-    const cells = ((study.cells as Record<string, unknown>)?.data as Array<Record<string, unknown>>) ?? [];
+    const cells =
+      ((study.cells as Record<string, unknown>)?.data as Array<Record<string, unknown>>) ?? [];
 
     // Pause ad sets in losing cells
     for (const cell of cells) {
@@ -519,9 +514,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // Rule methods (Phase 7)
   // ---------------------------------------------------------------------------
 
-  async createAdRule(
-    params: CreateAdRuleWriteParams,
-  ): Promise<{ id: string; success: boolean }> {
+  async createAdRule(params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
     const accountId = this.adAccountId.startsWith("act_")
       ? this.adAccountId
       : `act_${this.adAccountId}`;
@@ -844,18 +837,13 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { id: "study_new_1", success: true };
   }
 
-  async concludeExperiment(
-    _studyId: string,
-    _winnerCellId: string,
-  ): Promise<{ success: boolean }> {
+  async concludeExperiment(_studyId: string, _winnerCellId: string): Promise<{ success: boolean }> {
     return { success: true };
   }
 
   // --- Rule methods (Phase 7) ---
 
-  async createAdRule(
-    _params: CreateAdRuleWriteParams,
-  ): Promise<{ id: string; success: boolean }> {
+  async createAdRule(_params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
     return { id: "rule_new_1", success: true };
   }
 

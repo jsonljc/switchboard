@@ -487,7 +487,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.report.creative",
       name: "Creative Report",
-      description: "Generate a creative performance report with per-ad metrics and creative metadata.",
+      description:
+        "Generate a creative performance report with per-ad metrics and creative metadata.",
       parametersSchema: {
         type: "object",
         required: ["adAccountId"],
@@ -536,7 +537,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.report.comparison",
       name: "Period Comparison Report",
-      description: "Compare performance between two time periods with metric-level change analysis.",
+      description:
+        "Compare performance between two time periods with metric-level change analysis.",
       parametersSchema: {
         type: "object",
         required: ["adAccountId", "currentPeriod", "previousPeriod"],
@@ -555,7 +557,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.signal.pixel.diagnose",
       name: "Diagnose Pixel",
-      description: "Validate pixel events, check firing status, and identify missing standard events.",
+      description:
+        "Validate pixel events, check firing status, and identify missing standard events.",
       parametersSchema: {
         type: "object",
         required: ["adAccountId"],
@@ -591,7 +594,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.account.learning_phase",
       name: "Check Learning Phase",
-      description: "Check learning phase status for ad sets — identifies stuck or limited learning.",
+      description:
+        "Check learning phase status for ad sets — identifies stuck or limited learning.",
       parametersSchema: {
         type: "object",
         properties: {
@@ -625,7 +629,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           adAccountId: { type: "string" },
           name: { type: "string" },
-          source: { type: "string", enum: ["website", "customer_list", "engagement", "app", "offline"] },
+          source: {
+            type: "string",
+            enum: ["website", "customer_list", "engagement", "app", "offline"],
+          },
           description: { type: "string" },
           rule: { type: "object" },
           retentionDays: { type: "number" },
@@ -704,7 +711,15 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["adSetId", "bidStrategy"],
         properties: {
           adSetId: { type: "string" },
-          bidStrategy: { type: "string", enum: ["LOWEST_COST_WITHOUT_CAP", "LOWEST_COST_WITH_BID_CAP", "COST_CAP", "MINIMUM_ROAS"] },
+          bidStrategy: {
+            type: "string",
+            enum: [
+              "LOWEST_COST_WITHOUT_CAP",
+              "LOWEST_COST_WITH_BID_CAP",
+              "COST_CAP",
+              "MINIMUM_ROAS",
+            ],
+          },
           bidAmount: { type: "number" },
         },
       },
@@ -720,7 +735,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["adAccountId"],
         properties: {
           adAccountId: { type: "string" },
-          maxShiftPercent: { type: "number", description: "Max % shift per campaign (default: 30)" },
+          maxShiftPercent: {
+            type: "number",
+            description: "Max % shift per campaign (default: 30)",
+          },
         },
       },
       baseRiskCategory: "high",
@@ -756,7 +774,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.campaign.update_objective",
       name: "Update Campaign Objective",
-      description: "Change the objective of an existing campaign. High-impact, irreversible change.",
+      description:
+        "Change the objective of an existing campaign. High-impact, irreversible change.",
       parametersSchema: {
         type: "object",
         required: ["campaignId", "objective"],
@@ -858,11 +877,13 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           accountId: { type: "string", description: "Ad account ID" },
           assets: {
             type: "array",
-            description: "Array of asset performance data objects (adId, adName, assetType, impressions, clicks, conversions, spend, ctr, cpa, frequency, and optional video metrics)",
+            description:
+              "Array of asset performance data objects (adId, adName, assetType, impressions, clicks, conversions, spend, ctr, cpa, frequency, and optional video metrics)",
           },
           visualAttributes: {
             type: "object",
-            description: "Map of adId to visual attributes (pre-computed by vision model). Keys are adId strings, values are VisualAttributes objects.",
+            description:
+              "Map of adId to visual attributes (pre-computed by vision model). Keys are adId strings, values are VisualAttributes objects.",
           },
         },
       },
@@ -880,7 +901,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           topPerformers: {
             type: "array",
-            description: "Array of AssetScore objects from score_assets results (top performers to model the brief after)",
+            description:
+              "Array of AssetScore objects from score_assets results (top performers to model the brief after)",
           },
           weaknesses: {
             type: "array",
@@ -1073,7 +1095,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.campaign.setup_guided",
       name: "Guided Campaign Setup",
-      description: "Multi-step guided campaign creation — campaign + ad set + ad with best practices.",
+      description:
+        "Multi-step guided campaign creation — campaign + ad set + ad with best practices.",
       parametersSchema: {
         type: "object",
         required: ["objective", "campaignName", "dailyBudget", "targeting", "creative"],
@@ -1108,7 +1131,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.compliance.audit",
       name: "Compliance Audit",
-      description: "Run a comprehensive compliance audit — ad review, special categories, pixel health, CAPI, and overall compliance score.",
+      description:
+        "Run a comprehensive compliance audit — ad review, special categories, pixel health, CAPI, and overall compliance score.",
       parametersSchema: {
         type: "object",
         required: ["adAccountId"],
@@ -1128,9 +1152,17 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["adAccountId"],
         properties: {
           adAccountId: { type: "string", description: "Ad account ID" },
-          action: { type: "string", enum: ["list", "create"], description: "Action to perform (default: list)" },
+          action: {
+            type: "string",
+            enum: ["list", "create"],
+            description: "Action to perform (default: list)",
+          },
           name: { type: "string", description: "Blocklist name (required for create)" },
-          publishers: { type: "array", items: { type: "string" }, description: "Publishers to block (required for create)" },
+          publishers: {
+            type: "array",
+            items: { type: "string" },
+            description: "Publishers to block (required for create)",
+          },
         },
       },
       baseRiskCategory: "medium",
@@ -1200,7 +1232,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.measurement.attribution.compare",
       name: "Compare Attribution Windows",
-      description: "Compare conversions across attribution windows (1d click, 7d click, 1d view) to understand attribution sensitivity.",
+      description:
+        "Compare conversions across attribution windows (1d click, 7d click, 1d view) to understand attribution sensitivity.",
       parametersSchema: {
         type: "object",
         required: ["adAccountId"],
@@ -1215,7 +1248,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.measurement.mmm_export",
       name: "MMM Data Export",
-      description: "Export daily-grain data formatted for Marketing Mix Modeling tools (Robyn, Meridian).",
+      description:
+        "Export daily-grain data formatted for Marketing Mix Modeling tools (Robyn, Meridian).",
       parametersSchema: {
         type: "object",
         required: ["adAccountId", "timeRange"],
@@ -1229,7 +1263,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
               until: { type: "string", description: "End date (YYYY-MM-DD)" },
             },
           },
-          format: { type: "string", enum: ["csv", "json"], description: "Export format (default: json)" },
+          format: {
+            type: "string",
+            enum: ["csv", "json"],
+            description: "Export format (default: json)",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -1239,7 +1277,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.pacing.check",
       name: "Check Pacing",
-      description: "Check pacing status for a flight plan — compares actual vs planned spend based on pacing curve.",
+      description:
+        "Check pacing status for a flight plan — compares actual vs planned spend based on pacing curve.",
       parametersSchema: {
         type: "object",
         required: ["flightId"],
@@ -1263,7 +1302,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           startDate: { type: "string", description: "Start date (YYYY-MM-DD)" },
           endDate: { type: "string", description: "End date (YYYY-MM-DD)" },
           totalBudget: { type: "number", description: "Total flight budget in dollars" },
-          pacingCurve: { type: "string", enum: ["even", "front-loaded", "back-loaded"], description: "Pacing curve (default: even)" },
+          pacingCurve: {
+            type: "string",
+            enum: ["even", "front-loaded", "back-loaded"],
+            description: "Pacing curve (default: even)",
+          },
         },
       },
       baseRiskCategory: "medium",
@@ -1293,7 +1336,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["adAccountId"],
         properties: {
           adAccountId: { type: "string", description: "Ad account ID" },
-          datePreset: { type: "string", description: "Date preset for historical data (default: last_30d)" },
+          datePreset: {
+            type: "string",
+            description: "Date preset for historical data (default: last_30d)",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -1331,7 +1377,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.forecast.budget_scenario",
       name: "Budget Scenario",
-      description: "Model budget scenarios using diminishing returns to project CPA at different spend levels.",
+      description:
+        "Model budget scenarios using diminishing returns to project CPA at different spend levels.",
       parametersSchema: {
         type: "object",
         required: ["currentSpend", "currentConversions", "currentCPA", "scenarioBudgets"],
@@ -1339,7 +1386,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           currentSpend: { type: "number", description: "Current daily/period spend" },
           currentConversions: { type: "number", description: "Current conversions" },
           currentCPA: { type: "number", description: "Current CPA" },
-          scenarioBudgets: { type: "array", items: { type: "number" }, description: "Array of budget levels to model" },
+          scenarioBudgets: {
+            type: "array",
+            items: { type: "number" },
+            description: "Array of budget levels to model",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -1523,7 +1574,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         required: ["catalogId"],
         properties: {
           catalogId: { type: "string", description: "Product catalog ID" },
-          action: { type: "string", enum: ["list", "create"], description: "Operation to perform (default: list)" },
+          action: {
+            type: "string",
+            enum: ["list", "create"],
+            description: "Operation to perform (default: list)",
+          },
           name: { type: "string", description: "Product set name (required for create)" },
           filter: { type: "object", description: "Product set filter rules (required for create)" },
         },
@@ -1535,7 +1590,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.alert.configure_notifications",
       name: "Configure Notification Channels",
-      description: "Set up notification channels (webhook, Slack, email) for automated alert delivery.",
+      description:
+        "Set up notification channels (webhook, Slack, email) for automated alert delivery.",
       parametersSchema: {
         type: "object",
         required: ["channels"],
@@ -1546,14 +1602,25 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
               type: "object",
               required: ["type"],
               properties: {
-                type: { type: "string", enum: ["webhook", "slack", "email"], description: "Channel type" },
+                type: {
+                  type: "string",
+                  enum: ["webhook", "slack", "email"],
+                  description: "Channel type",
+                },
                 url: { type: "string", description: "Webhook URL (for webhook type)" },
-                webhookUrl: { type: "string", description: "Slack incoming webhook URL (for slack type)" },
+                webhookUrl: {
+                  type: "string",
+                  description: "Slack incoming webhook URL (for slack type)",
+                },
                 channel: { type: "string", description: "Slack channel override" },
                 smtpHost: { type: "string", description: "SMTP host (for email type)" },
                 smtpPort: { type: "number", description: "SMTP port (for email type)" },
                 from: { type: "string", description: "Sender email (for email type)" },
-                to: { type: "array", items: { type: "string" }, description: "Recipient emails (for email type)" },
+                to: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Recipient emails (for email type)",
+                },
               },
             },
             description: "Array of notification channel configurations",
@@ -1566,13 +1633,18 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.alert.send_notifications",
       name: "Send Alert Notifications",
-      description: "Dispatch alert notifications to all configured channels. Accepts anomaly, budget, or policy alert data.",
+      description:
+        "Dispatch alert notifications to all configured channels. Accepts anomaly, budget, or policy alert data.",
       parametersSchema: {
         type: "object",
         required: ["accountId"],
         properties: {
           accountId: { type: "string", description: "Ad account ID" },
-          alertType: { type: "string", enum: ["anomaly", "budget_forecast", "policy_violation"], description: "Filter to specific alert type" },
+          alertType: {
+            type: "string",
+            enum: ["anomaly", "budget_forecast", "policy_violation"],
+            description: "Filter to specific alert type",
+          },
           anomalies: { type: "array", description: "Anomaly results to dispatch" },
           forecasts: { type: "array", description: "Budget forecast results to dispatch" },
           scanResult: { type: "object", description: "Policy scan result to dispatch" },
@@ -1585,13 +1657,18 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.auction.insights",
       name: "Auction Insights",
-      description: "Fetch competitive auction insights showing impression share, overlap rate, outbid rate, and position data against competitors.",
+      description:
+        "Fetch competitive auction insights showing impression share, overlap rate, outbid rate, and position data against competitors.",
       parametersSchema: {
         type: "object",
         required: ["entityId"],
         properties: {
           entityId: { type: "string", description: "Campaign, ad set, or account ID" },
-          entityLevel: { type: "string", enum: ["campaign", "adset", "account"], description: "Entity level (default: campaign)" },
+          entityLevel: {
+            type: "string",
+            enum: ["campaign", "adset", "account"],
+            description: "Entity level (default: campaign)",
+          },
           datePreset: { type: "string", description: "Date preset (e.g. last_7d, last_30d)" },
           since: { type: "string", description: "Start date (YYYY-MM-DD)" },
           until: { type: "string", description: "End date (YYYY-MM-DD)" },
@@ -1604,17 +1681,30 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.creative.power_calculate",
       name: "Power Calculator",
-      description: "Calculate required sample size, estimated duration, and budget for a creative test given baseline conversion rate and minimum detectable effect.",
+      description:
+        "Calculate required sample size, estimated duration, and budget for a creative test given baseline conversion rate and minimum detectable effect.",
       parametersSchema: {
         type: "object",
         required: ["baselineRate", "minimumDetectableEffect"],
         properties: {
-          baselineRate: { type: "number", description: "Baseline conversion rate (e.g. 0.02 for 2%)" },
-          minimumDetectableEffect: { type: "number", description: "Relative lift to detect (e.g. 0.10 for 10%)" },
+          baselineRate: {
+            type: "number",
+            description: "Baseline conversion rate (e.g. 0.02 for 2%)",
+          },
+          minimumDetectableEffect: {
+            type: "number",
+            description: "Relative lift to detect (e.g. 0.10 for 10%)",
+          },
           significanceLevel: { type: "number", description: "Alpha level (default: 0.05)" },
           power: { type: "number", description: "Statistical power (default: 0.80)" },
-          numVariants: { type: "number", description: "Number of variants including control (default: 2)" },
-          estimatedDailyTraffic: { type: "number", description: "Estimated daily impressions per variant (default: 1000)" },
+          numVariants: {
+            type: "number",
+            description: "Number of variants including control (default: 2)",
+          },
+          estimatedDailyTraffic: {
+            type: "number",
+            description: "Estimated daily impressions per variant (default: 1000)",
+          },
           estimatedCPM: { type: "number", description: "Estimated CPM in dollars (default: 10)" },
         },
       },
@@ -1624,12 +1714,20 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.creative.test_queue",
       name: "List Creative Tests & Calendar",
-      description: "List all creative tests and generate a week-by-week test calendar showing available/occupied slots.",
+      description:
+        "List all creative tests and generate a week-by-week test calendar showing available/occupied slots.",
       parametersSchema: {
         type: "object",
         properties: {
-          status: { type: "string", enum: ["queued", "running", "concluded", "cancelled"], description: "Filter by test status" },
-          calendarWeeks: { type: "number", description: "Number of weeks to show in calendar (default: 8)" },
+          status: {
+            type: "string",
+            enum: ["queued", "running", "concluded", "cancelled"],
+            description: "Filter by test status",
+          },
+          calendarWeeks: {
+            type: "number",
+            description: "Number of weeks to show in calendar (default: 8)",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -1638,7 +1736,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.creative.test_evaluate",
       name: "Evaluate Creative Test",
-      description: "Check a running creative test for statistical significance using chi-squared test with Wilson score confidence intervals.",
+      description:
+        "Check a running creative test for statistical significance using chi-squared test with Wilson score confidence intervals.",
       parametersSchema: {
         type: "object",
         required: ["testId", "variantMetrics"],
@@ -1667,7 +1766,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
     {
       actionType: "digital-ads.creative.test_create",
       name: "Queue Creative Test",
-      description: "Add a new creative test to the testing queue with hypothesis, variants, and scheduling.",
+      description:
+        "Add a new creative test to the testing queue with hypothesis, variants, and scheduling.",
       parametersSchema: {
         type: "object",
         required: ["name", "hypothesis", "variants", "primaryMetric"],
@@ -1687,7 +1787,11 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
             },
             description: "Test variants (minimum 2)",
           },
-          primaryMetric: { type: "string", enum: ["cpa", "ctr", "conversion_rate", "roas"], description: "Primary metric to optimize" },
+          primaryMetric: {
+            type: "string",
+            enum: ["cpa", "ctr", "conversion_rate", "roas"],
+            description: "Primary metric to optimize",
+          },
           scheduledStartDate: { type: "string", description: "When to start the test (ISO date)" },
           minBudgetPerVariant: { type: "number", description: "Minimum daily budget per variant" },
         },
@@ -1743,7 +1847,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           actionType: {
             type: "string",
-            description: "Filter by optimization action type (e.g. 'budget_increase', 'bid_strategy_change')",
+            description:
+              "Filter by optimization action type (e.g. 'budget_increase', 'bid_strategy_change')",
           },
           entityId: {
             type: "string",
@@ -1778,7 +1883,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           proposedAction: {
             type: "string",
-            description: "The optimization action type being considered (e.g. 'budget_increase', 'creative_rotation')",
+            description:
+              "The optimization action type being considered (e.g. 'budget_increase', 'creative_rotation')",
           },
           entityId: {
             type: "string",
@@ -1796,7 +1902,15 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         "Record a new optimization action with before-metrics. Creates a persistent record that can later be updated with outcome data.",
       parametersSchema: {
         type: "object",
-        required: ["accountId", "actionType", "entityId", "entityType", "changeDescription", "parameters", "metricsBefore"],
+        required: [
+          "accountId",
+          "actionType",
+          "entityId",
+          "entityType",
+          "changeDescription",
+          "parameters",
+          "metricsBefore",
+        ],
         properties: {
           accountId: {
             type: "string",
@@ -1804,7 +1918,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           actionType: {
             type: "string",
-            description: "The optimization action type (e.g. 'budget_increase', 'bid_strategy_change')",
+            description:
+              "The optimization action type (e.g. 'budget_increase', 'bid_strategy_change')",
           },
           entityId: {
             type: "string",
@@ -1825,7 +1940,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           metricsBefore: {
             type: "object",
-            description: "Metrics before the change (spend, conversions, cpa, roas, ctr, impressions)",
+            description:
+              "Metrics before the change (spend, conversions, cpa, roas, ctr, impressions)",
           },
           triggeringFinding: {
             type: "string",
@@ -1969,7 +2085,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
               },
               defaultOverlapRates: {
                 type: "object",
-                description: "Custom default overlap rates by platform pair (e.g. { 'meta+google': 0.20 })",
+                description:
+                  "Custom default overlap rates by platform pair (e.g. { 'meta+google': 0.20 })",
               },
               minDaysForStatistical: {
                 type: "number",
@@ -2043,9 +2160,18 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
             description: "Primary metric to measure incrementality (default: conversions)",
           },
           testDays: { type: "number", description: "Duration of the test period in days" },
-          preTestDays: { type: "number", description: "Baseline measurement period in days (default: 14)" },
-          cooldownDays: { type: "number", description: "Post-test observation period in days (default: 7)" },
-          treatmentBudgetPerDay: { type: "number", description: "Daily budget for treatment regions" },
+          preTestDays: {
+            type: "number",
+            description: "Baseline measurement period in days (default: 14)",
+          },
+          cooldownDays: {
+            type: "number",
+            description: "Post-test observation period in days (default: 7)",
+          },
+          treatmentBudgetPerDay: {
+            type: "number",
+            description: "Daily budget for treatment regions",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -2066,7 +2192,13 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
             description: "Per-region metrics for pre-test, test, and post-test periods",
             items: {
               type: "object",
-              required: ["regionId", "preTestConversions", "preTestRevenue", "testConversions", "testRevenue"],
+              required: [
+                "regionId",
+                "preTestConversions",
+                "preTestRevenue",
+                "testConversions",
+                "testRevenue",
+              ],
               properties: {
                 regionId: { type: "string" },
                 preTestConversions: { type: "number" },
@@ -2140,7 +2272,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           testDays: { type: "number", description: "Test period duration in days" },
           preTestDays: { type: "number", description: "Baseline period in days (default: 14)" },
           cooldownDays: { type: "number", description: "Post-test period in days (default: 7)" },
-          treatmentBudgetPerDay: { type: "number", description: "Daily budget for treatment regions" },
+          treatmentBudgetPerDay: {
+            type: "number",
+            description: "Daily budget for treatment regions",
+          },
         },
       },
       baseRiskCategory: "medium",
@@ -2184,7 +2319,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           kpiId: {
             type: "string",
-            description: "Optional KPI ID to compute a single KPI. If omitted, all registered KPIs are computed.",
+            description:
+              "Optional KPI ID to compute a single KPI. If omitted, all registered KPIs are computed.",
           },
           metrics: {
             type: "object",
@@ -2222,7 +2358,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           weightMetric: { type: "string", description: "For weighted_average: weight metric key" },
           expression: {
             type: "string",
-            description: "For custom type: arithmetic expression using metric names as variables (e.g. 'revenue / spend', '(clicks + video_views) / impressions')",
+            description:
+              "For custom type: arithmetic expression using metric names as variables (e.g. 'revenue / spend', '(clicks + video_views) / impressions')",
           },
           format: {
             type: "string",
@@ -2231,11 +2368,15 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           higherIsBetter: {
             type: "boolean",
-            description: "Whether higher values are better (used for threshold evaluation and ranking)",
+            description:
+              "Whether higher values are better (used for threshold evaluation and ranking)",
           },
           target: { type: "number", description: "Optional target value for threshold alerts" },
           warningThreshold: { type: "number", description: "Value that triggers a warning status" },
-          criticalThreshold: { type: "number", description: "Value that triggers a critical status" },
+          criticalThreshold: {
+            type: "number",
+            description: "Value that triggers a critical status",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -2267,15 +2408,24 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           touchpoints: {
             type: "array",
-            description: "Array of touchpoint objects with channel info, position distribution, spend, and last-click conversions",
+            description:
+              "Array of touchpoint objects with channel info, position distribution, spend, and last-click conversions",
           },
           paths: {
             type: "array",
-            description: "Array of conversion path objects with ordered touchpoint channel IDs, conversions, revenue, and avg days to convert",
+            description:
+              "Array of conversion path objects with ordered touchpoint channel IDs, conversions, revenue, and avg days to convert",
           },
           model: {
             type: "string",
-            enum: ["last_click", "first_click", "linear", "time_decay", "position_based", "data_driven"],
+            enum: [
+              "last_click",
+              "first_click",
+              "linear",
+              "time_decay",
+              "position_based",
+              "data_driven",
+            ],
             description: "Attribution model to apply",
           },
           decayHalfLife: {
@@ -2298,11 +2448,13 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           touchpoints: {
             type: "array",
-            description: "Array of touchpoint objects with channel info, position distribution, spend, and last-click conversions",
+            description:
+              "Array of touchpoint objects with channel info, position distribution, spend, and last-click conversions",
           },
           paths: {
             type: "array",
-            description: "Array of conversion path objects with ordered touchpoint channel IDs, conversions, revenue, and avg days to convert",
+            description:
+              "Array of conversion path objects with ordered touchpoint channel IDs, conversions, revenue, and avg days to convert",
           },
         },
       },
@@ -2391,18 +2543,47 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         "Register a custom seasonal event to the calendar. Custom events are merged with built-in events for all seasonal queries. Use this for industry-specific or client-specific events not in the default calendar.",
       parametersSchema: {
         type: "object",
-        required: ["name", "startMMDD", "endMMDD", "cpmThresholdMultiplier", "cpaThresholdMultiplier", "category", "region", "verticals"],
+        required: [
+          "name",
+          "startMMDD",
+          "endMMDD",
+          "cpmThresholdMultiplier",
+          "cpaThresholdMultiplier",
+          "category",
+          "region",
+          "verticals",
+        ],
         properties: {
           name: { type: "string", description: "Human-readable event name" },
           startMMDD: { type: "string", description: "Start date in MM-DD format (inclusive)" },
           endMMDD: { type: "string", description: "End date in MM-DD format (inclusive)" },
-          cpmThresholdMultiplier: { type: "number", description: "CPM threshold multiplier (e.g. 1.2 = 20% increase expected)" },
+          cpmThresholdMultiplier: {
+            type: "number",
+            description: "CPM threshold multiplier (e.g. 1.2 = 20% increase expected)",
+          },
           cpaThresholdMultiplier: { type: "number", description: "CPA threshold multiplier" },
-          category: { type: "string", enum: ["retail", "cultural", "sports", "industry", "platform"], description: "Event category" },
-          region: { type: "string", enum: ["global", "us", "uk", "eu", "apac", "latam", "mena"], description: "Event region" },
-          verticals: { type: "array", description: "Applicable verticals (commerce, leadgen, brand, all)" },
-          impact: { type: "string", description: "Description of the event's impact on ad performance" },
-          recommendedActions: { type: "array", description: "List of recommended actions during this event" },
+          category: {
+            type: "string",
+            enum: ["retail", "cultural", "sports", "industry", "platform"],
+            description: "Event category",
+          },
+          region: {
+            type: "string",
+            enum: ["global", "us", "uk", "eu", "apac", "latam", "mena"],
+            description: "Event region",
+          },
+          verticals: {
+            type: "array",
+            description: "Applicable verticals (commerce, leadgen, brand, all)",
+          },
+          impact: {
+            type: "string",
+            description: "Description of the event's impact on ad performance",
+          },
+          recommendedActions: {
+            type: "array",
+            description: "List of recommended actions during this event",
+          },
         },
       },
       baseRiskCategory: "low",
@@ -2420,15 +2601,35 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
         properties: {
           cohort: {
             type: "object",
-            description: "Customer cohort data including acquisition cost, revenue timeline (day0 through day365), retention rates, and purchase metrics",
-            required: ["cohortId", "acquisitionDate", "customerCount", "totalAcquisitionCost", "costPerAcquisition", "revenue", "retention", "avgOrderCount", "avgOrderValue"],
+            description:
+              "Customer cohort data including acquisition cost, revenue timeline (day0 through day365), retention rates, and purchase metrics",
+            required: [
+              "cohortId",
+              "acquisitionDate",
+              "customerCount",
+              "totalAcquisitionCost",
+              "costPerAcquisition",
+              "revenue",
+              "retention",
+              "avgOrderCount",
+              "avgOrderValue",
+            ],
             properties: {
               cohortId: { type: "string", description: "Unique cohort identifier" },
-              acquisitionCampaignId: { type: "string", description: "Acquisition source campaign ID" },
+              acquisitionCampaignId: {
+                type: "string",
+                description: "Acquisition source campaign ID",
+              },
               acquisitionAdSetId: { type: "string", description: "Acquisition source ad set ID" },
-              acquisitionDate: { type: "string", description: "Cohort acquisition date (YYYY-MM-DD)" },
+              acquisitionDate: {
+                type: "string",
+                description: "Cohort acquisition date (YYYY-MM-DD)",
+              },
               customerCount: { type: "number", description: "Number of customers in the cohort" },
-              totalAcquisitionCost: { type: "number", description: "Total acquisition cost for the cohort" },
+              totalAcquisitionCost: {
+                type: "number",
+                description: "Total acquisition cost for the cohort",
+              },
               costPerAcquisition: { type: "number", description: "Cost per acquisition (CPA)" },
               revenue: {
                 type: "object",
@@ -2455,7 +2656,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
                   day90: { type: "number" },
                 },
               },
-              avgOrderCount: { type: "number", description: "Average number of orders per customer" },
+              avgOrderCount: {
+                type: "number",
+                description: "Average number of orders per customer",
+              },
               avgOrderValue: { type: "number", description: "Average order value" },
               segment: { type: "string", description: "Optional segment label for grouping" },
             },
@@ -2479,12 +2683,14 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
             description: "Array of customer cohort data objects",
             items: {
               type: "object",
-              description: "CustomerCohort object with acquisition cost, revenue timeline, retention rates, and purchase metrics",
+              description:
+                "CustomerCohort object with acquisition cost, revenue timeline, retention rates, and purchase metrics",
             },
           },
           targetLTVtoCACRatio: {
             type: "number",
-            description: "Target LTV:CAC ratio benchmark (default: 3.0). Campaigns above this are healthy; below need attention.",
+            description:
+              "Target LTV:CAC ratio benchmark (default: 3.0). Campaigns above this are healthy; below need attention.",
           },
         },
       },
@@ -2507,7 +2713,10 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
               type: "object",
               required: ["campaignId", "campaignName", "dailyBudget", "cpa"],
               properties: {
-                campaignId: { type: "string", description: "Campaign ID (must match cohort acquisitionCampaignId)" },
+                campaignId: {
+                  type: "string",
+                  description: "Campaign ID (must match cohort acquisitionCampaignId)",
+                },
                 campaignName: { type: "string", description: "Campaign name" },
                 dailyBudget: { type: "number", description: "Current daily budget" },
                 cpa: { type: "number", description: "Current cost per acquisition" },
@@ -2524,7 +2733,8 @@ export const DIGITAL_ADS_MANIFEST: CartridgeManifest = {
           },
           totalBudget: {
             type: "number",
-            description: "Optional total budget constraint. If omitted, uses sum of current campaign budgets.",
+            description:
+              "Optional total budget constraint. If omitted, uses sum of current campaign budgets.",
           },
         },
       },

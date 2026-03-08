@@ -85,9 +85,7 @@ export class DeliveryDiagnosticsChecker {
     }
 
     // Check ad set-level issues
-    const activeAdSets = adSets.filter(
-      (as) => String(as.effective_status) === "ACTIVE",
-    );
+    const activeAdSets = adSets.filter((as) => String(as.effective_status) === "ACTIVE");
     const learningLimited = adSets.filter((as) => {
       const info = as.learning_stage_info as Record<string, unknown> | undefined;
       return info?.status === "LEARNING_LIMITED";
@@ -143,9 +141,7 @@ export class DeliveryDiagnosticsChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

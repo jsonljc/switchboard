@@ -35,7 +35,8 @@ describe("PixelDiagnosticsChecker", () => {
       ],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(pixelsResponse),
@@ -73,7 +74,8 @@ describe("PixelDiagnosticsChecker", () => {
 
     const statsResponse = { data: [] };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(pixelsResponse),
@@ -113,7 +115,8 @@ describe("PixelDiagnosticsChecker", () => {
       ],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(pixelsResponse),
@@ -147,7 +150,8 @@ describe("PixelDiagnosticsChecker", () => {
     };
 
     // Stats endpoint fails for inactive pixels
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(pixelsResponse),

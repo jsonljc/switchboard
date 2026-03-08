@@ -55,7 +55,8 @@ export class BidStrategyEngine {
         recommendedStrategy: "COST_CAP",
         recommendedBidAmount: newBid ? Math.round(newBid * 100) / 100 : null,
         reason: "Delivery is limited — cost cap may be too restrictive",
-        expectedImpact: "Increase bid cap by 30% to improve delivery while maintaining cost efficiency",
+        expectedImpact:
+          "Increase bid cap by 30% to improve delivery while maintaining cost efficiency",
       };
     }
 

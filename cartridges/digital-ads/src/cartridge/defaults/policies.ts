@@ -179,9 +179,7 @@ export const DEFAULT_DIGITAL_ADS_POLICIES: Policy[] = [
     active: true,
     rule: {
       composition: "AND",
-      conditions: [
-        { field: "actionType", operator: "eq", value: "digital-ads.audience.delete" },
-      ],
+      conditions: [{ field: "actionType", operator: "eq", value: "digital-ads.audience.delete" }],
     },
     effect: "require_approval",
     approvalRequirement: "elevated",
@@ -244,7 +242,11 @@ export const DEFAULT_DIGITAL_ADS_POLICIES: Policy[] = [
     rule: {
       composition: "AND",
       conditions: [
-        { field: "actionType", operator: "in", value: ["digital-ads.rule.create", "digital-ads.rule.delete"] },
+        {
+          field: "actionType",
+          operator: "in",
+          value: ["digital-ads.rule.create", "digital-ads.rule.delete"],
+        },
       ],
     },
     effect: "require_approval",

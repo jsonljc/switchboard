@@ -11,9 +11,7 @@ export class DiminishingReturnsAnalyzer {
    * Fits a log curve: conversions = a * ln(spend) + b
    * Identifies the optimal spend point where marginal CPA = 2x average CPA.
    */
-  analyze(
-    dataPoints: Array<{ spend: number; conversions: number }>,
-  ): DiminishingReturnsResult {
+  analyze(dataPoints: Array<{ spend: number; conversions: number }>): DiminishingReturnsResult {
     // Filter out invalid data points
     const validPoints = dataPoints.filter((p) => p.spend > 0 && p.conversions > 0);
 
@@ -66,9 +64,10 @@ export class DiminishingReturnsAnalyzer {
    * Fit a log curve (conversions = a * ln(spend) + b) using least squares regression.
    * Transform: let x = ln(spend), then fit linear y = a*x + b.
    */
-  private fitLogCurve(
-    points: Array<{ spend: number; conversions: number }>,
-  ): { a: number; b: number } {
+  private fitLogCurve(points: Array<{ spend: number; conversions: number }>): {
+    a: number;
+    b: number;
+  } {
     const n = points.length;
 
     // Transform spend to ln(spend)
@@ -140,7 +139,7 @@ export class DiminishingReturnsAnalyzer {
 
     // Marginal conversion rate at spend s: a / s
     // Saturation: a / s = 0.01 * avgRate => s = a / (0.01 * avgRate) = 100 * a / avgRate
-    const saturation = 100 * a / avgRate;
+    const saturation = (100 * a) / avgRate;
 
     if (!isFinite(saturation) || saturation <= 0 || saturation > 1e10) {
       return null;

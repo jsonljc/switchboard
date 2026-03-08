@@ -23,9 +23,7 @@ export const autoBidAdvisor: FindingAdvisor = (
 ): Finding[] => {
   const findings: Finding[] = [];
 
-  const convStage = stageAnalysis.find(
-    (s) => s.metric === "purchase" || s.metric === "lead",
-  );
+  const convStage = stageAnalysis.find((s) => s.metric === "purchase" || s.metric === "lead");
 
   if (convStage && Math.abs(convStage.deltaPercent) > 30 && convStage.currentValue > 0) {
     findings.push({

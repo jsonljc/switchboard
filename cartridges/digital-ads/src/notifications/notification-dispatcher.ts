@@ -170,9 +170,9 @@ export class NotificationDispatcher {
         severity: "warning",
         accountId,
         title: "Account Spend Limit Approaching",
-        message: scanResult.issues
-          .filter((i) => i.toLowerCase().includes("spend limit"))
-          .join(" ") || "Account spend limit is approaching its cap.",
+        message:
+          scanResult.issues.filter((i) => i.toLowerCase().includes("spend limit")).join(" ") ||
+          "Account spend limit is approaching its cap.",
         details: {
           spendLimitApproaching: true,
         },
@@ -183,7 +183,11 @@ export class NotificationDispatcher {
     }
 
     // General policy warnings — info
-    if (scanResult.policyWarnings.length > 0 && !scanResult.spendLimitApproaching && scanResult.disapprovedAds.length === 0) {
+    if (
+      scanResult.policyWarnings.length > 0 &&
+      !scanResult.spendLimitApproaching &&
+      scanResult.disapprovedAds.length === 0
+    ) {
       const warningSummary = scanResult.policyWarnings
         .map((w) => `${w.entityType} ${w.entityId}: ${w.warning}`)
         .join("; ");

@@ -51,8 +51,7 @@ export class ScenarioModeler {
 
       const lnBudget = Math.log(budget);
       const estimatedConversions = Math.max(0, a * lnBudget + b);
-      const estimatedCPA =
-        estimatedConversions > 0 ? budget / estimatedConversions : 0;
+      const estimatedCPA = estimatedConversions > 0 ? budget / estimatedConversions : 0;
 
       // Marginal CPA: cost of each additional conversion at this budget level
       let marginalCPA: number | null = null;

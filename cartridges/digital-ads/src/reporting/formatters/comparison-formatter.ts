@@ -14,8 +14,7 @@ export function formatComparisonReport(report: ComparisonReport): string {
   ];
 
   for (const change of report.changes) {
-    const direction =
-      change.percentChange > 0 ? "▲" : change.percentChange < 0 ? "▼" : "—";
+    const direction = change.percentChange > 0 ? "▲" : change.percentChange < 0 ? "▼" : "—";
     const sign = change.percentChange > 0 ? "+" : "";
     lines.push(
       `  ${change.metric}: ${change.currentValue.toFixed(2)} → ${change.previousValue.toFixed(2)} ` +

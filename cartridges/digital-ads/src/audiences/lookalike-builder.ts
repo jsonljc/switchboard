@@ -19,9 +19,7 @@ export class LookalikeBuilder {
 
     const sourceResponse = await fetch(sourceUrl);
     if (!sourceResponse.ok) {
-      throw new Error(
-        `Source audience ${params.sourceAudienceId} not found or inaccessible`,
-      );
+      throw new Error(`Source audience ${params.sourceAudienceId} not found or inaccessible`);
     }
     const sourceData = (await sourceResponse.json()) as Record<string, unknown>;
     const sourceCount = Number(sourceData.approximate_count ?? 0);
@@ -47,8 +45,7 @@ export class LookalikeBuilder {
     const body = {
       name: params.name,
       description:
-        params.description ??
-        `Lookalike of ${sourceData.name ?? params.sourceAudienceId}`,
+        params.description ?? `Lookalike of ${sourceData.name ?? params.sourceAudienceId}`,
       subtype: "LOOKALIKE",
       origin_audience_id: params.sourceAudienceId,
       lookalike_spec: JSON.stringify({
@@ -65,10 +62,7 @@ export class LookalikeBuilder {
     });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-      >;
+      const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = errorBody.error as Record<string, unknown> | undefined;
       throw new Error(
         `Failed to create lookalike audience: ${(error?.message as string) ?? `HTTP ${response.status}`}`,

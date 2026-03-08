@@ -2,12 +2,7 @@
 // Statistical significance for metric changes
 // ---------------------------------------------------------------------------
 
-import {
-  normalQuantile,
-  chi2CDF,
-  normalCDF,
-  wilsonScoreInterval,
-} from "./stats-utils.js";
+import { normalQuantile, chi2CDF, normalCDF, wilsonScoreInterval } from "./stats-utils.js";
 
 /**
  * Determines whether a WoW percentage change is statistically meaningful
@@ -117,9 +112,7 @@ export function chiSquaredTest(
     }
 
     exp = observed.map((_, i) =>
-      Array.from({ length: numCols }, (_, j) =>
-        (rowTotals[i]! * colTotals[j]!) / grandTotal,
-      ),
+      Array.from({ length: numCols }, (_, j) => (rowTotals[i]! * colTotals[j]!) / grandTotal),
     );
   }
 
@@ -212,9 +205,7 @@ export function proportionTest(
   const pValue = 2 * (1 - normalCDF(Math.abs(zStat)));
 
   // Confidence interval using unpooled standard error
-  const unpooledSE = Math.sqrt(
-    (p1 * (1 - p1)) / total1 + (p2 * (1 - p2)) / total2,
-  );
+  const unpooledSE = Math.sqrt((p1 * (1 - p1)) / total1 + (p2 * (1 - p2)) / total2);
   const zCrit = normalQuantile(1 - alpha / 2);
 
   return {
@@ -245,7 +236,7 @@ export function minimumSampleSize(
   baselineRate: number,
   minimumDetectableEffect: number,
   alpha: number = 0.05,
-  power: number = 0.80,
+  power: number = 0.8,
 ): number {
   if (minimumDetectableEffect === 0) return Infinity;
 

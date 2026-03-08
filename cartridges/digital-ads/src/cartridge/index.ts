@@ -103,7 +103,11 @@ import { LiftStudyManager } from "../measurement/lift-study-manager.js";
 import { AttributionAnalyzer } from "../measurement/attribution-analyzer.js";
 import { MMMExporter } from "../measurement/mmm-exporter.js";
 import { MultiTouchAttributionEngine } from "../measurement/multi-touch-attribution.js";
-import type { Touchpoint, ConversionPath, AttributionModel } from "../measurement/multi-touch-attribution.js";
+import type {
+  Touchpoint,
+  ConversionPath,
+  AttributionModel,
+} from "../measurement/multi-touch-attribution.js";
 
 // Pacing & Flight Management
 import { FlightManager } from "../pacing/flight-manager.js";
@@ -129,7 +133,10 @@ import { NotificationDispatcher } from "../notifications/notification-dispatcher
 import type { NotificationChannelConfig } from "../notifications/types.js";
 // Cross-Platform Deduplication
 import { ConversionDeduplicator } from "../orchestrator/deduplication.js";
-import type { PlatformConversionData, OverlapEstimationConfig } from "../orchestrator/deduplication.js";
+import type {
+  PlatformConversionData,
+  OverlapEstimationConfig,
+} from "../orchestrator/deduplication.js";
 // Custom KPI
 import { CustomKPIEngine } from "../core/custom-kpi.js";
 import type { CustomKPIDefinition } from "../core/custom-kpi.js";
@@ -143,13 +150,8 @@ import type { GeoRegionMetrics } from "../ab-testing/geo-experiment.js";
 import { LTVOptimizer } from "../optimization/ltv-optimizer.js";
 import type { CustomerCohort } from "../optimization/ltv-optimizer.js";
 // Seasonality
-import {
-  SeasonalCalendar,
-} from "../core/analysis/seasonality.js";
-import type {
-  EventRegion,
-  EventCategory,
-} from "../core/analysis/seasonality.js";
+import { SeasonalCalendar } from "../core/analysis/seasonality.js";
+import type { EventRegion, EventCategory } from "../core/analysis/seasonality.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -477,7 +479,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.report.comparison":
       case "digital-ads.auction.insights": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -489,7 +492,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.account.learning_phase":
       case "digital-ads.account.delivery.diagnose": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -499,7 +503,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.audience.insights":
       case "digital-ads.reach.estimate": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -508,7 +513,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.creative.list":
       case "digital-ads.creative.analyze": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -517,7 +523,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.experiment.check":
       case "digital-ads.experiment.list": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -525,7 +532,8 @@ export class DigitalAdsCartridge implements Cartridge {
       // Rule read actions — validate connection
       case "digital-ads.rule.list": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -544,7 +552,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.compliance.review_status":
       case "digital-ads.compliance.audit": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -554,7 +563,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.measurement.attribution.compare":
       case "digital-ads.measurement.mmm_export": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -563,7 +573,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.alert.budget_forecast":
       case "digital-ads.alert.policy_scan": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -589,7 +600,8 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.catalog.health":
       case "digital-ads.catalog.product_sets": {
         if (!this.session.connections.has("meta")) {
-          enriched.validationError = "No Meta connection established. Run digital-ads.platform.connect first.";
+          enriched.validationError =
+            "No Meta connection established. Run digital-ads.platform.connect first.";
         }
         break;
       }
@@ -730,7 +742,9 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const builder = new ReportBuilder(apiConfig.baseUrl, apiConfig.accessToken);
-          const report = await builder.generatePerformanceReport(parameters as unknown as Parameters<typeof builder.generatePerformanceReport>[0]);
+          const report = await builder.generatePerformanceReport(
+            parameters as unknown as Parameters<typeof builder.generatePerformanceReport>[0],
+          );
           return {
             success: true,
             summary: `Performance report generated: ${report.rows.length} rows, $${report.summary.totalSpend.toFixed(2)} total spend`,
@@ -755,7 +769,9 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const builder = new ReportBuilder(apiConfig.baseUrl, apiConfig.accessToken);
-          const report = await builder.generateCreativeReport(parameters as unknown as Parameters<typeof builder.generateCreativeReport>[0]);
+          const report = await builder.generateCreativeReport(
+            parameters as unknown as Parameters<typeof builder.generateCreativeReport>[0],
+          );
           return {
             success: true,
             summary: `Creative report generated: ${report.creatives.length} creatives analyzed`,
@@ -780,7 +796,9 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const builder = new ReportBuilder(apiConfig.baseUrl, apiConfig.accessToken);
-          const report = await builder.generateAudienceReport(parameters as unknown as Parameters<typeof builder.generateAudienceReport>[0]);
+          const report = await builder.generateAudienceReport(
+            parameters as unknown as Parameters<typeof builder.generateAudienceReport>[0],
+          );
           return {
             success: true,
             summary: `Audience report generated: ${report.ageGender.length} age/gender segments, ${report.countries.length} countries`,
@@ -805,7 +823,9 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const builder = new ReportBuilder(apiConfig.baseUrl, apiConfig.accessToken);
-          const report = await builder.generatePlacementReport(parameters as unknown as Parameters<typeof builder.generatePlacementReport>[0]);
+          const report = await builder.generatePlacementReport(
+            parameters as unknown as Parameters<typeof builder.generatePlacementReport>[0],
+          );
           return {
             success: true,
             summary: `Placement report generated: ${report.placements.length} placements analyzed`,
@@ -830,7 +850,9 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const builder = new ReportBuilder(apiConfig.baseUrl, apiConfig.accessToken);
-          const report = await builder.generateComparisonReport(parameters as unknown as Parameters<typeof builder.generateComparisonReport>[0]);
+          const report = await builder.generateComparisonReport(
+            parameters as unknown as Parameters<typeof builder.generateComparisonReport>[0],
+          );
           return {
             success: true,
             summary: `Comparison report generated: ${report.changes.length} metrics compared`,
@@ -858,7 +880,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new AuctionInsightsChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const entityId = parameters.entityId as string;
-          if (!entityId) return failResult("Missing entityId", "validation", "entityId is required");
+          if (!entityId)
+            return failResult("Missing entityId", "validation", "entityId is required");
           const result = await checker.analyze({
             entityId,
             entityLevel: parameters.entityLevel as "campaign" | "adset" | "account" | undefined,
@@ -893,7 +916,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new PixelDiagnosticsChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const diagnostics = await checker.diagnose(adAccountId);
           const totalIssues = diagnostics.reduce((sum, d) => sum + d.issues.length, 0);
           return {
@@ -948,7 +972,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new EMQChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const datasetId = parameters.datasetId as string;
-          if (!datasetId) return failResult("Missing datasetId", "validation", "datasetId is required");
+          if (!datasetId)
+            return failResult("Missing datasetId", "validation", "datasetId is required");
           const result = await checker.check(datasetId);
           return {
             success: true,
@@ -1004,7 +1029,11 @@ export class DigitalAdsCartridge implements Cartridge {
               data: results,
             };
           }
-          return failResult("Missing adSetId or adAccountId", "validation", "Provide adSetId or adAccountId");
+          return failResult(
+            "Missing adSetId or adAccountId",
+            "validation",
+            "Provide adSetId or adAccountId",
+          );
         } catch (err) {
           return failResult(
             `Failed to check learning phase: ${err instanceof Error ? err.message : String(err)}`,
@@ -1020,7 +1049,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new DeliveryDiagnosticsChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const campaignId = parameters.campaignId as string;
-          if (!campaignId) return failResult("Missing campaignId", "validation", "campaignId is required");
+          if (!campaignId)
+            return failResult("Missing campaignId", "validation", "campaignId is required");
           const diagnostic = await checker.diagnose(campaignId);
           return {
             success: true,
@@ -1049,7 +1079,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const builder = new CustomAudienceBuilder(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const audiences = await builder.list(adAccountId, parameters.limit as number | undefined);
           return {
             success: true,
@@ -1103,7 +1134,11 @@ export class DigitalAdsCartridge implements Cartridge {
               data: estimate,
             };
           }
-          return failResult("Missing audienceId or adAccountId+targetingSpec", "validation", "Provide audienceId or adAccountId with targetingSpec");
+          return failResult(
+            "Missing audienceId or adAccountId+targetingSpec",
+            "validation",
+            "Provide audienceId or adAccountId with targetingSpec",
+          );
         } catch (err) {
           return failResult(
             `Failed to get audience insights: ${err instanceof Error ? err.message : String(err)}`,
@@ -1155,7 +1190,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
           const limit = (parameters.limit as number) ?? 50;
           const url =
@@ -1193,8 +1229,12 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const analyzer = new CreativeAnalyzer(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
-          const result = await analyzer.analyze(adAccountId, parameters.datePreset as string | undefined);
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          const result = await analyzer.analyze(
+            adAccountId,
+            parameters.datePreset as string | undefined,
+          );
           return {
             success: true,
             summary: `Creative analysis: ${result.topPerformers.length} top, ${result.fatigued.length} fatigued, ${result.recommendations.length} recommendation(s)`,
@@ -1306,10 +1346,7 @@ export class DigitalAdsCartridge implements Cartridge {
               "topPerformers array is required",
             );
           }
-          const brief = scorer.generateCreativeBrief(
-            topPerformers,
-            weaknesses ?? [],
-          );
+          const brief = scorer.generateCreativeBrief(topPerformers, weaknesses ?? []);
           return {
             success: true,
             summary: `Creative brief generated: ${brief.recommendedFormats.length} format(s), ${brief.visualGuidelines.length} visual guideline(s), ${brief.avoidList.length} avoid item(s)`,
@@ -1364,7 +1401,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const client = new MetaStudiesClient(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const studies = await client.list(adAccountId);
           return {
             success: true,
@@ -1391,7 +1429,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const loop = new OptimizationLoop();
           const accountId = (parameters.adAccountId ?? parameters.accountId) as string;
-          if (!accountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!accountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const campaigns = (parameters.campaigns ?? []) as Array<{
             campaignId: string;
             campaignName: string;
@@ -1445,7 +1484,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const manager = new RulesManager(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const rules = await manager.list(adAccountId);
           return {
             success: true,
@@ -1588,7 +1628,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new ReviewChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const statuses = await checker.checkReviewStatus(adAccountId);
           const disapproved = statuses.filter((s) => s.effectiveStatus === "DISAPPROVED");
           return {
@@ -1616,7 +1657,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const auditor = new ComplianceAuditor(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const result = await auditor.audit(adAccountId);
           return {
             success: true,
@@ -1675,8 +1717,12 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const analyzer = new AttributionAnalyzer(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
-          const comparisons = await analyzer.compare(adAccountId, parameters.datePreset as string | undefined);
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          const comparisons = await analyzer.compare(
+            adAccountId,
+            parameters.datePreset as string | undefined,
+          );
           return {
             success: true,
             summary: `Attribution comparison: ${comparisons.length} metric(s) across attribution windows`,
@@ -1704,7 +1750,11 @@ export class DigitalAdsCartridge implements Cartridge {
           const adAccountId = parameters.adAccountId as string;
           const timeRange = parameters.timeRange as { since: string; until: string } | undefined;
           if (!adAccountId || !timeRange) {
-            return failResult("Missing adAccountId or timeRange", "validation", "adAccountId and timeRange are required");
+            return failResult(
+              "Missing adAccountId or timeRange",
+              "validation",
+              "adAccountId and timeRange are required",
+            );
           }
           const format = (parameters.format as "csv" | "json") ?? "json";
           const data = await exporter.export(adAccountId, timeRange, format);
@@ -1838,7 +1888,11 @@ export class DigitalAdsCartridge implements Cartridge {
           const flightId = String(parameters.flightId ?? "");
           const flight = this.flightManager.getFlight(flightId);
           if (!flight) {
-            return failResult(`Flight plan not found: ${flightId}`, "pacing.check", "No flight plan with that ID");
+            return failResult(
+              `Flight plan not found: ${flightId}`,
+              "pacing.check",
+              "No flight plan with that ID",
+            );
           }
           const apiConfig = this.getMetaApiConfig();
           if (!apiConfig) return this.noApiConfigResult();
@@ -1869,8 +1923,14 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const detector = new AnomalyDetector();
           const dailyMetrics = (parameters.dailyMetrics ?? []) as Array<{
-            date: string; spend: number; impressions: number;
-            clicks: number; conversions: number; ctr: number; cpm: number; cpa: number | null;
+            date: string;
+            spend: number;
+            impressions: number;
+            clicks: number;
+            conversions: number;
+            ctr: number;
+            cpm: number;
+            cpa: number | null;
           }>;
           if (dailyMetrics.length < 3) {
             return failResult(
@@ -1905,9 +1965,12 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const forecaster = new BudgetForecaster(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const forecasts = await forecaster.forecast(adAccountId);
-          const exhaustingSoon = forecasts.filter((f) => f.daysUntilExhaustion !== null && f.daysUntilExhaustion <= 7);
+          const exhaustingSoon = forecasts.filter(
+            (f) => f.daysUntilExhaustion !== null && f.daysUntilExhaustion <= 7,
+          );
           return {
             success: true,
             summary: `Budget forecast: ${forecasts.length} campaign(s) analyzed, ${exhaustingSoon.length} exhausting within 7 days`,
@@ -1933,7 +1996,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const scanner = new PolicyScanner(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const scanResult = await scanner.scan(adAccountId);
           return {
             success: true,
@@ -1978,7 +2042,11 @@ export class DigitalAdsCartridge implements Cartridge {
                 accountId,
                 anomalies as unknown as import("../alerting/types.js").AnomalyResult[],
               );
-              allResults.push(...results.map((r) => ({ type: "anomaly", ...r } as unknown as Record<string, unknown>)));
+              allResults.push(
+                ...results.map(
+                  (r) => ({ type: "anomaly", ...r }) as unknown as Record<string, unknown>,
+                ),
+              );
             }
           }
 
@@ -1990,7 +2058,11 @@ export class DigitalAdsCartridge implements Cartridge {
                 accountId,
                 forecasts as unknown as import("../alerting/types.js").BudgetForecast[],
               );
-              allResults.push(...results.map((r) => ({ type: "budget", ...r } as unknown as Record<string, unknown>)));
+              allResults.push(
+                ...results.map(
+                  (r) => ({ type: "budget", ...r }) as unknown as Record<string, unknown>,
+                ),
+              );
             }
           }
 
@@ -2002,7 +2074,11 @@ export class DigitalAdsCartridge implements Cartridge {
                 accountId,
                 scanResult as unknown as import("../alerting/types.js").PolicyScanResult,
               );
-              allResults.push(...results.map((r) => ({ type: "policy", ...r } as unknown as Record<string, unknown>)));
+              allResults.push(
+                ...results.map(
+                  (r) => ({ type: "policy", ...r }) as unknown as Record<string, unknown>,
+                ),
+              );
             }
           }
 
@@ -2069,7 +2145,10 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const analyzer = new DiminishingReturnsAnalyzer();
-          const dataPoints = (parameters.dataPoints ?? []) as Array<{ spend: number; conversions: number }>;
+          const dataPoints = (parameters.dataPoints ?? []) as Array<{
+            spend: number;
+            conversions: number;
+          }>;
           if (dataPoints.length < 3) {
             return failResult(
               "Not enough data for diminishing returns analysis (need at least 3 data points)",
@@ -2078,8 +2157,10 @@ export class DigitalAdsCartridge implements Cartridge {
             );
           }
           const result = analyzer.analyze(dataPoints);
-          const optStr = result.optimalSpend !== null ? `$${result.optimalSpend.toFixed(2)}` : "N/A";
-          const satStr = result.saturationPoint !== null ? `$${result.saturationPoint.toFixed(2)}` : "N/A";
+          const optStr =
+            result.optimalSpend !== null ? `$${result.optimalSpend.toFixed(2)}` : "N/A";
+          const satStr =
+            result.saturationPoint !== null ? `$${result.saturationPoint.toFixed(2)}` : "N/A";
           return {
             success: true,
             summary: `Diminishing returns: optimal spend ${optStr}, saturation at ${satStr}`,
@@ -2111,14 +2192,23 @@ export class DigitalAdsCartridge implements Cartridge {
             currentMonthlyCPA: Number(parameters.currentMonthlyCPA ?? 0),
             currentMonthlyConversions: Number(parameters.currentMonthlyConversions ?? 0),
             currentMonthlySpend: Number(parameters.currentMonthlySpend ?? 0),
-            currentROAS: parameters.currentROAS != null ? Number(parameters.currentROAS) : undefined,
-            targetAnnualGrowth: parameters.targetAnnualGrowth != null ? Number(parameters.targetAnnualGrowth) : undefined,
+            currentROAS:
+              parameters.currentROAS != null ? Number(parameters.currentROAS) : undefined,
+            targetAnnualGrowth:
+              parameters.targetAnnualGrowth != null
+                ? Number(parameters.targetAnnualGrowth)
+                : undefined,
             targetCPA: parameters.targetCPA != null ? Number(parameters.targetCPA) : undefined,
-            historicalMonthlyData: parameters.historicalMonthlyData as AnnualPlanParams["historicalMonthlyData"],
+            historicalMonthlyData:
+              parameters.historicalMonthlyData as AnnualPlanParams["historicalMonthlyData"],
             frontLoadBudget: parameters.frontLoadBudget as boolean | undefined,
             aggressiveScaling: parameters.aggressiveScaling as boolean | undefined,
           };
-          if (!planParams.totalAnnualBudget || !planParams.currentMonthlyCPA || !planParams.currentMonthlyConversions) {
+          if (
+            !planParams.totalAnnualBudget ||
+            !planParams.currentMonthlyCPA ||
+            !planParams.currentMonthlyConversions
+          ) {
             return failResult(
               "Missing required annual plan parameters",
               "validation",
@@ -2156,14 +2246,23 @@ export class DigitalAdsCartridge implements Cartridge {
             currentMonthlyCPA: Number(parameters.currentMonthlyCPA ?? 0),
             currentMonthlyConversions: Number(parameters.currentMonthlyConversions ?? 0),
             currentMonthlySpend: Number(parameters.currentMonthlySpend ?? 0),
-            currentROAS: parameters.currentROAS != null ? Number(parameters.currentROAS) : undefined,
-            targetAnnualGrowth: parameters.targetAnnualGrowth != null ? Number(parameters.targetAnnualGrowth) : undefined,
+            currentROAS:
+              parameters.currentROAS != null ? Number(parameters.currentROAS) : undefined,
+            targetAnnualGrowth:
+              parameters.targetAnnualGrowth != null
+                ? Number(parameters.targetAnnualGrowth)
+                : undefined,
             targetCPA: parameters.targetCPA != null ? Number(parameters.targetCPA) : undefined,
-            historicalMonthlyData: parameters.historicalMonthlyData as AnnualPlanParams["historicalMonthlyData"],
+            historicalMonthlyData:
+              parameters.historicalMonthlyData as AnnualPlanParams["historicalMonthlyData"],
             frontLoadBudget: parameters.frontLoadBudget as boolean | undefined,
             aggressiveScaling: parameters.aggressiveScaling as boolean | undefined,
           };
-          if (!planParams.totalAnnualBudget || !planParams.currentMonthlyCPA || !planParams.currentMonthlyConversions) {
+          if (
+            !planParams.totalAnnualBudget ||
+            !planParams.currentMonthlyCPA ||
+            !planParams.currentMonthlyConversions
+          ) {
             return failResult(
               "Missing required plan parameters",
               "validation",
@@ -2206,7 +2305,8 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const checker = new CatalogHealthChecker(apiConfig.baseUrl, apiConfig.accessToken);
           const catalogId = parameters.catalogId as string;
-          if (!catalogId) return failResult("Missing catalogId", "validation", "catalogId is required");
+          if (!catalogId)
+            return failResult("Missing catalogId", "validation", "catalogId is required");
           const health = await checker.check(catalogId);
           return {
             success: true,
@@ -2233,11 +2333,11 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const statusFilter = parameters.status as string | undefined;
           const tests = this.creativeTestingQueue.listTests(
-            statusFilter ? { status: statusFilter as "queued" | "running" | "concluded" | "cancelled" } : undefined,
+            statusFilter
+              ? { status: statusFilter as "queued" | "running" | "concluded" | "cancelled" }
+              : undefined,
           );
-          const calendar = this.creativeTestingQueue.getCalendar(
-            (parameters.weeks as number) ?? 8,
-          );
+          const calendar = this.creativeTestingQueue.getCalendar((parameters.weeks as number) ?? 8);
           return {
             success: true,
             summary: `Creative test queue: ${tests.length} test(s), ${calendar.filter((e) => e.status === "available").length} available slot(s)`,
@@ -2402,7 +2502,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const accountId = parameters.accountId as string;
-          if (!accountId) return failResult("Missing accountId", "validation", "accountId is required");
+          if (!accountId)
+            return failResult("Missing accountId", "validation", "accountId is required");
           const snapshot = this.accountMemory.getAccountInsights(accountId);
           return {
             success: true,
@@ -2426,11 +2527,17 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const accountId = parameters.accountId as string;
-          if (!accountId) return failResult("Missing accountId", "validation", "accountId is required");
+          if (!accountId)
+            return failResult("Missing accountId", "validation", "accountId is required");
           const records = this.accountMemory.listRecords(accountId, {
             actionType: parameters.actionType as OptimizationActionType | undefined,
             entityId: parameters.entityId as string | undefined,
-            status: parameters.status as "positive" | "negative" | "neutral" | "pending" | undefined,
+            status: parameters.status as
+              | "positive"
+              | "negative"
+              | "neutral"
+              | "pending"
+              | undefined,
             limit: parameters.limit as number | undefined,
           });
           return {
@@ -2457,7 +2564,11 @@ export class DigitalAdsCartridge implements Cartridge {
           const accountId = parameters.accountId as string;
           const proposedAction = parameters.proposedAction as OptimizationActionType;
           if (!accountId || !proposedAction) {
-            return failResult("Missing accountId or proposedAction", "validation", "accountId and proposedAction are required");
+            return failResult(
+              "Missing accountId or proposedAction",
+              "validation",
+              "accountId and proposedAction are required",
+            );
           }
           const recommendation = this.accountMemory.getRecommendation(
             accountId,
@@ -2486,7 +2597,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const accountId = parameters.accountId as string;
-          if (!accountId) return failResult("Missing accountId", "validation", "accountId is required");
+          if (!accountId)
+            return failResult("Missing accountId", "validation", "accountId is required");
           const exported = this.accountMemory.exportMemory(accountId);
           const parsed = JSON.parse(exported) as { recordCount: number };
           return {
@@ -2514,11 +2626,22 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const name = parameters.name as string;
           const hypothesis = parameters.hypothesis as string;
-          const availableRegions = parameters.availableRegions as import("../ab-testing/geo-experiment.js").GeoRegion[];
-          const primaryMetric = (parameters.primaryMetric ?? "conversions") as "conversions" | "revenue" | "store_visits";
+          const availableRegions =
+            parameters.availableRegions as import("../ab-testing/geo-experiment.js").GeoRegion[];
+          const primaryMetric = (parameters.primaryMetric ?? "conversions") as
+            | "conversions"
+            | "revenue"
+            | "store_visits";
           const testDays = parameters.testDays as number;
           const treatmentBudgetPerDay = parameters.treatmentBudgetPerDay as number;
-          if (!name || !hypothesis || !availableRegions || availableRegions.length < 2 || !testDays || !treatmentBudgetPerDay) {
+          if (
+            !name ||
+            !hypothesis ||
+            !availableRegions ||
+            availableRegions.length < 2 ||
+            !testDays ||
+            !treatmentBudgetPerDay
+          ) {
             return failResult(
               "Missing required geo experiment design parameters",
               "validation",
@@ -2588,10 +2711,15 @@ export class DigitalAdsCartridge implements Cartridge {
       case "digital-ads.geo_experiment.power": {
         const start = Date.now();
         try {
-          const baselineConversionRatePerRegion = parameters.baselineConversionRatePerRegion as number;
+          const baselineConversionRatePerRegion =
+            parameters.baselineConversionRatePerRegion as number;
           const minimumDetectableLift = parameters.minimumDetectableLift as number;
           const numberOfRegions = parameters.numberOfRegions as number;
-          if (baselineConversionRatePerRegion === undefined || minimumDetectableLift === undefined || !numberOfRegions) {
+          if (
+            baselineConversionRatePerRegion === undefined ||
+            minimumDetectableLift === undefined ||
+            !numberOfRegions
+          ) {
             return failResult(
               "Missing required power analysis parameters",
               "validation",
@@ -2623,7 +2751,6 @@ export class DigitalAdsCartridge implements Cartridge {
           );
         }
       }
-
 
       // --- Custom KPI actions (read) ---
       case "digital-ads.kpi.list": {
@@ -2679,14 +2806,17 @@ export class DigitalAdsCartridge implements Cartridge {
         }
       }
 
-
       // --- LTV Optimization actions (read) ---
       case "digital-ads.ltv.project": {
         const start = Date.now();
         try {
           const cohort = parameters.cohort as CustomerCohort;
           if (!cohort) {
-            return failResult("Missing cohort data", "validation", "cohort (CustomerCohort) is required");
+            return failResult(
+              "Missing cohort data",
+              "validation",
+              "cohort (CustomerCohort) is required",
+            );
           }
           const optimizer = new LTVOptimizer();
           const projection = optimizer.projectLTV(cohort);
@@ -2713,13 +2843,21 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const cohorts = parameters.cohorts as CustomerCohort[];
           if (!cohorts || !Array.isArray(cohorts) || cohorts.length === 0) {
-            return failResult("Missing cohorts data", "validation", "cohorts (CustomerCohort[]) is required and must be non-empty");
+            return failResult(
+              "Missing cohorts data",
+              "validation",
+              "cohorts (CustomerCohort[]) is required and must be non-empty",
+            );
           }
           const targetRatio = parameters.targetLTVtoCACRatio as number | undefined;
           const optimizer = new LTVOptimizer();
           const result = optimizer.optimizeByCohortLTV(cohorts, targetRatio);
-          const scaleCount = result.campaignRecommendations.filter((r) => r.action === "scale").length;
-          const pauseCount = result.campaignRecommendations.filter((r) => r.action === "pause").length;
+          const scaleCount = result.campaignRecommendations.filter(
+            (r) => r.action === "scale",
+          ).length;
+          const pauseCount = result.campaignRecommendations.filter(
+            (r) => r.action === "pause",
+          ).length;
           return {
             success: true,
             summary: `LTV optimization: ${result.cohorts.length} cohort(s) analyzed, ${result.campaignRecommendations.length} campaign(s) — avg LTV $${result.insights.avgLTV.toFixed(2)}, ${scaleCount} to scale, ${pauseCount} to pause`,
@@ -2749,10 +2887,18 @@ export class DigitalAdsCartridge implements Cartridge {
           }>;
           const cohorts = parameters.cohorts as CustomerCohort[];
           if (!campaigns || !Array.isArray(campaigns) || campaigns.length === 0) {
-            return failResult("Missing campaigns data", "validation", "campaigns array is required and must be non-empty");
+            return failResult(
+              "Missing campaigns data",
+              "validation",
+              "campaigns array is required and must be non-empty",
+            );
           }
           if (!cohorts || !Array.isArray(cohorts) || cohorts.length === 0) {
-            return failResult("Missing cohorts data", "validation", "cohorts (CustomerCohort[]) is required and must be non-empty");
+            return failResult(
+              "Missing cohorts data",
+              "validation",
+              "cohorts (CustomerCohort[]) is required and must be non-empty",
+            );
           }
           const totalBudget = parameters.totalBudget as number | undefined;
           const optimizer = new LTVOptimizer();
@@ -2784,7 +2930,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const vertical = parameters.vertical as string;
-          if (!vertical) return failResult("Missing vertical", "validation", "vertical is required");
+          if (!vertical)
+            return failResult("Missing vertical", "validation", "vertical is required");
           const region = parameters.region as EventRegion | undefined;
           const calendar = this.seasonalCalendar.getAnnualCalendar(vertical, region);
           return {
@@ -2839,7 +2986,11 @@ export class DigitalAdsCartridge implements Cartridge {
       }
 
       default:
-        return failResult(`Unknown read action type: ${actionType}`, "dispatch", `Unknown read action type`);
+        return failResult(
+          `Unknown read action type: ${actionType}`,
+          "dispatch",
+          `Unknown read action type`,
+        );
     }
   }
 
@@ -2939,7 +3090,8 @@ export class DigitalAdsCartridge implements Cartridge {
       }
       case "digital-ads.audience.delete": {
         const audienceId = parameters.audienceId as string;
-        if (!audienceId) return failResult("Missing audienceId", "validation", "audienceId required");
+        if (!audienceId)
+          return failResult("Missing audienceId", "validation", "audienceId required");
         await this.writeProvider.deleteCustomAudience(audienceId);
         return {
           success: true,
@@ -2958,10 +3110,18 @@ export class DigitalAdsCartridge implements Cartridge {
         const bidStrategy = parameters.bidStrategy as string;
         const bidAmount = parameters.bidAmount as number | undefined;
         if (!adSetId || !bidStrategy) {
-          return failResult("Missing adSetId or bidStrategy", "validation", "adSetId and bidStrategy required");
+          return failResult(
+            "Missing adSetId or bidStrategy",
+            "validation",
+            "adSetId and bidStrategy required",
+          );
         }
         try {
-          const result = await this.writeProvider.updateBidStrategy(adSetId, bidStrategy, bidAmount);
+          const result = await this.writeProvider.updateBidStrategy(
+            adSetId,
+            bidStrategy,
+            bidAmount,
+          );
           return {
             success: true,
             summary: `Updated bid strategy on ad set ${adSetId}: ${result.previousBidStrategy} → ${bidStrategy}`,
@@ -2988,7 +3148,10 @@ export class DigitalAdsCartridge implements Cartridge {
         }
       }
       case "digital-ads.budget.reallocate": {
-        const allocations = parameters.allocations as Array<{ campaignId: string; newBudgetCents: number }>;
+        const allocations = parameters.allocations as Array<{
+          campaignId: string;
+          newBudgetCents: number;
+        }>;
         if (!Array.isArray(allocations) || allocations.length === 0) {
           return failResult("Missing allocations", "validation", "allocations array required");
         }
@@ -3012,29 +3175,34 @@ export class DigitalAdsCartridge implements Cartridge {
           rollbackAvailable: results.length > 0,
           partialFailures: failures,
           durationMs: 0,
-          undoRecipe: results.length > 0
-            ? {
-                originalActionId: "",
-                originalEnvelopeId: "",
-                reverseActionType: "digital-ads.budget.reallocate",
-                reverseParameters: {
-                  allocations: results.map((r) => ({
-                    campaignId: r.campaignId,
-                    newBudgetCents: r.previousBudget,
-                  })),
-                },
-                undoExpiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
-                undoRiskCategory: "high",
-                undoApprovalRequired: "standard",
-              }
-            : null,
+          undoRecipe:
+            results.length > 0
+              ? {
+                  originalActionId: "",
+                  originalEnvelopeId: "",
+                  reverseActionType: "digital-ads.budget.reallocate",
+                  reverseParameters: {
+                    allocations: results.map((r) => ({
+                      campaignId: r.campaignId,
+                      newBudgetCents: r.previousBudget,
+                    })),
+                  },
+                  undoExpiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
+                  undoRiskCategory: "high",
+                  undoApprovalRequired: "standard",
+                }
+              : null,
         };
       }
       case "digital-ads.schedule.set": {
         const adSetId = parameters.adSetId as string;
         const schedule = parameters.schedule as Array<Record<string, unknown>>;
         if (!adSetId || !schedule) {
-          return failResult("Missing adSetId or schedule", "validation", "adSetId and schedule required");
+          return failResult(
+            "Missing adSetId or schedule",
+            "validation",
+            "adSetId and schedule required",
+          );
         }
         try {
           await this.writeProvider.updateAdSetSchedule(adSetId, schedule);
@@ -3059,7 +3227,11 @@ export class DigitalAdsCartridge implements Cartridge {
         const campaignId = parameters.campaignId as string;
         const objective = parameters.objective as string;
         if (!campaignId || !objective) {
-          return failResult("Missing campaignId or objective", "validation", "campaignId and objective required");
+          return failResult(
+            "Missing campaignId or objective",
+            "validation",
+            "campaignId and objective required",
+          );
         }
         try {
           const result = await this.writeProvider.updateCampaignObjective(campaignId, objective);
@@ -3122,7 +3294,10 @@ export class DigitalAdsCartridge implements Cartridge {
             const r = await this.writeProvider.updateAdStatus(adId, "PAUSED");
             results.push({ adId, action: "paused", previousStatus: r.previousStatus });
           } catch (err) {
-            failures.push({ step: `pause_${adId}`, error: err instanceof Error ? err.message : String(err) });
+            failures.push({
+              step: `pause_${adId}`,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         }
         for (const adId of adsToActivate ?? []) {
@@ -3130,7 +3305,10 @@ export class DigitalAdsCartridge implements Cartridge {
             const r = await this.writeProvider.updateAdStatus(adId, "ACTIVE");
             results.push({ adId, action: "activated", previousStatus: r.previousStatus });
           } catch (err) {
-            failures.push({ step: `activate_${adId}`, error: err instanceof Error ? err.message : String(err) });
+            failures.push({
+              step: `activate_${adId}`,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         }
 
@@ -3141,20 +3319,21 @@ export class DigitalAdsCartridge implements Cartridge {
           rollbackAvailable: results.length > 0,
           partialFailures: failures,
           durationMs: 0,
-          undoRecipe: results.length > 0
-            ? {
-                originalActionId: "",
-                originalEnvelopeId: "",
-                reverseActionType: "digital-ads.creative.rotate",
-                reverseParameters: {
-                  adsToPause: results.filter((r) => r.action === "activated").map((r) => r.adId),
-                  adsToActivate: results.filter((r) => r.action === "paused").map((r) => r.adId),
-                },
-                undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                undoRiskCategory: "high",
-                undoApprovalRequired: "standard",
-              }
-            : null,
+          undoRecipe:
+            results.length > 0
+              ? {
+                  originalActionId: "",
+                  originalEnvelopeId: "",
+                  reverseActionType: "digital-ads.creative.rotate",
+                  reverseParameters: {
+                    adsToPause: results.filter((r) => r.action === "activated").map((r) => r.adId),
+                    adsToActivate: results.filter((r) => r.action === "paused").map((r) => r.adId),
+                  },
+                  undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                  undoRiskCategory: "high",
+                  undoApprovalRequired: "standard",
+                }
+              : null,
         };
       }
 
@@ -3184,7 +3363,11 @@ export class DigitalAdsCartridge implements Cartridge {
         const studyId = parameters.studyId as string;
         const winnerCellId = parameters.winnerCellId as string;
         if (!studyId || !winnerCellId) {
-          return failResult("Missing studyId or winnerCellId", "validation", "studyId and winnerCellId required");
+          return failResult(
+            "Missing studyId or winnerCellId",
+            "validation",
+            "studyId and winnerCellId required",
+          );
         }
         await this.writeProvider.concludeExperiment(studyId, winnerCellId);
         return {
@@ -3200,7 +3383,10 @@ export class DigitalAdsCartridge implements Cartridge {
 
       // --- Optimization writes (Phase 7) ---
       case "digital-ads.optimization.apply": {
-        const actions = parameters.actions as Array<{ actionType: string; parameters: Record<string, unknown> }>;
+        const actions = parameters.actions as Array<{
+          actionType: string;
+          parameters: Record<string, unknown>;
+        }>;
         if (!Array.isArray(actions) || actions.length === 0) {
           return failResult("Missing actions", "validation", "actions array required");
         }
@@ -3214,7 +3400,10 @@ export class DigitalAdsCartridge implements Cartridge {
               failures.push({ step: action.actionType, error: r.summary });
             }
           } catch (err) {
-            failures.push({ step: action.actionType, error: err instanceof Error ? err.message : String(err) });
+            failures.push({
+              step: action.actionType,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         }
         return {
@@ -3327,9 +3516,10 @@ export class DigitalAdsCartridge implements Cartridge {
 
         return {
           success: failures.length === 0,
-          summary: failures.length === 0
-            ? `Guided setup complete: campaign ${createdIds.campaignId}, ad set ${createdIds.adSetId}, ad ${createdIds.adId} (all PAUSED)`
-            : `Guided setup partially failed: ${failures[0]?.error}`,
+          summary:
+            failures.length === 0
+              ? `Guided setup complete: campaign ${createdIds.campaignId}, ad set ${createdIds.adSetId}, ad ${createdIds.adId} (all PAUSED)`
+              : `Guided setup partially failed: ${failures[0]?.error}`,
           externalRefs: createdIds,
           rollbackAvailable: !!createdIds.campaignId,
           partialFailures: failures,
@@ -3356,13 +3546,18 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const manager = new PublisherBlocklistManager(apiConfig.baseUrl, apiConfig.accessToken);
           const adAccountId = parameters.adAccountId as string;
-          if (!adAccountId) return failResult("Missing adAccountId", "validation", "adAccountId is required");
+          if (!adAccountId)
+            return failResult("Missing adAccountId", "validation", "adAccountId is required");
           const subAction = (parameters.action as string) ?? "list";
           if (subAction === "create") {
             const name = parameters.name as string;
             const publishers = parameters.publishers as string[];
             if (!name || !publishers) {
-              return failResult("Missing name or publishers for blocklist creation", "validation", "name and publishers are required");
+              return failResult(
+                "Missing name or publishers for blocklist creation",
+                "validation",
+                "name and publishers are required",
+              );
             }
             const blocklist = await manager.create(adAccountId, name, publishers);
             return {
@@ -3399,7 +3594,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const campaignId = parameters.campaignId as string;
-          if (!campaignId) return failResult("Missing campaignId", "validation", "campaignId is required");
+          if (!campaignId)
+            return failResult("Missing campaignId", "validation", "campaignId is required");
           const excludedCategories = (parameters.excludedPublisherCategories ?? []) as string[];
           const filterLevel = (parameters.brandSafetyContentFilterLevel ?? "STANDARD") as string;
 
@@ -3438,7 +3634,11 @@ export class DigitalAdsCartridge implements Cartridge {
           const name = parameters.name as string;
           const startTime = parameters.startTime as number;
           const endTime = parameters.endTime as number;
-          const cells = parameters.cells as Array<{ name: string; adSetIds?: string[]; campaignIds?: string[] }>;
+          const cells = parameters.cells as Array<{
+            name: string;
+            adSetIds?: string[];
+            campaignIds?: string[];
+          }>;
           if (!adAccountId || !name || !startTime || !endTime || !cells) {
             return failResult(
               "Missing required lift study parameters",
@@ -3476,7 +3676,8 @@ export class DigitalAdsCartridge implements Cartridge {
             startDate: String(parameters.startDate ?? ""),
             endDate: String(parameters.endDate ?? ""),
             totalBudget: Number(parameters.totalBudget ?? 0),
-            pacingCurve: (parameters.pacingCurve as "even" | "front-loaded" | "back-loaded") ?? undefined,
+            pacingCurve:
+              (parameters.pacingCurve as "even" | "front-loaded" | "back-loaded") ?? undefined,
           });
           return {
             success: true,
@@ -3502,7 +3703,11 @@ export class DigitalAdsCartridge implements Cartridge {
           const flightId = String(parameters.flightId ?? "");
           const flight = this.flightManager.getFlight(flightId);
           if (!flight) {
-            return failResult(`Flight plan not found: ${flightId}`, "pacing.auto_adjust", "No flight plan with that ID");
+            return failResult(
+              `Flight plan not found: ${flightId}`,
+              "pacing.auto_adjust",
+              "No flight plan with that ID",
+            );
           }
           const apiConfig = this.getMetaApiConfig();
           if (!apiConfig) return this.noApiConfigResult();
@@ -3520,7 +3725,10 @@ export class DigitalAdsCartridge implements Cartridge {
               originalActionId: "",
               originalEnvelopeId: "",
               reverseActionType: "digital-ads.campaign.adjust_budget",
-              reverseParameters: { campaignId: flight.campaignId, newBudget: adjustment.currentDailyBudget },
+              reverseParameters: {
+                campaignId: flight.campaignId,
+                newBudget: adjustment.currentDailyBudget,
+              },
               undoExpiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
               undoRiskCategory: "high",
               undoApprovalRequired: "standard",
@@ -3544,12 +3752,18 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const setManager = new ProductSetManager(apiConfig.baseUrl, apiConfig.accessToken);
           const catalogId = String(parameters.catalogId ?? "");
-          if (!catalogId) return failResult("Missing catalogId", "validation", "catalogId is required");
+          if (!catalogId)
+            return failResult("Missing catalogId", "validation", "catalogId is required");
           const actionMode = String(parameters.action ?? "list");
           if (actionMode === "create") {
             const name = parameters.name as string;
             const filter = (parameters.filter as Record<string, unknown>) ?? {};
-            if (!name) return failResult("Missing name for product set creation", "validation", "name is required");
+            if (!name)
+              return failResult(
+                "Missing name for product set creation",
+                "validation",
+                "name is required",
+              );
             const productSet = await setManager.create(catalogId, { name, filter });
             return {
               success: true,
@@ -3588,8 +3802,16 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const name = parameters.name as string;
           const hypothesis = parameters.hypothesis as string;
-          const variants = parameters.variants as Array<{ variantId: string; description: string; adId?: string }>;
-          const primaryMetric = (parameters.primaryMetric ?? "cpa") as "cpa" | "ctr" | "conversion_rate" | "roas";
+          const variants = parameters.variants as Array<{
+            variantId: string;
+            description: string;
+            adId?: string;
+          }>;
+          const primaryMetric = (parameters.primaryMetric ?? "cpa") as
+            | "cpa"
+            | "ctr"
+            | "conversion_rate"
+            | "roas";
           const minBudgetPerVariant = (parameters.minBudgetPerVariant as number) ?? 0;
           const scheduledStartDate = (parameters.scheduledStartDate as string) ?? null;
 
@@ -3724,11 +3946,18 @@ export class DigitalAdsCartridge implements Cartridge {
           const accountId = parameters.accountId as string;
           const actionType = parameters.actionType as OptimizationActionType;
           const entityId = parameters.entityId as string;
-          const entityType = parameters.entityType as OptimizationRecord['entityType'];
+          const entityType = parameters.entityType as OptimizationRecord["entityType"];
           const changeDescription = parameters.changeDescription as string;
           const params = parameters.parameters as Record<string, unknown>;
-          const metricsBefore = parameters.metricsBefore as OptimizationRecord['metricsBefore'];
-          if (!accountId || !actionType || !entityId || !entityType || !changeDescription || !metricsBefore) {
+          const metricsBefore = parameters.metricsBefore as OptimizationRecord["metricsBefore"];
+          if (
+            !accountId ||
+            !actionType ||
+            !entityId ||
+            !entityType ||
+            !changeDescription ||
+            !metricsBefore
+          ) {
             return failResult(
               "Missing required fields for memory record",
               "validation",
@@ -3767,7 +3996,7 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const recordId = parameters.recordId as string;
-          const metricsAfter = parameters.metricsAfter as OptimizationRecord['metricsAfter'];
+          const metricsAfter = parameters.metricsAfter as OptimizationRecord["metricsAfter"];
           if (!recordId || !metricsAfter) {
             return failResult(
               "Missing recordId or metricsAfter",
@@ -3777,8 +4006,8 @@ export class DigitalAdsCartridge implements Cartridge {
           }
           const record = this.accountMemory.recordOutcome(recordId, metricsAfter);
           const outcomeStr = record.outcome
-            ? `${record.outcome.status} (${record.outcome.primaryMetricDeltaPercent > 0 ? '+' : ''}${record.outcome.primaryMetricDeltaPercent.toFixed(1)}%)`
-            : 'pending';
+            ? `${record.outcome.status} (${record.outcome.primaryMetricDeltaPercent > 0 ? "+" : ""}${record.outcome.primaryMetricDeltaPercent.toFixed(1)}%)`
+            : "pending";
           return {
             success: true,
             summary: `Recorded outcome for ${recordId}: ${outcomeStr}`,
@@ -3830,11 +4059,22 @@ export class DigitalAdsCartridge implements Cartridge {
         try {
           const name = parameters.name as string;
           const hypothesis = parameters.hypothesis as string;
-          const availableRegions = parameters.availableRegions as import("../ab-testing/geo-experiment.js").GeoRegion[];
-          const primaryMetric = (parameters.primaryMetric ?? "conversions") as "conversions" | "revenue" | "store_visits";
+          const availableRegions =
+            parameters.availableRegions as import("../ab-testing/geo-experiment.js").GeoRegion[];
+          const primaryMetric = (parameters.primaryMetric ?? "conversions") as
+            | "conversions"
+            | "revenue"
+            | "store_visits";
           const testDays = parameters.testDays as number;
           const treatmentBudgetPerDay = parameters.treatmentBudgetPerDay as number;
-          if (!name || !hypothesis || !availableRegions || availableRegions.length < 2 || !testDays || !treatmentBudgetPerDay) {
+          if (
+            !name ||
+            !hypothesis ||
+            !availableRegions ||
+            availableRegions.length < 2 ||
+            !testDays ||
+            !treatmentBudgetPerDay
+          ) {
             return failResult(
               "Missing required geo experiment parameters",
               "validation",
@@ -3883,7 +4123,8 @@ export class DigitalAdsCartridge implements Cartridge {
         const start = Date.now();
         try {
           const experimentId = parameters.experimentId as string;
-          if (!experimentId) return failResult("Missing experimentId", "validation", "experimentId is required");
+          if (!experimentId)
+            return failResult("Missing experimentId", "validation", "experimentId is required");
           const experiment = this.geoExperimentManager.concludeExperiment(experimentId);
           return {
             success: true,
@@ -3941,11 +4182,7 @@ export class DigitalAdsCartridge implements Cartridge {
         if (!kpiId) return failResult("Missing kpiId", "validation", "kpiId is required");
         const removed = this.kpiEngine.removeKPI(kpiId);
         if (!removed) {
-          return failResult(
-            `KPI not found: ${kpiId}`,
-            "kpi.remove",
-            `No KPI with ID ${kpiId}`,
-          );
+          return failResult(`KPI not found: ${kpiId}`, "kpi.remove", `No KPI with ID ${kpiId}`);
         }
         return {
           success: true,
@@ -3973,8 +4210,21 @@ export class DigitalAdsCartridge implements Cartridge {
           const impact = (parameters.impact as string) ?? "";
           const recommendedActions = (parameters.recommendedActions as string[]) ?? [];
 
-          if (!name || !startMMDD || !endMMDD || !cpmThresholdMultiplier || !cpaThresholdMultiplier || !category || !region || !verticals) {
-            return failResult("Missing required fields", "validation", "name, startMMDD, endMMDD, cpmThresholdMultiplier, cpaThresholdMultiplier, category, region, and verticals are all required");
+          if (
+            !name ||
+            !startMMDD ||
+            !endMMDD ||
+            !cpmThresholdMultiplier ||
+            !cpaThresholdMultiplier ||
+            !category ||
+            !region ||
+            !verticals
+          ) {
+            return failResult(
+              "Missing required fields",
+              "validation",
+              "name, startMMDD, endMMDD, cpmThresholdMultiplier, cpaThresholdMultiplier, category, region, and verticals are all required",
+            );
           }
 
           this.seasonalCalendar.addCustomEvent({

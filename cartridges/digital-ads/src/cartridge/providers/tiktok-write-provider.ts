@@ -299,16 +299,11 @@ export class RealTikTokAdsWriteProvider implements MetaAdsWriteProvider {
     throw new Error("createAdStudy not yet implemented for TikTok Ads");
   }
 
-  async concludeExperiment(
-    _studyId: string,
-    _winnerCellId: string,
-  ): Promise<{ success: boolean }> {
+  async concludeExperiment(_studyId: string, _winnerCellId: string): Promise<{ success: boolean }> {
     throw new Error("concludeExperiment not yet implemented for TikTok Ads");
   }
 
-  async createAdRule(
-    _params: CreateAdRuleWriteParams,
-  ): Promise<{ id: string; success: boolean }> {
+  async createAdRule(_params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
     throw new Error("createAdRule not yet implemented for TikTok Ads");
   }
 

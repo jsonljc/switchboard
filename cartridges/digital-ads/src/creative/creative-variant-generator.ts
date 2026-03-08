@@ -31,13 +31,7 @@ const DEFAULT_ANGLES = [
   "curiosity",
 ];
 
-const CTA_OPTIONS = [
-  "Shop Now",
-  "Learn More",
-  "Sign Up",
-  "Get Started",
-  "Try Free",
-];
+const CTA_OPTIONS = ["Shop Now", "Learn More", "Sign Up", "Get Started", "Try Free"];
 
 export class CreativeVariantGenerator {
   generateVariants(params: GenerateVariantsParams): GenerateVariantsResult {
@@ -48,12 +42,7 @@ export class CreativeVariantGenerator {
     for (const angle of angles) {
       for (let i = 0; i < perAngle; i++) {
         variants.push(
-          this.generateVariant(
-            params.productDescription,
-            params.targetAudience,
-            angle,
-            i,
-          ),
+          this.generateVariant(params.productDescription, params.targetAudience, angle, i),
         );
       }
     }

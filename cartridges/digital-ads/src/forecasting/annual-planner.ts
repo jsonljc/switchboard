@@ -161,11 +161,11 @@ const QUARTERLY_MILESTONES: Record<Quarter, string[]> = {
  */
 const DEFAULT_WEIGHTS: Record<string, number[]> = {
   // Commerce: heavy Q4 (BFCM/holiday), lighter Q1
-  commerce: [0.70, 0.75, 0.80, 0.90, 0.95, 0.90, 1.00, 1.05, 1.10, 1.15, 1.40, 1.30],
+  commerce: [0.7, 0.75, 0.8, 0.9, 0.95, 0.9, 1.0, 1.05, 1.1, 1.15, 1.4, 1.3],
   // Leadgen: more even, slight Q1/Q3 emphasis (budget planning cycles)
-  leadgen: [1.10, 1.05, 1.00, 0.95, 0.90, 0.90, 0.95, 1.00, 1.10, 1.05, 0.95, 1.05],
+  leadgen: [1.1, 1.05, 1.0, 0.95, 0.9, 0.9, 0.95, 1.0, 1.1, 1.05, 0.95, 1.05],
   // Brand: emphasis on Q2/Q3 (summer reach), moderate Q4
-  brand: [0.85, 0.85, 0.90, 1.05, 1.10, 1.15, 1.10, 1.10, 1.00, 0.95, 1.00, 0.95],
+  brand: [0.85, 0.85, 0.9, 1.05, 1.1, 1.15, 1.1, 1.1, 1.0, 0.95, 1.0, 0.95],
 };
 
 /**
@@ -235,7 +235,11 @@ const KEY_ACTIONS: Record<string, string[][]> = {
     ["Run gift guide campaigns", "Execute clearance sales", "Document annual learnings"],
   ],
   leadgen: [
-    ["Launch New Year planning webinars", "Create industry outlook content", "Test lead form variations"],
+    [
+      "Launch New Year planning webinars",
+      "Create industry outlook content",
+      "Test lead form variations",
+    ],
     ["Publish annual industry report", "Run LinkedIn campaigns", "Optimize lead scoring"],
     ["Review Q1 pipeline", "Refresh lead magnets", "Test new audience segments"],
     ["Launch spring webinar series", "Promote case studies", "A/B test ad copy"],
@@ -244,7 +248,11 @@ const KEY_ACTIONS: Record<string, string[][]> = {
     ["Prepare for industry events", "Launch pre-event registrations", "Build event audiences"],
     ["Run back-to-business campaigns", "Launch fall content calendar", "Test video testimonials"],
     ["Publish Q4 budget planning guides", "Target decision-makers", "Optimize form conversion"],
-    ["Create year-end planning resources", "Align with budget cycles", "Run executive-targeted ads"],
+    [
+      "Create year-end planning resources",
+      "Align with budget cycles",
+      "Run executive-targeted ads",
+    ],
     ["Target budget approval season", "Promote ROI case studies", "Maximize qualified leads"],
     ["Wrap-up content campaigns", "Plan next year strategy", "Archive winning creatives"],
   ],
@@ -340,15 +348,16 @@ export class AnnualPlanner {
       );
 
       // Apply growth trajectory to conversions
-      const adjustedConversions = Math.round(projectedConversions * growthRamp * scalingPenalty * 100) / 100;
-      const adjustedCPA = adjustedConversions > 0
-        ? Math.round((budget / adjustedConversions) * 100) / 100
-        : 0;
+      const adjustedConversions =
+        Math.round(projectedConversions * growthRamp * scalingPenalty * 100) / 100;
+      const adjustedCPA =
+        adjustedConversions > 0 ? Math.round((budget / adjustedConversions) * 100) / 100 : 0;
 
       // Spend efficiency: ratio of baseline CPA to projected CPA (1.0 = same, <1 = diminishing returns)
-      const spendEfficiency = adjustedCPA > 0
-        ? Math.min(1, Math.round((currentMonthlyCPA / adjustedCPA) * 100) / 100)
-        : 0;
+      const spendEfficiency =
+        adjustedCPA > 0
+          ? Math.min(1, Math.round((currentMonthlyCPA / adjustedCPA) * 100) / 100)
+          : 0;
 
       // Projected impressions (rough: budget / estimated CPM)
       const baseCPM = vertical === "brand" ? 5 : vertical === "commerce" ? 12 : 10;
@@ -397,9 +406,8 @@ export class AnnualPlanner {
       const qMonths = monthPlans.filter((mp) => mp.quarter === q);
       const totalBudget = qMonths.reduce((s, mp) => s + mp.plannedBudget, 0);
       const totalConversions = qMonths.reduce((s, mp) => s + mp.projectedConversions, 0);
-      const avgCPA = totalConversions > 0
-        ? Math.round((totalBudget / totalConversions) * 100) / 100
-        : 0;
+      const avgCPA =
+        totalConversions > 0 ? Math.round((totalBudget / totalConversions) * 100) / 100 : 0;
 
       return {
         quarter: q,
@@ -415,9 +423,8 @@ export class AnnualPlanner {
 
     // 7. Annual summary
     const totalConversions = monthPlans.reduce((s, mp) => s + mp.projectedConversions, 0);
-    const annualCPA = totalConversions > 0
-      ? Math.round((totalAnnualBudget / totalConversions) * 100) / 100
-      : 0;
+    const annualCPA =
+      totalConversions > 0 ? Math.round((totalAnnualBudget / totalConversions) * 100) / 100 : 0;
 
     let annualROAS: number | null = null;
     if (currentROAS != null) {
@@ -425,7 +432,8 @@ export class AnnualPlanner {
         .map((mp) => mp.projectedROAS)
         .filter((r): r is number => r !== null);
       if (roasValues.length > 0) {
-        annualROAS = Math.round((roasValues.reduce((s, r) => s + r, 0) / roasValues.length) * 100) / 100;
+        annualROAS =
+          Math.round((roasValues.reduce((s, r) => s + r, 0) / roasValues.length) * 100) / 100;
       }
     }
 
@@ -500,9 +508,8 @@ export class AnnualPlanner {
     // Apply seasonal CPA multiplier — higher multiplier = higher CPM = fewer conversions per dollar
     projectedConversions = projectedConversions / seasonalMultiplier;
 
-    const projectedCPA = projectedConversions > 0
-      ? Math.round((monthlyBudget / projectedConversions) * 100) / 100
-      : 0;
+    const projectedCPA =
+      projectedConversions > 0 ? Math.round((monthlyBudget / projectedConversions) * 100) / 100 : 0;
 
     return {
       projectedConversions: Math.round(projectedConversions * 100) / 100,
@@ -626,10 +633,7 @@ export class AnnualPlanner {
   /**
    * Assess risks for the annual plan.
    */
-  private assessRisks(
-    params: AnnualPlanParams,
-    monthPlans: MonthlyPlan[],
-  ): AnnualPlan["risks"] {
+  private assessRisks(params: AnnualPlanParams, monthPlans: MonthlyPlan[]): AnnualPlan["risks"] {
     const risks: AnnualPlan["risks"] = [];
     const { vertical, totalAnnualBudget, currentMonthlySpend, aggressiveScaling } = params;
 

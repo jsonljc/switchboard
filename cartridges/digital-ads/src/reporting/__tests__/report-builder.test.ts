@@ -22,9 +22,7 @@ function makeInsightsRow(overrides: Record<string, unknown> = {}) {
       { action_type: "purchase", value: "5" },
       { action_type: "link_click", value: "120" },
     ],
-    cost_per_action_type: [
-      { action_type: "purchase", value: "20.00" },
-    ],
+    cost_per_action_type: [{ action_type: "purchase", value: "20.00" }],
     ...overrides,
   };
 }
@@ -78,7 +76,11 @@ describe("ReportBuilder", () => {
         {
           id: "ad_1",
           name: "Image Ad",
-          creative: { id: "cr_1", thumbnail_url: "https://example.com/thumb.jpg", object_type: "IMAGE" },
+          creative: {
+            id: "cr_1",
+            thumbnail_url: "https://example.com/thumb.jpg",
+            object_type: "IMAGE",
+          },
           insights: {
             data: [
               {
@@ -158,7 +160,8 @@ describe("ReportBuilder", () => {
       ],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(ageGenderData),
@@ -216,17 +219,14 @@ describe("ReportBuilder", () => {
 
   it("generates a comparison report with two periods", async () => {
     const currentData = {
-      data: [
-        makeInsightsRow({ spend: "200.00", impressions: "20000", clicks: "300" }),
-      ],
+      data: [makeInsightsRow({ spend: "200.00", impressions: "20000", clicks: "300" })],
     };
     const previousData = {
-      data: [
-        makeInsightsRow({ spend: "100.00", impressions: "10000", clicks: "150" }),
-      ],
+      data: [makeInsightsRow({ spend: "100.00", impressions: "10000", clicks: "150" })],
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(currentData),
@@ -288,7 +288,8 @@ describe("ReportBuilder", () => {
       paging: {},
     };
 
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(page1),
@@ -320,9 +321,9 @@ describe("ReportBuilder", () => {
       } as unknown as Response),
     );
 
-    await expect(
-      builder.generatePerformanceReport({ adAccountId: "123456" }),
-    ).rejects.toThrow("Meta API error: Invalid token");
+    await expect(builder.generatePerformanceReport({ adAccountId: "123456" })).rejects.toThrow(
+      "Meta API error: Invalid token",
+    );
   });
 
   it("throws with HTTP status when error body is not parseable", async () => {
@@ -335,8 +336,8 @@ describe("ReportBuilder", () => {
       } as unknown as Response),
     );
 
-    await expect(
-      builder.generatePerformanceReport({ adAccountId: "123456" }),
-    ).rejects.toThrow("Meta API error: HTTP 500");
+    await expect(builder.generatePerformanceReport({ adAccountId: "123456" })).rejects.toThrow(
+      "Meta API error: HTTP 500",
+    );
   });
 });

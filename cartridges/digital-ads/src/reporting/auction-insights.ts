@@ -67,9 +67,7 @@ export class AuctionInsightsChecker {
     const competitors = rawEntries.map((entry) => this.parseEntry(entry));
 
     // Find "You" entry for position analysis
-    const yourEntry = competitors.find(
-      (c) => c.auctionCompetitor.toLowerCase() === "you",
-    );
+    const yourEntry = competitors.find((c) => c.auctionCompetitor.toLowerCase() === "you");
     const impressionShare = yourEntry?.impressionShare ?? 0;
     const avgPosition = this.computeAvgPosition(rawEntries);
     const competitivePressure = this.assessPressure(impressionShare);
@@ -107,11 +105,7 @@ export class AuctionInsightsChecker {
     return id;
   }
 
-  private buildTimeParams(
-    datePreset?: string,
-    since?: string,
-    until?: string,
-  ): string {
+  private buildTimeParams(datePreset?: string, since?: string, until?: string): string {
     if (since && until) {
       const timeRange = JSON.stringify({ since, until });
       return `&time_range=${encodeURIComponent(timeRange)}`;
@@ -150,9 +144,7 @@ export class AuctionInsightsChecker {
     // A value > 1 means you're paying relatively more per impression share point
     const medianPosition = Number(raw.auction_median_position ?? 0);
     const costShareRatio =
-      impressionShare > 0 && medianPosition > 0
-        ? medianPosition / impressionShare
-        : 0;
+      impressionShare > 0 && medianPosition > 0 ? medianPosition / impressionShare : 0;
 
     return {
       auctionCompetitor: String(raw.auction_competitor ?? "Unknown"),
@@ -180,9 +172,7 @@ export class AuctionInsightsChecker {
     return Number(yourEntry?.auction_median_position ?? 0);
   }
 
-  private assessPressure(
-    impressionShare: number,
-  ): "low" | "medium" | "high" {
+  private assessPressure(impressionShare: number): "low" | "medium" | "high" {
     if (impressionShare < 20) return "high";
     if (impressionShare <= 40) return "medium";
     return "low";
@@ -215,25 +205,17 @@ export class AuctionInsightsChecker {
     }
 
     // Outbid analysis
-    const otherCompetitors = competitors.filter(
-      (c) => c.auctionCompetitor.toLowerCase() !== "you",
-    );
-    const highOutbidCompetitors = otherCompetitors.filter(
-      (c) => c.outbidRate > 50,
-    );
+    const otherCompetitors = competitors.filter((c) => c.auctionCompetitor.toLowerCase() !== "you");
+    const highOutbidCompetitors = otherCompetitors.filter((c) => c.outbidRate > 50);
     if (highOutbidCompetitors.length > 0) {
-      const names = highOutbidCompetitors
-        .map((c) => c.auctionCompetitor)
-        .join(", ");
+      const names = highOutbidCompetitors.map((c) => c.auctionCompetitor).join(", ");
       recommendations.push(
         `You are being outbid more than 50% of the time by: ${names} — review bid strategy`,
       );
     }
 
     // Overlap analysis
-    const highOverlap = otherCompetitors.filter(
-      (c) => c.overlapRate > 70,
-    );
+    const highOverlap = otherCompetitors.filter((c) => c.overlapRate > 70);
     if (highOverlap.length > 0) {
       const names = highOverlap.map((c) => c.auctionCompetitor).join(", ");
       recommendations.push(
@@ -242,13 +224,9 @@ export class AuctionInsightsChecker {
     }
 
     // Position-above analysis
-    const dominatingCompetitors = otherCompetitors.filter(
-      (c) => c.positionAboveRate > 60,
-    );
+    const dominatingCompetitors = otherCompetitors.filter((c) => c.positionAboveRate > 60);
     if (dominatingCompetitors.length > 0) {
-      const names = dominatingCompetitors
-        .map((c) => c.auctionCompetitor)
-        .join(", ");
+      const names = dominatingCompetitors.map((c) => c.auctionCompetitor).join(", ");
       recommendations.push(
         `Competitors consistently ranking above you: ${names} — evaluate ad quality score and relevance`,
       );
@@ -269,9 +247,7 @@ export class AuctionInsightsChecker {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = body.error as Record<string, unknown> | undefined;
-      throw new Error(
-        `Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
-      );
+      throw new Error(`Meta API error: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
     }
     return (await response.json()) as Record<string, unknown>;
   }

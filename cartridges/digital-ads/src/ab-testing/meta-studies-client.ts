@@ -64,7 +64,9 @@ export class MetaStudiesClient {
     if (!response.ok) {
       const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = errorBody.error as Record<string, unknown> | undefined;
-      throw new Error(`Failed to create ad study: ${(error?.message as string) ?? `HTTP ${response.status}`}`);
+      throw new Error(
+        `Failed to create ad study: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
+      );
     }
 
     const data = (await response.json()) as Record<string, unknown>;

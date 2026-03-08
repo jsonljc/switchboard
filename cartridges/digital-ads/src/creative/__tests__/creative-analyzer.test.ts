@@ -249,8 +249,6 @@ describe("CreativeAnalyzer", () => {
     );
 
     const analyzer = new CreativeAnalyzer(BASE_URL, TOKEN);
-    await expect(analyzer.analyze("act_123")).rejects.toThrow(
-      "Failed to fetch creative data",
-    );
+    await expect(analyzer.analyze("act_123")).rejects.toThrow("Failed to fetch creative data");
   });
 });

@@ -153,10 +153,7 @@ export class BudgetAllocator {
     // Reserve budget for fallback campaigns (keep their current budgets
     // as the base — the efficiency-score method will redistribute within
     // this pool).
-    const fallbackBudget = fallback.reduce(
-      (s, fb) => s + fb.campaign.dailyBudget,
-      0,
-    );
+    const fallbackBudget = fallback.reduce((s, fb) => s + fb.campaign.dailyBudget, 0);
     const fittedBudget = totalBudget - fallbackBudget;
 
     const sumA = fitted.reduce((s, f) => s + f.a, 0);
@@ -176,9 +173,7 @@ export class BudgetAllocator {
 
       const changeDollars = idealBudget - campaign.dailyBudget;
       const changePercent =
-        campaign.dailyBudget > 0
-          ? (changeDollars / campaign.dailyBudget) * 100
-          : 0;
+        campaign.dailyBudget > 0 ? (changeDollars / campaign.dailyBudget) * 100 : 0;
 
       // Marginal CPA at the *recommended* spend level.
       const marginalCPA = a > 0 ? idealBudget / a : null;
@@ -225,10 +220,7 @@ export class BudgetAllocator {
     return {
       entries,
       totalCurrentBudget: totalBudget,
-      totalRecommendedBudget: entries.reduce(
-        (s, e) => s + e.recommendedDailyBudget,
-        0,
-      ),
+      totalRecommendedBudget: entries.reduce((s, e) => s + e.recommendedDailyBudget, 0),
       summary:
         changedEntries.length > 0
           ? `${changedEntries.length} campaign(s) recommended for budget adjustment${methodNote}`
@@ -262,8 +254,7 @@ export class BudgetAllocator {
     const entries: BudgetReallocationEntry[] = [];
 
     for (const campaign of scored) {
-      const idealShare =
-        totalScore > 0 ? campaign.score / totalScore : 1 / scored.length;
+      const idealShare = totalScore > 0 ? campaign.score / totalScore : 1 / scored.length;
       let idealBudget = totalBudget * idealShare;
 
       const maxChange = campaign.dailyBudget * (maxShift / 100);
@@ -273,9 +264,7 @@ export class BudgetAllocator {
 
       const changeDollars = idealBudget - campaign.dailyBudget;
       const changePercent =
-        campaign.dailyBudget > 0
-          ? (changeDollars / campaign.dailyBudget) * 100
-          : 0;
+        campaign.dailyBudget > 0 ? (changeDollars / campaign.dailyBudget) * 100 : 0;
 
       let reason: string;
       if (changeDollars > 1) {
@@ -310,10 +299,7 @@ export class BudgetAllocator {
     return {
       entries,
       totalCurrentBudget: totalBudget,
-      totalRecommendedBudget: entries.reduce(
-        (s, e) => s + e.recommendedDailyBudget,
-        0,
-      ),
+      totalRecommendedBudget: entries.reduce((s, e) => s + e.recommendedDailyBudget, 0),
       summary:
         changedEntries.length > 0
           ? `${changedEntries.length} campaign(s) recommended for budget adjustment`
@@ -336,8 +322,7 @@ export class BudgetAllocator {
     const entries: BudgetReallocationEntry[] = [];
 
     for (const { campaign, score } of fallbackCampaigns) {
-      const idealShare =
-        totalScore > 0 ? score / totalScore : 1 / fallbackCampaigns.length;
+      const idealShare = totalScore > 0 ? score / totalScore : 1 / fallbackCampaigns.length;
       let idealBudget = budgetPool * idealShare;
 
       const maxChange = campaign.dailyBudget * (maxShift / 100);
@@ -347,9 +332,7 @@ export class BudgetAllocator {
 
       const changeDollars = idealBudget - campaign.dailyBudget;
       const changePercent =
-        campaign.dailyBudget > 0
-          ? (changeDollars / campaign.dailyBudget) * 100
-          : 0;
+        campaign.dailyBudget > 0 ? (changeDollars / campaign.dailyBudget) * 100 : 0;
 
       let reason: string;
       if (changeDollars > 1) {
@@ -391,9 +374,10 @@ export class BudgetAllocator {
    * squares regression.  Transforms x = ln(spend) and fits the linear model
    * y = a*x + b.
    */
-  private fitLogCurve(
-    points: Array<{ spend: number; conversions: number }>,
-  ): { a: number; b: number } {
+  private fitLogCurve(points: Array<{ spend: number; conversions: number }>): {
+    a: number;
+    b: number;
+  } {
     const n = points.length;
 
     const xs = points.map((p) => Math.log(p.spend));
@@ -456,8 +440,7 @@ export class BudgetAllocator {
     marginalCPA: number | null,
     a: number,
   ): string {
-    const mcpaStr =
-      marginalCPA !== null ? ` (marginal CPA: $${marginalCPA.toFixed(2)})` : "";
+    const mcpaStr = marginalCPA !== null ? ` (marginal CPA: $${marginalCPA.toFixed(2)})` : "";
     const curveStr = ` [curve coefficient a=${a.toFixed(3)}]`;
 
     if (changeDollars > 1) {

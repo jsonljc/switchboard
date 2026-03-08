@@ -40,10 +40,7 @@ export class CustomAudienceBuilder {
     });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-      >;
+      const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = errorBody.error as Record<string, unknown> | undefined;
       throw new Error(
         `Failed to create custom audience: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
@@ -65,9 +62,7 @@ export class CustomAudienceBuilder {
   }
 
   async list(adAccountId: string, limit = 50): Promise<CustomAudienceInfo[]> {
-    const accountId = adAccountId.startsWith("act_")
-      ? adAccountId
-      : `act_${adAccountId}`;
+    const accountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
     const url =
       `${this.baseUrl}/${accountId}/customaudiences?fields=` +
       "id,name,description,subtype,approximate_count,delivery_status,retention_days,time_created" +
@@ -88,27 +83,21 @@ export class CustomAudienceBuilder {
           name: String(aud.name ?? ""),
           description: (aud.description as string) ?? null,
           subtype: String(aud.subtype ?? ""),
-          approximateCount: aud.approximate_count
-            ? Number(aud.approximate_count)
-            : null,
+          approximateCount: aud.approximate_count ? Number(aud.approximate_count) : null,
           deliveryStatus:
-            ((aud.delivery_status as Record<string, unknown>)?.status as string) ??
-            null,
+            ((aud.delivery_status as Record<string, unknown>)?.status as string) ?? null,
           retentionDays: aud.retention_days ? Number(aud.retention_days) : null,
           createdAt: (aud.time_created as string) ?? null,
         });
       }
 
-      nextUrl =
-        ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
+      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
     }
 
     return results;
   }
 
-  async getInsights(
-    audienceId: string,
-  ): Promise<{ approximateCount: number }> {
+  async getInsights(audienceId: string): Promise<{ approximateCount: number }> {
     const url =
       `${this.baseUrl}/${audienceId}?fields=approximate_count` +
       `&access_token=${this.accessToken}`;
@@ -129,10 +118,7 @@ export class CustomAudienceBuilder {
     const response = await fetch(url, { method: "DELETE" });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-      >;
+      const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       const error = errorBody.error as Record<string, unknown> | undefined;
       throw new Error(
         `Failed to delete audience: ${(error?.message as string) ?? `HTTP ${response.status}`}`,
