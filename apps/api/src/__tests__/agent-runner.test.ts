@@ -274,4 +274,72 @@ describe("startAgentRunner", () => {
 
     cleanup();
   });
+
+  it("records agent tick actions to audit ledger when provided", async () => {
+    // Set hour to 6 so agents tick
+    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+
+    mockTick.mockResolvedValue({
+      agentId: "optimizer",
+      actions: [
+        { actionType: "digital-ads.budget.adjust", outcome: "executed" },
+        { actionType: "digital-ads.campaign.pause", outcome: "skipped" },
+      ],
+      summary: "Budget rebalanced",
+    });
+
+    const mockRecord = vi.fn().mockResolvedValue({});
+    const ledger = { record: mockRecord } as unknown as import("@switchboard/core").AuditLedger;
+
+    const cfg = makeRunnerConfig({ ledger });
+    const cleanup = startAgentRunner(cfg);
+
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Each agent tick's actions should be recorded individually
+    expect(mockRecord).toHaveBeenCalled();
+    const calls = mockRecord.mock.calls;
+    // Find calls from any agent — at least the first one that ticked should have recorded
+    const agentCalls = calls.filter(
+      (c: unknown[]) => (c[0] as Record<string, unknown>).actorType === "agent",
+    );
+    expect(agentCalls.length).toBeGreaterThan(0);
+
+    // Verify the audit entry shape
+    const entry = agentCalls[0]![0] as Record<string, unknown>;
+    expect(entry.eventType).toBe("action.executed");
+    expect(entry.actorType).toBe("agent");
+    expect(entry.entityType).toBe("ads_operator_config");
+    expect(entry.entityId).toBe("op_1");
+    expect(entry.organizationId).toBe("org_1");
+
+    cleanup();
+  });
+
+  it("does not fail when audit ledger recording throws", async () => {
+    // Set hour to 6 so agents tick
+    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+
+    mockTick.mockResolvedValue({
+      agentId: "optimizer",
+      actions: [{ actionType: "test.action", outcome: "ok" }],
+      summary: "done",
+    });
+
+    const mockRecord = vi.fn().mockRejectedValue(new Error("ledger write failed"));
+    const ledger = { record: mockRecord } as unknown as import("@switchboard/core").AuditLedger;
+
+    const cfg = makeRunnerConfig({ ledger });
+    const logger = cfg.logger as unknown as { error: ReturnType<typeof vi.fn> };
+
+    const cleanup = startAgentRunner(cfg);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Agent tick should still have run (audit failure is non-fatal)
+    expect(mockTick).toHaveBeenCalled();
+    // Error should be logged
+    expect(logger.error).toHaveBeenCalled();
+
+    cleanup();
+  });
 });

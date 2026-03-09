@@ -100,6 +100,7 @@ export async function startBackgroundJobs(
     configLoader,
     resolvedProfile: resolvedProfile ?? null,
     resolvedSkin: resolvedSkin ?? null,
+    ledger,
     intervalMs: 60_000,
     logger,
   });

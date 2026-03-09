@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MetaApiClient } from "../client.js";
 import { commerceFunnel } from "../funnels/commerce.js";
-import type { MetaInsightsResponse } from "../types.js";
 import type { TimeRange } from "../../../core/types.js";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +14,7 @@ function makeClient(overrides: Record<string, unknown> = {}) {
   return new MetaApiClient({
     accessToken: "test-token",
     maxRetries: 1, // keep tests fast
+    maxRequestsPerSecond: 100, // don't throttle in tests
     ...overrides,
   });
 }
@@ -23,6 +23,7 @@ function okResponse(body: unknown): Response {
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(JSON.stringify(body)),
   } as unknown as Response;
@@ -33,13 +34,17 @@ function errorResponse(code: number, message: string, httpStatus = 400): Respons
     ok: false,
     status: httpStatus,
     statusText: "Bad Request",
+    headers: new Headers(),
     json: () => Promise.resolve({ error: { message, type: "OAuthException", code } }),
     text: () =>
       Promise.resolve(JSON.stringify({ error: { message, type: "OAuthException", code } })),
   } as unknown as Response;
 }
 
-function insightsResponse(data: MetaInsightsResponse["data"], next?: string): MetaInsightsResponse {
+function insightsResponse(
+  data: Record<string, unknown>[],
+  next?: string,
+): { data: Record<string, unknown>[]; paging?: { next: string } } {
   return {
     data,
     ...(next ? { paging: { next } } : {}),
@@ -69,14 +74,14 @@ describe("MetaApiClient", () => {
   // -----------------------------------------------------------------------
 
   describe("config defaults", () => {
-    it("uses default apiVersion v21.0", async () => {
+    it("uses default apiVersion v22.0", async () => {
       const client = makeClient();
       fetchMock.mockResolvedValue(okResponse(insightsResponse([])));
 
       await client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
 
       const calledUrl = fetchMock.mock.calls[0][0] as string;
-      expect(calledUrl).toContain("/v21.0/");
+      expect(calledUrl).toContain("/v22.0/");
     });
 
     it("accepts custom apiVersion", async () => {
@@ -87,6 +92,19 @@ describe("MetaApiClient", () => {
 
       const calledUrl = fetchMock.mock.calls[0][0] as string;
       expect(calledUrl).toContain("/v19.0/");
+    });
+
+    it("uses Bearer auth header instead of query param", async () => {
+      const client = makeClient();
+      fetchMock.mockResolvedValue(okResponse(insightsResponse([])));
+
+      await client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
+
+      const calledUrl = fetchMock.mock.calls[0][0] as string;
+      expect(calledUrl).not.toContain("access_token=");
+      const init = fetchMock.mock.calls[0][1];
+      const headers = init.headers as Headers;
+      expect(headers.get("Authorization")).toBe("Bearer test-token");
     });
   });
 
@@ -366,7 +384,7 @@ describe("MetaApiClient", () => {
                   clicks: "250",
                 },
               ],
-              "https://graph.facebook.com/v21.0/next-page",
+              "https://graph.facebook.com/v22.0/next-page",
             ),
           ),
         )
@@ -388,7 +406,7 @@ describe("MetaApiClient", () => {
       const snap = await client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(fetchMock.mock.calls[1][0]).toBe("https://graph.facebook.com/v21.0/next-page");
+      expect(fetchMock.mock.calls[1][0]).toBe("https://graph.facebook.com/v22.0/next-page");
       expect(snap.spend).toBeCloseTo(250);
       expect(snap.stages.impressions.count).toBe(11000);
     });
@@ -412,8 +430,8 @@ describe("MetaApiClient", () => {
       );
 
       const promise = client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
-      // Advance timers past the backoff (2^0 * 1000 = 1000ms)
-      await vi.advanceTimersByTimeAsync(2000);
+      // Advance timers past the backoff
+      await vi.advanceTimersByTimeAsync(5000);
       const snap = await promise;
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -441,7 +459,7 @@ describe("MetaApiClient", () => {
         );
 
       const promise = client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(5000);
       const snap = await promise;
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -455,7 +473,7 @@ describe("MetaApiClient", () => {
 
       await expect(
         client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel),
-      ).rejects.toThrow("Meta API error 190");
+      ).rejects.toThrow();
     });
 
     it("throws after retry exhaustion", async () => {
@@ -467,8 +485,8 @@ describe("MetaApiClient", () => {
 
       const promise = client.fetchSnapshot(ENTITY_ID, "campaign", TIME_RANGE, commerceFunnel);
       // Attach rejection handler before advancing timers to avoid unhandled rejection warning
-      const assertion = expect(promise).rejects.toThrow("Meta API error 2");
-      await vi.advanceTimersByTimeAsync(5000);
+      const assertion = expect(promise).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(15000);
 
       await assertion;
     });

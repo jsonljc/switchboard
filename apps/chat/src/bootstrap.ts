@@ -25,6 +25,7 @@ import {
   InMemoryGovernanceProfileStore,
   ProfileLoader,
   ProfileResolver,
+  InMemoryConversionBus,
 } from "@switchboard/core";
 import type { ResolvedSkin, ResolvedProfile, AgentNotifier } from "@switchboard/core";
 import type { BusinessProfile, CrmProvider } from "@switchboard/schemas";
@@ -394,6 +395,9 @@ export async function createChatRuntime(
         : undefined,
   });
 
+  // Create ConversionBus for CRM → ads attribution feedback loop
+  const conversionBus = new InMemoryConversionBus();
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -410,6 +414,7 @@ export async function createChatRuntime(
     crmProvider,
     responseGenerator,
     dataFlowExecutor,
+    conversionBus,
   });
 
   const cleanup = () => {
