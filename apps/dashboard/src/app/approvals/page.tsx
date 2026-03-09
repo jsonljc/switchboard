@@ -23,6 +23,14 @@ function formatRelative(timestamp: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/* ─── Consequence copy by risk level ─── */
+const CONSEQUENCE: Record<string, string> = {
+  low: "Routine — your assistant asked as a precaution.",
+  medium: "This affects a customer or involves money.",
+  high: "This is significant — take a moment to review.",
+  critical: "This is significant — take a moment to review.",
+};
+
 /* ─── Approval card ─── */
 function ApprovalCard({
   approval,
@@ -40,29 +48,25 @@ function ApprovalCard({
   onReject: (id: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
-      <div>
-        {approval.createdAt && (
-          <p className="section-label mb-2">{formatRelative(approval.createdAt)}</p>
-        )}
-        <p className="text-[15px] text-foreground leading-relaxed">{approval.summary}</p>
-      </div>
-      <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+    <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
+      {approval.createdAt && <p className="section-label">{formatRelative(approval.createdAt)}</p>}
+      <p className="text-[15px] text-foreground leading-relaxed">{approval.summary}</p>
+      <p className="text-[13px] text-muted-foreground italic leading-snug">
+        {CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
+      </p>
+      <div className="flex items-center gap-3 pt-1 border-t border-border/60">
         <button
           onClick={() => onApprove(approval.id, approval.bindingHash)}
-          className="px-4 py-2.5 rounded-lg text-[13px] font-medium bg-positive text-positive-foreground hover:opacity-90 transition-opacity"
+          className="px-5 py-2.5 rounded-lg text-[13px] font-medium bg-positive text-positive-foreground hover:opacity-90 transition-opacity"
         >
           Approve
         </button>
         <button
           onClick={() => onReject(approval.id)}
-          className="px-4 py-2.5 rounded-lg text-[13px] font-medium border border-border text-muted-foreground hover:text-foreground hover:border-border-subtle transition-colors"
+          className="px-4 py-2.5 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
-          Decline
+          Not now
         </button>
-        <span className="ml-auto text-[12px] text-muted-foreground capitalize">
-          {approval.riskCategory.replace("_", " ")}
-        </span>
       </div>
     </div>
   );
@@ -125,8 +129,7 @@ export default function ApprovalsPage() {
         body: JSON.stringify({
           approvalId,
           action,
-          respondedBy:
-            (session as { principalId?: string })?.principalId ?? "dashboard-user",
+          respondedBy: (session as { principalId?: string })?.principalId ?? "dashboard-user",
           bindingHash,
         }),
       });
@@ -148,7 +151,12 @@ export default function ApprovalsPage() {
       setDialog({
         open: true,
         action: "approve",
-        approval: { id, summary: approval.summary, bindingHash, riskCategory: approval.riskCategory },
+        approval: {
+          id,
+          summary: approval.summary,
+          bindingHash,
+          riskCategory: approval.riskCategory,
+        },
       });
     }
   };
@@ -169,9 +177,8 @@ export default function ApprovalsPage() {
     }
   };
 
-  const historyEntries = historyData?.entries.filter((e) =>
-    APPROVAL_EVENT_TYPES.includes(e.eventType),
-  ) ?? [];
+  const historyEntries =
+    historyData?.entries.filter((e) => APPROVAL_EVENT_TYPES.includes(e.eventType)) ?? [];
 
   const pendingCount = approvalsData?.approvals.length ?? 0;
 
@@ -179,9 +186,7 @@ export default function ApprovalsPage() {
     <div className="space-y-10">
       <section>
         <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Approvals</h1>
-        <p className="text-[14px] text-muted-foreground mt-1">
-          Decisions only you can make.
-        </p>
+        <p className="text-[14px] text-muted-foreground mt-1">Decisions only you can make.</p>
       </section>
 
       {/* Tab strip */}
@@ -216,9 +221,9 @@ export default function ApprovalsPage() {
             Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-36" />)
           ) : pendingCount === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-[15px] text-foreground font-medium">You&apos;re all caught up.</p>
+              <p className="text-[15px] text-foreground font-medium">Nothing waiting on you.</p>
               <p className="text-[14px] text-muted-foreground mt-1.5">
-                When your assistant needs a decision, it&apos;ll show up here.
+                Your assistant is running within the limits you set.
               </p>
             </div>
           ) : (

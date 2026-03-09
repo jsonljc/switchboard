@@ -3,17 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, LineChart, Link2, ShieldCheck, Shield } from "lucide-react";
+import { LayoutDashboard, TrendingUp, ShieldCheck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
 const NAV = [
-  { href: "/mission", label: "Overview", icon: LayoutDashboard },
-  { href: "/approvals", label: "Needs your decision", icon: ShieldCheck },
-  { href: "/performance", label: "Performance", icon: LineChart },
-  { href: "/connections", label: "Connections", icon: Link2 },
-  { href: "/boundaries", label: "Boundaries", icon: Shield },
+  { href: "/mission", label: "Today", icon: LayoutDashboard },
+  { href: "/leads", label: "Leads", icon: Users },
+  { href: "/results", label: "Results", icon: TrendingUp },
+  { href: "/approvals", label: "Decide", icon: ShieldCheck },
 ];
 
 export function Shell() {

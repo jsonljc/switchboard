@@ -12,11 +12,11 @@ import { cn } from "@/lib/utils";
 import type { AgentRosterEntry } from "@/lib/api-client";
 
 const STATUS_STYLES: Record<string, { dot: string; label: string }> = {
-  idle:              { dot: "bg-agent-idle",                 label: "Ready" },
-  working:           { dot: "bg-agent-active animate-pulse", label: "Working" },
-  analyzing:         { dot: "bg-agent-active animate-pulse", label: "Analyzing" },
-  waiting_approval:  { dot: "bg-agent-attention animate-pulse", label: "Waiting" },
-  error:             { dot: "bg-destructive animate-pulse",  label: "Error" },
+  idle: { dot: "bg-agent-idle", label: "Ready" },
+  working: { dot: "bg-agent-active animate-pulse", label: "Working" },
+  analyzing: { dot: "bg-agent-active animate-pulse", label: "Analyzing" },
+  waiting_approval: { dot: "bg-agent-attention animate-pulse", label: "Waiting" },
+  error: { dot: "bg-destructive animate-pulse", label: "Error" },
 };
 
 const TIER_LABELS: Record<string, string> = {
@@ -24,13 +24,7 @@ const TIER_LABELS: Record<string, string> = {
   business: "Business",
 };
 
-function AgentCard({
-  agent,
-  onClick,
-}: {
-  agent: AgentRosterEntry;
-  onClick: () => void;
-}) {
+function AgentCard({ agent, onClick }: { agent: AgentRosterEntry; onClick: () => void }) {
   const Icon = AGENT_ICONS[agent.agentRole] ?? AGENT_ICONS.primary_operator;
   const roleLabel = AGENT_ROLE_LABELS[agent.agentRole] ?? agent.agentRole;
   const isLocked = agent.status === "locked";
@@ -97,13 +91,7 @@ function AgentCard({
   );
 }
 
-function PrimaryCard({
-  agent,
-  onClick,
-}: {
-  agent: AgentRosterEntry;
-  onClick: () => void;
-}) {
+function PrimaryCard({ agent, onClick }: { agent: AgentRosterEntry; onClick: () => void }) {
   const Icon = AGENT_ICONS[agent.agentRole] ?? AGENT_ICONS.primary_operator;
   const activityStatus = (agent.agentState?.activityStatus as string) ?? "idle";
   const statusStyle = STATUS_STYLES[activityStatus] ?? STATUS_STYLES.idle;
@@ -176,40 +164,50 @@ export default function TeamPage() {
 
   const roster = rosterData?.roster ?? [];
   const primaryOperator = roster.find((a) => a.agentRole === "primary_operator");
-  const specialists = roster.filter((a) => a.agentRole !== "primary_operator");
+  const allSpecialists = roster.filter((a) => a.agentRole !== "primary_operator");
+  const activeSpecialists = allSpecialists.filter((a) => a.status !== "locked");
+  const lockedCount = allSpecialists.filter((a) => a.status === "locked").length;
 
   return (
     <div className="space-y-12">
       <section>
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Your AI Team</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Your team</h1>
         <p className="text-[14px] text-muted-foreground mt-1">
-          Your main assistant and the specialists that support them.
+          The specialists working for your business.
         </p>
       </section>
 
       {/* Primary operator */}
       {primaryOperator && (
         <section>
-          <PrimaryCard
-            agent={primaryOperator}
-            onClick={() => setSelectedAgent(primaryOperator)}
-          />
+          <PrimaryCard agent={primaryOperator} onClick={() => setSelectedAgent(primaryOperator)} />
         </section>
       )}
 
-      {/* Specialists */}
-      {specialists.length > 0 && (
+      {/* Active specialists only — locked agents removed from main grid */}
+      {activeSpecialists.length > 0 && (
         <section className="space-y-4">
           <h2 className="section-label">Specialists</h2>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {specialists.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                onClick={() => setSelectedAgent(agent)}
-              />
+            {activeSpecialists.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} onClick={() => setSelectedAgent(agent)} />
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Locked agents — quiet footer callout instead of disabled cards in the grid */}
+      {lockedCount > 0 && (
+        <section className="pt-4 border-t border-border/40">
+          <p className="text-[13px] text-muted-foreground">
+            {lockedCount} more specialist{lockedCount > 1 ? "s" : ""} available on higher plans.{" "}
+            <a
+              href="/settings"
+              className="text-foreground underline underline-offset-2 hover:no-underline transition-all"
+            >
+              View settings →
+            </a>
+          </p>
         </section>
       )}
 

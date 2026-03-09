@@ -7,6 +7,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAudit, type AuditEntryResponse } from "@/hooks/use-audit";
 import { ActivityDetail } from "@/components/activity/activity-detail";
+import { translateEvent } from "@/components/activity/event-translator";
 import { cn } from "@/lib/utils";
 
 export default function ActivityPage() {
@@ -56,10 +57,10 @@ function formatDate(timestamp: string): string {
 }
 
 const FILTERS = [
-  { key: undefined, label: "All" },
-  { key: "tool.invoked", label: "Actions" },
-  { key: "action.approved", label: "Approvals" },
-  { key: "action.denied", label: "Denied" },
+  { key: undefined, label: "Everything" },
+  { key: "tool.invoked", label: "Work done" },
+  { key: "action.approved", label: "You approved" },
+  { key: "action.denied", label: "Blocked" },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["key"];
@@ -149,54 +150,80 @@ function ActivityPageContent() {
         </div>
       ) : entries.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-[15px] text-foreground font-medium">No activity yet.</p>
+          <p className="text-[15px] text-foreground font-medium">Nothing to show.</p>
           <p className="text-[14px] text-muted-foreground mt-1.5">
-            When your assistant takes action, it&apos;ll show here.
+            Try &ldquo;Everything&rdquo; to see all recent activity.
           </p>
         </div>
       ) : (
         <div>
           {grouped.map((group) => (
             <div key={group.date} className="mb-8">
-              <p className="section-label py-3 mb-0 border-b border-border/40">{group.date}</p>
-              {group.items.map((entry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => setSelectedEntry(entry)}
-                  className="w-full flex items-start gap-4 py-4 border-b border-border/40 last:border-0 text-left group hover:bg-surface-raised -mx-3 px-3 rounded-lg transition-colors duration-fast"
-                >
-                  <div
+              {/* Date header with entry count */}
+              <p className="section-label py-3 mb-0 border-b border-border/40">
+                {group.date}
+                <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/60">
+                  · {group.items.length} {group.items.length === 1 ? "event" : "events"}
+                </span>
+              </p>
+              {group.items.map((entry) => {
+                const isWin =
+                  entry.eventType === "action.executed" || entry.eventType === "action.approved";
+                const isBlocked =
+                  entry.eventType === "action.denied" || entry.eventType === "action.rejected";
+                const displayText = translateEvent(entry);
+
+                return (
+                  <button
+                    key={entry.id}
+                    onClick={() => setSelectedEntry(entry)}
                     className={cn(
-                      "mt-1.5 h-[7px] w-[7px] rounded-full shrink-0",
-                      entry.eventType === "action.approved"
-                        ? "bg-positive"
-                        : entry.eventType === "action.rejected" || entry.eventType === "action.denied"
-                          ? "bg-negative"
-                          : entry.eventType.startsWith("tool.")
-                            ? "bg-agent-active"
-                            : "bg-agent-idle",
+                      "w-full flex items-start gap-4 py-4 border-b border-border/40 last:border-0 text-left group transition-colors duration-fast",
+                      isWin
+                        ? "border-l-2 border-l-positive bg-positive/[0.04] -mx-3 px-3 rounded-r-lg hover:bg-positive/[0.07]"
+                        : isBlocked
+                          ? "border-l-2 border-l-caution bg-caution/[0.04] -mx-3 px-3 rounded-r-lg hover:bg-caution/[0.07]"
+                          : "hover:bg-surface-raised -mx-3 px-3 rounded-lg",
                     )}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] text-foreground leading-snug">{entry.summary}</p>
-                    <time className="text-[12px] text-muted-foreground mt-0.5 block">
-                      {formatRelative(entry.timestamp)}
-                    </time>
-                  </div>
-                  <span className="text-[12px] text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0 self-center">
-                    →
-                  </span>
-                </button>
-              ))}
+                  >
+                    <div
+                      className={cn(
+                        "mt-1.5 h-[7px] w-[7px] rounded-full shrink-0",
+                        isWin
+                          ? "bg-positive"
+                          : isBlocked
+                            ? "bg-caution"
+                            : entry.eventType.startsWith("tool.")
+                              ? "bg-agent-active"
+                              : "bg-agent-idle",
+                      )}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          "leading-snug",
+                          isWin ? "text-[15px] text-foreground" : "text-[14px] text-foreground",
+                        )}
+                      >
+                        {displayText}
+                      </p>
+                      <time className="text-[12px] text-muted-foreground mt-0.5 block">
+                        {formatRelative(entry.timestamp)}
+                      </time>
+                    </div>
+                    <span className="text-[12px] text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0 self-center">
+                      →
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
       )}
 
       <Sheet open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
-        <SheetContent>
-          {selectedEntry && <ActivityDetail entry={selectedEntry} />}
-        </SheetContent>
+        <SheetContent>{selectedEntry && <ActivityDetail entry={selectedEntry} />}</SheetContent>
       </Sheet>
     </div>
   );
