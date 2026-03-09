@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import { profileToPosture } from "@switchboard/core";
 import type { GovernanceProfileStore } from "@switchboard/core";
 import type { GovernanceProfile } from "@switchboard/schemas";
-import { getOrgScopedMetaCampaignProvider } from "../utils/meta-campaign-provider.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -142,8 +141,7 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       try {
         const cartridge = app.storageContext.cartridges.get("digital-ads");
         if (isEmergencyHaltCapable(cartridge)) {
-          const provider = await getOrgScopedMetaCampaignProvider(app.prisma, orgId);
-          const campaigns = await provider.searchCampaigns("");
+          const campaigns = await cartridge.searchCampaigns("");
           for (const campaign of campaigns) {
             if (campaign.status === "ACTIVE") {
               try {
