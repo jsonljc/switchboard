@@ -20,8 +20,8 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 const TIER_LABELS: Record<string, string> = {
-  pro: "Available in Pro Plan",
-  business: "Available in Business Plan",
+  pro: "Coming with Pro",
+  business: "Coming with Business",
 };
 
 export function AgentCard({ agent, onClick }: AgentCardProps) {

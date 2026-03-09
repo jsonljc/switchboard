@@ -32,22 +32,22 @@ export function StepOperator({
           <Sparkles className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-medium">Name your AI operator</p>
+          <p className="text-sm font-medium">Name your assistant</p>
           <p className="text-xs text-muted-foreground">
-            This is the lead member of your AI team. They coordinate everything.
+            This is who you’ll talk to in Telegram. They coordinate everything for you.
           </p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="operator-name">Operator name</Label>
+        <Label htmlFor="operator-name">Name</Label>
         <Input
           id="operator-name"
           placeholder="Ava"
           value={operatorName}
           onChange={(e) => onNameChange(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">You can change this anytime in Settings.</p>
+        <p className="text-xs text-muted-foreground">You can change this anytime in Boundaries.</p>
       </div>
 
       <div className="space-y-2">

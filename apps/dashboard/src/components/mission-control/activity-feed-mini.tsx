@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function ActivityFeedMini() {
   const { data, isLoading } = useAudit({ limit: 5 });
-  const entries = data?.entries ?? [];
+  const entries = Array.isArray(data?.entries) ? data.entries : [];
+  const loadError = data?.error;
 
   return (
     <Card>
@@ -16,7 +17,7 @@ export function ActivityFeedMini() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Activity className="h-4 w-4 text-muted-foreground" />
-            Recent Activity
+            Recent activity
           </CardTitle>
           <Link href="/activity" className="text-xs text-primary hover:underline">
             View all
@@ -30,8 +31,14 @@ export function ActivityFeedMini() {
             <Skeleton className="h-10" />
             <Skeleton className="h-10" />
           </>
+        ) : loadError ? (
+          <p className="text-sm text-muted-foreground py-2">
+            Couldn’t load activity. Make sure the API is running and you’re signed in.
+          </p>
         ) : entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No recent activity</p>
+          <p className="text-sm text-muted-foreground py-2">
+            When your assistant takes action or you respond to a request, it’ll show here.
+          </p>
         ) : (
           entries.map((entry) => (
             <div

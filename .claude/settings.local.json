@@ -23,7 +23,13 @@
       "Bash(git -C:*)",
       "Bash(gh pr create:*)",
       "Bash(open https://github.com/jsonljc/switchboard/pull/31)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(git pull origin)",
+      "Bash(ls -la /Users/jasonli/switchboard/apps/dashboard/src/components/*/)",
+      "Bash(pnpm --filter @switchboard/dashboard typecheck)",
+      "Bash(pnpm --filter @switchboard/dashboard lint)",
+      "Bash(npx next lint --file src/app/page.tsx --file src/app/mission/page.tsx --file src/app/approvals/page.tsx --file src/app/activity/page.tsx --file src/app/team/page.tsx --file src/components/character/operator-character.tsx --file src/components/layout/shell.tsx --file src/components/layout/app-shell.tsx)",
+      "Bash(npx next lint --file src/app/page.tsx --file src/providers/query-provider.tsx --file src/hooks/use-approvals.ts --file src/hooks/use-agents.ts)"
     ]
   }
 }

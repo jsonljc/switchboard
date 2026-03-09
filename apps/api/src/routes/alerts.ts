@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
+import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 import { z } from "zod";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 const VALID_OPERATORS = ["gt", "gte", "lt", "lte", "eq", "pctChange_gt", "pctChange_lt"] as const;
 
@@ -34,7 +36,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const rules = await prisma.alertRule.findMany({
       where: { organizationId: orgId },
       orderBy: { createdAt: "desc" },
@@ -46,7 +49,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (request, reply) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const parsed = createAlertSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
@@ -62,7 +66,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const parsed = updateAlertSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
@@ -84,7 +89,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const existing = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
     if (!existing) return reply.code(404).send({ error: "Alert rule not found" });
     await prisma.alertRule.delete({ where: { id } });
@@ -96,7 +102,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const rule = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
     if (!rule) return reply.code(404).send({ error: "Alert rule not found" });
 
@@ -106,15 +113,29 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
       if (!cartridge)
         return reply.code(400).send({ error: "digital-ads cartridge not registered" });
 
-      const result = await cartridge.execute(
-        "digital-ads.funnel.diagnose",
-        {
+      const governedAction = await executeGovernedSystemAction({
+        orchestrator: app.orchestrator,
+        actionType: "digital-ads.funnel.diagnose",
+        cartridgeId: "digital-ads",
+        organizationId: orgId,
+        parameters: {
           platform: rule.platform ?? "meta",
           vertical: rule.vertical,
           entityId: "act_default",
         },
-        { principalId: "system", organizationId: orgId, connectionCredentials: {} },
-      );
+        message: `Test alert rule ${rule.id}`,
+        idempotencyKey: `alert-test:${rule.id}`,
+      });
+
+      if (governedAction.outcome !== "executed") {
+        return reply.code(409).send({
+          error: "Alert test was not executed",
+          detail: governedAction.explanation,
+          outcome: governedAction.outcome,
+        });
+      }
+
+      const result = governedAction.executionResult;
 
       if (!result?.data) {
         return reply.send({ triggered: false, error: "No diagnostic data returned" });
@@ -138,12 +159,13 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const rule = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
     if (!rule) return reply.code(404).send({ error: "Alert rule not found" });
 
     const history = await prisma.alertHistory.findMany({
-      where: { alertRuleId: id },
+      where: { alertRuleId: id, organizationId: orgId },
       orderBy: { triggeredAt: "desc" },
       take: 100,
     });
@@ -155,7 +177,8 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
     const prisma = app.prisma;
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const body = request.body as { durationMinutes?: number };
     const minutes = body.durationMinutes ?? 60;
 

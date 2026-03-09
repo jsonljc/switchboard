@@ -100,7 +100,7 @@ export function StepTelegram({
         {skipLeadBot ? (
           <div className="rounded-lg border border-dashed p-3">
             <p className="text-xs text-muted-foreground">
-              You can set up a lead bot later from Settings.
+              You can set up a lead bot later from Connections.
             </p>
             <Button
               variant="ghost"

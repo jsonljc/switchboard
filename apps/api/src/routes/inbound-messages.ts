@@ -153,7 +153,15 @@ export const inboundMessagesRoutes: FastifyPluginAsync = async (app) => {
         metadata?: Record<string, unknown>;
       };
 
-      const orgId = request.organizationIdFromAuth ?? "default";
+      const orgIdFromMetadata =
+        typeof metadata?.["organizationId"] === "string" ? metadata["organizationId"] : null;
+      const orgId = request.organizationIdFromAuth ?? orgIdFromMetadata;
+      if (!orgId) {
+        return reply.code(400).send({
+          error: "organizationId is required for web chat requests",
+          hint: "Pass metadata.organizationId from the embedded chat widget.",
+        });
+      }
 
       logger.info(
         { channelId, from, orgId, bodyLength: messageBody.length },

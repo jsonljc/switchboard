@@ -53,7 +53,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             <p className="font-medium text-sm">{approval.summary}</p>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge variant={riskBadgeVariant(approval.riskCategory)}>
-                {approval.riskCategory} risk
+                {approval.riskCategory === "critical" || approval.riskCategory === "high"
+                  ? "Higher impact"
+                  : "Lower impact"}
               </Badge>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />

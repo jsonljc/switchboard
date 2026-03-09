@@ -57,7 +57,8 @@ export function useAgentState() {
   return useQuery({
     queryKey: queryKeys.agents.state(),
     queryFn: fetchState,
-    refetchInterval: 30_000,
+    // 60s: agent state is informational on Mission Control; 30s was unnecessarily aggressive
+    refetchInterval: 60_000,
   });
 }
 

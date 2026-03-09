@@ -3,29 +3,25 @@
 import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect, useSearchParams } from "next/navigation";
-import { ActivityItem } from "@/components/activity/activity-item";
-import { ActivityDetail } from "@/components/activity/activity-detail";
-import { ActivityFilters } from "@/components/activity/activity-filters";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAudit } from "@/hooks/use-audit";
-import { AlertTriangle } from "lucide-react";
+import { useAudit, type AuditEntryResponse } from "@/hooks/use-audit";
+import { ActivityDetail } from "@/components/activity/activity-detail";
+import { cn } from "@/lib/utils";
 
 export default function ActivityPage() {
   return (
     <Suspense
       fallback={
-        <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Activity</h1>
-          <div className="space-y-1">
+        <div className="space-y-8">
+          <Skeleton className="h-6 w-24" />
+          <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3 p-3">
-                <Skeleton className="h-5 w-5 rounded-full" />
+              <div key={i} className="flex gap-4 py-4 border-b border-border/50">
+                <Skeleton className="h-[7px] w-[7px] rounded-full mt-1.5 shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/4" />
+                  <Skeleton className="h-4 w-4/5" />
+                  <Skeleton className="h-3 w-1/5" />
                 </div>
               </div>
             ))}
@@ -38,69 +34,169 @@ export default function ActivityPage() {
   );
 }
 
+function formatRelative(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "Yesterday" : `${d}d ago`;
+}
+
+function formatDate(timestamp: string): string {
+  const d = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+const FILTERS = [
+  { key: undefined, label: "All" },
+  { key: "tool.invoked", label: "Actions" },
+  { key: "action.approved", label: "Approvals" },
+  { key: "action.denied", label: "Denied" },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]["key"];
+
 function ActivityPageContent() {
   const { status } = useSession();
   const searchParams = useSearchParams();
-
   const filterParam = searchParams.get("filter");
-  const initialFilter = filterParam === "denied" ? "action.denied" : undefined;
+  const initialFilter: FilterKey = filterParam === "denied" ? "action.denied" : undefined;
 
-  const [filter, setFilter] = useState<string | undefined>(initialFilter);
-  const { data, isLoading, isError, error, refetch } = useAudit({ eventType: filter, limit: 50 });
-  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
+  const [filter, setFilter] = useState<FilterKey>(initialFilter);
+  const { data, isLoading, isError, refetch } = useAudit({
+    eventType: filter as string | undefined,
+    limit: 60,
+  });
+  const [selectedEntry, setSelectedEntry] = useState<AuditEntryResponse | null>(null);
+  const entries = Array.isArray(data?.entries) ? data.entries : [];
 
   if (status === "unauthenticated") redirect("/login");
 
-  if (isError) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Activity</h1>
-        <Card className="border-destructive">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Failed to load activity</span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Group by date
+  const grouped: { date: string; items: AuditEntryResponse[] }[] = [];
+  entries.forEach((entry) => {
+    const dateLabel = formatDate(entry.timestamp);
+    const last = grouped[grouped.length - 1];
+    if (last && last.date === dateLabel) {
+      last.items.push(entry);
+    } else {
+      grouped.push({ date: dateLabel, items: [entry] });
+    }
+  });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Activity</h1>
+    <div className="space-y-10">
+      <section>
+        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Activity</h1>
+        <p className="text-[14px] text-muted-foreground mt-1">
+          What your assistant has done, and what you&apos;ve decided.
+        </p>
+      </section>
 
-      <ActivityFilters activeFilter={filter} onFilterChange={setFilter} />
-
-      <div className="space-y-1">
-        {isLoading ? (
-          Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-start gap-3 p-3">
-              <Skeleton className="h-5 w-5 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-3 w-1/4" />
-              </div>
-            </div>
-          ))
-        ) : data?.entries.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No activity yet</p>
-          </div>
-        ) : (
-          data?.entries.map((entry) => (
-            <ActivityItem key={entry.id} entry={entry} onClick={() => setSelectedEntry(entry)} />
-          ))
-        )}
+      {/* Filter strip */}
+      <div className="flex items-center gap-0 border-b border-border/60">
+        {FILTERS.map((f) => (
+          <button
+            key={String(f.key)}
+            onClick={() => setFilter(f.key)}
+            className={cn(
+              "relative px-0 py-3 mr-6 text-[13.5px] transition-colors duration-fast",
+              filter === f.key
+                ? "text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {f.label}
+            {filter === f.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-foreground rounded-full" />
+            )}
+          </button>
+        ))}
       </div>
 
+      {/* Content */}
+      {isLoading ? (
+        <div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex gap-4 py-4 border-b border-border/50">
+              <Skeleton className="h-[7px] w-[7px] rounded-full mt-1.5 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : isError || data?.error ? (
+        <div className="py-12 text-center">
+          <p className="text-[14px] text-muted-foreground">
+            Couldn&apos;t load activity. Make sure the API is running.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 text-[13px] text-foreground underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-[15px] text-foreground font-medium">No activity yet.</p>
+          <p className="text-[14px] text-muted-foreground mt-1.5">
+            When your assistant takes action, it&apos;ll show here.
+          </p>
+        </div>
+      ) : (
+        <div>
+          {grouped.map((group) => (
+            <div key={group.date} className="mb-8">
+              <p className="section-label py-3 mb-0 border-b border-border/40">{group.date}</p>
+              {group.items.map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => setSelectedEntry(entry)}
+                  className="w-full flex items-start gap-4 py-4 border-b border-border/40 last:border-0 text-left group hover:bg-surface-raised -mx-3 px-3 rounded-lg transition-colors duration-fast"
+                >
+                  <div
+                    className={cn(
+                      "mt-1.5 h-[7px] w-[7px] rounded-full shrink-0",
+                      entry.eventType === "action.approved"
+                        ? "bg-positive"
+                        : entry.eventType === "action.rejected" || entry.eventType === "action.denied"
+                          ? "bg-negative"
+                          : entry.eventType.startsWith("tool.")
+                            ? "bg-agent-active"
+                            : "bg-agent-idle",
+                    )}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] text-foreground leading-snug">{entry.summary}</p>
+                    <time className="text-[12px] text-muted-foreground mt-0.5 block">
+                      {formatRelative(entry.timestamp)}
+                    </time>
+                  </div>
+                  <span className="text-[12px] text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0 self-center">
+                    →
+                  </span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Sheet open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
-        <SheetContent>{selectedEntry && <ActivityDetail entry={selectedEntry} />}</SheetContent>
+        <SheetContent>
+          {selectedEntry && <ActivityDetail entry={selectedEntry} />}
+        </SheetContent>
       </Sheet>
     </div>
   );

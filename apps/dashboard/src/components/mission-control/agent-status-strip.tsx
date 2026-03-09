@@ -55,7 +55,11 @@ export function AgentStatusStrip() {
   });
 
   if (workingAgents.length === 0) {
-    return <p className="text-sm text-muted-foreground py-2">All specialists are idle</p>;
+    return (
+      <p className="text-sm text-muted-foreground py-2">
+        No one’s working on anything right now. When your assistant is active, they’ll show here.
+      </p>
+    );
   }
 
   return (

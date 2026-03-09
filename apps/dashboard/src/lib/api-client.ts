@@ -93,6 +93,41 @@ export interface ScheduledReportEntry {
   updatedAt: string;
 }
 
+export interface OperatorSummary {
+  organizationId: string;
+  spend: {
+    source: "meta";
+    currency: "USD";
+    connectionStatus: "connected" | "missing" | "error";
+    today: number | null;
+    last7Days: number | null;
+    last30Days: number | null;
+    trend: Array<{
+      date: string;
+      spend: number | null;
+      leads: number;
+      bookings: number;
+    }>;
+    freshness: {
+      fetchedAt: string | null;
+      cacheTtlSeconds: number;
+    };
+  };
+  outcomes: {
+    leads30d: number;
+    qualifiedLeads30d: number;
+    bookings30d: number;
+    revenue30d: number | null;
+    costPerLead30d: number | null;
+    costPerQualifiedLead30d: number | null;
+    costPerBooking30d: number | null;
+  };
+  operator: {
+    actionsToday: number;
+    deniedToday: number;
+  };
+}
+
 export interface CreateScheduledReportInput {
   name: string;
   cronExpression: string;
@@ -631,6 +666,10 @@ export class SwitchboardClient {
   }
 
   // Clinic Reports
+  async getOperatorSummary() {
+    return this.request<{ summary: OperatorSummary }>("/api/reports/operator-summary");
+  }
+
   async getClinicReport(params?: { startDate?: string; endDate?: string; adSpend?: number }) {
     const query = new URLSearchParams();
     if (params?.startDate) query.set("startDate", params.startDate);
@@ -671,10 +710,16 @@ export class SwitchboardClient {
   }
 
   // Conversations
-  async getConversations(filters?: { status?: string; channel?: string; limit?: number }) {
+  async getConversations(filters?: {
+    status?: string;
+    channel?: string;
+    principalId?: string;
+    limit?: number;
+  }) {
     const params = new URLSearchParams();
     if (filters?.status) params.set("status", filters.status);
     if (filters?.channel) params.set("channel", filters.channel);
+    if (filters?.principalId) params.set("principalId", filters.principalId);
     if (filters?.limit) params.set("limit", String(filters.limit));
     const qs = params.toString();
     return this.request<{
@@ -683,6 +728,7 @@ export class SwitchboardClient {
         threadId: string;
         channel: string;
         principalId: string;
+        organizationId: string | null;
         status: string;
         currentIntent: string | null;
         firstReplyAt: string | null;
@@ -692,6 +738,28 @@ export class SwitchboardClient {
       limit: number;
       offset: number;
     }>(`/api/conversations${qs ? `?${qs}` : ""}`);
+  }
+
+  async getConversation(id: string) {
+    return this.request<{
+      id: string;
+      threadId: string;
+      channel: string;
+      principalId: string;
+      organizationId: string | null;
+      status: string;
+      currentIntent: string | null;
+      firstReplyAt: string | null;
+      lastActivityAt: string;
+      messages: Array<{ role: string; text: string; timestamp: string }>;
+    }>(`/api/conversations/${id}`);
+  }
+
+  async setConversationOverride(id: string, override: boolean) {
+    return this.request<{ id: string; status: string }>(`/api/conversations/${id}/override`, {
+      method: "PATCH",
+      body: JSON.stringify({ override }),
+    });
   }
 
   // CRM Contacts
@@ -704,6 +772,10 @@ export class SwitchboardClient {
     return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
       `/api/crm/contacts${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  async getContact(id: string) {
+    return this.request<{ contact: unknown }>(`/api/crm/contacts/${id}`);
   }
 
   // CRM Deals

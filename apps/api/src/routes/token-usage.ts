@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { computeTokenCostUSD, listModelCosts } from "@switchboard/core";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 const COST_PRECISION = 1_000_000;
 
@@ -23,7 +24,8 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as { period?: string };
       const period = query.period ?? "daily";
-      const orgId = request.organizationIdFromAuth ?? "default";
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const redis = app.redis;
 
       if (!redis) {
@@ -112,7 +114,8 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as { days?: string };
       const days = Math.min(parseInt(query.days ?? "7", 10) || 7, 90);
-      const orgId = request.organizationIdFromAuth ?? "default";
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const redis = app.redis;
 
       if (!redis) {

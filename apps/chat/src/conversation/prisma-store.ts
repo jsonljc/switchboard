@@ -22,6 +22,7 @@ export class PrismaConversationStore implements ConversationStore {
         threadId: state.threadId,
         channel: state.channel,
         principalId: state.principalId,
+        organizationId: state.organizationId,
         status: state.status,
         currentIntent: state.currentIntent,
         pendingProposalIds: state.pendingProposalIds,
@@ -35,6 +36,7 @@ export class PrismaConversationStore implements ConversationStore {
       update: {
         status: state.status,
         currentIntent: state.currentIntent,
+        organizationId: state.organizationId,
         pendingProposalIds: state.pendingProposalIds,
         pendingApprovalIds: state.pendingApprovalIds,
         clarificationQuestion: state.clarificationQuestion,
@@ -80,6 +82,7 @@ function toConversationStateData(row: {
   threadId: string;
   channel: string;
   principalId: string;
+  organizationId: string | null;
   status: string;
   currentIntent: string | null;
   pendingProposalIds: string[];
@@ -95,6 +98,7 @@ function toConversationStateData(row: {
     threadId: row.threadId,
     channel: row.channel,
     principalId: row.principalId,
+    organizationId: row.organizationId,
     status: row.status as ConversationStatus,
     currentIntent: row.currentIntent,
     pendingProposalIds: row.pendingProposalIds,

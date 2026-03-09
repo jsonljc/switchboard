@@ -180,4 +180,27 @@ describe("Webhooks API", () => {
       globalThis.fetch = originalFetch;
     });
   });
+
+  describe("organization scope", () => {
+    it("rejects unscoped requests", async () => {
+      await app.close();
+
+      app = Fastify({ logger: false });
+      app.decorate("storageContext", { identity: mockIdentity } as any);
+      app.decorateRequest("organizationIdFromAuth", undefined);
+      app.decorateRequest("principalIdFromAuth", undefined);
+      app.addHook("onRequest", async (request) => {
+        request.principalIdFromAuth = "user_admin";
+      });
+
+      await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/webhooks",
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
 });

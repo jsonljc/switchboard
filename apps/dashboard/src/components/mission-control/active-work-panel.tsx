@@ -16,7 +16,7 @@ export function ActiveWorkPanel() {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          Needs Your Input
+          Needs your input
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -26,7 +26,9 @@ export function ActiveWorkPanel() {
             <Skeleton className="h-12" />
           </>
         ) : approvals.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">Nothing needs your input right now</p>
+          <p className="text-sm text-muted-foreground py-2">
+            Nothing needs your input right now. When your assistant needs a decision, it’ll show up here.
+          </p>
         ) : (
           approvals.map((approval) => (
             <Link
@@ -54,7 +56,7 @@ export function ActiveWorkPanel() {
             href="/approvals"
             className="text-xs text-primary hover:underline block text-center pt-1"
           >
-            View all approvals
+            View all
           </Link>
         )}
       </CardContent>

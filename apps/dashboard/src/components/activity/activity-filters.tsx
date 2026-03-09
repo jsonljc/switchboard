@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 
 const filters = [
   { label: "All", value: undefined },
-  { label: "Executed", value: "action.executed" },
-  { label: "Denied", value: "action.denied" },
-  { label: "Approvals", value: "action.approved" },
+  { label: "Completed", value: "action.executed" },
+  { label: "Declined", value: "action.denied" },
+  { label: "Approved", value: "action.approved" },
   { label: "Settings", value: "policy.created" },
 ];
 

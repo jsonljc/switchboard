@@ -1,22 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-
-/** Cartridge that supports campaign read operations. */
-interface CampaignCapableCartridge {
-  getCampaign(
-    id: string,
-  ): Promise<{ id: string; name: string; status: string; [key: string]: unknown }>;
-  searchCampaigns(
-    query: string,
-  ): Promise<Array<{ id: string; name: string; status: string; [key: string]: unknown }>>;
-}
-
-function isCampaignCapable(cartridge: unknown): cartridge is CampaignCapableCartridge {
-  return (
-    cartridge != null &&
-    typeof (cartridge as CampaignCapableCartridge).getCampaign === "function" &&
-    typeof (cartridge as CampaignCapableCartridge).searchCampaigns === "function"
-  );
-}
+import { getOrgScopedMetaCampaignProvider } from "../utils/meta-campaign-provider.js";
 
 export const campaignsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/campaigns/:id
@@ -31,9 +14,6 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      // Campaign data is fetched via external APIs using cartridge boot-time credentials.
-      // TODO: Per-org credential scoping needed — currently campaigns are scoped by whichever
-      // credentials the cartridge was initialized with, not by the requester's org.
       if (!request.organizationIdFromAuth) {
         return reply.code(403).send({
           error: "Forbidden: API key must be scoped to an organization",
@@ -42,19 +22,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge) {
-        return reply
-          .code(503)
-          .send({ error: "Digital ads cartridge not available", statusCode: 503 });
-      }
-
-      if (!isCampaignCapable(cartridge)) {
-        return reply.code(501).send({ error: "getCampaign not implemented", statusCode: 501 });
-      }
-
       try {
-        const campaign = await cartridge.getCampaign(id);
+        const provider = await getOrgScopedMetaCampaignProvider(
+          app.prisma,
+          request.organizationIdFromAuth,
+        );
+        const campaign = await provider.getCampaign(id);
         if (!campaign) {
           return reply.code(404).send({ error: "Campaign not found", statusCode: 404 });
         }
@@ -80,7 +53,6 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as { query?: string; limit?: string };
 
-      // TODO: Per-org credential scoping needed — see GET /:id comment
       if (!request.organizationIdFromAuth) {
         return reply.code(403).send({
           error: "Forbidden: API key must be scoped to an organization",
@@ -93,19 +65,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "query parameter is required", statusCode: 400 });
       }
 
-      const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge) {
-        return reply
-          .code(503)
-          .send({ error: "Digital ads cartridge not available", statusCode: 503 });
-      }
-
-      if (!isCampaignCapable(cartridge)) {
-        return reply.code(501).send({ error: "searchCampaigns not implemented", statusCode: 501 });
-      }
-
       try {
-        const campaigns = await cartridge.searchCampaigns(query.query);
+        const provider = await getOrgScopedMetaCampaignProvider(
+          app.prisma,
+          request.organizationIdFromAuth,
+        );
+        const campaigns = await provider.searchCampaigns(query.query);
         const limit = query.limit ? parseInt(query.limit, 10) : 20;
         return reply.code(200).send({
           campaigns: campaigns.slice(0, limit),

@@ -37,6 +37,7 @@ export const ConversationStatusSchema = z.enum([
   "active",
   "awaiting_clarification",
   "awaiting_approval",
+  "human_override",
   "completed",
   "expired",
 ]);
@@ -47,6 +48,7 @@ export const ConversationStateSchema = z.object({
   threadId: z.string(),
   channel: z.string(),
   principalId: z.string(),
+  organizationId: z.string().nullable().optional(),
   status: ConversationStatusSchema,
   currentIntent: z.string().nullable(),
   pendingProposalIds: z.array(z.string()),

@@ -1,10 +1,10 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
+import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { randomUUID, createHash } from "crypto";
-import { encryptApiKey } from "./crypto";
 import { verifyPassword } from "./password";
+import { provisionDashboardUser } from "./provision-dashboard-user";
 
 const prisma = new PrismaClient();
 
@@ -59,23 +59,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers,
   adapter: {
     async createUser(user) {
-      // When a user first signs in via magic link, create the DashboardUser,
-      // plus a Principal and IdentitySpec via the Switchboard API
-      const orgId = `org_${randomUUID()}`;
-      const principalId = `principal_${randomUUID()}`;
-      const apiKey = `sk_${randomUUID().replace(/-/g, "")}`;
-
-      const dashboardUser = await prisma.dashboardUser.create({
-        data: {
-          id: randomUUID(),
-          email: user.email!,
-          name: user.name,
-          emailVerified: user.emailVerified,
-          organizationId: orgId,
-          principalId,
-          apiKeyEncrypted: encryptApiKey(apiKey),
-          apiKeyHash: createHash("sha256").update(apiKey).digest("hex"),
-        },
+      const dashboardUser = await provisionDashboardUser(prisma, {
+        email: user.email!,
+        name: user.name,
+        emailVerified: user.emailVerified,
       });
 
       return {

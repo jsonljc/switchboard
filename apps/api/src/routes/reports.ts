@@ -1,8 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { buildOperatorSummary } from "../services/operator-summary.js";
+import { getOrgScopedMetaAdsContext } from "../utils/meta-campaign-provider.js";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 const clinicReportQuerySchema = z.object({
-  organizationId: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   adSpend: z.coerce.number().optional(),
@@ -10,6 +12,21 @@ const clinicReportQuerySchema = z.object({
 
 export const reportsRoutes: FastifyPluginAsync = async (app) => {
   const prisma = app.prisma;
+
+  app.get("/operator-summary", async (request, reply) => {
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
+
+    const summary = await buildOperatorSummary({
+      prisma,
+      redis: app.redis,
+      organizationId: orgId,
+    });
+
+    return reply.send({ summary });
+  });
 
   // GET /api/reports/clinic — clinic performance metrics
   app.get("/clinic", async (request, reply) => {
@@ -20,7 +37,8 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Invalid query", details: parsed.error.format() });
     }
 
-    const orgId = parsed.data.organizationId ?? request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const endDate = parsed.data.endDate ? new Date(parsed.data.endDate) : new Date();
     const startDate = parsed.data.startDate
       ? new Date(parsed.data.startDate)
@@ -200,14 +218,31 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       bySource: [...bySourceMap.values()],
     };
 
-    // Cost metrics (from optional adSpend param)
+    let actualAdSpend: number | null = null;
+    try {
+      const { provider, adAccountId } = await getOrgScopedMetaAdsContext(prisma, orgId);
+      const spendRows = await provider.getAccountInsights(adAccountId, {
+        dateRange: {
+          since: startDate.toISOString().slice(0, 10),
+          until: endDate.toISOString().slice(0, 10),
+        },
+        fields: ["spend"],
+      });
+      actualAdSpend =
+        Math.round(spendRows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0) * 100) /
+        100;
+    } catch {
+      actualAdSpend = null;
+    }
+
+    // Cost metrics (source-backed when available, optional override otherwise)
+    const adSpend = actualAdSpend ?? parsed.data.adSpend ?? null;
     const effectiveBookings = bookingCount || bookingAuditCount;
     const costPerBooking =
-      parsed.data.adSpend != null && effectiveBookings > 0
-        ? parsed.data.adSpend / effectiveBookings
+      adSpend != null && effectiveBookings > 0
+        ? adSpend / effectiveBookings
         : null;
-    const costPerLead =
-      parsed.data.adSpend != null && leadsFromAds > 0 ? parsed.data.adSpend / leadsFromAds : null;
+    const costPerLead = adSpend != null && leadsFromAds > 0 ? adSpend / leadsFromAds : null;
 
     return reply.send({
       period: {
@@ -227,7 +262,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
       responseTime: responseTimeMetrics,
       adCorrelation,
       costMetrics: {
-        adSpend: parsed.data.adSpend ?? null,
+        adSpend,
         costPerBooking,
         costPerLead,
       },

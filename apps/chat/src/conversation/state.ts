@@ -12,6 +12,7 @@ export interface ConversationStateData {
   threadId: string;
   channel: string;
   principalId: string;
+  organizationId: string | null;
   status: ConversationStatus;
   currentIntent: string | null;
   pendingProposalIds: string[];
@@ -28,12 +29,14 @@ export function createConversation(
   threadId: string,
   channel: string,
   principalId: string,
+  organizationId?: string | null,
 ): ConversationStateData {
   return {
     id: `conv_${randomUUID()}`,
     threadId,
     channel,
     principalId,
+    organizationId: organizationId ?? null,
     status: "active",
     currentIntent: null,
     pendingProposalIds: [],

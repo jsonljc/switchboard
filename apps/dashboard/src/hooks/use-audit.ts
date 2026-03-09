@@ -17,9 +17,11 @@ export interface AuditEntryResponse {
   envelopeId: string | null;
 }
 
-interface AuditResponse {
+export interface AuditResponse {
   entries: AuditEntryResponse[];
   total: number;
+  /** Set when the server could not reach the backend; UI can show a friendly message. */
+  error?: string;
 }
 
 async function fetchAudit(params?: { eventType?: string; limit?: number }): Promise<AuditResponse> {
@@ -28,8 +30,11 @@ async function fetchAudit(params?: { eventType?: string; limit?: number }): Prom
   if (params?.limit) searchParams.set("limit", String(params.limit));
   const qs = searchParams.toString();
   const res = await fetch(`/api/dashboard/audit${qs ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error("Failed to fetch audit");
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  const entries = Array.isArray(data?.entries) ? data.entries : [];
+  const total = typeof data?.total === "number" ? data.total : entries.length;
+  const error = data?.error ?? (!res.ok ? "Failed to load activity" : undefined);
+  return { entries, total, error };
 }
 
 export function useAudit(params?: { eventType?: string; limit?: number }) {

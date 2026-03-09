@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 
@@ -38,59 +37,60 @@ export function WizardShell({
   children,
 }: WizardShellProps) {
   return (
-    <div className="min-h-[80vh] flex items-center justify-center">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>Get Started</CardTitle>
-          <CardDescription>
+    <div className="min-h-[80vh] flex items-center justify-center py-12 content-width">
+      <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-8">
+        <div className="space-y-3 mb-6">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            Set up your assistant
+          </h1>
+          <p className="text-[15px] text-muted-foreground">
             Step {step + 1} of {stepLabels.length}: {stepLabels[step]}
-          </CardDescription>
-          <div className="flex gap-1 mt-2">
+          </p>
+          <div className="flex gap-1 pt-1">
             {stepLabels.map((_, i) => (
               <div
                 key={i}
-                className={`h-1 flex-1 rounded-full transition-colors ${
-                  i <= step ? "bg-primary" : "bg-muted"
+                className={`h-0.5 flex-1 rounded-full transition-colors ${
+                  i <= step ? "bg-primary/80" : "bg-muted"
                 }`}
               />
             ))}
           </div>
-        </CardHeader>
-        <CardContent>
-          {children}
+        </div>
 
-          <div className="flex gap-2 mt-6">
-            {step > 0 && (
-              <Button
-                variant="outline"
-                onClick={onBack}
-                className="flex-1 min-h-[44px]"
-              >
-                <ChevronLeft className="mr-1 h-4 w-4" />
-                Back
-              </Button>
-            )}
-            {isLastStep ? (
-              <Button
-                onClick={onComplete}
-                className="flex-1 min-h-[44px]"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Setting up..." : "Complete Setup"}
-              </Button>
-            ) : (
-              <Button
-                onClick={onNext}
-                className="flex-1 min-h-[44px]"
-                disabled={!canProceed}
-              >
-                Next
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        {children}
+
+        <div className="flex gap-2 mt-8">
+          {step > 0 && (
+            <Button
+              variant="outline"
+              onClick={onBack}
+              className="flex-1 min-h-[44px]"
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Back
+            </Button>
+          )}
+          {isLastStep ? (
+            <Button
+              onClick={onComplete}
+              className="flex-1 min-h-[44px]"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Setting up…" : "Finish"}
+            </Button>
+          ) : (
+            <Button
+              onClick={onNext}
+              className="flex-1 min-h-[44px]"
+              disabled={!canProceed}
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

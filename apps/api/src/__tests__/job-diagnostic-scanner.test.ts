@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockHandleTriggeredAlert = vi.fn();
+const mockExecuteGovernedSystemAction = vi.fn();
 
 vi.mock("../alerts/handler.js", () => ({
   handleTriggeredAlert: (...args: unknown[]) => mockHandleTriggeredAlert(...args),
+}));
+
+vi.mock("../services/system-governed-actions.js", () => ({
+  executeGovernedSystemAction: (...args: unknown[]) => mockExecuteGovernedSystemAction(...args),
 }));
 
 import { startDiagnosticScanner } from "../jobs/diagnostic-scanner.js";
@@ -12,6 +17,11 @@ describe("Diagnostic Scanner Job", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    mockExecuteGovernedSystemAction.mockResolvedValue({
+      outcome: "executed",
+      executionResult: { data: { primaryKPI: { current: 150 } } },
+      envelopeId: "env_1",
+    });
   });
 
   afterEach(() => {
@@ -27,11 +37,13 @@ describe("Diagnostic Scanner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn(), list: vi.fn() },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });
@@ -54,11 +66,13 @@ describe("Diagnostic Scanner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn() },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });
@@ -94,12 +108,10 @@ describe("Diagnostic Scanner Job", () => {
         findMany: vi.fn().mockResolvedValue(rules),
       },
     };
-    const mockCartridge = {
-      execute: vi.fn().mockResolvedValue({ data: { primaryKPI: { current: 150 } } }),
-    };
     const storageContext = {
-      cartridges: { get: vi.fn().mockReturnValue(mockCartridge) },
+      cartridges: { get: vi.fn().mockReturnValue({ id: "digital-ads" }) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     mockHandleTriggeredAlert.mockResolvedValue(undefined);
@@ -107,16 +119,20 @@ describe("Diagnostic Scanner Job", () => {
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });
 
     await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(mockCartridge.execute).toHaveBeenCalledWith(
-      "digital-ads.funnel.diagnose",
-      expect.any(Object),
-      expect.objectContaining({ principalId: "system", organizationId: "org_1" }),
+    expect(mockExecuteGovernedSystemAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orchestrator,
+        actionType: "digital-ads.funnel.diagnose",
+        cartridgeId: "digital-ads",
+        organizationId: "org_1",
+      }),
     );
     expect(mockHandleTriggeredAlert).toHaveBeenCalledWith(
       rules[0],
@@ -139,20 +155,23 @@ describe("Diagnostic Scanner Job", () => {
         findMany: vi.fn().mockResolvedValue(rules),
       },
     };
-    const mockCartridge = {
-      execute: vi
-        .fn()
-        .mockRejectedValueOnce(new Error("Org 1 failed"))
-        .mockResolvedValueOnce({ data: { kpi: 1 } }),
-    };
     const storageContext = {
-      cartridges: { get: vi.fn().mockReturnValue(mockCartridge) },
+      cartridges: { get: vi.fn().mockReturnValue({ id: "digital-ads" }) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    mockExecuteGovernedSystemAction
+      .mockRejectedValueOnce(new Error("Org 1 failed"))
+      .mockResolvedValueOnce({
+        outcome: "executed",
+        executionResult: { data: { kpi: 1 } },
+        envelopeId: "env_2",
+      });
 
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });
@@ -160,7 +179,7 @@ describe("Diagnostic Scanner Job", () => {
     await vi.advanceTimersByTimeAsync(30_000);
 
     // Both orgs attempted — first fails, second succeeds
-    expect(mockCartridge.execute).toHaveBeenCalledTimes(2);
+    expect(mockExecuteGovernedSystemAction).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ err: expect.any(Error), orgId: "org_1" }),
       "Failed to run diagnostic scan for org",
@@ -181,11 +200,13 @@ describe("Diagnostic Scanner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn().mockReturnValue(undefined) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });
@@ -209,11 +230,13 @@ describe("Diagnostic Scanner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn() },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 120_000,
     });

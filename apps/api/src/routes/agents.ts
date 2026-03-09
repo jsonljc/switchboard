@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { deriveAgentStates } from "@switchboard/db";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 const DEFAULT_ROSTER = [
   {
@@ -75,10 +76,8 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
-      const orgId = request.organizationIdFromAuth;
-      if (!orgId) {
-        return reply.code(400).send({ error: "Organization ID required", statusCode: 400 });
-      }
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       const roster = await app.prisma.agentRoster.findMany({
         where: { organizationId: orgId },
@@ -105,14 +104,15 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const { id } = request.params as { id: string };
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       const existing = await app.prisma.agentRoster.findUnique({ where: { id } });
       if (!existing) {
         return reply.code(404).send({ error: "Agent not found", statusCode: 404 });
       }
 
-      if (orgId && existing.organizationId !== orgId) {
+      if (existing.organizationId !== orgId) {
         return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
@@ -152,10 +152,8 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
-      const orgId = request.organizationIdFromAuth;
-      if (!orgId) {
-        return reply.code(400).send({ error: "Organization ID required", statusCode: 400 });
-      }
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       // Fetch recent audit entries (last 24h)
       const since = new Date();
@@ -196,10 +194,8 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
-      const orgId = request.organizationIdFromAuth;
-      if (!orgId) {
-        return reply.code(400).send({ error: "Organization ID required", statusCode: 400 });
-      }
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       const body = request.body as {
         operatorName?: string;

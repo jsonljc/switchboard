@@ -5,6 +5,7 @@
 import type { LifecycleOrchestrator, ResolvedSkin, ResolvedProfile } from "@switchboard/core";
 import type { StorageContext } from "@switchboard/core";
 import type { AgentNotifier } from "@switchboard/core";
+import type { Queue, Worker } from "bullmq";
 import { startApprovalExpiryJob } from "../jobs/approval-expiry.js";
 import { startChainVerificationJob } from "../jobs/chain-verification.js";
 import { startDiagnosticScanner } from "../jobs/diagnostic-scanner.js";
@@ -14,12 +15,18 @@ import { startTtlCleanupJob } from "../jobs/ttl-cleanup.js";
 import { startCadenceRunner } from "../jobs/cadence-runner.js";
 import { startAgentRunner } from "../jobs/agent-runner.js";
 import type { AuditLedger } from "@switchboard/core";
+import {
+  createBackgroundJobsQueue,
+  createBackgroundWorker,
+  scheduleBackgroundJobs,
+} from "../queue/index.js";
 
 interface JobDeps {
   storage: StorageContext;
   ledger: AuditLedger;
   orchestrator: LifecycleOrchestrator;
   prismaClient: import("@switchboard/db").PrismaClient | null;
+  redis: import("ioredis").default | null;
   resolvedSkin?: ResolvedSkin | null;
   resolvedProfile?: ResolvedProfile | null;
   logger: {
@@ -34,19 +41,20 @@ interface JobDeps {
  */
 export async function startBackgroundJobs(
   deps: JobDeps,
-): Promise<{ stop: () => void; agentNotifier: AgentNotifier }> {
-  const { storage, ledger, orchestrator, prismaClient, resolvedSkin, resolvedProfile, logger } =
+): Promise<{
+  stop: () => Promise<void>;
+  agentNotifier: AgentNotifier;
+  backgroundQueue: Queue | null;
+  backgroundWorker: Worker | null;
+}> {
+  const { storage, ledger, orchestrator, prismaClient, redis, resolvedSkin, resolvedProfile, logger } =
     deps;
 
   const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger });
   const stopChainVerify = startChainVerificationJob({ ledger, logger });
 
-  const stopDiagnosticScanner = prismaClient
-    ? startDiagnosticScanner({ prisma: prismaClient, storageContext: storage, logger })
-    : () => {};
-  const stopScheduledReports = prismaClient
-    ? startScheduledReportJob({ prisma: prismaClient, storageContext: storage, logger })
-    : () => {};
+  let stopDiagnosticScanner = () => {};
+  let stopScheduledReports = () => {};
   const stopTokenRefresh = prismaClient
     ? startTokenRefreshJob({ prisma: prismaClient, logger })
     : () => {};
@@ -93,20 +101,57 @@ export async function startBackgroundJobs(
     configLoader = () => configStore.listActive();
   }
 
-  const stopAgentRunner = startAgentRunner({
-    storageContext: storage,
-    orchestrator,
-    notifier: agentNotifier,
-    configLoader,
-    resolvedProfile: resolvedProfile ?? null,
-    resolvedSkin: resolvedSkin ?? null,
-    ledger,
-    intervalMs: 60_000,
-    logger,
-  });
+  let stopAgentRunner = () => {};
+  let backgroundQueue: Queue | null = null;
+  let backgroundWorker: Worker | null = null;
+
+  if (prismaClient && redis) {
+    const connection = { url: process.env["REDIS_URL"]! };
+    backgroundQueue = createBackgroundJobsQueue(connection);
+    backgroundWorker = createBackgroundWorker({
+      connection,
+      prisma: prismaClient,
+      storage,
+      orchestrator,
+      ledger,
+      resolvedProfile: resolvedProfile ?? null,
+      resolvedSkin: resolvedSkin ?? null,
+      redis,
+      logger,
+    });
+    await scheduleBackgroundJobs(backgroundQueue);
+  } else {
+    stopDiagnosticScanner = prismaClient
+      ? startDiagnosticScanner({
+          prisma: prismaClient,
+          storageContext: storage,
+          orchestrator,
+          logger,
+        })
+      : () => {};
+    stopScheduledReports = prismaClient
+      ? startScheduledReportJob({
+          prisma: prismaClient,
+          storageContext: storage,
+          orchestrator,
+          logger,
+        })
+      : () => {};
+    stopAgentRunner = startAgentRunner({
+      storageContext: storage,
+      orchestrator,
+      notifier: agentNotifier,
+      configLoader,
+      resolvedProfile: resolvedProfile ?? null,
+      resolvedSkin: resolvedSkin ?? null,
+      ledger,
+      intervalMs: 60_000,
+      logger,
+    });
+  }
 
   return {
-    stop: () => {
+    stop: async () => {
       stopExpiryJob();
       stopChainVerify();
       stopDiagnosticScanner();
@@ -115,7 +160,15 @@ export async function startBackgroundJobs(
       stopTtlCleanup();
       stopCadenceRunner();
       stopAgentRunner();
+      if (backgroundWorker) {
+        await backgroundWorker.close();
+      }
+      if (backgroundQueue) {
+        await backgroundQueue.close();
+      }
     },
     agentNotifier,
+    backgroundQueue,
+    backgroundWorker,
   };
 }
