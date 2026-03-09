@@ -24,7 +24,11 @@ interface SpendLimitsFormProps {
 }
 
 export function SpendLimitsForm({ defaultValues, onSubmit, isLoading }: SpendLimitsFormProps) {
-  const { register, handleSubmit, formState: { errors } } = useForm<SpendLimitsValues>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SpendLimitsValues>({
     resolver: zodResolver(spendLimitsSchema),
     defaultValues,
   });
@@ -39,7 +43,10 @@ export function SpendLimitsForm({ defaultValues, onSubmit, isLoading }: SpendLim
           {(["daily", "weekly", "monthly", "perAction"] as const).map((field) => (
             <div key={field} className="space-y-1">
               <Label htmlFor={field}>
-                {field === "perAction" ? "Per Action" : field.charAt(0).toUpperCase() + field.slice(1)} Limit ($)
+                {field === "perAction"
+                  ? "Per Action"
+                  : field.charAt(0).toUpperCase() + field.slice(1)}{" "}
+                Limit ($)
               </Label>
               <Input
                 id={field}
@@ -55,7 +62,7 @@ export function SpendLimitsForm({ defaultValues, onSubmit, isLoading }: SpendLim
             </div>
           ))}
           <Button type="submit" disabled={isLoading} className="w-full min-h-[44px]">
-            {isLoading ? "Saving..." : "Save Spend Limits"}
+            {isLoading ? "Saving..." : "Save"}
           </Button>
         </form>
       </CardContent>

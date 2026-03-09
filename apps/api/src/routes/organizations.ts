@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
-import { generateIntegrationGuide, StrategistAgent } from "@switchboard/core";
+import {
+  generateIntegrationGuide,
+  StrategistAgent,
+  ProfileResolver,
+  buildMinimalProfile,
+} from "@switchboard/core";
 import type { AgentContext } from "@switchboard/core";
 import { PrismaAdsOperatorConfigStore } from "@switchboard/db";
 import { getConnectionStore } from "../utils/connection-store.js";
@@ -581,7 +586,33 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // 2. Build AgentContext and fire-and-forget strategist tick
+      // 2. Resolve profile for StrategistAgent context
+      let profile = app.resolvedProfile ?? undefined;
+      if (!profile && app.prisma) {
+        try {
+          const orgConfig = await app.prisma.organizationConfig.findUnique({
+            where: { id: orgId },
+            select: { name: true, skinId: true },
+          });
+          if (orgConfig?.name) {
+            const minimalProfile = buildMinimalProfile({
+              orgId,
+              businessName: orgConfig.name,
+              skinId: orgConfig.skinId ?? "generic",
+              timezone: opConfig.schedule.timezone,
+            });
+            const resolver = new ProfileResolver();
+            profile = resolver.resolve(minimalProfile);
+          }
+        } catch {
+          logger.warn(
+            { orgId },
+            "Could not load org config for profile — strategist may skip plan",
+          );
+        }
+      }
+
+      // 3. Build AgentContext and fire-and-forget strategist tick
       const ctx: AgentContext = {
         config: opConfig,
         orchestrator: app.orchestrator as AgentContext["orchestrator"],
@@ -589,6 +620,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         notifier: app.agentNotifier ?? {
           sendProactive: async (_chatId: string, _channelType: string, _message: string) => {},
         },
+        profile,
         skin: app.resolvedSkin ?? undefined,
       };
 

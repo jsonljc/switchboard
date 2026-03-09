@@ -75,4 +75,9 @@ export const queryKeys = {
     roster: () => ["agents", "roster"] as const,
     state: () => ["agents", "state"] as const,
   },
+  operatorConfig: {
+    all: ["operatorConfig"] as const,
+    current: () => ["operatorConfig", "current"] as const,
+    autonomy: () => ["operatorConfig", "autonomy"] as const,
+  },
 };

@@ -60,6 +60,7 @@ export async function resolveCartridgeCredentials(
 
 export interface CartridgeBootstrapResult {
   adsWriteProvider: MetaAdsWriteProvider | null;
+  businessProfile: import("@switchboard/schemas").BusinessProfile | undefined;
 }
 
 export async function registerCartridges(
@@ -122,7 +123,7 @@ export async function registerCartridges(
   );
   await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
 
-  return { adsWriteProvider };
+  return { adsWriteProvider, businessProfile };
 }
 
 export async function wireEscalationNotifier(): Promise<void> {

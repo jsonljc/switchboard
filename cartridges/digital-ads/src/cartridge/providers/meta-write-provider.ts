@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // MetaAdsWriteProvider — production implementation for write operations
 // ---------------------------------------------------------------------------
-// Ports the RealMetaAdsProvider pattern from ads-spend with campaign and
-// ad set mutation support via the Meta Graph API.
+// Delegates all HTTP operations to MetaGraphClient for shared auth,
+// circuit breaker, retry, and rate limiting.
 // ---------------------------------------------------------------------------
 
 import type {
@@ -23,68 +23,65 @@ import type {
   ConversionEvent,
   InsightsOptions,
 } from "../types.js";
+import { MetaGraphClient } from "../../platforms/meta/graph-client.js";
 
 export interface MetaAdsWriteConfig {
   accessToken: string;
   adAccountId: string;
   apiVersion?: string;
+  graphClient?: MetaGraphClient;
 }
 
 export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
-  private readonly baseUrl: string;
-  private readonly accessToken: string;
+  private readonly client: MetaGraphClient;
   private readonly adAccountId: string;
 
   constructor(config: MetaAdsWriteConfig) {
-    const apiVersion = config.apiVersion ?? "v21.0";
-    this.baseUrl = `https://graph.facebook.com/${apiVersion}`;
-    this.accessToken = config.accessToken;
+    this.client =
+      config.graphClient ??
+      new MetaGraphClient({
+        accessToken: config.accessToken,
+        apiVersion: config.apiVersion,
+      });
     this.adAccountId = config.adAccountId;
   }
 
+  private get accountId(): string {
+    return this.adAccountId.startsWith("act_") ? this.adAccountId : `act_${this.adAccountId}`;
+  }
+
   async getCampaign(campaignId: string): Promise<CampaignInfo> {
-    const url =
-      `${this.baseUrl}/${campaignId}?fields=` +
-      "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,stop_time,objective" +
-      `&access_token=${this.accessToken}`;
-    const data = await this.executeWithRetry(url);
+    const data = await this.client.request<Record<string, unknown>>(campaignId, {
+      params: {
+        fields:
+          "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,stop_time,objective",
+      },
+    });
     return this.parseCampaign(data);
   }
 
   async searchCampaigns(query: string): Promise<CampaignInfo[]> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    let url =
-      `${this.baseUrl}/${accountId}/campaigns?fields=` +
-      "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,stop_time,objective" +
-      `&access_token=${this.accessToken}`;
+    const params: Record<string, string> = {
+      fields:
+        "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,stop_time,objective",
+    };
     if (query) {
-      url += `&filtering=[{"field":"name","operator":"CONTAIN","value":"${query}"}]`;
+      params.filtering = `[{"field":"name","operator":"CONTAIN","value":"${query}"}]`;
     }
 
-    const results: CampaignInfo[] = [];
-    let nextUrl: string | null = url;
+    const items = await this.client.requestPaginated<Record<string, unknown>>(
+      `${this.accountId}/campaigns`,
+      params,
+    );
 
-    while (nextUrl) {
-      const data = await this.executeWithRetry(nextUrl);
-      if (data.data) {
-        for (const item of data.data as Record<string, unknown>[]) {
-          results.push(this.parseCampaign(item));
-        }
-      }
-      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
-    }
-
-    return results;
+    return items.map((item) => this.parseCampaign(item));
   }
 
   async pauseCampaign(campaignId: string): Promise<{ success: boolean; previousStatus: string }> {
     const current = await this.getCampaign(campaignId);
     const previousStatus = current.status;
 
-    const url = `${this.baseUrl}/${campaignId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(campaignId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "PAUSED" }),
@@ -97,8 +94,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const current = await this.getCampaign(campaignId);
     const previousStatus = current.status;
 
-    const url = `${this.baseUrl}/${campaignId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(campaignId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "ACTIVE" }),
@@ -115,8 +111,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const previousBudget = current.dailyBudget || current.lifetimeBudget || 0;
 
     const budgetField = current.lifetimeBudget ? "lifetime_budget" : "daily_budget";
-    const url = `${this.baseUrl}/${campaignId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(campaignId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [budgetField]: String(newBudgetCents) }),
@@ -126,11 +121,12 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async getAdSet(adSetId: string): Promise<AdSetInfo> {
-    const url =
-      `${this.baseUrl}/${adSetId}?fields=` +
-      "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,end_time,targeting,campaign_id" +
-      `&access_token=${this.accessToken}`;
-    const data = await this.executeWithRetry(url);
+    const data = await this.client.request<Record<string, unknown>>(adSetId, {
+      params: {
+        fields:
+          "id,name,status,daily_budget,lifetime_budget,effective_status,start_time,end_time,targeting,campaign_id",
+      },
+    });
     return this.parseAdSet(data);
   }
 
@@ -138,8 +134,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const current = await this.getAdSet(adSetId);
     const previousStatus = current.status;
 
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "PAUSED" }),
@@ -152,8 +147,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const current = await this.getAdSet(adSetId);
     const previousStatus = current.status;
 
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "ACTIVE" }),
@@ -170,8 +164,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const previousBudget = current.dailyBudget || current.lifetimeBudget || 0;
 
     const budgetField = current.lifetimeBudget ? "lifetime_budget" : "daily_budget";
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [budgetField]: String(newBudgetCents) }),
@@ -184,8 +177,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     adSetId: string,
     targetingSpec: Record<string, unknown>,
   ): Promise<{ success: boolean }> {
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targeting: targetingSpec }),
@@ -195,11 +187,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async createCampaign(params: CreateCampaignParams): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/campaigns?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       objective: params.objective,
@@ -210,7 +197,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     // Budget is in cents for the API
     body.daily_budget = String(Math.round(params.dailyBudget * 100));
 
-    const data = await this.executeWithRetry(url, {
+    const data = await this.client.request<Record<string, unknown>>(`${this.accountId}/campaigns`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -220,11 +207,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async createAdSet(params: CreateAdSetParams): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/adsets?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       campaign_id: params.campaignId,
       name: params.name,
@@ -235,7 +217,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
       status: params.status ?? "PAUSED",
     };
 
-    const data = await this.executeWithRetry(url, {
+    const data = await this.client.request<Record<string, unknown>>(`${this.accountId}/adsets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -245,25 +227,22 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async createAd(params: CreateAdParams): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-
     // First create the ad creative
-    const creativeUrl = `${this.baseUrl}/${accountId}/adcreatives?access_token=${this.accessToken}`;
     const creativeBody: Record<string, unknown> = {
       name: `${params.name} Creative`,
       object_story_spec: params.creative,
     };
 
-    const creativeData = await this.executeWithRetry(creativeUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(creativeBody),
-    });
+    const creativeData = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/adcreatives`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creativeBody),
+      },
+    );
 
     // Then create the ad referencing the creative
-    const adUrl = `${this.baseUrl}/${accountId}/ads?access_token=${this.accessToken}`;
     const adBody: Record<string, unknown> = {
       name: params.name,
       adset_id: params.adSetId,
@@ -271,7 +250,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
       status: params.status ?? "PAUSED",
     };
 
-    const data = await this.executeWithRetry(adUrl, {
+    const data = await this.client.request<Record<string, unknown>>(`${this.accountId}/ads`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(adBody),
@@ -287,11 +266,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async createCustomAudience(
     params: CreateCustomAudienceWriteParams,
   ): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/customaudiences?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       subtype: params.subtype,
@@ -301,11 +275,14 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     if (params.rule) body.rule = params.rule;
     if (params.retentionDays) body.retention_days = params.retentionDays;
 
-    const data = await this.executeWithRetry(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/customaudiences`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     return { id: String(data.id), success: true };
   }
@@ -313,11 +290,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async createLookalikeAudience(
     params: CreateLookalikeAudienceWriteParams,
   ): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/customaudiences?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       subtype: "LOOKALIKE",
@@ -329,18 +301,20 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
       }),
     };
 
-    const data = await this.executeWithRetry(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/customaudiences`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     return { id: String(data.id), success: true };
   }
 
   async deleteCustomAudience(audienceId: string): Promise<{ success: boolean }> {
-    const url = `${this.baseUrl}/${audienceId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, { method: "DELETE" });
+    await this.client.request(audienceId, { method: "DELETE" });
     return { success: true };
   }
 
@@ -353,18 +327,15 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     bidStrategy: string,
     bidAmount?: number,
   ): Promise<{ success: boolean; previousBidStrategy: string }> {
-    // Fetch current bid strategy before updating
-    const currentUrl =
-      `${this.baseUrl}/${adSetId}?fields=bid_strategy,bid_amount` +
-      `&access_token=${this.accessToken}`;
-    const current = await this.executeWithRetry(currentUrl);
+    const current = await this.client.request<Record<string, unknown>>(adSetId, {
+      params: { fields: "bid_strategy,bid_amount" },
+    });
     const previousBidStrategy = (current.bid_strategy as string) ?? "LOWEST_COST_WITHOUT_CAP";
 
     const body: Record<string, unknown> = { bid_strategy: bidStrategy };
     if (bidAmount !== undefined) body.bid_amount = String(bidAmount);
 
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -377,8 +348,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     adSetId: string,
     schedule: Array<Record<string, unknown>>,
   ): Promise<{ success: boolean }> {
-    const url = `${this.baseUrl}/${adSetId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adSetId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -396,8 +366,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     const campaign = await this.getCampaign(campaignId);
     const previousObjective = campaign.objective ?? "UNKNOWN";
 
-    const url = `${this.baseUrl}/${campaignId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(campaignId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ objective }),
@@ -413,11 +382,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async createAdCreative(
     params: CreateAdCreativeWriteParams,
   ): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/adcreatives?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       object_story_spec: params.objectStorySpec,
@@ -426,11 +390,14 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
       body.degrees_of_freedom_spec = params.degreesOfFreedomSpec;
     }
 
-    const data = await this.executeWithRetry(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/adcreatives`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     return { id: String(data.id), success: true };
   }
@@ -439,13 +406,12 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     adId: string,
     status: string,
   ): Promise<{ success: boolean; previousStatus: string }> {
-    // Fetch current status
-    const currentUrl = `${this.baseUrl}/${adId}?fields=status&access_token=${this.accessToken}`;
-    const current = await this.executeWithRetry(currentUrl);
+    const current = await this.client.request<Record<string, unknown>>(adId, {
+      params: { fields: "status" },
+    });
     const previousStatus = (current.status as string) ?? "UNKNOWN";
 
-    const url = `${this.baseUrl}/${adId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, {
+    await this.client.request(adId, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -459,11 +425,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // ---------------------------------------------------------------------------
 
   async createAdStudy(params: CreateAdStudyWriteParams): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/ad_studies?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       description: params.description ?? "",
@@ -479,21 +440,22 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     if (params.objective) body.objective = params.objective;
     if (params.confidenceLevel) body.confidence_level = params.confidenceLevel;
 
-    const data = await this.executeWithRetry(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/ad_studies`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     return { id: String(data.id), success: true };
   }
 
   async concludeExperiment(studyId: string, winnerCellId: string): Promise<{ success: boolean }> {
-    // Get study cells to find the losers
-    const studyUrl =
-      `${this.baseUrl}/${studyId}?fields=cells{id,name,adsets}` +
-      `&access_token=${this.accessToken}`;
-    const study = await this.executeWithRetry(studyUrl);
+    const study = await this.client.request<Record<string, unknown>>(studyId, {
+      params: { fields: "cells{id,name,adsets}" },
+    });
 
     const cells =
       ((study.cells as Record<string, unknown>)?.data as Array<Record<string, unknown>>) ?? [];
@@ -519,11 +481,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // ---------------------------------------------------------------------------
 
   async createAdRule(params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
-    const accountId = this.adAccountId.startsWith("act_")
-      ? this.adAccountId
-      : `act_${this.adAccountId}`;
-    const url = `${this.baseUrl}/${accountId}/adrules_library?access_token=${this.accessToken}`;
-
     const body: Record<string, unknown> = {
       name: params.name,
       evaluation_spec: params.evaluationSpec,
@@ -531,18 +488,20 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     };
     if (params.scheduleSpec) body.schedule_spec = params.scheduleSpec;
 
-    const data = await this.executeWithRetry(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const data = await this.client.request<Record<string, unknown>>(
+      `${this.accountId}/adrules_library`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     return { id: String(data.id), success: true };
   }
 
   async deleteAdRule(ruleId: string): Promise<{ success: boolean }> {
-    const url = `${this.baseUrl}/${ruleId}?access_token=${this.accessToken}`;
-    await this.executeWithRetry(url, { method: "DELETE" });
+    await this.client.request(ruleId, { method: "DELETE" });
     return { success: true };
   }
 
@@ -551,11 +510,11 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // ---------------------------------------------------------------------------
 
   async getLeadForms(pageId: string): Promise<LeadFormInfo[]> {
-    const url =
-      `${this.baseUrl}/${pageId}/leadgen_forms?fields=id,name,status,created_time` +
-      `&access_token=${this.accessToken}`;
-    const data = await this.executeWithRetry(url);
-    const forms = (data.data ?? []) as Record<string, unknown>[];
+    const data = await this.client.request<{ data: Record<string, unknown>[] }>(
+      `${pageId}/leadgen_forms`,
+      { params: { fields: "id,name,status,created_time" } },
+    );
+    const forms = data.data ?? [];
     return forms.map((f) => ({
       id: String(f.id),
       name: String(f.name ?? ""),
@@ -566,31 +525,23 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   }
 
   async getLeadFormData(formId: string, options?: { since?: number }): Promise<LeadFormEntry[]> {
-    let url =
-      `${this.baseUrl}/${formId}/leads?fields=id,created_time,field_data` +
-      `&access_token=${this.accessToken}`;
+    const params: Record<string, string> = {
+      fields: "id,created_time,field_data",
+    };
     if (options?.since) {
-      url += `&filtering=[{"field":"time_created","operator":"GREATER_THAN","value":${options.since}}]`;
+      params.filtering = `[{"field":"time_created","operator":"GREATER_THAN","value":${options.since}}]`;
     }
 
-    const entries: LeadFormEntry[] = [];
-    let nextUrl: string | null = url;
+    const items = await this.client.requestPaginated<Record<string, unknown>>(
+      `${formId}/leads`,
+      params,
+    );
 
-    while (nextUrl) {
-      const data = await this.executeWithRetry(nextUrl);
-      if (data.data) {
-        for (const item of data.data as Record<string, unknown>[]) {
-          entries.push({
-            id: String(item.id),
-            createdTime: String(item.created_time ?? ""),
-            fieldData: (item.field_data ?? []) as LeadFormEntry["fieldData"],
-          });
-        }
-      }
-      nextUrl = ((data.paging as Record<string, unknown> | undefined)?.next as string) ?? null;
-    }
-
-    return entries;
+    return items.map((item) => ({
+      id: String(item.id),
+      createdTime: String(item.created_time ?? ""),
+      fieldData: (item.field_data ?? []) as LeadFormEntry["fieldData"],
+    }));
   }
 
   // ---------------------------------------------------------------------------
@@ -601,8 +552,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     pixelId: string,
     event: ConversionEvent,
   ): Promise<{ eventsReceived: number; success: boolean }> {
-    const url = `${this.baseUrl}/${pixelId}/events?access_token=${this.accessToken}`;
-
     const eventData: Record<string, unknown> = {
       event_name: event.eventName,
       event_time: event.eventTime,
@@ -612,7 +561,7 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     if (event.customData) eventData.custom_data = event.customData;
     if (event.eventSourceUrl) eventData.event_source_url = event.eventSourceUrl;
 
-    const data = await this.executeWithRetry(url, {
+    const data = await this.client.request<Record<string, unknown>>(`${pixelId}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: [eventData] }),
@@ -647,27 +596,25 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
     path: string,
     options: InsightsOptions,
   ): Promise<Record<string, unknown>[]> {
-    const params = new URLSearchParams({
+    const params: Record<string, string> = {
       fields: options.fields.join(","),
       time_range: JSON.stringify(options.dateRange),
-      access_token: this.accessToken,
-    });
+    };
     if (options.breakdowns?.length) {
-      params.set("breakdowns", options.breakdowns.join(","));
+      params.breakdowns = options.breakdowns.join(",");
     }
     if (options.level) {
-      params.set("level", options.level);
+      params.level = options.level;
     }
 
-    const url = `${this.baseUrl}/${path}?${params.toString()}`;
-    const data = await this.executeWithRetry(url);
-    return (data.data ?? []) as Record<string, unknown>[];
+    const data = await this.client.request<{ data: Record<string, unknown>[] }>(path, { params });
+    return data.data ?? [];
   }
 
   async healthCheck(): Promise<ConnectionHealth> {
     const start = Date.now();
     try {
-      await this.executeWithRetry(`${this.baseUrl}/me?access_token=${this.accessToken}`);
+      await this.client.request("me");
       return {
         status: "connected",
         latencyMs: Date.now() - start,
@@ -700,59 +647,6 @@ export class RealMetaAdsWriteProvider implements MetaAdsWriteProvider {
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
-
-  private async executeWithRetry(
-    url: string,
-    init?: RequestInit,
-    retries = 3,
-  ): Promise<Record<string, unknown>> {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      const response = await fetch(url, init);
-      const body = (await response.json()) as Record<string, unknown>;
-
-      if (response.ok) return body;
-
-      const error = body.error as Record<string, unknown> | undefined;
-      const code = error?.code as number | undefined;
-
-      // Rate limit — retry with backoff
-      if (code === 17 && attempt < retries) {
-        await this.delay(Math.pow(2, attempt) * 1000);
-        continue;
-      }
-
-      // Auth error — no retry
-      if (code === 190) {
-        throw new MetaAuthError(
-          (error?.message as string) ?? "Authentication failed",
-          code,
-          (error?.error_subcode as number) ?? 0,
-          error?.fbtrace_id as string | undefined,
-        );
-      }
-
-      // 5xx — retry with backoff
-      if (response.status >= 500 && attempt < retries) {
-        await this.delay(Math.pow(2, attempt) * 1000);
-        continue;
-      }
-
-      throw new MetaApiError(
-        (error?.message as string) ?? `HTTP ${response.status}`,
-        code ?? response.status,
-        (error?.error_subcode as number) ?? 0,
-        (error?.type as string) ?? "unknown",
-        error?.fbtrace_id as string | undefined,
-      );
-    }
-
-    throw new Error("Max retries exceeded");
-  }
-
-  /* istanbul ignore next -- simple timer */
-  protected delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
 
   private parseCampaign(raw: Record<string, unknown>): CampaignInfo {
     return {
@@ -894,8 +788,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { id: "ad_new_1", success: true };
   }
 
-  // --- Audience methods (Phase 3) ---
-
   async createCustomAudience(
     _params: CreateCustomAudienceWriteParams,
   ): Promise<{ id: string; success: boolean }> {
@@ -911,8 +803,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async deleteCustomAudience(_audienceId: string): Promise<{ success: boolean }> {
     return { success: true };
   }
-
-  // --- Bid & Schedule methods (Phase 4) ---
 
   async updateBidStrategy(
     _adSetId: string,
@@ -936,8 +826,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousObjective: "OUTCOME_SALES" };
   }
 
-  // --- Creative methods (Phase 5) ---
-
   async createAdCreative(
     _params: CreateAdCreativeWriteParams,
   ): Promise<{ id: string; success: boolean }> {
@@ -951,8 +839,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true, previousStatus: "ACTIVE" };
   }
 
-  // --- Experiment methods (Phase 6) ---
-
   async createAdStudy(
     _params: CreateAdStudyWriteParams,
   ): Promise<{ id: string; success: boolean }> {
@@ -963,8 +849,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     return { success: true };
   }
 
-  // --- Rule methods (Phase 7) ---
-
   async createAdRule(_params: CreateAdRuleWriteParams): Promise<{ id: string; success: boolean }> {
     return { id: "rule_new_1", success: true };
   }
@@ -972,8 +856,6 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
   async deleteAdRule(_ruleId: string): Promise<{ success: boolean }> {
     return { success: true };
   }
-
-  // --- Lead Forms API ---
 
   async getLeadForms(_pageId: string): Promise<LeadFormInfo[]> {
     return [
@@ -1001,16 +883,12 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
     ];
   }
 
-  // --- Conversions API (CAPI) ---
-
   async sendConversionEvent(
     _pixelId: string,
     _event: ConversionEvent,
   ): Promise<{ eventsReceived: number; success: boolean }> {
     return { eventsReceived: 1, success: true };
   }
-
-  // --- Insights API ---
 
   async getAccountInsights(
     _accountId: string,
@@ -1050,35 +928,10 @@ export class MockMetaAdsWriteProvider implements MetaAdsWriteProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Errors
+// Errors — re-exported from shared location for backward compatibility
 // ---------------------------------------------------------------------------
 
-export class MetaApiError extends Error {
-  constructor(
-    message: string,
-    public readonly code: number,
-    public readonly subcode: number,
-    public readonly type: string,
-    public readonly fbtraceId?: string,
-  ) {
-    super(message);
-    this.name = "MetaApiError";
-  }
-}
-
-export class MetaRateLimitError extends MetaApiError {
-  constructor(message: string, subcode: number, fbtraceId?: string) {
-    super(message, 17, subcode, "OAuthException", fbtraceId);
-    this.name = "MetaRateLimitError";
-  }
-}
-
-export class MetaAuthError extends MetaApiError {
-  constructor(message: string, code: number, subcode: number, fbtraceId?: string) {
-    super(message, code, subcode, "OAuthException", fbtraceId);
-    this.name = "MetaAuthError";
-  }
-}
+export { MetaApiError, MetaRateLimitError, MetaAuthError } from "../../platforms/meta/errors.js";
 
 // ---------------------------------------------------------------------------
 // Factory

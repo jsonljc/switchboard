@@ -14,7 +14,13 @@ import {
   ProgressiveAutonomyController,
   automationLevelToProfile,
 } from "@switchboard/core";
-import type { AgentNotifier, AgentContext, AdsAgent, CompetenceSnapshot } from "@switchboard/core";
+import type {
+  AgentNotifier,
+  AgentContext,
+  AdsAgent,
+  CompetenceSnapshot,
+  AuditLedger,
+} from "@switchboard/core";
 import type { AdsOperatorConfig } from "@switchboard/schemas";
 import type {
   StorageContext,
@@ -37,6 +43,8 @@ export interface AgentRunnerConfig {
   resolvedProfile?: ResolvedProfile | null;
   /** Resolved skin for StrategistAgent context (optional). */
   resolvedSkin?: ResolvedSkin | null;
+  /** Audit ledger for recording agent tick results (optional). */
+  ledger?: AuditLedger | null;
   /** Interval between schedule checks (default: 60s) */
   intervalMs?: number;
   logger?: Logger;
@@ -64,6 +72,7 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
     configLoader,
     resolvedProfile = null,
     resolvedSkin = null,
+    ledger = null,
     intervalMs = 60_000,
     logger = createLogger("agent-runner"),
   } = config;
@@ -174,6 +183,37 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
               },
               `Agent ${agent.name} tick complete`,
             );
+
+            // Record agent tick to audit ledger so dashboard can show agent activity
+            if (ledger) {
+              try {
+                for (const action of result.actions) {
+                  await ledger.record({
+                    eventType: "action.executed",
+                    actorType: "agent",
+                    actorId: agent.id,
+                    entityType: "ads_operator_config",
+                    entityId: opConfig.id,
+                    riskCategory: "low",
+                    summary: `[${agent.name}] ${action.actionType}: ${action.outcome}`,
+                    snapshot: {
+                      agentId: agent.id,
+                      configId: opConfig.id,
+                      actionType: action.actionType,
+                      outcome: action.outcome,
+                      tickSummary: result.summary,
+                    },
+                    organizationId: opConfig.organizationId,
+                    visibilityLevel: "org",
+                  });
+                }
+              } catch (auditErr) {
+                logger.error(
+                  { err: auditErr, agentId: agent.id, configId: opConfig.id },
+                  "Failed to record agent tick to audit ledger",
+                );
+              }
+            }
           } catch (err) {
             logger.error(
               { err, agentId: agent.id, configId: opConfig.id },

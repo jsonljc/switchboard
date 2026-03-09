@@ -24,3 +24,5 @@ export type {
   AutonomyAssessment,
   CompetenceSnapshot,
 } from "./progressive-autonomy.js";
+export { buildMinimalProfile } from "./profile-builder.js";
+export type { MinimalOrgData } from "./profile-builder.js";

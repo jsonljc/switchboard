@@ -4,9 +4,32 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Pencil, Check, X } from "lucide-react";
+import { Sparkles, Pencil, Check, X, Pause, Play } from "lucide-react";
 import { useUpdateAgentRoster } from "@/hooks/use-agents";
+import {
+  useOperatorConfig,
+  useUpdateOperatorConfig,
+  useAutonomyAssessment,
+} from "@/hooks/use-operator-config";
 import type { AgentRosterEntry } from "@/lib/api-client";
+
+const AUTOMATION_LEVELS = [
+  {
+    value: "copilot" as const,
+    label: "Copilot",
+    description: "All actions require your approval",
+  },
+  {
+    value: "supervised" as const,
+    label: "Supervised",
+    description: "Low-risk auto-executes, others need approval",
+  },
+  {
+    value: "autonomous" as const,
+    label: "Autonomous",
+    description: "All actions within risk tolerance auto-execute",
+  },
+];
 
 interface PrimaryOperatorCardProps {
   agent: AgentRosterEntry;
@@ -16,6 +39,12 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(agent.displayName);
   const updateAgent = useUpdateAgentRoster();
+  const { data: configData } = useOperatorConfig();
+  const updateConfig = useUpdateOperatorConfig();
+  const { data: autonomyData } = useAutonomyAssessment();
+
+  const config = configData?.config;
+  const autonomy = autonomyData?.assessment;
 
   const workingStyle = (agent.config as Record<string, unknown>)?.workingStyle as
     | string
@@ -31,6 +60,15 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
   const handleCancel = () => {
     setEditName(agent.displayName);
     setIsEditing(false);
+  };
+
+  const handleToggleActive = () => {
+    if (!config) return;
+    updateConfig.mutate({ active: !config.active });
+  };
+
+  const handleAutomationChange = (level: "copilot" | "supervised" | "autonomous") => {
+    updateConfig.mutate({ automationLevel: level });
   };
 
   return (
@@ -84,6 +122,104 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
             )}
           </div>
         </div>
+
+        {config && (
+          <div className="mt-6 pt-4 border-t space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`h-2.5 w-2.5 rounded-full ${config.active ? "bg-green-500" : "bg-yellow-500"}`}
+                />
+                <span className="text-sm font-medium">{config.active ? "Running" : "Paused"}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleActive}
+                disabled={updateConfig.isPending}
+              >
+                {config.active ? (
+                  <>
+                    <Pause className="h-3.5 w-3.5 mr-1.5" />
+                    Pause
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3.5 w-3.5 mr-1.5" />
+                    Resume
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Automation Level</p>
+              <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
+                {AUTOMATION_LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    onClick={() => handleAutomationChange(level.value)}
+                    disabled={updateConfig.isPending}
+                    className={`text-left border rounded-lg p-3 transition-colors ${
+                      config.automationLevel === level.value
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{level.label}</p>
+                    <p className="text-xs text-muted-foreground">{level.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {autonomy && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Autonomy Progress</p>
+                  {autonomy.autonomousEligible && (
+                    <span className="text-xs font-medium text-primary">Autonomous Eligible</span>
+                  )}
+                  {autonomy.recommendedProfile !== autonomy.currentProfile && (
+                    <span className="text-xs font-medium text-primary">
+                      Upgrade: {autonomy.currentProfile} &rarr; {autonomy.recommendedProfile}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-primary rounded-full h-2 transition-all"
+                      style={{ width: `${autonomy.progressPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{autonomy.reason}</span>
+                    <span>{autonomy.progressPercent}%</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Score</span>
+                    <p className="font-medium">{autonomy.stats.competenceScore.toFixed(0)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Successes</span>
+                    <p className="font-medium">{autonomy.stats.totalSuccesses}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Failures</span>
+                    <p className="font-medium">{autonomy.stats.totalFailures}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Fail Rate</span>
+                    <p className="font-medium">{(autonomy.stats.failureRate * 100).toFixed(0)}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

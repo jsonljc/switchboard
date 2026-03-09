@@ -784,4 +784,22 @@ export class SwitchboardClient {
       body: JSON.stringify(updates),
     });
   }
+
+  async getAutonomyAssessment(orgId: string) {
+    return this.request<{
+      assessment: {
+        currentProfile: string;
+        recommendedProfile: string;
+        autonomousEligible: boolean;
+        reason: string;
+        progressPercent: number;
+        stats: {
+          totalSuccesses: number;
+          totalFailures: number;
+          competenceScore: number;
+          failureRate: number;
+        };
+      };
+    }>(`/api/operator-config/${orgId}/autonomy`);
+  }
 }

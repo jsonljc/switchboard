@@ -1,13 +1,17 @@
 "use client";
 
 import { useApprovalCount } from "@/hooks/use-approvals";
-import { useAgentState } from "@/hooks/use-agents";
+import { useAgentRoster, useAgentState } from "@/hooks/use-agents";
 
 export function StatusHero() {
   const pendingCount = useApprovalCount();
   const { data: stateData } = useAgentState();
+  const { data: rosterData } = useAgentRoster();
   const hasErrors = stateData?.states?.some((s) => s.activityStatus === "error") ?? false;
   const needsAttention = pendingCount > 0 || hasErrors;
+
+  const primaryOperator = rosterData?.roster?.find((a) => a.agentRole === "primary_operator");
+  const operatorName = primaryOperator?.displayName ?? "Your AI team";
 
   return (
     <div
@@ -25,8 +29,8 @@ export function StatusHero() {
         />
         <h2 className="text-lg font-semibold">
           {needsAttention
-            ? `${pendingCount + (hasErrors ? 1 : 0)} item${pendingCount + (hasErrors ? 1 : 0) !== 1 ? "s" : ""} need${pendingCount + (hasErrors ? 1 : 0) === 1 ? "s" : ""} your attention`
-            : "Your AI team is running smoothly"}
+            ? `${operatorName} needs your attention`
+            : `${operatorName} is running smoothly`}
         </h2>
       </div>
       {!needsAttention && (

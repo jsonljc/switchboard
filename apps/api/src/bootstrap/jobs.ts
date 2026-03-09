@@ -2,7 +2,7 @@
 // Background job startup — cron jobs, agent runner, etc.
 // ---------------------------------------------------------------------------
 
-import type { LifecycleOrchestrator, ResolvedSkin } from "@switchboard/core";
+import type { LifecycleOrchestrator, ResolvedSkin, ResolvedProfile } from "@switchboard/core";
 import type { StorageContext } from "@switchboard/core";
 import type { AgentNotifier } from "@switchboard/core";
 import { startApprovalExpiryJob } from "../jobs/approval-expiry.js";
@@ -21,6 +21,7 @@ interface JobDeps {
   orchestrator: LifecycleOrchestrator;
   prismaClient: import("@switchboard/db").PrismaClient | null;
   resolvedSkin?: ResolvedSkin | null;
+  resolvedProfile?: ResolvedProfile | null;
   logger: {
     info: (...args: unknown[]) => void;
     warn: (...args: unknown[]) => void;
@@ -34,7 +35,8 @@ interface JobDeps {
 export async function startBackgroundJobs(
   deps: JobDeps,
 ): Promise<{ stop: () => void; agentNotifier: AgentNotifier }> {
-  const { storage, ledger, orchestrator, prismaClient, resolvedSkin, logger } = deps;
+  const { storage, ledger, orchestrator, prismaClient, resolvedSkin, resolvedProfile, logger } =
+    deps;
 
   const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger });
   const stopChainVerify = startChainVerificationJob({ ledger, logger });
@@ -96,7 +98,9 @@ export async function startBackgroundJobs(
     orchestrator,
     notifier: agentNotifier,
     configLoader,
+    resolvedProfile: resolvedProfile ?? null,
     resolvedSkin: resolvedSkin ?? null,
+    ledger,
     intervalMs: 60_000,
     logger,
   });

@@ -1,9 +1,4 @@
-import type {
-  MetaApiConfig,
-  MetaApiError,
-  MetaInsightsResponse,
-  MetaInsightsRow,
-} from "./types.js";
+import type { MetaApiConfig, MetaInsightsRow } from "./types.js";
 import type {
   EntityLevel,
   FunnelSchema,
@@ -14,15 +9,11 @@ import type {
 } from "../../core/types.js";
 import type { PlatformType } from "../types.js";
 import { AbstractPlatformClient } from "../base-client.js";
+import { MetaGraphClient } from "./graph-client.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const DEFAULT_API_VERSION = "v21.0";
-const DEFAULT_MAX_RPS = 4; // stay well under Meta's 200/hr/token burst
-const DEFAULT_MAX_RETRIES = 3;
-const BASE_URL = "https://graph.facebook.com";
 
 // All the fields we need from the insights endpoint
 const INSIGHTS_FIELDS = [
@@ -41,41 +32,11 @@ const INSIGHTS_FIELDS = [
 ].join(",");
 
 // ---------------------------------------------------------------------------
-// Rate limiter — simple token-bucket
+// Meta API Client config with optional shared graph client
 // ---------------------------------------------------------------------------
 
-class RateLimiter {
-  private tokens: number;
-  private lastRefill: number;
-
-  constructor(private maxTokens: number) {
-    this.tokens = maxTokens;
-    this.lastRefill = Date.now();
-  }
-
-  async acquire(): Promise<void> {
-    this.refill();
-    if (this.tokens > 0) {
-      this.tokens--;
-      return;
-    }
-    // Wait until next refill
-    const waitMs = 1000 - (Date.now() - this.lastRefill);
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-    this.refill();
-    this.tokens--;
-  }
-
-  private refill(): void {
-    const now = Date.now();
-    const elapsed = now - this.lastRefill;
-    if (elapsed >= 1000) {
-      this.tokens = this.maxTokens;
-      this.lastRefill = now;
-    }
-  }
+export interface MetaApiClientConfig extends MetaApiConfig {
+  graphClient?: MetaGraphClient;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,18 +45,18 @@ class RateLimiter {
 
 export class MetaApiClient extends AbstractPlatformClient {
   readonly platform: PlatformType = "meta";
-  private config: Required<MetaApiConfig>;
-  private rateLimiter: RateLimiter;
+  private client: MetaGraphClient;
 
-  constructor(config: MetaApiConfig) {
+  constructor(config: MetaApiClientConfig) {
     super();
-    this.config = {
-      accessToken: config.accessToken,
-      apiVersion: config.apiVersion ?? DEFAULT_API_VERSION,
-      maxRequestsPerSecond: config.maxRequestsPerSecond ?? DEFAULT_MAX_RPS,
-      maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
-    };
-    this.rateLimiter = new RateLimiter(this.config.maxRequestsPerSecond);
+    this.client =
+      config.graphClient ??
+      new MetaGraphClient({
+        accessToken: config.accessToken,
+        apiVersion: config.apiVersion,
+        maxRequestsPerSecond: config.maxRequestsPerSecond,
+        maxRetries: config.maxRetries,
+      });
   }
 
   // -------------------------------------------------------------------------
@@ -128,28 +89,10 @@ export class MetaApiClient extends AbstractPlatformClient {
     timeRange: TimeRange,
     _funnel: FunnelSchema,
   ): Promise<SubEntityBreakdown[]> {
-    const params = new URLSearchParams({
-      fields: [
-        "id",
-        "status",
-        "effective_status",
-        "daily_budget",
-        `insights.time_range(${JSON.stringify({ since: timeRange.since, until: timeRange.until })})` +
-          "{spend,actions}",
-      ].join(","),
-      access_token: this.config.accessToken,
-      limit: "500",
-    });
-
-    const url = `${BASE_URL}/${this.config.apiVersion}/${entityId}/adsets?${params}`;
     const breakdowns: SubEntityBreakdown[] = [];
 
     try {
-      await this.rateLimiter.acquire();
-      const res = await fetch(url);
-      if (!res.ok) return breakdowns;
-
-      const data = (await res.json()) as {
+      const data = await this.client.request<{
         data: Array<{
           id: string;
           status: string;
@@ -162,7 +105,19 @@ export class MetaApiClient extends AbstractPlatformClient {
             }>;
           };
         }>;
-      };
+      }>(`${entityId}/adsets`, {
+        params: {
+          fields: [
+            "id",
+            "status",
+            "effective_status",
+            "daily_budget",
+            `insights.time_range(${JSON.stringify({ since: timeRange.since, until: timeRange.until })})` +
+              "{spend,actions}",
+          ].join(","),
+          limit: "500",
+        },
+      });
 
       for (const adset of data.data) {
         if (adset.effective_status !== "ACTIVE") continue;
@@ -199,7 +154,7 @@ export class MetaApiClient extends AbstractPlatformClient {
   }
 
   // -------------------------------------------------------------------------
-  // Private: raw API call with retries, rate limiting, pagination
+  // Private: raw API call via MetaGraphClient
   // -------------------------------------------------------------------------
 
   private async fetchInsights(
@@ -208,63 +163,15 @@ export class MetaApiClient extends AbstractPlatformClient {
     timeRange: TimeRange,
   ): Promise<MetaInsightsRow[]> {
     const endpoint = this.getEndpoint(entityId, entityLevel);
-    const params = new URLSearchParams({
+
+    return this.client.requestPaginated<MetaInsightsRow>(endpoint, {
       fields: INSIGHTS_FIELDS,
       time_range: JSON.stringify({
         since: timeRange.since,
         until: timeRange.until,
       }),
-      access_token: this.config.accessToken,
       limit: "500",
     });
-
-    const allRows: MetaInsightsRow[] = [];
-    let url: string | null = `${BASE_URL}/${this.config.apiVersion}/${endpoint}?${params}`;
-
-    while (url) {
-      const response = await this.requestWithRetry(url);
-      allRows.push(...response.data);
-      url = response.paging?.next ?? null;
-    }
-
-    return allRows;
-  }
-
-  private async requestWithRetry(url: string): Promise<MetaInsightsResponse> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
-      await this.rateLimiter.acquire();
-
-      try {
-        const res = await fetch(url);
-
-        if (res.ok) {
-          return (await res.json()) as MetaInsightsResponse;
-        }
-
-        const body = (await res.json()) as MetaApiError;
-        const code = body.error?.code;
-
-        // Retry on rate limiting (code 32) and transient errors (code 2)
-        if ((code === 32 || code === 2) && attempt < this.config.maxRetries) {
-          const backoff = Math.pow(2, attempt) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, backoff));
-          continue;
-        }
-
-        throw new Error(`Meta API error ${code}: ${body.error?.message ?? res.statusText}`);
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        if (attempt < this.config.maxRetries) {
-          const backoff = Math.pow(2, attempt) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, backoff));
-          continue;
-        }
-      }
-    }
-
-    throw lastError ?? new Error("Request failed after retries");
   }
 
   // -------------------------------------------------------------------------

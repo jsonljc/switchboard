@@ -63,14 +63,12 @@ export function ForbiddenList({ currentForbidden, onSave, isLoading }: Forbidden
     setSelected(next);
   };
 
-  const customItems = Array.from(selected).filter(
-    (b) => !commonForbiddenBehaviors.includes(b)
-  );
+  const customItems = Array.from(selected).filter((b) => !commonForbiddenBehaviors.includes(b));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Forbidden Actions</CardTitle>
+        <CardTitle className="text-base">Things your AI should never do</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-3">
@@ -122,7 +120,7 @@ export function ForbiddenList({ currentForbidden, onSave, isLoading }: Forbidden
           disabled={isLoading}
           onClick={() => onSave(Array.from(selected))}
         >
-          {isLoading ? "Saving..." : "Save Forbidden Actions"}
+          {isLoading ? "Saving..." : "Save"}
         </Button>
       </CardContent>
     </Card>

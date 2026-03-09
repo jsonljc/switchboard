@@ -10,27 +10,44 @@ import { StepOperator } from "@/components/onboarding/step-operator";
 import { StepCapabilities } from "@/components/onboarding/step-capabilities";
 import { StepGovernanceSimple } from "@/components/onboarding/step-governance-simple";
 import { StepConnection } from "@/components/onboarding/step-connection";
-import { StepWelcomeTeam } from "@/components/onboarding/step-welcome-team";
+import { StepBudget } from "@/components/onboarding/step-budget";
+import { StepTelegram } from "@/components/onboarding/step-telegram";
+import { StepAllSet } from "@/components/onboarding/step-all-set";
 import { SKIN_CATALOG } from "@/lib/skin-catalog";
-import { useInitializeRoster, useAgentRoster } from "@/hooks/use-agents";
+import { useInitializeRoster } from "@/hooks/use-agents";
 
 const STEP_LABELS = [
   "About your business",
   "Name your operator",
   "Choose capabilities",
   "How much freedom?",
-  "Connect your tools",
-  "Meet your team",
+  "Connect your ads",
+  "Set your budget",
+  "Connect Telegram",
+  "You're all set!",
 ];
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = STEP_LABELS.length;
+
+/** Map simple governance choice to AdsOperatorConfig automationLevel */
+function governanceToAutomationLevel(mode: string): "copilot" | "supervised" | "autonomous" {
+  switch (mode) {
+    case "observe":
+      return "autonomous";
+    case "guarded":
+      return "supervised";
+    case "strict":
+    case "locked":
+    default:
+      return "copilot";
+  }
+}
 
 export default function SetupPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const initializeRoster = useInitializeRoster();
-  const { data: rosterData } = useAgentRoster();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -51,8 +68,19 @@ export default function SetupPage() {
 
   // Step 4: Connection
   const [_connectionId, setConnectionId] = useState<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
 
-  // Step 5: Welcome team — initialized during handleNext for step 4→5
+  // Step 5: Budget
+  const [monthlyBudget, setMonthlyBudget] = useState(1000);
+
+  // Step 6: Telegram
+  const [ownerBotConnected, setOwnerBotConnected] = useState(false);
+  const [leadBotToken, setLeadBotToken] = useState("");
+  const [skipLeadBot, setSkipLeadBot] = useState(false);
+
+  // Step 7: All Set
+  const [isHandoffTriggered, setIsHandoffTriggered] = useState(false);
+  const [isHandoffLoading, setIsHandoffLoading] = useState(false);
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -80,6 +108,10 @@ export default function SetupPage() {
       case 4:
         return true; // Connection is optional
       case 5:
+        return monthlyBudget >= 200;
+      case 6:
+        return true; // Telegram is optional (can connect later)
+      case 7:
         return true;
       default:
         return false;
@@ -103,32 +135,11 @@ export default function SetupPage() {
   const handleNext = async () => {
     await saveStep(step);
 
-    // Initialize capabilities defaults when moving from step 0 → step 2
+    // Initialize capabilities defaults when moving from step 0
     if (step === 0 && !capabilitiesInitialized) {
-      // Default: select all capabilities for the chosen skin
       const allCaps = getAllCapabilityIds(requiredCartridges);
       setSelectedCapabilities(allCaps);
       setCapabilitiesInitialized(true);
-    }
-
-    // Initialize roster when transitioning to the welcome step
-    if (step === 4) {
-      try {
-        await initializeRoster.mutateAsync({
-          operatorName: operatorName.trim() || "Ava",
-          operatorConfig: {
-            tone: workingStyle,
-            workingStyle:
-              workingStyle === "concise"
-                ? "Concise & Direct"
-                : workingStyle === "friendly"
-                  ? "Friendly & Warm"
-                  : "Professional & Detailed",
-          },
-        });
-      } catch {
-        // Non-critical — roster can be initialized later
-      }
     }
 
     setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
@@ -136,6 +147,27 @@ export default function SetupPage() {
 
   const handleBack = () => {
     setStep((s) => Math.max(s - 1, 0));
+  };
+
+  const handleTriggerHandoff = async () => {
+    setIsHandoffLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/organizations/handoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Handoff failed");
+      }
+      setIsHandoffTriggered(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to start analysis";
+      toast({ title: "Handoff failed", description: message, variant: "destructive" });
+    } finally {
+      setIsHandoffLoading(false);
+    }
   };
 
   const handleComplete = async () => {
@@ -155,6 +187,7 @@ export default function SetupPage() {
       });
 
       // 2. Create identity spec
+      const dailyBudgetCap = Math.round((monthlyBudget / 30) * 100) / 100;
       await fetch("/api/dashboard/identity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,14 +203,19 @@ export default function SetupPage() {
             high: "elevated",
             critical: "mandatory",
           },
-          globalSpendLimits: { daily: 10000, weekly: null, monthly: null, perAction: 5000 },
+          globalSpendLimits: {
+            daily: dailyBudgetCap,
+            weekly: null,
+            monthly: monthlyBudget,
+            perAction: Math.round(monthlyBudget / 10),
+          },
           cartridgeSpendLimits: {},
           forbiddenBehaviors: [],
           trustBehaviors: [],
         }),
       });
 
-      // 3. Initialize agent roster (if not already done in handleNext)
+      // 3. Initialize agent roster
       try {
         await initializeRoster.mutateAsync({
           operatorName: operatorName.trim() || "Ava",
@@ -195,7 +233,41 @@ export default function SetupPage() {
         // May already be initialized — that's fine
       }
 
-      // 4. Set onboarding complete and redirect to Mission Control
+      // 4. Create AdsOperatorConfig — activates the agent runner
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+      const automationLevel = governanceToAutomationLevel(governanceMode);
+
+      const platformMap: Record<string, string> = {
+        "meta-ads": "meta",
+        "google-ads": "google",
+        "tiktok-ads": "tiktok",
+      };
+      const platform = platformMap[selectedPlatform ?? "meta-ads"] ?? "meta";
+
+      await fetch("/api/dashboard/operator-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adAccountIds: ["default"],
+          platforms: [platform],
+          automationLevel,
+          targets: {
+            dailyBudgetCap,
+          },
+          schedule: {
+            optimizerCronHour: 6,
+            reportCronHour: 8,
+            timezone,
+          },
+          notificationChannel: {
+            type: "telegram",
+            chatId: organizationId,
+          },
+          active: true,
+        }),
+      });
+
+      // 5. Redirect to mission control
       router.push("/");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -207,8 +279,6 @@ export default function SetupPage() {
       setIsSubmitting(false);
     }
   };
-
-  const roster = rosterData?.roster ?? [];
 
   return (
     <WizardShell
@@ -251,10 +321,32 @@ export default function SetupPage() {
         <StepGovernanceSimple selected={governanceMode} onChange={setGovernanceMode} />
       )}
       {step === 4 && (
-        <StepConnection cartridgeId={connectionCartridge} onConnectionCreated={setConnectionId} />
+        <StepConnection
+          cartridgeId={connectionCartridge}
+          onConnectionCreated={setConnectionId}
+          onPlatformSelected={setSelectedPlatform}
+        />
       )}
-      {step === 5 && (
-        <StepWelcomeTeam operatorName={operatorName.trim() || "Ava"} roster={roster} />
+      {step === 5 && <StepBudget monthlyBudget={monthlyBudget} onBudgetChange={setMonthlyBudget} />}
+      {step === 6 && (
+        <StepTelegram
+          organizationId={organizationId}
+          ownerBotConnected={ownerBotConnected}
+          onOwnerBotConnected={() => setOwnerBotConnected(true)}
+          leadBotToken={leadBotToken}
+          onLeadBotTokenChange={setLeadBotToken}
+          skipLeadBot={skipLeadBot}
+          onSkipLeadBot={setSkipLeadBot}
+        />
+      )}
+      {step === 7 && (
+        <StepAllSet
+          businessName={businessName}
+          organizationId={organizationId}
+          isHandoffTriggered={isHandoffTriggered}
+          isHandoffLoading={isHandoffLoading}
+          onTriggerHandoff={handleTriggerHandoff}
+        />
       )}
     </WizardShell>
   );

@@ -16,7 +16,7 @@ export function ActiveWorkPanel() {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          Pending Approvals
+          Needs Your Input
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -26,7 +26,7 @@ export function ActiveWorkPanel() {
             <Skeleton className="h-12" />
           </>
         ) : approvals.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No pending approvals</p>
+          <p className="text-sm text-muted-foreground py-2">Nothing needs your input right now</p>
         ) : (
           approvals.map((approval) => (
             <Link

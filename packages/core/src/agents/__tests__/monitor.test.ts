@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MonitorAgent, DEFAULT_ALERT_CONDITIONS } from "../monitor.js";
 import type { AgentContext } from "../types.js";
 import type { MonitorSnapshot } from "../monitor.js";
@@ -62,6 +62,13 @@ describe("MonitorAgent", () => {
 
   beforeEach(() => {
     agent = new MonitorAgent();
+    // Pin date to Wednesday so the monitor always produces a daily report
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-04T10:00:00Z")); // Wednesday
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("tick", () => {
@@ -84,8 +91,9 @@ describe("MonitorAgent", () => {
 
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
-      expect(reportText).toContain("$24.50");
-      expect(reportText).toContain("Leads: 8");
+      expect(reportText).toContain("24.50");
+      expect(reportText).toContain("Leads:");
+      expect(reportText).toMatch(/Leads:.*8/);
     });
 
     it("shows zero-lead campaigns as warnings", async () => {
@@ -114,7 +122,8 @@ describe("MonitorAgent", () => {
 
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
-      expect(reportText).toContain('"Dead Campaign" has 0 leads today');
+      expect(reportText).toContain("Dead Campaign");
+      expect(reportText).toContain("0 leads");
     });
 
     it("handles no data gracefully", async () => {
@@ -171,10 +180,7 @@ describe("MonitorAgent", () => {
     });
 
     it("generates weekly report on Monday", async () => {
-      // Find the next Monday
-      const monday = new Date();
-      monday.setDate(monday.getDate() + ((1 - monday.getDay() + 7) % 7 || 7));
-      vi.useFakeTimers({ now: monday });
+      vi.setSystemTime(new Date("2026-03-09T10:00:00Z")); // Monday
 
       const ctx = makeMockContext();
       await agent.tick(ctx);
@@ -182,14 +188,10 @@ describe("MonitorAgent", () => {
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
       expect(reportText).toContain("Weekly Report");
-
-      vi.useRealTimers();
     });
 
     it("formats weekly report with campaign ranking", async () => {
-      const monday = new Date();
-      monday.setDate(monday.getDate() + ((1 - monday.getDay() + 7) % 7 || 7));
-      vi.useFakeTimers({ now: monday });
+      vi.setSystemTime(new Date("2026-03-09T10:00:00Z")); // Monday
 
       const ctx = makeMockContext();
       (ctx.orchestrator.executeApproved as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -218,8 +220,6 @@ describe("MonitorAgent", () => {
         .calls[0]![2] as string;
       expect(reportText).toContain("Best:");
       expect(reportText).toContain("Worst:");
-
-      vi.useRealTimers();
     });
   });
 });

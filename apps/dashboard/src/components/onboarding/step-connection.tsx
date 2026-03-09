@@ -11,12 +11,16 @@ interface ServiceRegistryEntry {
   serviceId: string;
   displayName: string;
   authType: string;
-  requiredFields: { key: string; label: string; type: "text" | "password"; placeholder?: string }[];
+  requiredFields: {
+    key: string;
+    label: string;
+    type: "text" | "password";
+    placeholder?: string;
+  }[];
   cartridgeId: string;
   description: string;
 }
 
-// Mirrors @switchboard/cartridge-sdk service-registry.ts
 const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
   {
     serviceId: "stripe",
@@ -39,22 +43,64 @@ const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
     cartridgeId: "digital-ads",
     description: "Manage ad campaigns, budgets, and audience targeting.",
   },
+  {
+    serviceId: "google-ads",
+    displayName: "Google Ads",
+    authType: "api_key",
+    requiredFields: [
+      {
+        key: "developerToken",
+        label: "Developer Token",
+        type: "password",
+        placeholder: "XXXXXXXXXXXXXXXX",
+      },
+      { key: "customerId", label: "Customer ID", type: "text", placeholder: "123-456-7890" },
+    ],
+    cartridgeId: "digital-ads",
+    description: "Manage search, display, and shopping campaigns.",
+  },
+  {
+    serviceId: "tiktok-ads",
+    displayName: "TikTok Ads",
+    authType: "api_key",
+    requiredFields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        type: "password",
+        placeholder: "Your TikTok access token",
+      },
+      { key: "advertiserId", label: "Advertiser ID", type: "text", placeholder: "1234567890" },
+    ],
+    cartridgeId: "digital-ads",
+    description: "Manage TikTok ad campaigns and creative content.",
+  },
 ];
 
 interface StepConnectionProps {
   cartridgeId: string;
   onConnectionCreated?: (connectionId: string) => void;
+  onPlatformSelected?: (serviceId: string) => void;
 }
 
-export function StepConnection({ cartridgeId, onConnectionCreated }: StepConnectionProps) {
-  const service = SERVICE_REGISTRY.find((s) => s.cartridgeId === cartridgeId);
+export function StepConnection({
+  cartridgeId,
+  onConnectionCreated,
+  onPlatformSelected,
+}: StepConnectionProps) {
+  const services = SERVICE_REGISTRY.filter((s) => s.cartridgeId === cartridgeId);
   const createConnection = useCreateConnection();
   const testConnection = useTestConnection();
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
+    services.length === 1 ? services[0].serviceId : null,
+  );
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ healthy: boolean; detail?: string } | null>(null);
 
-  if (!service) {
+  const service = services.find((s) => s.serviceId === selectedServiceId) ?? null;
+
+  if (services.length === 0) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
@@ -64,14 +110,23 @@ export function StepConnection({ cartridgeId, onConnectionCreated }: StepConnect
     );
   }
 
+  const handleSelectService = (serviceId: string) => {
+    setSelectedServiceId(serviceId);
+    setCredentials({});
+    setConnectionId(null);
+    setTestResult(null);
+    onPlatformSelected?.(serviceId);
+  };
+
   const handleSave = async () => {
+    if (!service) return;
     const result = await createConnection.mutateAsync({
       serviceId: service.serviceId,
       serviceName: service.displayName,
       authType: service.authType,
       credentials,
     });
-    const id = (result.connection as any)?.id;
+    const id = (result.connection as Record<string, unknown>)?.id as string | undefined;
     if (id) {
       setConnectionId(id);
       onConnectionCreated?.(id);
@@ -85,10 +140,52 @@ export function StepConnection({ cartridgeId, onConnectionCreated }: StepConnect
     setTestResult(result);
   };
 
-  const allFieldsFilled = service.requiredFields.every((f) => credentials[f.key]?.trim());
+  const allFieldsFilled = service?.requiredFields.every((f) => credentials[f.key]?.trim()) ?? false;
+
+  // Platform selection when multiple services match
+  if (services.length > 1 && !selectedServiceId) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">Which ad platform do you use?</p>
+        <div className="grid gap-2">
+          {services.map((s) => (
+            <button
+              key={s.serviceId}
+              onClick={() => handleSelectService(s.serviceId)}
+              className="text-left border rounded-lg p-4 hover:border-primary/50 transition-colors"
+            >
+              <p className="text-sm font-medium">{s.displayName}</p>
+              <p className="text-xs text-muted-foreground">{s.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!service) return null;
 
   return (
     <div className="space-y-4">
+      {services.length > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{service.displayName}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => {
+              setSelectedServiceId(null);
+              setCredentials({});
+              setConnectionId(null);
+              setTestResult(null);
+            }}
+          >
+            Change platform
+          </Button>
+        </div>
+      )}
+
       <p className="text-sm text-muted-foreground">
         Connect your {service.displayName} account. {service.description}
       </p>
