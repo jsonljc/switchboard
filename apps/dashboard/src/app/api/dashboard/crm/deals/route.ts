@@ -10,12 +10,8 @@ export async function GET(request: NextRequest) {
     const data = await client.getDeals({
       stage: url.searchParams.get("stage") ?? undefined,
       contactId: url.searchParams.get("contactId") ?? undefined,
-      limit: url.searchParams.has("limit")
-        ? Number(url.searchParams.get("limit"))
-        : undefined,
-      offset: url.searchParams.has("offset")
-        ? Number(url.searchParams.get("offset"))
-        : undefined,
+      limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
+      offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
     });
     return NextResponse.json(data);
   } catch (err: unknown) {

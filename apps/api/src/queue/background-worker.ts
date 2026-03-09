@@ -1,6 +1,11 @@
 import { Worker } from "bullmq";
 import type { ConnectionOptions, Job } from "bullmq";
-import type { LifecycleOrchestrator, ResolvedProfile, ResolvedSkin, StorageContext } from "@switchboard/core";
+import type {
+  LifecycleOrchestrator,
+  ResolvedProfile,
+  ResolvedSkin,
+  StorageContext,
+} from "@switchboard/core";
 import type { AuditLedger } from "@switchboard/core";
 import type { PrismaClient } from "@switchboard/db";
 import type Redis from "ioredis";
@@ -10,10 +15,7 @@ import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
 import { runDiagnosticScanOnce } from "../jobs/diagnostic-scanner.js";
 import { runScheduledReportScanOnce } from "../jobs/scheduled-reports.js";
-import {
-  createRedisAgentRunGate,
-  runAgentRunnerCycle,
-} from "../jobs/agent-runner.js";
+import { createRedisAgentRunGate, runAgentRunnerCycle } from "../jobs/agent-runner.js";
 
 export interface BackgroundWorkerConfig {
   connection: ConnectionOptions;
@@ -78,7 +80,9 @@ export function createBackgroundWorker(config: BackgroundWorkerConfig): Worker<B
           });
           return { kind: job.data.kind, success: true };
         default:
-          throw new Error(`Unsupported background job kind: ${(job.data as { kind?: string }).kind}`);
+          throw new Error(
+            `Unsupported background job kind: ${(job.data as { kind?: string }).kind}`,
+          );
       }
     },
     {
@@ -91,7 +95,10 @@ export function createBackgroundWorker(config: BackgroundWorkerConfig): Worker<B
     logger.info({ jobId: job.id, kind: job.data.kind }, "Background job completed");
   });
   worker.on("failed", (job, err) => {
-    logger.error({ jobId: job?.id, kind: job?.data.kind, err: err.message }, "Background job failed");
+    logger.error(
+      { jobId: job?.id, kind: job?.data.kind, err: err.message },
+      "Background job failed",
+    );
   });
 
   return worker;

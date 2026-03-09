@@ -229,8 +229,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
         fields: ["spend"],
       });
       actualAdSpend =
-        Math.round(spendRows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0) * 100) /
-        100;
+        Math.round(spendRows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0) * 100) / 100;
     } catch {
       actualAdSpend = null;
     }
@@ -239,9 +238,7 @@ export const reportsRoutes: FastifyPluginAsync = async (app) => {
     const adSpend = actualAdSpend ?? parsed.data.adSpend ?? null;
     const effectiveBookings = bookingCount || bookingAuditCount;
     const costPerBooking =
-      adSpend != null && effectiveBookings > 0
-        ? adSpend / effectiveBookings
-        : null;
+      adSpend != null && effectiveBookings > 0 ? adSpend / effectiveBookings : null;
     const costPerLead = adSpend != null && leadsFromAds > 0 ? adSpend / leadsFromAds : null;
 
     return reply.send({

@@ -19,9 +19,7 @@ export interface ScheduledReportJobConfig {
  * formats the summary, and delivers via configured channels.
  * Returns a cleanup function that stops the interval.
  */
-export async function runScheduledReportScanOnce(
-  config: ScheduledReportJobConfig,
-): Promise<void> {
+export async function runScheduledReportScanOnce(config: ScheduledReportJobConfig): Promise<void> {
   const {
     prisma,
     storageContext,
@@ -150,10 +148,7 @@ export async function runScheduledReportScanOnce(
           },
         });
 
-        logger.info(
-          { reportId: report.id, reportName: report.name },
-          "Scheduled report delivered",
-        );
+        logger.info({ reportId: report.id, reportName: report.name }, "Scheduled report delivered");
       } catch (err) {
         logger.error({ err, reportId: report.id } as any, "Failed to run scheduled report");
       }

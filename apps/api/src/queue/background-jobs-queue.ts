@@ -3,18 +3,13 @@ import type { ConnectionOptions } from "bullmq";
 
 export const BACKGROUND_JOBS_QUEUE_NAME = "switchboard:background-jobs";
 
-export type BackgroundJobKind =
-  | "diagnostic-scan"
-  | "scheduled-report-scan"
-  | "agent-runner-cycle";
+export type BackgroundJobKind = "diagnostic-scan" | "scheduled-report-scan" | "agent-runner-cycle";
 
 export interface BackgroundJobData {
   kind: BackgroundJobKind;
 }
 
-export function createBackgroundJobsQueue(
-  connection: ConnectionOptions,
-): Queue<BackgroundJobData> {
+export function createBackgroundJobsQueue(connection: ConnectionOptions): Queue<BackgroundJobData> {
   return new Queue<BackgroundJobData>(BACKGROUND_JOBS_QUEUE_NAME, {
     connection,
     defaultJobOptions: {
@@ -29,9 +24,7 @@ export function createBackgroundJobsQueue(
   });
 }
 
-export async function scheduleBackgroundJobs(
-  queue: Queue<BackgroundJobData>,
-): Promise<void> {
+export async function scheduleBackgroundJobs(queue: Queue<BackgroundJobData>): Promise<void> {
   await queue.upsertJobScheduler(
     "diagnostic-scan",
     { every: 5 * 60 * 1000 },

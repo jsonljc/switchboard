@@ -47,9 +47,7 @@ interface OperatorSummaryDeps {
   organizationId: string;
 }
 
-export async function buildOperatorSummary(
-  deps: OperatorSummaryDeps,
-): Promise<OperatorSummary> {
+export async function buildOperatorSummary(deps: OperatorSummaryDeps): Promise<OperatorSummary> {
   const cacheKey = `operator-summary:${deps.organizationId}`;
   const cached = deps.redis ? await deps.redis.get(cacheKey) : null;
   if (cached) {
@@ -204,7 +202,9 @@ async function buildSpendSummary(
   });
 
   const trendDates = enumerateDateKeys(start7Days, now);
-  const leadCountsByDayPromise = leadTrendPromise.then((rows) => countByDay(rows.map((row) => row.createdAt)));
+  const leadCountsByDayPromise = leadTrendPromise.then((rows) =>
+    countByDay(rows.map((row) => row.createdAt)),
+  );
   const bookingCountsByDayPromise = bookingTrendPromise.then((rows) =>
     countByDay(rows.map((row) => row.createdAt)),
   );
@@ -221,7 +221,12 @@ async function buildSpendSummary(
         Promise.all(
           trendDates.map(async (date) => ({
             date,
-            spend: await fetchSpend(provider, adAccountId, new Date(`${date}T00:00:00.000Z`), new Date(`${date}T23:59:59.999Z`)),
+            spend: await fetchSpend(
+              provider,
+              adAccountId,
+              new Date(`${date}T00:00:00.000Z`),
+              new Date(`${date}T23:59:59.999Z`),
+            ),
           })),
         ),
       ]);
@@ -285,9 +290,7 @@ async function fetchSpend(
     fields: ["spend"],
   });
 
-  return roundCurrency(
-    rows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0),
-  );
+  return roundCurrency(rows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0));
 }
 
 function startOfDay(date: Date): Date {

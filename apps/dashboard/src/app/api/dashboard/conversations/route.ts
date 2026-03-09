@@ -11,9 +11,7 @@ export async function GET(request: NextRequest) {
       status: url.searchParams.get("status") ?? undefined,
       channel: url.searchParams.get("channel") ?? undefined,
       principalId: url.searchParams.get("principalId") ?? undefined,
-      limit: url.searchParams.has("limit")
-        ? Number(url.searchParams.get("limit"))
-        : undefined,
+      limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
     });
     return NextResponse.json(data);
   } catch (err: unknown) {

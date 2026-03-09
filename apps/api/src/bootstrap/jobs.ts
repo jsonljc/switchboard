@@ -39,16 +39,22 @@ interface JobDeps {
 /**
  * Start all background jobs and return a cleanup function + agentNotifier.
  */
-export async function startBackgroundJobs(
-  deps: JobDeps,
-): Promise<{
+export async function startBackgroundJobs(deps: JobDeps): Promise<{
   stop: () => Promise<void>;
   agentNotifier: AgentNotifier;
   backgroundQueue: Queue | null;
   backgroundWorker: Worker | null;
 }> {
-  const { storage, ledger, orchestrator, prismaClient, redis, resolvedSkin, resolvedProfile, logger } =
-    deps;
+  const {
+    storage,
+    ledger,
+    orchestrator,
+    prismaClient,
+    redis,
+    resolvedSkin,
+    resolvedProfile,
+    logger,
+  } = deps;
 
   const stopExpiryJob = startApprovalExpiryJob({ storage, ledger, logger });
   const stopChainVerify = startChainVerificationJob({ ledger, logger });

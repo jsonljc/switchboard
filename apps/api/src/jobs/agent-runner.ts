@@ -221,7 +221,8 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
             cronHour = opConfig.schedule.optimizerCronHour;
           }
 
-          if (!isDue(agent.id, opConfig.id, opConfig.schedule.timezone, cronHour, cronDay)) continue;
+          if (!isDue(agent.id, opConfig.id, opConfig.schedule.timezone, cronHour, cronDay))
+            continue;
 
           const ctx: AgentContext = {
             config: opConfig,
@@ -469,7 +470,10 @@ export async function runAgentRunnerCycle(
 
       const currentProfile = automationLevelToProfile(opConfig.automationLevel);
       const assessment = autonomyController.assess(currentProfile, snapshot);
-      if (assessment.recommendedProfile !== assessment.currentProfile || assessment.autonomousEligible) {
+      if (
+        assessment.recommendedProfile !== assessment.currentProfile ||
+        assessment.autonomousEligible
+      ) {
         await notifier.sendProactive(
           opConfig.notificationChannel.chatId,
           opConfig.notificationChannel.type,
