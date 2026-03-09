@@ -13,6 +13,7 @@ import {
   SkinLoader,
   SkinResolver,
   ToolRegistry,
+  ProfileResolver,
   setMetrics,
 } from "@switchboard/core";
 import type {
@@ -21,6 +22,7 @@ import type {
   ApprovalNotifier,
   TierStore,
   ResolvedSkin,
+  ResolvedProfile,
   AgentNotifier,
 } from "@switchboard/core";
 import type { Policy } from "@switchboard/schemas";
@@ -57,6 +59,7 @@ declare module "fastify" {
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
     resolvedSkin: ResolvedSkin | null;
+    resolvedProfile: ResolvedProfile | null;
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
   }
@@ -221,8 +224,21 @@ export async function buildServer() {
 
   // --- Resolve credentials and register cartridges ---
   const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
-  const { adsWriteProvider } = await registerCartridges(storage, credentials, redis, app.log);
+  const { adsWriteProvider, businessProfile } = await registerCartridges(
+    storage,
+    credentials,
+    redis,
+    app.log,
+  );
   await wireEscalationNotifier();
+
+  // --- Resolve business profile (optional, loaded from PROFILE_ID in cartridge bootstrap) ---
+  let resolvedProfile: ResolvedProfile | null = null;
+  if (businessProfile) {
+    const profileResolver = new ProfileResolver();
+    resolvedProfile = profileResolver.resolve(businessProfile);
+    app.log.info({ profileId: businessProfile.id }, "Business profile resolved for agent context");
+  }
 
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
   let resolvedSkin: ResolvedSkin | null = null;
@@ -393,6 +409,7 @@ export async function buildServer() {
     orchestrator,
     prismaClient,
     resolvedSkin,
+    resolvedProfile,
     logger: app.log,
   });
 
@@ -411,6 +428,7 @@ export async function buildServer() {
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
   app.decorate("resolvedSkin", resolvedSkin);
+  app.decorate("resolvedProfile", resolvedProfile);
   app.decorate("agentNotifier", agentNotifier);
   app.decorate("conversionBus", conversionBus);
 

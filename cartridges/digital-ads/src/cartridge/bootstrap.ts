@@ -12,6 +12,7 @@ import { TikTokProvider } from "./providers/tiktok-provider.js";
 import { MockProvider } from "./providers/mock-provider.js";
 import { createMetaAdsWriteProvider } from "./providers/meta-write-provider.js";
 import { PostMutationVerifier } from "./interceptors/verification.js";
+import { MetaGraphClient } from "../platforms/meta/graph-client.js";
 import type { CartridgeInterceptor } from "@switchboard/cartridge-sdk";
 import type { PlatformType, PlatformClient, PlatformCredentials } from "../platforms/types.js";
 import type { MetricSnapshot } from "../core/types.js";
@@ -105,6 +106,13 @@ export async function bootstrapDigitalAdsCartridge(
 
   const cartridge = new DigitalAdsCartridge();
 
+  // Create shared MetaGraphClient so both read and write providers share
+  // the same circuit breaker and rate limiter
+  const graphClient = new MetaGraphClient({
+    accessToken: config.accessToken,
+    apiVersion: "v22.0",
+  });
+
   const wrapProvider = (provider: AdPlatformProvider): AdPlatformProvider =>
     config.cacheStore ? new CachingProviderWrapper(provider, config.cacheStore) : provider;
 
@@ -116,15 +124,16 @@ export async function bootstrapDigitalAdsCartridge(
       cartridge.registerProvider(wrapProvider(new MockProvider(platform, snapshot)));
     }
   } else {
-    cartridge.registerProvider(wrapProvider(new MetaProvider()));
+    cartridge.registerProvider(wrapProvider(new MetaProvider({ graphClient })));
     cartridge.registerProvider(wrapProvider(new GoogleProvider()));
     cartridge.registerProvider(wrapProvider(new TikTokProvider()));
   }
 
-  // Register write provider
+  // Register write provider (shares the same graphClient)
   const writeProvider = createMetaAdsWriteProvider({
     accessToken: config.accessToken,
     adAccountId: config.adAccountId,
+    graphClient,
   });
   cartridge.registerWriteProvider(writeProvider);
 

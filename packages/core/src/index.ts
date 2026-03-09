@@ -346,6 +346,8 @@ export type {
   AutonomyAssessment,
   CompetenceSnapshot,
 } from "./agents/index.js";
+export { buildMinimalProfile } from "./agents/index.js";
+export type { MinimalOrgData } from "./agents/index.js";
 
 // Event bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";

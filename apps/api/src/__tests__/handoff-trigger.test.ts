@@ -59,6 +59,7 @@ function buildApp() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("storageContext", {} as any);
   app.decorate("resolvedSkin", null);
+  app.decorate("resolvedProfile", null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("agentNotifier", {
     sendProactive: vi.fn().mockResolvedValue(undefined),
@@ -118,6 +119,7 @@ describe("POST /api/organizations/:orgId/handoff", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     app.decorate("storageContext", {} as any);
     app.decorate("resolvedSkin", null);
+    app.decorate("resolvedProfile", null);
     app.decorate("agentNotifier", null);
     app.register(organizationsRoutes, { prefix: "/api/organizations" });
 

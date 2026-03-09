@@ -7,10 +7,20 @@ import type { EntityLevel } from "../../core/types.js";
 import type { PlatformHealth } from "../types.js";
 import type { AdPlatformProvider } from "./provider.js";
 import { MetaApiClient } from "../../platforms/meta/client.js";
+import type { MetaGraphClient } from "../../platforms/meta/graph-client.js";
 import { todayISO } from "../utils.js";
+
+export interface MetaProviderConfig {
+  graphClient?: MetaGraphClient;
+}
 
 export class MetaProvider implements AdPlatformProvider {
   readonly platform = "meta" as const;
+  private readonly graphClient?: MetaGraphClient;
+
+  constructor(config?: MetaProviderConfig) {
+    this.graphClient = config?.graphClient;
+  }
 
   async connect(
     credentials: PlatformCredentials,
@@ -23,7 +33,10 @@ export class MetaProvider implements AdPlatformProvider {
     if (credentials.platform !== "meta") {
       throw new Error("MetaProvider requires Meta credentials");
     }
-    const client = new MetaApiClient({ accessToken: credentials.accessToken });
+    const client = new MetaApiClient({
+      accessToken: credentials.accessToken,
+      graphClient: this.graphClient,
+    });
 
     // Validate by fetching a lightweight snapshot — confirms the token works
     const timeRange = { since: todayISO(), until: todayISO() };
@@ -76,6 +89,9 @@ export class MetaProvider implements AdPlatformProvider {
     if (credentials.platform !== "meta") {
       throw new Error("MetaProvider requires Meta credentials");
     }
-    return new MetaApiClient({ accessToken: credentials.accessToken });
+    return new MetaApiClient({
+      accessToken: credentials.accessToken,
+      graphClient: this.graphClient,
+    });
   }
 }
