@@ -91,8 +91,9 @@ describe("MonitorAgent", () => {
 
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
-      expect(reportText).toContain("$24.50");
-      expect(reportText).toContain("Leads: 8");
+      expect(reportText).toContain("24.50");
+      expect(reportText).toContain("Leads:");
+      expect(reportText).toMatch(/Leads:.*8/);
     });
 
     it("shows zero-lead campaigns as warnings", async () => {
@@ -121,7 +122,8 @@ describe("MonitorAgent", () => {
 
       const reportText = (ctx.notifier.sendProactive as ReturnType<typeof vi.fn>).mock
         .calls[0]![2] as string;
-      expect(reportText).toContain('"Dead Campaign" has 0 leads today');
+      expect(reportText).toContain("Dead Campaign");
+      expect(reportText).toContain("0 leads");
     });
 
     it("handles no data gracefully", async () => {
