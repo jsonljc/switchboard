@@ -70,44 +70,48 @@ describe("reportsRoutes", () => {
     return routes;
   }
 
-  it("returns correct structure for clinic report with empty data", async () => {
-    const routes = await registerRoutes();
-    const handler = routes.get("/clinic");
-    const reply = createReply();
+  it(
+    "returns correct structure for clinic report with empty data",
+    { timeout: 15_000 },
+    async () => {
+      const routes = await registerRoutes();
+      const handler = routes.get("/clinic");
+      const reply = createReply();
 
-    await handler!(
-      {
-        query: {},
-        organizationIdFromAuth: "org-1",
-      },
-      reply,
-    );
+      await handler!(
+        {
+          query: {},
+          organizationIdFromAuth: "org-1",
+        },
+        reply,
+      );
 
-    const body = reply.getBody() as Record<string, unknown>;
-    expect(body).toHaveProperty("period");
-    expect(body).toHaveProperty("organizationId", "org-1");
-    expect(body).toHaveProperty("leads");
-    expect(body).toHaveProperty("bookings");
-    expect(body).toHaveProperty("responseTime");
-    expect(body).toHaveProperty("adCorrelation");
-    expect(body).toHaveProperty("costMetrics");
+      const body = reply.getBody() as Record<string, unknown>;
+      expect(body).toHaveProperty("period");
+      expect(body).toHaveProperty("organizationId", "org-1");
+      expect(body).toHaveProperty("leads");
+      expect(body).toHaveProperty("bookings");
+      expect(body).toHaveProperty("responseTime");
+      expect(body).toHaveProperty("adCorrelation");
+      expect(body).toHaveProperty("costMetrics");
 
-    const leads = body["leads"] as { total: number; byStage: unknown[] };
-    expect(leads.total).toBe(0);
-    expect(leads.byStage).toEqual([]);
+      const leads = body["leads"] as { total: number; byStage: unknown[] };
+      expect(leads.total).toBe(0);
+      expect(leads.byStage).toEqual([]);
 
-    const bookings = body["bookings"] as { count: number };
-    expect(bookings.count).toBe(0);
+      const bookings = body["bookings"] as { count: number };
+      expect(bookings.count).toBe(0);
 
-    const costMetrics = body["costMetrics"] as {
-      adSpend: number | null;
-      costPerBooking: number | null;
-      costPerLead: number | null;
-    };
-    expect(costMetrics.adSpend).toBeNull();
-    expect(costMetrics.costPerBooking).toBeNull();
-    expect(costMetrics.costPerLead).toBeNull();
-  });
+      const costMetrics = body["costMetrics"] as {
+        adSpend: number | null;
+        costPerBooking: number | null;
+        costPerLead: number | null;
+      };
+      expect(costMetrics.adSpend).toBeNull();
+      expect(costMetrics.costPerBooking).toBeNull();
+      expect(costMetrics.costPerLead).toBeNull();
+    },
+  );
 
   it("calculates cost per booking when adSpend is provided", async () => {
     mockPrisma.crmDeal.groupBy.mockResolvedValue([

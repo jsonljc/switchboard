@@ -610,3 +610,102 @@ model CadenceInstance {
   @@index([patientId])
   @@index([nextEvaluationAt])
 }
+
+// ── Revenue Growth Cartridge ──
+
+model RevenueAccount {
+  id              String    @id @default(uuid())
+  organizationId  String
+  accountId       String    // external ad account ID
+  platforms       String[]  // "meta", "google", "tiktok"
+  vertical        String    @default("commerce")
+  active          Boolean   @default(true)
+  lastCycleAt     DateTime?
+  nextCycleAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  diagnosticCycles RevGrowthDiagnosticCycle[]
+  interventions    RevGrowthIntervention[]
+
+  @@unique([organizationId, accountId])
+  @@index([organizationId])
+  @@index([active, nextCycleAt])
+}
+
+model RevGrowthDiagnosticCycle {
+  id                        String    @id @default(uuid())
+  revenueAccountId          String
+  organizationId            String
+  dataTier                  String    // FULL, PARTIAL, SPARSE
+  scorerOutputs             Json      // ScorerOutput[]
+  constraints               Json      // Constraint[]
+  primaryConstraint         String?   // ConstraintType enum value
+  previousPrimaryConstraint String?   // ConstraintType from prior cycle
+  constraintTransition      Boolean   @default(false)
+  startedAt                 DateTime  @default(now())
+  completedAt               DateTime?
+  createdAt                 DateTime  @default(now())
+
+  revenueAccount RevenueAccount          @relation(fields: [revenueAccountId], references: [id], onDelete: Cascade)
+  interventions  RevGrowthIntervention[]
+
+  @@index([revenueAccountId])
+  @@index([organizationId])
+  @@index([completedAt])
+}
+
+model RevGrowthIntervention {
+  id                    String    @id @default(uuid())
+  cycleId               String
+  revenueAccountId      String
+  constraintType        String    // ConstraintType enum value
+  actionType            String    // RevGrowthActionType enum value
+  status                String    @default("PROPOSED") // GovernanceStatus
+  priority              Int       @default(1)
+  estimatedImpact       String    @default("MEDIUM") // ImpactTier
+  reasoning             String
+  artifacts             Json      @default("[]") // ActionArtifact[]
+  outcomeStatus         String    @default("PENDING") // OutcomeStatus
+  measurementWindowDays Int?
+  measurementStartedAt  DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  cycle          RevGrowthDiagnosticCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  revenueAccount RevenueAccount          @relation(fields: [revenueAccountId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+  @@index([revenueAccountId])
+  @@index([status])
+  @@index([outcomeStatus])
+}
+
+model RevGrowthWeeklyDigest {
+  id                    String   @id @default(uuid())
+  revenueAccountId      String
+  organizationId        String
+  weekStartDate         String   // YYYY-MM-DD
+  headline              String
+  summary               String
+  constraintHistory     String[] // ConstraintType values
+  interventionOutcomes  Json     // [{ interventionId, actionType, outcome }]
+  createdAt             DateTime @default(now())
+
+  @@index([revenueAccountId])
+  @@index([organizationId, weekStartDate])
+}
+
+model ConnectorHealthLog {
+  id            String   @id @default(uuid())
+  organizationId String
+  connectorId   String
+  connectorName String
+  status        String   // connected, degraded, disconnected
+  matchRate     Float?
+  errorMessage  String?
+  checkedAt     DateTime @default(now())
+
+  @@index([organizationId, connectorId])
+  @@index([checkedAt])
+}

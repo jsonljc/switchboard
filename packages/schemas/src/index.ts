@@ -49,3 +49,6 @@ export * from "./campaign-plan.js";
 
 // Ads operator config (per-business agent configuration)
 export * from "./ads-operator.js";
+
+// Revenue growth cartridge types
+export * from "./revenue-growth.js";
