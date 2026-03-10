@@ -3,7 +3,12 @@ import type { ConnectionOptions } from "bullmq";
 
 export const BACKGROUND_JOBS_QUEUE_NAME = "switchboard:background-jobs";
 
-export type BackgroundJobKind = "diagnostic-scan" | "scheduled-report-scan" | "agent-runner-cycle";
+export type BackgroundJobKind =
+  | "diagnostic-scan"
+  | "scheduled-report-scan"
+  | "agent-runner-cycle"
+  | "revenue-growth-cycle"
+  | "intervention-outcome-check";
 
 export interface BackgroundJobData {
   kind: BackgroundJobKind;
@@ -57,6 +62,32 @@ export async function scheduleBackgroundJobs(queue: Queue<BackgroundJobData>): P
     {
       name: "agent-runner-cycle",
       data: { kind: "agent-runner-cycle" },
+      opts: {
+        removeOnComplete: 100,
+        removeOnFail: false,
+      },
+    },
+  );
+
+  await queue.upsertJobScheduler(
+    "revenue-growth-cycle",
+    { every: 60 * 60 * 1000 },
+    {
+      name: "revenue-growth-cycle",
+      data: { kind: "revenue-growth-cycle" },
+      opts: {
+        removeOnComplete: 100,
+        removeOnFail: false,
+      },
+    },
+  );
+
+  await queue.upsertJobScheduler(
+    "intervention-outcome-check",
+    { every: 6 * 60 * 60 * 1000 },
+    {
+      name: "intervention-outcome-check",
+      data: { kind: "intervention-outcome-check" },
       opts: {
         removeOnComplete: 100,
         removeOnFail: false,

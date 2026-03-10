@@ -29,6 +29,7 @@
     "@switchboard/core": "workspace:*",
     "@switchboard/crm": "workspace:*",
     "@switchboard/db": "workspace:*",
+    "@switchboard/revenue-growth": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "bullmq": "^5.34.0",
     "cron-parser": "^4.9.0",

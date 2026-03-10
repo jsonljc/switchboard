@@ -357,3 +357,7 @@ export type {
   ConversionEventType,
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
+
+// LLM client interface (structured LLM calls)
+export { MockLLMClient } from "./llm/types.js";
+export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";

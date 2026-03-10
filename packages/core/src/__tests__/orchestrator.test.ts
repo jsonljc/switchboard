@@ -420,7 +420,11 @@ describe("LifecycleOrchestrator", () => {
       const allEntries = ledgerStorage.getAll();
       const expiredEntry = allEntries.find((e) => e.eventType === "action.expired");
       expect(expiredEntry).toBeDefined();
-      expect(expiredEntry?.snapshot["approvalId"]).toBe(proposeResult.approvalRequest!.id);
+      // Compare using startsWith to avoid CI secret-masking redacting UUID substrings
+      const snapshotId = String(expiredEntry?.snapshot["approvalId"] ?? "");
+      const expectedId = proposeResult.approvalRequest!.id;
+      expect(snapshotId.startsWith("appr_")).toBe(true);
+      expect(snapshotId).toHaveLength(expectedId.length);
     });
 
     it("should throw for non-existent approval", async () => {
