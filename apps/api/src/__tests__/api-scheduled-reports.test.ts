@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+
+const mockExecuteGovernedSystemAction = vi.fn();
+
+vi.mock("../services/system-governed-actions.js", () => ({
+  executeGovernedSystemAction: (...args: unknown[]) => mockExecuteGovernedSystemAction(...args),
+}));
+
 import { scheduledReportsRoutes } from "../routes/scheduled-reports.js";
 
 describe("Scheduled Reports API", () => {
@@ -30,6 +37,7 @@ describe("Scheduled Reports API", () => {
 
     app.decorate("prisma", mockPrisma as any);
     app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("orchestrator", {} as any);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -204,6 +212,11 @@ describe("Scheduled Reports API", () => {
       });
       mockCartridges.get.mockReturnValue({
         execute: vi.fn().mockResolvedValue({ data: { summary: "ok" } }),
+      });
+      mockExecuteGovernedSystemAction.mockResolvedValue({
+        outcome: "executed",
+        executionResult: { data: { summary: "ok" } },
+        envelopeId: "env_1",
       });
       mockScheduledReport.update.mockResolvedValue({});
 

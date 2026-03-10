@@ -36,12 +36,20 @@ const TEST_CONFIG: AdsOperatorConfig = {
   updatedAt: new Date("2025-01-01"),
 };
 
+const mockGetPrincipal = vi.fn();
+
 function buildApp() {
   const app = Fastify({ logger: false });
 
   // Simulate Prisma being available
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("prisma", {} as any);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.decorate("storageContext", {
+    identity: { getPrincipal: mockGetPrincipal },
+  } as any);
+  app.decorateRequest("organizationIdFromAuth", undefined);
+  app.decorateRequest("principalIdFromAuth", undefined);
   app.register(operatorConfigRoutes, { prefix: "/api/operator-config" });
 
   return app;
@@ -52,11 +60,16 @@ describe("operator-config routes", () => {
     mockCreate.mockReset();
     mockGetByOrg.mockReset();
     mockUpdate.mockReset();
+    mockGetPrincipal.mockReset();
   });
 
   describe("POST /api/operator-config", () => {
     it("creates a config and returns 201", async () => {
       mockCreate.mockResolvedValue(TEST_CONFIG);
+      mockGetPrincipal.mockResolvedValue({
+        id: "system",
+        organizationId: "org-1",
+      });
       const app = buildApp();
 
       const res = await app.inject({
