@@ -4,10 +4,10 @@
 
 import type { Cartridge } from "@switchboard/cartridge-sdk";
 import { RevenueGrowthCartridge } from "./index.js";
-import type { DataCollectionDeps } from "../data/normalizer.js";
+import type { RevGrowthDeps } from "../data/normalizer.js";
 
 export interface BootstrapRevenueGrowthConfig {
-  deps?: DataCollectionDeps;
+  deps?: RevGrowthDeps;
 }
 
 export interface BootstrapRevenueGrowthResult {

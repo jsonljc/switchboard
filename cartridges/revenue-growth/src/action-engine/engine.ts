@@ -93,10 +93,7 @@ export function estimateImpact(constraint: Constraint): ImpactTier {
 // generateIntervention — Create an intervention proposal from a constraint
 // ---------------------------------------------------------------------------
 
-export function generateIntervention(
-  constraint: Constraint,
-  cycleId: string,
-): Intervention {
+export function generateIntervention(constraint: Constraint, cycleId: string): Intervention {
   const mapping = CONSTRAINT_ACTION_MAP[constraint.type];
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
@@ -205,7 +202,8 @@ function buildBriefContent(constraint: Constraint, mapping: ActionMapping): stri
   ];
 
   for (const issue of constraint.scorerOutput.issues) {
-    const severity = issue.severity === "critical" ? "🔴" : issue.severity === "warning" ? "🟡" : "🔵";
+    const severity =
+      issue.severity === "critical" ? "🔴" : issue.severity === "warning" ? "🟡" : "🔵";
     lines.push(`- ${severity} ${issue.message}`);
   }
 

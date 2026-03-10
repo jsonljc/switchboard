@@ -15,6 +15,8 @@ import type {
   DiagnosticRunOutput,
   ConnectorHealth,
   Intervention,
+  ConstraintType,
+  Constraint,
 } from "@switchboard/schemas";
 
 import { REVENUE_GROWTH_MANIFEST } from "./manifest.js";
@@ -27,15 +29,17 @@ import { scoreHeadroom } from "../scorers/headroom.js";
 import { scoreSalesProcess } from "../scorers/sales-process.js";
 import { identifyConstraints } from "../constraint-engine/engine.js";
 import { generateIntervention } from "../action-engine/engine.js";
+import { generateWeeklyDigest } from "../digest/generator.js";
 
-import type { DataCollectionDeps } from "../data/normalizer.js";
+import type { RevGrowthDeps } from "../data/normalizer.js";
+import type { DiagnosticCycleRecord } from "../stores/interfaces.js";
 
 export class RevenueGrowthCartridge implements Cartridge {
   readonly manifest: CartridgeManifest = REVENUE_GROWTH_MANIFEST;
 
-  private deps: DataCollectionDeps | null = null;
+  private deps: RevGrowthDeps | null = null;
 
-  setDeps(deps: DataCollectionDeps): void {
+  setDeps(deps: RevGrowthDeps): void {
     this.deps = deps;
   }
 
@@ -74,6 +78,9 @@ export class RevenueGrowthCartridge implements Cartridge {
       case "revenue-growth.intervention.defer":
         return this.deferIntervention(parameters, start);
 
+      case "revenue-growth.digest.generate":
+        return this.generateDigest(parameters, start);
+
       default:
         return {
           success: false,
@@ -100,9 +107,7 @@ export class RevenueGrowthCartridge implements Cartridge {
         summary: "Missing required parameters: accountId and organizationId",
         externalRefs: {},
         rollbackAvailable: false,
-        partialFailures: [
-          { step: "validate", error: "accountId and organizationId are required" },
-        ],
+        partialFailures: [{ step: "validate", error: "accountId and organizationId are required" }],
         durationMs: Date.now() - start,
         undoRecipe: null,
       };
@@ -121,13 +126,22 @@ export class RevenueGrowthCartridge implements Cartridge {
       scoreSalesProcess(normalizedData),
     ];
 
-    // 3. Identify constraints
+    // 3. Read previous primary constraint from store
+    let previousPrimaryConstraintType: ConstraintType | null = null;
+    if (this.deps?.cycleStore) {
+      const previousCycle = await this.deps.cycleStore.getLatest(accountId);
+      if (previousCycle) {
+        previousPrimaryConstraintType = previousCycle.primaryConstraint ?? null;
+      }
+    }
+
+    // 4. Identify constraints
     const { primary, secondary, constraintTransition } = identifyConstraints(
       scorerOutputs,
-      null, // TODO: read previous from store in Phase 3
+      previousPrimaryConstraintType,
     );
 
-    // 4. Generate interventions via action engine
+    // 5. Generate interventions via action engine
     const cycleId = crypto.randomUUID();
     const interventions: Intervention[] = [];
 
@@ -148,6 +162,35 @@ export class RevenueGrowthCartridge implements Cartridge {
       constraintTransition,
       completedAt: now,
     };
+
+    // 6. Persist cycle and interventions to stores
+    if (this.deps?.cycleStore) {
+      const allConstraints: Constraint[] = [];
+      if (primary) allConstraints.push(primary);
+      allConstraints.push(...secondary);
+
+      const cycleRecord: DiagnosticCycleRecord = {
+        id: cycleId,
+        accountId,
+        organizationId,
+        dataTier,
+        scorerOutputs,
+        constraints: allConstraints,
+        primaryConstraint: primary?.type ?? null,
+        previousPrimaryConstraint: previousPrimaryConstraintType,
+        constraintTransition,
+        interventions,
+        startedAt: now,
+        completedAt: now,
+      };
+      await this.deps.cycleStore.save(cycleRecord);
+    }
+
+    if (this.deps?.interventionStore) {
+      for (const intervention of interventions) {
+        await this.deps.interventionStore.save(intervention);
+      }
+    }
 
     return {
       success: true,
@@ -180,10 +223,25 @@ export class RevenueGrowthCartridge implements Cartridge {
       };
     }
 
-    // Placeholder — in Phase 3, this will read from PrismaInterventionStore
+    if (this.deps?.cycleStore) {
+      const latest = await this.deps.cycleStore.getLatest(accountId);
+      if (latest) {
+        return {
+          success: true,
+          summary: `Latest diagnostic for account ${accountId}: ${latest.primaryConstraint ?? "no constraint"}`,
+          externalRefs: { accountId, cycleId: latest.id },
+          rollbackAvailable: false,
+          partialFailures: [],
+          durationMs: Date.now() - start,
+          undoRecipe: null,
+          data: latest,
+        };
+      }
+    }
+
     return {
       success: true,
-      summary: `Latest diagnostic for account ${accountId} (store not yet implemented)`,
+      summary: `No diagnostic history found for account ${accountId}`,
       externalRefs: { accountId },
       rollbackAvailable: false,
       partialFailures: [],
@@ -249,9 +307,13 @@ export class RevenueGrowthCartridge implements Cartridge {
       };
     }
 
+    if (this.deps?.interventionStore) {
+      await this.deps.interventionStore.updateStatus(interventionId, "APPROVED");
+    }
+
     return {
       success: true,
-      summary: `Intervention ${interventionId} approved (store not yet implemented)`,
+      summary: `Intervention ${interventionId} approved`,
       externalRefs: { interventionId },
       rollbackAvailable: false,
       partialFailures: [],
@@ -278,6 +340,10 @@ export class RevenueGrowthCartridge implements Cartridge {
       };
     }
 
+    if (this.deps?.interventionStore) {
+      await this.deps.interventionStore.updateStatus(interventionId, "DEFERRED");
+    }
+
     return {
       success: true,
       summary: `Intervention ${interventionId} deferred: ${reason}`,
@@ -289,12 +355,73 @@ export class RevenueGrowthCartridge implements Cartridge {
     };
   }
 
+  private async generateDigest(
+    parameters: Record<string, unknown>,
+    start: number,
+  ): Promise<ExecuteResult> {
+    const accountId = parameters["accountId"] as string;
+    if (!accountId) {
+      return {
+        success: false,
+        summary: "Missing required parameter: accountId",
+        externalRefs: {},
+        rollbackAvailable: false,
+        partialFailures: [{ step: "validate", error: "accountId is required" }],
+        durationMs: Date.now() - start,
+        undoRecipe: null,
+      };
+    }
+
+    if (!this.deps?.cycleStore) {
+      return {
+        success: false,
+        summary: "Cycle store not configured — cannot generate digest",
+        externalRefs: {},
+        rollbackAvailable: false,
+        partialFailures: [{ step: "deps", error: "cycleStore is required" }],
+        durationMs: Date.now() - start,
+        undoRecipe: null,
+      };
+    }
+
+    const cycles = await this.deps.cycleStore.listByAccount(accountId, 7);
+    const interventions = this.deps.interventionStore
+      ? await this.deps.interventionStore.listByAccount(accountId, { limit: 20 })
+      : [];
+
+    const digest = await generateWeeklyDigest(
+      accountId,
+      cycles,
+      interventions,
+      this.deps.llmClient,
+    );
+
+    if (this.deps.digestStore) {
+      await this.deps.digestStore.save(digest);
+    }
+
+    return {
+      success: true,
+      summary: `Weekly digest generated: ${digest.headline}`,
+      externalRefs: { accountId, digestId: digest.id },
+      rollbackAvailable: false,
+      partialFailures: [],
+      durationMs: Date.now() - start,
+      undoRecipe: null,
+      data: digest,
+    };
+  }
+
   async getRiskInput(
     actionType: string,
     _parameters: Record<string, unknown>,
     _context: Record<string, unknown>,
   ): Promise<RiskInput> {
-    if (actionType.includes("diagnostic") || actionType.includes("connectors")) {
+    if (
+      actionType.includes("diagnostic") ||
+      actionType.includes("connectors") ||
+      actionType.includes("digest")
+    ) {
       return {
         baseRisk: "none",
         exposure: { dollarsAtRisk: 0, blastRadius: 0 },

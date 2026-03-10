@@ -40,6 +40,26 @@ export interface DataCollectionDeps {
 }
 
 // ---------------------------------------------------------------------------
+// Extended dependency injection — includes stores and LLM client
+// ---------------------------------------------------------------------------
+
+import type {
+  InterventionStore,
+  DiagnosticCycleStore,
+  RevenueAccountStore,
+  WeeklyDigestStore,
+} from "../stores/interfaces.js";
+import type { LLMClient } from "@switchboard/core";
+
+export interface RevGrowthDeps extends DataCollectionDeps {
+  interventionStore?: InterventionStore;
+  cycleStore?: DiagnosticCycleStore;
+  accountStore?: RevenueAccountStore;
+  digestStore?: WeeklyDigestStore;
+  llmClient?: LLMClient;
+}
+
+// ---------------------------------------------------------------------------
 // Mock connector for testing
 // ---------------------------------------------------------------------------
 

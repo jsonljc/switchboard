@@ -11,7 +11,12 @@
 //   10% data completeness (number of stages tracked)
 // ---------------------------------------------------------------------------
 
-import type { ScorerOutput, ScorerIssue, NormalizedData, ConfidenceLevel } from "@switchboard/schemas";
+import type {
+  ScorerOutput,
+  ScorerIssue,
+  NormalizedData,
+  ConfidenceLevel,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Thresholds
@@ -186,10 +191,7 @@ export function scoreFunnelLeakage(data: NormalizedData): ScorerOutput {
 
   // --- Composite Score ---
   const compositeScore = Math.round(
-    worstDropoffScore * 0.4 +
-      overallScore * 0.3 +
-      consistencyScore * 0.2 +
-      completenessScore * 0.1,
+    worstDropoffScore * 0.4 + overallScore * 0.3 + consistencyScore * 0.2 + completenessScore * 0.1,
   );
 
   const confidence = determineConfidence(data);

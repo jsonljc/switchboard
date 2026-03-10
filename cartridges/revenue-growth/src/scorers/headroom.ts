@@ -11,7 +11,12 @@
 //   15% caveat severity
 // ---------------------------------------------------------------------------
 
-import type { ScorerOutput, ScorerIssue, NormalizedData, ConfidenceLevel } from "@switchboard/schemas";
+import type {
+  ScorerOutput,
+  ScorerIssue,
+  NormalizedData,
+  ConfidenceLevel,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Thresholds

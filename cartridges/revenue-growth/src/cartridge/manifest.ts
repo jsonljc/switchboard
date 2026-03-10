@@ -58,6 +58,17 @@ export const REVENUE_GROWTH_ACTIONS: ActionDefinition[] = [
     baseRiskCategory: "none",
     reversible: false,
   },
+  {
+    actionType: "revenue-growth.digest.generate",
+    name: "Generate Weekly Digest",
+    description:
+      "Generate a weekly digest summarizing diagnostic history, constraint transitions, and intervention outcomes.",
+    parametersSchema: {
+      accountId: { type: "string" },
+    },
+    baseRiskCategory: "none",
+    reversible: false,
+  },
 ];
 
 export const REVENUE_GROWTH_MANIFEST: CartridgeManifest = {

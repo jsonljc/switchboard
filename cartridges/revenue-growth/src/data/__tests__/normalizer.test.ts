@@ -17,6 +17,7 @@ describe("assignDataConfidenceTier", () => {
     creativeAssets: null,
     crmSummary: null,
     signalHealth: null,
+    headroom: null,
   };
 
   it("returns SPARSE when no data sources are available", () => {
@@ -109,6 +110,10 @@ describe("assignDataConfidenceTier", () => {
         averageDealValue: 500,
         averageTimeToFirstContact: 2,
         leadToCloseRate: 0.15,
+        stageConversionRates: null,
+        averageDaysToClose: null,
+        adAttributedLeads: null,
+        followUpWithin24hRate: null,
       },
     };
     expect(assignDataConfidenceTier(data)).toBe("FULL");
@@ -167,6 +172,10 @@ describe("collectNormalizedData", () => {
         averageDealValue: 500,
         averageTimeToFirstContact: 2,
         leadToCloseRate: 0.15,
+        stageConversionRates: null,
+        averageDaysToClose: null,
+        adAttributedLeads: null,
+        followUpWithin24hRate: null,
       },
     });
 
@@ -200,6 +209,9 @@ describe("collectNormalizedData", () => {
         throw new Error("Connection failed");
       },
       fetchCrmSummary: () => {
+        throw new Error("Connection failed");
+      },
+      fetchHeadroom: () => {
         throw new Error("Connection failed");
       },
     };

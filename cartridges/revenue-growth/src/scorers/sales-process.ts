@@ -8,7 +8,12 @@
 //   20% pipeline stage conversion consistency
 // ---------------------------------------------------------------------------
 
-import type { ScorerOutput, ScorerIssue, NormalizedData, ConfidenceLevel } from "@switchboard/schemas";
+import type {
+  ScorerOutput,
+  ScorerIssue,
+  NormalizedData,
+  ConfidenceLevel,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Thresholds

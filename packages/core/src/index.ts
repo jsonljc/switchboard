@@ -360,4 +360,4 @@ export type {
 
 // LLM client interface (structured LLM calls)
 export { MockLLMClient } from "./llm/types.js";
-export type { LLMClient, LLMMessage, LLMCompletionOptions } from "./llm/types.js";
+export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";
