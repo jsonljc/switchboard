@@ -16,10 +16,7 @@ export interface CalibrationEntry {
 export function calibrateFromHistory(
   interventions: Intervention[],
 ): Map<ConstraintType, CalibrationEntry> {
-  const groups = new Map<
-    ConstraintType,
-    { improved: number; total: number; totalDelta: number }
-  >();
+  const groups = new Map<ConstraintType, { improved: number; total: number; totalDelta: number }>();
 
   for (const intervention of interventions) {
     // Only consider interventions with a resolved outcome

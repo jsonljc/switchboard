@@ -9,4 +9,8 @@ export { PrismaConnectionStore } from "./prisma-connection-store.js";
 export type { ConnectionRecord } from "./prisma-connection-store.js";
 export { PrismaGovernanceProfileStore } from "./prisma-governance-profile-store.js";
 export { PrismaCredentialResolver } from "./prisma-credential-resolver.js";
+export { PrismaInterventionStore } from "./prisma-intervention-store.js";
+export { PrismaDiagnosticCycleStore } from "./prisma-diagnostic-cycle-store.js";
+export { PrismaRevenueAccountStore } from "./prisma-revenue-account-store.js";
+export { PrismaWeeklyDigestStore } from "./prisma-weekly-digest-store.js";
 export { createPrismaStorage } from "./factory.js";

@@ -32,7 +32,11 @@ export class RevenueGrowthAgent implements AdsAgent {
         const result = await cartridge.execute(
           "revenue-growth.diagnostic.run",
           { accountId: account.accountId, organizationId: account.organizationId },
-          { principalId: "agent:revenue-growth", organizationId: account.organizationId, connectionCredentials: {} },
+          {
+            principalId: "agent:revenue-growth",
+            organizationId: account.organizationId,
+            connectionCredentials: {},
+          },
         );
 
         actions.push({
@@ -87,8 +91,7 @@ export class RevenueGrowthAgent implements AdsAgent {
           await this.deps.accountStore.upsert({
             ...account,
             nextCycleAt,
-            lastCycleId:
-              result.externalRefs["cycleId"]?.toString() ?? account.lastCycleId,
+            lastCycleId: result.externalRefs["cycleId"]?.toString() ?? account.lastCycleId,
             updatedAt: new Date().toISOString(),
           });
         }

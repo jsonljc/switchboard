@@ -14,6 +14,8 @@ import { startTokenRefreshJob } from "../jobs/token-refresh.js";
 import { startTtlCleanupJob } from "../jobs/ttl-cleanup.js";
 import { startCadenceRunner } from "../jobs/cadence-runner.js";
 import { startAgentRunner } from "../jobs/agent-runner.js";
+import { startRevGrowthRunner } from "../jobs/revenue-growth-runner.js";
+import { startOutcomeChecker } from "../jobs/outcome-checker.js";
 import type { AuditLedger } from "@switchboard/core";
 import {
   createBackgroundJobsQueue,
@@ -108,6 +110,8 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
   }
 
   let stopAgentRunner = () => {};
+  let stopRevGrowthRunner = () => {};
+  let stopOutcomeChecker = () => {};
   let backgroundQueue: Queue | null = null;
   let backgroundWorker: Worker | null = null;
 
@@ -154,6 +158,18 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
       intervalMs: 60_000,
       logger,
     });
+    if (prismaClient) {
+      stopRevGrowthRunner = startRevGrowthRunner({
+        prisma: prismaClient,
+        intervalMs: 60 * 60 * 1000,
+        logger,
+      });
+      stopOutcomeChecker = startOutcomeChecker({
+        prisma: prismaClient,
+        intervalMs: 6 * 60 * 60 * 1000,
+        logger,
+      });
+    }
   }
 
   return {
@@ -166,6 +182,8 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
       stopTtlCleanup();
       stopCadenceRunner();
       stopAgentRunner();
+      stopRevGrowthRunner();
+      stopOutcomeChecker();
       if (backgroundWorker) {
         await backgroundWorker.close();
       }

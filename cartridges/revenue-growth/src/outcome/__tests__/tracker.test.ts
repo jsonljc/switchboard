@@ -30,11 +30,7 @@ function makeIntervention(overrides: Partial<Intervention> = {}): Intervention {
 
 describe("checkOutcomes", () => {
   it("returns empty when no intervention store", async () => {
-    const results = await checkOutcomes(
-      { connectors: [] },
-      "acc_1",
-      "org_1",
-    );
+    const results = await checkOutcomes({ connectors: [] }, "acc_1", "org_1");
     expect(results).toEqual([]);
   });
 

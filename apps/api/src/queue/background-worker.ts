@@ -16,6 +16,8 @@ import type { Logger } from "../logger.js";
 import { runDiagnosticScanOnce } from "../jobs/diagnostic-scanner.js";
 import { runScheduledReportScanOnce } from "../jobs/scheduled-reports.js";
 import { createRedisAgentRunGate, runAgentRunnerCycle } from "../jobs/agent-runner.js";
+import { runRevGrowthCycleOnce } from "../jobs/revenue-growth-runner.js";
+import { runOutcomeCheckOnce } from "../jobs/outcome-checker.js";
 
 export interface BackgroundWorkerConfig {
   connection: ConnectionOptions;
@@ -78,6 +80,12 @@ export function createBackgroundWorker(config: BackgroundWorkerConfig): Worker<B
             logger,
             runGate: redis ? createRedisAgentRunGate(redis) : undefined,
           });
+          return { kind: job.data.kind, success: true };
+        case "revenue-growth-cycle":
+          await runRevGrowthCycleOnce({ prisma, logger });
+          return { kind: job.data.kind, success: true };
+        case "intervention-outcome-check":
+          await runOutcomeCheckOnce({ prisma, logger });
           return { kind: job.data.kind, success: true };
         default:
           throw new Error(

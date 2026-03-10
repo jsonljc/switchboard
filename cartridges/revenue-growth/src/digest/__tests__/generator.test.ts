@@ -53,9 +53,7 @@ describe("generateWeeklyDigest", () => {
       makeCycle({ primaryConstraint: "SIGNAL" }),
       makeCycle({ primaryConstraint: "CREATIVE" }),
     ];
-    const interventions = [
-      makeIntervention({ outcomeStatus: "IMPROVED" }),
-    ];
+    const interventions = [makeIntervention({ outcomeStatus: "IMPROVED" })];
 
     const digest = await generateWeeklyDigest("acc_1", cycles, interventions);
 

@@ -10,7 +10,11 @@ import {
   InMemoryWeeklyDigestStore,
 } from "../in-memory.js";
 import type { Intervention } from "@switchboard/schemas";
-import type { DiagnosticCycleRecord, RevenueAccountRecord, WeeklyDigestRecord } from "../interfaces.js";
+import type {
+  DiagnosticCycleRecord,
+  RevenueAccountRecord,
+  WeeklyDigestRecord,
+} from "../interfaces.js";
 
 function makeIntervention(overrides: Partial<Intervention> = {}): Intervention {
   const now = new Date().toISOString();

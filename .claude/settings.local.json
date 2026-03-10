@@ -29,7 +29,18 @@
       "Bash(pnpm --filter @switchboard/dashboard typecheck)",
       "Bash(pnpm --filter @switchboard/dashboard lint)",
       "Bash(npx next lint --file src/app/page.tsx --file src/app/mission/page.tsx --file src/app/approvals/page.tsx --file src/app/activity/page.tsx --file src/app/team/page.tsx --file src/components/character/operator-character.tsx --file src/components/layout/shell.tsx --file src/components/layout/app-shell.tsx)",
-      "Bash(npx next lint --file src/app/page.tsx --file src/providers/query-provider.tsx --file src/hooks/use-approvals.ts --file src/hooks/use-agents.ts)"
+      "Bash(npx next lint --file src/app/page.tsx --file src/providers/query-provider.tsx --file src/hooks/use-approvals.ts --file src/hooks/use-agents.ts)",
+      "Bash(git remote:*)",
+      "Bash(gh pr:*)",
+      "Bash(corepack pnpm:*)",
+      "Bash(gh run:*)",
+      "Bash(export PATH=\"/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm install --lockfile-only 2>&1)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --write cartridges/revenue-growth/src/action-engine/engine.ts cartridges/revenue-growth/src/cartridge/index.ts cartridges/revenue-growth/src/scorers/funnel-leakage.ts cartridges/revenue-growth/src/scorers/headroom.ts cartridges/revenue-growth/src/scorers/sales-process.ts 2>&1)",
+      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --write cartridges/revenue-growth/src/agent/revenue-growth-agent.ts cartridges/revenue-growth/src/digest/__tests__/generator.test.ts cartridges/revenue-growth/src/outcome/__tests__/tracker.test.ts cartridges/revenue-growth/src/outcome/calibrator.ts cartridges/revenue-growth/src/outcome/tracker.ts cartridges/revenue-growth/src/stores/__tests__/in-memory.test.ts 2>&1)",
+      "Bash(ln:*)",
+      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --check \"cartridges/revenue-growth/src/**/*.ts\" 2>&1)"
     ]
   }
 }

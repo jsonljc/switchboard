@@ -46,12 +46,7 @@ export async function checkOutcomes(
   for (const intervention of pendingInterventions) {
     if (!isWindowElapsed(intervention)) continue;
 
-    const result = await evaluateSingleOutcome(
-      intervention,
-      deps,
-      accountId,
-      organizationId,
-    );
+    const result = await evaluateSingleOutcome(intervention, deps, accountId, organizationId);
     if (result) {
       await deps.interventionStore.updateOutcome(intervention.id, result.outcome);
       results.push(result);
