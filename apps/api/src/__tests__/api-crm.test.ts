@@ -169,6 +169,9 @@ describe("CRM API", () => {
       app = Fastify({ logger: false });
       app.decorate("prisma", null);
       app.decorateRequest("organizationIdFromAuth", undefined);
+      app.addHook("onRequest", async (request) => {
+        request.organizationIdFromAuth = "org_test";
+      });
       await app.register(crmRoutes, { prefix: "/api/crm" });
 
       const res = await app.inject({
@@ -177,6 +180,24 @@ describe("CRM API", () => {
       });
 
       expect(res.statusCode).toBe(503);
+    });
+  });
+
+  describe("organization scope", () => {
+    it("rejects unscoped requests", async () => {
+      await app.close();
+
+      app = Fastify({ logger: false });
+      app.decorate("prisma", { _mock: true } as any);
+      app.decorateRequest("organizationIdFromAuth", undefined);
+      await app.register(crmRoutes, { prefix: "/api/crm" });
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/crm/contacts",
+      });
+
+      expect(res.statusCode).toBe(403);
     });
   });
 });

@@ -34,6 +34,7 @@ import { authMiddleware } from "./middleware/auth.js";
 import apiVersionPlugin from "./versioning.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
+import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import {
   resolveCartridgeCredentials,
   registerCartridges,
@@ -222,6 +223,10 @@ export async function buildServer() {
     redis,
   } = await bootstrapStorage(app.log);
 
+  if (prismaClient) {
+    await ensureSystemIdentity(prismaClient);
+  }
+
   // --- Resolve credentials and register cartridges ---
   const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
   const { adsWriteProvider, businessProfile } = await registerCartridges(
@@ -408,6 +413,7 @@ export async function buildServer() {
     ledger,
     orchestrator,
     prismaClient,
+    redis,
     resolvedSkin,
     resolvedProfile,
     logger: app.log,
@@ -434,7 +440,7 @@ export async function buildServer() {
 
   // Resource cleanup on close — order: jobs → worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
-    stopAllJobs();
+    await stopAllJobs();
 
     if (worker) {
       await worker.close();

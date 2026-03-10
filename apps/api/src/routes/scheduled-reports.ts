@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
+import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 import { z } from "zod";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 const cronRegex = /^(\S+\s+){4}\S+$/;
 
@@ -40,7 +42,8 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/scheduled-reports — list reports for org
   app.get("/", async (request, reply) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const reports = await prisma.scheduledReport.findMany({
       where: { organizationId: orgId },
       orderBy: { createdAt: "desc" },
@@ -51,7 +54,8 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/scheduled-reports — create report
   app.post("/", async (request, reply) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const parsed = createReportSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
@@ -68,7 +72,8 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
   app.put("/:id", async (request, reply) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const parsed = updateReportSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
@@ -96,7 +101,8 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
   app.delete("/:id", async (request, reply) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const existing = await prisma.scheduledReport.findFirst({
       where: { id, organizationId: orgId },
     });
@@ -109,7 +115,8 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
   app.post("/:id/run", async (request, reply) => {
     if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
     const { id } = request.params as { id: string };
-    const orgId = request.organizationIdFromAuth ?? "default";
+    const orgId = requireOrganizationScope(request, reply);
+    if (!orgId) return;
     const report = await prisma.scheduledReport.findFirst({ where: { id, organizationId: orgId } });
     if (!report) return reply.code(404).send({ error: "Scheduled report not found" });
 
@@ -123,15 +130,27 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
       const actionId = resolveDiagnoseAction(cartridgeId, report.reportType);
 
-      const result = await cartridge.execute(
-        actionId,
-        {
+      const governedAction = await executeGovernedSystemAction({
+        orchestrator: app.orchestrator,
+        actionType: actionId,
+        cartridgeId,
+        organizationId: orgId,
+        parameters: {
           platform: report.platform ?? "meta",
           vertical: report.vertical,
           entityId: "act_default",
         },
-        { principalId: "system", organizationId: orgId, connectionCredentials: {} },
-      );
+        message: `Manual run for scheduled report ${report.id}`,
+        idempotencyKey: `scheduled-report-manual:${report.id}:${Date.now()}`,
+      });
+
+      if (governedAction.outcome !== "executed") {
+        return reply.code(409).send({
+          error: "Report run was not executed",
+          detail: governedAction.explanation,
+          outcome: governedAction.outcome,
+        });
+      }
 
       // Update lastRunAt and nextRunAt
       const nextRunAt = computeNextRunAt(report.cronExpression, report.timezone);
@@ -140,7 +159,7 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
         data: { lastRunAt: new Date(), nextRunAt },
       });
 
-      return reply.send({ success: true, data: result?.data ?? null });
+      return reply.send({ success: true, data: governedAction.executionResult?.data ?? null });
     } catch (err: any) {
       app.log.error({ err, reportId: id }, "Manual report run failed");
       return reply.code(500).send({ error: "Report run failed", detail: err.message });

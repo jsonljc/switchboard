@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -48,31 +47,28 @@ function LoginForm() {
 
   if (isVerify) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 md:pl-0">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <CheckCircle2 className="h-12 w-12 text-green-500" />
-            </div>
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
-              We sent you a magic link. Click the link in your email to sign in.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Check your email</h1>
+          <p className="text-[15px] text-muted-foreground mt-2">
+            We sent you a magic link. Click the link in your email to sign in.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 md:pl-0">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Switchboard</CardTitle>
-          <CardDescription>Sign in to manage your AI agents</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {showMagicLink ? (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Switchboard</h1>
+          <p className="text-[15px] text-muted-foreground mt-1">Sign in to your account</p>
+        </div>
+        {showMagicLink ? (
             <>
               <form onSubmit={handleMagicLinkSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -159,8 +155,7 @@ function LoginForm() {
               )}
             </>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

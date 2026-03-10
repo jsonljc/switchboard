@@ -59,7 +59,7 @@ function makeConfig(overrides?: Partial<AdsOperatorConfig>): AdsOperatorConfig {
     platforms: ["meta"],
     automationLevel: "supervised",
     targets: { cpa: 15, roas: 3, dailyBudgetCap: 100 },
-    schedule: { optimizerCronHour: 6, reportCronHour: 9, timezone: "America/New_York" },
+    schedule: { optimizerCronHour: 6, reportCronHour: 9, timezone: "UTC" },
     notificationChannel: { type: "telegram", chatId: "chat_1" },
     principalId: "user_1",
     active: true,
@@ -104,7 +104,7 @@ describe("startAgentRunner", () => {
 
   it("returns a cleanup function", () => {
     // Set time to a non-matching hour so no agents tick on start
-    vi.setSystemTime(new Date(2026, 2, 8, 0, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 0, 0, 0)));
 
     const cleanup = startAgentRunner(makeRunnerConfig());
     expect(typeof cleanup).toBe("function");
@@ -113,7 +113,7 @@ describe("startAgentRunner", () => {
 
   it("ticks agents when cron hour matches", async () => {
     // Set the hour to 6 so optimizerCronHour (6) matches
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 15, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 15, 0)));
 
     const cfg = makeRunnerConfig();
 
@@ -134,7 +134,7 @@ describe("startAgentRunner", () => {
 
   it("does not tick when cron hour does not match", async () => {
     // Set hour to 14 — neither optimizerCronHour (6) nor reportCronHour (9) match
-    vi.setSystemTime(new Date(2026, 2, 8, 14, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 14, 0, 0)));
 
     const cfg = makeRunnerConfig();
 
@@ -150,7 +150,7 @@ describe("startAgentRunner", () => {
 
   it("stops when cleanup is called", async () => {
     // Set hour to 6 to match
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     const cfg = makeRunnerConfig();
 
@@ -173,7 +173,7 @@ describe("startAgentRunner", () => {
 
   it("handles tick errors gracefully", async () => {
     // Set hour to 6 so ticks fire
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     // Make agent tick throw
     mockTick.mockRejectedValue(new Error("network failure"));
@@ -197,7 +197,7 @@ describe("startAgentRunner", () => {
 
   it("skips inactive configs", async () => {
     // Set hour to 6
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     const inactiveConfig = makeConfig({ active: false });
     const cfg = makeRunnerConfig({ operatorConfigs: [inactiveConfig] });
@@ -214,7 +214,7 @@ describe("startAgentRunner", () => {
 
   it("does not double-tick same agent within the hour", async () => {
     // Set hour to 6
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 10, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 10, 0)));
 
     const cfg = makeRunnerConfig();
 
@@ -237,7 +237,7 @@ describe("startAgentRunner", () => {
 
   it("uses configLoader when provided to fetch configs dynamically", async () => {
     // Set hour to 6 so agents tick
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     const dynamicConfig = makeConfig({ id: "dynamic_1" });
     const configLoader = vi.fn().mockResolvedValue([dynamicConfig]);
@@ -262,7 +262,7 @@ describe("startAgentRunner", () => {
 
   it("falls back to static operatorConfigs when configLoader is not set", async () => {
     // Set hour to 6
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     const cfg = makeRunnerConfig({ operatorConfigs: [makeConfig()] });
 
@@ -277,7 +277,7 @@ describe("startAgentRunner", () => {
 
   it("records agent tick actions to audit ledger when provided", async () => {
     // Set hour to 6 so agents tick
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     mockTick.mockResolvedValue({
       agentId: "optimizer",
@@ -318,7 +318,7 @@ describe("startAgentRunner", () => {
 
   it("does not fail when audit ledger recording throws", async () => {
     // Set hour to 6 so agents tick
-    vi.setSystemTime(new Date(2026, 2, 8, 6, 0, 0));
+    vi.setSystemTime(new Date(Date.UTC(2026, 2, 8, 6, 0, 0)));
 
     mockTick.mockResolvedValue({
       agentId: "optimizer",

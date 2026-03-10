@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { paginationParams, paginate } from "@switchboard/core";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const crmRoutes: FastifyPluginAsync = async (app) => {
   // Helper to get PrismaCrmProvider (lazy import)
-  async function getCrmProvider(organizationId?: string) {
+  async function getCrmProvider(organizationId: string) {
     if (!app.prisma) {
       throw { statusCode: 503, message: "Database not available" };
     }
@@ -20,7 +21,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as Record<string, string | undefined>;
       const { limit, offset } = paginationParams(query);
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       const provider = await getCrmProvider(orgId);
       const search = query["search"];
@@ -44,7 +46,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const provider = await getCrmProvider(orgId);
 
       const contact = await provider.getContact(id);
@@ -64,7 +67,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as Record<string, string | undefined>;
       const { limit, offset } = paginationParams(query);
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const provider = await getCrmProvider(orgId);
 
       const deals = await provider.listDeals({
@@ -86,7 +90,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const provider = await getCrmProvider(orgId);
 
       const deals = await provider.listDeals();
@@ -107,7 +112,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as Record<string, string | undefined>;
       const { limit, offset } = paginationParams(query);
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const provider = await getCrmProvider(orgId);
 
       const activities = await provider.listActivities({
@@ -129,7 +135,8 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const query = request.query as Record<string, string | undefined>;
-      const orgId = request.organizationIdFromAuth;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const provider = await getCrmProvider(orgId);
 
       const stages = await provider.getPipelineStatus(query["pipeline"]);

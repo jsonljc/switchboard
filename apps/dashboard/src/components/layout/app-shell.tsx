@@ -2,12 +2,14 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Header } from "./header";
-import { NavBar } from "./nav-bar";
+import { Shell } from "./shell";
 import { DevPanel } from "../dev/dev-panel";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
+
+// Pages that need full-viewport treatment (no content-width wrapper or padding)
+const FULL_VIEWPORT_PATHS = ["/"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -17,9 +19,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
 
+  const isFullViewport = FULL_VIEWPORT_PATHS.includes(pathname);
+
   const { data: orgData, isLoading: orgLoading } = useOrgConfig(!hideChrome);
 
-  // Redirect guard: if onboarding is not complete, redirect to /setup
   const onboardingComplete = orgData?.config?.onboardingComplete ?? true;
   const isSetupPath = pathname === "/setup" || pathname.startsWith("/setup/");
   const isLoginPath = pathname === "/login";
@@ -32,19 +35,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (hideChrome) {
     return (
-      <main>
+      <main className="min-h-screen bg-background">
         {children}
         <DevPanel />
       </main>
     );
   }
 
+  if (isFullViewport) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Shell />
+        <main className="pb-20 md:pb-0 md:pt-14 min-h-[calc(100vh-56px)]">
+          {children}
+        </main>
+        <DevPanel />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen">
-      <Header />
-      <NavBar />
-      <main className="pb-20 md:pb-0 md:pl-60">
-        <div className="max-w-5xl mx-auto p-4">{children}</div>
+    <div className="min-h-screen bg-background">
+      <Shell />
+      <main className="pb-20 md:pb-0 md:pt-14">
+        <div className="page-width py-10 md:py-14">{children}</div>
       </main>
       <DevPanel />
     </div>

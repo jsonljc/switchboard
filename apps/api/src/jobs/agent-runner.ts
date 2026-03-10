@@ -56,6 +56,52 @@ interface AgentLastRun {
   lastRunAt: Date;
 }
 
+export interface AgentRunGate {
+  tryAcquire(slotKey: string, ttlSeconds: number): Promise<boolean>;
+}
+
+export function createInMemoryAgentRunGate(): AgentRunGate {
+  const slots = new Map<string, number>();
+  return {
+    async tryAcquire(slotKey: string, ttlSeconds: number): Promise<boolean> {
+      const now = Date.now();
+      const expiresAt = slots.get(slotKey);
+      if (expiresAt && expiresAt > now) {
+        return false;
+      }
+      slots.set(slotKey, now + ttlSeconds * 1000);
+      return true;
+    },
+  };
+}
+
+export function createRedisAgentRunGate(redis: {
+  set: (
+    key: string,
+    value: string,
+    mode: "EX",
+    ttlSeconds: number,
+    condition: "NX",
+  ) => Promise<unknown>;
+}): AgentRunGate {
+  return {
+    async tryAcquire(slotKey: string, ttlSeconds: number): Promise<boolean> {
+      const result = await redis.set(`agent-run:${slotKey}`, "1", "EX", ttlSeconds, "NX");
+      return result === "OK";
+    },
+  };
+}
+
+const WEEKDAY_TO_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
 /**
  * Start the agent runner background job.
  * Periodically checks all active AdsOperatorConfig records and ticks
@@ -97,15 +143,37 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
     return operatorConfigs.filter((c) => c.active);
   }
 
-  function isDue(agentId: string, configId: string, cronHour: number, cronDay?: number): boolean {
+  function getScheduleClock(timezone: string): { hour: number; day: number } {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hour12: false,
+      weekday: "short",
+    }).formatToParts(new Date());
+
+    const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+    const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
+    return {
+      hour,
+      day: WEEKDAY_TO_INDEX[weekday] ?? 0,
+    };
+  }
+
+  function isDue(
+    agentId: string,
+    configId: string,
+    timezone: string,
+    cronHour: number,
+    cronDay?: number,
+  ): boolean {
     const key = `${agentId}:${configId}`;
     const now = new Date();
-    const currentHour = now.getHours();
+    const clock = getScheduleClock(timezone);
 
-    if (currentHour !== cronHour) return false;
+    if (clock.hour !== cronHour) return false;
 
     // Weekly agents (e.g. strategist) only run on the specified day
-    if (cronDay !== undefined && now.getDay() !== cronDay) return false;
+    if (cronDay !== undefined && clock.day !== cronDay) return false;
 
     const lastRun = lastRuns.get(key);
     if (!lastRun) return true;
@@ -153,7 +221,8 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
             cronHour = opConfig.schedule.optimizerCronHour;
           }
 
-          if (!isDue(agent.id, opConfig.id, cronHour, cronDay)) continue;
+          if (!isDue(agent.id, opConfig.id, opConfig.schedule.timezone, cronHour, cronDay))
+            continue;
 
           const ctx: AgentContext = {
             config: opConfig,
@@ -311,4 +380,190 @@ export function startAgentRunner(config: AgentRunnerConfig): () => void {
     }
     logger.info("Agent runner stopped");
   };
+}
+
+export async function runAgentRunnerCycle(
+  config: AgentRunnerConfig & { runGate?: AgentRunGate },
+): Promise<void> {
+  const {
+    storageContext,
+    orchestrator,
+    notifier,
+    runGate = createInMemoryAgentRunGate(),
+    operatorConfigs = [],
+    configLoader,
+    resolvedProfile = null,
+    resolvedSkin = null,
+    ledger = null,
+    logger = createLogger("agent-runner"),
+  } = config;
+
+  const agents: AdsAgent[] = [
+    new OptimizerAgent(),
+    new ReporterAgent(),
+    new MonitorAgent(),
+    new GuardrailAgent(),
+    new StrategistAgent(),
+  ];
+  const autonomyController = new ProgressiveAutonomyController();
+
+  const getConfigs = async (): Promise<AdsOperatorConfig[]> => {
+    if (configLoader) return configLoader();
+    return operatorConfigs.filter((entry) => entry.active);
+  };
+
+  const getScheduleClock = (timezone: string): { hour: number; day: number } => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      hour12: false,
+      weekday: "short",
+    }).formatToParts(new Date());
+
+    const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+    const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
+    return {
+      hour,
+      day: WEEKDAY_TO_INDEX[weekday] ?? 0,
+    };
+  };
+
+  const buildRunSlotKey = (
+    agentId: string,
+    configId: string,
+    timezone: string,
+    cronHour: number,
+    cronDay?: number,
+  ): string | null => {
+    const clock = getScheduleClock(timezone);
+    if (clock.hour !== cronHour) return null;
+    if (cronDay !== undefined && clock.day !== cronDay) return null;
+    const now = new Date();
+    const dateKey = `${now.getUTCFullYear()}-${now.getUTCMonth() + 1}-${now.getUTCDate()}-${cronHour}`;
+    return `${agentId}:${configId}:${dateKey}`;
+  };
+
+  const assessAutonomy = async (opConfig: AdsOperatorConfig): Promise<void> => {
+    const canAssess = await runGate.tryAcquire(`autonomy:${opConfig.id}`, 24 * 60 * 60);
+    if (!canAssess) {
+      return;
+    }
+
+    try {
+      const records = await storageContext.competence.listRecords(opConfig.principalId);
+      if (records.length === 0) return;
+
+      const snapshot: CompetenceSnapshot = {
+        score: 0,
+        successCount: 0,
+        failureCount: 0,
+        rollbackCount: 0,
+      };
+
+      for (const record of records) {
+        snapshot.successCount += record.successCount;
+        snapshot.failureCount += record.failureCount;
+        snapshot.rollbackCount += record.rollbackCount;
+        snapshot.score += record.score;
+      }
+      snapshot.score = snapshot.score / records.length;
+
+      const currentProfile = automationLevelToProfile(opConfig.automationLevel);
+      const assessment = autonomyController.assess(currentProfile, snapshot);
+      if (
+        assessment.recommendedProfile !== assessment.currentProfile ||
+        assessment.autonomousEligible
+      ) {
+        await notifier.sendProactive(
+          opConfig.notificationChannel.chatId,
+          opConfig.notificationChannel.type,
+          autonomyController.formatAssessment(assessment),
+        );
+      }
+    } catch (err) {
+      logger.error({ err, configId: opConfig.id }, "Autonomy assessment failed");
+    }
+  };
+
+  try {
+    const configs = await getConfigs();
+    if (configs.length === 0) return;
+
+    for (const opConfig of configs) {
+      let anyAgentTicked = false;
+
+      for (const agent of agents) {
+        let cronHour: number;
+        let cronDay: number | undefined;
+        if (agent.id === "reporter" || agent.id === "monitor") {
+          cronHour = opConfig.schedule.reportCronHour;
+        } else if (agent.id === "strategist") {
+          cronHour = opConfig.schedule.reportCronHour;
+          cronDay = opConfig.schedule.strategistCronDay ?? 1;
+        } else {
+          cronHour = opConfig.schedule.optimizerCronHour;
+        }
+
+        const runSlotKey = buildRunSlotKey(
+          agent.id,
+          opConfig.id,
+          opConfig.schedule.timezone,
+          cronHour,
+          cronDay,
+        );
+        if (!runSlotKey) continue;
+
+        const acquired = await runGate.tryAcquire(runSlotKey, 60 * 60 + 300);
+        if (!acquired) continue;
+
+        const ctx: AgentContext = {
+          config: opConfig,
+          orchestrator: orchestrator as AgentContext["orchestrator"],
+          storage: storageContext,
+          notifier,
+          profile: resolvedProfile ?? undefined,
+          skin: resolvedSkin ?? undefined,
+        };
+
+        try {
+          const result = await agent.tick(ctx);
+          anyAgentTicked = true;
+
+          if (ledger) {
+            for (const action of result.actions) {
+              await ledger.record({
+                eventType: "action.executed",
+                actorType: "agent",
+                actorId: agent.id,
+                entityType: "ads_operator_config",
+                entityId: opConfig.id,
+                riskCategory: "low",
+                summary: `[${agent.name}] ${action.actionType}: ${action.outcome}`,
+                snapshot: {
+                  agentId: agent.id,
+                  configId: opConfig.id,
+                  actionType: action.actionType,
+                  outcome: action.outcome,
+                  tickSummary: result.summary,
+                },
+                organizationId: opConfig.organizationId,
+                visibilityLevel: "org",
+              });
+            }
+          }
+        } catch (err) {
+          logger.error(
+            { err, agentId: agent.id, configId: opConfig.id },
+            `Agent ${agent.name} tick failed`,
+          );
+        }
+      }
+
+      if (anyAgentTicked) {
+        await assessAutonomy(opConfig);
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, "Error in agent runner cycle");
+  }
 }

@@ -39,6 +39,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               <p className="text-sm text-muted-foreground">
                 {this.state.error?.message || "An unexpected error occurred."}
               </p>
+              {process.env.NODE_ENV === "development" && this.state.error?.stack && (
+                <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-32">
+                  {this.state.error.stack}
+                </pre>
+              )}
               <Button
                 onClick={() => {
                   this.setState({ hasError: false, error: null });

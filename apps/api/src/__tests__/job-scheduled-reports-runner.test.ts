@@ -6,6 +6,12 @@ vi.mock("@switchboard/digital-ads", () => ({
   formatDiagnostic: vi.fn((data: unknown) => `Formatted: ${JSON.stringify(data)}`),
 }));
 
+const mockExecuteGovernedSystemAction = vi.fn();
+
+vi.mock("../services/system-governed-actions.js", () => ({
+  executeGovernedSystemAction: (...args: unknown[]) => mockExecuteGovernedSystemAction(...args),
+}));
+
 import { startScheduledReportJob } from "../jobs/scheduled-reports.js";
 
 describe("Scheduled Reports Runner Job", () => {
@@ -14,6 +20,11 @@ describe("Scheduled Reports Runner Job", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    mockExecuteGovernedSystemAction.mockResolvedValue({
+      outcome: "executed",
+      executionResult: { data: { summary: "test data" } },
+      envelopeId: "env_1",
+    });
     notifySpy = vi
       .spyOn(notifier, "sendProactiveNotification")
       .mockResolvedValue([{ channel: "test", success: true }] as any);
@@ -34,11 +45,13 @@ describe("Scheduled Reports Runner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn() },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });
@@ -72,27 +85,29 @@ describe("Scheduled Reports Runner Job", () => {
       },
     };
 
-    const mockCartridge = {
-      execute: vi.fn().mockResolvedValue({ data: { summary: "test data" } }),
-    };
     const storageContext = {
-      cartridges: { get: vi.fn().mockReturnValue(mockCartridge) },
+      cartridges: { get: vi.fn().mockReturnValue({ id: "digital-ads" }) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });
 
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(mockCartridge.execute).toHaveBeenCalledWith(
-      "digital-ads.funnel.diagnose",
-      expect.any(Object),
-      expect.objectContaining({ organizationId: "org_1" }),
+    expect(mockExecuteGovernedSystemAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orchestrator,
+        actionType: "digital-ads.funnel.diagnose",
+        cartridgeId: "digital-ads",
+        organizationId: "org_1",
+      }),
     );
     expect(notifySpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -134,11 +149,13 @@ describe("Scheduled Reports Runner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn().mockReturnValue(undefined) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });
@@ -174,17 +191,21 @@ describe("Scheduled Reports Runner Job", () => {
       },
     };
 
-    const mockCartridge = {
-      execute: vi.fn().mockResolvedValue({ data: { kpi: 42 } }),
-    };
     const storageContext = {
-      cartridges: { get: vi.fn().mockReturnValue(mockCartridge) },
+      cartridges: { get: vi.fn().mockReturnValue({ id: "digital-ads" }) },
     };
+    mockExecuteGovernedSystemAction.mockResolvedValueOnce({
+      outcome: "executed",
+      executionResult: { data: { kpi: 42 } },
+      envelopeId: "env_2",
+    });
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });
@@ -226,13 +247,6 @@ describe("Scheduled Reports Runner Job", () => {
       },
     ];
 
-    const mockCartridge = {
-      execute: vi
-        .fn()
-        .mockRejectedValueOnce(new Error("Report failed"))
-        .mockResolvedValueOnce({ data: { ok: true } }),
-    };
-
     const prisma = {
       scheduledReport: {
         findMany: vi.fn().mockResolvedValue(reports),
@@ -240,13 +254,22 @@ describe("Scheduled Reports Runner Job", () => {
       },
     };
     const storageContext = {
-      cartridges: { get: vi.fn().mockReturnValue(mockCartridge) },
+      cartridges: { get: vi.fn().mockReturnValue({ id: "digital-ads" }) },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    mockExecuteGovernedSystemAction
+      .mockRejectedValueOnce(new Error("Report failed"))
+      .mockResolvedValueOnce({
+        outcome: "executed",
+        executionResult: { data: { ok: true } },
+        envelopeId: "env_3",
+      });
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });
@@ -254,7 +277,7 @@ describe("Scheduled Reports Runner Job", () => {
     await vi.advanceTimersByTimeAsync(5_000);
 
     // First report fails, second succeeds
-    expect(mockCartridge.execute).toHaveBeenCalledTimes(2);
+    expect(mockExecuteGovernedSystemAction).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ err: expect.any(Error), reportId: "rep_fail" }),
       "Failed to run scheduled report",
@@ -273,11 +296,13 @@ describe("Scheduled Reports Runner Job", () => {
     const storageContext = {
       cartridges: { get: vi.fn() },
     };
+    const orchestrator = {};
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
       prisma: prisma as any,
       storageContext: storageContext as any,
+      orchestrator: orchestrator as any,
       logger,
       intervalMs: 5_000,
     });

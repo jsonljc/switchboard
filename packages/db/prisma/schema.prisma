@@ -130,6 +130,7 @@ model ConversationState {
   threadId              String    @unique
   channel               String
   principalId           String
+  organizationId        String?
   status                String
   currentIntent         String?
   pendingProposalIds    String[]
@@ -141,6 +142,7 @@ model ConversationState {
   expiresAt             DateTime
 
   @@index([principalId])
+  @@index([organizationId])
   @@index([status])
 }
 

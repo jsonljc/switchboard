@@ -40,7 +40,27 @@ export const operatorConfigRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "organizationId is required", statusCode: 400 });
       }
 
+      if (
+        request.organizationIdFromAuth &&
+        body.organizationId !== request.organizationIdFromAuth
+      ) {
+        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+      }
+
       const principalId = body.principalId ?? request.principalIdFromAuth ?? "system";
+      const principal = await app.storageContext.identity.getPrincipal(principalId);
+      if (!principal) {
+        return reply.code(400).send({
+          error: "principalId does not exist",
+          statusCode: 400,
+        });
+      }
+      if (principal.organizationId && principal.organizationId !== body.organizationId) {
+        return reply.code(403).send({
+          error: "principalId is not bound to the target organization",
+          statusCode: 403,
+        });
+      }
 
       // Validate the config shape via Zod (minus auto-generated fields)
       const parseResult = AdsOperatorConfigSchema.omit({

@@ -31,9 +31,6 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      // Campaign data is fetched via external APIs using cartridge boot-time credentials.
-      // TODO: Per-org credential scoping needed — currently campaigns are scoped by whichever
-      // credentials the cartridge was initialized with, not by the requester's org.
       if (!request.organizationIdFromAuth) {
         return reply.code(403).send({
           error: "Forbidden: API key must be scoped to an organization",
@@ -80,7 +77,6 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as { query?: string; limit?: string };
 
-      // TODO: Per-org credential scoping needed — see GET /:id comment
       if (!request.organizationIdFromAuth) {
         return reply.code(403).send({
           error: "Forbidden: API key must be scoped to an organization",

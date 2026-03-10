@@ -7,7 +7,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { WizardShell } from "@/components/onboarding/wizard-shell";
 import { StepBusinessType } from "@/components/onboarding/step-business-type";
 import { StepOperator } from "@/components/onboarding/step-operator";
-import { StepCapabilities } from "@/components/onboarding/step-capabilities";
 import { StepGovernanceSimple } from "@/components/onboarding/step-governance-simple";
 import { StepConnection } from "@/components/onboarding/step-connection";
 import { StepBudget } from "@/components/onboarding/step-budget";
@@ -19,7 +18,6 @@ import { useInitializeRoster } from "@/hooks/use-agents";
 const STEP_LABELS = [
   "About your business",
   "Name your operator",
-  "Choose capabilities",
   "How much freedom?",
   "Connect your ads",
   "Set your budget",
@@ -59,26 +57,22 @@ export default function SetupPage() {
   const [operatorName, setOperatorName] = useState("Ava");
   const [workingStyle, setWorkingStyle] = useState("friendly");
 
-  // Step 2: Capabilities
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
-  const [capabilitiesInitialized, setCapabilitiesInitialized] = useState(false);
-
-  // Step 3: Governance
+  // Step 2: Governance
   const [governanceMode, setGovernanceMode] = useState("guarded");
 
-  // Step 4: Connection
+  // Step 3: Connection
   const [_connectionId, setConnectionId] = useState<string | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
 
-  // Step 5: Budget
+  // Step 4: Budget
   const [monthlyBudget, setMonthlyBudget] = useState(1000);
 
-  // Step 6: Telegram
+  // Step 5: Telegram
   const [ownerBotConnected, setOwnerBotConnected] = useState(false);
   const [leadBotToken, setLeadBotToken] = useState("");
   const [skipLeadBot, setSkipLeadBot] = useState(false);
 
-  // Step 7: All Set
+  // Step 6: All Set
   const [isHandoffTriggered, setIsHandoffTriggered] = useState(false);
   const [isHandoffLoading, setIsHandoffLoading] = useState(false);
 
@@ -102,16 +96,14 @@ export default function SetupPage() {
       case 1:
         return operatorName.trim().length > 0 && workingStyle !== "";
       case 2:
-        return selectedCapabilities.length > 0;
-      case 3:
         return governanceMode !== "";
-      case 4:
+      case 3:
         return true; // Connection is optional
-      case 5:
+      case 4:
         return monthlyBudget >= 200;
-      case 6:
+      case 5:
         return true; // Telegram is optional (can connect later)
-      case 7:
+      case 6:
         return true;
       default:
         return false;
@@ -134,13 +126,6 @@ export default function SetupPage() {
 
   const handleNext = async () => {
     await saveStep(step);
-
-    // Initialize capabilities defaults when moving from step 0
-    if (step === 0 && !capabilitiesInitialized) {
-      const allCaps = getAllCapabilityIds(requiredCartridges);
-      setSelectedCapabilities(allCaps);
-      setCapabilitiesInitialized(true);
-    }
 
     setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1));
   };
@@ -298,7 +283,6 @@ export default function SetupPage() {
           selectedSkin={selectedSkin}
           onSkinChange={(skinId) => {
             setSelectedSkin(skinId);
-            setCapabilitiesInitialized(false);
           }}
         />
       )}
@@ -311,24 +295,17 @@ export default function SetupPage() {
         />
       )}
       {step === 2 && (
-        <StepCapabilities
-          requiredCartridges={requiredCartridges}
-          selectedCapabilities={selectedCapabilities}
-          onCapabilitiesChange={setSelectedCapabilities}
-        />
-      )}
-      {step === 3 && (
         <StepGovernanceSimple selected={governanceMode} onChange={setGovernanceMode} />
       )}
-      {step === 4 && (
+      {step === 3 && (
         <StepConnection
           cartridgeId={connectionCartridge}
           onConnectionCreated={setConnectionId}
           onPlatformSelected={setSelectedPlatform}
         />
       )}
-      {step === 5 && <StepBudget monthlyBudget={monthlyBudget} onBudgetChange={setMonthlyBudget} />}
-      {step === 6 && (
+      {step === 4 && <StepBudget monthlyBudget={monthlyBudget} onBudgetChange={setMonthlyBudget} />}
+      {step === 5 && (
         <StepTelegram
           organizationId={organizationId}
           ownerBotConnected={ownerBotConnected}
@@ -339,7 +316,7 @@ export default function SetupPage() {
           onSkipLeadBot={setSkipLeadBot}
         />
       )}
-      {step === 7 && (
+      {step === 6 && (
         <StepAllSet
           businessName={businessName}
           organizationId={organizationId}
@@ -350,20 +327,4 @@ export default function SetupPage() {
       )}
     </WizardShell>
   );
-}
-
-/** Get all capability IDs for a set of cartridges */
-function getAllCapabilityIds(cartridgeIds: string[]): string[] {
-  const CARTRIDGE_CAPABILITIES: Record<string, string[]> = {
-    "digital-ads": ["campaign-management", "budget-optimization", "performance-monitoring"],
-    "customer-engagement": ["lead-response", "lead-qualification", "follow-up"],
-    crm: ["contact-management", "deal-tracking"],
-    payments: ["payment-processing", "invoice-management"],
-  };
-  const ids: string[] = [];
-  for (const cartridgeId of cartridgeIds) {
-    const caps = CARTRIDGE_CAPABILITIES[cartridgeId];
-    if (caps) ids.push(...caps);
-  }
-  return ids;
 }

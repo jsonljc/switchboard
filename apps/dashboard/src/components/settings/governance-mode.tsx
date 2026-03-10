@@ -9,23 +9,18 @@ import { Button } from "@/components/ui/button";
 const modes = [
   {
     value: "observe",
-    label: "Observer",
-    description: "Handles everything independently.",
+    label: "Let them handle it",
+    description: "Your operator handles routine work and only surfaces exceptions.",
   },
   {
     value: "guarded",
-    label: "Guided",
-    description: "Asks before risky actions.",
-  },
-  {
-    value: "strict",
-    label: "Careful",
-    description: "More actions need approval.",
+    label: "Ask me for big decisions",
+    description: "Routine work can run, but spend and major changes come back to you.",
   },
   {
     value: "locked",
-    label: "Manual",
-    description: "Every action needs approval.",
+    label: "Ask me for everything",
+    description: "Nothing happens without your approval. Maximum oversight.",
   },
 ];
 
@@ -36,12 +31,13 @@ interface GovernanceModeProps {
 }
 
 export function GovernanceMode({ currentMode, onSave, isLoading }: GovernanceModeProps) {
-  const [selected, setSelected] = useState(currentMode);
+  const normalizedCurrentMode = currentMode === "strict" ? "guarded" : currentMode;
+  const [selected, setSelected] = useState(normalizedCurrentMode);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Autonomy Level</CardTitle>
+        <CardTitle className="text-base">How your assistant works</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <RadioGroup value={selected} onValueChange={setSelected} className="space-y-3">
@@ -60,7 +56,7 @@ export function GovernanceMode({ currentMode, onSave, isLoading }: GovernanceMod
         </RadioGroup>
         <Button
           className="w-full min-h-[44px]"
-          disabled={isLoading || selected === currentMode}
+          disabled={isLoading || selected === normalizedCurrentMode}
           onClick={() => onSave(selected)}
         >
           {isLoading ? "Saving..." : "Save"}

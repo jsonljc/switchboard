@@ -78,25 +78,23 @@ export default function SettingsPage() {
         displayName: operatorName.trim(),
       });
     }
-    toast({ title: "Settings saved" });
+    toast({ title: "Saved", description: "Your changes have been saved." });
   };
 
   if (isError) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <Card className="border-destructive">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Failed to load settings</span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <div className="rounded-lg border border-border bg-surface p-6">
+          <div className="flex items-center gap-2 text-destructive mb-2">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="font-medium">Failed to load settings</span>
+          </div>
+          <p className="text-[15px] text-muted-foreground mb-4">{(error as Error)?.message}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
@@ -111,13 +109,18 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
+    <div className="space-y-10">
+      <section>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <p className="text-[15px] text-muted-foreground mt-1">
+          Your business, your assistant, and how they work together.
+        </p>
+      </section>
 
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="boundaries">Boundaries</TabsTrigger>
+          <TabsTrigger value="boundaries">How your assistant works</TabsTrigger>
           <TabsTrigger value="connections">Connections</TabsTrigger>
         </TabsList>
 

@@ -353,7 +353,12 @@ export class ChatRuntime {
     let conversation = await getThread(threadId);
     let isNewConversation = false;
     if (!conversation) {
-      conversation = createConversation(threadId, message.channel, message.principalId);
+      conversation = createConversation(
+        threadId,
+        message.channel,
+        message.principalId,
+        message.organizationId ?? null,
+      );
       // Auto-link to CRM contact by external ID (e.g. WhatsApp phone, Telegram user ID)
       if (this.crmProvider) {
         try {
@@ -428,6 +433,11 @@ export class ChatRuntime {
       isNewConversation = true;
     }
 
+    if (!conversation.organizationId && message.organizationId) {
+      conversation.organizationId = message.organizationId;
+      await setThread(conversation);
+    }
+
     // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
     if (this.isLeadBot && this.leadRouter) {
       await handleLeadMessage(ctx, this.leadRouter, message, threadId);
@@ -440,6 +450,10 @@ export class ChatRuntime {
       message: { role: "user", text: message.text, timestamp: new Date() },
     });
     await setThread(conversation);
+
+    if (conversation.status === "human_override") {
+      return;
+    }
 
     // Handle help command
     if (/^help$/i.test(message.text.trim())) {

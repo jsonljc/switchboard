@@ -42,19 +42,18 @@ export function RespondDialog({
           </DialogTitle>
           <DialogDescription>
             {action === "approve"
-              ? "Are you sure you want to approve this action?"
-              : "Are you sure you want to reject this action?"}
+              ? "This will go ahead as proposed. You can undo or adjust later if needed."
+              : "This will cancel the request. Your assistant won’t take this action."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-3">
           <p className="text-sm font-medium">{approval.summary}</p>
           <div className="flex items-center gap-2">
             <Badge variant={approval.riskCategory === "high" || approval.riskCategory === "critical" ? "destructive" : "secondary"}>
-              {approval.riskCategory} risk
+              {approval.riskCategory === "critical" || approval.riskCategory === "high"
+                ? "Higher impact"
+                : "Lower impact"}
             </Badge>
-          </div>
-          <div className="text-xs text-muted-foreground font-mono bg-muted p-2 rounded break-all">
-            Binding hash: {approval.bindingHash}
           </div>
         </div>
         <DialogFooter className="gap-2">

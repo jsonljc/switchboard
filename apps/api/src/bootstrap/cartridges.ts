@@ -38,14 +38,14 @@ export async function resolveCartridgeCredentials(
       const { PrismaConnectionStore } = await import("@switchboard/db");
       const connStore = new PrismaConnectionStore(prismaClient);
 
-      const adsCon = await connStore.getByService("meta-ads");
+      const adsCon = await connStore.getByServiceGlobal("meta-ads");
       if (adsCon) {
         adsAccessToken =
           (adsCon.credentials as Record<string, string>).accessToken ?? adsAccessToken;
         adsAccountId = (adsCon.credentials as Record<string, string>).adAccountId ?? adsAccountId;
       }
 
-      const stripeCon = await connStore.getByService("stripe");
+      const stripeCon = await connStore.getByServiceGlobal("stripe");
       if (stripeCon) {
         stripeSecretKey =
           (stripeCon.credentials as Record<string, string>).secretKey ?? stripeSecretKey;

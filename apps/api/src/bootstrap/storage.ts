@@ -58,6 +58,13 @@ export async function bootstrapStorage(logger: {
         prismaClient as ConstructorParameters<typeof PrismaLedgerStorage>[0],
       );
     } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(
+          `DATABASE_URL is configured but the database is unreachable: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       logger.error(
         { err },
         "DATABASE_URL set but DB unreachable — falling back to in-memory (DEGRADED)",

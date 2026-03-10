@@ -82,6 +82,7 @@ describe("PrismaConversationStore integration", () => {
     const state = {
       id: "conv_test",
       threadId: "thread_1",
+      organizationId: null,
       channel: "slack",
       principalId: "user_1",
       status: "active" as const,
@@ -122,6 +123,7 @@ describe("PrismaConversationStore integration", () => {
         findUnique: async () => ({
           id: "conv_test",
           threadId: "thread_1",
+          organizationId: "org_1",
           channel: "slack",
           principalId: "user_1",
           status: "active",
@@ -152,6 +154,7 @@ describe("PrismaConversationStore integration", () => {
         findUnique: async () => ({
           id: "conv_test",
           threadId: "thread_1",
+          organizationId: null,
           channel: "slack",
           principalId: "user_1",
           status: "active",

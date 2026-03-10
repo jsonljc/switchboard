@@ -2,45 +2,209 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Switchboard UI — Calm, editorial, Claude-inspired.
+  Warm neutrals, typography-led, minimal chrome.
+  Character-centered identity system.
+*/
+
 @layer base {
   :root {
-    --background: 40 33% 98%;
-    --foreground: 220 20% 14%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 20% 14%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 35 40% 94%;
-    --secondary-foreground: 220 20% 14%;
-    --muted: 35 25% 94%;
-    --muted-foreground: 220 10% 46%;
-    --accent: 35 40% 94%;
-    --accent-foreground: 220 20% 14%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 30 20% 88%;
-    --input: 30 20% 88%;
-    --ring: 239 84% 67%;
-    --radius: 0.75rem;
-    --chart-1: 239 84% 67%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 35 92% 52%;
-    --chart-4: 280 45% 55%;
-    --chart-5: 12 76% 61%;
+    /* ─── Surfaces ─── */
+    --background: 45 25% 98%;
+    --foreground: 30 8% 10%;
+    --surface: 0 0% 100%;
+    --surface-foreground: 30 8% 10%;
+    --surface-raised: 40 15% 96%;
 
-    /* Agent semantic tokens */
-    --agent-active: 173 58% 39%;
-    --agent-idle: 220 10% 60%;
-    --agent-attention: 38 92% 50%;
-    --agent-locked: 220 10% 78%;
+    /* ─── Text ─── */
+    --muted: 40 12% 93%;
+    --muted-foreground: 30 6% 40%;
+    --tertiary-foreground: 30 5% 58%;
+
+    /* ─── Interactive ─── */
+    --primary: 30 8% 10%;
+    --primary-foreground: 45 25% 98%;
+    --secondary: 40 12% 93%;
+    --secondary-foreground: 30 8% 10%;
+    --accent: 40 18% 91%;
+    --accent-foreground: 30 8% 10%;
+
+    /* ─── Borders ─── */
+    --border: 35 12% 89%;
+    --border-subtle: 35 12% 93%;
+    --input: 35 12% 89%;
+    --ring: 30 8% 10%;
+
+    /* ─── Semantic ─── */
+    --destructive: 0 38% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --positive: 152 28% 32%;
+    --positive-foreground: 0 0% 98%;
+    --positive-subtle: 152 22% 94%;
+    --caution: 38 42% 38%;
+    --caution-foreground: 0 0% 98%;
+    --caution-subtle: 38 35% 94%;
+    --negative: 0 38% 40%;
+    --negative-foreground: 0 0% 98%;
+
+    /* ─── Operator amber accent ─── */
+    --operator: 30 55% 46%;
+    --operator-foreground: 0 0% 98%;
+    --operator-subtle: 32 45% 94%;
+
+    /* ─── Cards ─── */
+    --card: 0 0% 100%;
+    --card-foreground: 30 8% 10%;
+
+    /* ─── Agent status ─── */
+    --agent-active: 152 30% 36%;
+    --agent-idle: 30 5% 56%;
+    --agent-attention: 38 45% 42%;
+    --agent-locked: 30 5% 68%;
+
+    /* ─── Radii ─── */
+    --radius: 0.5rem;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+
+    /* ─── Typography ─── */
+    --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Cormorant Garamond", "Playfair Display", ui-serif, Georgia, serif;
+
+    /* ─── Spacing (editorial) ─── */
+    --space-page-y: 2.5rem;
+    --space-page-x: 1.5rem;
+    --space-section: 3rem;
+    --space-block: 1.5rem;
+    --content-width: 42rem;
+
+    /* ─── Motion ─── */
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+    --duration-fast: 120ms;
+    --duration-default: 280ms;
+    --duration-slow: 600ms;
+    --duration-very-slow: 900ms;
+
+    /* ─── Character color system ─── */
+    --char-body: hsl(30 8% 42%);
+    --char-aura: hsl(30 8% 55%);
+    --char-accent: hsl(30 55% 46%);
+
+    /* Role: Leads */
+    --char-leads-body: hsl(238 28% 52%);
+    --char-leads-aura: hsl(238 28% 68%);
+
+    /* Role: Bookings */
+    --char-bookings-body: hsl(186 35% 38%);
+    --char-bookings-aura: hsl(186 35% 56%);
+
+    /* Role: Care */
+    --char-care-body: hsl(28 35% 44%);
+    --char-care-aura: hsl(28 38% 60%);
+
+    /* Role: Growth */
+    --char-growth-body: hsl(152 28% 36%);
+    --char-growth-aura: hsl(152 28% 52%);
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    line-height: 1.65;
+  }
+}
+
+/* ─── Utility: constrained content width ─── */
+@layer components {
+  .content-width {
+    max-width: var(--content-width);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--space-page-x);
+    padding-right: var(--space-page-x);
+  }
+
+  .page-width {
+    max-width: 74rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  /* Section label — small caps, muted */
+  .section-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: hsl(var(--tertiary-foreground));
+  }
+
+  /* Display type — uses the display font */
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* ─── Character animations ─── */
+@keyframes character-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes aura-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes aura-pulse-once {
+  0% { transform: scale(1); opacity: 0.85; }
+  30% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@layer utilities {
+  .animate-character-float {
+    animation: character-float 6s ease-in-out infinite;
+  }
+  .animate-aura-breathe {
+    animation: aura-breathe 6s ease-in-out infinite;
+  }
+  .animate-aura-pulse {
+    animation: aura-pulse-once 1.2s var(--ease-standard) forwards;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.5s var(--ease-enter) forwards;
   }
 }

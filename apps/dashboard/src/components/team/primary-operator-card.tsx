@@ -16,18 +16,18 @@ import type { AgentRosterEntry } from "@/lib/api-client";
 const AUTOMATION_LEVELS = [
   {
     value: "copilot" as const,
-    label: "Copilot",
-    description: "All actions require your approval",
+    label: "Ask me for everything",
+    description: "Your assistant will suggest actions and wait for your approval.",
   },
   {
     value: "supervised" as const,
-    label: "Supervised",
-    description: "Low-risk auto-executes, others need approval",
+    label: "Ask me for big decisions",
+    description: "Routine work runs automatically. You’re asked before spending or major changes.",
   },
   {
     value: "autonomous" as const,
-    label: "Autonomous",
-    description: "All actions within risk tolerance auto-execute",
+    label: "Let them handle it",
+    description: "Your assistant runs within the limits you set. They’ll only ask when it matters.",
   },
 ];
 
@@ -113,11 +113,11 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
                 </>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">Growth Operator</p>
+            <p className="text-sm text-muted-foreground">Your main assistant</p>
             <p className="text-sm text-muted-foreground mt-2">{agent.description}</p>
             {workingStyle && (
               <p className="text-xs text-muted-foreground mt-2">
-                Working style: <span className="font-medium text-foreground">{workingStyle}</span>
+                Communicates: <span className="font-medium text-foreground">{workingStyle}</span>
               </p>
             )}
           </div>
@@ -153,7 +153,7 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium">Automation Level</p>
+              <p className="text-sm font-medium">How much can they do without asking?</p>
               <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
                 {AUTOMATION_LEVELS.map((level) => (
                   <button
@@ -174,49 +174,28 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
             </div>
 
             {autonomy && (
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Autonomy Progress</p>
-                  {autonomy.autonomousEligible && (
-                    <span className="text-xs font-medium text-primary">Autonomous Eligible</span>
-                  )}
-                  {autonomy.recommendedProfile !== autonomy.currentProfile && (
-                    <span className="text-xs font-medium text-primary">
-                      Upgrade: {autonomy.currentProfile} &rarr; {autonomy.recommendedProfile}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary rounded-full h-2 transition-all"
-                      style={{ width: `${autonomy.progressPercent}%` }}
-                    />
+              <details className="group space-y-3 pt-2">
+                <summary className="text-sm font-medium text-muted-foreground cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  See progress details
+                </summary>
+                <div className="space-y-3 pl-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-muted-foreground">Progress</p>
+                    {autonomy.autonomousEligible && (
+                      <span className="text-xs font-medium text-primary">Ready for more autonomy</span>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{autonomy.reason}</span>
-                    <span>{autonomy.progressPercent}%</span>
+                  <div className="space-y-1">
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div
+                        className="bg-primary rounded-full h-2 transition-all"
+                        style={{ width: `${autonomy.progressPercent}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{autonomy.reason}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Score</span>
-                    <p className="font-medium">{autonomy.stats.competenceScore.toFixed(0)}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Successes</span>
-                    <p className="font-medium">{autonomy.stats.totalSuccesses}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Failures</span>
-                    <p className="font-medium">{autonomy.stats.totalFailures}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Fail Rate</span>
-                    <p className="font-medium">{(autonomy.stats.failureRate * 100).toFixed(0)}%</p>
-                  </div>
-                </div>
-              </div>
+              </details>
             )}
           </div>
         )}

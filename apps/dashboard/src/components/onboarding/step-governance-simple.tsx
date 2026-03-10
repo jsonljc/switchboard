@@ -7,15 +7,15 @@ import { ShieldCheck, ShieldAlert, Shield } from "lucide-react";
 
 const GOVERNANCE_OPTIONS = [
   {
-    id: "guarded",
+    id: "observe",
     label: "Let them handle it",
-    description: "Your AI team runs independently. They'll only ask you about big-ticket items.",
+    description: "Your operator handles routine work and only surfaces exceptions.",
     icon: ShieldCheck,
   },
   {
-    id: "strict",
+    id: "guarded",
     label: "Ask me for big decisions",
-    description: "Your AI team checks with you before spending money or making major changes.",
+    description: "Routine work can run, but spend and major changes come back to you.",
     icon: ShieldAlert,
   },
   {
@@ -37,7 +37,7 @@ export function StepGovernanceSimple({ selected, onChange }: StepGovernanceSimpl
       <div>
         <Label>How much freedom should your AI team have?</Label>
         <p className="text-xs text-muted-foreground mt-1">
-          You can always change this later in Settings.
+          You can always change this later in Boundaries.
         </p>
       </div>
 

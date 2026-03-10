@@ -9,8 +9,15 @@ export function QueryProvider({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30 * 1000,
-            refetchOnWindowFocus: true,
+            // 2-minute stale window: prevents refetch on every navigation
+            staleTime: 2 * 60 * 1000,
+            // Keep data in cache for 10 minutes after all subscribers unmount
+            gcTime: 10 * 60 * 1000,
+            // Disable window-focus refetch — it triggers all queries simultaneously
+            // when the user alt-tabs back to the dashboard (e.g. from Telegram)
+            refetchOnWindowFocus: false,
+            // Only retry once on failure — prevents long waterfall on API errors
+            retry: 1,
           },
         },
       })

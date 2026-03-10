@@ -11,31 +11,31 @@ export function StatusHero() {
   const needsAttention = pendingCount > 0 || hasErrors;
 
   const primaryOperator = rosterData?.roster?.find((a) => a.agentRole === "primary_operator");
-  const operatorName = primaryOperator?.displayName ?? "Your AI team";
+  const operatorName = primaryOperator?.displayName ?? "Your assistant";
 
   return (
     <div
       className={`rounded-lg border p-6 ${
         needsAttention
-          ? "bg-agent-attention/5 border-agent-attention/30"
-          : "bg-agent-active/5 border-agent-active/30"
+          ? "bg-agent-attention/5 border-agent-attention/20"
+          : "bg-primary/[0.04] border-primary/10"
       }`}
     >
       <div className="flex items-center gap-3">
         <div
-          className={`h-3 w-3 rounded-full ${
+          className={`h-2.5 w-2.5 rounded-full ${
             needsAttention ? "bg-agent-attention animate-pulse" : "bg-agent-active"
           }`}
         />
-        <h2 className="text-lg font-semibold">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
           {needsAttention
             ? `${operatorName} needs your attention`
             : `${operatorName} is running smoothly`}
-        </h2>
+        </h1>
       </div>
       {!needsAttention && (
         <p className="text-sm text-muted-foreground mt-1 ml-6">
-          All systems operational. Your team is working in the background.
+          Everything is running smoothly. Your assistant is working in the background.
         </p>
       )}
     </div>

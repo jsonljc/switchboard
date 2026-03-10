@@ -1,13 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac } from "node:crypto";
 import { requireRole } from "../utils/require-role.js";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 interface WebhookRegistration {
   id: string;
   url: string;
   events: string[];
   secret: string;
-  organizationId: string | null;
+  organizationId: string;
   active: boolean;
   createdAt: string;
   lastTriggeredAt: string | null;
@@ -16,7 +17,7 @@ interface WebhookRegistration {
 // In-memory store — production would use Prisma
 const webhookStore = new Map<string, WebhookRegistration>();
 
-function getOrgWebhooks(orgId: string | null): WebhookRegistration[] {
+function getOrgWebhooks(orgId: string): WebhookRegistration[] {
   return [...webhookStore.values()].filter((w) => w.organizationId === orgId);
 }
 
@@ -31,7 +32,8 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const orgId = request.organizationIdFromAuth ?? null;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       const webhooks = getOrgWebhooks(orgId).map(({ secret: _s, ...rest }) => rest);
       return reply.code(200).send({ webhooks });
     },
@@ -58,7 +60,8 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
       const { url, events } = request.body as { url: string; events: string[] };
-      const orgId = request.organizationIdFromAuth ?? null;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       // Validate URL scheme
       if (!url.startsWith("https://")) {
@@ -112,7 +115,8 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Webhook not found" });
       }
 
-      const orgId = request.organizationIdFromAuth ?? null;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (webhook.organizationId !== orgId) {
         return reply.code(403).send({ error: "Forbidden" });
       }
@@ -145,7 +149,8 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Webhook not found" });
       }
 
-      const orgId = request.organizationIdFromAuth ?? null;
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (webhook.organizationId !== orgId) {
         return reply.code(403).send({ error: "Forbidden" });
       }

@@ -24,7 +24,8 @@ export function useApprovals() {
   return useQuery({
     queryKey: queryKeys.approvals.pending(),
     queryFn: fetchPendingApprovals,
-    refetchInterval: 30_000,
+    // 60s: frequent enough to surface new approvals promptly without hammering the API
+    refetchInterval: 60_000,
   });
 }
 
