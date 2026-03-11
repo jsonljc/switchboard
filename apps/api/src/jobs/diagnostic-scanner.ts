@@ -182,6 +182,11 @@ function resolveCartridgeForVertical(vertical: string): string {
     case "healthcare":
     case "dental":
       return "customer-engagement";
+    case "ecommerce":
+    case "saas":
+    case "agency":
+    case "home-services":
+      return "revenue-growth";
     default:
       return "digital-ads";
   }
@@ -192,6 +197,8 @@ function resolveDiagnoseAction(cartridgeId: string): string {
   switch (cartridgeId) {
     case "customer-engagement":
       return "customer-engagement.pipeline.diagnose";
+    case "revenue-growth":
+      return "revenue-growth.diagnostic.run";
     default:
       return "digital-ads.funnel.diagnose";
   }

@@ -201,6 +201,69 @@ export interface SimulateResult {
   explanation: string;
 }
 
+// Revenue Growth types
+export interface RevGrowthScorerOutput {
+  scorerName: string;
+  constraintType: string;
+  score: number;
+  confidence: string;
+  findings: string[];
+  rawMetrics: Record<string, unknown>;
+}
+
+export interface RevGrowthConstraint {
+  type: string;
+  score: number;
+  confidence: string;
+  reasoning: string;
+}
+
+export interface RevGrowthIntervention {
+  id: string;
+  cycleId: string;
+  constraintType: string;
+  actionType: string;
+  status: string;
+  priority: number;
+  estimatedImpact: string;
+  reasoning: string;
+  artifacts: Array<{ type: string; title: string; content: string; generatedAt: string }>;
+  outcomeStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RevGrowthDiagnosticResult {
+  cycleId: string;
+  accountId: string;
+  dataTier: string;
+  scorerOutputs: RevGrowthScorerOutput[];
+  primaryConstraint: RevGrowthConstraint | null;
+  secondaryConstraints: RevGrowthConstraint[];
+  interventions: RevGrowthIntervention[];
+  constraintTransition: string | null;
+  completedAt: string;
+}
+
+export interface RevGrowthConnectorHealth {
+  connectorId: string;
+  name: string;
+  status: string;
+  lastSyncAt: string | null;
+  matchRate: number | null;
+  errorMessage: string | null;
+}
+
+export interface RevGrowthDigest {
+  id: string;
+  accountId: string;
+  headline: string;
+  summary: string;
+  constraintHistory: Array<{ type: string; score: number; cycleId: string }>;
+  outcomeHighlights: Array<{ interventionId: string; actionType: string; outcomeStatus: string }>;
+  generatedAt: string;
+}
+
 export class SwitchboardClient {
   constructor(
     private baseUrl: string,
@@ -873,5 +936,54 @@ export class SwitchboardClient {
         };
       };
     }>(`/api/operator-config/${orgId}/autonomy`);
+  }
+
+  // Revenue Growth
+  async runRevGrowthDiagnostic(accountId: string) {
+    return this.request<{
+      outcome: string;
+      data?: RevGrowthDiagnosticResult;
+      summary?: string;
+      explanation?: string;
+      envelopeId: string;
+    }>(`/api/revenue-growth/${accountId}/run`, { method: "POST" });
+  }
+
+  async getRevGrowthLatest(accountId: string) {
+    return this.request<{ data: RevGrowthDiagnosticResult | null; summary: string }>(
+      `/api/revenue-growth/${accountId}/latest`,
+    );
+  }
+
+  async getRevGrowthConnectors(accountId: string) {
+    return this.request<{ connectors: RevGrowthConnectorHealth[] }>(
+      `/api/revenue-growth/${accountId}/connectors`,
+    );
+  }
+
+  async listRevGrowthInterventions(accountId: string) {
+    return this.request<{ interventions: RevGrowthIntervention[] }>(
+      `/api/revenue-growth/${accountId}/interventions`,
+    );
+  }
+
+  async approveRevGrowthIntervention(interventionId: string) {
+    return this.request<{ outcome: string; summary?: string; envelopeId?: string }>(
+      `/api/revenue-growth/interventions/${interventionId}/approve`,
+      { method: "POST" },
+    );
+  }
+
+  async deferRevGrowthIntervention(interventionId: string, reason: string) {
+    return this.request<{ summary: string }>(
+      `/api/revenue-growth/interventions/${interventionId}/defer`,
+      { method: "POST", body: JSON.stringify({ reason }) },
+    );
+  }
+
+  async getRevGrowthDigest(accountId: string) {
+    return this.request<{ digest: RevGrowthDigest | null; summary: string }>(
+      `/api/revenue-growth/${accountId}/digest`,
+    );
   }
 }

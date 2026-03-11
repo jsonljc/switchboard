@@ -31,6 +31,7 @@ import { reportsRoutes } from "../routes/reports.js";
 import { conversationsRoutes } from "../routes/conversations.js";
 import { agentsRoutes } from "../routes/agents.js";
 import { operatorConfigRoutes } from "../routes/operator-config.js";
+import { revenueGrowthRoutes } from "../routes/revenue-growth.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(actionsRoutes, { prefix: "/api/actions" });
@@ -61,4 +62,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });
   await app.register(operatorConfigRoutes, { prefix: "/api/operator-config" });
+  await app.register(revenueGrowthRoutes, { prefix: "/api/revenue-growth" });
 }
