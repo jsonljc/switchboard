@@ -86,6 +86,9 @@ importers:
       '@switchboard/payments':
         specifier: workspace:*
         version: link:../../cartridges/payments
+      '@switchboard/revenue-growth':
+        specifier: workspace:*
+        version: link:../../cartridges/revenue-growth
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -437,6 +440,25 @@ importers:
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.33)(jsdom@25.0.1)
+
+  cartridges/revenue-growth:
+    dependencies:
+      '@switchboard/cartridge-sdk':
+        specifier: workspace:*
+        version: link:../../packages/cartridge-sdk
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
