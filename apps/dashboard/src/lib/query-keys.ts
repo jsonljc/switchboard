@@ -80,4 +80,11 @@ export const queryKeys = {
     current: () => ["operatorConfig", "current"] as const,
     autonomy: () => ["operatorConfig", "autonomy"] as const,
   },
+  revenueGrowth: {
+    all: ["revenueGrowth"] as const,
+    diagnostic: (accountId: string) => ["revenueGrowth", "diagnostic", accountId] as const,
+    connectors: (accountId: string) => ["revenueGrowth", "connectors", accountId] as const,
+    interventions: (accountId: string) => ["revenueGrowth", "interventions", accountId] as const,
+    digest: (accountId: string) => ["revenueGrowth", "digest", accountId] as const,
+  },
 };

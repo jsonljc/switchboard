@@ -20,6 +20,8 @@ export {
   MockConnector,
 } from "./data/normalizer.js";
 export type { CartridgeConnector, DataCollectionDeps, RevGrowthDeps } from "./data/normalizer.js";
+export { MetaAdsConnector } from "./data/meta-ads-connector.js";
+export type { MetaAdsConnectorConfig } from "./data/meta-ads-connector.js";
 
 // Scorers
 export { scoreSignalHealth } from "./scorers/signal-health.js";

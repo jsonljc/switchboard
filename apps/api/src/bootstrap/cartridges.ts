@@ -17,6 +17,13 @@ import {
   DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
   setEscalationNotifier,
 } from "@switchboard/customer-engagement";
+import {
+  bootstrapRevenueGrowthCartridge,
+  DEFAULT_REVENUE_GROWTH_POLICIES,
+  MockConnector,
+  MetaAdsConnector,
+} from "@switchboard/revenue-growth";
+import type { CartridgeConnector, RevGrowthDeps } from "@switchboard/revenue-growth";
 import type Redis from "ioredis";
 
 interface CartridgeCredentials {
@@ -123,7 +130,64 @@ export async function registerCartridges(
   );
   await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
 
+  // Register revenue-growth cartridge
+  const revGrowthConnector =
+    credentials.adsAccessToken && credentials.adsAccountId
+      ? buildMetaAdsConnectorSync(credentials.adsAccessToken, credentials.adsAccountId)
+      : new MockConnector();
+
+  const revGrowthDeps = await buildRevGrowthDeps(revGrowthConnector);
+
+  const { cartridge: revGrowthCartridge } = await bootstrapRevenueGrowthCartridge({
+    deps: revGrowthDeps,
+  });
+  storage.cartridges.register("revenue-growth", new GuardedCartridge(revGrowthCartridge));
+  await seedDefaultStorage(storage, DEFAULT_REVENUE_GROWTH_POLICIES);
+
   return { adsWriteProvider, businessProfile };
+}
+
+function buildMetaAdsConnectorSync(accessToken: string, adAccountId: string): CartridgeConnector {
+  try {
+    return new MetaAdsConnector({ accessToken, adAccountId });
+  } catch {
+    return new MockConnector();
+  }
+}
+
+async function buildRevGrowthDeps(connector: CartridgeConnector): Promise<RevGrowthDeps> {
+  const deps: RevGrowthDeps = { connectors: [connector] };
+
+  try {
+    const {
+      getDb,
+      PrismaInterventionStore,
+      PrismaDiagnosticCycleStore,
+      PrismaRevenueAccountStore,
+      PrismaWeeklyDigestStore,
+    } = await import("@switchboard/db");
+    const prisma = getDb();
+    // Prisma stores satisfy the store interfaces via structural typing at runtime.
+    // The Prisma layer deserializes JSON columns as `unknown[]` / `string[]`,
+    // which is narrower than the Zod-derived union types in the interface.
+    // The cartridge consumes these opaquely, so the cast is safe.
+    deps.interventionStore = new PrismaInterventionStore(
+      prisma,
+    ) as unknown as RevGrowthDeps["interventionStore"];
+    deps.cycleStore = new PrismaDiagnosticCycleStore(
+      prisma,
+    ) as unknown as RevGrowthDeps["cycleStore"];
+    deps.accountStore = new PrismaRevenueAccountStore(
+      prisma,
+    ) as unknown as RevGrowthDeps["accountStore"];
+    deps.digestStore = new PrismaWeeklyDigestStore(
+      prisma,
+    ) as unknown as RevGrowthDeps["digestStore"];
+  } catch {
+    // Prisma stores not available — run without persistence
+  }
+
+  return deps;
 }
 
 export async function wireEscalationNotifier(): Promise<void> {
