@@ -44,8 +44,10 @@ export async function refreshMetaOAuthToken(
     const response = await fetch(`${META_TOKEN_URL}?${params.toString()}`);
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      const errorMsg = (errorBody as any)?.error?.message ?? `HTTP ${response.status}`;
+      const errorBody = (await response.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      const errorMsg = errorBody?.error?.message ?? `HTTP ${response.status}`;
       return { success: false, error: `Token refresh failed: ${errorMsg}` };
     }
 
