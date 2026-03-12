@@ -513,7 +513,7 @@ describe("PaymentsCartridge", () => {
       );
       expect(denyPolicy?.effect).toBe("deny");
       const condition = denyPolicy?.rule.conditions?.find(
-        (c: { field: string; value: unknown }) => c.field === "metadata.hasOpenDispute",
+        (c) => c.field === "metadata.hasOpenDispute",
       );
       expect(condition?.value).toBe(true);
     });
@@ -526,8 +526,7 @@ describe("PaymentsCartridge", () => {
       expect(escalatePolicy?.effect).toBe("require_approval");
       expect(escalatePolicy?.approvalRequirement).toBe("elevated");
       const condition = escalatePolicy?.rule.conditions?.find(
-        (c: { field: string; operator: string; value: unknown }) =>
-          c.field === "metadata.previousRefundCount",
+        (c) => c.field === "metadata.previousRefundCount",
       );
       expect(condition?.operator).toBe("gt");
       expect(condition?.value).toBe(3);
