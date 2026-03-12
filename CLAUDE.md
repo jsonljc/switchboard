@@ -75,6 +75,7 @@ pnpm db:seed             # Seed database
   - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
   - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)
   - `cartridges/customer-engagement`: 60/60/70/60 (target: 80/70/75/80)
+  - `cartridges/crm`: 50/50/55/50 (handles customer data — coverage enforced)
 - Test files use the pattern `*.test.ts` and are co-located with source files
 
 ## Commit Message Format
@@ -114,13 +115,15 @@ Never commit `.env` files or secrets to the repository.
 
 ### File Size Limits
 
-- **Warn** when a file exceeds **400 lines** (excluding blanks and comments)
+- **ESLint error** at **600 lines** (excluding blanks and comments) — blocks commits
+- **Warn** when a file exceeds **400 lines** — suggest splitting proactively
 - **Never** create or allow a file to grow past **600 lines** — split it first
-- When modifying a file, check its line count; if it exceeds 400 lines after the change, suggest splitting
+- Existing oversized files have `/* eslint-disable max-lines */` — do not add code to these without splitting first
 
 ### New Module Checklist
 
 Every new `.ts` source file (non-test, non-index, non-types) **must** have:
+
 - A corresponding `__tests__/<name>.test.ts` test file
 - Proper layer placement (utility in core, domain logic in cartridge, types in schemas)
 - No `any` — use proper types or `unknown`
@@ -129,12 +132,14 @@ Every new `.ts` source file (non-test, non-index, non-types) **must** have:
 ### New Cartridge Checklist
 
 When creating a new cartridge:
+
 - Verify it does **not** import from `@switchboard/db` or any `apps/*` package
 - Verify it does **not** import from other cartridges
 - Ensure it has a `manifest.ts` and `defaults/guardrails.ts`
 - Ensure it has at least one test file
 - Verify it is registered in at least one app (`apps/api` or `apps/mcp-server`)
 - Verify the `Dockerfile` includes it (base stage `COPY` + production stage `COPY --from=build`)
+- **Add the new cartridge to `.eslintrc.json` blocklists** — in both the `cartridges/*/src/**/*.ts` override (cross-cartridge patterns) and the `packages/db/src/**/*.ts` override (db cannot import cartridges). The `arch-check.ts` script validates this in CI.
 - The `.dependency-cruiser.cjs` rules auto-apply — no manual config updates needed
 
 ### Refactoring Principles
@@ -150,29 +155,43 @@ When creating a new cartridge:
 - When adding exports to an `index.ts` barrel file, flag if total exports exceed **40 symbols**
 - Prefer selective re-exports over `export *`
 
-### Dependency Boundaries (enforced by dependency-cruiser)
+### Dependency Boundaries (enforced by ESLint + dependency-cruiser)
 
-These rules are automatically enforced at pre-commit and in CI via `dependency-cruiser`:
-- `schemas` → no `@switchboard/*` imports
-- `cartridge-sdk` → only `@switchboard/schemas`
-- `core` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`
-- `db` → only `@switchboard/schemas`, `@switchboard/core`
-- `cartridges/*` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`, `@switchboard/core`
-- No cartridge-to-cartridge imports
-- No circular dependencies
+These rules are enforced at two levels:
+
+- **ESLint `no-restricted-imports`** (pre-commit via lint-staged — instant feedback):
+  - `schemas` → no `@switchboard/*` imports
+  - `cartridge-sdk` → only `@switchboard/schemas`
+  - `core` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`
+  - `db` → only `@switchboard/schemas`, `@switchboard/core`
+  - `cartridges/*` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`, `@switchboard/core`
+  - No cartridge-to-cartridge imports
+  - No circular dependencies
+- **dependency-cruiser** (CI only — full graph analysis, ~71s):
+  - Validates the complete import graph across all packages
+  - Catches circular dependencies and transitive violations
+  - Runs as part of the `architecture` CI job
+
+### File Size Enforcement
+
+- **ESLint `max-lines`** is set to `error` at **600 lines** (skipBlankLines, skipComments)
+- Existing oversized files have `/* eslint-disable max-lines */` — these are tech debt to address
+- No new files may exceed 600 lines
 
 ## Pre-Commit Hooks
 
 Husky runs these hooks automatically:
 
-- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files), then dependency-cruiser boundary validation
+- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files)
 - **commit-msg**: commitlint (validates conventional commit format)
+
+Note: dependency-cruiser does **not** run at pre-commit (too slow at ~71s). It runs in CI only. ESLint boundary rules provide instant pre-commit feedback for import violations.
 
 ## Branch Protection
 
 `main` branch is protected via GitHub API:
 
-- **Required status checks**: typecheck, lint, test, security (must pass before merge)
+- **Required status checks**: typecheck, lint, test, architecture, security (must pass before merge)
 - **Strict mode**: branches must be up-to-date with `main` before merging
 - **PRs required**: direct pushes to `main` are blocked
 - **Enforced for admins**: no bypass, even for repo owners

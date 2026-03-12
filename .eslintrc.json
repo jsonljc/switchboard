@@ -18,7 +18,7 @@
     ],
     "@typescript-eslint/no-explicit-any": "warn",
     "no-console": ["warn", { "allow": ["warn", "error"] }],
-    "max-lines": ["warn", { "max": 400, "skipBlankLines": true, "skipComments": true }],
+    "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }],
     "complexity": ["warn", 15]
   },
   "ignorePatterns": ["dist", "node_modules", "coverage"],
@@ -199,10 +199,41 @@
               {
                 "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
                 "message": "Cartridges cannot import from apps."
+              },
+              {
+                "group": ["@switchboard/digital-ads", "@switchboard/digital-ads/*"],
+                "message": "Cartridges cannot import from other cartridges."
+              },
+              {
+                "group": ["@switchboard/customer-engagement", "@switchboard/customer-engagement/*"],
+                "message": "Cartridges cannot import from other cartridges."
+              },
+              {
+                "group": ["@switchboard/payments", "@switchboard/payments/*"],
+                "message": "Cartridges cannot import from other cartridges."
+              },
+              {
+                "group": ["@switchboard/crm", "@switchboard/crm/*"],
+                "message": "Cartridges cannot import from other cartridges."
+              },
+              {
+                "group": ["@switchboard/quant-trading", "@switchboard/quant-trading/*"],
+                "message": "Cartridges cannot import from other cartridges."
+              },
+              {
+                "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
+                "message": "Cartridges cannot import from other cartridges."
               }
             ]
           }
         ]
+      }
+    },
+    {
+      "files": ["apps/*/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "error"
       }
     }
   ]

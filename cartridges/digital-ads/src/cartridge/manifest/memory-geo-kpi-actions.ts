@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // Memory, deduplication, geo-experiment, KPI, seasonal, and LTV action definitions
 
 import type { ActionDefinition } from "@switchboard/schemas";
