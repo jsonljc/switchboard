@@ -69,6 +69,64 @@ export const REVENUE_GROWTH_ACTIONS: ActionDefinition[] = [
     baseRiskCategory: "none",
     reversible: false,
   },
+  {
+    actionType: "revenue-growth.intervention.execute",
+    name: "Execute Intervention",
+    description:
+      "Transition an approved intervention to EXECUTING status and start measurement tracking.",
+    parametersSchema: {
+      interventionId: { type: "string" },
+    },
+    baseRiskCategory: "low",
+    reversible: false,
+  },
+  {
+    actionType: "revenue-growth.monitoring.check",
+    name: "Run Monitoring Check",
+    description:
+      "Check all executing interventions for due monitoring checkpoints and detect anomalies.",
+    parametersSchema: {
+      accountId: { type: "string" },
+      organizationId: { type: "string" },
+    },
+    baseRiskCategory: "none",
+    reversible: false,
+  },
+  {
+    actionType: "revenue-growth.creative.analyze-gaps",
+    name: "Analyze Creative Gaps",
+    description: "Evaluate the creative portfolio across 7 criteria and identify significant gaps.",
+    parametersSchema: {
+      accountId: { type: "string" },
+      organizationId: { type: "string" },
+    },
+    baseRiskCategory: "none",
+    reversible: false,
+  },
+  {
+    actionType: "revenue-growth.creative.generate-strategy",
+    name: "Generate Creative Strategy",
+    description:
+      "Generate a prioritized creative strategy with recommendations and test hypotheses.",
+    parametersSchema: {
+      accountId: { type: "string" },
+      organizationId: { type: "string" },
+    },
+    baseRiskCategory: "none",
+    reversible: false,
+  },
+  {
+    actionType: "revenue-growth.creative.deploy-test",
+    name: "Deploy Creative Test",
+    description:
+      "Run the full creative pipeline: analyze gaps, generate strategy, create images, review, and deploy a test campaign.",
+    parametersSchema: {
+      accountId: { type: "string" },
+      organizationId: { type: "string" },
+    },
+    baseRiskCategory: "low",
+    reversible: false,
+  },
 ];
 
 export const REVENUE_GROWTH_MANIFEST: CartridgeManifest = {

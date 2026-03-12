@@ -2,7 +2,15 @@
 // In-Memory Store Implementations — Map-based, for testing
 // ---------------------------------------------------------------------------
 
-import type { Intervention, GovernanceStatus, OutcomeStatus } from "@switchboard/schemas";
+import type {
+  Intervention,
+  GovernanceStatus,
+  OutcomeStatus,
+  AccountLearningProfile,
+  MonitorCheckpoint,
+  TestCampaign,
+  TestCampaignStatus,
+} from "@switchboard/schemas";
 import type {
   InterventionStore,
   DiagnosticCycleStore,
@@ -11,6 +19,9 @@ import type {
   RevenueAccountRecord,
   WeeklyDigestStore,
   WeeklyDigestRecord,
+  AccountProfileStore,
+  MonitorCheckpointStore,
+  TestCampaignStore,
 } from "./interfaces.js";
 
 // ---------------------------------------------------------------------------
@@ -141,5 +152,84 @@ export class InMemoryWeeklyDigestStore implements WeeklyDigestStore {
       .filter((d) => d.accountId === accountId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return limit ? digests.slice(0, limit) : digests;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// InMemoryAccountProfileStore
+// ---------------------------------------------------------------------------
+
+export class InMemoryAccountProfileStore implements AccountProfileStore {
+  private readonly data = new Map<string, AccountLearningProfile>();
+
+  async save(profile: AccountLearningProfile): Promise<void> {
+    this.data.set(profile.accountId, { ...profile });
+  }
+
+  async getByAccountId(accountId: string): Promise<AccountLearningProfile | null> {
+    return this.data.get(accountId) ?? null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// InMemoryMonitorCheckpointStore
+// ---------------------------------------------------------------------------
+
+export class InMemoryMonitorCheckpointStore implements MonitorCheckpointStore {
+  private readonly data = new Map<string, MonitorCheckpoint>();
+
+  async save(checkpoint: MonitorCheckpoint): Promise<void> {
+    this.data.set(checkpoint.id, { ...checkpoint });
+  }
+
+  async listByIntervention(interventionId: string): Promise<MonitorCheckpoint[]> {
+    return [...this.data.values()]
+      .filter((c) => c.interventionId === interventionId)
+      .sort((a, b) => a.checkedAt.localeCompare(b.checkedAt));
+  }
+
+  async getLatest(interventionId: string): Promise<MonitorCheckpoint | null> {
+    const checkpoints = [...this.data.values()]
+      .filter((c) => c.interventionId === interventionId)
+      .sort((a, b) => b.checkedAt.localeCompare(a.checkedAt));
+    return checkpoints[0] ?? null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// InMemoryTestCampaignStore
+// ---------------------------------------------------------------------------
+
+export class InMemoryTestCampaignStore implements TestCampaignStore {
+  private readonly data = new Map<string, TestCampaign>();
+
+  async save(campaign: TestCampaign): Promise<void> {
+    this.data.set(campaign.id, { ...campaign });
+  }
+
+  async getById(id: string): Promise<TestCampaign | null> {
+    return this.data.get(id) ?? null;
+  }
+
+  async listByAccount(
+    accountId: string,
+    opts?: { status?: TestCampaignStatus; limit?: number },
+  ): Promise<TestCampaign[]> {
+    let results = [...this.data.values()].filter((c) => c.accountId === accountId);
+    if (opts?.status) {
+      results = results.filter((c) => c.status === opts.status);
+    }
+    results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (opts?.limit) {
+      results = results.slice(0, opts.limit);
+    }
+    return results;
+  }
+
+  async updateStatus(id: string, status: TestCampaignStatus): Promise<void> {
+    const existing = this.data.get(id);
+    if (existing) {
+      this.data.set(id, { ...existing, status, updatedAt: new Date().toISOString() });
+    }
   }
 }

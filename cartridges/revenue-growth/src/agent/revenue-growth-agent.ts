@@ -2,7 +2,7 @@
 // RevenueGrowthAgent — Autonomous diagnostic cycle + outcome tracking
 // ---------------------------------------------------------------------------
 // Implements AdsAgent from core. The tick() runs the full cycle:
-// diagnostic → persist → check outcomes → generate digest (if weekly).
+// diagnostic → persist → check outcomes → monitor → update profile → digest.
 // ---------------------------------------------------------------------------
 
 import type { AdsAgent, AgentContext, AgentTickResult } from "@switchboard/core";
@@ -10,6 +10,9 @@ import type { RevGrowthDeps } from "../data/normalizer.js";
 import { checkOutcomes } from "../outcome/tracker.js";
 import { generateWeeklyDigest } from "../digest/generator.js";
 import { RevenueGrowthCartridge } from "../cartridge/index.js";
+import { AccountProfileManager } from "../learning/account-profile.js";
+import { PostChangeMonitor } from "../monitoring/post-change-monitor.js";
+import type { DiagnosticRunOutput } from "@switchboard/schemas";
 
 export class RevenueGrowthAgent implements AdsAgent {
   readonly id = "revenue-growth";
@@ -58,7 +61,57 @@ export class RevenueGrowthAgent implements AdsAgent {
           });
         }
 
-        // 4. Generate weekly digest on Mondays
+        // 4. Run post-change monitoring
+        if (this.deps.monitorCheckpointStore) {
+          const monitor = new PostChangeMonitor();
+          const checkpoints = await monitor.checkDueInterventions(
+            this.deps,
+            account.accountId,
+            account.organizationId,
+          );
+
+          if (checkpoints.length > 0) {
+            const anomalies = checkpoints.filter((c) => c.anomalyDetected);
+            actions.push({
+              actionType: "revenue-growth.monitoring.check",
+              outcome: `${checkpoints.length} checkpoint(s), ${anomalies.length} anomaly(ies)`,
+            });
+          }
+        }
+
+        // 5. Update account learning profile
+        if (this.deps.accountProfileStore) {
+          const profileManager = new AccountProfileManager();
+          let profile = await profileManager.getOrCreate(
+            account.accountId,
+            account.organizationId,
+            { accountProfileStore: this.deps.accountProfileStore },
+          );
+
+          // Update constraint history from diagnostic result
+          const diagOutput = result.data as DiagnosticRunOutput | undefined;
+          const currentConstraint = diagOutput?.primaryConstraint?.type ?? null;
+
+          profile = profileManager.updateConstraintHistory(
+            profile,
+            currentConstraint,
+            // If there was a transition, the previous constraint was different
+            diagOutput?.constraintTransition ? null : currentConstraint,
+          );
+
+          // Update calibration from intervention history
+          if (this.deps.interventionStore) {
+            const interventions = await this.deps.interventionStore.listByAccount(
+              account.accountId,
+              { limit: 50 },
+            );
+            profile = profileManager.updateCalibration(profile, interventions);
+          }
+
+          await this.deps.accountProfileStore.save(profile);
+        }
+
+        // 6. Generate weekly digest on Mondays
         const isMonday = new Date().getDay() === 1;
         if (isMonday && this.deps.cycleStore) {
           const cycles = await this.deps.cycleStore.listByAccount(account.accountId, 7);
@@ -83,7 +136,7 @@ export class RevenueGrowthAgent implements AdsAgent {
           });
         }
 
-        // 5. Update account nextCycleAt
+        // 7. Update account nextCycleAt
         if (this.deps.accountStore) {
           const nextCycleAt = new Date(
             Date.now() + account.cadenceMinutes * 60 * 1000,
