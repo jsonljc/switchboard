@@ -11,23 +11,31 @@ import type {
   ExecuteResult,
 } from "@switchboard/cartridge-sdk";
 
-/** Keywords that indicate medical claims */
-const MEDICAL_CLAIM_KEYWORDS = [
-  "cure",
-  "cures",
-  "guaranteed results",
-  "guarantee",
-  "guaranteed",
-  "100% effective",
-  "100% success",
-  "fda approved for",
-  "clinically proven to",
-  "miracle",
-  "permanent results",
-  "risk-free",
-  "no side effects",
-  "eliminates all",
-  "instant results",
+/** Regex patterns that indicate medical claims (with word boundaries to prevent false positives) */
+const MEDICAL_CLAIM_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bcures?\b/i, label: "cure" },
+  { pattern: /\bguarantee[ds]?\s+(?:results?|outcomes?|success)/i, label: "guaranteed results" },
+  { pattern: /\b100%\s+effective\b/i, label: "100% effective" },
+  { pattern: /\b100%\s+success\b/i, label: "100% success" },
+  { pattern: /\bfda\s+approved\s+for\b/i, label: "fda approved for" },
+  { pattern: /\bclinically\s+proven\s+to\b/i, label: "clinically proven to" },
+  { pattern: /\bmiracle\b/i, label: "miracle" },
+  { pattern: /\bpermanent\s+results?\b/i, label: "permanent results" },
+  { pattern: /\brisk[- ]free\b/i, label: "risk-free" },
+  { pattern: /\bno\s+side\s+effects?\b/i, label: "no side effects" },
+  { pattern: /\beliminates?\s+all\b/i, label: "eliminates all" },
+  { pattern: /\binstant\s+results?\b/i, label: "instant results" },
+  // FTC/FDA terms
+  { pattern: /\bscientifically\s+proven\b/i, label: "scientifically proven" },
+  { pattern: /\bmedically\s+proven\b/i, label: "medically proven" },
+  { pattern: /\breverse[sd]?\s+aging\b/i, label: "reverse aging" },
+  { pattern: /\bno\s+(?:pain|downtime|recovery)\b/i, label: "no pain/downtime/recovery" },
+  { pattern: /\balways\s+works\b/i, label: "always works" },
+  { pattern: /\bnever\s+fails?\b/i, label: "never fails" },
+  {
+    pattern: /\bbetter\s+than\s+(?:surgery|medication)\b/i,
+    label: "better than surgery/medication",
+  },
 ];
 
 /** Action types that produce outbound messages */
@@ -88,11 +96,11 @@ export class MedicalClaimFilter implements CartridgeInterceptor {
  */
 export function findMedicalClaims(texts: string[]): string[] {
   const violations: string[] = [];
-  const combined = texts.join(" ").toLowerCase();
+  const combined = texts.join(" ");
 
-  for (const keyword of MEDICAL_CLAIM_KEYWORDS) {
-    if (combined.includes(keyword.toLowerCase())) {
-      violations.push(keyword);
+  for (const { pattern, label } of MEDICAL_CLAIM_PATTERNS) {
+    if (pattern.test(combined)) {
+      violations.push(label);
     }
   }
 

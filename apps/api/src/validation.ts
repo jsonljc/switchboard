@@ -132,3 +132,40 @@ export const RoutingConfigSchema = z.object({
   preferredInterpreter: z.string().min(1).max(200),
   fallbackChain: z.array(z.string().max(200)).max(20).optional(),
 });
+
+// ── Connections ──────────────────────────────────────────────────────
+
+export const CreateConnectionBodySchema = z.object({
+  serviceId: z.string().min(1).max(200),
+  serviceName: z.string().min(1).max(200),
+  authType: z.string().min(1).max(100),
+  credentials: z
+    .record(z.string().max(200), z.unknown())
+    .refine((obj) => JSON.stringify(obj).length <= 50_000, {
+      message: "credentials must be ≤ 50 KB when serialized",
+    }),
+  scopes: z.array(z.string().max(200)).max(50).optional(),
+});
+
+export const UpdateConnectionBodySchema = z.object({
+  serviceName: z.string().min(1).max(200).optional(),
+  authType: z.string().min(1).max(100).optional(),
+  credentials: z
+    .record(z.string().max(200), z.unknown())
+    .refine((obj) => JSON.stringify(obj).length <= 50_000, {
+      message: "credentials must be ≤ 50 KB when serialized",
+    })
+    .optional(),
+  scopes: z.array(z.string().max(200)).max(50).optional(),
+});
+
+// ── Governance ──────────────────────────────────────────────────────
+
+export const SetGovernanceProfileBodySchema = z.object({
+  profile: z.enum(["observe", "guarded", "strict", "locked"]),
+});
+
+export const EmergencyHaltBodySchema = z.object({
+  organizationId: z.string().min(1).max(500).optional(),
+  reason: z.string().max(2000).optional(),
+});

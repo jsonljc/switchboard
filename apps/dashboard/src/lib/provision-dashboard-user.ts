@@ -37,7 +37,8 @@ export async function provisionDashboardUser(
         type: "user",
         name: displayName,
         organizationId: orgId,
-        roles: ["admin", "approver", "operator"],
+        // New users start as operator only — admin/approver roles must be granted explicitly
+        roles: ["operator"],
       },
     });
 
@@ -56,10 +57,10 @@ export async function provisionDashboardUser(
           critical: "mandatory",
         },
         globalSpendLimits: {
-          daily: 5000,
-          weekly: 20000,
-          monthly: 50000,
-          perAction: 1000,
+          daily: 500,
+          weekly: 2000,
+          monthly: 5000,
+          perAction: 100,
         },
         cartridgeSpendLimits: {},
         forbiddenBehaviors: [],

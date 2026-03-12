@@ -17,12 +17,25 @@ export interface ChannelCredentials {
 /** Maximum proactive messages per chat per day. */
 const MAX_DAILY_MESSAGES = 20;
 
+export interface ProactiveSenderConfig {
+  credentials: ChannelCredentials;
+  /** Optional callback to check if a chatId is within the WhatsApp 24h window. */
+  isWithinWindow?: (chatId: string) => Promise<boolean>;
+}
+
 export class ProactiveSender implements AgentNotifier {
   private credentials: ChannelCredentials;
   private dailyCounts = new Map<string, { count: number; resetAt: number }>();
+  private isWithinWindow: ((chatId: string) => Promise<boolean>) | null;
 
-  constructor(credentials: ChannelCredentials) {
-    this.credentials = credentials;
+  constructor(credentialsOrConfig: ChannelCredentials | ProactiveSenderConfig) {
+    if ("credentials" in credentialsOrConfig) {
+      this.credentials = credentialsOrConfig.credentials;
+      this.isWithinWindow = credentialsOrConfig.isWithinWindow ?? null;
+    } else {
+      this.credentials = credentialsOrConfig;
+      this.isWithinWindow = null;
+    }
   }
 
   async sendProactive(chatId: string, channelType: string, message: string): Promise<void> {
@@ -111,6 +124,17 @@ export class ProactiveSender implements AgentNotifier {
     if (!creds) {
       console.warn("[ProactiveSender] No WhatsApp credentials configured");
       return;
+    }
+
+    // Check 24h window if callback is configured
+    if (this.isWithinWindow) {
+      const withinWindow = await this.isWithinWindow(to);
+      if (!withinWindow) {
+        console.warn(
+          `[ProactiveSender] WhatsApp 24h window expired for ${to} — skipping freeform message`,
+        );
+        return;
+      }
     }
 
     const res = await fetch(`https://graph.facebook.com/v18.0/${creds.phoneNumberId}/messages`, {

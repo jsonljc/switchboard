@@ -27,8 +27,8 @@ const PHI_FIELD_PATTERNS = [
 
 /** Patterns that match PHI values in string fields */
 const PHI_VALUE_PATTERNS = [
-  /\b\d{3}-\d{2}-\d{4}\b/, // SSN
-  /\b\d{9}\b/, // SSN without dashes
+  /\b\d{3}-\d{2}-\d{4}\b/, // SSN with dashes
+  /\b(?!0{3})(?!6{3})[0-8]\d{2}(?!0{2})\d{2}(?!0{4})\d{4}\b/, // SSN without dashes (excludes invalid ranges)
 ];
 
 export class HIPAARedactor implements CartridgeInterceptor {

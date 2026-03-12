@@ -67,23 +67,14 @@ export class ApprovalManager {
       throw new Error(`Envelope not found for expired approval`);
     }
 
-    // 3. Validate binding hash for approve/patch
+    // 3. Validate binding hash for approve/patch (timing-safe for all orgs)
     if (params.action === "approve" || params.action === "patch") {
-      const isSmbOrgResult = await isSmbOrg(this.ctx, approval.organizationId);
-      if (isSmbOrgResult) {
-        if (params.bindingHash !== approval.request.bindingHash) {
-          throw new Error(
-            "Binding hash mismatch: action parameters may have changed (stale approval)",
-          );
-        }
-      } else {
-        const a = Buffer.from(params.bindingHash);
-        const b = Buffer.from(approval.request.bindingHash);
-        if (a.length !== b.length || !timingSafeEqual(a, b)) {
-          throw new Error(
-            "Binding hash mismatch: action parameters may have changed (stale approval)",
-          );
-        }
+      const a = Buffer.from(params.bindingHash);
+      const b = Buffer.from(approval.request.bindingHash);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        throw new Error(
+          "Binding hash mismatch: action parameters may have changed (stale approval)",
+        );
       }
     }
 

@@ -15,6 +15,12 @@ export interface CadenceWorkerConfig {
   cadenceStore?: CadenceStore;
   /** Evaluation interval in ms (default: 5 minutes). */
   intervalMs?: number;
+  /** Callback for sending WhatsApp template messages when outside 24h window. */
+  sendWhatsAppTemplate?: (
+    chatId: string,
+    templateName: string,
+    languageCode: string,
+  ) => Promise<void>;
 }
 
 // In-memory cadence state fallback
@@ -43,7 +49,7 @@ export function startCadenceForContact(
  * Returns a cleanup function to stop the worker.
  */
 export function startCadenceWorker(config: CadenceWorkerConfig): () => void {
-  const { notifier, cadenceStore, intervalMs = 5 * 60 * 1000 } = config;
+  const { notifier, cadenceStore, intervalMs = 5 * 60 * 1000, sendWhatsAppTemplate } = config;
 
   let stopped = false;
 
@@ -112,11 +118,25 @@ export function startCadenceWorker(config: CadenceWorkerConfig): () => void {
         if (channelType === "whatsapp") {
           const lastInbound = conversation?.lastInboundAt ?? null;
           if (!isWithinWhatsAppWindow(lastInbound)) {
-            console.warn(
-              `[CadenceWorker] WhatsApp 24h window expired for ${channelId}, ` +
-                `skipping freeform message (template required)`,
-            );
-            // TODO: send template message via WhatsApp adapter when templates are configured
+            if (sendWhatsAppTemplate) {
+              try {
+                await sendWhatsAppTemplate(channelId, "follow_up_notification", "en");
+                console.warn(
+                  `[CadenceWorker] WhatsApp 24h window expired for ${channelId}, ` +
+                    `sent template message instead`,
+                );
+              } catch (templateErr) {
+                console.error(
+                  `[CadenceWorker] Failed to send WhatsApp template for ${channelId}:`,
+                  templateErr,
+                );
+              }
+            } else {
+              console.warn(
+                `[CadenceWorker] WhatsApp 24h window expired for ${channelId}, ` +
+                  `no template sender configured — skipping`,
+              );
+            }
             continue;
           }
         }

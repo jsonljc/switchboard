@@ -16,6 +16,7 @@ const CACHE_PREFIX = "switchboard:policies:";
 export class PrismaPolicyStore implements PolicyStore {
   private redis?: PrismaPolicyStoreOptions["redis"];
   private cacheTtlSeconds: number;
+  private knownCacheKeys = new Set<string>();
 
   constructor(
     private prisma: PrismaClient,
@@ -33,12 +34,15 @@ export class PrismaPolicyStore implements PolicyStore {
 
   private async invalidateCache(): Promise<void> {
     if (!this.redis) return;
-    // Delete all known cache keys by using a simple pattern
-    // Since we can't SCAN easily, invalidate the most common key
-    try {
-      await this.redis.del(`${CACHE_PREFIX}all:global`);
-    } catch {
-      // Cache invalidation failure is non-fatal
+    // Delete all tracked cache keys
+    const keysToDelete = [...this.knownCacheKeys];
+    this.knownCacheKeys.clear();
+    for (const key of keysToDelete) {
+      try {
+        await this.redis.del(key);
+      } catch {
+        // Cache invalidation failure is non-fatal
+      }
     }
   }
 
@@ -169,6 +173,7 @@ export class PrismaPolicyStore implements PolicyStore {
       try {
         const key = this.cacheKey(filter);
         await this.redis.set(key, JSON.stringify(results), "EX", this.cacheTtlSeconds);
+        this.knownCacheKeys.add(key);
       } catch {
         // Cache write failure is non-fatal
       }

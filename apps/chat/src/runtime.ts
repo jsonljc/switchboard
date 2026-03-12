@@ -25,6 +25,7 @@ import type { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
 import type { ConversationRouter } from "@switchboard/customer-engagement";
 import { findMedicalClaims } from "@switchboard/customer-engagement";
+import { isWithinWhatsAppWindow } from "./adapters/whatsapp.js";
 
 // Extracted modules
 import type { HandlerContext, OperatorState } from "./handlers/handler-context.js";
@@ -169,6 +170,25 @@ export class ChatRuntime {
       filtered =
         "I'd be happy to help with that question. For specific details about procedures and outcomes, " +
         "I'd recommend speaking directly with our team who can provide accurate, personalized information.";
+    }
+
+    // WhatsApp 24h window enforcement: send template if outside window
+    if (this.adapter.channel === "whatsapp") {
+      const conversation = await getThread(threadId);
+      const lastInbound = conversation?.lastInboundAt ?? null;
+      if (!isWithinWhatsAppWindow(lastInbound)) {
+        console.warn(
+          `[WhatsApp] 24h window expired for ${threadId}, sending template instead of freeform`,
+        );
+        if ("sendTemplateMessage" in this.adapter) {
+          await (
+            this.adapter as {
+              sendTemplateMessage: (id: string, name: string, lang: string) => Promise<void>;
+            }
+          ).sendTemplateMessage(threadId, "follow_up_notification", "en");
+        }
+        return;
+      }
     }
 
     await this.adapter.sendTextReply(threadId, filtered);

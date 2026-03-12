@@ -31,8 +31,8 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
-      API_KEY_ENCRYPTION_SECRET: ci-test-encryption-secret-32chr
-      NEXTAUTH_SECRET: ci-test-nextauth-secret
+      API_KEY_ENCRYPTION_SECRET: ${{ secrets.CI_API_KEY_ENCRYPTION_SECRET || 'ci-test-encryption-secret-32chr' }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -188,7 +188,6 @@ jobs:
         run: bash scripts/check-no-empty-tests.sh
 
   secrets:
-    needs: setup
     runs-on: ubuntu-latest
 
     steps:
@@ -230,7 +229,7 @@ jobs:
           key: build-${{ github.sha }}
 
       - name: Security audit
-        run: pnpm audit --audit-level=critical
+        run: pnpm audit --audit-level=high
 
   architecture:
     needs: setup
@@ -268,7 +267,6 @@ jobs:
         run: npx depcruise --config .dependency-cruiser.cjs packages/ cartridges/ apps/
 
   docker:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:

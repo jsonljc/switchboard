@@ -214,6 +214,24 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      // HMAC signature verification
+      const bookingWebhookSecret = process.env["BOOKING_WEBHOOK_SECRET"];
+      if (bookingWebhookSecret) {
+        const signature = request.headers["x-webhook-signature"] as string | undefined;
+        if (!signature) {
+          return reply.code(401).send({ error: "Missing x-webhook-signature header" });
+        }
+        const rawBody =
+          typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+        const expectedSig = createHmac("sha256", bookingWebhookSecret)
+          .update(rawBody)
+          .digest("hex");
+        if (signature !== expectedSig) {
+          logger.warn("Invalid booking webhook signature");
+          return reply.code(401).send({ error: "Invalid signature" });
+        }
+      }
+
       const booking = request.body as {
         leadId?: string;
         contactExternalId?: string;
@@ -477,13 +495,11 @@ async function handleBookingConfirmation(
   }
 
   // Step 2: Emit booking conversion event for ad attribution feedback loop
-  const conversionBus = (app as unknown as Record<string, unknown>)["conversionBus"] as
-    | { emit: (event: Record<string, unknown>) => void }
-    | undefined;
+  const conversionBus = app.conversionBus;
 
   if (conversionBus && orgId) {
     conversionBus.emit({
-      type: "booking",
+      type: "booked",
       contactId: booking.contactExternalId ?? booking.leadId ?? booking.bookingId,
       organizationId: orgId,
       value: 1,

@@ -112,7 +112,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
     "hub.verify_token"?: string;
     "hub.challenge"?: string;
   }): { status: number; body: string } {
-    if (query["hub.mode"] === "subscribe" && query["hub.verify_token"] === this.verifyToken) {
+    const providedToken = query["hub.verify_token"] ?? "";
+    const tokenMatch =
+      this.verifyToken !== null &&
+      providedToken.length === this.verifyToken.length &&
+      timingSafeEqual(Buffer.from(providedToken), Buffer.from(this.verifyToken));
+    if (query["hub.mode"] === "subscribe" && tokenMatch) {
       return { status: 200, body: query["hub.challenge"] ?? "" };
     }
     return { status: 403, body: "Verification failed" };

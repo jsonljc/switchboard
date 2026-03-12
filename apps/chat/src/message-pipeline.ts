@@ -42,10 +42,10 @@ import { isOptOutKeyword, isOptInKeyword } from "./runtime-helpers.js";
 export interface ParsedMessage {
   id: string;
   text: string;
-  threadId?: string;
+  threadId: string | null;
   channel: string;
   principalId: string;
-  organizationId?: string;
+  organizationId: string | null;
   metadata?: Record<string, unknown>;
 }
 

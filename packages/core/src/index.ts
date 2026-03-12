@@ -157,6 +157,7 @@ export type {
   ApprovalNotification,
   WhatsAppNotifierConfig,
   ChannelCredentials,
+  ProactiveSenderConfig,
 } from "./notifications/index.js";
 
 // Guardrail State Store

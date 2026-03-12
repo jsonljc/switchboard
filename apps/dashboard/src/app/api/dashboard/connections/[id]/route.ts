@@ -8,10 +8,11 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     const client = await getApiClient();
     const data = await client.getConnection(params.id);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
@@ -23,10 +24,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json();
     const data = await client.updateConnection(params.id, body);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
@@ -37,10 +39,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     const client = await getApiClient();
     const data = await client.deleteConnection(params.id);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }

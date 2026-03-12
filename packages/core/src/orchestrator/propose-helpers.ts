@@ -1,9 +1,22 @@
-import type { CompositeRiskContext, GuardrailConfig, Policy } from "@switchboard/schemas";
+import type {
+  CompositeRiskContext,
+  CompetenceAdjustment,
+  GuardrailConfig,
+  Policy,
+  RiskInput,
+} from "@switchboard/schemas";
+import type { Cartridge } from "@switchboard/cartridge-sdk";
 import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import { evaluateRule } from "../engine/rule-evaluator.js";
 import type { SpendLookup } from "../engine/policy-engine.js";
+import {
+  type ResolvedIdentity,
+  resolveIdentity,
+  applyCompetenceAdjustments,
+} from "../identity/spec.js";
 
 import type { SharedContext } from "./shared-context.js";
+import { buildCartridgeContext } from "./shared-context.js";
 
 /**
  * Hydrate in-memory guardrail state (rate limits + cooldowns)
@@ -184,4 +197,102 @@ export async function buildCompositeContext(
     distinctTargetEntities: targetEntities.size,
     distinctCartridges: cartridges.size,
   };
+}
+
+/**
+ * Resolve identity spec + overlays + competence adjustments for a principal.
+ */
+export async function resolveEffectiveIdentity(
+  ctx: SharedContext,
+  principalId: string,
+  cartridgeId: string,
+  actionType: string,
+): Promise<{
+  resolvedIdentity: ResolvedIdentity;
+  effectiveIdentity: ResolvedIdentity;
+  competenceAdjustments: CompetenceAdjustment[];
+}> {
+  const identitySpec = await ctx.storage.identity.getSpecByPrincipalId(principalId);
+  if (!identitySpec) {
+    throw new Error(`Identity spec not found for principal: ${principalId}`);
+  }
+  const overlays = await ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
+  const resolvedIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
+
+  let competenceAdjustments: CompetenceAdjustment[] = [];
+  let effectiveIdentity = resolvedIdentity;
+  if (ctx.competenceTracker) {
+    const adj = await ctx.competenceTracker.getAdjustment(principalId, actionType);
+    if (adj) {
+      competenceAdjustments = [adj];
+      effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
+    }
+  }
+
+  return { resolvedIdentity, effectiveIdentity, competenceAdjustments };
+}
+
+/**
+ * Run cartridge enrichContext + cross-cartridge enrichment + getRiskInput.
+ */
+export async function enrichAndGetRiskInput(
+  ctx: SharedContext,
+  cartridge: Cartridge,
+  actionType: string,
+  parameters: Record<string, unknown>,
+  principalId: string,
+  organizationId: string | null,
+  cartridgeId: string,
+): Promise<{ enriched: Record<string, unknown>; riskInput: RiskInput }> {
+  let enriched: Record<string, unknown> = {};
+  try {
+    enriched = await cartridge.enrichContext(
+      actionType,
+      parameters,
+      await buildCartridgeContext(ctx, cartridgeId, principalId, organizationId),
+    );
+  } catch (err) {
+    console.warn(
+      `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  if (ctx.crossCartridgeEnricher && organizationId) {
+    try {
+      const crossCartridgeContext = await ctx.crossCartridgeEnricher.enrich({
+        targetCartridgeId: cartridgeId,
+        actionType,
+        parameters,
+        organizationId,
+        principalId,
+      });
+      if (Object.keys(crossCartridgeContext).length > 0) {
+        enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
+      }
+    } catch (err) {
+      console.warn(
+        `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  let riskInput: RiskInput;
+  try {
+    riskInput = await cartridge.getRiskInput(actionType, parameters, {
+      principalId,
+      ...enriched,
+    });
+  } catch (err) {
+    console.warn(
+      `[orchestrator] getRiskInput failed, using default medium risk: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    riskInput = {
+      baseRisk: "medium",
+      exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+      reversibility: "full",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+    };
+  }
+
+  return { enriched, riskInput };
 }

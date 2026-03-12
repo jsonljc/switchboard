@@ -32,6 +32,24 @@ import { PAYMENTS_SIDE_EFFECT_TOOLS, PAYMENTS_READ_TOOLS } from "./tools/payment
 import type { ReadToolDeps } from "./tools/index.js";
 import type { GovernanceToolDeps } from "./tools/index.js";
 import { generateToolsFromRegistry } from "./auto-register.js";
+
+const SENSITIVE_ERROR_PATTERNS = [
+  /SELECT\s|INSERT\s|UPDATE\s|DELETE\s|DROP\s|ALTER\s|CREATE\s/i,
+  /at\s+\S+\s+\(.*:\d+:\d+\)/,
+  /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/,
+  /postgresql:\/\/|mysql:\/\/|redis:\/\/|mongodb:\/\//i,
+  /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET/i,
+  /prisma|PrismaClient/i,
+];
+
+function sanitizeMcpError(message: string): string {
+  for (const pattern of SENSITIVE_ERROR_PATTERNS) {
+    if (pattern.test(message)) {
+      return "Request failed";
+    }
+  }
+  return message;
+}
 import type { AutoRegisteredTool } from "./auto-register.js";
 
 /**
@@ -354,7 +372,8 @@ export class SwitchboardMcpServer {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const message = sanitizeMcpError(rawMessage);
       return {
         content: [{ type: "text", text: JSON.stringify({ error: message }) }],
       };

@@ -237,13 +237,15 @@ async function main() {
 
   // --- Internal provision-notify endpoint ---
   app.post("/internal/provision-notify", async (request, reply) => {
-    // Verify shared secret
+    // Verify shared secret — fail-closed: reject if INTERNAL_API_SECRET is not set
     const internalSecret = process.env["INTERNAL_API_SECRET"];
-    if (internalSecret) {
-      const authHeader = request.headers["authorization"];
-      if (authHeader !== `Bearer ${internalSecret}`) {
-        return reply.code(401).send({ error: "Unauthorized" });
-      }
+    if (!internalSecret) {
+      app.log.error("INTERNAL_API_SECRET is not configured — rejecting internal request");
+      return reply.code(503).send({ error: "Internal authentication not configured" });
+    }
+    const authHeader = request.headers["authorization"];
+    if (authHeader !== `Bearer ${internalSecret}`) {
+      return reply.code(401).send({ error: "Unauthorized" });
     }
 
     if (!registry) {

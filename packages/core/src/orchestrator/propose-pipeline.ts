@@ -43,6 +43,8 @@ import {
   extractQuorumFromPolicies,
   buildSpendLookup,
   buildCompositeContext,
+  resolveEffectiveIdentity,
+  enrichAndGetRiskInput,
 } from "./propose-helpers.js";
 import { proposePlan } from "./plan-pipeline.js";
 
@@ -142,98 +144,33 @@ export class ProposePipeline {
       }
     }
 
-    // 1. Look up IdentitySpec + overlays
-    const identitySpec = await this.ctx.storage.identity.getSpecByPrincipalId(params.principalId);
-    if (!identitySpec) {
-      throw new Error(`Identity spec not found for principal: ${params.principalId}`);
-    }
-    const overlays = await this.ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
-
-    // 2. Resolve identity
-    const resolvedIdentity = resolveIdentity(identitySpec, overlays, {
-      cartridgeId: params.cartridgeId,
-    });
-
-    // 2b. Apply competence adjustments
-    let competenceAdjustments: CompetenceAdjustment[] = [];
-    let effectiveIdentity = resolvedIdentity;
-    if (this.ctx.competenceTracker) {
-      const adj = await this.ctx.competenceTracker.getAdjustment(
-        params.principalId,
-        params.actionType,
-      );
-      if (adj) {
-        competenceAdjustments = [adj];
-        effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
-      }
-    }
+    // 1-2. Resolve identity + competence adjustments
+    const { effectiveIdentity, competenceAdjustments } = await resolveEffectiveIdentity(
+      this.ctx,
+      params.principalId,
+      params.cartridgeId,
+      params.actionType,
+    );
 
     // 2c. Check per-org action type restrictions
     const restrictionResult = await this.checkRestriction(params, effectiveIdentity);
     if (restrictionResult) return restrictionResult;
 
-    // 3. Look up cartridge + enrich context + get risk input
+    // 3-4. Look up cartridge + enrich context + get risk input
     const cartridge = this.ctx.storage.cartridges.get(params.cartridgeId);
     if (!cartridge) {
       throw new Error(`Cartridge not found: ${params.cartridgeId}`);
     }
 
-    let enriched: Record<string, unknown> = {};
-    try {
-      enriched = await cartridge.enrichContext(
-        params.actionType,
-        params.parameters,
-        await buildCartridgeContext(
-          this.ctx,
-          params.cartridgeId,
-          params.principalId,
-          params.organizationId ?? null,
-        ),
-      );
-    } catch (err) {
-      console.warn(
-        `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-
-    // 3c. Cross-cartridge enrichment (optional, fail-safe)
-    if (this.ctx.crossCartridgeEnricher && params.organizationId) {
-      try {
-        const crossCartridgeContext = await this.ctx.crossCartridgeEnricher.enrich({
-          targetCartridgeId: params.cartridgeId,
-          actionType: params.actionType,
-          parameters: params.parameters,
-          organizationId: params.organizationId,
-          principalId: params.principalId,
-        });
-        if (Object.keys(crossCartridgeContext).length > 0) {
-          enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
-        }
-      } catch (err) {
-        console.warn(
-          `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    // 4. Get risk input from cartridge
-    let riskInput: import("@switchboard/schemas").RiskInput;
-    try {
-      riskInput = await cartridge.getRiskInput(params.actionType, params.parameters, {
-        principalId: params.principalId,
-        ...enriched,
-      });
-    } catch (err) {
-      console.warn(
-        `[orchestrator] getRiskInput failed, using default medium risk: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      riskInput = {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-    }
+    const { enriched, riskInput } = await enrichAndGetRiskInput(
+      this.ctx,
+      cartridge,
+      params.actionType,
+      params.parameters,
+      params.principalId,
+      params.organizationId ?? null,
+      params.cartridgeId,
+    );
 
     // 5. Get guardrails from cartridge + hydrate state
     const guardrails = cartridge.getGuardrails();
@@ -625,6 +562,23 @@ export class ProposePipeline {
     return this.ctx.storage.policies.listActive({ cartridgeId, organizationId });
   }
 
+  /**
+   * Validate that _forceApproval is only used by principals with admin or approver roles.
+   */
+  private async isForceApprovalAllowed(params: {
+    parameters: Record<string, unknown>;
+    principalId: string;
+  }): Promise<boolean> {
+    if (params.parameters["_forceApproval"] !== true) return false;
+
+    const principal = await this.ctx.storage.identity.getPrincipal(params.principalId);
+    const hasRole = principal?.roles.some((r) => r === "admin" || r === "approver");
+    if (!hasRole) {
+      throw new Error("_forceApproval requires admin or approver role");
+    }
+    return true;
+  }
+
   private async checkRestriction(
     params: {
       actionType: string;
@@ -737,7 +691,10 @@ export class ProposePipeline {
 
     if (isEmergencyOverride) {
       const principal = await this.ctx.storage.identity.getPrincipal(params.principalId);
-      const hasRole = principal?.roles.some((r) => r === "admin" || r === "emergency_responder");
+      if (principal?.type !== "user") {
+        throw new Error("Emergency override is restricted to user principals");
+      }
+      const hasRole = principal.roles.some((r) => r === "admin" || r === "emergency_responder");
       if (!hasRole) {
         throw new Error("Emergency override requires admin or emergency_responder role");
       }
@@ -752,7 +709,7 @@ export class ProposePipeline {
       envelope.status = "denied";
     } else if (
       decisionTrace.approvalRequired !== "none" ||
-      params.parameters["_forceApproval"] === true
+      (await this.isForceApprovalAllowed(params))
     ) {
       approvalRequest = await this.createApprovalRequest(
         envelope,

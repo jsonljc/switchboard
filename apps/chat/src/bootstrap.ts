@@ -422,6 +422,8 @@ export async function createChatRuntime(
         [bookingFlow.id, bookingFlow],
       ]),
       defaultFlowId: qualificationFlow.id,
+      faqs: resolvedProfile?.profile?.faqs,
+      businessName: resolvedProfile?.profile?.name,
     });
     console.warn(
       `[Chat] Lead bot mode enabled: qualification → booking flow, ` +

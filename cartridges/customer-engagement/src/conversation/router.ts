@@ -6,6 +6,8 @@ import type { ConversationFlowDefinition } from "./types.js";
 import type { ConversationSession, ConversationSessionStore } from "./session-store.js";
 import { createConversationState, executeNextStep } from "./engine.js";
 import { ConversationNLPAdapter } from "./nlp-adapter.js";
+import type { FAQRecord } from "@switchboard/schemas";
+import { matchFAQ, formatFAQResponse } from "./faq-matcher.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -40,6 +42,10 @@ export interface RouterResponse {
   completed: boolean;
   /** Session ID */
   sessionId: string | null;
+  /** Conversation state variables (exposed on completion for callers to read) */
+  variables?: Record<string, unknown>;
+  /** Typed lead profile fields extracted from question answers */
+  leadProfileUpdate?: Record<string, unknown>;
 }
 
 export interface ConversationRouterConfig {
@@ -50,6 +56,10 @@ export interface ConversationRouterConfig {
   defaultFlowId: string;
   /** Session timeout in ms (default: 30 minutes) */
   sessionTimeoutMs?: number;
+  /** FAQ records for direct-answer routing before qualification flow */
+  faqs?: FAQRecord[];
+  /** Business name for FAQ response formatting */
+  businessName?: string;
 }
 
 /**
@@ -67,6 +77,8 @@ export class ConversationRouter {
   private readonly defaultFlowId: string;
   private readonly sessionTimeoutMs: number;
   private readonly nlpAdapter: ConversationNLPAdapter;
+  private readonly faqs: FAQRecord[];
+  private readonly businessName: string | undefined;
 
   constructor(config: ConversationRouterConfig) {
     this.sessionStore = config.sessionStore;
@@ -74,6 +86,8 @@ export class ConversationRouter {
     this.defaultFlowId = config.defaultFlowId;
     this.sessionTimeoutMs = config.sessionTimeoutMs ?? 30 * 60 * 1000; // 30 minutes
     this.nlpAdapter = new ConversationNLPAdapter();
+    this.faqs = config.faqs ?? [];
+    this.businessName = config.businessName;
   }
 
   /**
@@ -98,6 +112,23 @@ export class ConversationRouter {
       };
     }
 
+    // Step 2.5: FAQ matching — if FAQs are configured, try to answer directly before flow
+    if (this.faqs.length > 0) {
+      const faqResult = matchFAQ(message.body, this.faqs);
+      if (faqResult.tier === "direct" || faqResult.tier === "caveat") {
+        const faqResponse = formatFAQResponse(faqResult, this.businessName);
+        if (faqResponse) {
+          return {
+            handled: true,
+            responses: [faqResponse],
+            escalated: false,
+            completed: false,
+            sessionId: session.id,
+          };
+        }
+      }
+    }
+
     // Step 3: Set the user's response as a variable
     const state = { ...session.state };
     state.variables = {
@@ -116,9 +147,12 @@ export class ConversationRouter {
       // Set extracted variables
       Object.assign(state.variables, nlpResult.extractedVariables);
 
-      // If NLP resolved an option, set it
+      // If NLP resolved an option, set it (both generic and step-specific key)
       if (nlpResult.resolvedOptionIndex !== null) {
         state.variables["selectedOption"] = nlpResult.resolvedOptionIndex;
+        if (currentStep) {
+          state.variables[`selectedOption_${currentStep.id}`] = nlpResult.resolvedOptionIndex;
+        }
       }
 
       // Handle escalation requests
@@ -200,6 +234,9 @@ export class ConversationRouter {
       await this.sessionStore.delete(session.id);
     }
 
+    // Extract lead profile updates from question answers
+    const leadProfileUpdate = extractLeadProfileUpdate(currentState.variables);
+
     return {
       handled: true,
       responses,
@@ -207,6 +244,8 @@ export class ConversationRouter {
       escalated,
       completed,
       sessionId: session.id,
+      variables: currentState.variables,
+      leadProfileUpdate: Object.keys(leadProfileUpdate).length > 0 ? leadProfileUpdate : undefined,
     };
   }
 
@@ -303,4 +342,37 @@ export class ConversationRouter {
   async endSession(sessionId: string): Promise<void> {
     await this.sessionStore.delete(sessionId);
   }
+}
+
+/**
+ * Map question answers to typed lead profile fields.
+ * Uses the step-specific selectedOption keys set during flow execution.
+ */
+function extractLeadProfileUpdate(variables: Record<string, unknown>): Record<string, unknown> {
+  const update: Record<string, unknown> = {};
+
+  // Timeline: option 1→"immediate", 2→"soon", 3→"exploring"
+  const timelineOption = variables["selectedOption_timeline_question"];
+  if (timelineOption === 1) update["timeline"] = "immediate";
+  else if (timelineOption === 2) update["timeline"] = "soon";
+  else if (timelineOption === 3) update["timeline"] = "exploring";
+
+  // Budget: option 1→"ready", 2→"price_sensitive", 3→"flexible"
+  const budgetOption = variables["selectedOption_budget_question"];
+  if (budgetOption === 1) update["priceReadiness"] = "ready";
+  else if (budgetOption === 2) update["priceReadiness"] = "price_sensitive";
+  else if (budgetOption === 3) update["priceReadiness"] = "flexible";
+
+  // Insurance: option 1→hasInsurance: true
+  const insuranceOption = variables["selectedOption_insurance_question"];
+  if (insuranceOption === 1) {
+    update["signals"] = { hasInsurance: true };
+  }
+
+  // Mark qualification as complete if score was computed
+  if (variables["leadScore"] !== undefined) {
+    update["qualificationComplete"] = true;
+  }
+
+  return update;
 }
