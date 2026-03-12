@@ -48,14 +48,24 @@ import type {
   DiagnosticCycleStore,
   RevenueAccountStore,
   WeeklyDigestStore,
+  AccountProfileStore,
+  MonitorCheckpointStore,
+  TestCampaignStore,
 } from "../stores/interfaces.js";
 import type { LLMClient } from "@switchboard/core";
+import type { InterventionDispatcher } from "../execution/dispatcher.js";
+import type { ImageGenerator } from "../creative/image-generator.js";
 
 export interface RevGrowthDeps extends DataCollectionDeps {
   interventionStore?: InterventionStore;
   cycleStore?: DiagnosticCycleStore;
   accountStore?: RevenueAccountStore;
   digestStore?: WeeklyDigestStore;
+  accountProfileStore?: AccountProfileStore;
+  monitorCheckpointStore?: MonitorCheckpointStore;
+  testCampaignStore?: TestCampaignStore;
+  dispatcher?: InterventionDispatcher;
+  imageGenerator?: ImageGenerator;
   llmClient?: LLMClient;
 }
 

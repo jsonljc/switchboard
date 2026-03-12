@@ -11,7 +11,13 @@
 // and records all others as secondary.
 // ---------------------------------------------------------------------------
 
-import type { ScorerOutput, Constraint, ConstraintType } from "@switchboard/schemas";
+import type {
+  ScorerOutput,
+  Constraint,
+  ConstraintType,
+  AccountLearningProfile,
+  EscalationResult,
+} from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Configuration — scorer name → constraint type mapping with thresholds
@@ -67,6 +73,15 @@ const CONSTRAINT_RULES: ConstraintRule[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// ScorerContext — Optional context for calibration-aware scoring
+// ---------------------------------------------------------------------------
+
+export interface ScorerContext {
+  accountProfile?: AccountLearningProfile;
+  escalation?: EscalationResult;
+}
+
+// ---------------------------------------------------------------------------
 // identifyConstraints — Main engine entry point
 // ---------------------------------------------------------------------------
 
@@ -79,6 +94,7 @@ export interface ConstraintResult {
 export function identifyConstraints(
   scorerOutputs: ScorerOutput[],
   previousPrimaryConstraintType: ConstraintType | null,
+  scorerContext?: ScorerContext,
 ): ConstraintResult {
   // Build a lookup of scorer outputs by name
   const scorerMap = new Map<string, ScorerOutput>();
@@ -93,7 +109,17 @@ export function identifyConstraints(
     const scorerOutput = scorerMap.get(rule.scorerName);
     if (!scorerOutput) continue;
 
-    if (scorerOutput.score < rule.bindingThreshold) {
+    // Calibration-aware threshold adjustment for SALES constraint
+    let effectiveThreshold = rule.bindingThreshold;
+    if (scorerContext?.accountProfile && rule.constraintType === "SALES") {
+      const calibration = scorerContext.accountProfile.calibration[rule.constraintType];
+      if (calibration && calibration.totalCount >= 3 && calibration.successRate > 0.7) {
+        // High success rate → widen the binding threshold to catch issues earlier
+        effectiveThreshold = Math.min(rule.bindingThreshold + 10, 80);
+      }
+    }
+
+    if (scorerOutput.score < effectiveThreshold) {
       const isCritical = scorerOutput.score < rule.criticalThreshold;
       const reason = buildReason(rule, scorerOutput, isCritical);
 
