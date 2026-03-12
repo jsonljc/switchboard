@@ -29,14 +29,19 @@ export type PolicyCondition = z.infer<typeof PolicyConditionSchema>;
 export const PolicyCompositionSchema = z.enum(["AND", "OR", "NOT"]);
 export type PolicyComposition = z.infer<typeof PolicyCompositionSchema>;
 
-export const PolicyRuleSchema: z.ZodType<any> = z.lazy(() =>
+export interface PolicyRule {
+  composition?: PolicyComposition;
+  conditions?: PolicyCondition[];
+  children?: PolicyRule[];
+}
+
+export const PolicyRuleSchema: z.ZodType<PolicyRule> = z.lazy(() =>
   z.object({
     composition: PolicyCompositionSchema.optional(),
     conditions: z.array(PolicyConditionSchema).optional(),
     children: z.array(PolicyRuleSchema).optional(),
   }),
 );
-export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 
 export const PolicyEffectSchema = z.enum(["allow", "deny", "modify", "require_approval"]);
 export type PolicyEffect = z.infer<typeof PolicyEffectSchema>;

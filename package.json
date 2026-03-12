@@ -15,7 +15,8 @@
     "db:generate": "pnpm --filter @switchboard/db generate",
     "db:migrate": "pnpm --filter @switchboard/db migrate",
     "db:seed": "pnpm --filter @switchboard/db seed",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "arch:check": "npx tsx scripts/arch-check.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

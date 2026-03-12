@@ -19,7 +19,7 @@ export class PrismaConnectorHealthLogStore {
   constructor(private prisma: PrismaClient) {}
 
   async log(entry: Omit<ConnectorHealthLogEntry, "id" | "checkedAt">): Promise<void> {
-    await (this.prisma as any).connectorHealthLog.create({
+    await this.prisma.connectorHealthLog.create({
       data: {
         organizationId: entry.organizationId,
         connectorId: entry.connectorId,
@@ -35,7 +35,7 @@ export class PrismaConnectorHealthLogStore {
     organizationId: string,
     connectorId: string,
   ): Promise<ConnectorHealthLogEntry | null> {
-    const row = await (this.prisma as any).connectorHealthLog.findFirst({
+    const row = await this.prisma.connectorHealthLog.findFirst({
       where: { organizationId, connectorId },
       orderBy: { checkedAt: "desc" },
     });
@@ -45,7 +45,7 @@ export class PrismaConnectorHealthLogStore {
 
   async listByOrg(organizationId: string): Promise<ConnectorHealthLogEntry[]> {
     // Get the latest log per connector for this org
-    const rows = await (this.prisma as any).connectorHealthLog.findMany({
+    const rows = await this.prisma.connectorHealthLog.findMany({
       where: { organizationId },
       orderBy: { checkedAt: "desc" },
     });

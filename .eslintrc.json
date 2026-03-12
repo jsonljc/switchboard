@@ -17,13 +17,17 @@
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
     ],
     "@typescript-eslint/no-explicit-any": "warn",
-    "no-console": ["warn", { "allow": ["warn", "error"] }]
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "max-lines": ["warn", { "max": 400, "skipBlankLines": true, "skipComments": true }],
+    "complexity": ["warn", 15]
   },
   "ignorePatterns": ["dist", "node_modules", "coverage"],
   "overrides": [
     {
       "files": ["packages/schemas/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -39,7 +43,9 @@
     },
     {
       "files": ["packages/cartridge-sdk/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -75,7 +81,9 @@
     },
     {
       "files": ["packages/db/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -105,6 +113,10 @@
                 "message": "db cannot import from cartridges."
               },
               {
+                "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
+                "message": "db cannot import from cartridges."
+              },
+              {
                 "group": ["@switchboard/api", "@switchboard/api/*"],
                 "message": "db cannot import from apps."
               },
@@ -127,7 +139,9 @@
     },
     {
       "files": ["packages/core/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
           "error",
           {
@@ -159,7 +173,9 @@
     },
     {
       "files": ["cartridges/*/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
+        "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
           "error",
           {
