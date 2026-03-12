@@ -262,7 +262,7 @@ export const revenueGrowthRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // POST /interventions/:id/defer — Defer an intervention
+  // POST /interventions/:id/defer — Defer an intervention (governed)
   app.post(
     "/interventions/:id/defer",
     {
@@ -272,7 +272,8 @@ export const revenueGrowthRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      if (!request.organizationIdFromAuth) {
+      const organizationId = request.organizationIdFromAuth;
+      if (!organizationId) {
         return reply.code(403).send({
           error: "Forbidden: API key must be scoped to an organization",
           statusCode: 403,
@@ -290,12 +291,31 @@ export const revenueGrowthRoutes: FastifyPluginAsync = async (app) => {
       const body = request.body as { reason?: string } | undefined;
 
       try {
-        const result = await cartridge.execute(
-          "revenue-growth.intervention.defer",
-          { interventionId: id, reason: body?.reason ?? "No reason provided" },
-          { principalId: "system", organizationId: null, connectionCredentials: {} },
-        );
-        return reply.code(200).send({ summary: result.summary });
+        const result = await executeGovernedSystemAction({
+          orchestrator: app.orchestrator,
+          actionType: "revenue-growth.intervention.defer",
+          cartridgeId: "revenue-growth",
+          organizationId,
+          parameters: {
+            interventionId: id,
+            reason: body?.reason ?? "No reason provided",
+          },
+          message: `Defer intervention ${id}`,
+        });
+
+        if (result.outcome !== "executed") {
+          return reply.code(200).send({
+            outcome: result.outcome,
+            explanation: result.explanation,
+            envelopeId: result.envelopeId,
+          });
+        }
+
+        return reply.code(200).send({
+          outcome: "executed",
+          summary: result.executionResult.summary,
+          envelopeId: result.envelopeId,
+        });
       } catch (err) {
         return reply.code(500).send({
           error: err instanceof Error ? err.message : "Failed to defer intervention",

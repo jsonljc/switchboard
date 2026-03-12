@@ -115,11 +115,18 @@ export class PrismaInterventionStore {
   }
 
   async listByAccount(
-    _accountId: string,
+    accountId: string,
     opts?: { status?: string; limit?: number },
   ): Promise<Intervention[]> {
+    const where: Record<string, unknown> = {
+      revenueAccount: { accountId },
+    };
+    if (opts?.status) {
+      where["status"] = opts.status;
+    }
+
     const rows = await this.prisma.revGrowthIntervention.findMany({
-      where: opts?.status ? { status: opts.status } : undefined,
+      where,
       orderBy: { createdAt: "desc" },
       take: opts?.limit,
     });
