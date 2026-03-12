@@ -127,6 +127,12 @@ export interface OperatorSummary {
     actionsToday: number;
     deniedToday: number;
   };
+  speedToLead?: {
+    averageMs: number | null;
+    p50Ms: number | null;
+    p95Ms: number | null;
+    sampleSize: number;
+  };
 }
 
 export interface CreateScheduledReportInput {

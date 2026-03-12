@@ -135,7 +135,7 @@ When creating a new cartridge:
 
 - Verify it does **not** import from `@switchboard/db` or any `apps/*` package
 - Verify it does **not** import from other cartridges
-- Ensure it has a `manifest.ts` and `defaults/guardrails.ts`
+- Ensure it has a `manifest.ts` and `defaults/guardrails.ts` — either in `src/` (flat) or `src/cartridge/` (nested); both patterns are accepted
 - Ensure it has at least one test file
 - Verify it is registered in at least one app (`apps/api` or `apps/mcp-server`)
 - Verify the `Dockerfile` includes it (base stage `COPY` + production stage `COPY --from=build`)

@@ -44,6 +44,9 @@ export * from "./skin.js";
 // Business profiles (per-business instance knowledge)
 export * from "./business-profile.js";
 
+// Lead profile (per-lead intelligence accumulated over conversation turns)
+export * from "./lead-profile.js";
+
 // Campaign plan (strategist agent output)
 export * from "./campaign-plan.js";
 

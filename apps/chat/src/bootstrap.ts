@@ -42,6 +42,15 @@ import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerAllCartridges, DEFAULT_CHAT_AVAILABLE_ACTIONS } from "./cartridge-registrar.js";
 import { ResponseGenerator } from "./composer/response-generator.js";
 import { ProactiveSender } from "./notifications/proactive-sender.js";
+import {
+  ConversationRouter,
+  InMemorySessionStore,
+  RedisSessionStore,
+  qualificationFlow,
+  bookingFlow,
+  resolveCadenceTemplates,
+} from "@switchboard/customer-engagement";
+import { startCadenceWorker, registerCadenceDefinition } from "./jobs/cadence-worker.js";
 
 /** Configuration for clinic mode (LLM interpreter + read tools). */
 export interface ClinicConfig {
@@ -228,6 +237,14 @@ export async function createChatRuntime(
   let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let responseGenerator: ResponseGenerator | null = null;
 
+  // Create Redis client (shared by model router + session store)
+  let chatRedis: import("ioredis").default | undefined;
+  const chatRedisUrl = process.env["REDIS_URL"];
+  if (chatRedisUrl) {
+    const { default: IORedis } = await import("ioredis");
+    chatRedis = new IORedis(chatRedisUrl);
+  }
+
   if (useLlmInterpreter && !interpreter) {
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
@@ -235,14 +252,6 @@ export async function createChatRuntime(
     const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
     const adAccountId =
       clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
-
-    // Create Redis client for model router if REDIS_URL is available
-    let chatRedis: import("ioredis").default | undefined;
-    const chatRedisUrl = process.env["REDIS_URL"];
-    if (chatRedisUrl) {
-      const { default: IORedis } = await import("ioredis");
-      chatRedis = new IORedis(chatRedisUrl);
-    }
 
     const modelRouter = createModelRouter(
       {
@@ -398,6 +407,28 @@ export async function createChatRuntime(
   // Create ConversionBus for CRM → ads attribution feedback loop
   const conversionBus = new InMemoryConversionBus();
 
+  // Lead bot mode: wire ConversationRouter when SKIN_ID is set and LEAD_BOT_MODE is enabled.
+  // This routes lead messages through qualification → booking flows instead of the
+  // owner/operator interpreter pipeline.
+  let leadRouter: ConversationRouter | null = null;
+  const isLeadBot = skinIdEnv && process.env["LEAD_BOT_MODE"] === "true";
+  if (isLeadBot) {
+    const sessionStore = chatRedis ? new RedisSessionStore(chatRedis) : new InMemorySessionStore();
+
+    leadRouter = new ConversationRouter({
+      sessionStore,
+      flows: new Map([
+        [qualificationFlow.id, qualificationFlow],
+        [bookingFlow.id, bookingFlow],
+      ]),
+      defaultFlowId: qualificationFlow.id,
+    });
+    console.warn(
+      `[Chat] Lead bot mode enabled: qualification → booking flow, ` +
+        `session store=${chatRedis ? "redis" : "in-memory"}`,
+    );
+  }
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -415,11 +446,38 @@ export async function createChatRuntime(
     responseGenerator,
     dataFlowExecutor,
     conversionBus,
+    isLeadBot: !!isLeadBot,
+    leadRouter,
   });
+
+  // Start cadence worker for follow-up automation when lead bot mode is enabled
+  let stopCadenceWorker: (() => void) | null = null;
+  if (isLeadBot) {
+    // Register default cadence templates (consultation-reminder, post-treatment-followup, etc.)
+    const templates = resolveCadenceTemplates();
+    for (const template of templates) {
+      registerCadenceDefinition(template);
+    }
+
+    let cadenceStore: import("@switchboard/db").CadenceStore | undefined;
+    if (process.env["DATABASE_URL"]) {
+      const { getDb, PrismaCadenceStore } = await import("@switchboard/db");
+      cadenceStore = new PrismaCadenceStore(getDb());
+    }
+
+    stopCadenceWorker = startCadenceWorker({
+      notifier: agentNotifier,
+      cadenceStore,
+      intervalMs: 5 * 60 * 1000, // Evaluate every 5 minutes
+    });
+  }
 
   const cleanup = () => {
     if (campaignRefreshTimer) {
       clearInterval(campaignRefreshTimer);
+    }
+    if (stopCadenceWorker) {
+      stopCadenceWorker();
     }
   };
 

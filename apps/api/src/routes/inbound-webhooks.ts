@@ -176,6 +176,86 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/inbound/booking-confirmed — Receive booking confirmations
+  // from Calendly, Setmore, or custom booking systems
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    "/booking-confirmed",
+    {
+      schema: {
+        description:
+          "Receive booking confirmation webhooks from external booking systems (Calendly, Setmore, custom).",
+        tags: ["Inbound Webhooks"],
+        body: {
+          type: "object",
+          properties: {
+            leadId: { type: "string", description: "Lead attribution ID from booking URL" },
+            contactExternalId: {
+              type: "string",
+              description: "Channel sender ID (e.g. WhatsApp phone number)",
+            },
+            bookingId: { type: "string", description: "External booking system ID" },
+            service: { type: "string", description: "Service/treatment booked" },
+            provider: { type: "string", description: "Provider/staff name" },
+            scheduledAt: {
+              type: "string",
+              format: "date-time",
+              description: "Appointment date/time",
+            },
+            source: {
+              type: "string",
+              enum: ["calendly", "setmore", "acuity", "custom"],
+              description: "Booking platform source",
+            },
+            organizationId: { type: "string" },
+          },
+          required: ["bookingId", "source"],
+        },
+      },
+    },
+    async (request, reply) => {
+      const booking = request.body as {
+        leadId?: string;
+        contactExternalId?: string;
+        bookingId: string;
+        service?: string;
+        provider?: string;
+        scheduledAt?: string;
+        source: string;
+        organizationId?: string;
+      };
+
+      logger.info(
+        {
+          bookingId: booking.bookingId,
+          source: booking.source,
+          leadId: booking.leadId,
+          service: booking.service,
+        },
+        "Received booking confirmation",
+      );
+
+      try {
+        await handleBookingConfirmation(app, booking);
+        return reply.code(200).send({
+          received: true,
+          bookingId: booking.bookingId,
+        });
+      } catch (err) {
+        logger.error(
+          { err, bookingId: booking.bookingId },
+          "Error processing booking confirmation",
+        );
+        return reply.code(200).send({
+          received: true,
+          bookingId: booking.bookingId,
+          processingError: true,
+        });
+      }
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
   // GET /api/inbound/forms/verify — Facebook webhook verification challenge
   // ─────────────────────────────────────────────────────────────────────────
   app.get(
@@ -350,6 +430,78 @@ async function handleFormSubmission(
   }
 
   logger.info({ leadId, source: submission.source }, "Form submission processed");
+}
+
+// ── Booking Confirmation Handler ──
+
+async function handleBookingConfirmation(
+  app: import("fastify").FastifyInstance,
+  booking: {
+    leadId?: string;
+    contactExternalId?: string;
+    bookingId: string;
+    service?: string;
+    provider?: string;
+    scheduledAt?: string;
+    source: string;
+    organizationId?: string;
+  },
+): Promise<void> {
+  const orgId = booking.organizationId;
+
+  // Step 1: Update CRM deal stage to booked
+  const crmCartridge = app.storageContext.cartridges.get("crm");
+  if (crmCartridge && (booking.leadId || booking.contactExternalId)) {
+    try {
+      await crmCartridge.execute(
+        "crm.deal.create",
+        {
+          name: `Booking: ${booking.service ?? "Appointment"}`,
+          stage: "booked",
+          pipeline: "lead-conversion",
+          contactExternalId: booking.contactExternalId,
+          properties: {
+            bookingId: booking.bookingId,
+            service: booking.service,
+            provider: booking.provider,
+            scheduledAt: booking.scheduledAt,
+            source: booking.source,
+            leadId: booking.leadId,
+          },
+        },
+        systemContext(orgId),
+      );
+    } catch (err) {
+      logger.warn({ err, bookingId: booking.bookingId }, "Failed to create CRM deal for booking");
+    }
+  }
+
+  // Step 2: Emit booking conversion event for ad attribution feedback loop
+  const conversionBus = (app as unknown as Record<string, unknown>)["conversionBus"] as
+    | { emit: (event: Record<string, unknown>) => void }
+    | undefined;
+
+  if (conversionBus && orgId) {
+    conversionBus.emit({
+      type: "booking",
+      contactId: booking.contactExternalId ?? booking.leadId ?? booking.bookingId,
+      organizationId: orgId,
+      value: 1,
+      timestamp: new Date(),
+      metadata: {
+        bookingId: booking.bookingId,
+        service: booking.service,
+        source: booking.source,
+        scheduledAt: booking.scheduledAt,
+      },
+    });
+    logger.info({ bookingId: booking.bookingId, orgId }, "Booking conversion event emitted");
+  }
+
+  logger.info(
+    { bookingId: booking.bookingId, source: booking.source, service: booking.service },
+    "Booking confirmation processed",
+  );
 }
 
 // ── Stripe Signature Verification ──

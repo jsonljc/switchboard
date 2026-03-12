@@ -80,7 +80,13 @@ export class MedicalClaimFilter implements CartridgeInterceptor {
   }
 }
 
-function findMedicalClaims(texts: string[]): string[] {
+/**
+ * Scan text(s) for medical claim keywords that could be regulatory violations.
+ * Returns list of detected violation keywords, or empty array if clean.
+ * Extracted as a standalone function so it can be reused in the lead conversation
+ * path (sendFilteredReply) in addition to the afterExecute interceptor.
+ */
+export function findMedicalClaims(texts: string[]): string[] {
   const violations: string[] = [];
   const combined = texts.join(" ").toLowerCase();
 

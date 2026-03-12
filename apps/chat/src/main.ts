@@ -33,7 +33,7 @@ async function main() {
       const { initSecurityStore } = await import("./adapters/security.js");
       const redisClient = new Redis(process.env["REDIS_URL"]);
       initSecurityStore(new RedisSecurityStore(redisClient as never));
-      console.log("Redis security store initialized");
+      app.log.info("Redis security store initialized");
     } catch (err) {
       console.warn("Failed to initialize Redis security store, using in-memory fallback:", err);
     }
@@ -292,7 +292,7 @@ async function main() {
 
   try {
     await app.listen({ port, host });
-    console.log(`Switchboard Chat webhook server listening on ${host}:${port}`);
+    app.log.info(`Switchboard Chat webhook server listening on ${host}:${port}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
