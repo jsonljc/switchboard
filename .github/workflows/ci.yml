@@ -262,7 +262,7 @@ jobs:
           key: build-${{ github.sha }}
 
       - name: Architecture health check
-        run: npx tsx scripts/arch-check.ts
+        run: pnpm dlx tsx scripts/arch-check.ts
 
       - name: Dependency boundary validation
         run: npx depcruise --config .dependency-cruiser.cjs packages/ cartridges/ apps/
