@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, beforeEach } from "vitest";
 import { PaymentsCartridge } from "../index.js";
 import { CartridgeTestHarness } from "@switchboard/cartridge-sdk";

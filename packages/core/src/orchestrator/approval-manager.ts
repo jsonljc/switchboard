@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { timingSafeEqual } from "node:crypto";
 import type { ActionEnvelope, RiskCategory } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
