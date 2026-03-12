@@ -620,6 +620,7 @@ model RevenueAccount {
   platforms       String[]  // "meta", "google", "tiktok"
   vertical        String    @default("commerce")
   active          Boolean   @default(true)
+  cadenceMinutes  Int       @default(60)
   lastCycleAt     DateTime?
   nextCycleAt     DateTime?
   createdAt       DateTime  @default(now())

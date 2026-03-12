@@ -25,6 +25,7 @@
   "overrides": [
     {
       "files": ["packages/schemas/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
@@ -42,6 +43,7 @@
     },
     {
       "files": ["packages/cartridge-sdk/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
@@ -79,6 +81,7 @@
     },
     {
       "files": ["packages/db/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
@@ -136,6 +139,7 @@
     },
     {
       "files": ["packages/core/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [
@@ -169,6 +173,7 @@
     },
     {
       "files": ["cartridges/*/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "error",
         "no-restricted-imports": [

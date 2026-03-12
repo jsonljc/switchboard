@@ -111,7 +111,7 @@ export async function buildDiagnosticContext(
 function hasSubEntitySupport(client: PlatformClient): client is PlatformClient & {
   fetchSubEntityBreakdowns: NonNullable<PlatformClient["fetchSubEntityBreakdowns"]>;
 } {
-  return typeof (client as any).fetchSubEntityBreakdowns === "function";
+  return typeof client.fetchSubEntityBreakdowns === "function";
 }
 
 /**

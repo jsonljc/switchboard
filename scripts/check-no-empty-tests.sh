@@ -9,11 +9,15 @@ set -euo pipefail
 exit_code=0
 dirs=()
 
+# Packages excluded from the test requirement (scaffolding tools, etc.)
+EXCLUDED="create-switchboard-cartridge"
+
 # Collect all package directories
 for base in packages cartridges apps; do
   if [ -d "$base" ]; then
     for pkg in "$base"/*/; do
-      if [ -d "${pkg}src" ]; then
+      pkg_name=$(basename "$pkg")
+      if [ -d "${pkg}src" ] && [[ ! " $EXCLUDED " =~ " $pkg_name " ]]; then
         dirs+=("$pkg")
       fi
     done
