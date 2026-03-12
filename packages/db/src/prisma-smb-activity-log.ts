@@ -1,5 +1,10 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
-import type { ActivityLogStorage, ActivityLogEntry, ActivityLogQuery } from "@switchboard/core";
+import type {
+  ActivityLogStorage,
+  ActivityLogEntry,
+  ActivityLogQuery,
+  ActivityResult,
+} from "@switchboard/core";
 
 export class PrismaSmbActivityLogStorage implements ActivityLogStorage {
   constructor(private prisma: PrismaClient) {}
@@ -48,9 +53,9 @@ export class PrismaSmbActivityLogStorage implements ActivityLogStorage {
       id: row.id,
       timestamp: row.timestamp,
       actorId: row.actorId,
-      actorType: row.actorType,
+      actorType: row.actorType as ActivityLogEntry["actorType"],
       actionType: row.actionType,
-      result: row.result,
+      result: row.result as ActivityResult,
       amount: row.amount,
       summary: row.summary,
       snapshot: row.snapshot as Record<string, unknown>,
