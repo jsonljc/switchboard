@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { randomUUID } from "node:crypto";
 import { LLMInterpreter } from "../interpreter/llm-base.js";
 import type { LLMConfig, LLMResponse } from "../interpreter/llm-base.js";

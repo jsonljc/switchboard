@@ -228,13 +228,6 @@
           }
         ]
       }
-    },
-    {
-      "files": ["apps/*/src/**/*.ts"],
-      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
-      "rules": {
-        "@typescript-eslint/no-explicit-any": "error"
-      }
     }
   ]
 }

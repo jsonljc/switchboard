@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, beforeEach } from "vitest";
 import { LifecycleOrchestrator } from "../orchestrator/lifecycle.js";
 import { createInMemoryStorage } from "../storage/index.js";
