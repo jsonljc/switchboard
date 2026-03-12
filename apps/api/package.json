@@ -33,7 +33,7 @@
     "@switchboard/schemas": "workspace:*",
     "bullmq": "^5.71.0",
     "cron-parser": "^4.9.0",
-    "fastify": "^5.2.0",
+    "fastify": "^5.8.2",
     "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.0",
     "pino": "^9.0.0",
