@@ -1,11 +1,16 @@
-import type { PrismaClient } from "@prisma/client";
-import type { ActivityLogStorage, ActivityLogEntry, ActivityLogQuery } from "@switchboard/core";
+import type { PrismaClient, Prisma } from "@prisma/client";
+import type {
+  ActivityLogStorage,
+  ActivityLogEntry,
+  ActivityLogQuery,
+  ActivityResult,
+} from "@switchboard/core";
 
 export class PrismaSmbActivityLogStorage implements ActivityLogStorage {
   constructor(private prisma: PrismaClient) {}
 
   async append(entry: ActivityLogEntry): Promise<void> {
-    await (this.prisma as any).smbActivityLogEntry.create({
+    await this.prisma.smbActivityLogEntry.create({
       data: {
         id: entry.id,
         timestamp: entry.timestamp,
@@ -15,7 +20,7 @@ export class PrismaSmbActivityLogStorage implements ActivityLogStorage {
         result: entry.result,
         amount: entry.amount,
         summary: entry.summary,
-        snapshot: entry.snapshot as any,
+        snapshot: entry.snapshot as Prisma.InputJsonValue,
         envelopeId: entry.envelopeId,
         organizationId: entry.organizationId,
         redactionApplied: entry.redactionApplied,
@@ -25,34 +30,32 @@ export class PrismaSmbActivityLogStorage implements ActivityLogStorage {
   }
 
   async query(filter: ActivityLogQuery): Promise<ActivityLogEntry[]> {
-    const where: any = {
-      organizationId: filter.organizationId,
-    };
-
-    if (filter.actorId) where.actorId = filter.actorId;
-    if (filter.actionType) where.actionType = filter.actionType;
-    if (filter.result) where.result = filter.result;
-    if (filter.envelopeId) where.envelopeId = filter.envelopeId;
-    if (filter.after || filter.before) {
-      where.timestamp = {};
-      if (filter.after) where.timestamp.gte = filter.after;
-      if (filter.before) where.timestamp.lt = filter.before;
-    }
-
-    const rows = await (this.prisma as any).smbActivityLogEntry.findMany({
-      where,
+    const rows = await this.prisma.smbActivityLogEntry.findMany({
+      where: {
+        organizationId: filter.organizationId,
+        ...(filter.actorId ? { actorId: filter.actorId } : {}),
+        ...(filter.actionType ? { actionType: filter.actionType } : {}),
+        ...(filter.result ? { result: filter.result } : {}),
+        ...(filter.envelopeId ? { envelopeId: filter.envelopeId } : {}),
+        ...((filter.after || filter.before) && {
+          timestamp: {
+            ...(filter.after ? { gte: filter.after } : {}),
+            ...(filter.before ? { lt: filter.before } : {}),
+          },
+        }),
+      },
       orderBy: { timestamp: "desc" },
       skip: filter.offset ?? 0,
       take: filter.limit ?? 50,
     });
 
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
       actorId: row.actorId,
-      actorType: row.actorType,
+      actorType: row.actorType as ActivityLogEntry["actorType"],
       actionType: row.actionType,
-      result: row.result,
+      result: row.result as ActivityResult,
       amount: row.amount,
       summary: row.summary,
       snapshot: row.snapshot as Record<string, unknown>,

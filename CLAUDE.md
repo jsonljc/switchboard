@@ -110,11 +110,62 @@ See `.env.example` for the full list. Key variables:
 
 Never commit `.env` files or secrets to the repository.
 
+## Architecture Enforcement
+
+### File Size Limits
+
+- **Warn** when a file exceeds **400 lines** (excluding blanks and comments)
+- **Never** create or allow a file to grow past **600 lines** — split it first
+- When modifying a file, check its line count; if it exceeds 400 lines after the change, suggest splitting
+
+### New Module Checklist
+
+Every new `.ts` source file (non-test, non-index, non-types) **must** have:
+- A corresponding `__tests__/<name>.test.ts` test file
+- Proper layer placement (utility in core, domain logic in cartridge, types in schemas)
+- No `any` — use proper types or `unknown`
+- `.js` extensions on all relative imports
+
+### New Cartridge Checklist
+
+When creating a new cartridge:
+- Verify it does **not** import from `@switchboard/db` or any `apps/*` package
+- Verify it does **not** import from other cartridges
+- Ensure it has a `manifest.ts` and `defaults/guardrails.ts`
+- Ensure it has at least one test file
+- Verify it is registered in at least one app (`apps/api` or `apps/mcp-server`)
+- Verify the `Dockerfile` includes it (base stage `COPY` + production stage `COPY --from=build`)
+- The `.dependency-cruiser.cjs` rules auto-apply — no manual config updates needed
+
+### Refactoring Principles
+
+- **No premature abstractions**: don't create helpers/utilities for things used in only 1 place
+- **Check for existing utils** before creating new ones — search `cartridge-sdk`, `core`, and `schemas` first
+- **No grab-bag utils.ts files**: every extracted file must have a single clear responsibility
+- If a refactor creates more than 3 new files, justify why
+- If it creates a new package, justify why it can't be a directory in an existing package
+
+### Barrel File Hygiene
+
+- When adding exports to an `index.ts` barrel file, flag if total exports exceed **40 symbols**
+- Prefer selective re-exports over `export *`
+
+### Dependency Boundaries (enforced by dependency-cruiser)
+
+These rules are automatically enforced at pre-commit and in CI via `dependency-cruiser`:
+- `schemas` → no `@switchboard/*` imports
+- `cartridge-sdk` → only `@switchboard/schemas`
+- `core` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`
+- `db` → only `@switchboard/schemas`, `@switchboard/core`
+- `cartridges/*` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`, `@switchboard/core`
+- No cartridge-to-cartridge imports
+- No circular dependencies
+
 ## Pre-Commit Hooks
 
 Husky runs these hooks automatically:
 
-- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files)
+- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files), then dependency-cruiser boundary validation
 - **commit-msg**: commitlint (validates conventional commit format)
 
 ## Branch Protection

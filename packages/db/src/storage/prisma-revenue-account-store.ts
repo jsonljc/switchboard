@@ -30,12 +30,14 @@ export class PrismaRevenueAccountStore {
         organizationId: account.organizationId,
         accountId: account.accountId,
         active: account.active,
+        cadenceMinutes: account.cadenceMinutes,
         nextCycleAt: new Date(account.nextCycleAt),
         createdAt: new Date(account.createdAt),
         updatedAt: new Date(account.updatedAt),
       },
       update: {
         active: account.active,
+        cadenceMinutes: account.cadenceMinutes,
         nextCycleAt: new Date(account.nextCycleAt),
         updatedAt: new Date(account.updatedAt),
       },
@@ -71,6 +73,7 @@ function toAccountRecord(row: {
   organizationId: string;
   accountId: string;
   active: boolean;
+  cadenceMinutes: number;
   nextCycleAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -79,7 +82,7 @@ function toAccountRecord(row: {
     organizationId: row.organizationId,
     accountId: row.accountId,
     active: row.active,
-    cadenceMinutes: 60, // Default; Prisma model doesn't store this directly
+    cadenceMinutes: row.cadenceMinutes,
     nextCycleAt: row.nextCycleAt?.toISOString() ?? new Date().toISOString(),
     lastCycleId: null, // Prisma model uses lastCycleAt instead
     createdAt: row.createdAt.toISOString(),

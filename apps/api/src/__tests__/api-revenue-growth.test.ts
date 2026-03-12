@@ -235,12 +235,20 @@ describe("Revenue Growth API", () => {
 
   describe("POST /interventions/:id/defer", () => {
     it("defers intervention with reason", async () => {
-      const mockCartridge = {
-        execute: vi.fn().mockResolvedValue({
+      mockCartridges.get.mockReturnValue({});
+      vi.mocked(executeGovernedSystemAction).mockResolvedValue({
+        outcome: "executed",
+        executionResult: {
+          success: true,
           summary: "Intervention int_1 deferred: Budget not ready",
-        }),
-      };
-      mockCartridges.get.mockReturnValue(mockCartridge);
+          externalRefs: {},
+          rollbackAvailable: false,
+          partialFailures: [],
+          durationMs: 10,
+          undoRecipe: null,
+        },
+        envelopeId: "env_4",
+      });
 
       const res = await app.inject({
         method: "POST",

@@ -29,6 +29,8 @@ const SCORER_BY_CONSTRAINT: Record<
   FUNNEL: scoreFunnelLeakage,
   SATURATION: scoreHeadroom,
   SALES: scoreSalesProcess,
+  // CAPACITY uses headroom scorer (capacity is about scaling potential)
+  CAPACITY: scoreHeadroom,
 };
 
 const IMPROVEMENT_THRESHOLD = 10;

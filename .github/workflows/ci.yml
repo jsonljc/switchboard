@@ -184,6 +184,9 @@ jobs:
         with:
           json-summary-path: coverage/coverage-summary.json
 
+      - name: Check for untested packages
+        run: bash scripts/check-no-empty-tests.sh
+
   secrets:
     needs: setup
     runs-on: ubuntu-latest
