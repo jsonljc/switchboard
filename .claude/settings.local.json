@@ -40,7 +40,9 @@
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --write cartridges/revenue-growth/src/action-engine/engine.ts cartridges/revenue-growth/src/cartridge/index.ts cartridges/revenue-growth/src/scorers/funnel-leakage.ts cartridges/revenue-growth/src/scorers/headroom.ts cartridges/revenue-growth/src/scorers/sales-process.ts 2>&1)",
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --write cartridges/revenue-growth/src/agent/revenue-growth-agent.ts cartridges/revenue-growth/src/digest/__tests__/generator.test.ts cartridges/revenue-growth/src/outcome/__tests__/tracker.test.ts cartridges/revenue-growth/src/outcome/calibrator.ts cartridges/revenue-growth/src/outcome/tracker.ts cartridges/revenue-growth/src/stores/__tests__/in-memory.test.ts 2>&1)",
       "Bash(ln:*)",
-      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --check \"cartridges/revenue-growth/src/**/*.ts\" 2>&1)"
+      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --check \"cartridges/revenue-growth/src/**/*.ts\" 2>&1)",
+      "Bash(gh api:*)",
+      "Bash(curl:*)"
     ]
   }
 }
