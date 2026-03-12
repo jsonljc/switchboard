@@ -42,7 +42,15 @@
       "Bash(ln:*)",
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && npx prettier --check \"cartridges/revenue-growth/src/**/*.ts\" 2>&1)",
       "Bash(gh api:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pnpm:*)",
+      "Bash(./node_modules/.bin/pnpm:*)",
+      "Bash(corepack enable && corepack prepare pnpm@9.15.4 --activate 2>&1; which pnpm 2>&1 || corepack pnpm --version 2>&1)",
+      "Bash(grep:*)",
+      "Bash(find /Users/jasonljc/switchboard -maxdepth 1 -name \"turbo.json\" | xargs cat 2>/dev/null)",
+      "Bash(find:*)",
+      "Bash(time npx depcruise:*)",
+      "Bash(/usr/local/lib/node_modules/corepack/shims/pnpm install:*)"
     ]
   }
 }

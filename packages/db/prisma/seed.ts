@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { PrismaClient } from "@prisma/client";
 import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";

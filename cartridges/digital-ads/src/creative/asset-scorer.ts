@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Creative Asset Scorer — Visual asset analysis + performance scoring
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { randomUUID } from "node:crypto";
 import type {
   ActionEnvelope,

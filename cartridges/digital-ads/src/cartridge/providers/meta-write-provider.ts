@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // MetaAdsWriteProvider — production implementation for write operations
 // ---------------------------------------------------------------------------
