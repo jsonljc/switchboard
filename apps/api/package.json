@@ -31,7 +31,7 @@
     "@switchboard/db": "workspace:*",
     "@switchboard/revenue-growth": "workspace:*",
     "@switchboard/schemas": "workspace:*",
-    "bullmq": "^5.34.0",
+    "bullmq": "^5.71.0",
     "cron-parser": "^4.9.0",
     "fastify": "^5.2.0",
     "fastify-plugin": "^5.1.0",
