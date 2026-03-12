@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import {
