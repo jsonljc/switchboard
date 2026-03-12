@@ -1,1 +1,2 @@
+export PATH="/usr/local/lib/node_modules/corepack/shims:$PATH"
 pnpm lint-staged
