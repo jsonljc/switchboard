@@ -103,7 +103,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
                 lastName: { type: "string" },
                 email: { type: "string" },
                 phone: { type: "string" },
-                treatmentInterest: { type: "string" },
+                serviceInterest: { type: "string" },
                 message: { type: "string" },
               },
             },
@@ -122,7 +122,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
           lastName?: string;
           email?: string;
           phone?: string;
-          treatmentInterest?: string;
+          serviceInterest?: string;
           message?: string;
         };
         // Facebook-specific fields
@@ -151,7 +151,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
           leadId,
           source: submission.source,
           email: submission.fields.email,
-          treatmentInterest: submission.fields.treatmentInterest,
+          serviceInterest: submission.fields.serviceInterest,
         },
         "Received form submission",
       );
@@ -395,7 +395,7 @@ async function handleFormSubmission(
       lastName?: string;
       email?: string;
       phone?: string;
-      treatmentInterest?: string;
+      serviceInterest?: string;
       message?: string;
     };
   },
@@ -416,7 +416,7 @@ async function handleFormSubmission(
             leadId,
             source: submission.source,
             formId: submission.formId,
-            treatmentInterest: submission.fields.treatmentInterest,
+            serviceInterest: submission.fields.serviceInterest,
             submittedAt: submission.submittedAt ?? new Date().toISOString(),
           },
         },
@@ -438,7 +438,7 @@ async function handleFormSubmission(
           source: submission.source,
           firstName: submission.fields.firstName,
           phone: submission.fields.phone,
-          treatmentInterest: submission.fields.treatmentInterest,
+          serviceInterest: submission.fields.serviceInterest,
         },
         systemContext(),
       );

@@ -24,10 +24,10 @@ describe("matchObjection", () => {
     expect(result!.category).toBe("trust");
   });
 
-  it("should match fear objections", () => {
-    const result = matchObjection("I'm afraid it will hurt, needles scare me");
+  it("should match comfort objections", () => {
+    const result = matchObjection("I'm nervous and anxious about this");
     expect(result).not.toBeNull();
-    expect(result!.category).toBe("fear");
+    expect(result!.category).toBe("comfort");
   });
 
   it("should match results objections", () => {

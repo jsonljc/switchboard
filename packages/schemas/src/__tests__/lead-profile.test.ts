@@ -4,7 +4,7 @@ import { LeadProfileSchema } from "../lead-profile.js";
 describe("LeadProfileSchema", () => {
   it("validates a complete lead profile", () => {
     const profile = {
-      treatmentInterest: "Teeth Whitening",
+      serviceInterest: "Teeth Whitening",
       timeline: "immediate",
       priceReadiness: "ready",
       objectionsRaised: [{ category: "price", raisedAt: "2026-03-13T10:00:00Z", resolvedAt: null }],
@@ -15,7 +15,7 @@ describe("LeadProfileSchema", () => {
     };
 
     const result = LeadProfileSchema.parse(profile);
-    expect(result.treatmentInterest).toBe("Teeth Whitening");
+    expect(result.serviceInterest).toBe("Teeth Whitening");
     expect(result.timeline).toBe("immediate");
     expect(result.objectionsRaised).toHaveLength(1);
   });
@@ -23,7 +23,7 @@ describe("LeadProfileSchema", () => {
   it("validates a minimal lead profile", () => {
     const profile = {};
     const result = LeadProfileSchema.parse(profile);
-    expect(result.treatmentInterest).toBeUndefined();
+    expect(result.serviceInterest).toBeUndefined();
     expect(result.timeline).toBeUndefined();
   });
 

@@ -10,7 +10,7 @@ const simpleFlow: ConversationFlowDefinition = {
   id: "test-flow",
   name: "Test Flow",
   description: "A test flow",
-  variables: ["contactName", "clinicName"],
+  variables: ["contactName", "businessName"],
   steps: [
     { id: "greeting", type: "message", template: "Hello {{contactName}}!" },
     {

@@ -57,7 +57,7 @@ export class CreativeVariantGenerator {
     targetAudience: string;
     angles?: string[];
     variantsPerAngle?: number;
-    clinicName?: string;
+    businessName?: string;
     complianceRules?: string[];
   }): Promise<CreativeVariant[]> {
     const angles = params.angles
@@ -93,7 +93,7 @@ export class CreativeVariantGenerator {
     params: {
       productDescription: string;
       targetAudience: string;
-      clinicName?: string;
+      businessName?: string;
       complianceRules?: string[];
     },
     angle: CreativeAngle,
@@ -103,11 +103,11 @@ export class CreativeVariantGenerator {
       ? `\nCompliance rules:\n${params.complianceRules.map((r) => `- ${r}`).join("\n")}`
       : "\nCompliance: No superlative claims, no guaranteed results, no before/after imagery references.";
 
-    return `Generate ${count} ad creative variants for a healthcare/aesthetics clinic.
+    return `Generate ${count} ad creative variants for a service business.
 
 Product/Service: ${params.productDescription}
 Target Audience: ${params.targetAudience}
-Clinic Name: ${params.clinicName ?? "[Clinic Name]"}
+Business Name: ${params.businessName ?? "[Business Name]"}
 Creative Angle: ${angle.name} — ${angle.description}
 Tone Keywords: ${angle.toneKeywords.join(", ")}
 ${complianceBlock}

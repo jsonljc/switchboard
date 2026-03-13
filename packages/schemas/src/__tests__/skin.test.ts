@@ -29,7 +29,7 @@ function validClinicSkin() {
       interpreterSystemPrompt: "You are a dental clinic assistant.",
       terminology: { campaign: "treatment plan" },
       replyTemplates: {
-        greeting: "Welcome to {{clinicName}}!",
+        greeting: "Welcome to {{businessName}}!",
       },
     },
     playbooks: [

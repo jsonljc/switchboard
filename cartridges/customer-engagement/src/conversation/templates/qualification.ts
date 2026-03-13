@@ -8,18 +8,18 @@ export const qualificationFlow: ConversationFlowDefinition = {
   id: "qualification",
   name: "Lead Qualification",
   description: "Qualifies incoming leads through structured conversation.",
-  variables: ["contactName", "serviceInterest", "source", "clinicName"],
+  variables: ["contactName", "serviceInterest", "source", "businessName"],
   steps: [
     {
       id: "greeting",
       type: "message",
       template:
-        "Hi {{contactName}}! Thank you for your interest in {{serviceInterest}} at {{clinicName}}. I'd love to help you get started.",
+        "Hi {{contactName}}! Thank you for your interest in {{serviceInterest}} at {{businessName}}. I'd love to help you get started.",
     },
     {
       id: "timeline_question",
       type: "question",
-      template: "When are you looking to start treatment?",
+      template: "When are you looking to get started?",
       options: ["As soon as possible", "Within a month", "Just exploring options"],
     },
     {
@@ -31,8 +31,8 @@ export const qualificationFlow: ConversationFlowDefinition = {
     {
       id: "insurance_question",
       type: "question",
-      template: "Will you be using insurance for this treatment?",
-      options: ["Yes", "No", "Not sure"],
+      template: "Do you have any questions about pricing or payment options?",
+      options: ["Yes, tell me more", "No, I'm ready to proceed", "I'd like to discuss options"],
     },
     {
       id: "score_lead",
