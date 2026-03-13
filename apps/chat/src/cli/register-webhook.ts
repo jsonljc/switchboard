@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     console.error("Failed:", result.description);
     process.exit(1);
   }
-  console.log("Webhook registered:", url);
+  console.warn("Webhook registered:", url);
 }
 
 main();

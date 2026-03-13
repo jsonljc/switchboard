@@ -134,6 +134,20 @@ export const LLMContextSchema = z.object({
 });
 export type LLMContext = z.infer<typeof LLMContextSchema>;
 
+export const FAQRecordSchema = z.object({
+  /** Canonical question text */
+  question: z.string().min(1),
+  /** Alternative phrasings to match against */
+  variants: z.array(z.string()).optional(),
+  /** Approved answer text */
+  answer: z.string().min(1),
+  /** Topic domain (e.g. "pricing", "procedure", "aftercare") */
+  topic: z.string().optional(),
+  /** Whether this FAQ contains sensitive content requiring careful handling */
+  sensitive: z.boolean().optional(),
+});
+export type FAQRecord = z.infer<typeof FAQRecordSchema>;
+
 // ---------------------------------------------------------------------------
 // Root Schema
 // ---------------------------------------------------------------------------
@@ -156,6 +170,7 @@ export const BusinessProfileSchema = z.object({
   reviewPlatforms: z.array(z.string()).optional(),
   hours: z.record(z.string(), HoursEntrySchema).optional(),
   policies: z.array(PolicyEntrySchema).optional(),
+  faqs: z.array(FAQRecordSchema).optional(),
   llmContext: LLMContextSchema.optional(),
 });
 export type BusinessProfile = z.infer<typeof BusinessProfileSchema>;

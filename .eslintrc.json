@@ -17,7 +17,7 @@
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
     ],
     "@typescript-eslint/no-explicit-any": "warn",
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-console": ["error", { "allow": ["warn", "error"] }],
     "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }],
     "complexity": ["warn", 15]
   },
@@ -223,6 +223,35 @@
               {
                 "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
                 "message": "Cartridges cannot import from other cartridges."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/*/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/api", "@switchboard/api/*"],
+                "message": "Apps cannot import from other apps."
+              },
+              {
+                "group": ["@switchboard/chat", "@switchboard/chat/*"],
+                "message": "Apps cannot import from other apps."
+              },
+              {
+                "group": ["@switchboard/dashboard", "@switchboard/dashboard/*"],
+                "message": "Apps cannot import from other apps."
+              },
+              {
+                "group": ["@switchboard/mcp-server", "@switchboard/mcp-server/*"],
+                "message": "Apps cannot import from other apps."
               }
             ]
           }

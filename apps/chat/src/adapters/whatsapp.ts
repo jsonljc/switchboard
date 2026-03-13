@@ -48,6 +48,18 @@ class WhatsAppApiError extends Error {
   }
 }
 
+/** WhatsApp 24-hour conversation window duration in milliseconds. */
+const WHATSAPP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Check whether we are inside the WhatsApp 24-hour conversation window.
+ * Outside the window, only pre-approved template messages may be sent.
+ */
+export function isWithinWhatsAppWindow(lastInboundAt: Date | null): boolean {
+  if (!lastInboundAt) return false;
+  return Date.now() - lastInboundAt.getTime() < WHATSAPP_WINDOW_MS;
+}
+
 export class WhatsAppAdapter implements ChannelAdapter {
   readonly channel = "whatsapp" as const;
   private token: string;
@@ -100,7 +112,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
     "hub.verify_token"?: string;
     "hub.challenge"?: string;
   }): { status: number; body: string } {
-    if (query["hub.mode"] === "subscribe" && query["hub.verify_token"] === this.verifyToken) {
+    const providedToken = query["hub.verify_token"] ?? "";
+    const tokenMatch =
+      this.verifyToken !== null &&
+      providedToken.length === this.verifyToken.length &&
+      timingSafeEqual(Buffer.from(providedToken), Buffer.from(this.verifyToken));
+    if (query["hub.mode"] === "subscribe" && tokenMatch) {
       return { status: 200, body: query["hub.challenge"] ?? "" };
     }
     return { status: 403, body: "Verification failed" };
@@ -229,6 +246,34 @@ export class WhatsAppAdapter implements ChannelAdapter {
       to: threadId,
       type: "text",
       text: { body: text },
+    });
+  }
+
+  /**
+   * Send a pre-approved WhatsApp template message.
+   * Required for messages outside the 24-hour conversation window.
+   */
+  async sendTemplateMessage(
+    threadId: string,
+    templateName: string,
+    languageCode: string,
+    components?: Array<{
+      type: "body" | "header" | "button";
+      parameters: Array<{ type: "text"; text: string }>;
+    }>,
+  ): Promise<void> {
+    const template: Record<string, unknown> = {
+      name: templateName,
+      language: { code: languageCode },
+    };
+    if (components && components.length > 0) {
+      template["components"] = components;
+    }
+    await this.sendMessage(threadId, {
+      messaging_product: "whatsapp",
+      to: threadId,
+      type: "template",
+      template,
     });
   }
 

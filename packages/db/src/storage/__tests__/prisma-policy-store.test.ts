@@ -266,6 +266,12 @@ describe("PrismaPolicyStore", () => {
     });
 
     it("invalidates cache on save", async () => {
+      // First, populate cache by calling listActive so knownCacheKeys is non-empty
+      prisma.policy.findMany.mockResolvedValue([]);
+      redis.get.mockResolvedValue(null);
+      redis.set.mockResolvedValue("OK");
+      await cachedStore.listActive();
+
       prisma.policy.upsert.mockResolvedValue({});
       redis.del.mockResolvedValue(1);
 

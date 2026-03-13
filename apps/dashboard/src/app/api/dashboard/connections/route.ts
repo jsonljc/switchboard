@@ -8,10 +8,11 @@ export async function GET() {
     const client = await getApiClient();
     const data = await client.listConnections();
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
@@ -23,10 +24,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = await client.createConnection(body);
     return NextResponse.json(data, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }

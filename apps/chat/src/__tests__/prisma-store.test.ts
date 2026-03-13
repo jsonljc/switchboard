@@ -91,6 +91,7 @@ describe("PrismaConversationStore integration", () => {
       pendingApprovalIds: [],
       clarificationQuestion: null,
       firstReplyAt: null,
+      lastInboundAt: null,
       messages: [
         { role: "user" as const, text: "hello", timestamp: new Date("2024-01-01") },
         { role: "assistant" as const, text: "hi", timestamp: new Date("2024-01-01") },
@@ -98,6 +99,7 @@ describe("PrismaConversationStore integration", () => {
       lastActivityAt: new Date(),
       expiresAt: new Date(Date.now() + 86400000),
       crmContactId: null,
+      leadProfile: null,
     };
 
     await store.save(state);

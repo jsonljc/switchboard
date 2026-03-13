@@ -187,6 +187,80 @@ describe("Inbound Webhooks API", () => {
     });
   });
 
+  describe("POST /api/inbound/booking-confirmed", () => {
+    it("receives a booking confirmation", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_abc123",
+          source: "calendly",
+          service: "Teeth Whitening",
+          contactExternalId: "15551234567",
+          scheduledAt: "2026-03-20T14:00:00Z",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().received).toBe(true);
+      expect(res.json().bookingId).toBe("cal_abc123");
+    });
+
+    it("creates CRM deal on booking confirmation", async () => {
+      const mockCartridge = {
+        execute: vi.fn().mockResolvedValue({ data: {} }),
+      };
+      mockCartridges.get.mockReturnValue(mockCartridge);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_deal1",
+          source: "calendly",
+          service: "Consultation",
+          contactExternalId: "15551234567",
+          organizationId: "org_clinic1",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockCartridge.execute).toHaveBeenCalledWith(
+        "crm.deal.create",
+        expect.objectContaining({
+          name: "Booking: Consultation",
+          stage: "booked",
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it("emits booking conversion event when conversionBus is available", async () => {
+      const mockEmit = vi.fn();
+      (app as unknown as Record<string, unknown>)["conversionBus"] = { emit: mockEmit };
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_conv1",
+          source: "setmore",
+          contactExternalId: "15559876543",
+          organizationId: "org_clinic1",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "booked",
+          contactId: "15559876543",
+          organizationId: "org_clinic1",
+        }),
+      );
+    });
+  });
+
   describe("GET /api/inbound/forms/verify", () => {
     it("responds to Facebook verification challenge", async () => {
       const res = await app.inject({

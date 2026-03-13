@@ -54,7 +54,7 @@ export class RuntimeRegistry {
       }
     }
 
-    console.log(`[RuntimeRegistry] Loaded ${this.runtimes.size} managed runtimes`);
+    console.warn(`[RuntimeRegistry] Loaded ${this.runtimes.size} managed runtimes`);
   }
 
   async provision(managedChannel: ManagedChannelRecord, prisma: PrismaClient): Promise<void> {

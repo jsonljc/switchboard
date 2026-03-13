@@ -21,6 +21,15 @@ function formatCurrency(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = seconds / 60;
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  return `${(minutes / 60).toFixed(1)}h`;
+}
+
 function buildNarrative(trend: Array<{ date: string; leads: number; bookings: number }>): string {
   if (trend.length === 0) return "No data yet for this period.";
   const totalLeads = trend.reduce((sum, d) => sum + d.leads, 0);
@@ -141,8 +150,8 @@ export default function ResultsPage() {
           <Skeleton className="h-6 w-20" />
           <Skeleton className="h-4 w-48" />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="space-y-2">
               <Skeleton className="h-3 w-16" />
               <Skeleton className="h-8 w-20" />
@@ -167,6 +176,7 @@ export default function ResultsPage() {
   const bookings30 = outcomes?.bookings30d ?? 0;
   const costPerLead = outcomes?.costPerLead30d ?? null;
   const spend30 = spend?.last30Days ?? 0;
+  const stl = data?.speedToLead;
 
   // Quality badge for costPerLead
   const cpLBadge =
@@ -189,7 +199,7 @@ export default function ResultsPage() {
       {/* Scorecard — outcomes first, cost second */}
       <section>
         <p className="section-label mb-4">This month</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-x-8 gap-y-6">
           <ScorecardTile label="Leads" value={leads30.toString()} sub="people reached" />
           <ScorecardTile label="Booked" value={bookings30.toString()} sub="appointments set" />
           <ScorecardTile
@@ -198,6 +208,33 @@ export default function ResultsPage() {
             badge={cpLBadge?.label}
             badgeVariant={cpLBadge?.variant}
             sub="cost to get attention"
+          />
+          <ScorecardTile
+            label="Speed to lead"
+            value={stl?.averageMs != null ? formatDuration(stl.averageMs) : "—"}
+            badge={
+              stl?.averageMs != null
+                ? stl.averageMs < 30_000
+                  ? "Fast"
+                  : stl.averageMs < 120_000
+                    ? "OK"
+                    : "Slow"
+                : undefined
+            }
+            badgeVariant={
+              stl?.averageMs != null
+                ? stl.averageMs < 30_000
+                  ? "positive"
+                  : stl.averageMs < 120_000
+                    ? "muted"
+                    : "caution"
+                : undefined
+            }
+            sub={
+              stl?.p50Ms != null && stl?.p95Ms != null
+                ? `p50 ${formatDuration(stl.p50Ms)} · p95 ${formatDuration(stl.p95Ms)}`
+                : "first reply time"
+            }
           />
           <ScorecardTile
             label="Spent"
@@ -227,6 +264,15 @@ export default function ResultsPage() {
               {costPerLead !== null
                 ? `$${costPerLead.toFixed(2)} — that's what it cost to get one person's contact info. Under $${BENCHMARK_COST_PER_LEAD} is strong for most service businesses.`
                 : "Not enough data yet — cost per lead will appear once your campaigns have run."}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-surface p-5">
+            <p className="text-[13.5px] text-foreground font-medium mb-1">Speed to lead</p>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              {stl?.averageMs != null
+                ? `${formatDuration(stl.averageMs)} average first response time across ${stl.sampleSize} conversations. Under 30 seconds is strong — leads are 21× more likely to convert when contacted within 5 minutes.`
+                : "Not enough data yet — speed to lead will appear once conversations are tracked."}
             </p>
           </div>
 

@@ -9,6 +9,118 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./principals": {
+      "types": "./dist/principals.d.ts",
+      "import": "./dist/principals.js"
+    },
+    "./risk": {
+      "types": "./dist/risk.d.ts",
+      "import": "./dist/risk.js"
+    },
+    "./governance-profile": {
+      "types": "./dist/governance-profile.d.ts",
+      "import": "./dist/governance-profile.js"
+    },
+    "./identity-spec": {
+      "types": "./dist/identity-spec.d.ts",
+      "import": "./dist/identity-spec.js"
+    },
+    "./role-overlay": {
+      "types": "./dist/role-overlay.d.ts",
+      "import": "./dist/role-overlay.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "import": "./dist/policy.js"
+    },
+    "./action": {
+      "types": "./dist/action.d.ts",
+      "import": "./dist/action.js"
+    },
+    "./cartridge": {
+      "types": "./dist/cartridge.d.ts",
+      "import": "./dist/cartridge.js"
+    },
+    "./audit": {
+      "types": "./dist/audit.d.ts",
+      "import": "./dist/audit.js"
+    },
+    "./chat": {
+      "types": "./dist/chat.d.ts",
+      "import": "./dist/chat.js"
+    },
+    "./envelope": {
+      "types": "./dist/envelope.d.ts",
+      "import": "./dist/envelope.js"
+    },
+    "./action-plan": {
+      "types": "./dist/action-plan.d.ts",
+      "import": "./dist/action-plan.js"
+    },
+    "./decision-trace": {
+      "types": "./dist/decision-trace.d.ts",
+      "import": "./dist/decision-trace.js"
+    },
+    "./resolver": {
+      "types": "./dist/resolver.d.ts",
+      "import": "./dist/resolver.js"
+    },
+    "./undo": {
+      "types": "./dist/undo.d.ts",
+      "import": "./dist/undo.js"
+    },
+    "./competence": {
+      "types": "./dist/competence.d.ts",
+      "import": "./dist/competence.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./organization-tier": {
+      "types": "./dist/organization-tier.d.ts",
+      "import": "./dist/organization-tier.js"
+    },
+    "./data-flow": {
+      "types": "./dist/data-flow.d.ts",
+      "import": "./dist/data-flow.js"
+    },
+    "./capability": {
+      "types": "./dist/capability.d.ts",
+      "import": "./dist/capability.js"
+    },
+    "./goal-brief": {
+      "types": "./dist/goal-brief.d.ts",
+      "import": "./dist/goal-brief.js"
+    },
+    "./crm-provider": {
+      "types": "./dist/crm-provider.d.ts",
+      "import": "./dist/crm-provider.js"
+    },
+    "./skin": {
+      "types": "./dist/skin.d.ts",
+      "import": "./dist/skin.js"
+    },
+    "./business-profile": {
+      "types": "./dist/business-profile.d.ts",
+      "import": "./dist/business-profile.js"
+    },
+    "./lead-profile": {
+      "types": "./dist/lead-profile.d.ts",
+      "import": "./dist/lead-profile.js"
+    },
+    "./campaign-plan": {
+      "types": "./dist/campaign-plan.d.ts",
+      "import": "./dist/campaign-plan.js"
+    },
+    "./ads-operator": {
+      "types": "./dist/ads-operator.d.ts",
+      "import": "./dist/ads-operator.js"
+    },
+    "./revenue-growth": {
+      "types": "./dist/revenue-growth.d.ts",
+      "import": "./dist/revenue-growth.js"
     }
   },
   "scripts": {

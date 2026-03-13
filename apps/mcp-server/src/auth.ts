@@ -2,7 +2,12 @@
  * MCP server authentication.
  * Maps API key to actor context (actorId + organizationId).
  * Fail-closed: rejects if no valid key is configured and we're not in dev mode.
+ *
+ * Keys are hashed on load and compared with timingSafeEqual to prevent
+ * timing side-channel attacks on key lookup.
  */
+
+import { createHash, timingSafeEqual } from "node:crypto";
 
 export interface McpAuthContext {
   actorId: string;
@@ -14,9 +19,15 @@ interface ApiKeyEntry {
   organizationId: string | null;
 }
 
+/** Hash an API key with SHA-256 for storage and comparison. Exported for testing. */
+export function hashKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
 /**
  * Load API key mappings from MCP_API_KEYS env var.
  * Format: "key:actorId:orgId" (orgId optional, comma-separated entries)
+ * Keys are hashed on load for timing-safe comparison.
  * Falls back to a default dev context when no keys are configured and NODE_ENV !== "production".
  */
 export function loadMcpApiKeys(): Map<string, ApiKeyEntry> {
@@ -33,13 +44,15 @@ export function loadMcpApiKeys(): Map<string, ApiKeyEntry> {
     const actorId = parts[1]?.trim();
     if (!key || !actorId) continue;
     const organizationId = parts[2]?.trim() || null;
-    out.set(key, { actorId, organizationId });
+    out.set(hashKey(key), { actorId, organizationId });
   }
   return out;
 }
 
 /**
  * Resolve auth context from an API key.
+ * Uses timing-safe comparison by hashing the provided key and comparing
+ * against pre-hashed stored keys.
  * In development mode (no keys configured), returns a default actor.
  */
 export function resolveAuth(
@@ -60,10 +73,16 @@ export function resolveAuth(
     throw new Error("Authentication required: no API key provided");
   }
 
-  const entry = keys.get(apiKey);
-  if (!entry) {
-    throw new Error("Invalid API key");
+  const candidateHash = hashKey(apiKey);
+
+  // Iterate all keys with timing-safe comparison to prevent timing leaks
+  for (const [storedHash, entry] of keys) {
+    const a = Buffer.from(candidateHash, "hex");
+    const b = Buffer.from(storedHash, "hex");
+    if (a.length === b.length && timingSafeEqual(a, b)) {
+      return { actorId: entry.actorId, organizationId: entry.organizationId };
+    }
   }
 
-  return { actorId: entry.actorId, organizationId: entry.organizationId };
+  throw new Error("Invalid API key");
 }

@@ -116,6 +116,10 @@ export type {
 export { qualificationFlow } from "./conversation/templates/qualification.js";
 export { bookingFlow } from "./conversation/templates/booking.js";
 
+// FAQ matcher
+export { matchFAQ, formatFAQResponse } from "./conversation/faq-matcher.js";
+export type { FAQMatchResult } from "./conversation/faq-matcher.js";
+
 // Cadence engine
 export { evaluateCadenceStep } from "./cadence/engine.js";
 export type { CadenceEvaluation } from "./cadence/engine.js";
@@ -127,6 +131,9 @@ export type {
   CadenceStep,
   CadenceStatus,
 } from "./cadence/types.js";
+
+// Medical claim scanning (reusable across interceptor + lead reply path)
+export { findMedicalClaims } from "./cartridge/interceptors/medical-claim-filter.js";
 
 // Agents
 export type { AgentModule, AgentType } from "./agents/types.js";

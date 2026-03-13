@@ -9,6 +9,16 @@ export default defineConfig({
     setupFiles: ["./src/test-setup.ts"],
     globals: true,
     css: false,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "json-summary", "html"],
+      thresholds: {
+        statements: 40,
+        branches: 35,
+        functions: 40,
+        lines: 40,
+      },
+    },
   },
   resolve: {
     alias: {

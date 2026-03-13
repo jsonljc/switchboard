@@ -10,6 +10,10 @@ import type {
   RouterResponse,
 } from "@switchboard/customer-engagement";
 import { handleProposeResult } from "./proposal-handler.js";
+import { getThread, setThread } from "../conversation/threads.js";
+import { transitionConversation } from "../conversation/state.js";
+import { startCadenceForContact } from "../jobs/cadence-worker.js";
+import type { CadenceInstance } from "@switchboard/customer-engagement";
 
 export async function handleLeadMessage(
   ctx: HandlerContext,
@@ -63,6 +67,43 @@ export async function handleLeadMessage(
     } catch (err) {
       console.error("[LeadBot] Action proposal error:", err);
     }
+  }
+
+  // Update lead profile from question answers
+  if (routerResponse.leadProfileUpdate) {
+    const conversation = await getThread(threadId);
+    if (conversation) {
+      const updated = transitionConversation(conversation, {
+        type: "update_lead_profile",
+        profile: routerResponse.leadProfileUpdate,
+      });
+      await setThread(updated);
+    }
+  }
+
+  // Start cadence when qualification flow completes
+  if (routerResponse.completed && routerResponse.variables) {
+    const leadScore = Number(routerResponse.variables["leadScore"] ?? 0);
+    const cadenceTemplateId = leadScore >= 50 ? "consultation-reminder" : "dormant-winback";
+
+    const instance: CadenceInstance = {
+      id: `cadence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      cadenceDefinitionId: cadenceTemplateId,
+      contactId: threadId,
+      organizationId: inbound.organizationId,
+      status: "active",
+      currentStepIndex: 0,
+      startedAt: new Date(),
+      nextExecutionAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      variables: {
+        contactName: routerResponse.variables["contactName"] ?? message.principalId,
+        contactPhone: message.principalId,
+        leadScore,
+      },
+      completedSteps: [],
+      skippedSteps: [],
+    };
+    startCadenceForContact(instance);
   }
 
   // Escalation notification

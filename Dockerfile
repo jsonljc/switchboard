@@ -23,7 +23,7 @@ COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
 COPY apps/dashboard/package.json apps/dashboard/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # ---- Build stage: compile TypeScript ----
 FROM base AS build
@@ -75,7 +75,9 @@ COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 EXPOSE 3000
 ENV NODE_ENV=production
@@ -124,7 +126,9 @@ COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 EXPOSE 3001
 ENV NODE_ENV=production
@@ -138,6 +142,8 @@ WORKDIR /app
 COPY --from=build /app/apps/dashboard/.next/standalone ./
 COPY --from=build /app/apps/dashboard/.next/static apps/dashboard/.next/static
 COPY --from=build /app/apps/dashboard/public apps/dashboard/public
+
+USER node
 
 EXPOSE 3002
 ENV NODE_ENV=production
@@ -183,7 +189,9 @@ COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth
 COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
 COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 ENV NODE_ENV=production
 CMD ["node", "apps/mcp-server/dist/main.js"]

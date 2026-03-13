@@ -63,7 +63,9 @@ export class PrismaConnectionStore {
     const row = await this.prisma.connection.findFirst({
       where: {
         serviceId,
-        ...(organizationId ? { organizationId } : {}),
+        // When no org is specified, only return global connections (null org)
+        // to prevent cross-org credential leakage
+        organizationId: organizationId ?? null,
       },
     });
     if (!row) return null;
@@ -126,6 +128,9 @@ function toConnectionRecord(row: {
     credentials = decryptCredentials(row.credentials);
   } else {
     // Legacy unencrypted JSON — decrypt will fail, treat as plain
+    console.warn(
+      `[connection-store] connection ${row.id} uses unencrypted legacy credentials — re-save to encrypt`,
+    );
     credentials = row.credentials as Record<string, unknown>;
   }
 

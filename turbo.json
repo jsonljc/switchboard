@@ -1,10 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalEnv": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "SKIN_ID", "PROFILE_ID"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**"],
+      "env": ["DATABASE_URL"]
     },
     "dev": {
       "cache": false,
@@ -14,13 +16,21 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": [
+        "DATABASE_URL",
+        "API_KEY_ENCRYPTION_SECRET",
+        "NEXTAUTH_SECRET",
+        "CREDENTIALS_ENCRYPTION_KEY"
+      ]
     },
     "test:unit": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "API_KEY_ENCRYPTION_SECRET"]
     },
     "test:integration": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "REDIS_URL"]
     },
     "typecheck": {
       "dependsOn": ["^build"]

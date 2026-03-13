@@ -5,21 +5,20 @@ import type {
   ActionPlan,
   ActionProposal,
   ApprovalRequest,
-  DecisionTrace,
-  RiskCategory,
   CompetenceAdjustment,
-  CompositeRiskContext,
 } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { PolicyEngineContext } from "../engine/policy-engine.js";
 import type { SimulationResult } from "../engine/simulator.js";
-import { type EvaluationContext, evaluateRule } from "../engine/rule-evaluator.js";
+import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
-import type { SpendLookup } from "../engine/policy-engine.js";
-import { evaluatePlan } from "../engine/composites.js";
-import { resolveIdentity, applyCompetenceAdjustments } from "../identity/spec.js";
+import {
+  type ResolvedIdentity,
+  resolveIdentity,
+  applyCompetenceAdjustments,
+} from "../identity/spec.js";
 import { routeApproval } from "../approval/router.js";
 import { createApprovalState } from "../approval/state-machine.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
@@ -39,6 +38,16 @@ import { smbPropose } from "../smb/pipeline.js";
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
 import type { ProposeResult } from "./lifecycle.js";
+import {
+  hydrateGuardrailState,
+  extractQuorumFromPolicies,
+  buildSpendLookup,
+  buildCompositeContext,
+  clearProposeCaches,
+  resolveEffectiveIdentity,
+  enrichAndGetRiskInput,
+} from "./propose-helpers.js";
+import { proposePlan } from "./plan-pipeline.js";
 
 function generateEnvelopeId(): string {
   return `env_${randomUUID()}`;
@@ -136,203 +145,40 @@ export class ProposePipeline {
       }
     }
 
-    // 1. Look up IdentitySpec + overlays
-    const identitySpec = await this.ctx.storage.identity.getSpecByPrincipalId(params.principalId);
-    if (!identitySpec) {
-      throw new Error(`Identity spec not found for principal: ${params.principalId}`);
-    }
-    const overlays = await this.ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
-
-    // 2. Resolve identity
-    const resolvedIdentity = resolveIdentity(identitySpec, overlays, {
-      cartridgeId: params.cartridgeId,
-    });
-
-    // 2b. Apply competence adjustments
-    let competenceAdjustments: CompetenceAdjustment[] = [];
-    let effectiveIdentity = resolvedIdentity;
-    if (this.ctx.competenceTracker) {
-      const adj = await this.ctx.competenceTracker.getAdjustment(
-        params.principalId,
-        params.actionType,
-      );
-      if (adj) {
-        competenceAdjustments = [adj];
-        effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
-      }
-    }
+    // 1-2. Resolve identity + competence adjustments
+    const { effectiveIdentity, competenceAdjustments } = await resolveEffectiveIdentity(
+      this.ctx,
+      params.principalId,
+      params.cartridgeId,
+      params.actionType,
+    );
 
     // 2c. Check per-org action type restrictions
-    if (this.ctx.governanceProfileStore) {
-      const profileConfig = await this.ctx.governanceProfileStore.getConfig(
-        params.organizationId ?? null,
-      );
-      const restriction = checkActionTypeRestriction(params.actionType, profileConfig);
-      if (restriction) {
-        const now = new Date();
-        const deniedEnvelopeId = generateEnvelopeId();
-        const deniedProposalId = `prop_${randomUUID()}`;
-        const traceId = params.traceId ?? `trace_${randomUUID()}`;
+    const restrictionResult = await this.checkRestriction(params, effectiveIdentity);
+    if (restrictionResult) return restrictionResult;
 
-        const deniedEnvelope: ActionEnvelope = {
-          id: deniedEnvelopeId,
-          version: 1,
-          incomingMessage: params.message ?? null,
-          conversationId: null,
-          proposals: [
-            {
-              id: deniedProposalId,
-              actionType: params.actionType,
-              parameters: params.parameters,
-              evidence: params.message ?? `Proposed ${params.actionType}`,
-              confidence: 1.0,
-              originatingMessageId: "",
-            },
-          ],
-          resolvedEntities: [],
-          plan: null,
-          decisions: [],
-          approvalRequests: [],
-          executionResults: [],
-          auditEntryIds: [],
-          status: "denied",
-          createdAt: now,
-          updatedAt: now,
-          parentEnvelopeId: params.parentEnvelopeId ?? null,
-          traceId,
-        };
-
-        await this.ctx.storage.envelopes.save(deniedEnvelope);
-
-        await this.ctx.ledger.record({
-          eventType: "action.denied",
-          actorType: "system",
-          actorId: "orchestrator",
-          entityType: "action",
-          entityId: deniedProposalId,
-          riskCategory: "low",
-          summary: `Action denied: ${restriction}`,
-          snapshot: { actionType: params.actionType, reason: restriction },
-          envelopeId: deniedEnvelopeId,
-          traceId,
-        });
-
-        return {
-          envelope: deniedEnvelope,
-          decisionTrace: {
-            actionId: deniedProposalId,
-            envelopeId: deniedEnvelopeId,
-            checks: [],
-            computedRiskScore: { rawScore: 0, category: "low" as const, factors: [] },
-            finalDecision: "deny" as const,
-            approvalRequired: "none" as const,
-            explanation: restriction,
-            evaluatedAt: now,
-          },
-          approvalRequest: null,
-          denied: true,
-          explanation: restriction,
-        };
-      }
-    }
-
-    // 3. Look up cartridge
+    // 3-4. Look up cartridge + enrich context + get risk input
     const cartridge = this.ctx.storage.cartridges.get(params.cartridgeId);
     if (!cartridge) {
       throw new Error(`Cartridge not found: ${params.cartridgeId}`);
     }
 
-    // 3b. Enrich context from cartridge
-    let enriched: Record<string, unknown> = {};
-    try {
-      enriched = await cartridge.enrichContext(
-        params.actionType,
-        params.parameters,
-        await buildCartridgeContext(
-          this.ctx,
-          params.cartridgeId,
-          params.principalId,
-          params.organizationId ?? null,
-        ),
-      );
-    } catch (err) {
-      console.warn(
-        `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    const { enriched, riskInput } = await enrichAndGetRiskInput(
+      this.ctx,
+      cartridge,
+      params.actionType,
+      params.parameters,
+      params.principalId,
+      params.organizationId ?? null,
+      params.cartridgeId,
+    );
 
-    // 3c. Cross-cartridge enrichment (optional, fail-safe)
-    if (this.ctx.crossCartridgeEnricher && params.organizationId) {
-      try {
-        const crossCartridgeContext = await this.ctx.crossCartridgeEnricher.enrich({
-          targetCartridgeId: params.cartridgeId,
-          actionType: params.actionType,
-          parameters: params.parameters,
-          organizationId: params.organizationId,
-          principalId: params.principalId,
-        });
-        if (Object.keys(crossCartridgeContext).length > 0) {
-          enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
-        }
-      } catch (err) {
-        console.warn(
-          `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    // 4. Get risk input from cartridge
-    let riskInput: import("@switchboard/schemas").RiskInput;
-    try {
-      riskInput = await cartridge.getRiskInput(params.actionType, params.parameters, {
-        principalId: params.principalId,
-        ...enriched,
-      });
-    } catch (err) {
-      console.warn(
-        `[orchestrator] getRiskInput failed, using default medium risk: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      riskInput = {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-    }
-
-    // 5. Get guardrails from cartridge
+    // 5. Get guardrails from cartridge + hydrate state
     const guardrails = cartridge.getGuardrails();
-
-    // 5b. Hydrate guardrail state from store
-    await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
+    await hydrateGuardrailState(this.ctx, guardrails, params.actionType, params.parameters);
 
     // 6. Load policies (with optional cache)
-    let policies: import("@switchboard/schemas").Policy[];
-    if (this.ctx.policyCache) {
-      const cached = await this.ctx.policyCache.get(
-        params.cartridgeId,
-        params.organizationId ?? null,
-      );
-      if (cached !== null) {
-        policies = cached;
-      } else {
-        policies = await this.ctx.storage.policies.listActive({
-          cartridgeId: params.cartridgeId,
-          organizationId: params.organizationId ?? null,
-        });
-        await this.ctx.policyCache.set(
-          params.cartridgeId,
-          params.organizationId ?? null,
-          policies,
-          DEFAULT_POLICY_CACHE_TTL_MS,
-        );
-      }
-    } else {
-      policies = await this.ctx.storage.policies.listActive({
-        cartridgeId: params.cartridgeId,
-        organizationId: params.organizationId ?? null,
-      });
-    }
+    const policies = await this.loadPolicies(params.cartridgeId, params.organizationId ?? null);
 
     // Create proposal object
     const proposalId = `prop_${randomUUID()}`;
@@ -379,12 +225,14 @@ export class ProposePipeline {
       resolvedIdentity: effectiveIdentity,
       riskInput,
       competenceAdjustments,
-      compositeContext: await this.buildCompositeContext(
+      compositeContext: await buildCompositeContext(
+        this.ctx,
         params.principalId,
         params.organizationId ?? undefined,
       ),
       systemRiskPosture,
-      spendLookup: await this.buildSpendLookup(
+      spendLookup: await buildSpendLookup(
+        this.ctx,
         params.principalId,
         params.organizationId ?? undefined,
       ),
@@ -399,8 +247,6 @@ export class ProposePipeline {
     );
 
     const now = new Date();
-
-    // Create the envelope
     const envelope: ActionEnvelope = {
       id: envelopeId,
       version: 1,
@@ -421,144 +267,21 @@ export class ProposePipeline {
     };
 
     // 10. Handle decision outcome
-    let approvalRequest: ApprovalRequest | null = null;
-    let governanceNote: string | undefined;
+    const { approvalRequest, governanceNote } = await this.handleDecisionOutcome(
+      envelope,
+      proposal,
+      decisionTrace,
+      evalContext,
+      effectiveIdentity,
+      params,
+      policies,
+      now,
+      traceId,
+    );
 
-    const isObserveMode = effectiveIdentity.governanceProfile === "observe";
-    const isEmergencyOverride = params.emergencyOverride === true;
-
-    if (isEmergencyOverride) {
-      const principal = await this.ctx.storage.identity.getPrincipal(params.principalId);
-      const hasRole = principal?.roles.some((r) => r === "admin" || r === "emergency_responder");
-      if (!hasRole) {
-        throw new Error("Emergency override requires admin or emergency_responder role");
-      }
-    }
-
-    if (isObserveMode || isEmergencyOverride) {
-      envelope.status = "approved";
-      governanceNote = isEmergencyOverride
-        ? "Auto-approved (emergency override): full governance evaluation ran but approval requirement was bypassed."
-        : "Auto-approved (observe mode): full governance evaluation ran but approval requirement was bypassed.";
-    } else if (decisionTrace.finalDecision === "deny") {
-      envelope.status = "denied";
-    } else if (
-      decisionTrace.approvalRequired !== "none" ||
-      params.parameters["_forceApproval"] === true
-    ) {
-      // Approval needed
-      const routing = routeApproval(
-        decisionTrace.computedRiskScore.category,
-        resolvedIdentity,
-        this.ctx.routingConfig,
-      );
-
-      if (
-        routing.approvalRequired !== "none" &&
-        routing.approvers.length === 0 &&
-        !routing.fallbackApprover
-      ) {
-        envelope.status = "denied";
-        await this.ctx.storage.envelopes.save(envelope);
-        await this.ctx.ledger.record({
-          eventType: "action.denied",
-          actorType: "system",
-          actorId: "orchestrator",
-          entityType: "action",
-          entityId: proposal.id,
-          riskCategory: decisionTrace.computedRiskScore.category,
-          summary: `Action denied: approval required but no approvers configured`,
-          snapshot: {
-            actionType: params.actionType,
-            approvalRequired: routing.approvalRequired,
-            reason: "no_approvers_configured",
-          },
-          envelopeId: envelope.id,
-          traceId,
-        });
-
-        return {
-          envelope,
-          decisionTrace,
-          approvalRequest: null,
-          denied: true,
-          explanation: "Action denied: approval required but no approvers are configured.",
-        };
-      }
-
-      const expiresAt = new Date(now.getTime() + routing.expiresInMs);
-
-      const bindingHash = computeBindingHash({
-        envelopeId: envelope.id,
-        envelopeVersion: envelope.version,
-        actionId: proposal.id,
-        parameters: params.parameters,
-        decisionTraceHash: hashObject(decisionTrace),
-        contextSnapshotHash: hashObject(evalContext),
-      });
-
-      const approvalId = generateApprovalId();
-
-      const quorumRequired = this.extractQuorumFromPolicies(policies, evalContext);
-
-      approvalRequest = {
-        id: approvalId,
-        actionId: proposal.id,
-        envelopeId: envelope.id,
-        conversationId: null,
-        summary: buildActionSummary(params.actionType, params.parameters, params.principalId),
-        riskCategory: decisionTrace.computedRiskScore.category,
-        bindingHash,
-        evidenceBundle: {
-          decisionTrace,
-          contextSnapshot: evalContext as unknown as Record<string, unknown>,
-          identitySnapshot: resolvedIdentity as unknown as Record<string, unknown>,
-        },
-        suggestedButtons: [
-          { label: "Approve", action: "approve" },
-          { label: "Reject", action: "reject" },
-        ],
-        approvers: routing.approvers,
-        fallbackApprover: routing.fallbackApprover,
-        status: "pending",
-        respondedBy: null,
-        respondedAt: null,
-        patchValue: null,
-        expiresAt,
-        expiredBehavior: routing.expiredBehavior,
-        createdAt: now,
-        quorum: quorumRequired ? { required: quorumRequired, approvalHashes: [] } : null,
-      };
-
-      envelope.approvalRequests = [approvalRequest];
-      envelope.status = "pending_approval";
-
-      const approvalState = createApprovalState(
-        expiresAt,
-        quorumRequired ? { required: quorumRequired } : null,
-      );
-      await this.ctx.storage.approvals.save({
-        request: approvalRequest,
-        state: approvalState,
-        envelopeId: envelope.id,
-        organizationId: params.organizationId ?? null,
-      });
-
-      if (this.ctx.approvalNotifier) {
-        const notification = buildApprovalNotification(approvalRequest, decisionTrace);
-        this.ctx.approvalNotifier.notify(notification).catch((err) => {
-          console.error("Failed to send approval notification:", err);
-        });
-      }
-    } else {
-      // Auto-allowed
-      envelope.status = "approved";
-    }
-
-    // 11. Save envelope
+    // 11. Save envelope + audit
     await this.ctx.storage.envelopes.save(envelope);
-
-    // 12. Record audit entry
+    clearProposeCaches(); // Invalidate spend/composite caches after envelope mutation
     const auditEntry = await this.ctx.ledger.record({
       eventType: envelope.status === "denied" ? "action.denied" : "action.proposed",
       actorType: "user",
@@ -629,7 +352,7 @@ export class ProposePipeline {
       cartridgeId: string;
       organizationId?: string;
     }>,
-    _executeApproved: (envelopeId: string) => Promise<ExecuteResult>,
+    executeApproved: (envelopeId: string) => Promise<ExecuteResult>,
   ): Promise<{
     planDecision: "allow" | "deny" | "partial";
     results: ProposeResult[];
@@ -637,221 +360,7 @@ export class ProposePipeline {
     planApprovalRequest?: ApprovalRequest;
     planEnvelope?: ActionEnvelope;
   }> {
-    // Data-flow delegation
-    if (plan.dataFlowSteps && plan.dataFlowSteps.length > 0 && this.ctx.dataFlowExecutor) {
-      const firstProposal = proposals[0];
-      const dataFlowResult = await this.ctx.dataFlowExecutor.execute(
-        {
-          id: plan.id,
-          envelopeId: plan.envelopeId,
-          strategy: plan.strategy,
-          approvalMode: plan.approvalMode,
-          summary: plan.summary,
-          steps: plan.dataFlowSteps,
-          deferredBindings: true,
-        },
-        {
-          principalId: firstProposal?.principalId ?? "system",
-          organizationId: firstProposal?.organizationId,
-          traceId: `trace_${randomUUID()}`,
-        },
-      );
-
-      const planDecision =
-        dataFlowResult.overallOutcome === "completed"
-          ? ("allow" as const)
-          : dataFlowResult.overallOutcome === "partial"
-            ? ("partial" as const)
-            : ("deny" as const);
-
-      return {
-        planDecision,
-        results: [],
-        explanation: `Data-flow plan ${dataFlowResult.overallOutcome}: ${dataFlowResult.stepResults.length} steps processed`,
-      };
-    }
-
-    // Evaluate each proposal independently
-    const results: ProposeResult[] = [];
-    const decisionTraces: DecisionTrace[] = [];
-
-    for (const proposal of proposals) {
-      const result = await this.propose(proposal);
-      results.push(result);
-      decisionTraces.push(result.decisionTrace);
-    }
-
-    plan.proposalOrder = results.map((r) => r.envelope.proposals[0]?.id ?? "");
-
-    const planResult = evaluatePlan(plan, decisionTraces);
-
-    // For atomic strategy, if any denied, mark all as denied
-    if (plan.strategy === "atomic" && planResult.planDecision === "deny") {
-      for (const result of results) {
-        if (result.envelope.status !== "denied") {
-          await this.ctx.storage.envelopes.update(result.envelope.id, { status: "denied" });
-          result.envelope.status = "denied";
-        }
-      }
-    }
-
-    // For sequential strategy, deny everything after first failure
-    if (plan.strategy === "sequential" && planResult.planDecision !== "allow") {
-      let hitFailure = false;
-      for (let i = 0; i < results.length; i++) {
-        const proposalId = plan.proposalOrder[i];
-        if (hitFailure && proposalId) {
-          const result = results[i]!;
-          if (result.envelope.status !== "denied") {
-            await this.ctx.storage.envelopes.update(result.envelope.id, { status: "denied" });
-            result.envelope.status = "denied";
-          }
-        }
-        if (results[i]?.denied) hitFailure = true;
-      }
-    }
-
-    // single_approval mode: consolidate
-    if (plan.approvalMode === "single_approval" && planResult.planDecision !== "deny") {
-      const pendingResults = results.filter((r) => r.approvalRequest !== null);
-
-      if (pendingResults.length > 0) {
-        const now = new Date();
-        const planEnvelopeId = generateEnvelopeId();
-
-        const planEnvelope: ActionEnvelope = {
-          id: planEnvelopeId,
-          version: 1,
-          incomingMessage: null,
-          conversationId: null,
-          proposals: pendingResults.flatMap((r) => r.envelope.proposals),
-          resolvedEntities: [],
-          plan,
-          decisions: decisionTraces,
-          approvalRequests: [],
-          executionResults: [],
-          auditEntryIds: [],
-          status: "pending_approval",
-          createdAt: now,
-          updatedAt: now,
-          parentEnvelopeId: null,
-          traceId: `trace_${randomUUID()}`,
-        };
-
-        plan.envelopeId = planEnvelopeId;
-
-        const combinedBindingHash = computeBindingHash({
-          envelopeId: planEnvelopeId,
-          envelopeVersion: planEnvelope.version,
-          actionId: plan.id,
-          parameters: {
-            proposalEnvelopeIds: results.map((r) => r.envelope.id),
-          },
-          decisionTraceHash: hashObject(decisionTraces),
-          contextSnapshotHash: hashObject({ planId: plan.id }),
-        });
-
-        const riskPriority: RiskCategory[] = ["low", "medium", "high", "critical"];
-        let highestRisk: RiskCategory = "low";
-        for (const r of pendingResults) {
-          const cat = r.decisionTrace.computedRiskScore.category;
-          if (cat !== "none" && riskPriority.indexOf(cat) > riskPriority.indexOf(highestRisk)) {
-            highestRisk = cat;
-          }
-        }
-
-        const shortestExpiryMs = Math.min(
-          ...pendingResults.map(
-            (r) => r.approvalRequest!.expiresAt.getTime() - r.approvalRequest!.createdAt.getTime(),
-          ),
-        );
-        const expiresAt = new Date(now.getTime() + shortestExpiryMs);
-
-        const allApprovers = [
-          ...new Set(pendingResults.flatMap((r) => r.approvalRequest!.approvers)),
-        ];
-
-        const fallbackApprover =
-          pendingResults.map((r) => r.approvalRequest!.fallbackApprover).find((f) => f !== null) ??
-          null;
-
-        const summaryParts = pendingResults.map((r) => r.approvalRequest!.summary);
-        const planSummary = `Plan (${pendingResults.length} actions): ${summaryParts.join("; ")}`;
-
-        const approvalId = generateApprovalId();
-        const planApprovalRequest: ApprovalRequest = {
-          id: approvalId,
-          actionId: plan.id,
-          envelopeId: planEnvelopeId,
-          conversationId: null,
-          summary: planSummary,
-          riskCategory: highestRisk,
-          bindingHash: combinedBindingHash,
-          evidenceBundle: {
-            decisionTrace: decisionTraces,
-            contextSnapshot: {
-              proposalEnvelopeIds: results.map((r) => r.envelope.id),
-            },
-            identitySnapshot: {},
-          },
-          suggestedButtons: [
-            { label: "Approve All", action: "approve" },
-            { label: "Reject All", action: "reject" },
-          ],
-          approvers: allApprovers,
-          fallbackApprover,
-          status: "pending",
-          respondedBy: null,
-          respondedAt: null,
-          patchValue: null,
-          expiresAt,
-          expiredBehavior: "deny" as const,
-          createdAt: now,
-          quorum: null,
-        };
-
-        planEnvelope.approvalRequests = [planApprovalRequest];
-        await this.ctx.storage.envelopes.save(planEnvelope);
-
-        const approvalState = createApprovalState(expiresAt, null);
-        await this.ctx.storage.approvals.save({
-          request: planApprovalRequest,
-          state: approvalState,
-          envelopeId: planEnvelopeId,
-          organizationId: proposals[0]?.organizationId ?? null,
-        });
-
-        for (const result of pendingResults) {
-          await this.ctx.storage.envelopes.update(result.envelope.id, { status: "queued" });
-          result.envelope.status = "queued" as ActionEnvelope["status"];
-        }
-
-        for (const result of pendingResults) {
-          result.approvalRequest = null;
-        }
-
-        if (this.ctx.approvalNotifier) {
-          const notification = buildApprovalNotification(planApprovalRequest, decisionTraces[0]!);
-          this.ctx.approvalNotifier.notify(notification).catch((err) => {
-            console.error("Failed to send plan approval notification:", err);
-          });
-        }
-
-        return {
-          planDecision: planResult.planDecision,
-          results,
-          explanation: planResult.explanation,
-          planApprovalRequest,
-          planEnvelope,
-        };
-      }
-    }
-
-    return {
-      planDecision: planResult.planDecision,
-      results,
-      explanation: planResult.explanation,
-    };
+    return proposePlan(this, this.ctx, plan, proposals, executeApproved);
   }
 
   async resolveAndPropose(params: {
@@ -989,31 +498,9 @@ export class ProposePipeline {
     });
 
     const guardrails = cartridge.getGuardrails();
-    await this.hydrateGuardrailState(guardrails, params.actionType, params.parameters);
+    await hydrateGuardrailState(this.ctx, guardrails, params.actionType, params.parameters);
 
-    let policiesSim: import("@switchboard/schemas").Policy[];
-    if (this.ctx.policyCache) {
-      const cached = await this.ctx.policyCache.get(params.cartridgeId, null);
-      if (cached !== null) {
-        policiesSim = cached;
-      } else {
-        policiesSim = await this.ctx.storage.policies.listActive({
-          cartridgeId: params.cartridgeId,
-        });
-        await this.ctx.policyCache.set(
-          params.cartridgeId,
-          null,
-          policiesSim,
-          DEFAULT_POLICY_CACHE_TTL_MS,
-        );
-      }
-    } else {
-      policiesSim = await this.ctx.storage.policies.listActive({
-        cartridgeId: params.cartridgeId,
-      });
-    }
-
-    const policies = policiesSim;
+    const policies = await this.loadPolicies(params.cartridgeId, null);
 
     const proposal: ActionProposal = {
       id: `sim_${randomUUID()}`,
@@ -1053,166 +540,317 @@ export class ProposePipeline {
 
   // ── Private helpers ──
 
-  async hydrateGuardrailState(
-    guardrails: import("@switchboard/schemas").GuardrailConfig | null,
-    actionType: string,
-    parameters: Record<string, unknown>,
-  ): Promise<void> {
-    if (!this.ctx.guardrailStateStore || !guardrails) return;
-
-    const scopeKeys: string[] = [];
-    for (const rl of guardrails.rateLimits) {
-      const key = rl.scope === "global" ? "global" : `${rl.scope}:${actionType}`;
-      scopeKeys.push(key);
-    }
-
-    const entityKeys: string[] = [];
-    for (const cd of guardrails.cooldowns) {
-      if (cd.actionType === actionType || cd.actionType === "*") {
-        const entityId = (parameters["entityId"] as string) ?? "unknown";
-        entityKeys.push(`${cd.scope}:${entityId}`);
+  private async loadPolicies(
+    cartridgeId: string,
+    organizationId: string | null,
+  ): Promise<import("@switchboard/schemas").Policy[]> {
+    if (this.ctx.policyCache) {
+      const cached = await this.ctx.policyCache.get(cartridgeId, organizationId);
+      if (cached !== null) {
+        return cached;
       }
-    }
-
-    const [rateLimits, cooldowns] = await Promise.all([
-      scopeKeys.length > 0
-        ? this.ctx.guardrailStateStore.getRateLimits(scopeKeys)
-        : Promise.resolve(new Map()),
-      entityKeys.length > 0
-        ? this.ctx.guardrailStateStore.getCooldowns(entityKeys)
-        : Promise.resolve(new Map()),
-    ]);
-
-    for (const [key, entry] of rateLimits) {
-      this.ctx.guardrailState.actionCounts.set(key, entry);
-    }
-    for (const [key, timestamp] of cooldowns) {
-      this.ctx.guardrailState.lastActionTimes.set(key, timestamp);
-    }
-  }
-
-  private extractQuorumFromPolicies(
-    policies: import("@switchboard/schemas").Policy[],
-    evalContext: EvaluationContext,
-  ): number | null {
-    const sorted = [...policies].filter((p) => p.active).sort((a, b) => a.priority - b.priority);
-    for (const policy of sorted) {
-      if (policy.cartridgeId && policy.cartridgeId !== evalContext.cartridgeId) continue;
-      if (policy.effect !== "require_approval") continue;
-      if (!policy.effectParams) continue;
-
-      const ruleResult = evaluateRule(policy.rule, evalContext);
-      if (!ruleResult.matched) continue;
-
-      const quorum = policy.effectParams["quorum"];
-      if (typeof quorum === "number" && quorum >= 1) {
-        return quorum;
-      }
-    }
-    return null;
-  }
-
-  private async buildSpendLookup(
-    principalId: string,
-    organizationId?: string,
-  ): Promise<SpendLookup> {
-    const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
-    const weekMs = 7 * dayMs;
-    const monthMs = 30 * dayMs;
-
-    let allEnvelopes: import("@switchboard/schemas").ActionEnvelope[];
-    try {
-      allEnvelopes = await this.ctx.storage.envelopes.list({
-        limit: 500,
+      const policies = await this.ctx.storage.policies.listActive({
+        cartridgeId,
         organizationId,
       });
-    } catch {
-      return { dailySpend: 0, weeklySpend: 0, monthlySpend: 0 };
+      await this.ctx.policyCache.set(
+        cartridgeId,
+        organizationId,
+        policies,
+        DEFAULT_POLICY_CACHE_TTL_MS,
+      );
+      return policies;
     }
-
-    let dailySpend = 0;
-    let weeklySpend = 0;
-    let monthlySpend = 0;
-
-    for (const env of allEnvelopes) {
-      if (env.status !== "executed") continue;
-      const isPrincipal = env.proposals.some((p) => p.parameters["_principalId"] === principalId);
-      if (!isPrincipal) continue;
-
-      for (const p of env.proposals) {
-        const amount =
-          typeof p.parameters["amount"] === "number"
-            ? Math.abs(p.parameters["amount"])
-            : typeof p.parameters["budgetChange"] === "number"
-              ? Math.abs(p.parameters["budgetChange"])
-              : 0;
-
-        if (amount === 0) continue;
-
-        const age = now - env.createdAt.getTime();
-        if (age < monthMs) monthlySpend += amount;
-        if (age < weekMs) weeklySpend += amount;
-        if (age < dayMs) dailySpend += amount;
-      }
-    }
-
-    return { dailySpend, weeklySpend, monthlySpend };
+    return this.ctx.storage.policies.listActive({ cartridgeId, organizationId });
   }
 
-  private async buildCompositeContext(
-    principalId: string,
-    organizationId?: string,
-  ): Promise<CompositeRiskContext | undefined> {
-    const windowMs = 60 * 60 * 1000;
-    const cutoff = new Date(Date.now() - windowMs);
+  /**
+   * Validate that _forceApproval is only used by principals with admin or approver roles.
+   */
+  private async isForceApprovalAllowed(params: {
+    parameters: Record<string, unknown>;
+    principalId: string;
+  }): Promise<boolean> {
+    if (params.parameters["_forceApproval"] !== true) return false;
 
-    let allRecentEnvelopes: import("@switchboard/schemas").ActionEnvelope[];
-    try {
-      allRecentEnvelopes = await this.ctx.storage.envelopes.list({
-        limit: 200,
-        organizationId,
-      });
-    } catch {
-      return undefined;
+    const principal = await this.ctx.storage.identity.getPrincipal(params.principalId);
+    const hasRole = principal?.roles.some((r) => r === "admin" || r === "approver");
+    if (!hasRole) {
+      throw new Error("_forceApproval requires admin or approver role");
     }
+    return true;
+  }
 
-    const windowEnvelopes = allRecentEnvelopes.filter((e) => {
-      if (e.createdAt < cutoff) return false;
-      return e.proposals.some((p) => p.parameters["_principalId"] === principalId);
+  private async checkRestriction(
+    params: {
+      actionType: string;
+      parameters: Record<string, unknown>;
+      principalId: string;
+      organizationId?: string | null;
+      message?: string;
+      parentEnvelopeId?: string | null;
+      traceId?: string;
+    },
+    _effectiveIdentity: ResolvedIdentity,
+  ): Promise<ProposeResult | null> {
+    if (!this.ctx.governanceProfileStore) return null;
+
+    const profileConfig = await this.ctx.governanceProfileStore.getConfig(
+      params.organizationId ?? null,
+    );
+    const restriction = checkActionTypeRestriction(params.actionType, profileConfig);
+    if (!restriction) return null;
+
+    const now = new Date();
+    const deniedEnvelopeId = generateEnvelopeId();
+    const deniedProposalId = `prop_${randomUUID()}`;
+    const traceId = params.traceId ?? `trace_${randomUUID()}`;
+
+    const deniedEnvelope: ActionEnvelope = {
+      id: deniedEnvelopeId,
+      version: 1,
+      incomingMessage: params.message ?? null,
+      conversationId: null,
+      proposals: [
+        {
+          id: deniedProposalId,
+          actionType: params.actionType,
+          parameters: params.parameters,
+          evidence: params.message ?? `Proposed ${params.actionType}`,
+          confidence: 1.0,
+          originatingMessageId: "",
+        },
+      ],
+      resolvedEntities: [],
+      plan: null,
+      decisions: [],
+      approvalRequests: [],
+      executionResults: [],
+      auditEntryIds: [],
+      status: "denied",
+      createdAt: now,
+      updatedAt: now,
+      parentEnvelopeId: params.parentEnvelopeId ?? null,
+      traceId,
+    };
+
+    await this.ctx.storage.envelopes.save(deniedEnvelope);
+    clearProposeCaches(); // Invalidate spend/composite caches after envelope mutation
+
+    await this.ctx.ledger.record({
+      eventType: "action.denied",
+      actorType: "system",
+      actorId: "orchestrator",
+      entityType: "action",
+      entityId: deniedProposalId,
+      riskCategory: "low",
+      summary: `Action denied: ${restriction}`,
+      snapshot: { actionType: params.actionType, reason: restriction },
+      envelopeId: deniedEnvelopeId,
+      traceId,
     });
 
-    if (windowEnvelopes.length === 0) return undefined;
+    return {
+      envelope: deniedEnvelope,
+      decisionTrace: {
+        actionId: deniedProposalId,
+        envelopeId: deniedEnvelopeId,
+        checks: [],
+        computedRiskScore: { rawScore: 0, category: "low" as const, factors: [] },
+        finalDecision: "deny" as const,
+        approvalRequired: "none" as const,
+        explanation: restriction,
+        evaluatedAt: now,
+      },
+      approvalRequest: null,
+      denied: true,
+      explanation: restriction,
+    };
+  }
 
-    let cumulativeExposure = 0;
-    const targetEntities = new Set<string>();
-    const cartridges = new Set<string>();
+  private async handleDecisionOutcome(
+    envelope: ActionEnvelope,
+    proposal: ActionProposal,
+    decisionTrace: import("@switchboard/schemas").DecisionTrace,
+    evalContext: EvaluationContext,
+    effectiveIdentity: ResolvedIdentity,
+    params: {
+      actionType: string;
+      parameters: Record<string, unknown>;
+      principalId: string;
+      organizationId?: string | null;
+      cartridgeId: string;
+      emergencyOverride?: boolean;
+    },
+    policies: import("@switchboard/schemas").Policy[],
+    now: Date,
+    traceId: string,
+  ): Promise<{ approvalRequest: ApprovalRequest | null; governanceNote?: string }> {
+    let approvalRequest: ApprovalRequest | null = null;
+    let governanceNote: string | undefined;
 
-    for (const env of windowEnvelopes) {
-      for (const decision of env.decisions) {
-        const dollarsFactor = decision.computedRiskScore.factors.find(
-          (f) => f.factor === "dollars_at_risk",
-        );
-        if (dollarsFactor) {
-          cumulativeExposure += dollarsFactor.contribution;
-        }
+    const isObserveMode = effectiveIdentity.governanceProfile === "observe";
+    const isEmergencyOverride = params.emergencyOverride === true;
+
+    if (isEmergencyOverride) {
+      const principal = await this.ctx.storage.identity.getPrincipal(params.principalId);
+      if (principal?.type !== "user") {
+        throw new Error("Emergency override is restricted to user principals");
       }
-
-      for (const proposal of env.proposals) {
-        const entityId = proposal.parameters["entityId"] as string | undefined;
-        if (entityId) targetEntities.add(entityId);
-
-        const cartridgeId = proposal.parameters["_cartridgeId"] as string | undefined;
-        if (cartridgeId) cartridges.add(cartridgeId);
+      const hasRole = principal.roles.some((r) => r === "admin" || r === "emergency_responder");
+      if (!hasRole) {
+        throw new Error("Emergency override requires admin or emergency_responder role");
       }
     }
 
-    return {
-      recentActionCount: windowEnvelopes.length,
-      windowMs,
-      cumulativeExposure,
-      distinctTargetEntities: targetEntities.size,
-      distinctCartridges: cartridges.size,
+    if (isObserveMode || isEmergencyOverride) {
+      envelope.status = "approved";
+      governanceNote = isEmergencyOverride
+        ? "Auto-approved (emergency override): full governance evaluation ran but approval requirement was bypassed."
+        : "Auto-approved (observe mode): full governance evaluation ran but approval requirement was bypassed.";
+    } else if (decisionTrace.finalDecision === "deny") {
+      envelope.status = "denied";
+    } else if (
+      decisionTrace.approvalRequired !== "none" ||
+      (await this.isForceApprovalAllowed(params))
+    ) {
+      approvalRequest = await this.createApprovalRequest(
+        envelope,
+        proposal,
+        decisionTrace,
+        evalContext,
+        params,
+        policies,
+        now,
+        traceId,
+      );
+    } else {
+      envelope.status = "approved";
+    }
+
+    return { approvalRequest, governanceNote };
+  }
+
+  private async createApprovalRequest(
+    envelope: ActionEnvelope,
+    proposal: ActionProposal,
+    decisionTrace: import("@switchboard/schemas").DecisionTrace,
+    evalContext: EvaluationContext,
+    params: {
+      actionType: string;
+      parameters: Record<string, unknown>;
+      principalId: string;
+      organizationId?: string | null;
+      cartridgeId: string;
+    },
+    policies: import("@switchboard/schemas").Policy[],
+    now: Date,
+    traceId: string,
+  ): Promise<ApprovalRequest | null> {
+    const identitySpec = await this.ctx.storage.identity.getSpecByPrincipalId(params.principalId);
+    const overlays = identitySpec
+      ? await this.ctx.storage.identity.listOverlaysBySpecId(identitySpec.id)
+      : [];
+    const resolvedIdentity = identitySpec
+      ? resolveIdentity(identitySpec, overlays, { cartridgeId: params.cartridgeId })
+      : ({} as ResolvedIdentity);
+
+    const routing = routeApproval(
+      decisionTrace.computedRiskScore.category,
+      resolvedIdentity,
+      this.ctx.routingConfig,
+    );
+
+    if (
+      routing.approvalRequired !== "none" &&
+      routing.approvers.length === 0 &&
+      !routing.fallbackApprover
+    ) {
+      envelope.status = "denied";
+      await this.ctx.storage.envelopes.save(envelope);
+      await this.ctx.ledger.record({
+        eventType: "action.denied",
+        actorType: "system",
+        actorId: "orchestrator",
+        entityType: "action",
+        entityId: proposal.id,
+        riskCategory: decisionTrace.computedRiskScore.category,
+        summary: `Action denied: approval required but no approvers configured`,
+        snapshot: {
+          actionType: params.actionType,
+          approvalRequired: routing.approvalRequired,
+          reason: "no_approvers_configured",
+        },
+        envelopeId: envelope.id,
+        traceId,
+      });
+      return null;
+    }
+
+    const expiresAt = new Date(now.getTime() + routing.expiresInMs);
+
+    const bindingHash = computeBindingHash({
+      envelopeId: envelope.id,
+      envelopeVersion: envelope.version,
+      actionId: proposal.id,
+      parameters: params.parameters,
+      decisionTraceHash: hashObject(decisionTrace),
+      contextSnapshotHash: hashObject(evalContext),
+    });
+
+    const approvalId = generateApprovalId();
+    const quorumRequired = extractQuorumFromPolicies(policies, evalContext);
+
+    const approvalRequest: ApprovalRequest = {
+      id: approvalId,
+      actionId: proposal.id,
+      envelopeId: envelope.id,
+      conversationId: null,
+      summary: buildActionSummary(params.actionType, params.parameters, params.principalId),
+      riskCategory: decisionTrace.computedRiskScore.category,
+      bindingHash,
+      evidenceBundle: {
+        decisionTrace,
+        contextSnapshot: evalContext as unknown as Record<string, unknown>,
+        identitySnapshot: resolvedIdentity as unknown as Record<string, unknown>,
+      },
+      suggestedButtons: [
+        { label: "Approve", action: "approve" },
+        { label: "Reject", action: "reject" },
+      ],
+      approvers: routing.approvers,
+      fallbackApprover: routing.fallbackApprover,
+      status: "pending",
+      respondedBy: null,
+      respondedAt: null,
+      patchValue: null,
+      expiresAt,
+      expiredBehavior: routing.expiredBehavior,
+      createdAt: now,
+      quorum: quorumRequired ? { required: quorumRequired, approvalHashes: [] } : null,
     };
+
+    envelope.approvalRequests = [approvalRequest];
+    envelope.status = "pending_approval";
+
+    const approvalState = createApprovalState(
+      expiresAt,
+      quorumRequired ? { required: quorumRequired } : null,
+    );
+    await this.ctx.storage.approvals.save({
+      request: approvalRequest,
+      state: approvalState,
+      envelopeId: envelope.id,
+      organizationId: params.organizationId ?? null,
+    });
+
+    if (this.ctx.approvalNotifier) {
+      const notification = buildApprovalNotification(approvalRequest, decisionTrace);
+      this.ctx.approvalNotifier.notify(notification).catch((err) => {
+        console.error("Failed to send approval notification:", err);
+      });
+    }
+
+    return approvalRequest;
   }
 }

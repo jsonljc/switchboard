@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cartridge": {
+      "types": "./dist/cartridge/index.d.ts",
+      "import": "./dist/cartridge/index.js"
     }
   },
   "scripts": {

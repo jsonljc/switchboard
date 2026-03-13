@@ -138,6 +138,7 @@ model ConversationState {
   clarificationQuestion String?
   messages              Json      @default("[]")
   firstReplyAt          DateTime?
+  lastInboundAt         DateTime?
   lastActivityAt        DateTime  @default(now())
   expiresAt             DateTime
 

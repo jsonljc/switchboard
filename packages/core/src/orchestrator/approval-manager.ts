@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { timingSafeEqual } from "node:crypto";
 import type { ActionEnvelope, RiskCategory } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
@@ -13,6 +12,7 @@ import { resolveIdentity } from "../identity/spec.js";
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext, isSmbOrg } from "./shared-context.js";
 import type { ApprovalResponse } from "./lifecycle.js";
+import { respondToPlanApproval } from "./plan-approval-manager.js";
 
 export class ApprovalManager {
   private approvalResponseTimes = new Map<string, number[]>();
@@ -67,23 +67,14 @@ export class ApprovalManager {
       throw new Error(`Envelope not found for expired approval`);
     }
 
-    // 3. Validate binding hash for approve/patch
+    // 3. Validate binding hash for approve/patch (timing-safe for all orgs)
     if (params.action === "approve" || params.action === "patch") {
-      const isSmbOrgResult = await isSmbOrg(this.ctx, approval.organizationId);
-      if (isSmbOrgResult) {
-        if (params.bindingHash !== approval.request.bindingHash) {
-          throw new Error(
-            "Binding hash mismatch: action parameters may have changed (stale approval)",
-          );
-        }
-      } else {
-        const a = Buffer.from(params.bindingHash);
-        const b = Buffer.from(approval.request.bindingHash);
-        if (a.length !== b.length || !timingSafeEqual(a, b)) {
-          throw new Error(
-            "Binding hash mismatch: action parameters may have changed (stale approval)",
-          );
-        }
+      const a = Buffer.from(params.bindingHash);
+      const b = Buffer.from(approval.request.bindingHash);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        throw new Error(
+          "Binding hash mismatch: action parameters may have changed (stale approval)",
+        );
       }
     }
 
@@ -416,186 +407,6 @@ export class ApprovalManager {
     planEnvelope: ActionEnvelope;
     executionResults: ExecuteResult[];
   }> {
-    const approval = await this.ctx.storage.approvals.getById(params.approvalId);
-    if (!approval) {
-      throw new Error(`Plan approval not found: ${params.approvalId}`);
-    }
-
-    if (isExpired(approval.state)) {
-      const expiredState = transitionApproval(approval.state, "expire");
-      await this.ctx.storage.approvals.updateState(
-        params.approvalId,
-        expiredState,
-        approval.state.version,
-      );
-
-      const planEnvelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
-      if (planEnvelope) {
-        await this.ctx.storage.envelopes.update(planEnvelope.id, { status: "expired" });
-        planEnvelope.status = "expired";
-
-        const proposalEnvelopeIds = (
-          approval.request.evidenceBundle.contextSnapshot as Record<string, unknown>
-        )["proposalEnvelopeIds"] as string[] | undefined;
-        if (proposalEnvelopeIds) {
-          for (const envId of proposalEnvelopeIds) {
-            await this.ctx.storage.envelopes.update(envId, { status: "expired" });
-          }
-        }
-
-        await this.ctx.ledger.record({
-          eventType: "action.expired",
-          actorType: "system",
-          actorId: "orchestrator",
-          entityType: "plan",
-          entityId: params.approvalId,
-          riskCategory: approval.request.riskCategory as RiskCategory,
-          summary: `Plan approval expired for envelope ${approval.envelopeId}`,
-          snapshot: { approvalId: params.approvalId, envelopeId: approval.envelopeId },
-          envelopeId: approval.envelopeId,
-        });
-
-        return { planEnvelope, executionResults: [] };
-      }
-      throw new Error("Plan envelope not found for expired approval");
-    }
-
-    if (params.action === "approve") {
-      const a = Buffer.from(params.bindingHash);
-      const b = Buffer.from(approval.request.bindingHash);
-      if (a.length !== b.length || !timingSafeEqual(a, b)) {
-        throw new Error("Binding hash mismatch: plan parameters may have changed");
-      }
-    }
-
-    if (approval.request.approvers.length > 0) {
-      const principal = await this.ctx.storage.identity.getPrincipal(params.respondedBy);
-      if (!principal) {
-        throw new Error(`Principal not found: ${params.respondedBy}`);
-      }
-      const delegations = await this.ctx.storage.identity.listDelegationRules(
-        approval.organizationId ?? undefined,
-      );
-      const chainResult = canApproveWithChain(principal, approval.request.approvers, delegations);
-      if (!chainResult.authorized) {
-        throw new Error(
-          `Principal ${params.respondedBy} is not authorized to respond to this plan approval`,
-        );
-      }
-    }
-
-    const planVersionBeforeTransition = approval.state.version;
-    const newState = transitionApproval(
-      approval.state,
-      params.action === "approve" ? "approve" : "reject",
-      params.respondedBy,
-    );
-    await this.ctx.storage.approvals.updateState(
-      params.approvalId,
-      newState,
-      planVersionBeforeTransition,
-    );
-
-    const planEnvelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
-    if (!planEnvelope) {
-      throw new Error(`Plan envelope not found: ${approval.envelopeId}`);
-    }
-
-    const proposalEnvelopeIds = (
-      approval.request.evidenceBundle.contextSnapshot as Record<string, unknown>
-    )["proposalEnvelopeIds"] as string[] | undefined;
-    if (!proposalEnvelopeIds || proposalEnvelopeIds.length === 0) {
-      throw new Error("No proposal envelope IDs found in plan approval");
-    }
-
-    if (params.action === "reject") {
-      await this.ctx.storage.envelopes.update(planEnvelope.id, { status: "denied" });
-      planEnvelope.status = "denied";
-
-      for (const envId of proposalEnvelopeIds) {
-        await this.ctx.storage.envelopes.update(envId, { status: "denied" });
-      }
-
-      await this.ctx.ledger.record({
-        eventType: "action.rejected",
-        actorType: "user",
-        actorId: params.respondedBy,
-        entityType: "plan",
-        entityId: params.approvalId,
-        riskCategory: approval.request.riskCategory as RiskCategory,
-        summary: `Plan rejected by ${params.respondedBy}`,
-        snapshot: {
-          approvalId: params.approvalId,
-          envelopeId: planEnvelope.id,
-          proposalEnvelopeIds,
-        },
-        envelopeId: planEnvelope.id,
-      });
-
-      return { planEnvelope, executionResults: [] };
-    }
-
-    // Approve: execute all child envelopes
-    await this.ctx.storage.envelopes.update(planEnvelope.id, { status: "approved" });
-    planEnvelope.status = "approved";
-
-    await this.ctx.ledger.record({
-      eventType: "action.approved",
-      actorType: "user",
-      actorId: params.respondedBy,
-      entityType: "plan",
-      entityId: params.approvalId,
-      riskCategory: approval.request.riskCategory as RiskCategory,
-      summary: `Plan approved by ${params.respondedBy}`,
-      snapshot: {
-        approvalId: params.approvalId,
-        envelopeId: planEnvelope.id,
-        proposalEnvelopeIds,
-      },
-      envelopeId: planEnvelope.id,
-    });
-
-    const executionResults: ExecuteResult[] = [];
-    for (const envId of proposalEnvelopeIds) {
-      await this.ctx.storage.envelopes.update(envId, { status: "approved" });
-
-      try {
-        const result = await executeApproved(envId);
-        executionResults.push(result);
-
-        if (planEnvelope.plan?.strategy === "atomic" && !result.success) {
-          const remaining = proposalEnvelopeIds.slice(proposalEnvelopeIds.indexOf(envId) + 1);
-          for (const remainingId of remaining) {
-            await this.ctx.storage.envelopes.update(remainingId, { status: "failed" });
-          }
-          break;
-        }
-      } catch (err) {
-        executionResults.push({
-          success: false,
-          summary: `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
-          externalRefs: {},
-          rollbackAvailable: false,
-          partialFailures: [{ step: "execute", error: String(err) }],
-          durationMs: 0,
-          undoRecipe: null,
-        });
-
-        if (planEnvelope.plan?.strategy === "atomic") {
-          const remaining = proposalEnvelopeIds.slice(proposalEnvelopeIds.indexOf(envId) + 1);
-          for (const remainingId of remaining) {
-            await this.ctx.storage.envelopes.update(remainingId, { status: "failed" });
-          }
-          break;
-        }
-      }
-    }
-
-    const allSuccess = executionResults.every((r) => r.success);
-    const planStatus = allSuccess ? "executed" : "failed";
-    await this.ctx.storage.envelopes.update(planEnvelope.id, { status: planStatus });
-    planEnvelope.status = planStatus as ActionEnvelope["status"];
-
-    return { planEnvelope, executionResults };
+    return respondToPlanApproval(this.ctx, params, executeApproved);
   }
 }

@@ -67,8 +67,10 @@ export async function buildCartridgeContext(
   if (ctx.credentialResolver && organizationId) {
     try {
       connectionCredentials = await ctx.credentialResolver.resolve(cartridgeId, organizationId);
-    } catch {
-      // Fall back to empty credentials if resolution fails
+    } catch (err) {
+      console.warn(
+        `[orchestrator] credential resolution failed for cartridge=${cartridgeId} org=${organizationId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
   return { principalId, organizationId, connectionCredentials };

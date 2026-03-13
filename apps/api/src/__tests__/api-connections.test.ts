@@ -99,7 +99,7 @@ describe("Connections API", () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain("required");
+      expect(res.json().error.toLowerCase()).toContain("required");
     });
 
     it("returns 503 if encryption key is not set", async () => {
