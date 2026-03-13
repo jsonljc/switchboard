@@ -5,6 +5,7 @@ import { AuditLedger, InMemoryLedgerStorage } from "../audit/ledger.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 import { CompetenceTracker } from "../competence/index.js";
+import { clearProposeCaches } from "../orchestrator/propose-helpers.js";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
@@ -45,6 +46,7 @@ describe("LifecycleOrchestrator — lifecycle, competence, delegation, risk, spe
   let cartridge: TestCartridge;
 
   beforeEach(async () => {
+    clearProposeCaches();
     storage = createInMemoryStorage();
     ledgerStorage = new InMemoryLedgerStorage();
     ledger = new AuditLedger(ledgerStorage);

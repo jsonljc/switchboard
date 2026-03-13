@@ -253,7 +253,7 @@ describe("Inbound Webhooks API", () => {
       expect(res.statusCode).toBe(200);
       expect(mockEmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "booking",
+          type: "booked",
           contactId: "15559876543",
           organizationId: "org_clinic1",
         }),

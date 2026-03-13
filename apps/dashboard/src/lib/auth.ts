@@ -209,8 +209,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // SAFETY: Extending session with custom fields from JWT token — NextAuth's
       // type definitions don't include custom fields, but the session object is
       // a plain object that accepts additional properties at runtime
-      (session as Record<string, unknown>).organizationId = token.organizationId;
-      (session as Record<string, unknown>).principalId = token.principalId;
+      (session as unknown as Record<string, unknown>).organizationId = token.organizationId;
+      (session as unknown as Record<string, unknown>).principalId = token.principalId;
       return session;
     },
   },

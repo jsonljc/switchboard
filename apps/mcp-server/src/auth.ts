@@ -19,7 +19,8 @@ interface ApiKeyEntry {
   organizationId: string | null;
 }
 
-function hashKey(key: string): string {
+/** Hash an API key with SHA-256 for storage and comparison. Exported for testing. */
+export function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }
 

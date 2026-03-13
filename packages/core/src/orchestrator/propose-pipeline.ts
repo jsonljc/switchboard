@@ -43,6 +43,7 @@ import {
   extractQuorumFromPolicies,
   buildSpendLookup,
   buildCompositeContext,
+  clearProposeCaches,
   resolveEffectiveIdentity,
   enrichAndGetRiskInput,
 } from "./propose-helpers.js";
@@ -280,6 +281,7 @@ export class ProposePipeline {
 
     // 11. Save envelope + audit
     await this.ctx.storage.envelopes.save(envelope);
+    clearProposeCaches(); // Invalidate spend/composite caches after envelope mutation
     const auditEntry = await this.ctx.ledger.record({
       eventType: envelope.status === "denied" ? "action.denied" : "action.proposed",
       actorType: "user",
@@ -633,6 +635,7 @@ export class ProposePipeline {
     };
 
     await this.ctx.storage.envelopes.save(deniedEnvelope);
+    clearProposeCaches(); // Invalidate spend/composite caches after envelope mutation
 
     await this.ctx.ledger.record({
       eventType: "action.denied",

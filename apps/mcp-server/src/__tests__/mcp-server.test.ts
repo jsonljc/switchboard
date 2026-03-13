@@ -24,7 +24,7 @@ import {
 } from "../tools/index.js";
 import type { ReadToolDeps } from "../tools/read.js";
 import type { McpAuthContext } from "../auth.js";
-import { resolveAuth, loadMcpApiKeys } from "../auth.js";
+import { resolveAuth, loadMcpApiKeys, hashKey } from "../auth.js";
 import { SessionGuard } from "../session-guard.js";
 
 // ── Test Harness ───────────────────────────────────────────────────────
@@ -440,19 +440,19 @@ describe("MCP Server", () => {
     });
 
     it("resolves auth from configured key", () => {
-      const keys = new Map([["test-key", { actorId: "user1", organizationId: "org1" }]]);
+      const keys = new Map([[hashKey("test-key"), { actorId: "user1", organizationId: "org1" }]]);
       const auth = resolveAuth("test-key", keys);
       expect(auth.actorId).toBe("user1");
       expect(auth.organizationId).toBe("org1");
     });
 
     it("rejects invalid key when keys are configured", () => {
-      const keys = new Map([["valid-key", { actorId: "user1", organizationId: null }]]);
+      const keys = new Map([[hashKey("valid-key"), { actorId: "user1", organizationId: null }]]);
       expect(() => resolveAuth("bad-key", keys)).toThrow("Invalid API key");
     });
 
     it("rejects missing key when keys are configured", () => {
-      const keys = new Map([["valid-key", { actorId: "user1", organizationId: null }]]);
+      const keys = new Map([[hashKey("valid-key"), { actorId: "user1", organizationId: null }]]);
       expect(() => resolveAuth(undefined, keys)).toThrow("Authentication required");
     });
 
@@ -462,8 +462,15 @@ describe("MCP Server", () => {
       try {
         const keys = loadMcpApiKeys();
         expect(keys.size).toBe(2);
-        expect(keys.get("key1")).toEqual({ actorId: "actor1", organizationId: "org1" });
-        expect(keys.get("key2")).toEqual({ actorId: "actor2", organizationId: null });
+        // Keys are stored hashed for timing-safe comparison
+        expect(keys.get(hashKey("key1"))).toEqual({
+          actorId: "actor1",
+          organizationId: "org1",
+        });
+        expect(keys.get(hashKey("key2"))).toEqual({
+          actorId: "actor2",
+          organizationId: null,
+        });
       } finally {
         if (original !== undefined) {
           process.env["MCP_API_KEYS"] = original;

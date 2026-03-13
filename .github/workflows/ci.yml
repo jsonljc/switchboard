@@ -45,7 +45,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Generate Prisma client
         run: pnpm --filter @switchboard/db exec prisma generate
@@ -61,6 +61,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -90,6 +91,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -122,6 +124,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -157,6 +160,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -218,6 +222,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -227,6 +232,9 @@ jobs:
             apps/*/node_modules
             packages/db/node_modules/.prisma
           key: build-${{ github.sha }}
+
+      - name: Regenerate lockfile with overrides
+        run: pnpm install --no-frozen-lockfile
 
       - name: Security audit
         run: pnpm audit --audit-level=high
@@ -250,6 +258,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist

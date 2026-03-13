@@ -6,6 +6,7 @@ import {
   extractQuorumFromPolicies,
   buildSpendLookup,
   buildCompositeContext,
+  clearProposeCaches,
 } from "../propose-helpers.js";
 import { makeSharedContext, makeEnvelope } from "./helpers.js";
 
@@ -296,6 +297,7 @@ describe("buildSpendLookup", () => {
   const dayMs = 24 * 60 * 60 * 1000;
 
   beforeEach(() => {
+    clearProposeCaches();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-10T12:00:00Z"));
   });
@@ -449,6 +451,7 @@ describe("buildSpendLookup", () => {
 
 describe("buildCompositeContext", () => {
   beforeEach(() => {
+    clearProposeCaches();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-10T12:00:00Z"));
   });

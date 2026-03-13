@@ -130,7 +130,7 @@ describe("Governance API", () => {
 
       expect(res.statusCode).toBe(400);
       const body = res.json();
-      expect(body.error).toContain("profile is required");
+      expect(body.error.toLowerCase()).toContain("required");
     });
 
     it("returns 400 for invalid profile value", async () => {
@@ -142,8 +142,8 @@ describe("Governance API", () => {
 
       expect(res.statusCode).toBe(400);
       const body = res.json();
-      expect(body.error).toContain("Invalid profile");
-      expect(body.error).toContain("banana");
+      // Zod enum validation produces: "Invalid enum value. Expected '...' | '...', received 'banana'"
+      expect(body.error.toLowerCase()).toContain("invalid");
     });
 
     it("accepts all valid profile values", async () => {

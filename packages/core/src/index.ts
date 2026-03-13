@@ -1,92 +1,23 @@
-// Engine
-export { evaluateRule } from "./engine/rule-evaluator.js";
-export type { EvaluationContext, ConditionResult, RuleResult } from "./engine/rule-evaluator.js";
-export {
-  computeRiskScore,
-  DEFAULT_RISK_CONFIG,
-  computeCompositeRiskAdjustment,
-  DEFAULT_COMPOSITE_RISK_CONFIG,
-} from "./engine/risk-scorer.js";
-export type { RiskScoringConfig, CompositeRiskConfig } from "./engine/risk-scorer.js";
-export { createTraceBuilder, addCheck, buildTrace } from "./engine/decision-trace.js";
-export type { DecisionTraceBuilder } from "./engine/decision-trace.js";
-export {
-  resolveEntities,
-  buildClarificationQuestion,
-  buildNotFoundExplanation,
-} from "./engine/resolver.js";
-export type { EntityResolver, ResolverResult } from "./engine/resolver.js";
-export { evaluatePlan } from "./engine/composites.js";
-export type { PlanEvaluationResult } from "./engine/composites.js";
-export { formatSimulationResult } from "./engine/simulator.js";
-export type { SimulationInput, SimulationResult } from "./engine/simulator.js";
-export { evaluate, simulate, createGuardrailState } from "./engine/policy-engine.js";
-export type {
-  PolicyEngineConfig,
-  PolicyEngineContext,
-  GuardrailState,
-  SpendLookup,
-} from "./engine/policy-engine.js";
-export { InMemoryRiskPostureStore } from "./engine/risk-posture.js";
-export type { RiskPostureStore } from "./engine/risk-posture.js";
+// ---------------------------------------------------------------------------
+// @switchboard/core — public API surface
+//
+// Domain barrels provide sub-path imports (e.g. @switchboard/core/engine).
+// This root barrel re-exports everything for backwards-compatible imports.
+// ---------------------------------------------------------------------------
 
-// Identity
-export { resolveIdentity, applyCompetenceAdjustments } from "./identity/spec.js";
-export type { ResolvedIdentity } from "./identity/spec.js";
-export { getActiveOverlays } from "./identity/overlay.js";
-export { canActAs, resolveApprovers } from "./identity/principals.js";
-export {
-  GOVERNANCE_PROFILE_PRESETS,
-  automationLevelToProfile,
-} from "./identity/governance-presets.js";
-export type { GovernanceProfilePreset } from "./identity/governance-presets.js";
+// Engine (rule evaluation, risk scoring, policy engine, simulation)
+export * from "./engine/index.js";
 
-// Approval
-export {
-  createApprovalState,
-  transitionApproval,
-  isExpired,
-  determineApprovalRequirement,
-  StaleVersionError,
-} from "./approval/state-machine.js";
-export type {
-  ApprovalState,
-  ApprovalStatus,
-  QuorumState,
-  QuorumEntry,
-} from "./approval/state-machine.js";
-export { routeApproval, DEFAULT_ROUTING_CONFIG } from "./approval/router.js";
-export type { ApprovalRouting, ApprovalRoutingConfig } from "./approval/router.js";
-export { computeBindingHash, hashObject, validateBindingHash } from "./approval/binding.js";
-export { checkExpiry, getExpiryMs } from "./approval/expiry.js";
-export { canApprove, canApproveWithChain } from "./approval/delegation.js";
-export { applyPatch, describePatch } from "./approval/patching.js";
-export { resolveDelegationChain, narrowScope } from "./approval/chain.js";
-export type { DelegationChainResult, ChainResolutionOptions } from "./approval/chain.js";
+// Identity (spec resolution, overlays, principals, governance presets)
+export * from "./identity/index.js";
 
-// Storage
-export {
-  InMemoryEnvelopeStore,
-  InMemoryPolicyStore,
-  InMemoryIdentityStore,
-  InMemoryApprovalStore,
-  InMemoryCartridgeRegistry,
-  InMemoryCompetenceStore,
-  matchActionTypePattern,
-  createInMemoryStorage,
-  seedDefaultStorage,
-} from "./storage/index.js";
-export type {
-  EnvelopeStore,
-  PolicyStore,
-  IdentityStore,
-  ApprovalStore,
-  CartridgeRegistry,
-  CompetenceStore,
-  StorageContext,
-} from "./storage/index.js";
+// Approval (state machine, routing, binding, expiry, delegation, patching, chains)
+export * from "./approval/index.js";
 
-// Orchestrator
+// Storage (in-memory stores, interfaces)
+export * from "./storage/index.js";
+
+// Orchestrator (lifecycle, propose pipeline, approval/execution managers)
 export { LifecycleOrchestrator, inferCartridgeId } from "./orchestrator/index.js";
 export type {
   OrchestratorConfig,
@@ -94,120 +25,37 @@ export type {
   ApprovalResponse,
   RuntimeOrchestrator,
 } from "./orchestrator/index.js";
+export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-wrapper.js";
 
-// Audit
-export {
-  computeAuditHash,
-  computeAuditHashSync,
-  sha256,
-  verifyChain,
-} from "./audit/canonical-hash.js";
-export { canonicalizeSync } from "./audit/canonical-json.js";
-export type { AuditHashInput } from "./audit/canonical-hash.js";
-export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./audit/redaction.js";
-export type { RedactionConfig, RedactionResult } from "./audit/redaction.js";
-export {
-  storeEvidence,
-  verifyEvidence,
-  setEvidenceStore,
-  InMemoryEvidenceStore,
-  FileSystemEvidenceStore,
-} from "./audit/evidence.js";
-export type { EvidencePointer, EvidenceStore } from "./audit/evidence.js";
-export { AuditLedger, InMemoryLedgerStorage } from "./audit/ledger.js";
-export type { LedgerStorage, AuditQueryFilter } from "./audit/ledger.js";
+// Audit (hashing, canonicalization, redaction, evidence, ledger)
+export * from "./audit/index.js";
 
-// Competence
-export { CompetenceTracker, DEFAULT_COMPETENCE_THRESHOLDS } from "./competence/index.js";
+// Competence (tracker, thresholds)
+export * from "./competence/index.js";
 
-// Telemetry
-export { getTracer, setTracer, createOTelTracer, NoopTracer } from "./telemetry/index.js";
-export type { Tracer, Span } from "./telemetry/index.js";
-export { getMetrics, setMetrics, createInMemoryMetrics } from "./telemetry/index.js";
-export type { SwitchboardMetrics, Counter, Histogram } from "./telemetry/index.js";
-
-// LLM Cost Table
-export {
-  LLM_COST_TABLE,
-  DEFAULT_MODEL_ID,
-  computeTokenCostUSD,
-  usdToTokenBudget,
-  getModelCost,
-  listModelCosts,
-} from "./telemetry/llm-costs.js";
-export type { ModelCostEntry } from "./telemetry/llm-costs.js";
+// Telemetry (tracing, metrics, LLM cost table)
+export * from "./telemetry/index.js";
 
 // Execution Guard
 export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
 
-// Notifications
-export {
-  NoopNotifier,
-  CompositeNotifier,
-  buildApprovalNotification,
-  EmailApprovalNotifier,
-  WebhookApprovalNotifier,
-  TelegramApprovalNotifier,
-  SlackApprovalNotifier,
-  WhatsAppApprovalNotifier,
-  ProactiveSender,
-} from "./notifications/index.js";
-export type {
-  ApprovalNotifier,
-  ApprovalNotification,
-  WhatsAppNotifierConfig,
-  ChannelCredentials,
-  ProactiveSenderConfig,
-} from "./notifications/index.js";
+// Notifications (approval notifiers, proactive sender)
+export * from "./notifications/index.js";
 
 // Guardrail State Store
-export type { GuardrailStateStore, RateLimitEntry } from "./guardrail-state/index.js";
-export { InMemoryGuardrailStateStore } from "./guardrail-state/index.js";
+export * from "./guardrail-state/index.js";
 
-// Runtime Adapters (execute request/response for OpenClaw, MCP, etc.)
-export type {
-  RuntimeExecuteRequest,
-  RuntimeExecuteResponse,
-  ExecuteOutcome,
-  RuntimeAdapter,
-} from "./runtime-adapters/types.js";
+// Runtime Adapters (OpenClaw, MCP, HTTP, integration guide)
+export * from "./runtime-adapters/index.js";
 
-// Execution service (single propose + conditional execute facade)
+// Execution Service (propose + conditional execute facade)
 export { ExecutionService, NeedsClarificationError, NotFoundError } from "./execution-service.js";
 
-// OpenClaw adapter (tool payload ↔ RuntimeExecuteRequest/Response)
-export {
-  openclawPayloadToRequest,
-  responseToOpenclawTool,
-  openclawExecute,
-} from "./runtime-adapters/openclaw.js";
-export type { OpenClawToolPayload, OpenClawToolResponse } from "./runtime-adapters/openclaw.js";
-
-// MCP adapter (tool payload ↔ RuntimeExecuteRequest/Response)
-export {
-  mcpToolCallToExecuteRequest,
-  executeResponseToMcpResult,
-  mcpExecute,
-} from "./runtime-adapters/mcp.js";
-export type { McpToolCallPayload, McpToolResponse } from "./runtime-adapters/mcp.js";
-
-// CartridgeReadAdapter (governed read path for cartridge provider methods)
+// CartridgeReadAdapter (governed read path)
 export { CartridgeReadAdapter } from "./read-adapter.js";
 export type { ReadOperation, ReadResult } from "./read-adapter.js";
 
-// HTTP adapter (call POST /api/execute from another process)
-export { HttpExecutionAdapter } from "./runtime-adapters/http-adapter.js";
-export type { HttpExecutionAdapterOptions } from "./runtime-adapters/http-adapter.js";
-
-// Integration guide generator
-export { generateIntegrationGuide } from "./runtime-adapters/integration-guide.js";
-export type {
-  IntegrationGuide,
-  IntegrationStep,
-  IntegrationGuideParams,
-} from "./runtime-adapters/integration-guide.js";
-
-// Governance profiles (per-org posture)
+// Governance (per-org posture)
 export {
   profileToPosture,
   checkActionTypeRestriction,
@@ -216,141 +64,49 @@ export {
 } from "./governance/profile.js";
 export type { GovernanceProfileStore } from "./governance/profile.js";
 
-// Policy cache
+// Policy Cache
 export { InMemoryPolicyCache, DEFAULT_POLICY_CACHE_TTL_MS } from "./policy-cache.js";
 export type { PolicyCache } from "./policy-cache.js";
 
-// Retry utility
-export { withRetry } from "./utils/retry.js";
-export type { RetryOptions } from "./utils/retry.js";
-
-// Circuit breaker
-export { CircuitBreaker, CircuitBreakerOpenError } from "./utils/circuit-breaker.js";
-export type { CircuitBreakerConfig, CircuitBreakerState } from "./utils/circuit-breaker.js";
-export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-wrapper.js";
-
-// Pagination
-export { paginationParams, paginate } from "./utils/pagination.js";
-export type { PaginatedResult, PaginationParams } from "./utils/pagination.js";
-
-// Nested value traversal
-export { getNestedValue } from "./utils/nested-value.js";
+// Utilities (retry, circuit breaker, pagination, nested value)
+export * from "./utils/index.js";
 
 // Cross-Cartridge Enrichment
-export { DefaultCrossCartridgeEnricher, DEFAULT_ENRICHMENT_MAPPINGS } from "./enrichment/index.js";
-export type {
-  CrossCartridgeContext,
-  EnrichmentMapping,
-  CrossCartridgeEnricher,
-  DefaultCrossCartridgeEnricherConfig,
-} from "./enrichment/index.js";
+export * from "./enrichment/index.js";
 
-// Data-Flow Plan Execution (multi-step cross-cartridge plans with binding resolution)
-export {
-  DataFlowExecutor,
-  resolveBindings,
-  BindingResolutionError,
-  evaluateCondition,
-} from "./data-flow/index.js";
-export type {
-  DataFlowStep,
-  DataFlowPlan,
-  StepExecutionResult,
-  DataFlowOrchestrator,
-  DataFlowExecutorConfig,
-  DataFlowExecutionResult,
-  BindingContext,
-} from "./data-flow/index.js";
+// Data-Flow Plan Execution
+export * from "./data-flow/index.js";
 
-// SMB governance (simplified pipeline for SMB-tier organizations)
-export {
-  smbEvaluate,
-  smbCategorizeRisk,
-  smbApprovalRequired,
-  smbRouteApproval,
-  smbBindingHash,
-  smbCreateApprovalRequest,
-  SmbActivityLog,
-  InMemorySmbActivityLogStorage,
-  smbPropose,
-  InMemoryTierStore,
-} from "./smb/index.js";
-export type {
-  SmbEvaluationContext,
-  SmbApprovalRouting,
-  ActivityLogEntry,
-  ActivityLogQuery,
-  ActivityLogStorage,
-  ActivityResult,
-  SmbPipelineContext,
-  TierStore,
-} from "./smb/index.js";
+// SMB Governance
+export * from "./smb/index.js";
 
-// Capability Registry (executor routing, step types)
-export { CapabilityRegistry } from "./capability/index.js";
+// Capability Registry
+export * from "./capability/index.js";
 
 // Planning (goal parsing, plan graph building)
-export { GoalParser, PlanGraphBuilder, PLAN_TEMPLATES } from "./planning/index.js";
-export type { PlanTemplate, PlanStepTemplate, PlanningContext } from "./planning/index.js";
+export * from "./planning/index.js";
 
-// Idempotency guard (request deduplication)
+// Idempotency Guard
 export { IdempotencyGuard, InMemoryIdempotencyStore } from "./idempotency/guard.js";
 export type { IdempotencyStore } from "./idempotency/guard.js";
 
-// Credential resolution (per-org connection credentials at execution time)
+// Credential Resolution
 export { NoOpCredentialResolver } from "./credentials/resolver.js";
 export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
 
-// Skin loader & resolver
-export { SkinLoader, SkinResolver } from "./skin/index.js";
-export type { ResolvedSkin } from "./skin/index.js";
+// Skin Loader & Resolver
+export * from "./skin/index.js";
 
-// Business profile loader & resolver
-export { ProfileLoader, ProfileResolver } from "./profile/index.js";
-export type { ResolvedProfile } from "./profile/index.js";
+// Business Profile Loader & Resolver
+export * from "./profile/index.js";
 
-// Tool registry
-export { ToolRegistry } from "./tool-registry/index.js";
-export type { RegisteredTool, ToolFilter } from "./tool-registry/index.js";
-export { matchGlob, matchesAny } from "./tool-registry/index.js";
+// Tool Registry
+export * from "./tool-registry/index.js";
 
 // Agents (autonomous ads operator layer)
-export {
-  OptimizerAgent,
-  ReporterAgent,
-  StrategistAgent,
-  MonitorAgent,
-  GuardrailAgent,
-} from "./agents/index.js";
-export {
-  DEFAULT_ALERT_CONDITIONS,
-  DEFAULT_ALERT_TEMPLATES,
-  buildDefaultAlertRules,
-  DEFAULT_GUARDRAIL_RULES,
-  ProgressiveAutonomyController,
-  DEFAULT_AUTONOMY_THRESHOLDS,
-} from "./agents/index.js";
-export type {
-  AdsAgent,
-  AgentContext,
-  AgentTickResult,
-  AgentNotifier,
-  AlertCondition,
-  AlertResult,
-  AlertRuleTemplate,
-  MonitorSnapshot,
-  CampaignSnapshot,
-  GuardrailViolation,
-  GuardrailRule,
-  CampaignGuardrailData,
-  AutonomyThresholds,
-  AutonomyAssessment,
-  CompetenceSnapshot,
-} from "./agents/index.js";
-export { buildMinimalProfile } from "./agents/index.js";
-export type { MinimalOrgData } from "./agents/index.js";
+export * from "./agents/index.js";
 
-// Event bus (conversion feedback loop)
+// Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";
 export type {
   ConversionBus,
@@ -359,6 +115,6 @@ export type {
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
 
-// LLM client interface (structured LLM calls)
+// LLM Client Interface
 export { MockLLMClient } from "./llm/types.js";
 export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";

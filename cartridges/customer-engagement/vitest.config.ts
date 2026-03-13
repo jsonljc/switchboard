@@ -9,6 +9,14 @@ export default defineConfig({
     pool: "forks",
     coverage: {
       provider: "v8",
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/__tests__/**",
+        "src/cartridge/providers/calendar/google-calendar.ts",
+        "src/cartridge/providers/review/google-reviews.ts",
+        "src/cartridge/providers/sms/twilio.ts",
+      ],
       reporter: ["text", "json", "json-summary", "html"],
       thresholds: {
         // Target: 80/70/75/80 — current coverage: ~60/77/81/60

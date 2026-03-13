@@ -85,16 +85,30 @@ export function extractQuorumFromPolicies(
   return null;
 }
 
+/** Cache entry for spend lookup and composite context to avoid repeated DB queries per propose. */
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+const SPEND_CACHE_TTL_MS = 10_000; // 10 seconds
+const spendCache = new Map<string, CacheEntry<SpendLookup>>();
+
 /**
  * Build a SpendLookup by scanning recent executed envelopes for the
- * given principal within the organization.
+ * given principal within the organization. Results are cached for 10s
+ * to avoid repeated 500-envelope DB reads per propose call.
  */
 export async function buildSpendLookup(
   ctx: SharedContext,
   principalId: string,
   organizationId?: string,
 ): Promise<SpendLookup> {
+  const cacheKey = `${principalId}:${organizationId ?? ""}`;
   const now = Date.now();
+  const cached = spendCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) return cached.value;
+
   const dayMs = 24 * 60 * 60 * 1000;
   const weekMs = 7 * dayMs;
   const monthMs = 30 * dayMs;
@@ -135,20 +149,37 @@ export async function buildSpendLookup(
     }
   }
 
-  return { dailySpend, weeklySpend, monthlySpend };
+  const result = { dailySpend, weeklySpend, monthlySpend };
+  spendCache.set(cacheKey, { value: result, expiresAt: now + SPEND_CACHE_TTL_MS });
+  return result;
+}
+
+const COMPOSITE_CACHE_TTL_MS = 10_000; // 10 seconds
+const compositeCache = new Map<string, CacheEntry<CompositeRiskContext | undefined>>();
+
+/** Clear spend and composite caches. Exported for testing. */
+export function clearProposeCaches(): void {
+  spendCache.clear();
+  compositeCache.clear();
 }
 
 /**
  * Build a CompositeRiskContext by scanning envelopes from the last hour
- * for the given principal within the organization.
+ * for the given principal within the organization. Results are cached for 10s
+ * to avoid repeated 200-envelope DB reads per propose call.
  */
 export async function buildCompositeContext(
   ctx: SharedContext,
   principalId: string,
   organizationId?: string,
 ): Promise<CompositeRiskContext | undefined> {
+  const cacheKey = `composite:${principalId}:${organizationId ?? ""}`;
+  const now = Date.now();
+  const cached = compositeCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) return cached.value;
+
   const windowMs = 60 * 60 * 1000;
-  const cutoff = new Date(Date.now() - windowMs);
+  const cutoff = new Date(now - windowMs);
 
   let allRecentEnvelopes: import("@switchboard/schemas").ActionEnvelope[];
   try {
@@ -165,7 +196,10 @@ export async function buildCompositeContext(
     return e.proposals.some((p) => p.parameters["_principalId"] === principalId);
   });
 
-  if (windowEnvelopes.length === 0) return undefined;
+  if (windowEnvelopes.length === 0) {
+    compositeCache.set(cacheKey, { value: undefined, expiresAt: now + COMPOSITE_CACHE_TTL_MS });
+    return undefined;
+  }
 
   let cumulativeExposure = 0;
   const targetEntities = new Set<string>();
@@ -190,13 +224,18 @@ export async function buildCompositeContext(
     }
   }
 
-  return {
+  const compositeResult: CompositeRiskContext = {
     recentActionCount: windowEnvelopes.length,
     windowMs,
     cumulativeExposure,
     distinctTargetEntities: targetEntities.size,
     distinctCartridges: cartridges.size,
   };
+  compositeCache.set(cacheKey, {
+    value: compositeResult,
+    expiresAt: now + COMPOSITE_CACHE_TTL_MS,
+  });
+  return compositeResult;
 }
 
 /**
