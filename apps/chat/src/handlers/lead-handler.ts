@@ -14,12 +14,15 @@ import { getThread, setThread } from "../conversation/threads.js";
 import { transitionConversation } from "../conversation/state.js";
 import { startCadenceForContact } from "../jobs/cadence-worker.js";
 import type { CadenceInstance } from "@switchboard/customer-engagement";
+import { HandoffPackageAssembler } from "@switchboard/core";
+import type { DialogueMiddleware } from "../middleware/dialogue-middleware.js";
 
 export async function handleLeadMessage(
   ctx: HandlerContext,
   leadRouter: ConversationRouter,
   message: IncomingMessage,
   threadId: string,
+  dialogueMiddleware?: DialogueMiddleware | null,
 ): Promise<void> {
   const inbound: InboundMessage = {
     channelId: threadId,
@@ -33,6 +36,18 @@ export async function handleLeadMessage(
     metadata: message.metadata,
   };
 
+  // Pre-interpret: run emotional classification and language detection
+  if (dialogueMiddleware) {
+    const conversation = await getThread(threadId);
+    if (conversation) {
+      const beforeResult = dialogueMiddleware.beforeInterpret(message.text, conversation);
+      if (beforeResult.detectedLanguage && !conversation.detectedLanguage) {
+        const updated = { ...conversation, detectedLanguage: beforeResult.detectedLanguage };
+        await setThread(updated);
+      }
+    }
+  }
+
   let routerResponse: RouterResponse;
   try {
     routerResponse = await leadRouter.handleMessage(inbound);
@@ -42,10 +57,15 @@ export async function handleLeadMessage(
     return;
   }
 
-  // Send each response message back through the adapter
+  // Send each response message back through the adapter (with post-generation validation)
   for (const text of routerResponse.responses) {
-    await ctx.sendFilteredReply(threadId, text);
-    await ctx.recordAssistantMessage(threadId, text);
+    let finalText = text;
+    if (dialogueMiddleware) {
+      const result = dialogueMiddleware.afterGenerate(text, "greet", threadId);
+      finalText = result.text;
+    }
+    await ctx.sendFilteredReply(threadId, finalText);
+    await ctx.recordAssistantMessage(threadId, finalText);
   }
 
   // If the router produced an action, propose it through governance
@@ -106,8 +126,27 @@ export async function handleLeadMessage(
     startCadenceForContact(instance);
   }
 
-  // Escalation notification
+  // Escalation: build handoff package for context and notify
   if (routerResponse.escalated) {
+    const conversation = await getThread(threadId);
+    const assembler = new HandoffPackageAssembler();
+    assembler.assemble({
+      sessionId: threadId,
+      organizationId: inbound.organizationId,
+      reason: "human_requested",
+      messages: conversation?.messages.map((m) => ({ role: m.role, text: m.text })) ?? [],
+      leadSnapshot: {
+        leadId: conversation?.crmContactId ?? undefined,
+        channel: inbound.channelType,
+        serviceInterest: conversation?.leadProfile?.serviceInterest ?? undefined,
+      },
+      qualificationSnapshot: {
+        signalsCaptured: routerResponse.variables ?? {},
+        qualificationStage: routerResponse.machineState ?? "unknown",
+      },
+      slaMinutes: 30,
+    });
+
     await ctx.sendFilteredReply(
       threadId,
       "I'm connecting you with a team member who can help. They'll be with you shortly.",

@@ -100,6 +100,8 @@ describe("PrismaConversationStore integration", () => {
       expiresAt: new Date(Date.now() + 86400000),
       crmContactId: null,
       leadProfile: null,
+      detectedLanguage: null,
+      machineState: null,
     };
 
     await store.save(state);
