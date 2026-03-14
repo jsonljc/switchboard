@@ -15,7 +15,7 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
     category: "price",
     keywords: ["expensive", "cost", "price", "afford", "cheap", "budget", "money", "payment"],
     response:
-      "We understand cost is an important factor. We offer flexible payment plans and financing options to make treatment more accessible. Many patients find that spreading payments over several months makes it very manageable.",
+      "We understand cost is an important factor. We offer flexible payment plans and financing options to make our services more accessible. Many customers find that spreading payments over several months makes it very manageable.",
     followUp: "Would you like to learn more about our financing options?",
   },
   {
@@ -34,17 +34,17 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
       "credentials",
       "trust",
       "reputation",
-      "new patient",
+      "new customer",
     ],
     response:
-      "Your comfort is our priority. Our providers are board-certified with extensive experience. We have hundreds of satisfied patients and would be happy to share before-and-after results or connect you with patients who've had similar treatments.",
-    followUp: "Would you like to see our patient testimonials or provider credentials?",
+      "Your comfort is our priority. Our team is qualified and experienced with extensive expertise. We have hundreds of satisfied customers and would be happy to share results or connect you with customers who've had similar services.",
+    followUp: "Would you like to see our customer testimonials or team credentials?",
   },
   {
-    category: "fear",
-    keywords: ["pain", "hurt", "scary", "afraid", "nervous", "anxious", "uncomfortable", "needle"],
+    category: "comfort",
+    keywords: ["nervous", "anxious", "uncomfortable", "worried", "scared", "afraid", "hesitant"],
     response:
-      "It's completely normal to feel nervous. We use the latest techniques to ensure maximum comfort, including topical numbing, gentle approaches, and sedation options when appropriate. Most patients say the experience was much easier than expected.",
+      "It's completely normal to have concerns. We prioritize your comfort throughout the process and use the latest techniques to ensure the best experience. Most customers say it was much easier than expected.",
     followUp: "Would a consultation help address your specific concerns about comfort?",
   },
   {
@@ -61,20 +61,20 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
     ],
     response:
       "We focus on delivering natural-looking results tailored to your goals. During your consultation, we'll discuss realistic expectations, show you examples of similar cases, and create a personalized service plan.",
-    followUp: "Would you like to see examples of results from similar treatments?",
+    followUp: "Would you like to see examples of results from similar services?",
   },
   {
     category: "comparison",
     keywords: [
-      "other clinic",
+      "other provider",
       "competitor",
-      "another doctor",
+      "another option",
       "second opinion",
       "alternative",
       "different",
     ],
     response:
-      "We encourage you to make the best choice for your care. What sets us apart is our personalized approach, advanced technology, and commitment to ongoing patient care. We'd love the opportunity to show you why our patients choose to stay with us.",
+      "We encourage you to make the best choice for your needs. What sets us apart is our personalized approach, advanced methods, and commitment to ongoing customer care. We'd love the opportunity to show you why our customers choose to stay with us.",
     followUp:
       "Would you like to schedule a complimentary consultation to experience our approach firsthand?",
   },
@@ -90,15 +90,16 @@ export const DEFAULT_OBJECTION_TREES: ObjectionMatch[] = [
       "in-network",
     ],
     response:
-      "We work with many insurance plans and can verify your coverage before your appointment. For treatments not covered by insurance, we offer transparent pricing and payment plans.",
+      "We work with many insurance plans and can verify your coverage before your appointment. For services not covered by insurance, we offer transparent pricing and payment plans.",
     followUp: "Would you like us to check your insurance coverage?",
   },
   {
     category: "downtime",
     keywords: ["recovery", "downtime", "heal", "rest", "time off", "work", "social"],
     response:
-      "Recovery varies by treatment, but many of our procedures have minimal downtime. We'll provide you with a detailed recovery timeline during your consultation so you can plan accordingly.",
-    followUp: "Would you like specific recovery information for the treatment you're considering?",
+      "Results vary by service — we'll walk you through what to expect. Many of our services have minimal downtime. We'll provide you with a detailed timeline during your consultation so you can plan accordingly.",
+    followUp:
+      "Would you like specific details about what to expect for the service you're considering?",
   },
 ];
 

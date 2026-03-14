@@ -159,7 +159,7 @@ describe("Inbound Webhooks API", () => {
           fields: {
             firstName: "Alice",
             email: "alice@example.com",
-            treatmentInterest: "Botox",
+            serviceInterest: "Botox",
           },
         },
       });

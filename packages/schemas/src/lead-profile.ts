@@ -28,8 +28,8 @@ export const ObjectionEntrySchema = z.object({
 export type ObjectionEntry = z.infer<typeof ObjectionEntrySchema>;
 
 export const LeadProfileSchema = z.object({
-  /** Service/treatment the lead is interested in */
-  treatmentInterest: z.string().nullable().optional(),
+  /** Service the lead is interested in */
+  serviceInterest: z.string().nullable().optional(),
   /** How soon the lead wants to proceed */
   timeline: TimelineEnum.optional(),
   /** Lead's readiness to invest */

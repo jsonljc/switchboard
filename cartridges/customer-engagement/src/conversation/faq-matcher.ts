@@ -90,7 +90,7 @@ export function matchFAQ(message: string, faqs: FAQRecord[]): FAQMatchResult {
 /**
  * Format an FAQ response based on the confidence tier.
  */
-export function formatFAQResponse(result: FAQMatchResult, clinicName?: string): string | null {
+export function formatFAQResponse(result: FAQMatchResult, businessName?: string): string | null {
   if (!result.match) return null;
 
   if (result.tier === "direct") {
@@ -99,7 +99,7 @@ export function formatFAQResponse(result: FAQMatchResult, clinicName?: string): 
 
   if (result.tier === "caveat") {
     const prefix = result.match.sensitive
-      ? `Based on our general information${clinicName ? ` at ${clinicName}` : ""}, `
+      ? `Based on our general information${businessName ? ` at ${businessName}` : ""}, `
       : "";
     return (
       `${prefix}${result.match.answer}\n\n` +
