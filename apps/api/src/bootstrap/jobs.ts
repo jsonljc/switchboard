@@ -16,6 +16,7 @@ import { startCadenceRunner } from "../jobs/cadence-runner.js";
 import { startAgentRunner } from "../jobs/agent-runner.js";
 import { startRevGrowthRunner } from "../jobs/revenue-growth-runner.js";
 import { startOutcomeChecker } from "../jobs/outcome-checker.js";
+import { startOptimisationRunner } from "../jobs/optimisation-runner.js";
 import type { AuditLedger } from "@switchboard/core";
 import {
   createBackgroundJobsQueue,
@@ -112,6 +113,7 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
   let stopAgentRunner = () => {};
   let stopRevGrowthRunner = () => {};
   let stopOutcomeChecker = () => {};
+  let stopOptimisationRunner = () => {};
   let backgroundQueue: Queue | null = null;
   let backgroundWorker: Worker | null = null;
 
@@ -169,6 +171,11 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
         intervalMs: 6 * 60 * 60 * 1000,
         logger,
       });
+      stopOptimisationRunner = startOptimisationRunner({
+        prisma: prismaClient,
+        intervalMs: 24 * 60 * 60 * 1000,
+        logger,
+      });
     }
   }
 
@@ -184,6 +191,7 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
       stopAgentRunner();
       stopRevGrowthRunner();
       stopOutcomeChecker();
+      stopOptimisationRunner();
       if (backgroundWorker) {
         await backgroundWorker.close();
       }

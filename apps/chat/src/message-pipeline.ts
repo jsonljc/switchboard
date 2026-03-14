@@ -23,6 +23,7 @@ import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
 import type { ConversationRouter } from "@switchboard/customer-engagement";
 import type { ConversionBus } from "@switchboard/core";
+import type { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
 // Extracted handlers
 import type { HandlerContext } from "./handlers/handler-context.js";
@@ -68,6 +69,7 @@ export interface PipelineDeps {
   isLeadBot: boolean;
   leadRouter: ConversationRouter | null;
   conversionBus: ConversionBus | null;
+  dialogueMiddleware: DialogueMiddleware | null;
 
   // Callbacks into ChatRuntime
   composeResponse(context: ResponseContext, orgId?: string): Promise<GeneratedResponse>;

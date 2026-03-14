@@ -8,6 +8,12 @@ import { createConversationState, executeNextStep } from "./engine.js";
 import { ConversationNLPAdapter } from "./nlp-adapter.js";
 import type { FAQRecord } from "@switchboard/schemas";
 import { matchFAQ, formatFAQResponse } from "./faq-matcher.js";
+import {
+  createLeadStateMachine,
+  LeadConversationEvent,
+  LeadConversationState,
+  type LeadStateMachineContext,
+} from "./lead-state-machine.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -46,6 +52,8 @@ export interface RouterResponse {
   variables?: Record<string, unknown>;
   /** Typed lead profile fields extracted from question answers */
   leadProfileUpdate?: Record<string, unknown>;
+  /** Current lead state machine state (if enabled). */
+  machineState?: string;
 }
 
 export interface ConversationRouterConfig {
@@ -99,6 +107,24 @@ export class ConversationRouter {
 
     if (!session) {
       session = await this.createSession(message);
+    }
+
+    // Step 1.5: Advance lead state machine (if enabled)
+    if (session.machineState !== undefined) {
+      const sm = createLeadStateMachine();
+      sm.hydrate(session.machineState as LeadConversationState);
+      const smCtx: LeadStateMachineContext = {
+        turnCount: session.state.history.length,
+        signalsCaptured: 0,
+        totalSignals: 3,
+        engagementLevel: "medium",
+        hasObjection: false,
+        maxTurnsBeforeEscalation: 15,
+      };
+      const smResult = await sm.transition(LeadConversationEvent.MESSAGE_RECEIVED, smCtx);
+      if (smResult.success) {
+        session.machineState = sm.currentState;
+      }
     }
 
     // Step 2: If escalated, don't process further
@@ -227,6 +253,7 @@ export class ConversationRouter {
       state: currentState,
       escalated,
       lastActivityAt: new Date(),
+      machineState: session.machineState,
     });
 
     // If completed, clean up the session
@@ -246,6 +273,7 @@ export class ConversationRouter {
       sessionId: session.id,
       variables: currentState.variables,
       leadProfileUpdate: Object.keys(leadProfileUpdate).length > 0 ? leadProfileUpdate : undefined,
+      machineState: session.machineState,
     };
   }
 

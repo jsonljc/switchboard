@@ -26,6 +26,7 @@ import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/ban
 import type { ConversationRouter } from "@switchboard/customer-engagement";
 import { findMedicalClaims } from "@switchboard/customer-engagement";
 import { isWithinWhatsAppWindow } from "./adapters/whatsapp.js";
+import { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
 // Extracted modules
 import type { HandlerContext, OperatorState } from "./handlers/handler-context.js";
@@ -95,6 +96,7 @@ export class ChatRuntime {
   private isLeadBot: boolean;
   private leadRouter: ConversationRouter | null;
   private conversionBus: ConversionBus | null;
+  private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
@@ -126,6 +128,9 @@ export class ChatRuntime {
     this.isLeadBot = config.isLeadBot ?? false;
     this.leadRouter = config.leadRouter ?? null;
     this.conversionBus = config.conversionBus ?? null;
+    this.dialogueMiddleware = new DialogueMiddleware({
+      resolvedProfile: config.resolvedProfile ?? null,
+    });
 
     // Initialize banned phrase filter from skin config
     const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
@@ -351,7 +356,7 @@ export class ChatRuntime {
     // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
     if (this.isLeadBot && this.leadRouter) {
       const ctx = this.buildHandlerContext();
-      await handleLeadMessage(ctx, this.leadRouter, message, threadId);
+      await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware);
       return;
     }
 
@@ -406,6 +411,7 @@ export class ChatRuntime {
       isLeadBot: this.isLeadBot,
       leadRouter: this.leadRouter,
       conversionBus: this.conversionBus,
+      dialogueMiddleware: this.dialogueMiddleware,
       composeResponse: (ctx: ResponseContext, orgId?: string) => this.composeResponse(ctx, orgId),
       sendFilteredReply: (tid: string, txt: string) => this.sendFilteredReply(tid, txt),
       recordAssistantMessage: (tid: string, txt: string) => this.recordAssistantMessage(tid, txt),

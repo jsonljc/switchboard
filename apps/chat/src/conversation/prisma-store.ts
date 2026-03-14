@@ -122,5 +122,7 @@ function toConversationStateData(row: PrismaConversationRow): ConversationStateD
     expiresAt: row.expiresAt,
     crmContactId: null,
     leadProfile: null,
+    detectedLanguage: null,
+    machineState: null,
   };
 }

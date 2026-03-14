@@ -27,6 +27,10 @@ export interface ConversationStateData {
   crmContactId: string | null;
   /** Typed lead profile that accumulates intelligence over conversation turns. */
   leadProfile: LeadProfile | null;
+  /** Detected language of the user (resolved from recent messages). */
+  detectedLanguage: string | null;
+  /** Current lead state machine state (e.g. QUALIFYING, BOOKING_PUSH). */
+  machineState: string | null;
 }
 
 export function createConversation(
@@ -53,6 +57,8 @@ export function createConversation(
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     crmContactId: null,
     leadProfile: null,
+    detectedLanguage: null,
+    machineState: null,
   };
 }
 

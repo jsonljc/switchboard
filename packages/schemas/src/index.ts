@@ -55,3 +55,9 @@ export * from "./ads-operator.js";
 
 // Revenue growth cartridge types
 export * from "./revenue-growth.js";
+
+// Conversation flow definitions (Zod-validated)
+export * from "./conversation-flow.js";
+
+// Outcome event tracking
+export * from "./outcome-event.js";

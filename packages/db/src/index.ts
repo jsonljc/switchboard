@@ -56,3 +56,6 @@ export { deriveAgentStates } from "./storage/agent-state-deriver.js";
 export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
 export { PrismaAdsOperatorConfigStore } from "./ads-operator-config/store.js";
 export { PrismaConnectorHealthLogStore } from "./storage/prisma-connector-health-log-store.js";
+export { PrismaBusinessConfigStore } from "./storage/prisma-business-config-store.js";
+export type { ConfigVersionRecord } from "./storage/prisma-business-config-store.js";
+export { PrismaOutcomeStore } from "./storage/prisma-outcome-store.js";

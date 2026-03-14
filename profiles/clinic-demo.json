@@ -316,5 +316,81 @@
     "persona": "friendly dental office coordinator",
     "tone": "warm and professional",
     "bannedTopics": ["competitor pricing", "medical diagnoses outside dentistry"]
+  },
+  "localisation": {
+    "market": "SG",
+    "languages": ["en", "zh"],
+    "naturalness": "semi_formal",
+    "tone": "warm and professional",
+    "emoji": {
+      "allowed": true,
+      "maxPerMessage": 1,
+      "preferredSet": ["😊", "👋", "✅"]
+    }
+  },
+  "booking": {
+    "bookingUrl": "https://brightsmile.example.com/book",
+    "bookingPhone": "+15551234567",
+    "requireDeposit": false,
+    "cancellationWindowHours": 24,
+    "maxAdvanceBookingDays": 60
+  },
+  "escalationConfig": {
+    "contacts": [
+      {
+        "id": "dr-chen",
+        "name": "Dr. Sarah Chen",
+        "channel": "whatsapp",
+        "channelId": "+15551234567",
+        "priority": 1
+      }
+    ],
+    "slaMinutes": 30,
+    "holdingMessage": "I'm connecting you with our team. They'll be with you shortly!",
+    "autoEscalateAfterTurns": 12
+  },
+  "learningPreferences": {
+    "enableAutoOptimisation": true,
+    "optimisationFrequency": "weekly",
+    "autoApplyTimingChanges": true,
+    "requireOwnerApprovalForContent": true,
+    "minSampleSize": 30
+  },
+  "conversationConfig": {
+    "flowMode": "hybrid",
+    "qualificationSignals": [
+      {
+        "id": "service_interest",
+        "name": "Service Interest",
+        "question": "What service are you interested in?",
+        "required": true,
+        "mappedField": "serviceInterest"
+      },
+      {
+        "id": "timeline",
+        "name": "Timeline",
+        "question": "When are you looking to come in?",
+        "options": ["As soon as possible", "Within a week", "Just exploring"],
+        "required": true,
+        "mappedField": "timeline"
+      },
+      {
+        "id": "insurance",
+        "name": "Insurance",
+        "question": "Do you have dental insurance?",
+        "options": ["Yes", "No", "Not sure"],
+        "required": false,
+        "mappedField": "hasInsurance"
+      }
+    ],
+    "maxTurnsBeforeEscalation": 12,
+    "silenceTimeoutMinutes": 30,
+    "reactivationWindowHours": 72
+  },
+  "persona": {
+    "name": "Sophia",
+    "role": "Patient Coordinator",
+    "personality": "Warm, patient, and knowledgeable about dental care",
+    "greetingTemplate": "Hi there! I'm {{name}}, your patient coordinator at {{businessName}}. How can I help you today?"
   }
 }

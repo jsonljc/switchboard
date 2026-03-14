@@ -711,3 +711,105 @@ model ConnectorHealthLog {
   @@index([organizationId, connectorId])
   @@index([checkedAt])
 }
+
+// ── AI Agent System: Business Config Persistence ──
+
+model BusinessConfig {
+  id              String    @id @default(uuid())
+  organizationId  String    @unique
+  config          Json      // Full BusinessProfile JSON
+  activeVersionId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  versions ConfigVersion[]
+
+  @@index([organizationId])
+}
+
+model ConfigVersion {
+  id               String   @id @default(uuid())
+  businessConfigId String
+  version          String
+  config           Json
+  changedBy        String
+  changeDescription String?
+  status           String   @default("draft") // draft, active, archived
+  createdAt        DateTime @default(now())
+
+  businessConfig BusinessConfig @relation(fields: [businessConfigId], references: [id], onDelete: Cascade)
+
+  @@index([businessConfigId])
+  @@index([status])
+}
+
+// ── AI Agent System: Outcome Tracking ──
+
+model OutcomeEvent {
+  id             String   @id @default(uuid())
+  sessionId      String
+  organizationId String
+  leadId         String?
+  outcomeType    String   // booked, escalated_resolved, escalated_unresolved, unresponsive, lost, reactivated
+  metadata       Json     @default("{}")
+  timestamp      DateTime @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([sessionId])
+  @@index([outcomeType])
+}
+
+model ResponseVariantLog {
+  id                String    @id @default(uuid())
+  sessionId         String
+  organizationId    String
+  primaryMove       String
+  templateId        String?
+  responseText      String
+  leadReplyReceived Boolean   @default(false)
+  leadReplyPositive Boolean   @default(false)
+  conversationState String?
+  timestamp         DateTime  @default(now())
+
+  @@index([organizationId, primaryMove])
+  @@index([sessionId])
+  @@index([timestamp])
+}
+
+model OptimisationProposal {
+  id             String   @id @default(uuid())
+  organizationId String
+  type           String   // timing, content, ordering, template
+  description    String
+  currentValue   String
+  proposedValue  String
+  confidence     Float
+  sampleSize     Int
+  status         String   @default("pending") // pending, approved, rejected, auto_applied
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, status])
+}
+
+// ── AI Agent System: Human Handoff ──
+
+model Handoff {
+  id                    String    @id @default(uuid())
+  sessionId             String
+  organizationId        String
+  leadId                String?
+  status                String    @default("pending") // pending, assigned, active, released
+  reason                String    // human_requested, max_turns_exceeded, etc.
+  leadSnapshot          Json      @default("{}")
+  qualificationSnapshot Json      @default("{}")
+  conversationSummary   Json      @default("{}")
+  slaDeadlineAt         DateTime
+  acknowledgedAt        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([organizationId, status])
+  @@index([sessionId])
+  @@index([slaDeadlineAt])
+}

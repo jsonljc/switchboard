@@ -118,3 +118,67 @@ export type {
 // LLM Client Interface
 export { MockLLMClient } from "./llm/types.js";
 export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";
+
+// State Machine (generic)
+export { StateMachine } from "./state-machine/machine.js";
+export type {
+  StateMachineConfig,
+  Transition,
+  TransitionResult,
+  TransitionGuard,
+  StateCallback,
+} from "./state-machine/types.js";
+
+// Dialogue (emotional classification, naturalness, bilingual, post-validation)
+export { classifyEmotionalSignal } from "./dialogue/emotional-classifier.js";
+export { NaturalnessPacketAssembler } from "./dialogue/naturalness-assembler.js";
+export { buildLocalisedSystemPrompt } from "./dialogue/system-prompt-builder.js";
+export { VariationPool } from "./dialogue/variation-pool.js";
+export { detectLanguage } from "./dialogue/language-detector.js";
+export { resolveLanguage, getLocalizedContent } from "./dialogue/bilingual-handler.js";
+export { PostGenerationValidator } from "./dialogue/post-validator.js";
+export type {
+  PrimaryMove,
+  EmotionalSignal,
+  EmotionalSignalInput,
+  NaturalnessPacket,
+  VoiceConfig,
+  ResponseConstraints,
+  VariationControl,
+} from "./dialogue/types.js";
+export type { DetectedLanguage, LanguageDetectionResult } from "./dialogue/language-detector.js";
+export type {
+  ValidationResult as PostValidationResult,
+  Violation,
+} from "./dialogue/post-validator.js";
+
+// Handoff (human handoff package assembly)
+export { HandoffPackageAssembler } from "./handoff/package-assembler.js";
+export { HandoffNotifier } from "./handoff/handoff-notifier.js";
+export { SlaMonitor } from "./handoff/sla-monitor.js";
+export type {
+  HandoffPackage,
+  HandoffReason,
+  HandoffStatus,
+  HandoffStore,
+  LeadSnapshot,
+  QualificationSnapshot,
+  ConversationSummary,
+} from "./handoff/types.js";
+
+// Flow Builder
+export { FlowBuilder } from "./flow-builder/builder.js";
+export { validateFlowDefinition } from "./flow-builder/validator.js";
+export type {
+  ValidationIssue,
+  ValidationResult as FlowValidationResult,
+} from "./flow-builder/validator.js";
+
+// Outcome Pipeline
+export { OutcomePipeline } from "./outcome/pipeline.js";
+export { OutcomeAggregator } from "./outcome/aggregator.js";
+export { runOptimisationCycle } from "./outcome/optimiser.js";
+export type { OutcomeStore, OptimisationProposal } from "./outcome/types.js";
+
+// Deployment Readiness
+export { DeploymentReadinessChecker } from "./deployment/readiness-checker.js";
