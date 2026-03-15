@@ -9,13 +9,26 @@ import type {
   InboundMessage,
   RouterResponse,
 } from "@switchboard/customer-engagement";
+import { LeadConversationState, getPrimaryMoveForState } from "@switchboard/customer-engagement";
 import { handleProposeResult } from "./proposal-handler.js";
 import { getThread, setThread } from "../conversation/threads.js";
 import { transitionConversation } from "../conversation/state.js";
 import { startCadenceForContact } from "../jobs/cadence-worker.js";
 import type { CadenceInstance } from "@switchboard/customer-engagement";
-import { HandoffPackageAssembler } from "@switchboard/core";
+import {
+  HandoffPackageAssembler,
+  HandoffNotifier,
+  type HandoffStore,
+  OutcomePipeline,
+} from "@switchboard/core";
 import type { DialogueMiddleware } from "../middleware/dialogue-middleware.js";
+import type { PrimaryMove } from "@switchboard/core";
+
+export interface LeadHandlerDeps {
+  handoffStore?: HandoffStore | null;
+  handoffNotifier?: HandoffNotifier | null;
+  outcomePipeline?: OutcomePipeline | null;
+}
 
 export async function handleLeadMessage(
   ctx: HandlerContext,
@@ -23,6 +36,7 @@ export async function handleLeadMessage(
   message: IncomingMessage,
   threadId: string,
   dialogueMiddleware?: DialogueMiddleware | null,
+  deps?: LeadHandlerDeps,
 ): Promise<void> {
   const inbound: InboundMessage = {
     channelId: threadId,
@@ -57,15 +71,35 @@ export async function handleLeadMessage(
     return;
   }
 
+  // Derive the actual primary move from the state machine state
+  const primaryMove: PrimaryMove = routerResponse.machineState
+    ? getPrimaryMoveForState(routerResponse.machineState as LeadConversationState)
+    : "greet";
+
   // Send each response message back through the adapter (with post-generation validation)
   for (const text of routerResponse.responses) {
     let finalText = text;
     if (dialogueMiddleware) {
-      const result = dialogueMiddleware.afterGenerate(text, "greet", threadId);
+      const result = dialogueMiddleware.afterGenerate(text, primaryMove, threadId);
       finalText = result.text;
     }
     await ctx.sendFilteredReply(threadId, finalText);
     await ctx.recordAssistantMessage(threadId, finalText);
+
+    // Log response variant for A/B testing signal (C2)
+    if (deps?.outcomePipeline) {
+      try {
+        await deps.outcomePipeline.logResponseVariant({
+          sessionId: threadId,
+          organizationId: inbound.organizationId,
+          primaryMove,
+          responseText: finalText,
+          conversationState: routerResponse.machineState ?? undefined,
+        });
+      } catch {
+        // Non-critical — don't block the response
+      }
+    }
   }
 
   // If the router produced an action, propose it through governance
@@ -124,13 +158,27 @@ export async function handleLeadMessage(
       skippedSteps: [],
     };
     startCadenceForContact(instance);
+
+    // Emit "booked" outcome for completed qualification with high score (C2)
+    if (deps?.outcomePipeline && leadScore >= 50) {
+      try {
+        await deps.outcomePipeline.emitOutcome({
+          sessionId: threadId,
+          organizationId: inbound.organizationId,
+          outcomeType: "booked",
+          metadata: { leadScore },
+        });
+      } catch {
+        // Non-critical
+      }
+    }
   }
 
-  // Escalation: build handoff package for context and notify
+  // Escalation: build handoff package, persist it, and notify (C3)
   if (routerResponse.escalated) {
     const conversation = await getThread(threadId);
     const assembler = new HandoffPackageAssembler();
-    assembler.assemble({
+    const handoffPackage = assembler.assemble({
       sessionId: threadId,
       organizationId: inbound.organizationId,
       reason: "human_requested",
@@ -147,9 +195,41 @@ export async function handleLeadMessage(
       slaMinutes: 30,
     });
 
+    // Persist handoff to database (C3)
+    if (deps?.handoffStore) {
+      try {
+        await deps.handoffStore.save(handoffPackage);
+      } catch (err) {
+        console.error("[LeadBot] Failed to persist handoff:", err);
+      }
+    }
+
+    // Notify escalation contacts (C3)
+    if (deps?.handoffNotifier) {
+      try {
+        await deps.handoffNotifier.notify(handoffPackage);
+      } catch (err) {
+        console.error("[LeadBot] Failed to send handoff notification:", err);
+      }
+    }
+
+    // Emit escalation outcome (C2)
+    if (deps?.outcomePipeline) {
+      try {
+        await deps.outcomePipeline.emitOutcome({
+          sessionId: threadId,
+          organizationId: inbound.organizationId,
+          outcomeType: "escalated_unresolved",
+          metadata: { reason: "human_requested", machineState: routerResponse.machineState },
+        });
+      } catch {
+        // Non-critical
+      }
+    }
+
     await ctx.sendFilteredReply(
       threadId,
-      "I'm connecting you with a team member who can help. They'll be with you shortly.",
+      "Let me get one of our team to help you directly. They'll be with you shortly!",
     );
   }
 }

@@ -25,17 +25,14 @@ export interface PostValidatorConfig {
 
 /** Fallback messages per PrimaryMove when a response is blocked. */
 const FALLBACK_MESSAGES: Partial<Record<PrimaryMove, string>> = {
-  greet: "Hi! Thanks for reaching out. How can I help you today?",
-  acknowledge_and_hold: "Thanks for sharing that. Let me look into this for you.",
-  answer_question:
-    "That's a great question. Let me connect you with someone who can give you the best answer.",
-  ask_qualification_question:
-    "I'd love to help you find the right option. What are you looking for?",
-  handle_objection:
-    "I completely understand your concern. Let me share some information that might help.",
-  advance_to_booking: "Would you like to schedule a time that works for you?",
-  escalate_to_human: "Let me connect you with a team member who can help.",
-  clarify: "Could you tell me a bit more about what you're looking for?",
+  greet: "Hey! What can we help you with today?",
+  acknowledge_and_hold: "Got it, thanks for letting us know. Give me a moment to check on that.",
+  answer_question: "Good question! Let me get someone who knows more about this to help you out.",
+  ask_qualification_question: "To point you in the right direction — what are you looking for?",
+  handle_objection: "That makes sense. Let me share a few things that might help with that.",
+  advance_to_booking: "Want to lock in a slot that works for you?",
+  escalate_to_human: "Let me get one of our team to help you directly.",
+  clarify: "Got it — could you share a bit more so I can help?",
 };
 
 const DEFAULT_FALLBACK = "Thanks for your message. How can I help you?";

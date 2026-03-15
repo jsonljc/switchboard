@@ -120,6 +120,15 @@ export { bookingFlow } from "./conversation/templates/booking.js";
 export { matchFAQ, formatFAQResponse } from "./conversation/faq-matcher.js";
 export type { FAQMatchResult } from "./conversation/faq-matcher.js";
 
+// Lead state machine
+export {
+  LeadConversationState,
+  getPrimaryMoveForState,
+} from "./conversation/lead-state-machine.js";
+
+// Intent classifier
+export type { MessageIntent } from "./conversation/intent-classifier.js";
+
 // Cadence engine
 export { evaluateCadenceStep } from "./cadence/engine.js";
 export type { CadenceEvaluation } from "./cadence/engine.js";

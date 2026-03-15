@@ -14,6 +14,7 @@ import {
   LeadConversationState,
   type LeadStateMachineContext,
 } from "./lead-state-machine.js";
+import type { ClassificationResult } from "./intent-classifier.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -110,20 +111,33 @@ export class ConversationRouter {
     }
 
     // Step 1.5: Advance lead state machine (if enabled)
+    // Classify intent first so we can dispatch semantic events
+    const classification = this.nlpAdapter.classifier.classify(message.body);
+
     if (session.machineState !== undefined) {
       const sm = createLeadStateMachine();
       sm.hydrate(session.machineState as LeadConversationState);
-      const smCtx: LeadStateMachineContext = {
-        turnCount: session.state.history.length,
-        signalsCaptured: 0,
-        totalSignals: 3,
-        engagementLevel: "medium",
-        hasObjection: false,
-        maxTurnsBeforeEscalation: 15,
-      };
-      const smResult = await sm.transition(LeadConversationEvent.MESSAGE_RECEIVED, smCtx);
-      if (smResult.success) {
-        session.machineState = sm.currentState;
+      const smCtx = this.buildStateMachineContext(session, classification);
+
+      // Dispatch semantic events based on classification and context
+      const events = this.resolveSemanticEvents(sm.currentState, classification, smCtx);
+      for (const event of events) {
+        const smResult = await sm.transition(event, smCtx);
+        if (smResult.success) {
+          session.machineState = sm.currentState;
+        }
+      }
+
+      // If state machine reached ESCALATING, mark session as escalated
+      if (
+        sm.currentState === LeadConversationState.ESCALATING ||
+        sm.currentState === LeadConversationState.HUMAN_ACTIVE
+      ) {
+        session.escalated = true;
+        await this.sessionStore.update(session.id, {
+          escalated: true,
+          machineState: session.machineState,
+        });
       }
     }
 
@@ -277,6 +291,140 @@ export class ConversationRouter {
     };
   }
 
+  /** Build state machine context from session state and classification. */
+  private buildStateMachineContext(
+    session: ConversationSession,
+    classification: ClassificationResult,
+  ): LeadStateMachineContext {
+    const history = session.state.history;
+    const signalsCaptured = this.countSignalsCaptured(session);
+    return {
+      turnCount: history.length,
+      signalsCaptured,
+      totalSignals: 3,
+      engagementLevel: this.inferEngagement(history),
+      hasObjection: classification.intent === "objection",
+      maxTurnsBeforeEscalation: 15,
+    };
+  }
+
+  /** Count qualification signals captured from session variables. */
+  private countSignalsCaptured(session: ConversationSession): number {
+    const vars = session.state.variables;
+    let count = 0;
+    if (vars["selectedOption_timeline_question"] !== undefined) count++;
+    if (vars["selectedOption_budget_question"] !== undefined) count++;
+    if (vars["selectedOption_insurance_question"] !== undefined) count++;
+    return count;
+  }
+
+  /** Infer engagement level from conversation history length. */
+  private inferEngagement(
+    history: Array<{ stepId: string }>,
+  ): LeadStateMachineContext["engagementLevel"] {
+    // Use turn count as a proxy for engagement
+    if (history.length <= 2) return "high";
+    if (history.length >= 12) return "declining";
+    if (history.length >= 8) return "low";
+    return "medium";
+  }
+
+  /**
+   * Resolve semantic events to dispatch based on classification, current state, and context.
+   * Returns an ordered list of events; the state machine processes them sequentially.
+   */
+  private resolveSemanticEvents(
+    currentState: LeadConversationState,
+    classification: ClassificationResult,
+    ctx: LeadStateMachineContext,
+  ): LeadConversationEvent[] {
+    const events: LeadConversationEvent[] = [];
+
+    // Medical risk → immediate escalation from any state
+    if (classification.intent === "medical_risk") {
+      events.push(LeadConversationEvent.ESCALATION_TRIGGERED);
+      return events;
+    }
+
+    // Human request → escalation
+    if (classification.intent === "escalation_request") {
+      events.push(LeadConversationEvent.HUMAN_REQUESTED);
+      return events;
+    }
+
+    // Objection detected
+    if (classification.intent === "objection") {
+      events.push(LeadConversationEvent.OBJECTION_DETECTED);
+      return events;
+    }
+
+    // Engagement declining
+    if (ctx.engagementLevel === "declining") {
+      events.push(LeadConversationEvent.ENGAGEMENT_DECLINING);
+      return events;
+    }
+
+    // State-specific semantic events
+    switch (currentState) {
+      case LeadConversationState.IDLE:
+        events.push(LeadConversationEvent.MESSAGE_RECEIVED);
+        break;
+
+      case LeadConversationState.GREETING:
+      case LeadConversationState.CLARIFYING:
+      case LeadConversationState.REACTIVATION:
+        // Any meaningful message classifies intent
+        if (classification.intent !== "off_topic") {
+          events.push(LeadConversationEvent.INTENT_CLASSIFIED);
+        } else {
+          events.push(LeadConversationEvent.MESSAGE_RECEIVED);
+        }
+        break;
+
+      case LeadConversationState.QUALIFYING:
+        // Check if all signals captured
+        if (ctx.signalsCaptured >= ctx.totalSignals) {
+          events.push(LeadConversationEvent.ALL_SIGNALS_CAPTURED);
+        } else if (
+          classification.intent === "freeform_answer" ||
+          classification.intent === "option_selection"
+        ) {
+          events.push(LeadConversationEvent.QUALIFICATION_SIGNAL_CAPTURED);
+        } else if (classification.intent === "affirmative" && ctx.signalsCaptured > 0) {
+          // Ready-now urgency signal
+          events.push(LeadConversationEvent.URGENCY_READY_NOW);
+        } else {
+          events.push(LeadConversationEvent.MESSAGE_RECEIVED);
+        }
+        break;
+
+      case LeadConversationState.OBJECTION_HANDLING:
+        // Positive response to objection handling → resolved
+        if (
+          classification.intent === "affirmative" ||
+          classification.intent === "freeform_answer"
+        ) {
+          if (ctx.signalsCaptured >= ctx.totalSignals) {
+            events.push(LeadConversationEvent.ALL_SIGNALS_CAPTURED);
+          } else {
+            events.push(LeadConversationEvent.OBJECTION_RESOLVED);
+          }
+        }
+        break;
+
+      case LeadConversationState.SLOWDOWN_MODE:
+      case LeadConversationState.FOLLOW_UP_SCHEDULED:
+        events.push(LeadConversationEvent.MESSAGE_RECEIVED);
+        break;
+
+      default:
+        events.push(LeadConversationEvent.MESSAGE_RECEIVED);
+        break;
+    }
+
+    return events;
+  }
+
   /**
    * Create a new conversation session and execute the initial greeting.
    */
@@ -308,6 +456,7 @@ export class ConversationRouter {
       timeoutMs: this.sessionTimeoutMs,
       escalated: false,
       metadata: message.metadata ?? {},
+      machineState: LeadConversationState.IDLE,
     };
 
     await this.sessionStore.create(session);

@@ -19,7 +19,11 @@ import type {
   ResolvedProfile,
   DataFlowExecutor,
   ConversionBus,
+  HandoffStore,
+  OutcomeStore,
 } from "@switchboard/core";
+import { OutcomePipeline, HandoffNotifier } from "@switchboard/core";
+import type { ApprovalNotifier } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
@@ -74,6 +78,14 @@ export interface ChatRuntimeConfig {
   leadRouter?: ConversationRouter | null;
   /** Optional ConversionBus for emitting conversion events (CRM → ads feedback loop). */
   conversionBus?: ConversionBus | null;
+  /** Optional HandoffStore for persisting escalation packages. */
+  handoffStore?: HandoffStore | null;
+  /** Optional ApprovalNotifier for sending handoff alerts. */
+  approvalNotifier?: ApprovalNotifier | null;
+  /** Optional OutcomeStore for recording conversation outcomes and response variants. */
+  outcomeStore?: OutcomeStore | null;
+  /** Minimum delay in ms before sending a response (typing simulation). Default: 0. */
+  typingDelayMs?: number;
 }
 
 export class ChatRuntime {
@@ -96,6 +108,10 @@ export class ChatRuntime {
   private isLeadBot: boolean;
   private leadRouter: ConversationRouter | null;
   private conversionBus: ConversionBus | null;
+  private handoffStore: HandoffStore | null;
+  private handoffNotifier: HandoffNotifier | null;
+  private outcomePipeline: OutcomePipeline | null;
+  private typingDelayMs: number;
   private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
@@ -128,6 +144,12 @@ export class ChatRuntime {
     this.isLeadBot = config.isLeadBot ?? false;
     this.leadRouter = config.leadRouter ?? null;
     this.conversionBus = config.conversionBus ?? null;
+    this.handoffStore = config.handoffStore ?? null;
+    this.handoffNotifier = config.approvalNotifier
+      ? new HandoffNotifier(config.approvalNotifier)
+      : null;
+    this.outcomePipeline = config.outcomeStore ? new OutcomePipeline(config.outcomeStore) : null;
+    this.typingDelayMs = config.typingDelayMs ?? 0;
     this.dialogueMiddleware = new DialogueMiddleware({
       resolvedProfile: config.resolvedProfile ?? null,
     });
@@ -162,8 +184,13 @@ export class ChatRuntime {
   // Shared helpers (used by this class and passed to extracted handlers)
   // ---------------------------------------------------------------------------
 
-  /** Send text reply with banned phrase filtering applied. */
+  /** Send text reply with banned phrase filtering and typing delay applied. */
   private async sendFilteredReply(threadId: string, text: string): Promise<void> {
+    // Typing delay simulation (H5) — wait before sending to appear human
+    if (this.typingDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.typingDelayMs));
+    }
+
     let filtered = this.filterOutgoing(text);
 
     // Post-generation medical claim validation
@@ -322,7 +349,7 @@ export class ChatRuntime {
       await linkCrmContact(this.buildPipelineDeps(), message, conversation);
       await setThread(conversation);
 
-      // Welcome message for first-time users
+      // Welcome message for first-time users (routed through sendFilteredReply for safety — H7)
       const welcomeResponse = await this.composeResponse(
         {
           type: "welcome",
@@ -330,7 +357,7 @@ export class ChatRuntime {
         },
         message.organizationId ?? undefined,
       );
-      await this.adapter.sendTextReply(threadId, welcomeResponse.text);
+      await this.sendFilteredReply(threadId, welcomeResponse.text);
       await this.recordAssistantMessage(threadId, welcomeResponse.text);
       isNewConversation = true;
     }
@@ -356,7 +383,11 @@ export class ChatRuntime {
     // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
     if (this.isLeadBot && this.leadRouter) {
       const ctx = this.buildHandlerContext();
-      await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware);
+      await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware, {
+        handoffStore: this.handoffStore,
+        handoffNotifier: this.handoffNotifier,
+        outcomePipeline: this.outcomePipeline,
+      });
       return;
     }
 

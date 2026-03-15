@@ -107,6 +107,41 @@ describe("LeadStateMachine", () => {
     expect(machine.currentState).toBe(LeadConversationState.QUALIFYING);
   });
 
+  it("should transition to ESCALATING on human request from GREETING", async () => {
+    const machine = createLeadStateMachine();
+    machine.hydrate(LeadConversationState.GREETING);
+    const result = await machine.transition(LeadConversationEvent.HUMAN_REQUESTED, makeContext());
+    expect(result.success).toBe(true);
+    expect(machine.currentState).toBe(LeadConversationState.ESCALATING);
+  });
+
+  it("should transition to ESCALATING on human request from POST_BOOKING", async () => {
+    const machine = createLeadStateMachine();
+    machine.hydrate(LeadConversationState.POST_BOOKING);
+    const result = await machine.transition(LeadConversationEvent.HUMAN_REQUESTED, makeContext());
+    expect(result.success).toBe(true);
+    expect(machine.currentState).toBe(LeadConversationState.ESCALATING);
+  });
+
+  it("should transition to ESCALATING on human request from FOLLOW_UP_SCHEDULED", async () => {
+    const machine = createLeadStateMachine();
+    machine.hydrate(LeadConversationState.FOLLOW_UP_SCHEDULED);
+    const result = await machine.transition(LeadConversationEvent.HUMAN_REQUESTED, makeContext());
+    expect(result.success).toBe(true);
+    expect(machine.currentState).toBe(LeadConversationState.ESCALATING);
+  });
+
+  it("should transition to ESCALATING on ESCALATION_TRIGGERED from GREETING", async () => {
+    const machine = createLeadStateMachine();
+    machine.hydrate(LeadConversationState.GREETING);
+    const result = await machine.transition(
+      LeadConversationEvent.ESCALATION_TRIGGERED,
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    expect(machine.currentState).toBe(LeadConversationState.ESCALATING);
+  });
+
   it("should map states to primary moves", () => {
     expect(getPrimaryMoveForState(LeadConversationState.GREETING)).toBe("greet");
     expect(getPrimaryMoveForState(LeadConversationState.QUALIFYING)).toBe(
