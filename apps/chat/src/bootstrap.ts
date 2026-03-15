@@ -48,6 +48,9 @@ import {
   RedisSessionStore,
   qualificationFlow,
   bookingFlow,
+  objectionHandlingFlow,
+  reviewRequestFlow,
+  postTreatmentFlow,
   resolveCadenceTemplates,
 } from "@switchboard/customer-engagement";
 import { startCadenceWorker, registerCadenceDefinition } from "./jobs/cadence-worker.js";
@@ -420,6 +423,9 @@ export async function createChatRuntime(
       flows: new Map([
         [qualificationFlow.id, qualificationFlow],
         [bookingFlow.id, bookingFlow],
+        [objectionHandlingFlow.id, objectionHandlingFlow],
+        [reviewRequestFlow.id, reviewRequestFlow],
+        [postTreatmentFlow.id, postTreatmentFlow],
       ]),
       defaultFlowId: qualificationFlow.id,
       faqs: resolvedProfile?.profile?.faqs,

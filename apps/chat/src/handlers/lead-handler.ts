@@ -106,6 +106,38 @@ export async function handleLeadMessage(
     }
   }
 
+  // Detect state transitions for outcome tracking
+  if (deps?.outcomePipeline && routerResponse.machineState) {
+    const conversation = await getThread(threadId);
+    const prevState = conversation?.machineState;
+
+    if (routerResponse.machineState === "REACTIVATION" && prevState) {
+      if (prevState === "HUMAN_ACTIVE" || prevState === "ESCALATING") {
+        try {
+          await deps.outcomePipeline.emitOutcome({
+            sessionId: threadId,
+            organizationId: inbound.organizationId,
+            outcomeType: "escalated_resolved",
+            metadata: { previousState: prevState },
+          });
+        } catch {
+          // Non-critical
+        }
+      } else if (prevState === "CLOSED_UNRESPONSIVE") {
+        try {
+          await deps.outcomePipeline.emitOutcome({
+            sessionId: threadId,
+            organizationId: inbound.organizationId,
+            outcomeType: "reactivated",
+            metadata: { previousState: prevState },
+          });
+        } catch {
+          // Non-critical
+        }
+      }
+    }
+  }
+
   // If the router produced an action, propose it through governance
   if (routerResponse.actionRequired) {
     try {
@@ -142,6 +174,23 @@ export async function handleLeadMessage(
   // Start cadence when qualification flow completes
   if (routerResponse.completed && routerResponse.variables) {
     const leadScore = Number(routerResponse.variables["leadScore"] ?? 0);
+
+    // Emit qualified event to ConversionBus (fires for all completed qualifications)
+    if (deps?.conversionBus) {
+      try {
+        deps.conversionBus.emit({
+          type: "qualified",
+          contactId: threadId,
+          organizationId: inbound.organizationId,
+          value: leadScore,
+          timestamp: new Date(),
+          metadata: { leadScore },
+        });
+      } catch {
+        // Non-critical
+      }
+    }
+
     const cadenceTemplateId = leadScore >= 50 ? "consultation-reminder" : "dormant-winback";
 
     const instance: CadenceInstance = {
@@ -171,6 +220,20 @@ export async function handleLeadMessage(
           organizationId: inbound.organizationId,
           outcomeType: "booked",
           metadata: { leadScore },
+        });
+      } catch {
+        // Non-critical
+      }
+    }
+
+    // Emit "lost" outcome for low-score completions (qualification didn't convert)
+    if (deps?.outcomePipeline && leadScore < 50) {
+      try {
+        await deps.outcomePipeline.emitOutcome({
+          sessionId: threadId,
+          organizationId: inbound.organizationId,
+          outcomeType: "lost",
+          metadata: { leadScore, reason: "low_qualification_score" },
         });
       } catch {
         // Non-critical
@@ -264,5 +327,13 @@ export async function handleLeadMessage(
       threadId,
       "Let me get one of our team to help you directly. They'll be with you shortly!",
     );
+  }
+
+  // Persist machine state for transition detection on next message
+  if (routerResponse.machineState) {
+    const conversation = await getThread(threadId);
+    if (conversation && conversation.machineState !== routerResponse.machineState) {
+      await setThread({ ...conversation, machineState: routerResponse.machineState });
+    }
   }
 }

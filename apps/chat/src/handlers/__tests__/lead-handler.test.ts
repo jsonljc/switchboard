@@ -115,7 +115,26 @@ describe("handleLeadMessage — ConversionBus wiring", () => {
     );
   });
 
-  it("does NOT emit to ConversionBus when score < 50", async () => {
+  it("emits 'qualified' to ConversionBus when qualification completes regardless of score", async () => {
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Thanks for the info."],
+          completed: true,
+          variables: { leadScore: "35" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      conversionBus,
+    });
+
+    expect(conversionBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: "qualified" }));
+  });
+
+  it("does NOT emit 'booked' to ConversionBus when score < 50", async () => {
     mockRouter = {
       handleMessage: vi.fn().mockResolvedValue(
         mockRouterResponse({
@@ -131,7 +150,9 @@ describe("handleLeadMessage — ConversionBus wiring", () => {
       conversionBus,
     });
 
-    expect(conversionBus.emit).not.toHaveBeenCalled();
+    expect(conversionBus.emit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "booked" }),
+    );
   });
 
   it("does NOT emit when conversionBus is not provided", async () => {
@@ -170,6 +191,115 @@ describe("handleLeadMessage — ConversionBus wiring", () => {
         type: "booked",
         sourceAdId: undefined,
         sourceCampaignId: undefined,
+      }),
+    );
+  });
+
+  it("emits 'lost' outcome when qualification completes with score < 50", async () => {
+    const outcomePipeline = {
+      emitOutcome: vi.fn().mockResolvedValue({}),
+      logResponseVariant: vi.fn().mockResolvedValue({}),
+    };
+
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Thanks for your interest."],
+          completed: true,
+          variables: { leadScore: "25" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      outcomePipeline: outcomePipeline as never,
+    });
+
+    expect(outcomePipeline.emitOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcomeType: "lost",
+        metadata: expect.objectContaining({ leadScore: 25, reason: "low_qualification_score" }),
+      }),
+    );
+  });
+});
+
+describe("handleLeadMessage — state transition outcomes", () => {
+  let ctx: HandlerContext;
+  let mockRouter: ConversationRouter;
+
+  beforeEach(() => {
+    ctx = createMockCtx();
+  });
+
+  it("emits 'escalated_resolved' when transitioning from HUMAN_ACTIVE to REACTIVATION", async () => {
+    const outcomePipeline = {
+      emitOutcome: vi.fn().mockResolvedValue({}),
+      logResponseVariant: vi.fn().mockResolvedValue({}),
+    };
+
+    // Mock thread with previous HUMAN_ACTIVE state
+    const { getThread } = await import("../../conversation/threads.js");
+    (getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "thread-1",
+      crmContactId: "contact-123",
+      messages: [],
+      machineState: "HUMAN_ACTIVE",
+    });
+
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Welcome back! How can I help?"],
+          machineState: "REACTIVATION",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      outcomePipeline: outcomePipeline as never,
+    });
+
+    expect(outcomePipeline.emitOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcomeType: "escalated_resolved",
+        metadata: expect.objectContaining({ previousState: "HUMAN_ACTIVE" }),
+      }),
+    );
+  });
+
+  it("emits 'reactivated' when transitioning from CLOSED_UNRESPONSIVE to REACTIVATION", async () => {
+    const outcomePipeline = {
+      emitOutcome: vi.fn().mockResolvedValue({}),
+      logResponseVariant: vi.fn().mockResolvedValue({}),
+    };
+
+    const { getThread } = await import("../../conversation/threads.js");
+    (getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "thread-1",
+      crmContactId: "contact-123",
+      messages: [],
+      machineState: "CLOSED_UNRESPONSIVE",
+    });
+
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Welcome back!"],
+          machineState: "REACTIVATION",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      outcomePipeline: outcomePipeline as never,
+    });
+
+    expect(outcomePipeline.emitOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcomeType: "reactivated",
+        metadata: expect.objectContaining({ previousState: "CLOSED_UNRESPONSIVE" }),
       }),
     );
   });
