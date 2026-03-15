@@ -34,6 +34,14 @@ export interface OperatorSummary {
     costPerLead30d: number | null;
     costPerQualifiedLead30d: number | null;
     costPerBooking30d: number | null;
+    outcomeBreakdown: {
+      booked: number;
+      lost: number;
+      escalated_unresolved: number;
+      escalated_resolved: number;
+      unresponsive: number;
+      reactivated: number;
+    };
   };
   operator: {
     actionsToday: number;
@@ -111,6 +119,14 @@ async function buildOutcomeSummary(
   qualifiedLeads30d: number;
   bookings30d: number;
   revenue30d: number | null;
+  outcomeBreakdown: {
+    booked: number;
+    lost: number;
+    escalated_unresolved: number;
+    escalated_resolved: number;
+    unresponsive: number;
+    reactivated: number;
+  };
 }> {
   const orgFilter = { organizationId };
   const dateFilter = { createdAt: { gte: start30Days } };
@@ -149,11 +165,36 @@ async function buildOutcomeSummary(
     }),
   ]);
 
+  const outcomeEvents = await prisma.outcomeEvent.groupBy({
+    by: ["outcomeType"],
+    where: {
+      organizationId,
+      timestamp: { gte: start30Days },
+    },
+    _count: { id: true },
+  });
+
+  const outcomeBreakdown = {
+    booked: 0,
+    lost: 0,
+    escalated_unresolved: 0,
+    escalated_resolved: 0,
+    unresponsive: 0,
+    reactivated: 0,
+  };
+  for (const row of outcomeEvents) {
+    const key = row.outcomeType as keyof typeof outcomeBreakdown;
+    if (key in outcomeBreakdown) {
+      outcomeBreakdown[key] = row._count.id;
+    }
+  }
+
   return {
     leads30d,
     qualifiedLeads30d: qualifiedDeals.length,
     bookings30d: bookingDeals.length,
     revenue30d: revenue._sum.amount ?? null,
+    outcomeBreakdown,
   };
 }
 

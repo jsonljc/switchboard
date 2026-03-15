@@ -122,6 +122,14 @@ export interface OperatorSummary {
     costPerLead30d: number | null;
     costPerQualifiedLead30d: number | null;
     costPerBooking30d: number | null;
+    outcomeBreakdown?: {
+      booked: number;
+      lost: number;
+      escalated_unresolved: number;
+      escalated_resolved: number;
+      unresponsive: number;
+      reactivated: number;
+    };
   };
   operator: {
     actionsToday: number;
