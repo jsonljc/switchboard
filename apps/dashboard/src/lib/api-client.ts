@@ -131,6 +131,7 @@ export interface OperatorSummary {
     averageMs: number | null;
     p50Ms: number | null;
     p95Ms: number | null;
+    percentWithin60s: number | null;
     sampleSize: number;
   };
 }

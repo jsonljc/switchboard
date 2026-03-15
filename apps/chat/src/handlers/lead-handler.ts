@@ -19,15 +19,19 @@ import {
   HandoffPackageAssembler,
   HandoffNotifier,
   type HandoffStore,
+  type ConversionBus,
   OutcomePipeline,
 } from "@switchboard/core";
 import type { DialogueMiddleware } from "../middleware/dialogue-middleware.js";
 import type { PrimaryMove } from "@switchboard/core";
+import type { CrmProvider } from "@switchboard/schemas";
 
 export interface LeadHandlerDeps {
   handoffStore?: HandoffStore | null;
   handoffNotifier?: HandoffNotifier | null;
   outcomePipeline?: OutcomePipeline | null;
+  conversionBus?: ConversionBus | null;
+  crmProvider?: CrmProvider | null;
 }
 
 export async function handleLeadMessage(
@@ -170,6 +174,35 @@ export async function handleLeadMessage(
         });
       } catch {
         // Non-critical
+      }
+    }
+
+    // Emit ConversionBus event so CAPIDispatcher sends booking signal to Meta
+    if (deps?.conversionBus && leadScore >= 50) {
+      try {
+        let sourceAdId: string | undefined;
+        let sourceCampaignId: string | undefined;
+        if (deps.crmProvider) {
+          const conversation = await getThread(threadId);
+          if (conversation?.crmContactId) {
+            const contacts = await deps.crmProvider.searchContacts(conversation.crmContactId);
+            const contact = contacts[0];
+            sourceAdId = contact?.sourceAdId ?? undefined;
+            sourceCampaignId = contact?.sourceCampaignId ?? undefined;
+          }
+        }
+        deps.conversionBus.emit({
+          type: "booked",
+          contactId: threadId,
+          organizationId: inbound.organizationId,
+          value: leadScore,
+          sourceAdId,
+          sourceCampaignId,
+          timestamp: new Date(),
+          metadata: { leadScore },
+        });
+      } catch {
+        // Non-critical — don't block the response
       }
     }
   }

@@ -43,6 +43,7 @@ export interface OperatorSummary {
     averageMs: number | null;
     p50Ms: number | null;
     p95Ms: number | null;
+    percentWithin60s: number | null;
     sampleSize: number;
   };
 }
@@ -338,18 +339,21 @@ async function buildSpeedToLead(
   }
 
   if (responseTimes.length === 0) {
-    return { averageMs: null, p50Ms: null, p95Ms: null, sampleSize: 0 };
+    return { averageMs: null, p50Ms: null, p95Ms: null, percentWithin60s: null, sampleSize: 0 };
   }
 
   responseTimes.sort((a, b) => a - b);
   const avg = responseTimes.reduce((sum, t) => sum + t, 0) / responseTimes.length;
   const p50 = responseTimes[Math.floor(responseTimes.length * 0.5)]!;
   const p95 = responseTimes[Math.floor(responseTimes.length * 0.95)]!;
+  const within60s = responseTimes.filter((t) => t <= 60_000).length;
+  const percentWithin60s = Math.round((within60s / responseTimes.length) * 100);
 
   return {
     averageMs: Math.round(avg),
     p50Ms: p50,
     p95Ms: p95,
+    percentWithin60s,
     sampleSize: responseTimes.length,
   };
 }

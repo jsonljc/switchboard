@@ -231,9 +231,12 @@ export default function ResultsPage() {
                 : undefined
             }
             sub={
-              stl?.p50Ms != null && stl?.p95Ms != null
-                ? `p50 ${formatDuration(stl.p50Ms)} · p95 ${formatDuration(stl.p95Ms)}`
-                : "first reply time"
+              stl?.percentWithin60s != null
+                ? `${stl.percentWithin60s}% within 60s` +
+                  (stl?.p50Ms != null ? ` · p50 ${formatDuration(stl.p50Ms)}` : "")
+                : stl?.p50Ms != null && stl?.p95Ms != null
+                  ? `p50 ${formatDuration(stl.p50Ms)} · p95 ${formatDuration(stl.p95Ms)}`
+                  : "first reply time"
             }
           />
           <ScorecardTile
