@@ -37,6 +37,7 @@ describe("Speed-to-Lead in OperatorSummary", () => {
       averageMs: null,
       p50Ms: null,
       p95Ms: null,
+      percentWithin60s: null,
       sampleSize: 0,
     });
   });

@@ -387,6 +387,8 @@ export class ChatRuntime {
         handoffStore: this.handoffStore,
         handoffNotifier: this.handoffNotifier,
         outcomePipeline: this.outcomePipeline,
+        conversionBus: this.conversionBus,
+        crmProvider: this.crmProvider,
       });
       return;
     }

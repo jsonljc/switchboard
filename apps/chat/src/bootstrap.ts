@@ -431,6 +431,13 @@ export async function createChatRuntime(
     );
   }
 
+  // Wire OutcomeStore for conversation outcome tracking (enables OutcomePipeline)
+  let outcomeStore: import("@switchboard/core").OutcomeStore | undefined;
+  if (process.env["DATABASE_URL"]) {
+    const { getDb, PrismaOutcomeStore } = await import("@switchboard/db");
+    outcomeStore = new PrismaOutcomeStore(getDb());
+  }
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -450,6 +457,7 @@ export async function createChatRuntime(
     conversionBus,
     isLeadBot: !!isLeadBot,
     leadRouter,
+    outcomeStore,
   });
 
   // Start cadence worker for follow-up automation when lead bot mode is enabled

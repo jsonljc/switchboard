@@ -1,0 +1,176 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { handleLeadMessage } from "../lead-handler.js";
+import type { HandlerContext } from "../handler-context.js";
+import type { ConversationRouter, RouterResponse } from "@switchboard/customer-engagement";
+import type { IncomingMessage } from "@switchboard/schemas";
+import type { ConversionBus } from "@switchboard/core";
+
+// Mock conversation threads
+vi.mock("../../conversation/threads.js", () => ({
+  getThread: vi.fn().mockResolvedValue({
+    id: "thread-1",
+    crmContactId: "contact-123",
+    messages: [],
+  }),
+  setThread: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../conversation/state.js", () => ({
+  transitionConversation: vi.fn((c: unknown) => c),
+}));
+
+vi.mock("../../jobs/cadence-worker.js", () => ({
+  startCadenceForContact: vi.fn(),
+}));
+
+function createMockCtx(): HandlerContext {
+  return {
+    adapter: {} as never,
+    orchestrator: {
+      resolveAndPropose: vi.fn().mockResolvedValue({ status: "proposed" }),
+    } as never,
+    readAdapter: null,
+    storage: null,
+    failedMessageStore: null,
+    humanizer: { applyTerminology: (t: string) => t } as never,
+    operatorState: { active: true, automationLevel: "supervised" },
+    apiBaseUrl: null,
+    composeResponse: vi.fn(),
+    sendFilteredReply: vi.fn().mockResolvedValue(undefined),
+    filterCardText: <T extends { summary: string; explanation?: string }>(card: T): T => card,
+    recordAssistantMessage: vi.fn().mockResolvedValue(undefined),
+    trackLastExecuted: vi.fn().mockResolvedValue(undefined),
+    getLastExecutedEnvelopeId: vi.fn().mockResolvedValue(null),
+  };
+}
+
+function createMockMessage(): IncomingMessage {
+  return {
+    id: "msg-1",
+    channel: "telegram",
+    channelMessageId: "chan-msg-1",
+    threadId: null,
+    text: "I want to book",
+    principalId: "user-1",
+    timestamp: new Date(),
+    organizationId: "org-1",
+    attachments: [],
+  };
+}
+
+function mockRouterResponse(overrides: Partial<RouterResponse> = {}): RouterResponse {
+  return {
+    handled: true,
+    responses: ["OK"],
+    escalated: false,
+    completed: false,
+    sessionId: "session-1",
+    ...overrides,
+  };
+}
+
+describe("handleLeadMessage — ConversionBus wiring", () => {
+  let ctx: HandlerContext;
+  let conversionBus: ConversionBus;
+  let mockRouter: ConversationRouter;
+
+  beforeEach(() => {
+    ctx = createMockCtx();
+    conversionBus = {
+      emit: vi.fn(),
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+    };
+  });
+
+  it("emits to ConversionBus when qualification completes with score >= 50", async () => {
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Great, you're booked!"],
+          completed: true,
+          variables: { leadScore: "75", contactName: "Alice" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      conversionBus,
+      crmProvider: {
+        searchContacts: vi
+          .fn()
+          .mockResolvedValue([{ sourceAdId: "ad-123", sourceCampaignId: "camp-456" }]),
+      } as never,
+    });
+
+    expect(conversionBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "booked",
+        contactId: "thread-1",
+        organizationId: "org-1",
+        sourceAdId: "ad-123",
+        sourceCampaignId: "camp-456",
+      }),
+    );
+  });
+
+  it("does NOT emit to ConversionBus when score < 50", async () => {
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Thanks for the info."],
+          completed: true,
+          variables: { leadScore: "30" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      conversionBus,
+    });
+
+    expect(conversionBus.emit).not.toHaveBeenCalled();
+  });
+
+  it("does NOT emit when conversionBus is not provided", async () => {
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Booked!"],
+          completed: true,
+          variables: { leadScore: "80" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {});
+  });
+
+  it("emits without attribution data when crmProvider is not provided", async () => {
+    mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Booked!"],
+          completed: true,
+          variables: { leadScore: "60" },
+          machineState: "qualified",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      conversionBus,
+    });
+
+    expect(conversionBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "booked",
+        sourceAdId: undefined,
+        sourceCampaignId: undefined,
+      }),
+    );
+  });
+});
