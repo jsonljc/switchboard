@@ -488,12 +488,27 @@ export async function createChatRuntime(
     });
   }
 
+  // Silence detector — flags conversations with 72h+ of inactivity as unresponsive
+  let stopSilenceDetector: (() => void) | null = null;
+  if (isLeadBot && outcomeStore) {
+    const { startSilenceDetector } = await import("./jobs/silence-detector.js");
+    const { OutcomePipeline } = await import("@switchboard/core");
+    const { getDb } = await import("@switchboard/db");
+    stopSilenceDetector = startSilenceDetector({
+      prisma: getDb(),
+      outcomePipeline: new OutcomePipeline(outcomeStore),
+    });
+  }
+
   const cleanup = () => {
     if (campaignRefreshTimer) {
       clearInterval(campaignRefreshTimer);
     }
     if (stopCadenceWorker) {
       stopCadenceWorker();
+    }
+    if (stopSilenceDetector) {
+      stopSilenceDetector();
     }
   };
 
