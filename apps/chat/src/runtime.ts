@@ -360,6 +360,18 @@ export class ChatRuntime {
       await this.sendFilteredReply(threadId, welcomeResponse.text);
       await this.recordAssistantMessage(threadId, welcomeResponse.text);
       isNewConversation = true;
+
+      // Emit inquiry event to ConversionBus for new lead bot conversations
+      if (this.isLeadBot && this.conversionBus) {
+        this.conversionBus.emit({
+          type: "inquiry",
+          contactId: threadId,
+          organizationId: message.organizationId ?? "default",
+          value: 0,
+          timestamp: new Date(),
+          metadata: { channel: message.channel },
+        });
+      }
     }
 
     if (!conversation.organizationId && message.organizationId) {

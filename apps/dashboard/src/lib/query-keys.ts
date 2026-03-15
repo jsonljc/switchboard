@@ -65,6 +65,12 @@ export const queryKeys = {
     list: (status?: string) => ["dlq", "list", status] as const,
     stats: () => ["dlq", "stats"] as const,
   },
+  conversations: {
+    all: ["conversations"] as const,
+    list: (filters?: Record<string, string | undefined>) =>
+      ["conversations", "list", filters] as const,
+    detail: (id: string) => ["conversations", "detail", id] as const,
+  },
   crm: {
     all: ["crm"] as const,
     contacts: () => ["crm", "contacts"] as const,

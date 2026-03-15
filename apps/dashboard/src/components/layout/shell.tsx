@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, TrendingUp, ShieldCheck, Users, LineChart } from "lucide-react";
+import {
+  LayoutDashboard,
+  TrendingUp,
+  ShieldCheck,
+  Users,
+  LineChart,
+  MessageSquare,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 import { useOrgConfig } from "@/hooks/use-org-config";
@@ -11,6 +18,7 @@ import { useOrgConfig } from "@/hooks/use-org-config";
 const NAV = [
   { href: "/mission", label: "Today", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/conversations", label: "Chats", icon: MessageSquare },
   { href: "/results", label: "Results", icon: TrendingUp },
   { href: "/growth", label: "Growth", icon: LineChart },
   { href: "/approvals", label: "Decide", icon: ShieldCheck },

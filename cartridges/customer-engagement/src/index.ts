@@ -115,6 +115,9 @@ export type {
 // Conversation flow templates (for lead bot qualification)
 export { qualificationFlow } from "./conversation/templates/qualification.js";
 export { bookingFlow } from "./conversation/templates/booking.js";
+export { objectionHandlingFlow } from "./conversation/templates/objection-handling.js";
+export { reviewRequestFlow } from "./conversation/templates/review-request.js";
+export { postTreatmentFlow } from "./conversation/templates/post-treatment.js";
 
 // FAQ matcher
 export { matchFAQ, formatFAQResponse } from "./conversation/faq-matcher.js";
