@@ -59,7 +59,7 @@ describe("PostGenerationValidator", () => {
     const result = validator.validate("Guaranteed cure for all issues", "greet");
     expect(result.valid).toBe(false);
     expect(result.fallbackMessage).toBeDefined();
-    expect(result.fallbackMessage).toContain("Hi");
+    expect(result.fallbackMessage).toContain("Hey");
   });
 
   it("should check configurable forbidden phrases", () => {

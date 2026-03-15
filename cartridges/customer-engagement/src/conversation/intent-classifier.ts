@@ -11,6 +11,7 @@ export type MessageIntent =
   | "question"
   | "objection"
   | "escalation_request"
+  | "medical_risk"
   | "off_topic"
   | "affirmative"
   | "negative";
@@ -53,6 +54,20 @@ const INTENT_PATTERNS: Array<{
       /(?:speak|talk|connect)\s+(?:to|with)\s+(?:a|an)?\s*(?:human|person|agent|someone|staff|doctor|manager)/i,
       /^(?:help|agent|human|real person|operator)$/i,
       /(?:i\s+(?:want|need)\s+(?:a\s+)?(?:real|human|actual)\s+person)/i,
+      /\b(?:are you (?:a )?(?:bot|real|automated)|is this (?:a )?(?:bot|automated)|not a bot)\b/i,
+      /\bcall me\b(?!\s+at\b)(?!\s+\d)/i,
+    ],
+  },
+  {
+    intent: "medical_risk",
+    patterns: [
+      /\b(?:pregnan(?:t|cy)|expecting a baby)\b/i,
+      /\b(?:autoimmune|immunodeficien)/i,
+      /\b(?:on medication|taking medication|on blood thinners|taking [\w\s]+ medication)\b/i,
+      /\b(?:recent surgery|just had surgery|post[- ]?(?:op|surgery))\b/i,
+      /\b(?:allergic reaction|anaphyla|severe allergy|allergy to (?:anaesthe|anesthe|lidocaine|latex))\b/i,
+      /\b(?:how many units|dosage|how much (?:botox|filler|injection))\b/i,
+      /\b(?:diagnos(?:e|is)|treat my \w+)\b/i,
     ],
   },
   {

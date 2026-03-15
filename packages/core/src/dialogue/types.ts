@@ -53,6 +53,7 @@ export interface ResponseConstraints {
   forbiddenPhrases: string[];
   bannedTopics: string[];
   singleQuestionOnly: boolean;
+  singleCTAOnly: boolean;
   noEmDashes: boolean;
 }
 

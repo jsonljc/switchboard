@@ -41,7 +41,7 @@ const YES_NO_MAP: Record<string, number> = {
 };
 
 export class ConversationNLPAdapter {
-  private classifier: MessageIntentClassifier;
+  readonly classifier: MessageIntentClassifier;
 
   constructor() {
     this.classifier = new MessageIntentClassifier();

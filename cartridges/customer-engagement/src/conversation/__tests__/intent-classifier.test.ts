@@ -105,6 +105,56 @@ describe("MessageIntentClassifier", () => {
     it("detects 'connect with a doctor'", () => {
       expect(classifier.classify("connect with a doctor").intent).toBe("escalation_request");
     });
+
+    it("detects 'are you a bot'", () => {
+      expect(classifier.classify("are you a bot").intent).toBe("escalation_request");
+    });
+
+    it("detects 'is this automated'", () => {
+      expect(classifier.classify("is this automated").intent).toBe("escalation_request");
+    });
+
+    it("detects 'not a bot'", () => {
+      expect(classifier.classify("you're not a bot right").intent).toBe("escalation_request");
+    });
+
+    it("detects standalone 'call me' as escalation", () => {
+      expect(classifier.classify("call me").intent).toBe("escalation_request");
+    });
+
+    it("does not classify 'call me at [number]' as escalation", () => {
+      expect(classifier.classify("call me at 555-123-4567").intent).not.toBe("escalation_request");
+    });
+  });
+
+  describe("medical_risk", () => {
+    it("detects pregnancy mention", () => {
+      expect(classifier.classify("I'm pregnant, is this safe?").intent).toBe("medical_risk");
+    });
+
+    it("detects medication mention", () => {
+      expect(classifier.classify("I'm on medication for my heart").intent).toBe("medical_risk");
+    });
+
+    it("detects autoimmune mention", () => {
+      expect(classifier.classify("I have an autoimmune condition").intent).toBe("medical_risk");
+    });
+
+    it("detects recent surgery", () => {
+      expect(classifier.classify("I just had surgery last week").intent).toBe("medical_risk");
+    });
+
+    it("detects allergic reaction concern", () => {
+      expect(classifier.classify("I had an allergic reaction before").intent).toBe("medical_risk");
+    });
+
+    it("detects dosage questions", () => {
+      expect(classifier.classify("how many units of botox do I need").intent).toBe("medical_risk");
+    });
+
+    it("detects diagnosis requests", () => {
+      expect(classifier.classify("can you diagnose my issue").intent).toBe("medical_risk");
+    });
   });
 
   describe("objection", () => {

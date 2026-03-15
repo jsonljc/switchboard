@@ -17,6 +17,7 @@ function makePacket(overrides?: Partial<NaturalnessPacket>): NaturalnessPacket {
       forbiddenPhrases: ["As an AI"],
       bannedTopics: ["competitor pricing"],
       singleQuestionOnly: true,
+      singleCTAOnly: true,
       noEmDashes: true,
     },
     leadContext: {

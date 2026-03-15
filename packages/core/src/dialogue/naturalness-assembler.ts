@@ -105,14 +105,26 @@ export class NaturalnessPacketAssembler {
       maxSentences: channelLimits.maxSentences,
       maxWords: channelLimits.maxWords,
       forbiddenPhrases: [
-        // Platform defaults
+        // Platform defaults — common AI giveaway phrases
         "I understand your concern",
         "As an AI",
         "I'd be happy to help",
+        "How are you today",
+        "Great question",
+        "Certainly",
+        "Absolutely",
+        "Of course",
+        "Please don't hesitate",
+        "Allow me to",
+        "Feel free to",
+        "I hope that answers",
+        "I hope this helps",
+        "That's a valid concern",
         ...(forbiddenPhrases ?? []),
       ],
       bannedTopics: bannedTopics ?? [],
       singleQuestionOnly: true,
+      singleCTAOnly: true,
       noEmDashes: true,
     };
   }

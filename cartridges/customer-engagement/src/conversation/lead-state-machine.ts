@@ -208,13 +208,18 @@ export function createLeadStateMachineConfig(): StateMachineConfig<
         to: LeadConversationState.CLOSED_UNRESPONSIVE,
       },
 
-      // Any state -> ESCALATING on human request or escalation trigger
+      // Any non-terminal state -> ESCALATING on human request or escalation trigger
       ...[
+        LeadConversationState.GREETING,
+        LeadConversationState.CLARIFYING,
         LeadConversationState.QUALIFYING,
         LeadConversationState.OBJECTION_HANDLING,
         LeadConversationState.BOOKING_PUSH,
         LeadConversationState.AWAITING_BOOKING,
         LeadConversationState.SLOWDOWN_MODE,
+        LeadConversationState.POST_BOOKING,
+        LeadConversationState.FOLLOW_UP_SCHEDULED,
+        LeadConversationState.REACTIVATION,
       ].flatMap((from) => [
         {
           from,
@@ -225,7 +230,6 @@ export function createLeadStateMachineConfig(): StateMachineConfig<
           from,
           event: LeadConversationEvent.ESCALATION_TRIGGERED,
           to: LeadConversationState.ESCALATING,
-          guard: (ctx: LeadStateMachineContext) => ctx.turnCount >= ctx.maxTurnsBeforeEscalation,
         },
       ]),
 

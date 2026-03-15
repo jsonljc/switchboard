@@ -63,6 +63,31 @@ function makeActionFlow(): ConversationFlowDefinition {
   };
 }
 
+function makeMultiStepFlow(): ConversationFlowDefinition {
+  return {
+    id: "multi",
+    name: "Multi-Step Flow",
+    description: "Multiple questions to keep session open",
+    steps: [
+      { id: "intro", type: "message", template: "Welcome! Let's get started." },
+      {
+        id: "timeline_question",
+        type: "question",
+        template: "When are you looking to get started?",
+        options: ["Right away", "Within a month", "Just exploring"],
+      },
+      {
+        id: "budget_question",
+        type: "question",
+        template: "What's your budget?",
+        options: ["Under $100", "$100-$500", "Over $500"],
+      },
+      { id: "thanks", type: "message", template: "Thanks!" },
+    ],
+    variables: ["contactName"],
+  };
+}
+
 function makeCompletionFlow(): ConversationFlowDefinition {
   return {
     id: "completion",
@@ -352,6 +377,77 @@ describe("ConversationRouter", () => {
 
       const deleted = await store.getById(session.id);
       expect(deleted).toBeNull();
+    });
+  });
+
+  describe("state machine integration", () => {
+    it("should activate state machine by default on new sessions", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const result = await router.handleMessage(makeMessage());
+      expect(result.machineState).toBeDefined();
+      // First message: IDLE -> GREETING via MESSAGE_RECEIVED
+      expect(result.machineState).toBe("GREETING");
+    });
+
+    it("should advance state machine with INTENT_CLASSIFIED on second message", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      // First message transitions IDLE -> GREETING
+      await router.handleMessage(makeMessage());
+      // Second message with meaningful intent should advance to QUALIFYING
+      const result = await router.handleMessage(makeMessage({ body: "I want teeth whitening" }));
+      expect(result.machineState).toBe("QUALIFYING");
+    });
+
+    it("should escalate on medical risk message", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      // First message
+      await router.handleMessage(makeMessage());
+      // Medical risk message
+      const result = await router.handleMessage(
+        makeMessage({ body: "I'm pregnant, is this safe?" }),
+      );
+      expect(result.escalated).toBe(true);
+    });
+
+    it("should escalate on human request", async () => {
+      const multiStepFlow = makeMultiStepFlow();
+      const flows = new Map([["multi", multiStepFlow]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+      });
+
+      // First message: IDLE -> GREETING, then first question shown
+      const r1 = await router.handleMessage(makeMessage());
+      expect(r1.machineState).toBe("GREETING");
+      expect(r1.completed).toBe(false);
+
+      // Second message: answer first question, advance state
+      const r2 = await router.handleMessage(makeMessage({ body: "1" }));
+      expect(r2.completed).toBe(false);
+
+      // Human request: should escalate
+      const r3 = await router.handleMessage(makeMessage({ body: "speak to a human" }));
+      expect(r3.escalated).toBe(true);
     });
   });
 

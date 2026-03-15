@@ -289,7 +289,7 @@ describe("ChatRuntime — lead bot mode", () => {
     await runtime.handleIncomingMessage({});
 
     const replies = adapter.sentText.filter((t) => t.threadId === threadId);
-    const escalationMsg = replies.find((t) => t.text.includes("connecting you"));
+    const escalationMsg = replies.find((t) => t.text.includes("team") && t.text.includes("help"));
     expect(escalationMsg).toBeTruthy();
 
     await deleteThread(threadId);
