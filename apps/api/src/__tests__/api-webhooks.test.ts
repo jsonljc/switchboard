@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+
+vi.mock("../utils/ssrf-guard.js", () => ({
+  assertSafeUrl: vi.fn().mockResolvedValue(undefined),
+  SSRFError: class SSRFError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "SSRFError";
+    }
+  },
+}));
+
 import { webhooksRoutes } from "../routes/webhooks.js";
+import { assertSafeUrl } from "../utils/ssrf-guard.js";
 
 describe("Webhooks API", () => {
   let app: FastifyInstance;
@@ -63,6 +75,9 @@ describe("Webhooks API", () => {
     });
 
     it("rejects non-HTTPS URL", async () => {
+      const { SSRFError } = await import("../utils/ssrf-guard.js");
+      vi.mocked(assertSafeUrl).mockRejectedValueOnce(new SSRFError("Only HTTPS URLs are allowed"));
+
       const res = await app.inject({
         method: "POST",
         url: "/api/webhooks",
@@ -74,6 +89,25 @@ describe("Webhooks API", () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toContain("HTTPS");
+    });
+
+    it("rejects webhook URL that fails SSRF validation", async () => {
+      const { SSRFError } = await import("../utils/ssrf-guard.js");
+      vi.mocked(assertSafeUrl).mockRejectedValueOnce(
+        new SSRFError("URL resolves to a private IP address"),
+      );
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/webhooks",
+        payload: {
+          url: "https://evil.example.com",
+          events: ["action.executed"],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("private IP");
     });
 
     it("returns 403 for unauthorized role", async () => {
