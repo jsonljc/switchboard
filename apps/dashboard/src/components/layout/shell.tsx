@@ -10,6 +10,7 @@ import {
   Users,
   LineChart,
   MessageSquare,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/mission", label: "Today", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/conversations", label: "Chats", icon: MessageSquare },
+  { href: "/campaigns", label: "Campaigns", icon: BarChart3 },
   { href: "/results", label: "Results", icon: TrendingUp },
   { href: "/growth", label: "Growth", icon: LineChart },
   { href: "/approvals", label: "Decide", icon: ShieldCheck },

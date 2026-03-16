@@ -144,6 +144,15 @@ export interface OperatorSummary {
   };
 }
 
+export interface CampaignAttribution {
+  campaignId: string;
+  leads: number;
+  bookings: number;
+  spend: number | null;
+  costPerLead: number | null;
+  costPerBooking: number | null;
+}
+
 export interface CreateScheduledReportInput {
   name: string;
   cronExpression: string;
@@ -747,6 +756,10 @@ export class SwitchboardClient {
   // Clinic Reports
   async getOperatorSummary() {
     return this.request<{ summary: OperatorSummary }>("/api/reports/operator-summary");
+  }
+
+  async getCampaignAttribution() {
+    return this.request<{ campaigns: CampaignAttribution[] }>("/api/reports/campaign-attribution");
   }
 
   async getClinicReport(params?: { startDate?: string; endDate?: string; adSpend?: number }) {

@@ -1,5 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 import { generateIntegrationGuide } from "@switchboard/core";
+
+const OrgConfigPutBody = z.object({
+  name: z.string().max(200).optional(),
+  runtimeType: z.enum(["http", "mcp", "telegram", "slack", "whatsapp"]).optional(),
+  runtimeConfig: z.record(z.unknown()).optional(),
+  governanceProfile: z.enum(["observe", "guarded", "strict", "locked"]).optional(),
+  selectedCartridgeId: z.string().max(100).optional(),
+  skinId: z.string().max(100).optional(),
+  onboardingComplete: z.boolean().optional(),
+});
 
 /**
  * Organization config routes — GET/PUT config and GET integration guide.
@@ -55,15 +66,15 @@ export const orgConfigRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
-      const body = request.body as {
-        name?: string;
-        runtimeType?: string;
-        runtimeConfig?: Record<string, unknown>;
-        governanceProfile?: string;
-        selectedCartridgeId?: string;
-        skinId?: string;
-        onboardingComplete?: boolean;
-      };
+      const parsed = OrgConfigPutBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "Invalid request body",
+          details: parsed.error.issues,
+          statusCode: 400,
+        });
+      }
+      const body = parsed.data;
 
       const config = await app.prisma.organizationConfig.upsert({
         where: { id: orgId },

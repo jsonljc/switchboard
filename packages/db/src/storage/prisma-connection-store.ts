@@ -88,9 +88,9 @@ export class PrismaConnectionStore {
     return toConnectionRecord(row);
   }
 
-  async list(organizationId?: string): Promise<ConnectionRecord[]> {
+  async list(organizationId: string): Promise<ConnectionRecord[]> {
     const rows = await this.prisma.connection.findMany({
-      where: organizationId ? { organizationId } : {},
+      where: { organizationId },
       orderBy: { createdAt: "desc" },
     });
     return rows.map(toConnectionRecord);

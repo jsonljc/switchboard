@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { createChatRuntime } from "./runtime.js";
 import { checkIngressRateLimit, checkNonce } from "./adapters/security.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
@@ -244,7 +245,12 @@ async function main() {
       return reply.code(503).send({ error: "Internal authentication not configured" });
     }
     const authHeader = request.headers["authorization"];
-    if (authHeader !== `Bearer ${internalSecret}`) {
+    const expectedAuth = `Bearer ${internalSecret}`;
+    if (
+      !authHeader ||
+      authHeader.length !== expectedAuth.length ||
+      !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expectedAuth))
+    ) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
 
