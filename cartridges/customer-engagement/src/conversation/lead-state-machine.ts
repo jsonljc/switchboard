@@ -71,6 +71,35 @@ const STATE_TO_MOVE: Record<LeadConversationState, PrimaryMove> = {
   [LeadConversationState.REACTIVATION]: "reactivate",
 };
 
+/** Human-readable goal descriptions per state, used as LLM prompt context. */
+export const STATE_GOALS: Record<LeadConversationState, string> = {
+  [LeadConversationState.IDLE]: "Build rapport, understand why they're reaching out",
+  [LeadConversationState.GREETING]: "Build rapport, understand why they're reaching out",
+  [LeadConversationState.CLARIFYING]:
+    "Understand which service they need — ask about goals, not just treatments",
+  [LeadConversationState.QUALIFYING]:
+    "Assess readiness naturally — weave timeline/budget questions into conversation",
+  [LeadConversationState.SLOWDOWN_MODE]: "Re-engage with light touch — 'Still thinking about it?'",
+  [LeadConversationState.OBJECTION_HANDLING]:
+    "Acknowledge concern genuinely, provide relevant info, don't be pushy",
+  [LeadConversationState.BOOKING_PUSH]:
+    "Guide toward booking — suggest times, explain what to expect, reduce friction",
+  [LeadConversationState.AWAITING_BOOKING]: "Be available, answer last questions, don't pressure",
+  [LeadConversationState.POST_BOOKING]: "Confirm booking details, set expectations for the visit",
+  [LeadConversationState.FOLLOW_UP_SCHEDULED]: "Check in warmly, see if they still need help",
+  [LeadConversationState.ESCALATING]:
+    "Warm handoff — explain a team member will follow up, set timing expectations",
+  [LeadConversationState.HUMAN_ACTIVE]: "A team member is handling this conversation directly",
+  [LeadConversationState.CLOSED_BOOKED]: "Booking confirmed — conversation complete",
+  [LeadConversationState.CLOSED_UNRESPONSIVE]: "Lead went quiet — conversation closed",
+  [LeadConversationState.REACTIVATION]:
+    "Welcome them back warmly, understand if their needs changed",
+};
+
+export function getGoalForState(state: LeadConversationState): string {
+  return STATE_GOALS[state];
+}
+
 export function getPrimaryMoveForState(state: LeadConversationState): PrimaryMove {
   return STATE_TO_MOVE[state];
 }
