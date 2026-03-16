@@ -6,11 +6,13 @@ function createMockPrisma() {
     crmContact: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
     crmDeal: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       groupBy: vi.fn(),
@@ -71,16 +73,19 @@ describe("PrismaCrmProvider", () => {
       expect(results[0]!.email).toBe("alice@example.com");
     });
 
-    it("gets a contact by id", async () => {
-      prisma.crmContact.findUnique.mockResolvedValue(TEST_CONTACT);
+    it("gets a contact by id with org filter", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(TEST_CONTACT);
       const result = await provider.getContact("contact_1");
       expect(result).not.toBeNull();
       expect(result!.firstName).toBe("Alice");
+      expect(prisma.crmContact.findFirst).toHaveBeenCalledWith({
+        where: { id: "contact_1", organizationId: "org_1" },
+      });
     });
 
-    it("returns null for missing contact", async () => {
-      prisma.crmContact.findUnique.mockResolvedValue(null);
-      const result = await provider.getContact("nonexistent");
+    it("returns null for contact in different org", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(null);
+      const result = await provider.getContact("contact_other_org");
       expect(result).toBeNull();
     });
 
@@ -99,13 +104,27 @@ describe("PrismaCrmProvider", () => {
       );
     });
 
-    it("updates a contact", async () => {
+    it("updates a contact after verifying org ownership", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue({ id: "contact_1" });
       prisma.crmContact.update.mockResolvedValue({ ...TEST_CONTACT, company: "NewCo" });
       const result = await provider.updateContact("contact_1", { company: "NewCo" });
       expect(result.company).toBe("NewCo");
+      expect(prisma.crmContact.findFirst).toHaveBeenCalledWith({
+        where: { id: "contact_1", organizationId: "org_1" },
+        select: { id: true },
+      });
     });
 
-    it("archives a contact", async () => {
+    it("rejects update for contact in different org", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(null);
+      await expect(provider.updateContact("contact_other", { company: "X" })).rejects.toThrow(
+        "not found",
+      );
+      expect(prisma.crmContact.update).not.toHaveBeenCalled();
+    });
+
+    it("archives a contact after verifying org ownership", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue({ id: "contact_1" });
       prisma.crmContact.update.mockResolvedValue({});
       await provider.archiveContact("contact_1");
       expect(prisma.crmContact.update).toHaveBeenCalledWith(
@@ -114,6 +133,12 @@ describe("PrismaCrmProvider", () => {
           data: { status: "archived" },
         }),
       );
+    });
+
+    it("rejects archive for contact in different org", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(null);
+      await expect(provider.archiveContact("contact_other")).rejects.toThrow("not found");
+      expect(prisma.crmContact.update).not.toHaveBeenCalled();
     });
   });
 
@@ -134,6 +159,12 @@ describe("PrismaCrmProvider", () => {
       });
       expect(result.name).toBe("Big Deal");
       expect(result.contactIds).toContain("contact_1");
+    });
+
+    it("rejects archive for deal in different org", async () => {
+      prisma.crmDeal.findFirst.mockResolvedValue(null);
+      await expect(provider.archiveDeal("deal_other")).rejects.toThrow("not found");
+      expect(prisma.crmDeal.update).not.toHaveBeenCalled();
     });
 
     it("gets pipeline aggregation", async () => {

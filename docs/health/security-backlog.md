@@ -16,8 +16,8 @@ Check items off as they are fixed. `/gate weekly` counts unchecked items.
 - [ ] C3: Missing org-scoping on deployment readiness — `apps/api/src/routes/deployment.ts:23-24`
       Leaks whether an org exists and its channel count
 
-- [ ] C4: CRM getContact/updateContact/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:39-45`
-      Cross-tenant PII exposure via ID guessing
+- [x] C4: CRM getContact/updateContact/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:39-45`
+      Fixed: all use `findFirst` with `orgFilter()`, mutations verify ownership before updating
 
 ## High
 
@@ -53,7 +53,8 @@ Check items off as they are fixed. `/gate weekly` counts unchecked items.
 
 - [ ] M6: Org config PUT has no role check — `apps/api/src/routes/org-config.ts:39`
 
-- [ ] M7: CRM archiveDeal/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:185,215`
+- [x] M7: CRM archiveDeal/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:185,215`
+      Fixed: both verify org ownership via `findFirst` + `orgFilter()` before mutating
 
 ## Production Resilience
 
