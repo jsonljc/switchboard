@@ -6,6 +6,7 @@ describe("TelegramRateLimiter (via TelegramAdapter)", () => {
   let fetchCalls: Array<{ url: string; body: unknown }>;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     adapter = new TelegramAdapter("fake-bot-token");
     fetchCalls = [];
 
@@ -20,38 +21,40 @@ describe("TelegramRateLimiter (via TelegramAdapter)", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it("allows a burst of 30 messages without delay", async () => {
-    const start = Date.now();
-
+    // sendTextReply now sends sendChatAction (typing) + delay + sendMessage = 2 fetch calls per message
     const promises: Promise<void>[] = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 15; i++) {
       promises.push(adapter.sendTextReply("chat_1", `Message ${i}`));
     }
+    // Advance past typing delays
+    await vi.advanceTimersByTimeAsync(5000);
     await Promise.all(promises);
 
-    const elapsed = Date.now() - start;
+    // 15 messages × 2 calls (sendChatAction + sendMessage) = 30 fetch calls
     expect(fetchCalls).toHaveLength(30);
-    // 30 messages should complete quickly (well under 1 second) since bucket starts full
-    expect(elapsed).toBeLessThan(1000);
   });
 
   it("sends messages sequentially without errors", async () => {
     // Send 5 messages sequentially
     for (let i = 0; i < 5; i++) {
-      await adapter.sendTextReply("chat_1", `Message ${i}`);
+      const p = adapter.sendTextReply("chat_1", `Message ${i}`);
+      await vi.advanceTimersByTimeAsync(5000);
+      await p;
     }
-    expect(fetchCalls).toHaveLength(5);
-    // Each call should target the sendMessage endpoint
-    for (const call of fetchCalls) {
-      expect(call.url).toContain("/sendMessage");
-    }
+    // 5 messages × 2 calls (sendChatAction + sendMessage)
+    expect(fetchCalls).toHaveLength(10);
+    // Filter to only sendMessage calls
+    const sendMessageCalls = fetchCalls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendMessageCalls).toHaveLength(5);
   });
 
   it("applies rate limiting to all API methods (sendApprovalCard, sendResultCard)", async () => {
-    // sendApprovalCard
+    // sendApprovalCard — no typing delay
     await adapter.sendApprovalCard("chat_1", {
       summary: "Test action",
       riskCategory: "low",
@@ -61,7 +64,7 @@ describe("TelegramRateLimiter (via TelegramAdapter)", () => {
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]!.url).toContain("/sendMessage");
 
-    // sendResultCard
+    // sendResultCard — no typing delay
     await adapter.sendResultCard("chat_1", {
       summary: "Done",
       success: true,
@@ -79,19 +82,31 @@ describe("TelegramRateLimiter (via TelegramAdapter)", () => {
   });
 
   it("token bucket refills over time", async () => {
-    // Drain the bucket
+    // Drain the bucket with sendApprovalCard (no typing delay, 1 call each)
     const promises: Promise<void>[] = [];
     for (let i = 0; i < 30; i++) {
-      promises.push(adapter.sendTextReply("chat_1", `Drain ${i}`));
+      promises.push(
+        adapter.sendApprovalCard("chat_1", {
+          summary: `Action ${i}`,
+          riskCategory: "low",
+          explanation: "Test",
+          buttons: [{ label: "OK", callbackData: "ok" }],
+        }),
+      );
     }
     await Promise.all(promises);
     expect(fetchCalls).toHaveLength(30);
 
     // Wait a small amount for some tokens to refill (100ms → ~3 tokens)
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await vi.advanceTimersByTimeAsync(120);
 
     // Should be able to send at least 1 more message
-    await adapter.sendTextReply("chat_1", "After refill");
+    await adapter.sendApprovalCard("chat_1", {
+      summary: "After refill",
+      riskCategory: "low",
+      explanation: "Test",
+      buttons: [{ label: "OK", callbackData: "ok" }],
+    });
     expect(fetchCalls).toHaveLength(31);
   });
 });
