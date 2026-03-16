@@ -11,10 +11,8 @@ const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal", "met
  * link-local, or cloud-metadata range.
  */
 function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4) return false;
-  const a = parts[0]!;
-  const b = parts[1]!;
+  const [a, b] = ip.split(".").map(Number);
+  if (a === undefined || b === undefined) return false;
 
   if (a === 127) return true; // loopback
   if (a === 10) return true; // 10.0.0.0/8
@@ -31,7 +29,8 @@ function isPrivateIPv6(ip: string): boolean {
   if (normalized === "::1") return true;
   if (normalized.startsWith("fe80:")) return true;
   const v4Mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (v4Mapped?.[1]) return isPrivateIPv4(v4Mapped[1]);
+  const mapped = v4Mapped?.[1];
+  if (mapped) return isPrivateIPv4(mapped);
   return false;
 }
 
