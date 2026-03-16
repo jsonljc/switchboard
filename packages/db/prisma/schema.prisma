@@ -454,6 +454,7 @@ model CrmContact {
   assignedStaffId String?
   sourceAdId      String?
   sourceCampaignId String?
+  gclid            String?   // Google Click ID for offline conversion attribution
   utmSource       String?
   properties      Json      @default("{}")
   createdAt       DateTime  @default(now())
