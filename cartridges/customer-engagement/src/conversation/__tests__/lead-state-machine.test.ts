@@ -4,6 +4,7 @@ import {
   LeadConversationState,
   LeadConversationEvent,
   getPrimaryMoveForState,
+  getGoalForState,
 } from "../lead-state-machine.js";
 import type { LeadStateMachineContext } from "../lead-state-machine.js";
 
@@ -152,5 +153,20 @@ describe("LeadStateMachine", () => {
     expect(getPrimaryMoveForState(LeadConversationState.SLOWDOWN_MODE)).toBe(
       "acknowledge_and_hold",
     );
+  });
+});
+
+describe("getGoalForState", () => {
+  it("returns a goal string for every state", () => {
+    for (const state of Object.values(LeadConversationState)) {
+      const goal = getGoalForState(state);
+      expect(goal).toBeTruthy();
+      expect(typeof goal).toBe("string");
+    }
+  });
+
+  it("returns qualifying goal for QUALIFYING state", () => {
+    const goal = getGoalForState(LeadConversationState.QUALIFYING);
+    expect(goal).toContain("readiness");
   });
 });

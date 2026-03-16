@@ -127,6 +127,8 @@ export type { FAQMatchResult } from "./conversation/faq-matcher.js";
 export {
   LeadConversationState,
   getPrimaryMoveForState,
+  getGoalForState,
+  STATE_GOALS,
 } from "./conversation/lead-state-machine.js";
 
 // Intent classifier

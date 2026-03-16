@@ -3,6 +3,7 @@ import { ConversationRouter } from "../router.js";
 import type { InboundMessage } from "../router.js";
 import { InMemorySessionStore } from "../session-store.js";
 import type { ConversationFlowDefinition } from "../types.js";
+import { getGoalForState, LeadConversationState } from "../lead-state-machine.js";
 
 function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
   return {
@@ -425,6 +426,30 @@ describe("ConversationRouter", () => {
         makeMessage({ body: "I'm pregnant, is this safe?" }),
       );
       expect(result.escalated).toBe(true);
+    });
+
+    it("populates stateGoal when machineState is set", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const result = await router.handleMessage(makeMessage());
+      expect(result.machineState).toBeDefined();
+      expect(result.stateGoal).toBeTruthy();
+      expect(typeof result.stateGoal).toBe("string");
+      // stateGoal should match what getGoalForState returns for the current machineState
+      expect(result.stateGoal).toBe(getGoalForState(result.machineState as LeadConversationState));
+    });
+
+    it("returns a goal for every LeadConversationState", () => {
+      for (const state of Object.values(LeadConversationState)) {
+        const goal = getGoalForState(state);
+        expect(goal).toBeTruthy();
+        expect(typeof goal).toBe("string");
+      }
     });
 
     it("should escalate on human request", async () => {
