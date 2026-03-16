@@ -284,6 +284,7 @@ export async function enrichAndGetRiskInput(
   cartridgeId: string,
 ): Promise<{ enriched: Record<string, unknown>; riskInput: RiskInput }> {
   let enriched: Record<string, unknown> = {};
+  let contextDegraded = false;
   try {
     enriched = await cartridge.enrichContext(
       actionType,
@@ -291,6 +292,7 @@ export async function enrichAndGetRiskInput(
       await buildCartridgeContext(ctx, cartridgeId, principalId, organizationId),
     );
   } catch (err) {
+    contextDegraded = true;
     console.warn(
       `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -309,10 +311,15 @@ export async function enrichAndGetRiskInput(
         enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
       }
     } catch (err) {
+      contextDegraded = true;
       console.warn(
         `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  if (contextDegraded) {
+    enriched = { ...enriched, _contextDegraded: true };
   }
 
   let riskInput: RiskInput;
@@ -331,6 +338,15 @@ export async function enrichAndGetRiskInput(
       reversibility: "full",
       sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
     };
+  }
+
+  // When context is degraded, bump approval requirement upward
+  if (contextDegraded) {
+    const bumpMap: Record<string, string> = { low: "medium", medium: "high" };
+    const bumped = bumpMap[riskInput.baseRisk];
+    if (bumped) {
+      riskInput = { ...riskInput, baseRisk: bumped as RiskInput["baseRisk"] };
+    }
   }
 
   return { enriched, riskInput };

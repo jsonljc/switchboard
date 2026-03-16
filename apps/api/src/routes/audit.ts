@@ -44,6 +44,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
       if (query.after) filter.after = new Date(query.after);
       if (query.before) filter.before = new Date(query.before);
       if (query.limit) filter.limit = Math.min(parseInt(query.limit, 10), 1000);
+      else filter.limit = 100;
       // Scope audit queries to the authenticated org when available
       if (request.organizationIdFromAuth) filter.organizationId = request.organizationIdFromAuth;
 

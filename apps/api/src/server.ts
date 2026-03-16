@@ -29,6 +29,15 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
+  process.on("unhandledRejection", (reason) => {
+    server.log.error({ err: reason }, "Unhandled promise rejection");
+  });
+
+  process.on("uncaughtException", (err) => {
+    server.log.error({ err }, "Uncaught exception — shutting down");
+    shutdown("uncaughtException");
+  });
+
   try {
     await server.listen({ port, host });
     server.log.info({ host, port }, "Switchboard API server listening");
