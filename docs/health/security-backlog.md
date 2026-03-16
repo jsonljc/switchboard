@@ -21,22 +21,29 @@ Check items off as they are fixed. `/gate weekly` counts unchecked items.
 
 ## High
 
-- [ ] H1: PII logged in webhook handler — `apps/api/src/routes/inbound-webhooks.ts:149-156`
-      Email addresses logged in plain text
+- [x] H1: PII logged in webhook handler — `apps/api/src/routes/inbound-webhooks.ts:149-156`
+      Fixed: replaced `email` field with `hasEmail: !!email` boolean in log statement
 
-- [ ] H2: Facebook webhook signature not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:141`
+- [x] H2: Facebook webhook signature not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:141`
+      Fixed: uses `timingSafeEqual` with length check
 
-- [ ] H3: Booking webhook signature not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:229`
+- [x] H3: Booking webhook signature not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:229`
+      Fixed: uses `timingSafeEqual` with length check
 
-- [ ] H4: Facebook verify token not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:304-308`
+- [x] H4: Facebook verify token not timing-safe — `apps/api/src/routes/inbound-webhooks.ts:304-308`
+      Fixed: uses `timingSafeEqual` with length check
 
-- [ ] H5: Internal API secret not timing-safe — `apps/chat/src/main.ts:247`
+- [x] H5: Internal API secret not timing-safe — `apps/chat/src/main.ts:247`
+      Fixed: uses `timingSafeEqual` with length check
 
-- [ ] H6: Connection store list() without org returns all connections — `packages/db/src/storage/prisma-connection-store.ts:91-97`
+- [x] H6: Connection store list() without org returns all connections — `packages/db/src/storage/prisma-connection-store.ts:91-97`
+      Fixed: `organizationId` parameter is now required (non-optional)
 
-- [ ] H7: No Zod validation on org config PUT body — `apps/api/src/routes/org-config.ts:58-66`
+- [x] H7: No Zod validation on org config PUT body — `apps/api/src/routes/org-config.ts:58-66`
+      Fixed: added `OrgConfigPutBody` Zod schema with `.safeParse()` before use
 
-- [ ] H8: No Zod validation on channel provisioning body — `apps/api/src/routes/org-channels.ts:32-44`
+- [x] H8: No Zod validation on channel provisioning body — `apps/api/src/routes/org-channels.ts:32-44`
+      Fixed: added `ChannelProvisionBody` Zod schema with `.safeParse()` before use
 
 ## Medium
 

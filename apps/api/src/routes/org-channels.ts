@@ -1,7 +1,25 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { getConnectionStore } from "../utils/connection-store.js";
 import { createLogger } from "../logger.js";
+
+const ChannelProvisionBody = z.object({
+  channels: z
+    .array(
+      z.object({
+        channel: z.enum(["telegram", "slack", "whatsapp"]),
+        botToken: z.string().max(500).optional(),
+        webhookSecret: z.string().max(500).optional(),
+        signingSecret: z.string().max(500).optional(),
+        token: z.string().max(500).optional(),
+        phoneNumberId: z.string().max(100).optional(),
+        appSecret: z.string().max(500).optional(),
+        verifyToken: z.string().max(500).optional(),
+      }),
+    )
+    .min(1, "At least one channel is required"),
+});
 
 const logger = createLogger("org-channels");
 
@@ -29,23 +47,15 @@ export const orgChannelsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
-      const body = request.body as {
-        channels: Array<{
-          channel: "telegram" | "slack" | "whatsapp";
-          botToken?: string;
-          webhookSecret?: string;
-          signingSecret?: string;
-          // WhatsApp-specific fields
-          token?: string;
-          phoneNumberId?: string;
-          appSecret?: string;
-          verifyToken?: string;
-        }>;
-      };
-
-      if (!body.channels || !Array.isArray(body.channels) || body.channels.length === 0) {
-        return reply.code(400).send({ error: "At least one channel is required", statusCode: 400 });
+      const parsed = ChannelProvisionBody.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "Invalid request body",
+          details: parsed.error.issues,
+          statusCode: 400,
+        });
       }
+      const body = parsed.data;
 
       const connectionStore = await getConnectionStore(app.prisma);
 

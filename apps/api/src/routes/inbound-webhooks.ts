@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createLogger } from "../logger.js";
 import type { CartridgeContext } from "@switchboard/cartridge-sdk";
 
@@ -138,7 +138,12 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         if (fbAppSecret) {
           const rawBody = JSON.stringify(request.body);
           const expectedSig = createHmac("sha256", fbAppSecret).update(rawBody).digest("hex");
-          if (submission.signature !== `sha256=${expectedSig}`) {
+          const sigBuffer = Buffer.from(submission.signature);
+          const expectedBuffer = Buffer.from(`sha256=${expectedSig}`);
+          if (
+            sigBuffer.length !== expectedBuffer.length ||
+            !timingSafeEqual(sigBuffer, expectedBuffer)
+          ) {
             return reply.code(401).send({ error: "Invalid Facebook signature" });
           }
         }
@@ -150,7 +155,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         {
           leadId,
           source: submission.source,
-          email: submission.fields.email,
+          hasEmail: !!submission.fields.email,
           serviceInterest: submission.fields.serviceInterest,
         },
         "Received form submission",
@@ -226,7 +231,9 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         const expectedSig = createHmac("sha256", bookingWebhookSecret)
           .update(rawBody)
           .digest("hex");
-        if (signature !== expectedSig) {
+        const sigBuf = Buffer.from(signature);
+        const expectedBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
           logger.warn("Invalid booking webhook signature");
           return reply.code(401).send({ error: "Invalid signature" });
         }
@@ -301,11 +308,13 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
 
       const verifyToken = process.env["FACEBOOK_VERIFY_TOKEN"];
 
-      if (
-        query["hub.mode"] === "subscribe" &&
-        query["hub.verify_token"] === verifyToken &&
-        query["hub.challenge"]
-      ) {
+      const tokenMatches =
+        verifyToken &&
+        query["hub.verify_token"] &&
+        query["hub.verify_token"].length === verifyToken.length &&
+        timingSafeEqual(Buffer.from(query["hub.verify_token"]), Buffer.from(verifyToken));
+
+      if (query["hub.mode"] === "subscribe" && tokenMatches && query["hub.challenge"]) {
         return reply.code(200).send(query["hub.challenge"]);
       }
 
