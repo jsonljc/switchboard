@@ -293,6 +293,7 @@ function toContact(row: {
   assignedStaffId: string | null;
   sourceAdId: string | null;
   sourceCampaignId?: string | null;
+  gclid?: string | null;
   utmSource: string | null;
   properties: unknown;
   createdAt: Date;
@@ -312,6 +313,7 @@ function toContact(row: {
     assignedStaffId: row.assignedStaffId,
     sourceAdId: row.sourceAdId,
     sourceCampaignId: row.sourceCampaignId ?? null,
+    gclid: row.gclid ?? null,
     utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),
