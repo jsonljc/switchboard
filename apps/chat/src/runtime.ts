@@ -26,6 +26,10 @@ import { OutcomePipeline, HandoffNotifier } from "@switchboard/core";
 import type { ApprovalNotifier } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
+import type {
+  LLMConversationEngine,
+  BusinessProfile as LLMBusinessProfile,
+} from "./conversation/llm-conversation-engine.js";
 import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
 import type { ConversationRouter } from "@switchboard/customer-engagement";
 import { findMedicalClaims } from "@switchboard/customer-engagement";
@@ -84,6 +88,10 @@ export interface ChatRuntimeConfig {
   approvalNotifier?: ApprovalNotifier | null;
   /** Optional OutcomeStore for recording conversation outcomes and response variants. */
   outcomeStore?: OutcomeStore | null;
+  /** Optional LLM conversation engine for natural lead bot responses. */
+  llmConversationEngine?: LLMConversationEngine | null;
+  /** Business profile for LLM conversation context. */
+  llmBusinessProfile?: LLMBusinessProfile | null;
   /** Minimum delay in ms before sending a response (typing simulation). Default: 0. */
   typingDelayMs?: number;
 }
@@ -111,6 +119,8 @@ export class ChatRuntime {
   private handoffStore: HandoffStore | null;
   private handoffNotifier: HandoffNotifier | null;
   private outcomePipeline: OutcomePipeline | null;
+  private llmConversationEngine: LLMConversationEngine | null;
+  private llmBusinessProfile: LLMBusinessProfile | null;
   private typingDelayMs: number;
   private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
@@ -149,6 +159,8 @@ export class ChatRuntime {
       ? new HandoffNotifier(config.approvalNotifier)
       : null;
     this.outcomePipeline = config.outcomeStore ? new OutcomePipeline(config.outcomeStore) : null;
+    this.llmConversationEngine = config.llmConversationEngine ?? null;
+    this.llmBusinessProfile = config.llmBusinessProfile ?? null;
     this.typingDelayMs = config.typingDelayMs ?? 0;
     this.dialogueMiddleware = new DialogueMiddleware({
       resolvedProfile: config.resolvedProfile ?? null,
@@ -401,6 +413,8 @@ export class ChatRuntime {
         outcomePipeline: this.outcomePipeline,
         conversionBus: this.conversionBus,
         crmProvider: this.crmProvider,
+        llmEngine: this.llmConversationEngine,
+        businessProfile: this.llmBusinessProfile,
       });
       return;
     }

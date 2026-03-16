@@ -239,6 +239,12 @@ export async function createChatRuntime(
   const useLlmInterpreter = skinIdEnv || clinicConfig;
   let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let responseGenerator: ResponseGenerator | null = null;
+  let llmConversationEngine:
+    | import("./conversation/llm-conversation-engine.js").LLMConversationEngine
+    | null = null;
+  let llmBusinessProfile:
+    | import("./conversation/llm-conversation-engine.js").BusinessProfile
+    | null = null;
 
   // Create Redis client (shared by model router + session store)
   let chatRedis: import("ioredis").default | undefined;
@@ -307,6 +313,41 @@ export async function createChatRuntime(
         modelRouter,
       });
       console.warn("[Chat] ResponseGenerator initialized (LLM response generation enabled)");
+    }
+
+    // Create LLM Conversation Engine for lead bot natural responses
+    if (llmConfig.apiKey) {
+      const { LLMConversationEngine } = await import("./conversation/llm-conversation-engine.js");
+      llmConversationEngine = new LLMConversationEngine(
+        { ...llmConfig, maxTokens: 200, temperature: 0.6 },
+        modelRouter,
+      );
+      console.warn("[Chat] LLMConversationEngine initialized (natural lead conversations enabled)");
+    }
+
+    // Build business profile for LLM conversation context
+    if (resolvedProfile) {
+      const biz = resolvedProfile.profile.business;
+      const catalog = resolvedProfile.profile.services?.catalog;
+      const hours = resolvedProfile.profile.hours;
+      const booking = resolvedProfile.profile.booking;
+      const faqs = resolvedProfile.profile.faqs;
+
+      llmBusinessProfile = {
+        businessName:
+          biz?.name ?? resolvedProfile.profile.name ?? process.env["CLINIC_NAME"] ?? "our clinic",
+        personaName: resolvedProfile.llmContext?.persona ?? "the team",
+        services: catalog
+          ?.map((s) => (s.typicalValue ? `${s.name} ($${s.typicalValue})` : s.name))
+          .join(", "),
+        hours: hours
+          ? Object.entries(hours)
+              .map(([day, h]) => `${day}: ${h.open}–${h.close}`)
+              .join(", ")
+          : undefined,
+        bookingMethod: booking?.bookingUrl ?? booking?.bookingPhone ?? biz?.phone,
+        faqs: faqs?.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n"),
+      };
     }
 
     // Create CartridgeReadAdapter for read intents
@@ -487,6 +528,8 @@ export async function createChatRuntime(
     isLeadBot: !!isLeadBot,
     leadRouter,
     outcomeStore,
+    llmConversationEngine,
+    llmBusinessProfile,
   });
 
   // Start cadence worker for follow-up automation when lead bot mode is enabled
