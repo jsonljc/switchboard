@@ -17,6 +17,9 @@ function createMockPrisma(conversations: unknown[] = []) {
     conversationState: {
       findMany: vi.fn().mockResolvedValue(conversations),
     },
+    outcomeEvent: {
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
   };
 }
 

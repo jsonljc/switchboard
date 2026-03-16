@@ -410,6 +410,29 @@ export async function createChatRuntime(
   // Create ConversionBus for CRM → ads attribution feedback loop
   const conversionBus = new InMemoryConversionBus();
 
+  // Wire CAPIDispatcher to ConversionBus so lead bot events reach Meta CAPI (standalone mode)
+  if (process.env["META_PIXEL_ID"] && process.env["META_ADS_ACCESS_TOKEN"]) {
+    try {
+      const { CAPIDispatcher, createMetaAdsWriteProvider } =
+        await import("@switchboard/digital-ads");
+      const adsProvider = createMetaAdsWriteProvider({
+        accessToken: process.env["META_ADS_ACCESS_TOKEN"],
+        adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      });
+      const dispatcher = new CAPIDispatcher({
+        adsProvider,
+        crmProvider:
+          crmProvider ??
+          ({ searchContacts: async () => [], getContact: async () => null } as never),
+        pixelId: process.env["META_PIXEL_ID"],
+      });
+      dispatcher.register(conversionBus);
+      console.warn("[Chat] CAPIDispatcher registered on ConversionBus");
+    } catch (err) {
+      console.error("[Bootstrap] Failed to wire CAPIDispatcher:", err);
+    }
+  }
+
   // Lead bot mode: wire ConversationRouter when SKIN_ID is set and LEAD_BOT_MODE is enabled.
   // This routes lead messages through qualification → booking flows instead of the
   // owner/operator interpreter pipeline.
@@ -488,12 +511,27 @@ export async function createChatRuntime(
     });
   }
 
+  // Silence detector — flags conversations with 72h+ of inactivity as unresponsive
+  let stopSilenceDetector: (() => void) | null = null;
+  if (isLeadBot && outcomeStore) {
+    const { startSilenceDetector } = await import("./jobs/silence-detector.js");
+    const { OutcomePipeline } = await import("@switchboard/core");
+    const { getDb } = await import("@switchboard/db");
+    stopSilenceDetector = startSilenceDetector({
+      prisma: getDb(),
+      outcomePipeline: new OutcomePipeline(outcomeStore),
+    });
+  }
+
   const cleanup = () => {
     if (campaignRefreshTimer) {
       clearInterval(campaignRefreshTimer);
     }
     if (stopCadenceWorker) {
       stopCadenceWorker();
+    }
+    if (stopSilenceDetector) {
+      stopSilenceDetector();
     }
   };
 

@@ -23,6 +23,14 @@ function createMockSummary(overrides: Partial<OperatorSummary> = {}): OperatorSu
       costPerLead30d: 16.2,
       costPerQualifiedLead30d: 24.56,
       costPerBooking30d: 42.3,
+      outcomeBreakdown: {
+        booked: 0,
+        lost: 0,
+        escalated_unresolved: 0,
+        escalated_resolved: 0,
+        unresponsive: 0,
+        reactivated: 0,
+      },
     },
     operator: { actionsToday: 5, deniedToday: 1 },
     speedToLead: {
@@ -107,6 +115,14 @@ describe("LeadBotDigestGenerator", () => {
         costPerLead30d: null,
         costPerQualifiedLead30d: null,
         costPerBooking30d: null,
+        outcomeBreakdown: {
+          booked: 0,
+          lost: 0,
+          escalated_unresolved: 0,
+          escalated_resolved: 0,
+          unresponsive: 0,
+          reactivated: 0,
+        },
       },
     });
     const priorMetrics = { leads: 0, bookings: 0, costPerBooking: null };
