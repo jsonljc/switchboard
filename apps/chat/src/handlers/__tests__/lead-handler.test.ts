@@ -304,3 +304,86 @@ describe("handleLeadMessage — state transition outcomes", () => {
     );
   });
 });
+
+describe("handleLeadMessage — LLM engine integration", () => {
+  let ctx: HandlerContext;
+
+  beforeEach(() => {
+    ctx = createMockCtx();
+  });
+
+  it("uses LLM engine response when engine is available and succeeds", async () => {
+    const llmEngine = {
+      generate: vi.fn().mockResolvedValue({
+        text: "Hey there! What brings you in today?",
+        usedLLM: true,
+        usage: { promptTokens: 100, completionTokens: 15 },
+      }),
+    };
+
+    const mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Template greeting"],
+          machineState: "GREETING",
+          stateGoal: "Build rapport, understand why they're reaching out",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      llmEngine: llmEngine as never,
+      businessProfile: { businessName: "Glow Clinic", personaName: "Sarah" },
+    });
+
+    // Should send LLM response, not template
+    expect(ctx.sendFilteredReply).toHaveBeenCalledWith(
+      "thread-1",
+      "Hey there! What brings you in today?",
+    );
+    expect(ctx.sendFilteredReply).not.toHaveBeenCalledWith("thread-1", "Template greeting");
+  });
+
+  it("falls back to template when LLM engine fails", async () => {
+    const llmEngine = {
+      generate: vi.fn().mockResolvedValue({
+        text: "Hi! This is Sarah from Glow Clinic. How can I help you today?",
+        usedLLM: false,
+      }),
+    };
+
+    const mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Template greeting"],
+          machineState: "GREETING",
+          stateGoal: "Build rapport",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {
+      llmEngine: llmEngine as never,
+      businessProfile: { businessName: "Glow Clinic", personaName: "Sarah" },
+    });
+
+    // Should fall back to template responses
+    expect(ctx.sendFilteredReply).toHaveBeenCalledWith("thread-1", "Template greeting");
+  });
+
+  it("uses template responses when no LLM engine provided", async () => {
+    const mockRouter = {
+      handleMessage: vi.fn().mockResolvedValue(
+        mockRouterResponse({
+          responses: ["Template greeting"],
+          machineState: "GREETING",
+          stateGoal: "Build rapport",
+        }),
+      ),
+    } as unknown as ConversationRouter;
+
+    await handleLeadMessage(ctx, mockRouter, createMockMessage(), "thread-1", null, {});
+
+    expect(ctx.sendFilteredReply).toHaveBeenCalledWith("thread-1", "Template greeting");
+  });
+});

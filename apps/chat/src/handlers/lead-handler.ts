@@ -25,6 +25,11 @@ import {
 import type { DialogueMiddleware } from "../middleware/dialogue-middleware.js";
 import type { PrimaryMove } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
+import type {
+  LLMConversationEngine,
+  LLMConversationContext,
+  BusinessProfile,
+} from "../conversation/llm-conversation-engine.js";
 
 export interface LeadHandlerDeps {
   handoffStore?: HandoffStore | null;
@@ -32,6 +37,8 @@ export interface LeadHandlerDeps {
   outcomePipeline?: OutcomePipeline | null;
   conversionBus?: ConversionBus | null;
   crmProvider?: CrmProvider | null;
+  llmEngine?: LLMConversationEngine | null;
+  businessProfile?: BusinessProfile | null;
 }
 
 export async function handleLeadMessage(
@@ -80,8 +87,35 @@ export async function handleLeadMessage(
     ? getPrimaryMoveForState(routerResponse.machineState as LeadConversationState)
     : "greet";
 
+  // Generate LLM response if engine is available, otherwise use template responses
+  let responsesToSend = routerResponse.responses;
+  if (deps?.llmEngine && deps.businessProfile && routerResponse.stateGoal) {
+    const conversation = await getThread(threadId);
+    const history = (conversation?.messages ?? []).map((m) => ({
+      role: m.role,
+      text: m.text,
+    }));
+
+    const llmCtx: LLMConversationContext = {
+      stateGoal: routerResponse.stateGoal,
+      businessProfile: deps.businessProfile,
+      conversationHistory: history,
+      userMessage: message.text,
+      leadProfile: conversation?.leadProfile
+        ? (conversation.leadProfile as Record<string, unknown>)
+        : undefined,
+      objectionContext:
+        primaryMove === "handle_objection" ? buildObjectionContext(routerResponse) : undefined,
+    };
+
+    const llmResult = await deps.llmEngine.generate(llmCtx, message.organizationId ?? undefined);
+    if (llmResult.usedLLM) {
+      responsesToSend = [llmResult.text];
+    }
+  }
+
   // Send each response message back through the adapter (with post-generation validation)
-  for (const text of routerResponse.responses) {
+  for (const text of responsesToSend) {
     let finalText = text;
     if (dialogueMiddleware) {
       const result = dialogueMiddleware.afterGenerate(text, primaryMove, threadId);
@@ -336,4 +370,14 @@ export async function handleLeadMessage(
       await setThread({ ...conversation, machineState: routerResponse.machineState });
     }
   }
+}
+
+function buildObjectionContext(response: RouterResponse): string {
+  const vars = response.variables ?? {};
+  const parts: string[] = [];
+  if (vars["lastMessage"]) {
+    parts.push(`They said: "${String(vars["lastMessage"])}"`);
+  }
+  parts.push("Acknowledge their concern genuinely. Don't dismiss or argue.");
+  return parts.join(" ");
 }
