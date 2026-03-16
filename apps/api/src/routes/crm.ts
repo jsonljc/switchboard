@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { paginationParams, paginate } from "@switchboard/core";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { emitDealStageEvent } from "../services/deal-stage-events.js";
 
 export const crmRoutes: FastifyPluginAsync = async (app) => {
   // Helper to get PrismaCrmProvider (lazy import)
@@ -100,6 +101,52 @@ export const crmRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Deal not found" });
       }
       return reply.code(200).send({ deal });
+    },
+  );
+
+  // PATCH /api/crm/deals/:id — Update deal stage (emits revenue events to ConversionBus)
+  app.patch(
+    "/deals/:id",
+    {
+      schema: { description: "Update a CRM deal stage.", tags: ["CRM"] },
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as { stage?: string; amount?: number };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
+      if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
+
+      const updated = await app.prisma.crmDeal.update({
+        where: { id },
+        data: {
+          ...(body.stage ? { stage: body.stage } : {}),
+          ...(body.amount !== undefined ? { amount: body.amount } : {}),
+        },
+      });
+
+      // Emit ConversionBus event for revenue-stage transitions
+      if (body.stage && app.conversionBus) {
+        const contact = updated.contactId
+          ? await app.prisma.crmContact.findUnique({
+              where: { id: updated.contactId },
+              select: { sourceCampaignId: true, sourceAdId: true },
+            })
+          : null;
+        emitDealStageEvent(
+          app.conversionBus,
+          {
+            contactId: updated.contactId ?? id,
+            organizationId: orgId,
+            amount: updated.amount,
+            stage: body.stage,
+          },
+          contact,
+        );
+      }
+
+      return reply.code(200).send({ deal: updated });
     },
   );
 

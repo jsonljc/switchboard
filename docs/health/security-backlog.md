@@ -7,17 +7,17 @@ Check items off as they are fixed. `/gate weekly` counts unchecked items.
 
 ## Critical
 
-- [ ] C1: SSRF via webhook URL — `apps/api/src/routes/webhooks.ts:168`
-      User-controlled URL fetched without SSRF protection (internal network scanning, cloud credential theft)
+- [x] C1: SSRF via webhook URL — `apps/api/src/routes/webhooks.ts:168`
+      Fixed: added `ssrf-guard.ts` — DNS resolution + private IP blocking at registration and fetch time
 
-- [ ] C2: Missing org-scoping on business config — `apps/api/src/routes/business-config.ts:24-37`
-      Any authenticated user can read/overwrite another org's business configuration
+- [x] C2: Missing org-scoping on business config — `apps/api/src/routes/business-config.ts:24-37`
+      Fixed: all 4 routes use `requireOrganizationScope()` from auth token instead of URL param
 
-- [ ] C3: Missing org-scoping on deployment readiness — `apps/api/src/routes/deployment.ts:23-24`
-      Leaks whether an org exists and its channel count
+- [x] C3: Missing org-scoping on deployment readiness — `apps/api/src/routes/deployment.ts:23-24`
+      Fixed: uses `requireOrganizationScope()` from auth token, removed orgId query param
 
-- [ ] C4: CRM getContact/updateContact/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:39-45`
-      Cross-tenant PII exposure via ID guessing
+- [x] C4: CRM getContact/updateContact/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:39-45`
+      Fixed: all use `findFirst` with `orgFilter()`, mutations verify ownership before updating
 
 ## High
 
@@ -53,7 +53,8 @@ Check items off as they are fixed. `/gate weekly` counts unchecked items.
 
 - [ ] M6: Org config PUT has no role check — `apps/api/src/routes/org-config.ts:39`
 
-- [ ] M7: CRM archiveDeal/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:185,215`
+- [x] M7: CRM archiveDeal/archiveContact missing org filter — `packages/db/src/storage/prisma-crm-provider.ts:185,215`
+      Fixed: both verify org ownership via `findFirst` + `orgFilter()` before mutating
 
 ## Production Resilience
 

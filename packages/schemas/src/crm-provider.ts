@@ -14,6 +14,7 @@ export interface CrmContact {
   assignedStaffId: string | null;
   sourceAdId: string | null;
   sourceCampaignId: string | null;
+  gclid: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;

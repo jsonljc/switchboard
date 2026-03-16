@@ -4,6 +4,7 @@
 
 import type { FastifyPluginAsync } from "fastify";
 import { DeploymentReadinessChecker } from "@switchboard/core";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/deployment/readiness
@@ -11,17 +12,13 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     "/readiness",
     {
       schema: {
-        description: "Check deployment readiness for an organization.",
+        description: "Check deployment readiness for the authenticated organization.",
         tags: ["Deployment"],
-        querystring: {
-          type: "object",
-          properties: { orgId: { type: "string" } },
-          required: ["orgId"],
-        },
       },
     },
     async (request, reply) => {
-      const { orgId } = request.query as { orgId: string };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
 
       if (!app.resolvedProfile) {
         return reply.code(404).send({ error: "No business profile loaded" });

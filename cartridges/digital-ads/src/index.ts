@@ -421,5 +421,7 @@ export type {
 export { CAPIDispatcher } from "./tracking/capi-dispatcher.js";
 export type { CAPIDispatcherConfig, CAPIDispatchResult } from "./tracking/capi-dispatcher.js";
 export { hashForCAPI, buildUserData } from "./tracking/capi-dispatcher.js";
+export { GoogleOfflineDispatcher } from "./tracking/google-offline-dispatcher.js";
+export type { GoogleOfflineDispatcherConfig } from "./tracking/google-offline-dispatcher.js";
 export { OutcomeTracker } from "./tracking/outcome-tracker.js";
 export type { OutcomeMetrics, CampaignOutcome } from "./tracking/outcome-tracker.js";

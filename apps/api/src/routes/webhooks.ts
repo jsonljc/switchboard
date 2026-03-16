@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { randomUUID, createHmac } from "node:crypto";
 import { requireRole } from "../utils/require-role.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { assertSafeUrl, SSRFError } from "../utils/ssrf-guard.js";
 
 interface WebhookRegistration {
   id: string;
@@ -63,9 +64,12 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
 
-      // Validate URL scheme
-      if (!url.startsWith("https://")) {
-        return reply.code(400).send({ error: "Webhook URL must use HTTPS" });
+      // Validate URL: HTTPS only, no private/internal IPs
+      try {
+        await assertSafeUrl(url);
+      } catch (err) {
+        const message = err instanceof SSRFError ? err.message : "Invalid webhook URL";
+        return reply.code(400).send({ error: message });
       }
 
       const webhook: WebhookRegistration = {
@@ -153,6 +157,14 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       if (!orgId) return;
       if (webhook.organizationId !== orgId) {
         return reply.code(403).send({ error: "Forbidden" });
+      }
+
+      // Re-validate URL at fetch time (DNS rebinding defense)
+      try {
+        await assertSafeUrl(webhook.url);
+      } catch (err) {
+        const message = err instanceof SSRFError ? err.message : "Invalid webhook URL";
+        return reply.code(400).send({ error: message });
       }
 
       const testPayload = {

@@ -37,8 +37,8 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async getContact(contactId: string): Promise<CrmContact | null> {
-    const row = await this.prisma.crmContact.findUnique({
-      where: { id: contactId },
+    const row = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
     });
     if (!row) return null;
     return toContact(row);
@@ -159,6 +159,15 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async updateContact(contactId: string, data: Record<string, unknown>): Promise<CrmContact> {
+    // Verify org ownership before updating
+    const existing = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Contact ${contactId} not found`);
+    }
+
     const updateData: Record<string, unknown> = {};
     if (data["email"] !== undefined) updateData["email"] = data["email"];
     if (data["firstName"] !== undefined) updateData["firstName"] = data["firstName"];
@@ -183,6 +192,14 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async archiveContact(contactId: string): Promise<void> {
+    // Verify org ownership before archiving
+    const existing = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Contact ${contactId} not found`);
+    }
     await this.prisma.crmContact.update({
       where: { id: contactId },
       data: { status: "archived" },
@@ -213,6 +230,14 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async archiveDeal(dealId: string): Promise<void> {
+    // Verify org ownership before archiving
+    const existing = await this.prisma.crmDeal.findFirst({
+      where: { id: dealId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Deal ${dealId} not found`);
+    }
     await this.prisma.crmDeal.update({
       where: { id: dealId },
       data: { stage: "closed_lost" },

@@ -21,6 +21,7 @@ function makeContact(overrides?: Partial<CrmContact>): CrmContact {
     assignedStaffId: null,
     sourceAdId: "ad_whitening",
     sourceCampaignId: "camp_spring",
+    gclid: null,
     utmSource: "meta_ads",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

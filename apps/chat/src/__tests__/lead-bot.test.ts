@@ -409,6 +409,7 @@ describe("CRM auto-create with ad attribution", () => {
         assignedStaffId: null,
         sourceAdId: "abc123",
         sourceCampaignId: "camp456",
+        gclid: null,
         utmSource: "meta_ads",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

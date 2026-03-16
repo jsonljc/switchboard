@@ -5,6 +5,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { BusinessProfileSchema } from "@switchboard/schemas";
 import { DeploymentReadinessChecker } from "@switchboard/core";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const businessConfigRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/business-config/:orgId
@@ -22,7 +23,8 @@ export const businessConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available" });
       }
@@ -53,7 +55,8 @@ export const businessConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available" });
       }
@@ -91,7 +94,8 @@ export const businessConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available" });
       }
@@ -118,7 +122,8 @@ export const businessConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available" });
       }
