@@ -60,6 +60,10 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
     const idempotencyKey = request.headers["idempotency-key"] as string | undefined;
     if (!idempotencyKey) return;
 
+    if (idempotencyKey.length > 256) {
+      return reply.code(400).send({ error: "Idempotency-Key exceeds maximum length of 256" });
+    }
+
     const cached = await backend.get(idempotencyKey);
     if (cached) {
       const entry = JSON.parse(cached) as { statusCode: number; body: string };

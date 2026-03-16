@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { generateIntegrationGuide } from "@switchboard/core";
+import { requireRole } from "../utils/require-role.js";
 
 const OrgConfigPutBody = z.object({
   name: z.string().max(200).optional(),
@@ -56,6 +57,8 @@ export const orgConfigRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      if (!(await requireRole(request, reply, "admin", "operator"))) return;
+
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }

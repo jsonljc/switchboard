@@ -5,18 +5,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createLogger } from "../logger.js";
-import type { CartridgeContext } from "@switchboard/cartridge-sdk";
+import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 
 const logger = createLogger("inbound-webhooks");
-
-/** Default system context for webhook-triggered actions */
-function systemContext(orgId?: string): CartridgeContext {
-  return {
-    principalId: "system:webhook",
-    organizationId: orgId ?? null,
-    connectionCredentials: {},
-  };
-}
 
 export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
   // ─────────────────────────────────────────────────────────────────────────
@@ -334,27 +325,26 @@ async function handleStripeEvent(
   switch (event.type) {
     case "payment_intent.succeeded": {
       logger.info({ paymentIntentId: obj["id"], amount: obj["amount"] }, "Payment succeeded");
-      // Dispatch to orchestrator: log payment, update CRM deal stage
-      const customerEngagement = app.storageContext.cartridges.get("customer-engagement");
-      if (customerEngagement) {
-        try {
-          await customerEngagement.execute(
-            "payment.log",
-            {
-              paymentId: obj["id"],
-              amount: obj["amount"],
-              currency: obj["currency"],
-              customerId: obj["customer"],
-              status: "succeeded",
-            },
-            systemContext(),
-          );
-        } catch (err) {
-          logger.warn(
-            { err, paymentId: obj["id"] },
-            "Failed to log payment via customer-engagement cartridge",
-          );
-        }
+      try {
+        await executeGovernedSystemAction({
+          orchestrator: app.orchestrator,
+          actionType: "payment.log",
+          cartridgeId: "customer-engagement",
+          organizationId: String(
+            (obj["metadata"] as Record<string, unknown> | undefined)?.["organizationId"] ??
+              "system",
+          ),
+          parameters: {
+            paymentId: obj["id"],
+            amount: obj["amount"],
+            currency: obj["currency"],
+            customerId: obj["customer"],
+            status: "succeeded",
+          },
+          idempotencyKey: `stripe:${event.id}`,
+        });
+      } catch (err) {
+        logger.warn({ err, paymentId: obj["id"] }, "Failed to log payment via governance");
       }
       break;
     }
@@ -409,51 +399,51 @@ async function handleFormSubmission(
     };
   },
 ): Promise<void> {
-  // Step 1: Create CRM contact
-  const crmCartridge = app.storageContext.cartridges.get("crm");
-  if (crmCartridge) {
-    try {
-      await crmCartridge.execute(
-        "crm.contact.create",
-        {
-          email: submission.fields.email ?? `lead-${leadId}@unknown.com`,
-          firstName: submission.fields.firstName,
-          lastName: submission.fields.lastName,
-          phone: submission.fields.phone,
-          channel: submission.source,
-          properties: {
-            leadId,
-            source: submission.source,
-            formId: submission.formId,
-            serviceInterest: submission.fields.serviceInterest,
-            submittedAt: submission.submittedAt ?? new Date().toISOString(),
-          },
-        },
-        systemContext(),
-      );
-    } catch (err) {
-      logger.warn({ err, leadId }, "Failed to create CRM contact");
-    }
-  }
-
-  // Step 2: Trigger customer engagement qualification
-  const peCartridge = app.storageContext.cartridges.get("customer-engagement");
-  if (peCartridge) {
-    try {
-      await peCartridge.execute(
-        "lead.qualify",
-        {
+  // Step 1: Create CRM contact via governance
+  try {
+    await executeGovernedSystemAction({
+      orchestrator: app.orchestrator,
+      actionType: "crm.contact.create",
+      cartridgeId: "crm",
+      organizationId: "system",
+      parameters: {
+        email: submission.fields.email ?? `lead-${leadId}@unknown.com`,
+        firstName: submission.fields.firstName,
+        lastName: submission.fields.lastName,
+        phone: submission.fields.phone,
+        channel: submission.source,
+        properties: {
           leadId,
           source: submission.source,
-          firstName: submission.fields.firstName,
-          phone: submission.fields.phone,
+          formId: submission.formId,
           serviceInterest: submission.fields.serviceInterest,
+          submittedAt: submission.submittedAt ?? new Date().toISOString(),
         },
-        systemContext(),
-      );
-    } catch (err) {
-      logger.warn({ err, leadId }, "Failed to qualify lead");
-    }
+      },
+      idempotencyKey: `form:contact:${leadId}`,
+    });
+  } catch (err) {
+    logger.warn({ err, leadId }, "Failed to create CRM contact via governance");
+  }
+
+  // Step 2: Trigger customer engagement qualification via governance
+  try {
+    await executeGovernedSystemAction({
+      orchestrator: app.orchestrator,
+      actionType: "lead.qualify",
+      cartridgeId: "customer-engagement",
+      organizationId: "system",
+      parameters: {
+        leadId,
+        source: submission.source,
+        firstName: submission.fields.firstName,
+        phone: submission.fields.phone,
+        serviceInterest: submission.fields.serviceInterest,
+      },
+      idempotencyKey: `form:qualify:${leadId}`,
+    });
+  } catch (err) {
+    logger.warn({ err, leadId }, "Failed to qualify lead via governance");
   }
 
   logger.info({ leadId, source: submission.source }, "Form submission processed");
@@ -476,13 +466,15 @@ async function handleBookingConfirmation(
 ): Promise<void> {
   const orgId = booking.organizationId;
 
-  // Step 1: Update CRM deal stage to booked
-  const crmCartridge = app.storageContext.cartridges.get("crm");
-  if (crmCartridge && (booking.leadId || booking.contactExternalId)) {
+  // Step 1: Update CRM deal stage to booked via governance
+  if (booking.leadId || booking.contactExternalId) {
     try {
-      await crmCartridge.execute(
-        "crm.deal.create",
-        {
+      await executeGovernedSystemAction({
+        orchestrator: app.orchestrator,
+        actionType: "crm.deal.create",
+        cartridgeId: "crm",
+        organizationId: orgId ?? "system",
+        parameters: {
           name: `Booking: ${booking.service ?? "Appointment"}`,
           stage: "booked",
           pipeline: "lead-conversion",
@@ -496,8 +488,8 @@ async function handleBookingConfirmation(
             leadId: booking.leadId,
           },
         },
-        systemContext(orgId),
-      );
+        idempotencyKey: `booking:deal:${booking.bookingId}`,
+      });
     } catch (err) {
       logger.warn({ err, bookingId: booking.bookingId }, "Failed to create CRM deal for booking");
     }
