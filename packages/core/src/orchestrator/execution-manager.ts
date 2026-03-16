@@ -133,12 +133,24 @@ export class ExecutionManager {
         execPrincipalId,
         execOrgId,
       );
+      const EXECUTION_TIMEOUT_MS = 30_000;
       const executeFn = () => cartridge.execute(proposal.actionType, execParams, cartridgeContext);
+      const timeoutFn = () =>
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(
+            () =>
+              reject(new Error(`Cartridge execution timed out after ${EXECUTION_TIMEOUT_MS}ms`)),
+            EXECUTION_TIMEOUT_MS,
+          ).unref(),
+        );
 
       if (this.circuitBreaker) {
-        executeResult = await this.circuitBreaker.execute(execCartridgeId, executeFn);
+        executeResult = await Promise.race([
+          this.circuitBreaker.execute(execCartridgeId, executeFn),
+          timeoutFn(),
+        ]);
       } else {
-        executeResult = await executeFn();
+        executeResult = await Promise.race([executeFn(), timeoutFn()]);
       }
     } catch (err) {
       executeResult = {
