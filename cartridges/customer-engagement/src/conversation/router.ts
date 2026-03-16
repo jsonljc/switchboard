@@ -10,6 +10,7 @@ import type { FAQRecord } from "@switchboard/schemas";
 import { matchFAQ, formatFAQResponse } from "./faq-matcher.js";
 import {
   createLeadStateMachine,
+  getGoalForState,
   LeadConversationEvent,
   LeadConversationState,
   type LeadStateMachineContext,
@@ -55,6 +56,8 @@ export interface RouterResponse {
   leadProfileUpdate?: Record<string, unknown>;
   /** Current lead state machine state (if enabled). */
   machineState?: string;
+  /** LLM goal description for the current state (if state machine enabled). */
+  stateGoal?: string;
 }
 
 export interface ConversationRouterConfig {
@@ -288,6 +291,9 @@ export class ConversationRouter {
       variables: currentState.variables,
       leadProfileUpdate: Object.keys(leadProfileUpdate).length > 0 ? leadProfileUpdate : undefined,
       machineState: session.machineState,
+      stateGoal: session.machineState
+        ? getGoalForState(session.machineState as LeadConversationState)
+        : undefined,
     };
   }
 
