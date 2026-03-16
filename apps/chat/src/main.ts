@@ -1,11 +1,25 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import { createChatRuntime } from "./runtime.js";
-import { checkIngressRateLimit, checkNonce } from "./adapters/security.js";
+import { checkIngressRateLimit } from "./adapters/security.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
 import { startHealthChecker } from "./managed/health-checker.js";
+import { runStartupChecks } from "./startup-checks.js";
+import { initDedup, checkDedup } from "./dedup/redis-dedup.js";
 
 async function main() {
+  // Pre-boot validation — fail fast with clear error messages
+  const checks = runStartupChecks();
+  for (const warning of checks.warnings) {
+    console.warn(`[Startup] WARNING: ${warning}`);
+  }
+  if (!checks.ok) {
+    for (const error of checks.errors) {
+      console.error(`[Startup] ERROR: ${error}`);
+    }
+    console.error("[Startup] Aborting — fix the above errors before starting");
+    process.exit(1);
+  }
   const app = Fastify({ logger: true });
 
   // Parse application/x-www-form-urlencoded (Slack interactive payloads)
@@ -34,7 +48,8 @@ async function main() {
       const { initSecurityStore } = await import("./adapters/security.js");
       const redisClient = new Redis(process.env["REDIS_URL"]);
       initSecurityStore(new RedisSecurityStore(redisClient as never));
-      app.log.info("Redis security store initialized");
+      initDedup(redisClient as never);
+      app.log.info("Redis security store + dedup initialized");
     } catch (err) {
       console.warn("Failed to initialize Redis security store, using in-memory fallback:", err);
     }
@@ -101,7 +116,7 @@ async function main() {
       const headers = request.headers as Record<string, string | undefined>;
       if (!adapter.verifyRequest(rawBody, headers)) {
         app.log.warn("Webhook request failed signature verification");
-        return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
+        return reply.code(401).send({ error: "Invalid signature" });
       }
     }
 
@@ -112,14 +127,17 @@ async function main() {
       return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
     }
 
-    // Nonce dedup — prevent duplicate processing on Telegram webhook retries
+    // Dedup — prevent duplicate processing on Telegram webhook retries
     const payload = request.body as Record<string, unknown>;
     const msg = payload["message"] as Record<string, unknown> | undefined;
     const cb = payload["callback_query"] as Record<string, unknown> | undefined;
     const nonceId = msg ? String(msg["message_id"]) : cb ? String(cb["id"]) : null;
-    if (nonceId && !(await checkNonce(nonceId, rateLimitConfig.windowMs))) {
-      app.log.warn({ nonceId }, "Duplicate webhook message, skipping");
-      return reply.code(200).send({ ok: true });
+    if (nonceId) {
+      const isNew = await checkDedup("telegram", nonceId);
+      if (!isNew) {
+        app.log.warn({ nonceId }, "Duplicate webhook message, skipping");
+        return reply.code(200).send({ ok: true });
+      }
     }
 
     try {
@@ -195,7 +213,7 @@ async function main() {
       const headers = request.headers as Record<string, string | undefined>;
       if (!managedAdapter.verifyRequest(rawBody, headers)) {
         app.log.warn({ webhookPath }, "Managed webhook request failed signature verification");
-        return reply.code(200).send({ ok: true });
+        return reply.code(401).send({ error: "Invalid signature" });
       }
     }
 
@@ -206,14 +224,14 @@ async function main() {
       return reply.code(200).send({ ok: true });
     }
 
-    // Nonce dedup
+    // Dedup — prevent duplicate webhook deliveries (Redis-backed, 24h TTL)
     const messageId = managedAdapter.extractMessageId(request.body);
-    if (
-      messageId &&
-      !(await checkNonce(`managed_${webhookId}_${messageId}`, rateLimitConfig.windowMs))
-    ) {
-      app.log.warn({ messageId, webhookPath }, "Duplicate managed webhook message, skipping");
-      return reply.code(200).send({ ok: true });
+    if (messageId) {
+      const isNew = await checkDedup(`managed_${webhookId}`, messageId);
+      if (!isNew) {
+        app.log.warn({ messageId, webhookPath }, "Duplicate managed webhook message, skipping");
+        return reply.code(200).send({ ok: true });
+      }
     }
 
     try {

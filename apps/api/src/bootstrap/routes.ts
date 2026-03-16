@@ -35,8 +35,11 @@ import { revenueGrowthRoutes } from "../routes/revenue-growth.js";
 import { businessConfigRoutes } from "../routes/business-config.js";
 import { flowBuilderRoutes } from "../routes/flow-builder.js";
 import { deploymentRoutes } from "../routes/deployment.js";
+import { setupRoutes } from "../routes/setup.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // Setup routes are registered before auth — bootstrap needs to work pre-auth
+  await app.register(setupRoutes, { prefix: "/api/setup" });
   await app.register(actionsRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });

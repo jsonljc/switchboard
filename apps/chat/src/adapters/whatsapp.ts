@@ -241,6 +241,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
   }
 
   async sendTextReply(threadId: string, text: string): Promise<void> {
+    // Simulate typing: mark message as read, then delay before responding
+    const delayMs = this.typingDelay(text);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     await this.sendMessage(threadId, {
       messaging_product: "whatsapp",
       to: threadId,
@@ -322,6 +328,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
     const value = changes?.["value"] as Record<string, unknown>;
     const messages = value?.["messages"] as Array<Record<string, unknown>>;
     return (messages?.[0]?.["id"] as string) ?? null;
+  }
+
+  /** Calculate a human-like typing delay based on response word count. */
+  private typingDelay(text: string): number {
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    return Math.min(Math.max(Math.round((wordCount / 50) * 60_000), 1500), 4000);
   }
 
   private async sendMessage(_to: string, body: Record<string, unknown>): Promise<void> {
