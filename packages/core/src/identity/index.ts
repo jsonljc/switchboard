@@ -4,3 +4,4 @@ export { getActiveOverlays } from "./overlay.js";
 export { canActAs, resolveApprovers } from "./principals.js";
 export { GOVERNANCE_PROFILE_PRESETS, automationLevelToProfile } from "./governance-presets.js";
 export type { GovernanceProfilePreset } from "./governance-presets.js";
+export { normalizePhone, normalizeEmail } from "./normalize.js";

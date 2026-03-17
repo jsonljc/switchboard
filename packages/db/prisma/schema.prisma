@@ -455,6 +455,10 @@ model CrmContact {
   sourceAdId      String?
   sourceCampaignId String?
   gclid            String?   // Google Click ID for offline conversion attribution
+  fbclid           String?   // Facebook Click ID
+  ttclid           String?   // TikTok Click ID
+  normalizedPhone  String?   // E.164 normalized phone for identity resolution
+  normalizedEmail  String?   // Lowercased email for identity resolution
   utmSource       String?
   properties      Json      @default("{}")
   createdAt       DateTime  @default(now())
@@ -468,6 +472,8 @@ model CrmContact {
   @@index([externalId])
   @@index([status])
   @@index([sourceAdId])
+  @@index([normalizedPhone])
+  @@index([normalizedEmail])
 }
 
 model CrmDeal {

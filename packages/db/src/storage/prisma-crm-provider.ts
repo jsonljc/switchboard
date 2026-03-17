@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { normalizePhone, normalizeEmail } from "@switchboard/core";
 import type {
   CrmProvider,
   CrmContact,
@@ -150,6 +151,10 @@ export class PrismaCrmProvider implements CrmProvider {
         assignedStaffId: data.assignedStaffId ?? null,
         sourceAdId: data.sourceAdId ?? null,
         sourceCampaignId: data.sourceCampaignId ?? null,
+        fbclid: data.fbclid ?? null,
+        ttclid: data.ttclid ?? null,
+        normalizedPhone: data.phone ? normalizePhone(data.phone) : null,
+        normalizedEmail: data.email ? normalizeEmail(data.email) : null,
         utmSource: data.utmSource ?? null,
         organizationId: this.organizationId ?? null,
         properties: (data.properties as object) ?? {},
@@ -183,6 +188,12 @@ export class PrismaCrmProvider implements CrmProvider {
     if (data["sourceAdId"] !== undefined) updateData["sourceAdId"] = data["sourceAdId"];
     if (data["sourceCampaignId"] !== undefined)
       updateData["sourceCampaignId"] = data["sourceCampaignId"];
+    if (data["fbclid"] !== undefined) updateData["fbclid"] = data["fbclid"];
+    if (data["ttclid"] !== undefined) updateData["ttclid"] = data["ttclid"];
+    if (data["normalizedPhone"] !== undefined)
+      updateData["normalizedPhone"] = data["normalizedPhone"];
+    if (data["normalizedEmail"] !== undefined)
+      updateData["normalizedEmail"] = data["normalizedEmail"];
     if (data["utmSource"] !== undefined) updateData["utmSource"] = data["utmSource"];
     if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
 
