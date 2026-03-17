@@ -494,6 +494,7 @@ export async function createChatRuntime(
       defaultFlowId: qualificationFlow.id,
       faqs: resolvedProfile?.profile?.faqs,
       businessName: resolvedProfile?.profile?.name,
+      objectionTrees: resolvedProfile?.objectionTrees ?? [],
     });
     console.warn(
       `[Chat] Lead bot mode enabled: qualification → booking flow, ` +

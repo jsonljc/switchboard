@@ -4,6 +4,7 @@ import type { InboundMessage } from "../router.js";
 import { InMemorySessionStore } from "../session-store.js";
 import type { ConversationFlowDefinition } from "../types.js";
 import { getGoalForState, LeadConversationState } from "../lead-state-machine.js";
+import type { ObjectionMatch } from "../../agents/intake/objection-trees.js";
 
 function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
   return {
@@ -527,6 +528,88 @@ describe("ConversationRouter", () => {
       await expect(router.handleMessage(makeMessage())).rejects.toThrow(
         "Default flow nonexistent not found",
       );
+    });
+  });
+
+  describe("objection trees wiring", () => {
+    const priceObjectionTree: ObjectionMatch = {
+      category: "price",
+      keywords: ["expensive", "cost", "price", "afford"],
+      response: "We offer flexible payment plans.",
+      followUp: "Would you like to learn more about financing?",
+    };
+
+    const timingObjectionTree: ObjectionMatch = {
+      category: "timing",
+      keywords: ["busy", "schedule", "later", "not now"],
+      response: "We have flexible scheduling options.",
+      followUp: "Want me to check availability?",
+    };
+
+    it("populates objectionResponse variable when objection detected", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+        objectionTrees: [priceObjectionTree, timingObjectionTree],
+      });
+
+      // First message creates session (IDLE -> GREETING)
+      await router.handleMessage(makeMessage());
+      // Second message with intent → advance to QUALIFYING
+      await router.handleMessage(makeMessage({ body: "I want to get started" }));
+      // Objection message with price keywords
+      const result = await router.handleMessage(
+        makeMessage({ body: "This is too expensive for me" }),
+      );
+
+      expect(result.variables?.["objectionResponse"]).toBe("We offer flexible payment plans.");
+      expect(result.variables?.["objectionCategory"]).toBe("price");
+      expect(result.variables?.["objectionFollowUp"]).toBe(
+        "Would you like to learn more about financing?",
+      );
+    });
+
+    it("uses default objection trees when none configured", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Advance to qualifying
+      await router.handleMessage(makeMessage({ body: "I want teeth whitening" }));
+      // Send objection with price keywords (should match default trees)
+      const result = await router.handleMessage(
+        makeMessage({ body: "This is too expensive for my budget" }),
+      );
+
+      // Default trees should populate objectionResponse for price category
+      expect(result.variables?.["objectionCategory"]).toBe("price");
+      expect(result.variables?.["objectionResponse"]).toBeTruthy();
+    });
+
+    it("does not populate objectionResponse when no keywords match", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+        objectionTrees: [priceObjectionTree],
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Advance state
+      await router.handleMessage(makeMessage({ body: "I want to get started" }));
+      // Non-objection message (no price keywords)
+      const result = await router.handleMessage(makeMessage({ body: "Tell me more about it" }));
+
+      expect(result.variables?.["objectionResponse"]).toBeUndefined();
     });
   });
 });

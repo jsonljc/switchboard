@@ -16,6 +16,7 @@ import {
   type LeadStateMachineContext,
 } from "./lead-state-machine.js";
 import type { ClassificationResult } from "./intent-classifier.js";
+import { matchObjection, type ObjectionMatch } from "../agents/intake/objection-trees.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -72,6 +73,8 @@ export interface ConversationRouterConfig {
   faqs?: FAQRecord[];
   /** Business name for FAQ response formatting */
   businessName?: string;
+  /** Objection trees for keyword-matched objection handling */
+  objectionTrees?: ObjectionMatch[];
 }
 
 /**
@@ -91,6 +94,7 @@ export class ConversationRouter {
   private readonly nlpAdapter: ConversationNLPAdapter;
   private readonly faqs: FAQRecord[];
   private readonly businessName: string | undefined;
+  private readonly objectionTrees: ObjectionMatch[];
 
   constructor(config: ConversationRouterConfig) {
     this.sessionStore = config.sessionStore;
@@ -100,6 +104,7 @@ export class ConversationRouter {
     this.nlpAdapter = new ConversationNLPAdapter();
     this.faqs = config.faqs ?? [];
     this.businessName = config.businessName;
+    this.objectionTrees = config.objectionTrees ?? [];
   }
 
   /**
@@ -206,6 +211,19 @@ export class ConversationRouter {
       // Handle escalation requests
       if (nlpResult.classification.intent === "escalation_request") {
         state.variables["escalationRequested"] = true;
+      }
+
+      // Wire objection response when intent is objection
+      if (classification.intent === "objection") {
+        const objMatch = matchObjection(
+          message.body,
+          this.objectionTrees.length > 0 ? this.objectionTrees : undefined,
+        );
+        if (objMatch) {
+          state.variables["objectionCategory"] = objMatch.category;
+          state.variables["objectionResponse"] = objMatch.response;
+          state.variables["objectionFollowUp"] = objMatch.followUp;
+        }
       }
     } else {
       // Fallback: try to interpret the message as a question response (numbered option)
