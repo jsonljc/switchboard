@@ -213,6 +213,7 @@ export interface LeadFormEntry {
 export interface ConversionEvent {
   eventName: string;
   eventTime: number;
+  eventId?: string;
   userData: {
     em?: string[];
     ph?: string[];
