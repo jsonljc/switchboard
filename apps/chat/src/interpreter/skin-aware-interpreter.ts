@@ -136,11 +136,9 @@ export class SkinAwareInterpreter extends ClinicInterpreter {
     }
 
     // 6. Language support
-    const availableLangs =
-      (this.resolvedProfile as Record<string, unknown>)?.["localisation"] &&
-      (
-        (this.resolvedProfile as Record<string, unknown>)["localisation"] as Record<string, unknown>
-      )?.["languages"];
+    const profileAny = this.resolvedProfile as unknown as Record<string, unknown> | null;
+    const localisation = profileAny?.["localisation"] as Record<string, unknown> | undefined;
+    const availableLangs = localisation?.["languages"];
     if (Array.isArray(availableLangs) && availableLangs.length > 0) {
       const langInstruction = buildLanguageInstruction(null, availableLangs as string[]);
       if (langInstruction) {

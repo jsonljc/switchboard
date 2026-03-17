@@ -20,7 +20,7 @@ describe("findUnrecordedAppointments", () => {
     });
 
     expect(gaps).toHaveLength(1);
-    expect(gaps[0].dealId).toBe("deal_1");
+    expect(gaps[0]!.dealId).toBe("deal_1");
   });
 
   it("excludes appointments within grace period", async () => {
