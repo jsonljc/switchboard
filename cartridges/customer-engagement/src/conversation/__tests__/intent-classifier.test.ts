@@ -166,16 +166,39 @@ describe("MessageIntentClassifier", () => {
       expect(classifier.classify("I'm worried about side effects").intent).toBe("objection");
     });
 
-    it("detects 'how much does it cost'", () => {
-      expect(classifier.classify("how much does it cost").intent).toBe("objection");
-    });
-
     it("detects 'what about risks'", () => {
       expect(classifier.classify("what about risks").intent).toBe("objection");
     });
 
     it("detects 'recovery time'", () => {
       expect(classifier.classify("recovery time after treatment").intent).toBe("objection");
+    });
+  });
+
+  describe("pricing/duration questions should not be objections", () => {
+    it("classifies 'how much does Botox cost?' as question, not objection", () => {
+      const result = classifier.classify("how much does Botox cost?");
+      expect(result.intent).toBe("question");
+    });
+
+    it("classifies 'how long does the treatment take?' as question, not objection", () => {
+      const result = classifier.classify("how long does the treatment take?");
+      expect(result.intent).toBe("question");
+    });
+
+    it("classifies 'how painful is it?' as question, not objection", () => {
+      const result = classifier.classify("how painful is it?");
+      expect(result.intent).toBe("question");
+    });
+
+    it("still classifies 'I'm worried about the cost' as objection", () => {
+      const result = classifier.classify("I'm worried about the cost");
+      expect(result.intent).toBe("objection");
+    });
+
+    it("still classifies 'that's too expensive' as objection", () => {
+      const result = classifier.classify("that's too expensive");
+      expect(result.intent).toBe("objection");
     });
   });
 

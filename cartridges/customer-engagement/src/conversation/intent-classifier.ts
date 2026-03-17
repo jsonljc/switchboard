@@ -74,7 +74,7 @@ const INTENT_PATTERNS: Array<{
     intent: "objection",
     patterns: [
       /(?:too expensive|can't afford|not sure|worried|scared|nervous|afraid|concerned|don'?t (?:think|want|need|know))/i,
-      /(?:what if|but what|how (?:much|long|painful))/i,
+      /(?:what if|but what)/i,
       /(?:side effects|risks?|complications?|recovery|downtime)/i,
     ],
   },
