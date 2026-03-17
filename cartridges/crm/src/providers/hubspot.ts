@@ -642,6 +642,8 @@ export class HubSpotCrmProvider implements CrmProvider {
       gclid: raw.properties["gclid"] ?? null,
       fbclid: raw.properties["fbclid"] ?? null,
       ttclid: raw.properties["ttclid"] ?? null,
+      normalizedPhone: null,
+      normalizedEmail: raw.properties["email"]?.toLowerCase().trim() ?? null,
       utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,

@@ -298,6 +298,8 @@ function toContact(row: {
   gclid?: string | null;
   fbclid?: string | null;
   ttclid?: string | null;
+  normalizedPhone?: string | null;
+  normalizedEmail?: string | null;
   utmSource: string | null;
   properties: unknown;
   createdAt: Date;
@@ -320,6 +322,8 @@ function toContact(row: {
     gclid: row.gclid ?? null,
     fbclid: row.fbclid ?? null,
     ttclid: row.ttclid ?? null,
+    normalizedPhone: row.normalizedPhone ?? null,
+    normalizedEmail: row.normalizedEmail ?? null,
     utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),

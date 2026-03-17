@@ -17,6 +17,8 @@ export interface CrmContact {
   gclid: string | null;
   fbclid: string | null;
   ttclid: string | null;
+  normalizedPhone: string | null;
+  normalizedEmail: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;

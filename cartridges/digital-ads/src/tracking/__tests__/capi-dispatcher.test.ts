@@ -24,6 +24,8 @@ function makeContact(overrides?: Partial<CrmContact>): CrmContact {
     gclid: null,
     fbclid: null,
     ttclid: null,
+    normalizedPhone: null,
+    normalizedEmail: null,
     utmSource: "meta_ads",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
