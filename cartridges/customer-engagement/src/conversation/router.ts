@@ -59,6 +59,8 @@ export interface RouterResponse {
   machineState?: string;
   /** LLM goal description for the current state (if state machine enabled). */
   stateGoal?: string;
+  /** FAQ answer text, when response came from FAQ matching (allows LLM to rephrase) */
+  faqContext?: string;
 }
 
 export interface ConversationRouterConfig {
@@ -172,6 +174,11 @@ export class ConversationRouter {
             escalated: false,
             completed: false,
             sessionId: session.id,
+            machineState: session.machineState,
+            stateGoal: session.machineState
+              ? getGoalForState(session.machineState as LeadConversationState)
+              : undefined,
+            faqContext: faqResponse,
           };
         }
       }

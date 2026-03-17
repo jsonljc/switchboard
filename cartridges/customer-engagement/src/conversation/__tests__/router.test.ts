@@ -516,6 +516,38 @@ describe("ConversationRouter", () => {
     });
   });
 
+  describe("FAQ with state context", () => {
+    it("includes stateGoal and faqContext in FAQ responses", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+        faqs: [
+          {
+            question: "What are your hours?",
+            answer: "We are open 9am-5pm.",
+            topic: "hours",
+          },
+        ],
+        businessName: "TestClinic",
+      });
+
+      // First message creates session (IDLE -> GREETING)
+      await router.handleMessage(makeMessage());
+      // Ask the FAQ question
+      const result = await router.handleMessage(makeMessage({ body: "What are your hours?" }));
+
+      expect(result.handled).toBe(true);
+      expect(result.faqContext).toBeTruthy();
+      expect(result.faqContext).toContain("9am-5pm");
+      expect(result.machineState).toBeDefined();
+      expect(result.stateGoal).toBeTruthy();
+      expect(typeof result.stateGoal).toBe("string");
+      expect(result.stateGoal).toBe(getGoalForState(result.machineState as LeadConversationState));
+    });
+  });
+
   describe("createSession error", () => {
     it("should throw when default flow is missing", async () => {
       const flows = new Map<string, ConversationFlowDefinition>();

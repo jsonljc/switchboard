@@ -108,6 +108,11 @@ export async function handleLeadMessage(
         primaryMove === "handle_objection" ? buildObjectionContext(routerResponse) : undefined,
     };
 
+    // When FAQ provided the answer, include it as context for the LLM to rephrase
+    if (routerResponse.faqContext) {
+      llmCtx.objectionContext = `Answer this based on: ${routerResponse.faqContext}`;
+    }
+
     const llmResult = await deps.llmEngine.generate(llmCtx, message.organizationId ?? undefined);
     if (llmResult.usedLLM) {
       responsesToSend = [llmResult.text];
