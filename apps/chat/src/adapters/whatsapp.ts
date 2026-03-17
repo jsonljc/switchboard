@@ -197,8 +197,31 @@ export class WhatsAppAdapter implements ChannelAdapter {
       }
     }
 
-    // Only handle text messages
-    if (msgType !== "text") return null;
+    // Capture non-text messages as leads instead of silently dropping
+    if (msgType !== "text") {
+      const from = msg["from"] as string;
+      const msgId = msg["id"] as string;
+      const timestamp = msg["timestamp"] as string;
+      const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
+      const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
+        | string
+        | undefined;
+      const metadata: Record<string, unknown> = { unsupported: true, originalType: msgType };
+      if (contactName) metadata["contactName"] = contactName;
+
+      return {
+        id: msgId ?? `wa_${Date.now()}`,
+        channel: "whatsapp",
+        channelMessageId: msgId ?? `wa_${Date.now()}`,
+        principalId: from ?? "unknown",
+        text: "",
+        threadId: from,
+        timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+        metadata,
+        attachments: [],
+        organizationId: null,
+      };
+    }
 
     const textObj = msg["text"] as Record<string, unknown>;
     const text = textObj?.["body"] as string;
