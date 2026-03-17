@@ -37,6 +37,8 @@ export * from "./goal-brief.js";
 
 // CRM provider types (shared contract for CRM implementations)
 export * from "./crm-provider.js";
+export { RevenueEventSchema, RevenueEventSourceSchema } from "./revenue-event.js";
+export type { RevenueEvent, RevenueEventSource } from "./revenue-event.js";
 
 // Skin manifests (vertical deployment configuration)
 export * from "./skin.js";
