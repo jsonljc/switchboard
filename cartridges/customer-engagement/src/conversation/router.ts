@@ -190,6 +190,11 @@ export class ConversationRouter {
       // Set extracted variables
       Object.assign(state.variables, nlpResult.extractedVariables);
 
+      // Update contactName if NLP extracted a name (e.g., "my name is Sarah")
+      if (nlpResult.extractedVariables["name"]) {
+        state.variables["contactName"] = nlpResult.extractedVariables["name"] as string;
+      }
+
       // If NLP resolved an option, set it (both generic and step-specific key)
       if (nlpResult.resolvedOptionIndex !== null) {
         state.variables["selectedOption"] = nlpResult.resolvedOptionIndex;
@@ -442,7 +447,7 @@ export class ConversationRouter {
 
     const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const state = createConversationState(flow, {
-      contactName: message.from,
+      contactName: (message.metadata?.["contactName"] as string) ?? message.from,
       contactPhone: message.from,
       channelType: message.channelType,
       lastMessage: message.body,

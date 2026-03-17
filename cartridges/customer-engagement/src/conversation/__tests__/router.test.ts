@@ -190,6 +190,45 @@ describe("ConversationRouter", () => {
       expect(result.handled).toBe(true);
     });
 
+    it("uses metadata contactName instead of user ID", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const response = await router.handleMessage(
+        makeMessage({
+          channelId: "meta-name-test",
+          channelType: "whatsapp",
+          body: "hi",
+          from: "7001",
+          metadata: { contactName: "Sarah" },
+        }),
+      );
+      expect(response.variables?.["contactName"]).toBe("Sarah");
+    });
+
+    it("falls back to message.from when metadata has no contactName", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const response = await router.handleMessage(
+        makeMessage({
+          channelId: "no-meta-test",
+          channelType: "telegram",
+          body: "hello",
+          from: "12345",
+        }),
+      );
+      expect(response.variables?.["contactName"]).toBe("12345");
+    });
+
     it("should return error response when flow not found", async () => {
       const flows = new Map([["greeting", makeGreetingFlow()]]);
       const router = new ConversationRouter({
