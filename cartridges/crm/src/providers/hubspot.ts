@@ -640,6 +640,8 @@ export class HubSpotCrmProvider implements CrmProvider {
       sourceAdId: raw.properties["hs_analytics_source_data_1"] ?? null,
       sourceCampaignId: raw.properties["hs_analytics_source_data_2"] ?? null,
       gclid: raw.properties["gclid"] ?? null,
+      fbclid: raw.properties["fbclid"] ?? null,
+      ttclid: raw.properties["ttclid"] ?? null,
       utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,

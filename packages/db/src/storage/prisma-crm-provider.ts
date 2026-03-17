@@ -133,6 +133,8 @@ export class PrismaCrmProvider implements CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
@@ -294,6 +296,8 @@ function toContact(row: {
   sourceAdId: string | null;
   sourceCampaignId?: string | null;
   gclid?: string | null;
+  fbclid?: string | null;
+  ttclid?: string | null;
   utmSource: string | null;
   properties: unknown;
   createdAt: Date;
@@ -314,6 +318,8 @@ function toContact(row: {
     sourceAdId: row.sourceAdId,
     sourceCampaignId: row.sourceCampaignId ?? null,
     gclid: row.gclid ?? null,
+    fbclid: row.fbclid ?? null,
+    ttclid: row.ttclid ?? null,
     utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),

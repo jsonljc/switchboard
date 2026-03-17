@@ -15,6 +15,8 @@ export interface CrmContact {
   sourceAdId: string | null;
   sourceCampaignId: string | null;
   gclid: string | null;
+  fbclid: string | null;
+  ttclid: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;
@@ -82,6 +84,8 @@ export interface CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact>;
