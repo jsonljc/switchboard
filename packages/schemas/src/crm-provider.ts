@@ -25,6 +25,14 @@ export interface CrmContact {
   properties: Record<string, unknown>;
 }
 
+export interface ContactAlias {
+  id: string;
+  contactId: string;
+  channel: string;
+  externalId: string;
+  createdAt: string;
+}
+
 export interface CrmDeal {
   id: string;
   name: string;

@@ -466,6 +466,7 @@ model CrmContact {
 
   deals          CrmDeal[]
   activities     CrmActivity[]
+  aliases        ContactAlias[]
 
   @@index([organizationId])
   @@index([email])
@@ -474,6 +475,19 @@ model CrmContact {
   @@index([sourceAdId])
   @@index([normalizedPhone])
   @@index([normalizedEmail])
+}
+
+model ContactAlias {
+  id         String   @id @default(uuid())
+  contactId  String
+  channel    String   // whatsapp, instagram, telegram, sms, facebook, web, email
+  externalId String
+  createdAt  DateTime @default(now())
+
+  contact CrmContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([channel, externalId])
+  @@index([contactId])
 }
 
 model CrmDeal {
