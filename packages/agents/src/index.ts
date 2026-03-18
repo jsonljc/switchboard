@@ -100,3 +100,5 @@ export {
   type LeadScore,
   type ObjectionMatch,
 } from "./agents/lead-responder/index.js";
+
+export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
