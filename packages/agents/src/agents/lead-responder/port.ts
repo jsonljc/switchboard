@@ -33,7 +33,6 @@ export const LEAD_RESPONDER_PORT: AgentPort = {
   ],
   configSchema: {
     qualificationThreshold: "number (default: 40)",
-    autoQualify: "boolean (default: true)",
     maxTurnsBeforeEscalation: "number (default: 10)",
   },
 };

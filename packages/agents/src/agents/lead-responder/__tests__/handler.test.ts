@@ -46,11 +46,7 @@ describe("LeadResponderHandler", () => {
     const handler = new LeadResponderHandler(deps);
 
     const event = makeLeadEvent();
-    const response = await handler.handle(
-      event,
-      { autoQualify: true },
-      { organizationId: "org-1" },
-    );
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
 
     expect(response.events).toHaveLength(1);
     expect(response.events[0]!.eventType).toBe("lead.qualified");
@@ -273,6 +269,49 @@ describe("LeadResponderHandler", () => {
     );
 
     expect(response.events.find((e) => e.eventType === "conversation.escalated")).toBeUndefined();
+  });
+
+  it("prioritizes unmatched_objection reason when both escalation conditions are true", async () => {
+    const deps = makeDeps({
+      matchObjection: vi.fn().mockReturnValue({ matched: false }),
+    });
+    const handler = new LeadResponderHandler(deps);
+
+    const history = Array.from({ length: 12 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `message ${i}`,
+    }));
+
+    const event = makeLeadEvent({ objectionText: "unknown concern" });
+    const response = await handler.handle(
+      event,
+      { maxTurnsBeforeEscalation: 10 },
+      { organizationId: "org-1", conversationHistory: history },
+    );
+
+    const escalation = response.events.find((e) => e.eventType === "conversation.escalated");
+    expect(escalation).toBeDefined();
+    expect(escalation!.payload).toEqual(
+      expect.objectContaining({
+        reason: "unmatched_objection",
+      }),
+    );
+  });
+
+  it("qualifies when score exactly equals threshold", async () => {
+    const deps = makeDeps({
+      scoreLead: vi.fn().mockReturnValue({
+        score: 40,
+        tier: "warm" as const,
+        factors: [],
+      }),
+    });
+    const handler = new LeadResponderHandler(deps);
+
+    const event = makeLeadEvent();
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(response.events[0]!.eventType).toBe("lead.qualified");
   });
 
   it("preserves handler state with score info", async () => {
