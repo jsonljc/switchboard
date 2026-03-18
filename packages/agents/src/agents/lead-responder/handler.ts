@@ -46,18 +46,9 @@ export class LeadResponderHandler implements AgentHandler {
       attribution: event.attribution,
     });
 
-    // Build action request for cartridge execution
-    const actions = [
-      {
-        actionType: "customer-engagement.lead.qualify",
-        parameters: {
-          contactId,
-          ...payload,
-          sourceAdId: event.attribution?.sourceAdId,
-          sourceCampaignId: event.attribution?.sourceCampaignId,
-        },
-      },
-    ];
+    // No action request for scoring — it's a read, already done via deps.scoreLead()
+    // Only writes (booking, sending messages, etc.) produce action requests
+    const actions: Array<{ actionType: string; parameters: Record<string, unknown> }> = [];
 
     // Handle objection if present
     const objectionText = payload.objectionText as string | undefined;

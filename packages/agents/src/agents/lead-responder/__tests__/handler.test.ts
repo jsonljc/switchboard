@@ -120,20 +120,18 @@ describe("LeadResponderHandler", () => {
     expect(r2.events[0]!.eventType).toBe("lead.disqualified");
   });
 
-  it("returns qualify_lead action request", async () => {
+  it("does not emit action requests for read-only scoring", async () => {
     const deps = makeDeps();
     const handler = new LeadResponderHandler(deps);
 
     const event = makeLeadEvent();
     const response = await handler.handle(event, {}, { organizationId: "org-1" });
 
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.lead.qualify",
-        }),
-      ]),
+    // Scoring is a read — no action requests for it
+    const qualifyActions = response.actions.filter(
+      (a) => a.actionType === "customer-engagement.lead.qualify",
     );
+    expect(qualifyActions).toHaveLength(0);
   });
 
   it("passes event payload to scoreLead", async () => {
@@ -326,5 +324,33 @@ describe("LeadResponderHandler", () => {
       lastTier: "hot",
       qualified: true,
     });
+  });
+
+  it("returns FAQ response when message matches FAQ", async () => {
+    const deps = makeDeps({
+      matchFAQ: vi.fn().mockReturnValue({
+        matched: true,
+        question: "Does Botox hurt?",
+        answer: "Most patients report minimal discomfort.",
+        confidence: 0.92,
+      }),
+    });
+    const handler = new LeadResponderHandler(deps);
+
+    const event = makeLeadEvent({ messageText: "Does Botox hurt?" });
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(response.state?.faqResponse).toBe("Most patients report minimal discomfort.");
+    expect(deps.matchFAQ).toHaveBeenCalledWith("Does Botox hurt?");
+  });
+
+  it("skips FAQ when no matchFAQ dep provided", async () => {
+    const deps = makeDeps(); // no matchFAQ
+    const handler = new LeadResponderHandler(deps);
+
+    const event = makeLeadEvent({ messageText: "Does Botox hurt?" });
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(response.state?.faqResponse).toBeUndefined();
   });
 });
