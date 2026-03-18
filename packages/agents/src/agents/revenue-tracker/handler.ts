@@ -4,83 +4,53 @@
 
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
-import type { ActionRequest, AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
-import type { RevenueTrackerDeps } from "./types.js";
+import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
 
 export class RevenueTrackerHandler implements AgentHandler {
-  constructor(_deps: RevenueTrackerDeps = {}) {}
-
   async handle(
     event: RoutedEventEnvelope,
     _config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
-    switch (event.eventType) {
-      case "revenue.recorded":
-        return this.handleRevenueRecorded(event, context);
-      case "stage.advanced":
-        return this.handleStageAdvanced(event);
-      default:
-        return { events: [], actions: [] };
+    if (event.eventType === "revenue.recorded") {
+      return this.handleRevenue(event, context);
     }
+
+    if (event.eventType === "stage.advanced") {
+      return this.handleStage(event, context);
+    }
+
+    return { events: [], actions: [] };
   }
 
-  private handleRevenueRecorded(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleRevenue(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
     const contactId = payload.contactId as string;
     const amount = payload.amount as number;
     const currency = (payload.currency as string) ?? "USD";
-    const attribution = event.attribution;
+    const profile = context.profile ?? {};
+    const revenue = profile.revenue as Record<string, unknown> | undefined;
 
-    const actions: ActionRequest[] = [];
-    const platformsNotified: string[] = [];
-
-    if (attribution?.fbclid) {
-      actions.push({
-        actionType: "digital-ads.capi.dispatch",
-        parameters: {
-          eventName: "Purchase",
-          fbclid: attribution.fbclid,
-          value: amount,
-          currency,
-        },
-      });
-      platformsNotified.push("meta");
+    if (!revenue) {
+      return this.escalate(event, context, contactId, "no_revenue_config");
     }
 
-    if (attribution?.gclid) {
-      actions.push({
-        actionType: "digital-ads.google.offline_conversion",
-        parameters: {
-          gclid: attribution.gclid,
-          conversionAction: "purchase",
-          conversionValue: amount,
-        },
-      });
-      platformsNotified.push("google");
-    }
+    const attributionModel = (revenue.attributionModel as string) ?? "last_click";
 
-    if (attribution?.ttclid) {
-      actions.push({
-        actionType: "digital-ads.tiktok.offline_conversion",
-        parameters: {
-          eventName: "CompletePayment",
-          ttclid: attribution.ttclid,
-          value: amount,
-        },
-      });
-      platformsNotified.push("tiktok");
-    }
-
-    const outboundEvent = createEventEnvelope({
+    const attributedEvent = createEventEnvelope({
       organizationId: context.organizationId,
       eventType: "revenue.attributed",
       source: { type: "agent", id: "revenue-tracker" },
       payload: {
         contactId,
         amount,
-        campaignId: attribution?.sourceCampaignId ?? null,
-        platformsNotified,
+        currency,
+        campaignId: event.attribution?.sourceCampaignId ?? null,
+        adId: event.attribution?.sourceAdId ?? null,
+        utmSource: event.attribution?.utmSource ?? null,
+        utmMedium: event.attribution?.utmMedium ?? null,
+        utmCampaign: event.attribution?.utmCampaign ?? null,
+        attributionModel,
       },
       correlationId: event.correlationId,
       causationId: event.eventId,
@@ -88,37 +58,72 @@ export class RevenueTrackerHandler implements AgentHandler {
     });
 
     return {
-      events: [outboundEvent],
-      actions,
+      events: [attributedEvent],
+      actions: [],
       state: {
         contactId,
         amount,
-        campaignId: attribution?.sourceCampaignId ?? null,
-        platformsNotified,
+        campaignId: event.attribution?.sourceCampaignId ?? null,
+        attributionModel,
       },
     };
   }
 
-  private handleStageAdvanced(event: RoutedEventEnvelope): AgentResponse {
+  private handleStage(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
     const contactId = payload.contactId as string;
     const stage = payload.stage as string;
+    const profile = context.profile ?? {};
+    const revenue = profile.revenue as Record<string, unknown> | undefined;
 
-    const actions: ActionRequest[] = [
-      {
-        actionType: "crm.activity.log",
-        parameters: {
-          contactId,
-          activityType: "stage_transition",
-          stage,
-        },
-      },
-    ];
+    if (!revenue) {
+      return { events: [], actions: [] };
+    }
+
+    const trackPipeline = revenue.trackPipeline !== false;
+
+    if (!trackPipeline) {
+      return { events: [], actions: [] };
+    }
 
     return {
       events: [],
-      actions,
-      state: { logged: true, stage },
+      actions: [
+        {
+          actionType: "crm.activity.log",
+          parameters: {
+            contactId,
+            activityType: "stage_transition",
+            stage,
+          },
+        },
+      ],
+      state: { contactId, stage, logged: true },
+    };
+  }
+
+  private escalate(
+    event: RoutedEventEnvelope,
+    context: AgentContext,
+    contactId: string,
+    reason: string,
+  ): AgentResponse {
+    const escalationEvent = createEventEnvelope({
+      organizationId: context.organizationId,
+      eventType: "conversation.escalated",
+      source: { type: "agent", id: "revenue-tracker" },
+      payload: {
+        contactId,
+        reason,
+      },
+      correlationId: event.correlationId,
+      causationId: event.eventId,
+      attribution: event.attribution,
+    });
+
+    return {
+      events: [escalationEvent],
+      actions: [],
     };
   }
 }

@@ -1,54 +1,67 @@
 import { describe, it, expect } from "vitest";
 import { RevenueTrackerHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
-import type { AttributionChain } from "../../../events.js";
 
-function makeRevenueEvent(
-  overrides: Record<string, unknown> = {},
-  attribution?: Partial<AttributionChain>,
-) {
+function makeRevenueEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
     organizationId: "org-1",
     eventType: "revenue.recorded",
-    source: { type: "agent", id: "sales-closer" },
+    source: { type: "system", id: "payments" },
     payload: {
       contactId: "c1",
       amount: 500,
       currency: "USD",
-      ...overrides,
+      ...payload,
     },
     attribution: {
-      fbclid: null,
+      fbclid: "fb-abc",
       gclid: null,
       ttclid: null,
-      sourceCampaignId: null,
-      sourceAdId: null,
-      utmSource: null,
-      utmMedium: null,
-      utmCampaign: null,
-      ...attribution,
+      sourceCampaignId: "camp-1",
+      sourceAdId: "ad-1",
+      utmSource: "meta",
+      utmMedium: "paid",
+      utmCampaign: "spring",
     },
   });
 }
 
-function makeStageEvent(overrides: Record<string, unknown> = {}) {
+function makeStageEvent(stage: string, payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
     organizationId: "org-1",
     eventType: "stage.advanced",
     source: { type: "agent", id: "sales-closer" },
     payload: {
       contactId: "c1",
-      stage: "proposal",
-      ...overrides,
+      stage,
+      ...payload,
+    },
+    attribution: {
+      fbclid: "fb-abc",
+      gclid: null,
+      ttclid: null,
+      sourceCampaignId: "camp-1",
+      sourceAdId: "ad-1",
+      utmSource: "meta",
+      utmMedium: "paid",
+      utmCampaign: "spring",
     },
   });
 }
 
 describe("RevenueTrackerHandler", () => {
-  it("emits revenue.attributed event for revenue.recorded", async () => {
+  it("emits revenue.attributed on revenue.recorded", async () => {
     const handler = new RevenueTrackerHandler();
     const event = makeRevenueEvent();
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: { attributionModel: "last_click" } },
+      },
+    );
 
     expect(response.events).toHaveLength(1);
     expect(response.events[0]!.eventType).toBe("revenue.attributed");
@@ -56,143 +69,187 @@ describe("RevenueTrackerHandler", () => {
       expect.objectContaining({
         contactId: "c1",
         amount: 500,
-        campaignId: null,
-        platformsNotified: [],
+        currency: "USD",
+        campaignId: "camp-1",
+        adId: "ad-1",
+        attributionModel: "last_click",
       }),
     );
   });
 
-  it("dispatches Meta CAPI conversion when fbclid present", async () => {
-    const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent({}, { fbclid: "fb-abc", sourceCampaignId: "camp-1" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "digital-ads.capi.dispatch",
-          parameters: expect.objectContaining({
-            eventName: "Purchase",
-            fbclid: "fb-abc",
-            value: 500,
-            currency: "USD",
-          }),
-        }),
-      ]),
-    );
-    const payload = response.events[0]!.payload as Record<string, unknown>;
-    expect(payload.platformsNotified).toContain("meta");
-  });
-
-  it("dispatches Google offline conversion when gclid present", async () => {
-    const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent({}, { gclid: "gclid-xyz" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "digital-ads.google.offline_conversion",
-          parameters: expect.objectContaining({
-            gclid: "gclid-xyz",
-            conversionAction: "purchase",
-            conversionValue: 500,
-          }),
-        }),
-      ]),
-    );
-    const payload = response.events[0]!.payload as Record<string, unknown>;
-    expect(payload.platformsNotified).toContain("google");
-  });
-
-  it("dispatches TikTok offline conversion when ttclid present", async () => {
-    const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent({}, { ttclid: "tt-123" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "digital-ads.tiktok.offline_conversion",
-          parameters: expect.objectContaining({
-            eventName: "CompletePayment",
-            ttclid: "tt-123",
-            value: 500,
-          }),
-        }),
-      ]),
-    );
-    const payload = response.events[0]!.payload as Record<string, unknown>;
-    expect(payload.platformsNotified).toContain("tiktok");
-  });
-
-  it("dispatches to multiple platforms when multiple click IDs present", async () => {
-    const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent(
-      {},
-      { fbclid: "fb-1", gclid: "gc-1", ttclid: "tt-1", sourceCampaignId: "camp-x" },
-    );
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toHaveLength(3);
-    const payload = response.events[0]!.payload as Record<string, unknown>;
-    expect(payload.platformsNotified).toEqual(expect.arrayContaining(["meta", "google", "tiktok"]));
-    expect(payload.campaignId).toBe("camp-x");
-  });
-
-  it("forwards attribution chain to outbound event", async () => {
-    const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent({}, { fbclid: "fb-abc", sourceCampaignId: "camp-1" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.events[0]!.attribution).toBeDefined();
-    expect(response.events[0]!.attribution!.fbclid).toBe("fb-abc");
-    expect(response.events[0]!.attribution!.sourceCampaignId).toBe("camp-1");
-  });
-
-  it("sets causationId to the inbound event id", async () => {
+  it("uses default attribution model when not configured", async () => {
     const handler = new RevenueTrackerHandler();
     const event = makeRevenueEvent();
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
 
-    expect(response.events[0]!.causationId).toBe(event.eventId);
-    expect(response.events[0]!.correlationId).toBe(event.correlationId);
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    const payload = response.events[0]!.payload as Record<string, unknown>;
+    expect(payload.attributionModel).toBe("last_click");
   });
 
-  it("includes attribution summary in state", async () => {
+  it("includes platform source in attribution payload", async () => {
     const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent({ amount: 250 }, { fbclid: "fb-1", sourceCampaignId: "camp-2" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+    const event = makeRevenueEvent();
 
-    expect(response.state).toEqual({
-      contactId: "c1",
-      amount: 250,
-      campaignId: "camp-2",
-      platformsNotified: ["meta"],
-    });
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    const payload = response.events[0]!.payload as Record<string, unknown>;
+    expect(payload.utmSource).toBe("meta");
+    expect(payload.utmMedium).toBe("paid");
+    expect(payload.utmCampaign).toBe("spring");
   });
 
-  it("logs CRM activity for stage.advanced events", async () => {
+  it("logs pipeline progression on stage.advanced", async () => {
     const handler = new RevenueTrackerHandler();
-    const event = makeStageEvent();
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+    const event = makeStageEvent("proposal_sent");
 
-    expect(response.events).toHaveLength(0);
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: { trackPipeline: true } },
+      },
+    );
+
     expect(response.actions).toEqual([
       {
         actionType: "crm.activity.log",
         parameters: {
           contactId: "c1",
           activityType: "stage_transition",
-          stage: "proposal",
+          stage: "proposal_sent",
         },
       },
     ]);
-    expect(response.state).toEqual({ logged: true, stage: "proposal" });
   });
 
-  it("ignores unrecognized event types", async () => {
+  it("skips pipeline logging when trackPipeline is false", async () => {
     const handler = new RevenueTrackerHandler();
+    const event = makeStageEvent("proposal_sent");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: { trackPipeline: false } },
+      },
+    );
+
+    expect(response.actions).toHaveLength(0);
+    expect(response.events).toHaveLength(0);
+  });
+
+  it("defaults trackPipeline to true", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeStageEvent("booked");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("crm.activity.log");
+  });
+
+  it("escalates when no revenue config in profile", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeRevenueEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
+    );
+
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        reason: "no_revenue_config",
+      }),
+    );
+  });
+
+  it("silently skips stage.advanced when no revenue config", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeStageEvent("booked");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
+    );
+
+    expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(0);
+  });
+
+  it("forwards attribution chain to outbound events", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeRevenueEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    expect(response.events[0]!.attribution).toBeDefined();
+    expect(response.events[0]!.attribution!.sourceCampaignId).toBe("camp-1");
+    expect(response.events[0]!.attribution!.fbclid).toBe("fb-abc");
+  });
+
+  it("sets causationId to the inbound event id", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeRevenueEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    expect(response.events[0]!.causationId).toBe(event.eventId);
+    expect(response.events[0]!.correlationId).toBe(event.correlationId);
+  });
+
+  it("ignores unhandled event types", async () => {
+    const handler = new RevenueTrackerHandler();
+
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "lead.received",
@@ -205,20 +262,46 @@ describe("RevenueTrackerHandler", () => {
     expect(response.actions).toHaveLength(0);
   });
 
-  it("defaults currency to USD when not provided", async () => {
+  it("handles revenue with no attribution gracefully", async () => {
     const handler = new RevenueTrackerHandler();
-    const event = makeRevenueEvent(
-      { contactId: "c2", amount: 100, currency: undefined },
-      { fbclid: "fb-x" },
-    );
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
 
-    const capiAction = response.actions.find((a) => a.actionType === "digital-ads.capi.dispatch");
-    expect(capiAction!.parameters.currency).toBe("USD");
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "revenue.recorded",
+      source: { type: "system", id: "payments" },
+      payload: { contactId: "c1", amount: 100 },
+    });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("revenue.attributed");
+    const payload = response.events[0]!.payload as Record<string, unknown>;
+    expect(payload.campaignId).toBeNull();
+    expect(payload.adId).toBeNull();
   });
 
-  it("accepts deps with default empty object", () => {
+  it("uses currency from event payload", async () => {
     const handler = new RevenueTrackerHandler();
-    expect(handler).toBeDefined();
+    const event = makeRevenueEvent({ currency: "EUR" });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    const payload = response.events[0]!.payload as Record<string, unknown>;
+    expect(payload.currency).toBe("EUR");
   });
 });

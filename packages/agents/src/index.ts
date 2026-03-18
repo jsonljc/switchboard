@@ -127,11 +127,4 @@ export {
 
 export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
 
-export {
-  REVENUE_TRACKER_PORT,
-  RevenueTrackerHandler,
-  type RevenueTrackerDeps,
-  type PipelineStatus,
-  type AttributionData,
-  type AdSnapshot,
-} from "./agents/revenue-tracker/index.js";
+export { REVENUE_TRACKER_PORT, RevenueTrackerHandler } from "./agents/revenue-tracker/index.js";

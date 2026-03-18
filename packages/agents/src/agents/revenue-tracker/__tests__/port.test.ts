@@ -9,19 +9,19 @@ describe("Revenue Tracker Port", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it("accepts revenue.recorded, stage.advanced, and ad.optimized events", () => {
+  it("accepts revenue.recorded and stage.advanced events", () => {
     expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("revenue.recorded");
     expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("stage.advanced");
-    expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("ad.optimized");
   });
 
-  it("emits revenue.attributed events", () => {
+  it("emits revenue.attributed and conversation.escalated events", () => {
     expect(REVENUE_TRACKER_PORT.outboundEvents).toContain("revenue.attributed");
+    expect(REVENUE_TRACKER_PORT.outboundEvents).toContain("conversation.escalated");
   });
 
-  it("declares attribute_revenue and send_conversion tools", () => {
+  it("declares attribute_revenue and log_pipeline tools", () => {
     const toolNames = REVENUE_TRACKER_PORT.tools.map((t) => t.name);
     expect(toolNames).toContain("attribute_revenue");
-    expect(toolNames).toContain("send_conversion");
+    expect(toolNames).toContain("log_pipeline");
   });
 });
