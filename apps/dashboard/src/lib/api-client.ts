@@ -146,11 +146,15 @@ export interface OperatorSummary {
 
 export interface CampaignAttribution {
   campaignId: string;
+  name: string;
   leads: number;
   bookings: number;
+  paid: number;
+  revenue: number;
   spend: number | null;
   costPerLead: number | null;
   costPerBooking: number | null;
+  roas: number | null;
 }
 
 export interface PilotReportData {
