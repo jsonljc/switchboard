@@ -88,6 +88,7 @@ export const queryKeys = {
     all: ["agents"] as const,
     roster: () => ["agents", "roster"] as const,
     state: () => ["agents", "state"] as const,
+    activity: () => ["agents", "activity"] as const,
   },
   inbox: {
     all: ["inbox"] as const,
