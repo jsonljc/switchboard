@@ -153,6 +153,45 @@ export interface CampaignAttribution {
   costPerBooking: number | null;
 }
 
+export interface PilotReportData {
+  period: { startDate: string; endDate: string; days: number };
+  speedToLead: {
+    medianMs: number | null;
+    percentWithin2Min: number | null;
+    sampleSize: number;
+    baseline: string | null;
+  };
+  conversion: {
+    leads: number;
+    payingPatients: number;
+    ratePercent: number | null;
+    baselinePercent: number | null;
+  };
+  costPerPatient: {
+    amount: number | null;
+    currency: string;
+    adSpend: number | null;
+    totalRevenue: number | null;
+    roas: number | null;
+    baselineAmount: number | null;
+  };
+  funnel: {
+    leads: number;
+    qualified: number;
+    booked: number;
+    showedUp: number;
+    paid: number;
+  };
+  campaigns: Array<{
+    name: string;
+    spend: number | null;
+    leads: number;
+    payingPatients: number;
+    revenue: number;
+    costPerPatient: number | null;
+  }>;
+}
+
 export interface CreateScheduledReportInput {
   name: string;
   cronExpression: string;
@@ -799,6 +838,10 @@ export class SwitchboardClient {
         costPerLead: number | null;
       };
     }>(`/api/reports/clinic${qs ? `?${qs}` : ""}`);
+  }
+
+  async getPilotReport() {
+    return this.request<{ report: PilotReportData | null; message?: string }>("/api/reports/pilot");
   }
 
   // Conversations
