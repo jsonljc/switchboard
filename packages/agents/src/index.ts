@@ -76,3 +76,19 @@ export {
   ConversionBusBridge,
   type ConversionBusBridgeOptions,
 } from "./bridges/conversion-bus-bridge.js";
+
+export {
+  validateConnectorConfig,
+  type ConnectorAdapter,
+  type ConnectorConfigValidation,
+  type ConnectorPort,
+} from "./connectors/connector-port.js";
+
+export {
+  createConnectorHandler,
+  type ConnectorHandlerConfig,
+} from "./dispatch/connector-handler.js";
+
+export { InMemoryConnectorConfigProvider } from "./providers/connector-config-provider.js";
+
+export { HubSpotConnectorAdapter } from "./connectors/hubspot-adapter.js";
