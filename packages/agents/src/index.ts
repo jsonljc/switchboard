@@ -109,3 +109,11 @@ export {
   type AgentActivityState,
   type StateChangeListener,
 } from "./agent-state.js";
+
+export {
+  NURTURE_AGENT_PORT,
+  NurtureAgentHandler,
+  type NurtureAgentDeps,
+  type CadenceStatus,
+  type ActivityAnalysis,
+} from "./agents/nurture/index.js";
