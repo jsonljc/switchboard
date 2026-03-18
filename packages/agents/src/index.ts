@@ -97,11 +97,18 @@ export {
   LEAD_RESPONDER_PORT,
   LeadResponderHandler,
   type LeadResponderDeps,
+  type FAQMatch,
   type LeadScore,
   type ObjectionMatch,
 } from "./agents/lead-responder/index.js";
 
-export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
+export {
+  SALES_CLOSER_PORT,
+  SalesCloserHandler,
+  type AvailableSlot,
+  type ContactInfo,
+  type SalesCloserDeps,
+} from "./agents/sales-closer/index.js";
 
 export {
   AgentStateTracker,
@@ -117,3 +124,21 @@ export {
   type CadenceStatus,
   type ActivityAnalysis,
 } from "./agents/nurture/index.js";
+
+export {
+  AD_OPTIMIZER_PORT,
+  AdOptimizerHandler,
+  type AdOptimizerDeps,
+  type CampaignSnapshot,
+  type FunnelDiagnosis,
+  type StructureAnalysis,
+} from "./agents/ad-optimizer/index.js";
+
+export {
+  REVENUE_TRACKER_PORT,
+  RevenueTrackerHandler,
+  type RevenueTrackerDeps,
+  type PipelineStatus,
+  type AttributionData,
+  type AdSnapshot,
+} from "./agents/revenue-tracker/index.js";

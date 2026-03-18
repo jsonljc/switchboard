@@ -40,7 +40,7 @@ describe("AdOptimizerHandler", () => {
     const result = await handler.handle(event, {}, defaultContext);
 
     expect(result.events).toHaveLength(1);
-    expect(result.events[0].eventType).toBe("ad.optimized");
+    expect(result.events[0]!.eventType).toBe("ad.optimized");
     expect(result.actions).toHaveLength(0);
     expect(result.state).toBeDefined();
     expect(result.state?.optimizationAction).toBe("none");
@@ -58,8 +58,8 @@ describe("AdOptimizerHandler", () => {
 
     expect(fetchSnapshot).toHaveBeenCalledWith({ platform: "meta", entityId: "ent-1" });
     expect(result.actions).toHaveLength(1);
-    expect(result.actions[0].actionType).toBe("digital-ads.campaign.pause");
-    expect(result.actions[0].parameters).toEqual({ campaignId: "camp-1" });
+    expect(result.actions[0]!.actionType).toBe("digital-ads.campaign.pause");
+    expect(result.actions[0]!.parameters).toEqual({ campaignId: "camp-1" });
     expect(result.state?.optimizationAction).toBe("pause");
   });
 
@@ -75,10 +75,10 @@ describe("AdOptimizerHandler", () => {
     const result = await handler.handle(event, { targetROAS: 4.0 }, defaultContext);
 
     expect(result.actions).toHaveLength(1);
-    expect(result.actions[0].actionType).toBe("digital-ads.campaign.adjust_budget");
-    expect(result.actions[0].parameters.campaignId).toBe("camp-1");
-    expect(typeof result.actions[0].parameters.newBudget).toBe("number");
-    expect(result.actions[0].parameters.newBudget as number).toBeLessThan(100);
+    expect(result.actions[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
+    expect(result.actions[0]!.parameters.campaignId).toBe("camp-1");
+    expect(typeof result.actions[0]!.parameters.newBudget).toBe("number");
+    expect(result.actions[0]!.parameters.newBudget as number).toBeLessThan(100);
     expect(result.state?.optimizationAction).toBe("adjust_budget");
   });
 
@@ -96,7 +96,7 @@ describe("AdOptimizerHandler", () => {
     expect(result.actions).toHaveLength(0);
     expect(result.state?.optimizationAction).toBe("none");
     expect(result.events).toHaveLength(1);
-    expect(result.events[0].eventType).toBe("ad.optimized");
+    expect(result.events[0]!.eventType).toBe("ad.optimized");
   });
 
   it("respects maxBudgetChangePercent config", async () => {
@@ -116,7 +116,7 @@ describe("AdOptimizerHandler", () => {
     );
 
     expect(result.actions).toHaveLength(1);
-    const newBudget = result.actions[0].parameters.newBudget as number;
+    const newBudget = result.actions[0]!.parameters.newBudget as number;
     // With 10% max reduction from spend of 100, new budget should be 90
     expect(newBudget).toBe(90);
   });
@@ -133,7 +133,7 @@ describe("AdOptimizerHandler", () => {
     const result = await handler.handle(event, {}, defaultContext);
 
     expect(result.actions).toHaveLength(1);
-    expect(result.actions[0].actionType).toBe("digital-ads.campaign.adjust_budget");
+    expect(result.actions[0]!.actionType).toBe("digital-ads.campaign.adjust_budget");
   });
 
   it("sets correlationId and causationId on emitted events", async () => {
@@ -141,8 +141,8 @@ describe("AdOptimizerHandler", () => {
     const event = makeEvent();
     const result = await handler.handle(event, {}, defaultContext);
 
-    expect(result.events[0].correlationId).toBe(event.correlationId);
-    expect(result.events[0].causationId).toBe(event.eventId);
+    expect(result.events[0]!.correlationId).toBe(event.correlationId);
+    expect(result.events[0]!.causationId).toBe(event.eventId);
   });
 
   it("includes snapshot in state when available", async () => {

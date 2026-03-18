@@ -8,11 +8,7 @@ import type { ActionRequest, AgentContext, AgentHandler, AgentResponse } from ".
 import type { RevenueTrackerDeps } from "./types.js";
 
 export class RevenueTrackerHandler implements AgentHandler {
-  private readonly deps: RevenueTrackerDeps;
-
-  constructor(deps: RevenueTrackerDeps = {}) {
-    this.deps = deps;
-  }
+  constructor(_deps: RevenueTrackerDeps = {}) {}
 
   async handle(
     event: RoutedEventEnvelope,
