@@ -37,6 +37,7 @@ import { flowBuilderRoutes } from "../routes/flow-builder.js";
 import { deploymentRoutes } from "../routes/deployment.js";
 import { setupRoutes } from "../routes/setup.js";
 import { revenueRoutes } from "../routes/revenue.js";
+import { handoffRoutes } from "../routes/handoff.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -74,4 +75,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(flowBuilderRoutes, { prefix: "/api/flows" });
   await app.register(deploymentRoutes, { prefix: "/api/deployment" });
   await app.register(revenueRoutes, { prefix: "/api/revenue" });
+  await app.register(handoffRoutes, { prefix: "/api/handoff" });
 }
