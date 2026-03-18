@@ -548,6 +548,59 @@ describe("ConversationRouter", () => {
     });
   });
 
+  describe("unanswered question handling", () => {
+    it("flags unanswered questions for graceful handling", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+        faqs: [
+          {
+            question: "What are your hours?",
+            answer: "We are open 9am-5pm.",
+            topic: "hours",
+          },
+        ],
+        businessName: "TestClinic",
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Ask something that doesn't match any FAQ
+      const result = await router.handleMessage(
+        makeMessage({ body: "Do you offer microblading?" }),
+      );
+
+      expect(result.unansweredQuestion).toBe("Do you offer microblading?");
+    });
+
+    it("does not flag unanswered question when FAQ matches", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+        faqs: [
+          {
+            question: "What are your hours?",
+            answer: "We are open 9am-5pm.",
+            topic: "hours",
+          },
+        ],
+        businessName: "TestClinic",
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Ask something that matches FAQ
+      const result = await router.handleMessage(makeMessage({ body: "What are your hours?" }));
+
+      // FAQ matched, so unansweredQuestion should not be set
+      expect(result.unansweredQuestion).toBeUndefined();
+    });
+  });
+
   describe("createSession error", () => {
     it("should throw when default flow is missing", async () => {
       const flows = new Map<string, ConversationFlowDefinition>();
