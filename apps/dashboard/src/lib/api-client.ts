@@ -146,11 +146,54 @@ export interface OperatorSummary {
 
 export interface CampaignAttribution {
   campaignId: string;
+  name: string;
   leads: number;
   bookings: number;
+  paid: number;
+  revenue: number;
   spend: number | null;
   costPerLead: number | null;
   costPerBooking: number | null;
+  roas: number | null;
+}
+
+export interface PilotReportData {
+  period: { startDate: string; endDate: string; days: number };
+  speedToLead: {
+    medianMs: number | null;
+    percentWithin2Min: number | null;
+    sampleSize: number;
+    baseline: string | null;
+  };
+  conversion: {
+    leads: number;
+    payingPatients: number;
+    ratePercent: number | null;
+    baselinePercent: number | null;
+  };
+  costPerPatient: {
+    amount: number | null;
+    currency: string;
+    adSpend: number | null;
+    totalRevenue: number | null;
+    roas: number | null;
+    baselineAmount: number | null;
+  };
+  funnel: {
+    leads: number;
+    qualified: number;
+    booked: number;
+    showedUp: number;
+    paid: number;
+  };
+  campaigns: Array<{
+    name: string;
+    spend: number | null;
+    leads: number;
+    payingPatients: number;
+    revenue: number;
+    costPerPatient: number | null;
+  }>;
 }
 
 export interface CreateScheduledReportInput {
@@ -801,6 +844,10 @@ export class SwitchboardClient {
     }>(`/api/reports/clinic${qs ? `?${qs}` : ""}`);
   }
 
+  async getPilotReport() {
+    return this.request<{ report: PilotReportData | null; message?: string }>("/api/reports/pilot");
+  }
+
   // Conversations
   async getConversations(filters?: {
     status?: string;
@@ -886,6 +933,27 @@ export class SwitchboardClient {
     return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
       `/api/crm/deals${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  async updateDeal(id: string, updates: { stage?: string; amount?: number }) {
+    return this.request<{ deal: unknown }>(`/api/crm/deals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async createRevenueEvent(event: {
+    contactId: string;
+    amount: number;
+    currency: string;
+    source: string;
+    reference: string;
+    recordedBy: string;
+  }) {
+    return this.request<{ event: unknown }>("/api/revenue", {
+      method: "POST",
+      body: JSON.stringify(event),
+    });
   }
 
   // Agent Roster & State
@@ -1014,5 +1082,20 @@ export class SwitchboardClient {
     return this.request<{ digest: RevGrowthDigest | null; summary: string }>(
       `/api/revenue-growth/${accountId}/digest`,
     );
+  }
+
+  // Handoff Inbox
+  async listPendingHandoffs() {
+    return this.request<{ items: unknown[]; total: number }>("/api/handoff/pending");
+  }
+
+  async getHandoffCount() {
+    return this.request<{ count: number }>("/api/handoff/count");
+  }
+
+  async releaseHandoff(id: string) {
+    return this.request<{ released: boolean }>(`/api/handoff/${id}/release`, {
+      method: "POST",
+    });
   }
 }

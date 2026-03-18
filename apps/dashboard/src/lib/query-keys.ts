@@ -71,6 +71,10 @@ export const queryKeys = {
       ["conversations", "list", filters] as const,
     detail: (id: string) => ["conversations", "detail", id] as const,
   },
+  reports: {
+    all: ["reports"] as const,
+    pilot: () => ["reports", "pilot"] as const,
+  },
   campaigns: {
     all: ["campaigns"] as const,
     attribution: () => ["campaigns", "attribution"] as const,
@@ -84,6 +88,12 @@ export const queryKeys = {
     all: ["agents"] as const,
     roster: () => ["agents", "roster"] as const,
     state: () => ["agents", "state"] as const,
+    activity: () => ["agents", "activity"] as const,
+  },
+  inbox: {
+    all: ["inbox"] as const,
+    list: () => ["inbox", "list"] as const,
+    count: () => ["inbox", "count"] as const,
   },
   operatorConfig: {
     all: ["operatorConfig"] as const,

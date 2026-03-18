@@ -30,6 +30,9 @@ function createTestApp(prisma: ReturnType<typeof createMockPrisma>) {
       const handler = args.length === 1 ? args[0] : args[1];
       routes.set(path, handler as (req: unknown, rep: unknown) => Promise<unknown>);
     },
+    async register(plugin: (a: unknown) => Promise<void>) {
+      await plugin(app);
+    },
   };
   return { app, routes };
 }
