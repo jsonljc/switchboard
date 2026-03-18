@@ -89,6 +89,11 @@ export const queryKeys = {
     roster: () => ["agents", "roster"] as const,
     state: () => ["agents", "state"] as const,
   },
+  inbox: {
+    all: ["inbox"] as const,
+    list: () => ["inbox", "list"] as const,
+    count: () => ["inbox", "count"] as const,
+  },
   operatorConfig: {
     all: ["operatorConfig"] as const,
     current: () => ["operatorConfig", "current"] as const,
