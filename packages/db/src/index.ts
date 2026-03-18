@@ -59,3 +59,4 @@ export { PrismaConnectorHealthLogStore } from "./storage/prisma-connector-health
 export { PrismaBusinessConfigStore } from "./storage/prisma-business-config-store.js";
 export type { ConfigVersionRecord } from "./storage/prisma-business-config-store.js";
 export { PrismaOutcomeStore } from "./storage/prisma-outcome-store.js";
+export { PrismaHandoffStore } from "./stores/handoff-store.js";
