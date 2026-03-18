@@ -53,9 +53,13 @@ export function aggregateCampaignAttribution(
   revenueEvents: RevenueAttribution[],
   campaignSpend: Map<string, CampaignMeta>,
 ): CampaignAttributionRow[] {
-  const dealsByContact = new Map<string, DealAttribution>();
+  const dealsByContact = new Map<string, DealAttribution[]>();
   for (const deal of deals) {
-    if (deal.contactId) dealsByContact.set(deal.contactId, deal);
+    if (deal.contactId) {
+      const existing = dealsByContact.get(deal.contactId) ?? [];
+      existing.push(deal);
+      dealsByContact.set(deal.contactId, existing);
+    }
   }
 
   const revenueByContact = new Map<string, number>();
@@ -78,11 +82,11 @@ export function aggregateCampaignAttribution(
     const bucket = byCampaign.get(campId)!;
     bucket.leads += 1;
 
-    const deal = dealsByContact.get(contact.id);
-    if (deal && BOOKING_STAGES.has(deal.stage)) {
+    const contactDeals = dealsByContact.get(contact.id) ?? [];
+    if (contactDeals.some((d) => BOOKING_STAGES.has(d.stage))) {
       bucket.bookings += 1;
     }
-    if (deal && PAID_STAGES.has(deal.stage)) {
+    if (contactDeals.some((d) => PAID_STAGES.has(d.stage))) {
       bucket.paid += 1;
     }
 

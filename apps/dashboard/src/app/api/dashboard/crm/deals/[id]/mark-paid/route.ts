@@ -6,10 +6,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const session = await requireSession();
     const { id } = await params;
-    const body = (await request.json()) as {
-      amount: number;
-      contactId: string;
-      reference?: string;
+    const raw: unknown = await request.json();
+
+    if (raw === null || typeof raw !== "object") {
+      return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+    }
+
+    const { amount, contactId, reference } = raw as Record<string, unknown>;
+
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "amount must be a positive number" }, { status: 400 });
+    }
+
+    if (typeof contactId !== "string" || contactId.trim() === "") {
+      return NextResponse.json({ error: "contactId must be a non-empty string" }, { status: 400 });
+    }
+
+    if (reference !== undefined && typeof reference !== "string") {
+      return NextResponse.json(
+        { error: "reference must be a string if provided" },
+        { status: 400 },
+      );
+    }
+
+    const body = {
+      amount,
+      contactId,
+      reference: reference as string | undefined,
     };
 
     const client = await getApiClient();

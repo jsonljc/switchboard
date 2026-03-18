@@ -39,6 +39,22 @@ describe("aggregateCampaignAttribution", () => {
     expect(camp2.revenue).toBe(0);
   });
 
+  it("counts bookings correctly when contact has booked deal followed by a lead-stage deal", () => {
+    const contacts = [{ id: "c1", sourceCampaignId: "camp1", sourceAdId: "ad1" }];
+    const deals = [
+      { id: "d1", contactId: "c1", stage: "booked", amount: 200 },
+      { id: "d2", contactId: "c1", stage: "lead", amount: null },
+    ];
+    const revenueEvents: { contactId: string; amount: number }[] = [];
+    const campaignSpend = new Map([["camp1", { name: "Camp 1", spend: 100 }]]);
+
+    const result = aggregateCampaignAttribution(contacts, deals, revenueEvents, campaignSpend);
+    const camp = result.find((r) => r.campaignId === "camp1")!;
+
+    expect(camp.bookings).toBe(1);
+    expect(camp.paid).toBe(0);
+  });
+
   it("returns empty array when no contacts have campaign attribution", () => {
     const result = aggregateCampaignAttribution([], [], [], new Map());
     expect(result).toEqual([]);
