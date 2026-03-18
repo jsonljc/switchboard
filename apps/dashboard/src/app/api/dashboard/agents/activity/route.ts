@@ -7,8 +7,9 @@ export async function GET(request: Request) {
     await requireSession();
     const client = await getApiClient();
     const url = new URL(request.url);
-    const days = url.searchParams.get("days") ?? "1";
-    const after = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000).toISOString();
+    const daysRaw = parseInt(url.searchParams.get("days") ?? "1");
+    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 90) : 1;
+    const after = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     const [rosterRes, stateRes, auditRes] = await Promise.all([
       client.getAgentRoster(),
