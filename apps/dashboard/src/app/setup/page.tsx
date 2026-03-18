@@ -12,6 +12,7 @@ import { StepConnection } from "@/components/onboarding/step-connection";
 import { StepBudget } from "@/components/onboarding/step-budget";
 import { StepTelegram } from "@/components/onboarding/step-telegram";
 import { StepAllSet } from "@/components/onboarding/step-all-set";
+import { StepBaseline, type BaselineData } from "@/components/onboarding/step-baseline";
 import { SKIN_CATALOG } from "@/lib/skin-catalog";
 import { useInitializeRoster } from "@/hooks/use-agents";
 
@@ -21,6 +22,7 @@ const STEP_LABELS = [
   "How much freedom?",
   "Connect your ads",
   "Set your budget",
+  "Quick baseline",
   "Connect Telegram",
   "You're all set!",
 ];
@@ -67,12 +69,20 @@ export default function SetupPage() {
   // Step 4: Budget
   const [monthlyBudget, setMonthlyBudget] = useState(1000);
 
-  // Step 5: Telegram
+  // Step 5: Baseline
+  const [baseline, setBaseline] = useState<BaselineData>({
+    leadsPerMonth: undefined,
+    conversionRatePercent: undefined,
+    monthlyAdSpend: undefined,
+    replySpeedDescription: undefined,
+  });
+
+  // Step 6: Telegram
   const [ownerBotConnected, setOwnerBotConnected] = useState(false);
   const [leadBotToken, setLeadBotToken] = useState("");
   const [skipLeadBot, setSkipLeadBot] = useState(false);
 
-  // Step 6: All Set
+  // Step 7: All Set
   const [isHandoffTriggered, setIsHandoffTriggered] = useState(false);
   const [isHandoffLoading, setIsHandoffLoading] = useState(false);
 
@@ -102,8 +112,10 @@ export default function SetupPage() {
       case 4:
         return monthlyBudget >= 200;
       case 5:
-        return true; // Telegram is optional (can connect later)
+        return true; // Baseline is optional
       case 6:
+        return true; // Telegram is optional (can connect later)
+      case 7:
         return true;
       default:
         return false;
@@ -117,6 +129,21 @@ export default function SetupPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: businessName, skinId: selectedSkin }),
+        });
+      }
+      if (stepIndex === 5) {
+        // Save baseline to business config via org update
+        await fetch("/api/dashboard/organizations", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runtimeConfig: {
+              pilotBaseline: {
+                ...baseline,
+                capturedAt: new Date().toISOString(),
+              },
+            },
+          }),
         });
       }
     } catch {
@@ -305,7 +332,8 @@ export default function SetupPage() {
         />
       )}
       {step === 4 && <StepBudget monthlyBudget={monthlyBudget} onBudgetChange={setMonthlyBudget} />}
-      {step === 5 && (
+      {step === 5 && <StepBaseline onBaselineChange={setBaseline} />}
+      {step === 6 && (
         <StepTelegram
           organizationId={organizationId}
           ownerBotConnected={ownerBotConnected}
@@ -316,7 +344,7 @@ export default function SetupPage() {
           onSkipLeadBot={setSkipLeadBot}
         />
       )}
-      {step === 6 && (
+      {step === 7 && (
         <StepAllSet
           businessName={businessName}
           organizationId={organizationId}
