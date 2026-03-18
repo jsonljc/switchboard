@@ -490,6 +490,23 @@ model ContactAlias {
   @@index([contactId])
 }
 
+model RevenueEvent {
+  id              String   @id @default(uuid())
+  contactId       String
+  organizationId  String
+  amount          Float
+  currency        String   @db.VarChar(3)
+  source          String   @default("manual") // manual, chat, batch, pos_sync, stripe, crm_sync, api
+  reference       String?
+  recordedBy      String
+  timestamp       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([contactId])
+  @@index([organizationId])
+  @@index([timestamp])
+}
+
 model CrmDeal {
   id              String    @id @default(uuid())
   name            String

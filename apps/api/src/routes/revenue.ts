@@ -5,7 +5,7 @@ import { requireOrganizationScope } from "../utils/require-org.js";
 export const revenueRoutes: FastifyPluginAsync = async (app) => {
   async function getCrmProvider(organizationId: string) {
     if (!app.prisma) {
-      throw { statusCode: 503, message: "Database not available" };
+      throw new Error("Database not available");
     }
     const { PrismaCrmProvider } = await import("@switchboard/db");
     return new PrismaCrmProvider(app.prisma, organizationId);
@@ -31,13 +31,33 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
 
       const event = parseResult.data;
 
+      if (!app.prisma) {
+        return reply.status(503).send({ error: "Database not available" });
+      }
+
       const provider = await getCrmProvider(orgId);
       const contact = await provider.getContact(event.contactId);
       if (!contact) {
         return reply.status(404).send({ error: "Contact not found" });
       }
 
-      // Emit purchased event to ConversionBus
+      const eventTimestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+
+      // Persist revenue event to database FIRST
+      await app.prisma.revenueEvent.create({
+        data: {
+          contactId: event.contactId,
+          organizationId: orgId,
+          amount: event.amount,
+          currency: event.currency,
+          source: event.source,
+          reference: event.reference ?? null,
+          recordedBy: event.recordedBy,
+          timestamp: eventTimestamp,
+        },
+      });
+
+      // Emit to ConversionBus (best-effort — event is already persisted)
       if (app.conversionBus) {
         app.conversionBus.emit({
           type: "purchased",
@@ -46,7 +66,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
           value: event.amount,
           sourceAdId: contact.sourceAdId ?? undefined,
           sourceCampaignId: contact.sourceCampaignId ?? undefined,
-          timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+          timestamp: eventTimestamp,
           metadata: {
             source: event.source,
             reference: event.reference,

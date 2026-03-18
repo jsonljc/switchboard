@@ -61,6 +61,8 @@ export interface RouterResponse {
   stateGoal?: string;
   /** FAQ answer text, when response came from FAQ matching (allows LLM to rephrase) */
   faqContext?: string;
+  /** Unanswered question text, when a question didn't match any FAQ */
+  unansweredQuestion?: string;
 }
 
 export interface ConversationRouterConfig {
@@ -182,6 +184,11 @@ export class ConversationRouter {
           };
         }
       }
+    }
+
+    // Detect unanswered questions — classified as question but FAQ didn't match (or no FAQs)
+    if (classification.intent === "question") {
+      session.state.variables["unansweredQuestion"] = message.body;
     }
 
     // Step 3: Set the user's response as a variable
@@ -324,6 +331,7 @@ export class ConversationRouter {
       stateGoal: session.machineState
         ? getGoalForState(session.machineState as LeadConversationState)
         : undefined,
+      unansweredQuestion: currentState.variables["unansweredQuestion"] as string | undefined,
     };
   }
 

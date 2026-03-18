@@ -108,6 +108,14 @@ export async function handleLeadMessage(
         primaryMove === "handle_objection" ? buildObjectionContext(routerResponse) : undefined,
     };
 
+    // When question was unanswered by FAQ, guide LLM to handle gracefully
+    if (routerResponse.unansweredQuestion && !routerResponse.faqContext) {
+      llmCtx.objectionContext =
+        `They asked a question you don't have a specific answer for: "${routerResponse.unansweredQuestion}". ` +
+        `Acknowledge their question honestly — say something like "Let me check with the team on that" or ` +
+        `"I'll have someone get back to you on that." Don't ignore it or change the subject.`;
+    }
+
     // When FAQ provided the answer, include it as context for the LLM to rephrase
     if (routerResponse.faqContext) {
       llmCtx.objectionContext = `Answer this based on: ${routerResponse.faqContext}`;

@@ -117,7 +117,8 @@ export class CAPIDispatcher {
     let contact: CrmContact | null;
     try {
       contact = await this.config.crmProvider.getContact(event.contactId);
-    } catch {
+    } catch (err) {
+      console.warn("[CAPIDispatcher] CRM lookup failed for contact", event.contactId, err);
       return { sent: false, reason: "CRM lookup failed" };
     }
 

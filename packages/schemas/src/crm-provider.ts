@@ -118,6 +118,11 @@ export interface CrmProvider {
     dealIds?: string[];
   }): Promise<CrmActivity>;
 
+  // Identity resolution
+  findByNormalizedPhone?(phone: string): Promise<CrmContact | null>;
+  findByNormalizedEmail?(email: string): Promise<CrmContact | null>;
+  addAlias?(contactId: string, channel: string, externalId: string): Promise<void>;
+
   // Health
   healthCheck(): Promise<ConnectionHealth>;
 }
