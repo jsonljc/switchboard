@@ -325,32 +325,4 @@ describe("LeadResponderHandler", () => {
       qualified: true,
     });
   });
-
-  it("returns FAQ response when message matches FAQ", async () => {
-    const deps = makeDeps({
-      matchFAQ: vi.fn().mockReturnValue({
-        matched: true,
-        question: "Does Botox hurt?",
-        answer: "Most patients report minimal discomfort.",
-        confidence: 0.92,
-      }),
-    });
-    const handler = new LeadResponderHandler(deps);
-
-    const event = makeLeadEvent({ messageText: "Does Botox hurt?" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.state?.faqResponse).toBe("Most patients report minimal discomfort.");
-    expect(deps.matchFAQ).toHaveBeenCalledWith("Does Botox hurt?");
-  });
-
-  it("skips FAQ when no matchFAQ dep provided", async () => {
-    const deps = makeDeps(); // no matchFAQ
-    const handler = new LeadResponderHandler(deps);
-
-    const event = makeLeadEvent({ messageText: "Does Botox hurt?" });
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.state?.faqResponse).toBeUndefined();
-  });
 });

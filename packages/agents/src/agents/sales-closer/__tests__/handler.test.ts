@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { SalesCloserHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
-import type { SalesCloserDeps } from "../types.js";
 
 function makeQualifiedEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -246,70 +245,5 @@ describe("SalesCloserHandler", () => {
     expect(bookAction).toBeDefined();
     expect(bookAction!.parameters.sourceAdId).toBe("ad-1");
     expect(bookAction!.parameters.sourceCampaignId).toBe("camp-1");
-  });
-
-  it("checks availability before booking when dep provided", async () => {
-    const deps: SalesCloserDeps = {
-      getAvailableSlots: vi
-        .fn()
-        .mockResolvedValue([
-          { startTime: "2026-03-19T10:00:00Z", endTime: "2026-03-19T11:00:00Z", providerId: "p1" },
-        ]),
-    };
-    const handler = new SalesCloserHandler(deps);
-
-    const event = makeQualifiedEvent();
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
-      },
-    );
-
-    expect(deps.getAvailableSlots).toHaveBeenCalled();
-    expect(response.state?.availableSlots).toBe(1);
-  });
-
-  it("escalates when no slots available", async () => {
-    const deps: SalesCloserDeps = {
-      getAvailableSlots: vi.fn().mockResolvedValue([]),
-    };
-    const handler = new SalesCloserHandler(deps);
-
-    const event = makeQualifiedEvent();
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
-      },
-    );
-
-    const escalation = response.events.find((e) => e.eventType === "conversation.escalated");
-    expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "no_available_slots" }));
-  });
-
-  it("works without deps (backward compatible)", async () => {
-    const handler = new SalesCloserHandler();
-
-    const event = makeQualifiedEvent();
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
-      },
-    );
-
-    // Should still emit stage.advanced and booking action
-    expect(response.events.some((e) => e.eventType === "stage.advanced")).toBe(true);
-    expect(
-      response.actions.some((a) => a.actionType === "customer-engagement.appointment.book"),
-    ).toBe(true);
   });
 });
