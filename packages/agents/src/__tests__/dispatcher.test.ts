@@ -3,6 +3,7 @@ import { Dispatcher } from "../dispatcher.js";
 import { InMemoryDeliveryStore } from "../delivery-store.js";
 import { PolicyBridge } from "../policy-bridge.js";
 import { createEventEnvelope } from "../events.js";
+import { AgentStateTracker } from "../agent-state.js";
 import type { RoutePlan } from "../route-plan.js";
 
 describe("Dispatcher", () => {
@@ -136,5 +137,70 @@ describe("Dispatcher", () => {
     const results = await dispatcher.execute(plan);
     expect(results).toHaveLength(2);
     expect(results.every((r) => r.status === "succeeded")).toBe(true);
+  });
+
+  it("updates agent state tracker when dispatching to agents", async () => {
+    const stateTracker = new AgentStateTracker();
+    const dispatcher = new Dispatcher({
+      deliveryStore: new InMemoryDeliveryStore(),
+      policyBridge: new PolicyBridge(null),
+      handlers: {
+        agent: vi.fn().mockResolvedValue({ success: true }),
+      },
+      stateTracker,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "lead.received",
+      source: { type: "system", id: "test" },
+      payload: {},
+    });
+
+    const plan: RoutePlan = {
+      event,
+      destinations: [
+        { type: "agent", id: "lead-responder", criticality: "required", sequencing: "parallel" },
+      ],
+    };
+
+    await dispatcher.execute(plan);
+
+    const state = stateTracker.get("org-1", "lead-responder")!;
+    expect(state.activityStatus).toBe("idle");
+    expect(state.eventsProcessed).toBe(1);
+    expect(state.lastActionSummary).toContain("lead.received");
+  });
+
+  it("sets error state when agent handler fails", async () => {
+    const stateTracker = new AgentStateTracker();
+    const dispatcher = new Dispatcher({
+      deliveryStore: new InMemoryDeliveryStore(),
+      policyBridge: new PolicyBridge(null),
+      handlers: {
+        agent: vi.fn().mockRejectedValue(new Error("handler crashed")),
+      },
+      stateTracker,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "lead.received",
+      source: { type: "system", id: "test" },
+      payload: {},
+    });
+
+    const plan: RoutePlan = {
+      event,
+      destinations: [
+        { type: "agent", id: "lead-responder", criticality: "required", sequencing: "parallel" },
+      ],
+    };
+
+    await dispatcher.execute(plan);
+
+    const state = stateTracker.get("org-1", "lead-responder")!;
+    expect(state.activityStatus).toBe("error");
+    expect(state.lastError).toBe("handler crashed");
   });
 });
