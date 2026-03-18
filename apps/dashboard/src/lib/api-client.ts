@@ -935,6 +935,27 @@ export class SwitchboardClient {
     );
   }
 
+  async updateDeal(id: string, updates: { stage?: string; amount?: number }) {
+    return this.request<{ deal: unknown }>(`/api/crm/deals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async createRevenueEvent(event: {
+    contactId: string;
+    amount: number;
+    currency: string;
+    source: string;
+    reference: string;
+    recordedBy: string;
+  }) {
+    return this.request<{ event: unknown }>("/api/revenue", {
+      method: "POST",
+      body: JSON.stringify(event),
+    });
+  }
+
   // Agent Roster & State
   async getAgentRoster() {
     return this.request<{ roster: AgentRosterEntry[] }>("/api/agents/roster");
