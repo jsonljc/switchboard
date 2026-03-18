@@ -5,8 +5,15 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import type { SalesCloserDeps } from "./types.js";
 
 export class SalesCloserHandler implements AgentHandler {
+  private readonly deps: SalesCloserDeps;
+
+  constructor(deps: SalesCloserDeps = {}) {
+    this.deps = deps;
+  }
+
   async handle(
     event: RoutedEventEnvelope,
     config: Record<string, unknown>,
@@ -31,6 +38,16 @@ export class SalesCloserHandler implements AgentHandler {
     const durationMinutes = (config.defaultDurationMinutes as number) ?? 60;
 
     const conversionAction = bookingUrl ? "booking_link" : "direct_booking";
+
+    // Check availability if dep provided
+    let availableSlots: number | undefined;
+    if (this.deps.getAvailableSlots) {
+      const slots = await this.deps.getAvailableSlots({ serviceType, durationMinutes });
+      availableSlots = slots.length;
+      if (slots.length === 0) {
+        return this.escalate(event, context, contactId, "no_available_slots");
+      }
+    }
 
     // Emit stage.advanced
     const stageEvent = createEventEnvelope({
@@ -76,6 +93,7 @@ export class SalesCloserHandler implements AgentHandler {
         contactId,
         conversionAction,
         stage: "booking_initiated",
+        ...(availableSlots !== undefined && { availableSlots }),
       },
     };
   }
