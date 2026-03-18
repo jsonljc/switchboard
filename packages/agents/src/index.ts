@@ -92,3 +92,11 @@ export {
 export { InMemoryConnectorConfigProvider } from "./providers/connector-config-provider.js";
 
 export { HubSpotConnectorAdapter } from "./connectors/hubspot-adapter.js";
+
+export {
+  LEAD_RESPONDER_PORT,
+  LeadResponderHandler,
+  type LeadResponderDeps,
+  type LeadScore,
+  type ObjectionMatch,
+} from "./agents/lead-responder/index.js";
