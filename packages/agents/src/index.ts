@@ -125,14 +125,7 @@ export {
   type ActivityAnalysis,
 } from "./agents/nurture/index.js";
 
-export {
-  AD_OPTIMIZER_PORT,
-  AdOptimizerHandler,
-  type AdOptimizerDeps,
-  type CampaignSnapshot,
-  type FunnelDiagnosis,
-  type StructureAnalysis,
-} from "./agents/ad-optimizer/index.js";
+export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
 
 export {
   REVENUE_TRACKER_PORT,
