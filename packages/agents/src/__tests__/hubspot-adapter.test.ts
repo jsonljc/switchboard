@@ -143,6 +143,31 @@ describe("HubSpotConnectorAdapter", () => {
     );
   });
 
+  it("logs activity on stage.advanced", async () => {
+    const crm = mockCrmProvider();
+    const adapter = new HubSpotConnectorAdapter(crm);
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "stage.advanced",
+      source: { type: "agent", id: "sales-closer" },
+      payload: {
+        contactId: "c1",
+        stage: "booked",
+      },
+    });
+
+    const result = await adapter.handleEvent(event);
+    expect(result.success).toBe(true);
+    expect(crm.logActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "note",
+        contactIds: ["c1"],
+        subject: expect.stringContaining("booked"),
+      }),
+    );
+  });
+
   it("returns failure for unsupported events", async () => {
     const crm = mockCrmProvider();
     const adapter = new HubSpotConnectorAdapter(crm);

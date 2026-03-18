@@ -50,6 +50,7 @@ describe("createConnectorHandler", () => {
 
     const result = await handler(event, "nonexistent");
     expect(result.success).toBe(false);
+    expect(result.error).toContain("No config found");
   });
 
   it("returns failure when no adapter registered for connector type", async () => {
@@ -74,6 +75,7 @@ describe("createConnectorHandler", () => {
 
     const result = await handler(event, "conn-1");
     expect(result.success).toBe(false);
+    expect(result.error).toContain("No adapter registered");
   });
 
   it("returns failure when adapter throws", async () => {
@@ -104,5 +106,6 @@ describe("createConnectorHandler", () => {
 
     const result = await handler(event, "conn-1");
     expect(result.success).toBe(false);
+    expect(result.error).toBe("API rate limited");
   });
 });

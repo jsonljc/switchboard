@@ -15,22 +15,27 @@ export function createConnectorHandler(config: ConnectorHandlerConfig) {
   return async (
     event: RoutedEventEnvelope,
     destinationId: string,
-  ): Promise<{ success: boolean }> => {
+  ): Promise<{ success: boolean; error?: string }> => {
     const connectorConfig = config.configLookup(destinationId);
     if (!connectorConfig) {
-      return { success: false };
+      return { success: false, error: `No config found for connector: ${destinationId}` };
     }
 
     const adapter = config.adapters.get(connectorConfig.connectorType);
     if (!adapter) {
-      return { success: false };
+      return {
+        success: false,
+        error: `No adapter registered for type: ${connectorConfig.connectorType}`,
+      };
     }
 
     try {
-      const result = await adapter.handleEvent(event);
-      return { success: result.success };
-    } catch {
-      return { success: false };
+      return await adapter.handleEvent(event);
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   };
 }
