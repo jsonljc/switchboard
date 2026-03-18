@@ -63,6 +63,16 @@ export class LeadResponderHandler implements AgentHandler {
       contactId,
     );
 
+    // Handle FAQ if message text present
+    const messageText = payload.messageText as string | undefined;
+    let faqResponse: string | undefined;
+    if (messageText && this.deps.matchFAQ) {
+      const faqResult = this.deps.matchFAQ(messageText);
+      if (faqResult.matched) {
+        faqResponse = faqResult.answer;
+      }
+    }
+
     const events: RoutedEventEnvelope[] = [outboundEvent];
     if (escalationEvent) {
       events.push(escalationEvent);
@@ -75,6 +85,7 @@ export class LeadResponderHandler implements AgentHandler {
         lastScore: scoreResult.score,
         lastTier: scoreResult.tier,
         qualified,
+        ...(faqResponse ? { faqResponse } : {}),
       },
     };
   }
