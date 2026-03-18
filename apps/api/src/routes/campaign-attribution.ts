@@ -145,15 +145,28 @@ export const campaignAttributionRoutes: FastifyPluginAsync = async (app) => {
         : [];
 
     const campaignSpend = new Map<string, CampaignMeta>();
+    // Campaign names/spend aren't available via a list API — we populate names
+    // from individual getCampaign lookups for each unique sourceCampaignId.
+    // Spend per campaign is not available (only account-level via getAccountInsights),
+    // so we leave it null and let the dashboard show "—" for spend/ROAS.
+    const uniqueCampaignIds = new Set(
+      contacts.map((c: { sourceCampaignId: string | null }) => c.sourceCampaignId).filter(Boolean),
+    );
     try {
-      const { provider, adAccountId } = await getOrgScopedMetaAdsContext(prisma, orgId);
-      const campaigns = await provider.getCampaigns(adAccountId);
-      for (const camp of campaigns) {
-        campaignSpend.set(camp.id, {
-          name: camp.name,
-          spend: camp.spend != null ? Number(camp.spend) : null,
-        });
-      }
+      const { provider } = await getOrgScopedMetaAdsContext(prisma, orgId);
+      await Promise.all(
+        [...uniqueCampaignIds].map(async (campId) => {
+          try {
+            const camp = await provider.getCampaign(campId as string);
+            campaignSpend.set(campId as string, {
+              name: camp.name,
+              spend: null, // Per-campaign spend not available from getCampaign
+            });
+          } catch {
+            // Individual campaign lookup failed — use ID as name
+          }
+        }),
+      );
     } catch {
       // No ad platform connected — campaign names will fall back to IDs
     }
