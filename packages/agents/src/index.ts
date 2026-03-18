@@ -102,3 +102,10 @@ export {
 } from "./agents/lead-responder/index.js";
 
 export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
+
+export {
+  AgentStateTracker,
+  type ActivityStatus,
+  type AgentActivityState,
+  type StateChangeListener,
+} from "./agent-state.js";
