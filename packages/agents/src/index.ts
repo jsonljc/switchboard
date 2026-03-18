@@ -57,3 +57,10 @@ export {
 } from "./route-plan.js";
 
 export { AgentRouter, type AgentRouterConfig } from "./router.js";
+
+export {
+  Dispatcher,
+  type DestinationHandler,
+  type DispatcherConfig,
+  type DispatchResult,
+} from "./dispatcher.js";
