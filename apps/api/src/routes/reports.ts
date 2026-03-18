@@ -3,6 +3,7 @@ import { z } from "zod";
 import { buildOperatorSummary } from "../services/operator-summary.js";
 import { getOrgScopedMetaAdsContext } from "../utils/meta-campaign-provider.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { campaignAttributionRoutes } from "./campaign-attribution.js";
 import { pilotReportRoutes } from "./pilot-report.js";
 
 const clinicReportQuerySchema = z.object({
@@ -13,6 +14,7 @@ const clinicReportQuerySchema = z.object({
 
 export const reportsRoutes: FastifyPluginAsync = async (app) => {
   await app.register(pilotReportRoutes);
+  await app.register(campaignAttributionRoutes);
   const prisma = app.prisma;
 
   app.get("/operator-summary", async (request, reply) => {
