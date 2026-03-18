@@ -11,7 +11,7 @@ import type {
   CrmActivity,
   CrmPipelineStage,
 } from "./crm-provider.js";
-import { withRetry, CircuitBreaker } from "@switchboard/core";
+import { withRetry, CircuitBreaker, normalizePhone, normalizeEmail } from "@switchboard/core";
 
 export interface HubSpotConfig {
   /** HubSpot private app access token */
@@ -642,8 +642,8 @@ export class HubSpotCrmProvider implements CrmProvider {
       gclid: raw.properties["gclid"] ?? null,
       fbclid: raw.properties["fbclid"] ?? null,
       ttclid: raw.properties["ttclid"] ?? null,
-      normalizedPhone: null,
-      normalizedEmail: raw.properties["email"]?.toLowerCase().trim() ?? null,
+      normalizedPhone: raw.properties["phone"] ? normalizePhone(raw.properties["phone"]) : null,
+      normalizedEmail: raw.properties["email"] ? normalizeEmail(raw.properties["email"]) : null,
       utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,

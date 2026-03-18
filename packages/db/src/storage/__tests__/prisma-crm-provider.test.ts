@@ -21,6 +21,9 @@ function createMockPrisma() {
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    contactAlias: {
+      upsert: vi.fn(),
+    },
     $queryRaw: vi.fn(),
   };
 }
@@ -221,6 +224,42 @@ describe("PrismaCrmProvider", () => {
         dealIds: ["deal_1"],
       });
       expect(result.type).toBe("call");
+    });
+  });
+
+  describe("identity resolution", () => {
+    it("finds contact by normalized phone", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(TEST_CONTACT);
+      const result = await provider.findByNormalizedPhone("+60123456789");
+      expect(result).not.toBeNull();
+      expect(prisma.crmContact.findFirst).toHaveBeenCalledWith({
+        where: { normalizedPhone: "+60123456789", organizationId: "org_1" },
+      });
+    });
+
+    it("returns null when no phone match", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(null);
+      const result = await provider.findByNormalizedPhone("+60000000000");
+      expect(result).toBeNull();
+    });
+
+    it("finds contact by normalized email", async () => {
+      prisma.crmContact.findFirst.mockResolvedValue(TEST_CONTACT);
+      const result = await provider.findByNormalizedEmail("alice@example.com");
+      expect(result).not.toBeNull();
+      expect(prisma.crmContact.findFirst).toHaveBeenCalledWith({
+        where: { normalizedEmail: "alice@example.com", organizationId: "org_1" },
+      });
+    });
+
+    it("upserts alias without throwing on duplicate", async () => {
+      prisma.contactAlias.upsert.mockResolvedValue({});
+      await provider.addAlias("contact_1", "whatsapp", "wa_123");
+      expect(prisma.contactAlias.upsert).toHaveBeenCalledWith({
+        where: { channel_externalId: { channel: "whatsapp", externalId: "wa_123" } },
+        update: { contactId: "contact_1" },
+        create: { contactId: "contact_1", channel: "whatsapp", externalId: "wa_123" },
+      });
     });
   });
 

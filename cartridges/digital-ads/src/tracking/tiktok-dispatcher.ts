@@ -68,7 +68,8 @@ export class TikTokDispatcher {
     let contact: CrmContact | null;
     try {
       contact = await this.config.crmProvider.getContact(event.contactId);
-    } catch {
+    } catch (err) {
+      console.warn("[TikTokDispatcher] CRM lookup failed for contact", event.contactId, err);
       return;
     }
 
@@ -101,8 +102,12 @@ export class TikTokDispatcher {
 
     try {
       await this.config.sendEvent(this.config.pixelId, payload);
-    } catch {
-      // Non-critical — don't block the event bus
+    } catch (err) {
+      console.warn(
+        "[TikTokDispatcher] Failed to send event to TikTok",
+        { pixelId: this.config.pixelId, event: payload.event, contactId: event.contactId },
+        err,
+      );
     }
   }
 }

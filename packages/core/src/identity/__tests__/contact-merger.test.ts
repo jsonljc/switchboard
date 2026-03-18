@@ -152,4 +152,47 @@ describe("ContactMerger", () => {
       }),
     );
   });
+
+  it("handles addAlias duplicate gracefully (idempotent)", async () => {
+    mockCrm.addAlias.mockRejectedValue(new Error("Unique constraint violation"));
+
+    const result = await merger.resolveContact({
+      phone: "+60 123-456-789",
+      channel: "whatsapp",
+      externalId: "wa_123",
+    });
+
+    // Should not throw — alias error is swallowed
+    expect(result.isNew).toBe(true);
+  });
+
+  it("retries via lookup on create race condition", async () => {
+    const raceWinner = makeContact({ id: "ct_race_winner" });
+
+    // First lookup: no match. Create: fails (race). Second lookup: finds winner.
+    mockCrm.findByNormalizedPhone.mockResolvedValueOnce(null).mockResolvedValueOnce(raceWinner);
+    mockCrm.createContact.mockRejectedValue(new Error("Unique constraint"));
+
+    const result = await merger.resolveContact({
+      phone: "+60123456789",
+      channel: "whatsapp",
+      externalId: "wa_race",
+    });
+
+    expect(result.isNew).toBe(false);
+    expect(result.contact.id).toBe("ct_race_winner");
+    expect(mockCrm.findByNormalizedPhone).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws when create fails and retry finds no match", async () => {
+    mockCrm.createContact.mockRejectedValue(new Error("DB error"));
+
+    await expect(
+      merger.resolveContact({
+        phone: "+60123456789",
+        channel: "whatsapp",
+        externalId: "wa_fail",
+      }),
+    ).rejects.toThrow("Failed to create contact");
+  });
 });

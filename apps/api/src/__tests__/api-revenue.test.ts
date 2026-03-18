@@ -22,4 +22,26 @@ describe("POST /api/revenue", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects zero-length contactId", () => {
+    const result = RevenueEventSchema.safeParse({
+      contactId: "",
+      amount: 350,
+      currency: "MYR",
+      source: "api",
+      recordedBy: "pos_system",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative amounts", () => {
+    const result = RevenueEventSchema.safeParse({
+      contactId: "ct_1",
+      amount: -100,
+      currency: "MYR",
+      source: "api",
+      recordedBy: "pos_system",
+    });
+    expect(result.success).toBe(false);
+  });
 });

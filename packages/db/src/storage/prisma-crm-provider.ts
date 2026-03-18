@@ -277,6 +277,29 @@ export class PrismaCrmProvider implements CrmProvider {
     return toActivity(row);
   }
 
+  async findByNormalizedPhone(phone: string): Promise<CrmContact | null> {
+    const row = await this.prisma.crmContact.findFirst({
+      where: { normalizedPhone: phone, ...this.orgFilter() },
+    });
+    return row ? toContact(row) : null;
+  }
+
+  async findByNormalizedEmail(email: string): Promise<CrmContact | null> {
+    const row = await this.prisma.crmContact.findFirst({
+      where: { normalizedEmail: email, ...this.orgFilter() },
+    });
+    return row ? toContact(row) : null;
+  }
+
+  async addAlias(contactId: string, channel: string, externalId: string): Promise<void> {
+    // Upsert to handle the @@unique([channel, externalId]) constraint gracefully
+    await this.prisma.contactAlias.upsert({
+      where: { channel_externalId: { channel, externalId } },
+      update: { contactId },
+      create: { contactId, channel, externalId },
+    });
+  }
+
   async healthCheck(): Promise<ConnectionHealth> {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
