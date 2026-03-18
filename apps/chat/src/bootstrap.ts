@@ -37,7 +37,6 @@ import { SlackApprovalNotifier } from "./notifications/slack-notifier.js";
 import { WhatsAppApprovalNotifier } from "./notifications/whatsapp-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
-import type { ChannelAdapter } from "./adapters/adapter.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerAllCartridges, DEFAULT_CHAT_AVAILABLE_ACTIONS } from "./cartridge-registrar.js";
 import { ResponseGenerator } from "./composer/response-generator.js";
@@ -494,6 +493,7 @@ export async function createChatRuntime(
       defaultFlowId: qualificationFlow.id,
       faqs: resolvedProfile?.profile?.faqs,
       businessName: resolvedProfile?.profile?.name,
+      objectionTrees: resolvedProfile?.objectionTrees ?? [],
     });
     console.warn(
       `[Chat] Lead bot mode enabled: qualification → booking flow, ` +
@@ -581,35 +581,5 @@ export async function createChatRuntime(
   return { runtime, cleanup, failedMessageStore, agentNotifier };
 }
 
-/**
- * Create a lightweight managed runtime for provisioned channels.
- * Uses ApiOrchestratorAdapter — no local storage, cartridges, or orchestrator.
- * The API server handles all governance, policies, and audit.
- */
-export async function createManagedRuntime(config: {
-  adapter: ChannelAdapter;
-  apiUrl: string;
-  apiKey?: string;
-  failedMessageStore?: FailedMessageStore;
-}): Promise<ChatRuntime> {
-  const apiAdapter = new ApiOrchestratorAdapter({
-    baseUrl: config.apiUrl,
-    apiKey: config.apiKey,
-  });
-
-  const interpreter = new RuleBasedInterpreter({
-    diagnosticDefaults: { platform: "meta" },
-  });
-  const interpreterRegistry = new InterpreterRegistry();
-  interpreterRegistry.register("rule-based", interpreter, 1000);
-  interpreterRegistry.setDefaultFallbackChain(["rule-based"]);
-
-  return new ChatRuntime({
-    adapter: config.adapter,
-    interpreter,
-    interpreterRegistry,
-    orchestrator: apiAdapter,
-    failedMessageStore: config.failedMessageStore,
-    availableActions: DEFAULT_CHAT_AVAILABLE_ACTIONS,
-  });
-}
+// Re-export from dedicated module
+export { createManagedRuntime } from "./managed-runtime.js";

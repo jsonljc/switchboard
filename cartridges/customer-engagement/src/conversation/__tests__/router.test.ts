@@ -4,6 +4,7 @@ import type { InboundMessage } from "../router.js";
 import { InMemorySessionStore } from "../session-store.js";
 import type { ConversationFlowDefinition } from "../types.js";
 import { getGoalForState, LeadConversationState } from "../lead-state-machine.js";
+import type { ObjectionMatch } from "../../agents/intake/objection-trees.js";
 
 function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
   return {
@@ -188,6 +189,45 @@ describe("ConversationRouter", () => {
       // Reply with "1" (first option)
       const result = await router.handleMessage(makeMessage({ body: "1" }));
       expect(result.handled).toBe(true);
+    });
+
+    it("uses metadata contactName instead of user ID", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const response = await router.handleMessage(
+        makeMessage({
+          channelId: "meta-name-test",
+          channelType: "whatsapp",
+          body: "hi",
+          from: "7001",
+          metadata: { contactName: "Sarah" },
+        }),
+      );
+      expect(response.variables?.["contactName"]).toBe("Sarah");
+    });
+
+    it("falls back to message.from when metadata has no contactName", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+      });
+
+      const response = await router.handleMessage(
+        makeMessage({
+          channelId: "no-meta-test",
+          channelType: "telegram",
+          body: "hello",
+          from: "12345",
+        }),
+      );
+      expect(response.variables?.["contactName"]).toBe("12345");
     });
 
     it("should return error response when flow not found", async () => {
@@ -476,6 +516,38 @@ describe("ConversationRouter", () => {
     });
   });
 
+  describe("FAQ with state context", () => {
+    it("includes stateGoal and faqContext in FAQ responses", async () => {
+      const flows = new Map([["greeting", makeGreetingFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "greeting",
+        faqs: [
+          {
+            question: "What are your hours?",
+            answer: "We are open 9am-5pm.",
+            topic: "hours",
+          },
+        ],
+        businessName: "TestClinic",
+      });
+
+      // First message creates session (IDLE -> GREETING)
+      await router.handleMessage(makeMessage());
+      // Ask the FAQ question
+      const result = await router.handleMessage(makeMessage({ body: "What are your hours?" }));
+
+      expect(result.handled).toBe(true);
+      expect(result.faqContext).toBeTruthy();
+      expect(result.faqContext).toContain("9am-5pm");
+      expect(result.machineState).toBeDefined();
+      expect(result.stateGoal).toBeTruthy();
+      expect(typeof result.stateGoal).toBe("string");
+      expect(result.stateGoal).toBe(getGoalForState(result.machineState as LeadConversationState));
+    });
+  });
+
   describe("createSession error", () => {
     it("should throw when default flow is missing", async () => {
       const flows = new Map<string, ConversationFlowDefinition>();
@@ -488,6 +560,88 @@ describe("ConversationRouter", () => {
       await expect(router.handleMessage(makeMessage())).rejects.toThrow(
         "Default flow nonexistent not found",
       );
+    });
+  });
+
+  describe("objection trees wiring", () => {
+    const priceObjectionTree: ObjectionMatch = {
+      category: "price",
+      keywords: ["expensive", "cost", "price", "afford"],
+      response: "We offer flexible payment plans.",
+      followUp: "Would you like to learn more about financing?",
+    };
+
+    const timingObjectionTree: ObjectionMatch = {
+      category: "timing",
+      keywords: ["busy", "schedule", "later", "not now"],
+      response: "We have flexible scheduling options.",
+      followUp: "Want me to check availability?",
+    };
+
+    it("populates objectionResponse variable when objection detected", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+        objectionTrees: [priceObjectionTree, timingObjectionTree],
+      });
+
+      // First message creates session (IDLE -> GREETING)
+      await router.handleMessage(makeMessage());
+      // Second message with intent → advance to QUALIFYING
+      await router.handleMessage(makeMessage({ body: "I want to get started" }));
+      // Objection message with price keywords
+      const result = await router.handleMessage(
+        makeMessage({ body: "This is too expensive for me" }),
+      );
+
+      expect(result.variables?.["objectionResponse"]).toBe("We offer flexible payment plans.");
+      expect(result.variables?.["objectionCategory"]).toBe("price");
+      expect(result.variables?.["objectionFollowUp"]).toBe(
+        "Would you like to learn more about financing?",
+      );
+    });
+
+    it("uses default objection trees when none configured", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Advance to qualifying
+      await router.handleMessage(makeMessage({ body: "I want teeth whitening" }));
+      // Send objection with price keywords (should match default trees)
+      const result = await router.handleMessage(
+        makeMessage({ body: "This is too expensive for my budget" }),
+      );
+
+      // Default trees should populate objectionResponse for price category
+      expect(result.variables?.["objectionCategory"]).toBe("price");
+      expect(result.variables?.["objectionResponse"]).toBeTruthy();
+    });
+
+    it("does not populate objectionResponse when no keywords match", async () => {
+      const flows = new Map([["multi", makeMultiStepFlow()]]);
+      const router = new ConversationRouter({
+        sessionStore: store,
+        flows,
+        defaultFlowId: "multi",
+        objectionTrees: [priceObjectionTree],
+      });
+
+      // First message creates session
+      await router.handleMessage(makeMessage());
+      // Advance state
+      await router.handleMessage(makeMessage({ body: "I want to get started" }));
+      // Non-objection message (no price keywords)
+      const result = await router.handleMessage(makeMessage({ body: "Tell me more about it" }));
+
+      expect(result.variables?.["objectionResponse"]).toBeUndefined();
     });
   });
 });

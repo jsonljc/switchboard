@@ -15,10 +15,22 @@ export interface CrmContact {
   sourceAdId: string | null;
   sourceCampaignId: string | null;
   gclid: string | null;
+  fbclid: string | null;
+  ttclid: string | null;
+  normalizedPhone: string | null;
+  normalizedEmail: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;
   properties: Record<string, unknown>;
+}
+
+export interface ContactAlias {
+  id: string;
+  contactId: string;
+  channel: string;
+  externalId: string;
+  createdAt: string;
 }
 
 export interface CrmDeal {
@@ -82,6 +94,8 @@ export interface CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact>;

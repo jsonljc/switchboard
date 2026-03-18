@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { normalizePhone, normalizeEmail } from "@switchboard/core";
 import type {
   CrmProvider,
   CrmContact,
@@ -133,6 +134,8 @@ export class PrismaCrmProvider implements CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
@@ -148,6 +151,10 @@ export class PrismaCrmProvider implements CrmProvider {
         assignedStaffId: data.assignedStaffId ?? null,
         sourceAdId: data.sourceAdId ?? null,
         sourceCampaignId: data.sourceCampaignId ?? null,
+        fbclid: data.fbclid ?? null,
+        ttclid: data.ttclid ?? null,
+        normalizedPhone: data.phone ? normalizePhone(data.phone) : null,
+        normalizedEmail: data.email ? normalizeEmail(data.email) : null,
         utmSource: data.utmSource ?? null,
         organizationId: this.organizationId ?? null,
         properties: (data.properties as object) ?? {},
@@ -181,6 +188,12 @@ export class PrismaCrmProvider implements CrmProvider {
     if (data["sourceAdId"] !== undefined) updateData["sourceAdId"] = data["sourceAdId"];
     if (data["sourceCampaignId"] !== undefined)
       updateData["sourceCampaignId"] = data["sourceCampaignId"];
+    if (data["fbclid"] !== undefined) updateData["fbclid"] = data["fbclid"];
+    if (data["ttclid"] !== undefined) updateData["ttclid"] = data["ttclid"];
+    if (data["normalizedPhone"] !== undefined)
+      updateData["normalizedPhone"] = data["normalizedPhone"];
+    if (data["normalizedEmail"] !== undefined)
+      updateData["normalizedEmail"] = data["normalizedEmail"];
     if (data["utmSource"] !== undefined) updateData["utmSource"] = data["utmSource"];
     if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
 
@@ -294,6 +307,10 @@ function toContact(row: {
   sourceAdId: string | null;
   sourceCampaignId?: string | null;
   gclid?: string | null;
+  fbclid?: string | null;
+  ttclid?: string | null;
+  normalizedPhone?: string | null;
+  normalizedEmail?: string | null;
   utmSource: string | null;
   properties: unknown;
   createdAt: Date;
@@ -314,6 +331,10 @@ function toContact(row: {
     sourceAdId: row.sourceAdId,
     sourceCampaignId: row.sourceCampaignId ?? null,
     gclid: row.gclid ?? null,
+    fbclid: row.fbclid ?? null,
+    ttclid: row.ttclid ?? null,
+    normalizedPhone: row.normalizedPhone ?? null,
+    normalizedEmail: row.normalizedEmail ?? null,
     utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),

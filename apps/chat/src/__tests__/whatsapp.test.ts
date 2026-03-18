@@ -48,7 +48,7 @@ describe("WhatsAppAdapter", () => {
       expect(msg!.id).toBe("wamid.abc123");
     });
 
-    it("should return null for non-text messages", () => {
+    it("should return unsupported message for non-text messages", () => {
       const payload = {
         object: "whatsapp_business_account",
         entry: [
@@ -72,7 +72,10 @@ describe("WhatsAppAdapter", () => {
       };
 
       const msg = adapter.parseIncomingMessage(payload);
-      expect(msg).toBeNull();
+      expect(msg).not.toBeNull();
+      expect(msg?.text).toBe("");
+      expect(msg?.metadata?.["unsupported"]).toBe(true);
+      expect(msg?.metadata?.["originalType"]).toBe("image");
     });
 
     it("should return null for empty payload", () => {

@@ -455,6 +455,10 @@ model CrmContact {
   sourceAdId      String?
   sourceCampaignId String?
   gclid            String?   // Google Click ID for offline conversion attribution
+  fbclid           String?   // Facebook Click ID
+  ttclid           String?   // TikTok Click ID
+  normalizedPhone  String?   // E.164 normalized phone for identity resolution
+  normalizedEmail  String?   // Lowercased email for identity resolution
   utmSource       String?
   properties      Json      @default("{}")
   createdAt       DateTime  @default(now())
@@ -462,12 +466,28 @@ model CrmContact {
 
   deals          CrmDeal[]
   activities     CrmActivity[]
+  aliases        ContactAlias[]
 
   @@index([organizationId])
   @@index([email])
   @@index([externalId])
   @@index([status])
   @@index([sourceAdId])
+  @@index([normalizedPhone])
+  @@index([normalizedEmail])
+}
+
+model ContactAlias {
+  id         String   @id @default(uuid())
+  contactId  String
+  channel    String   // whatsapp, instagram, telegram, sms, facebook, web, email
+  externalId String
+  createdAt  DateTime @default(now())
+
+  contact CrmContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([channel, externalId])
+  @@index([contactId])
 }
 
 model CrmDeal {

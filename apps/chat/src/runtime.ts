@@ -391,6 +391,17 @@ export class ChatRuntime {
       await setThread(conversation);
     }
 
+    // Handle unsupported message types — capture lead but reply with guidance
+    if (message.metadata?.["unsupported"]) {
+      conversation.lastInboundAt = new Date();
+      await setThread(conversation);
+      const ackText =
+        "Thanks for reaching out! I'm better with text — could you describe what you need?";
+      await this.sendFilteredReply(threadId, ackText);
+      await this.recordAssistantMessage(threadId, ackText);
+      return;
+    }
+
     // Track last inbound message time for WhatsApp 24h conversation window enforcement
     conversation.lastInboundAt = new Date();
     await setThread(conversation);

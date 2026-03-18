@@ -16,6 +16,7 @@ import {
   type LeadStateMachineContext,
 } from "./lead-state-machine.js";
 import type { ClassificationResult } from "./intent-classifier.js";
+import { matchObjection, type ObjectionMatch } from "../agents/intake/objection-trees.js";
 
 export interface InboundMessage {
   /** Channel identifier (phone number, chat widget ID) */
@@ -58,6 +59,8 @@ export interface RouterResponse {
   machineState?: string;
   /** LLM goal description for the current state (if state machine enabled). */
   stateGoal?: string;
+  /** FAQ answer text, when response came from FAQ matching (allows LLM to rephrase) */
+  faqContext?: string;
 }
 
 export interface ConversationRouterConfig {
@@ -72,6 +75,8 @@ export interface ConversationRouterConfig {
   faqs?: FAQRecord[];
   /** Business name for FAQ response formatting */
   businessName?: string;
+  /** Objection trees for keyword-matched objection handling */
+  objectionTrees?: ObjectionMatch[];
 }
 
 /**
@@ -91,6 +96,7 @@ export class ConversationRouter {
   private readonly nlpAdapter: ConversationNLPAdapter;
   private readonly faqs: FAQRecord[];
   private readonly businessName: string | undefined;
+  private readonly objectionTrees: ObjectionMatch[];
 
   constructor(config: ConversationRouterConfig) {
     this.sessionStore = config.sessionStore;
@@ -100,6 +106,7 @@ export class ConversationRouter {
     this.nlpAdapter = new ConversationNLPAdapter();
     this.faqs = config.faqs ?? [];
     this.businessName = config.businessName;
+    this.objectionTrees = config.objectionTrees ?? [];
   }
 
   /**
@@ -167,6 +174,11 @@ export class ConversationRouter {
             escalated: false,
             completed: false,
             sessionId: session.id,
+            machineState: session.machineState,
+            stateGoal: session.machineState
+              ? getGoalForState(session.machineState as LeadConversationState)
+              : undefined,
+            faqContext: faqResponse,
           };
         }
       }
@@ -190,6 +202,11 @@ export class ConversationRouter {
       // Set extracted variables
       Object.assign(state.variables, nlpResult.extractedVariables);
 
+      // Update contactName if NLP extracted a name (e.g., "my name is Sarah")
+      if (nlpResult.extractedVariables["name"]) {
+        state.variables["contactName"] = nlpResult.extractedVariables["name"] as string;
+      }
+
       // If NLP resolved an option, set it (both generic and step-specific key)
       if (nlpResult.resolvedOptionIndex !== null) {
         state.variables["selectedOption"] = nlpResult.resolvedOptionIndex;
@@ -201,6 +218,19 @@ export class ConversationRouter {
       // Handle escalation requests
       if (nlpResult.classification.intent === "escalation_request") {
         state.variables["escalationRequested"] = true;
+      }
+
+      // Wire objection response when intent is objection
+      if (classification.intent === "objection") {
+        const objMatch = matchObjection(
+          message.body,
+          this.objectionTrees.length > 0 ? this.objectionTrees : undefined,
+        );
+        if (objMatch) {
+          state.variables["objectionCategory"] = objMatch.category;
+          state.variables["objectionResponse"] = objMatch.response;
+          state.variables["objectionFollowUp"] = objMatch.followUp;
+        }
       }
     } else {
       // Fallback: try to interpret the message as a question response (numbered option)
@@ -442,7 +472,7 @@ export class ConversationRouter {
 
     const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const state = createConversationState(flow, {
-      contactName: message.from,
+      contactName: (message.metadata?.["contactName"] as string) ?? message.from,
       contactPhone: message.from,
       channelType: message.channelType,
       lastMessage: message.body,

@@ -22,6 +22,10 @@ function makeContact(overrides?: Partial<CrmContact>): CrmContact {
     sourceAdId: "ad_whitening",
     sourceCampaignId: "camp_spring",
     gclid: null,
+    fbclid: null,
+    ttclid: null,
+    normalizedPhone: null,
+    normalizedEmail: null,
     utmSource: "meta_ads",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -249,6 +253,30 @@ describe("CAPIDispatcher", () => {
 
       const call = (adsProvider.sendConversionEvent as ReturnType<typeof vi.fn>).mock.calls[0]![1];
       expect(call.customData.campaign_id).toBe("camp_99");
+    });
+
+    it("includes deterministic event_id for deduplication", async () => {
+      const event = makeConversionEvent();
+
+      await dispatcher.handleEvent(event);
+
+      const sentEvent = (adsProvider.sendConversionEvent as ReturnType<typeof vi.fn>).mock
+        .calls[0][1];
+      expect(sentEvent.eventId).toBeDefined();
+      expect(typeof sentEvent.eventId).toBe("string");
+
+      // Same event should produce same ID (deterministic)
+      vi.clearAllMocks();
+      crmProvider.getContact.mockResolvedValue(makeContact());
+      (adsProvider.sendConversionEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+        eventsReceived: 1,
+        success: true,
+      });
+
+      await dispatcher.handleEvent(event);
+      const sentEvent2 = (adsProvider.sendConversionEvent as ReturnType<typeof vi.fn>).mock
+        .calls[0][1];
+      expect(sentEvent2.eventId).toBe(sentEvent.eventId);
     });
 
     it("uses custom currency when configured", async () => {
