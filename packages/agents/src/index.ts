@@ -44,3 +44,16 @@ export {
   type DeliveryStatus,
   type DeliveryStore,
 } from "./delivery-store.js";
+
+export {
+  type ConnectorDestinationConfig,
+  type DestinationCriticality,
+  type DestinationSequencing,
+  type DestinationType,
+  type ManualQueueReason,
+  type ResolvedDestination,
+  type RoutePlan,
+  type WebhookDestinationConfig,
+} from "./route-plan.js";
+
+export { AgentRouter, type AgentRouterConfig } from "./router.js";
