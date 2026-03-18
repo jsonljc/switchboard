@@ -187,7 +187,8 @@ export async function buildServer() {
   const conversionBus = new InMemoryConversionBus();
 
   if (adsWriteProvider && prismaClient) {
-    const { CAPIDispatcher, OutcomeTracker } = await import("@switchboard/digital-ads");
+    const { CAPIDispatcher, OutcomeTracker, TikTokDispatcher, GoogleOfflineDispatcher } =
+      await import("@switchboard/digital-ads");
     const { PrismaCrmProvider } = await import("@switchboard/db");
 
     const dispatcher = new CAPIDispatcher({
@@ -200,7 +201,33 @@ export async function buildServer() {
     const outcomeTracker = new OutcomeTracker();
     outcomeTracker.register(conversionBus);
 
-    app.log.info("ConversionBus wired: CAPIDispatcher + OutcomeTracker registered");
+    const registeredDispatchers = ["CAPIDispatcher", "OutcomeTracker"];
+
+    // TikTok Events API dispatcher (gated by TIKTOK_PIXEL_ID)
+    const tiktokPixelId = process.env["TIKTOK_PIXEL_ID"];
+    if (tiktokPixelId) {
+      const tiktokDispatcher = new TikTokDispatcher({
+        sendEvent: async (_pixelId, _event) => ({ success: true }), // stub — real TikTok API client to come
+        crmProvider: new PrismaCrmProvider(prismaClient),
+        pixelId: tiktokPixelId,
+      });
+      tiktokDispatcher.register(conversionBus);
+      registeredDispatchers.push("TikTokDispatcher");
+    }
+
+    // Google Offline Conversions dispatcher (gated by GOOGLE_CONVERSION_ACTION_ID)
+    const googleConversionActionId = process.env["GOOGLE_CONVERSION_ACTION_ID"];
+    if (googleConversionActionId) {
+      const googleDispatcher = new GoogleOfflineDispatcher({
+        uploadConversion: async (_conversion) => ({ success: true }), // stub — real Google Ads client to come
+        crmProvider: new PrismaCrmProvider(prismaClient),
+        conversionActionId: googleConversionActionId,
+      });
+      googleDispatcher.register(conversionBus);
+      registeredDispatchers.push("GoogleOfflineDispatcher");
+    }
+
+    app.log.info(`ConversionBus wired: ${registeredDispatchers.join(" + ")} registered`);
   }
 
   // --- Execution queue setup ---

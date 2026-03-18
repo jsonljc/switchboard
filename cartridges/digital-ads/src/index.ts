@@ -421,6 +421,8 @@ export type {
 export { CAPIDispatcher } from "./tracking/capi-dispatcher.js";
 export type { CAPIDispatcherConfig, CAPIDispatchResult } from "./tracking/capi-dispatcher.js";
 export { hashForCAPI, buildUserData } from "./tracking/capi-dispatcher.js";
+export { TikTokDispatcher } from "./tracking/tiktok-dispatcher.js";
+export type { TikTokDispatcherConfig } from "./tracking/tiktok-dispatcher.js";
 export { GoogleOfflineDispatcher } from "./tracking/google-offline-dispatcher.js";
 export type { GoogleOfflineDispatcherConfig } from "./tracking/google-offline-dispatcher.js";
 export { OutcomeTracker } from "./tracking/outcome-tracker.js";

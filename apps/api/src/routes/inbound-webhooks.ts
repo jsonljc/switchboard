@@ -9,6 +9,11 @@ import { executeGovernedSystemAction } from "../services/system-governed-actions
 
 const logger = createLogger("inbound-webhooks");
 
+function timingSafeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
   // ─────────────────────────────────────────────────────────────────────────
   // POST /api/inbound/stripe — Receive Stripe webhook events
@@ -268,6 +273,114 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
           processingError: true,
         });
       }
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/inbound/revenue — Receive revenue events from external systems
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    "/revenue",
+    {
+      schema: {
+        description:
+          "Receive revenue events from external systems (POS, CRM, custom) with HMAC verification.",
+        tags: ["Inbound Webhooks"],
+      },
+    },
+    async (request, reply) => {
+      const webhookSecret = process.env["REVENUE_WEBHOOK_SECRET"];
+      if (!webhookSecret) {
+        logger.warn("REVENUE_WEBHOOK_SECRET not configured — rejecting webhook");
+        return reply.code(500).send({ error: "Webhook secret not configured" });
+      }
+
+      // Verify HMAC signature
+      const signature = request.headers["x-switchboard-signature"] as string | undefined;
+      if (!signature) {
+        return reply.code(401).send({ error: "Missing X-Switchboard-Signature header" });
+      }
+
+      const rawBody =
+        typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+      const expectedSig = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+
+      if (!timingSafeCompare(signature, expectedSig)) {
+        logger.warn("Invalid revenue webhook signature");
+        return reply.code(401).send({ error: "Invalid signature" });
+      }
+
+      // Validate payload against RevenueEventSchema
+      const { RevenueEventSchema } = await import("@switchboard/schemas");
+      const parseResult = RevenueEventSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.code(400).send({ error: parseResult.error.format() });
+      }
+
+      const event = parseResult.data;
+
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available" });
+      }
+
+      // Look up organization from header
+      const orgId = request.headers["x-organization-id"] as string | undefined;
+      if (!orgId) {
+        return reply.code(400).send({ error: "Missing X-Organization-Id header" });
+      }
+
+      // Look up contact
+      const contact = await app.prisma.crmContact.findFirst({
+        where: { id: event.contactId, organizationId: orgId },
+        select: { id: true, sourceAdId: true, sourceCampaignId: true },
+      });
+
+      if (!contact) {
+        return reply.code(404).send({ error: "Contact not found" });
+      }
+
+      const eventTimestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+
+      // Persist revenue event
+      await app.prisma.revenueEvent.create({
+        data: {
+          contactId: event.contactId,
+          organizationId: orgId,
+          amount: event.amount,
+          currency: event.currency,
+          source: event.source ?? "api",
+          reference: event.reference ?? null,
+          recordedBy: event.recordedBy,
+          timestamp: eventTimestamp,
+        },
+      });
+
+      // Emit to ConversionBus (best-effort)
+      if (app.conversionBus) {
+        app.conversionBus.emit({
+          type: "purchased",
+          contactId: event.contactId,
+          organizationId: orgId,
+          value: event.amount,
+          sourceAdId: contact.sourceAdId ?? undefined,
+          sourceCampaignId: contact.sourceCampaignId ?? undefined,
+          timestamp: eventTimestamp,
+          metadata: {
+            source: event.source ?? "api",
+            reference: event.reference,
+            recordedBy: event.recordedBy,
+            currency: event.currency,
+            inboundWebhook: true,
+          },
+        });
+      }
+
+      logger.info(
+        { contactId: event.contactId, amount: event.amount, orgId },
+        "Revenue event received via inbound webhook",
+      );
+
+      return reply.code(201).send({ recorded: true, contactId: event.contactId });
     },
   );
 

@@ -64,3 +64,15 @@ export {
   type DispatcherConfig,
   type DispatchResult,
 } from "./dispatcher.js";
+
+export { createWebhookHandler, type WebhookHandlerConfig } from "./dispatch/webhook-handler.js";
+
+export {
+  InMemoryWebhookConfigProvider,
+  type WebhookConfigEntry,
+} from "./providers/webhook-config-provider.js";
+
+export {
+  ConversionBusBridge,
+  type ConversionBusBridgeOptions,
+} from "./bridges/conversion-bus-bridge.js";
