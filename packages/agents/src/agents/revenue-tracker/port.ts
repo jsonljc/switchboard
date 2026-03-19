@@ -8,7 +8,7 @@ export const REVENUE_TRACKER_PORT: AgentPort = {
   agentId: "revenue-tracker",
   version: "0.1.0",
   inboundEvents: ["revenue.recorded", "stage.advanced"],
-  outboundEvents: ["revenue.attributed", "conversation.escalated"],
+  outboundEvents: ["revenue.attributed", "ad.anomaly_detected", "conversation.escalated"],
   tools: [
     {
       name: "attribute_revenue",
