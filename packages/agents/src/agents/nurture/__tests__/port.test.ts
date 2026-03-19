@@ -9,15 +9,13 @@ describe("Nurture Agent Port", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it("accepts lead.disqualified, stage.advanced, and revenue.recorded events", () => {
-    expect(NURTURE_AGENT_PORT.inboundEvents).toContain("lead.disqualified");
+  it("accepts stage.advanced events", () => {
     expect(NURTURE_AGENT_PORT.inboundEvents).toContain("stage.advanced");
-    expect(NURTURE_AGENT_PORT.inboundEvents).toContain("revenue.recorded");
+    expect(NURTURE_AGENT_PORT.inboundEvents).toHaveLength(1);
   });
 
-  it("emits stage.advanced and lead.qualified events", () => {
-    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("stage.advanced");
-    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("lead.qualified");
+  it("emits conversation.escalated events", () => {
+    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("conversation.escalated");
   });
 
   it("declares start_cadence, send_reminder, and request_review tools", () => {
@@ -25,13 +23,5 @@ describe("Nurture Agent Port", () => {
     expect(toolNames).toContain("start_cadence");
     expect(toolNames).toContain("send_reminder");
     expect(toolNames).toContain("request_review");
-  });
-
-  it("has version 0.1.0", () => {
-    expect(NURTURE_AGENT_PORT.version).toBe("0.1.0");
-  });
-
-  it("has agentId nurture", () => {
-    expect(NURTURE_AGENT_PORT.agentId).toBe("nurture");
   });
 });

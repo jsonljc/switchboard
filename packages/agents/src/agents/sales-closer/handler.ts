@@ -5,15 +5,8 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
-import type { SalesCloserDeps } from "./types.js";
 
 export class SalesCloserHandler implements AgentHandler {
-  private readonly deps: SalesCloserDeps;
-
-  constructor(deps: SalesCloserDeps = {}) {
-    this.deps = deps;
-  }
-
   async handle(
     event: RoutedEventEnvelope,
     config: Record<string, unknown>,
@@ -28,7 +21,6 @@ export class SalesCloserHandler implements AgentHandler {
     const profile = context.profile ?? {};
     const booking = profile.booking as Record<string, unknown> | undefined;
 
-    // If no booking config, escalate — needs human to configure
     if (!booking) {
       return this.escalate(event, context, contactId, "no_booking_config");
     }
@@ -39,17 +31,6 @@ export class SalesCloserHandler implements AgentHandler {
 
     const conversionAction = bookingUrl ? "booking_link" : "direct_booking";
 
-    // Check availability if dep provided
-    let availableSlots: number | undefined;
-    if (this.deps.getAvailableSlots) {
-      const slots = await this.deps.getAvailableSlots({ serviceType, durationMinutes });
-      availableSlots = slots.length;
-      if (slots.length === 0) {
-        return this.escalate(event, context, contactId, "no_available_slots");
-      }
-    }
-
-    // Emit stage.advanced
     const stageEvent = createEventEnvelope({
       organizationId: context.organizationId,
       eventType: "stage.advanced",
@@ -66,7 +47,6 @@ export class SalesCloserHandler implements AgentHandler {
       attribution: event.attribution,
     });
 
-    // Build booking action request
     const bookingParams: Record<string, unknown> = {
       contactId,
       serviceType,
@@ -79,21 +59,18 @@ export class SalesCloserHandler implements AgentHandler {
       bookingParams.bookingUrl = bookingUrl;
     }
 
-    const actions = [
-      {
-        actionType: "customer-engagement.appointment.book",
-        parameters: bookingParams,
-      },
-    ];
-
     return {
       events: [stageEvent],
-      actions,
+      actions: [
+        {
+          actionType: "customer-engagement.appointment.book",
+          parameters: bookingParams,
+        },
+      ],
       state: {
         contactId,
         conversionAction,
         stage: "booking_initiated",
-        ...(availableSlots !== undefined && { availableSlots }),
       },
     };
   }

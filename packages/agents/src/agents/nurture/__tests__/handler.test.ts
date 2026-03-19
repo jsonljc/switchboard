@@ -1,18 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { NurtureAgentHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
-import type { NurtureAgentDeps } from "../types.js";
 
-function makeDisqualifiedEvent(payload: Record<string, unknown> = {}) {
+function makeStageEvent(stage: string, payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
     organizationId: "org-1",
-    eventType: "lead.disqualified",
-    source: { type: "agent", id: "lead-responder" },
+    eventType: "stage.advanced",
+    source: { type: "agent", id: "sales-closer" },
     payload: {
       contactId: "c1",
-      score: 20,
-      tier: "cold",
-      reason: "below_threshold",
+      stage,
       ...payload,
     },
     attribution: {
@@ -28,251 +25,224 @@ function makeDisqualifiedEvent(payload: Record<string, unknown> = {}) {
   });
 }
 
-function makeStageAdvancedEvent(payload: Record<string, unknown> = {}) {
-  return createEventEnvelope({
-    organizationId: "org-1",
-    eventType: "stage.advanced",
-    source: { type: "agent", id: "sales-closer" },
-    payload: {
-      contactId: "c1",
-      stage: "booking_initiated",
-      ...payload,
-    },
-  });
-}
-
-function makeRevenueRecordedEvent(payload: Record<string, unknown> = {}) {
-  return createEventEnvelope({
-    organizationId: "org-1",
-    eventType: "revenue.recorded",
-    source: { type: "system", id: "payments" },
-    payload: {
-      contactId: "c1",
-      amount: 150,
-      ...payload,
-    },
-  });
-}
-
 describe("NurtureAgentHandler", () => {
-  // --- lead.disqualified ---
-
-  it("starts cold nurture cadence on lead.disqualified", async () => {
+  it("starts consultation-reminder cadence on booking_initiated", async () => {
     const handler = new NurtureAgentHandler();
-    const event = makeDisqualifiedEvent();
+    const event = makeStageEvent("booking_initiated");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.cadence.start",
-          parameters: expect.objectContaining({
-            contactId: "c1",
-            cadenceType: "cold_nurture",
-          }),
-        }),
-      ]),
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
     );
+
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
+    expect(response.actions[0]!.parameters.cadenceId).toBe("consultation-reminder");
+    expect(response.actions[0]!.parameters.contactId).toBe("c1");
   });
 
-  it("skips cadence start if contact already has active cadence", async () => {
-    const deps: NurtureAgentDeps = {
-      getCadenceStatus: vi.fn().mockReturnValue({
-        active: true,
-        cadenceId: "cad-1",
-        currentStep: 2,
-        totalSteps: 5,
+  it("starts post-treatment-followup cadence on service_completed", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("service_completed");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.actions[0]!.parameters.cadenceId).toBe("post-treatment-followup");
+  });
+
+  it("starts no-show-rebook cadence on no_show", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("no_show");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.actions[0]!.parameters.cadenceId).toBe("no-show-rebook");
+  });
+
+  it("starts dormant-winback cadence on dormant", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("dormant");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.actions[0]!.parameters.cadenceId).toBe("dormant-winback");
+  });
+
+  it("escalates with no_nurture_config when profile has no nurture", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("booking_initiated");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
+    );
+
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        reason: "no_nurture_config",
       }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.events).toHaveLength(0);
+    );
     expect(response.actions).toHaveLength(0);
   });
 
-  it("starts cadence when getCadenceStatus returns null", async () => {
-    const deps: NurtureAgentDeps = {
-      getCadenceStatus: vi.fn().mockReturnValue(null),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
+  it("escalates with unknown_nurture_stage for unmapped stages", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("some_unknown_stage");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
 
-    expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
-  });
-
-  it("starts cadence when getCadenceStatus returns inactive", async () => {
-    const deps: NurtureAgentDeps = {
-      getCadenceStatus: vi.fn().mockReturnValue({
-        active: false,
-        cadenceId: "cad-old",
-        currentStep: 5,
-        totalSteps: 5,
-      }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
-  });
-
-  it("re-qualifies lead when LTV tier is high", async () => {
-    const deps: NurtureAgentDeps = {
-      scoreLtv: vi.fn().mockReturnValue({ score: 90, tier: "high" }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const qualifiedEvent = response.events.find((e) => e.eventType === "lead.qualified");
-    expect(qualifiedEvent).toBeDefined();
-    expect(qualifiedEvent!.payload).toEqual(
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events[0]!.payload).toEqual(
       expect.objectContaining({
-        contactId: "c1",
-        score: 90,
-        tier: "high",
-        reason: "high_ltv_requalification",
+        reason: "unknown_nurture_stage",
       }),
     );
   });
 
-  it("does not re-qualify when LTV tier is not high", async () => {
-    const deps: NurtureAgentDeps = {
-      scoreLtv: vi.fn().mockReturnValue({ score: 30, tier: "low" }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
+  it("escalates with cadence_not_enabled when cadence not in enabledCadences", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("booking_initiated");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {
+          nurture: {
+            enabledCadences: ["post-treatment-followup", "no-show-rebook"],
+          },
+        },
+      },
+    );
 
-    expect(response.events.find((e) => e.eventType === "lead.qualified")).toBeUndefined();
-    // Still starts cadence
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({
+        reason: "cadence_not_enabled",
+      }),
+    );
+  });
+
+  it("allows cadence when it is in enabledCadences", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeStageEvent("booking_initiated");
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {
+          nurture: {
+            enabledCadences: ["consultation-reminder"],
+          },
+        },
+      },
+    );
+
+    expect(response.events).toHaveLength(0);
     expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.parameters.cadenceId).toBe("consultation-reminder");
   });
 
-  it("forwards attribution chain on lead.qualified event", async () => {
-    const deps: NurtureAgentDeps = {
-      scoreLtv: vi.fn().mockReturnValue({ score: 95, tier: "high" }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const qualifiedEvent = response.events.find((e) => e.eventType === "lead.qualified");
-    expect(qualifiedEvent!.attribution).toBeDefined();
-    expect(qualifiedEvent!.attribution!.fbclid).toBe("fb-abc");
-    expect(qualifiedEvent!.attribution!.sourceCampaignId).toBe("camp-1");
-  });
-
-  it("sets causationId to inbound event id on lead.disqualified", async () => {
-    const deps: NurtureAgentDeps = {
-      scoreLtv: vi.fn().mockReturnValue({ score: 95, tier: "high" }),
-    };
-    const handler = new NurtureAgentHandler(deps);
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const qualifiedEvent = response.events.find((e) => e.eventType === "lead.qualified");
-    expect(qualifiedEvent!.causationId).toBe(event.eventId);
-    expect(qualifiedEvent!.correlationId).toBe(event.correlationId);
-  });
-
-  // --- stage.advanced ---
-
-  it("sends reminder on stage.advanced", async () => {
+  it("allows all cadences when enabledCadences not set", async () => {
     const handler = new NurtureAgentHandler();
-    const event = makeStageAdvancedEvent();
+    const event = makeStageEvent("dormant");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.reminder.send",
-          parameters: expect.objectContaining({
-            contactId: "c1",
-          }),
-        }),
-      ]),
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
     );
+
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.parameters.cadenceId).toBe("dormant-winback");
   });
 
-  it("includes stage name in reminder message", async () => {
+  it("forwards attribution chain to escalation events", async () => {
     const handler = new NurtureAgentHandler();
-    const event = makeStageAdvancedEvent({ stage: "payment_pending" });
+    const event = makeStageEvent("booking_initiated");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const reminderAction = response.actions.find(
-      (a) => a.actionType === "customer-engagement.reminder.send",
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
     );
-    expect(reminderAction!.parameters.message).toContain("payment_pending");
+
+    expect(response.events[0]!.attribution).toBeDefined();
+    expect(response.events[0]!.attribution!.fbclid).toBe("fb-abc");
+    expect(response.events[0]!.attribution!.sourceCampaignId).toBe("camp-1");
   });
 
-  // --- revenue.recorded ---
-
-  it("requests review on revenue.recorded", async () => {
+  it("sets causationId to the inbound event id", async () => {
     const handler = new NurtureAgentHandler();
-    const event = makeRevenueRecordedEvent();
+    const event = makeStageEvent("booking_initiated");
 
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.review.request",
-          parameters: expect.objectContaining({
-            contactId: "c1",
-          }),
-        }),
-      ]),
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
     );
+
+    expect(response.events[0]!.causationId).toBe(event.eventId);
+    expect(response.events[0]!.correlationId).toBe(event.correlationId);
   });
 
-  it("uses platform from payload for review request", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeRevenueRecordedEvent({ platform: "yelp" });
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const reviewAction = response.actions.find(
-      (a) => a.actionType === "customer-engagement.review.request",
-    );
-    expect(reviewAction!.parameters.platform).toBe("yelp");
-  });
-
-  it("defaults platform to google when not specified", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeRevenueRecordedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    const reviewAction = response.actions.find(
-      (a) => a.actionType === "customer-engagement.review.request",
-    );
-    expect(reviewAction!.parameters.platform).toBe("google");
-  });
-
-  // --- unknown events ---
-
-  it("ignores unknown event types", async () => {
+  it("ignores non-stage.advanced events", async () => {
     const handler = new NurtureAgentHandler();
 
     const event = createEventEnvelope({
       organizationId: "org-1",
-      eventType: "ad.optimized",
+      eventType: "lead.received",
       source: { type: "system", id: "test" },
       payload: {},
     });
@@ -280,57 +250,5 @@ describe("NurtureAgentHandler", () => {
     const response = await handler.handle(event, {}, { organizationId: "org-1" });
     expect(response.events).toHaveLength(0);
     expect(response.actions).toHaveLength(0);
-  });
-
-  // --- state ---
-
-  it("preserves handler state on lead.disqualified", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.state).toEqual({
-      contactId: "c1",
-      cadenceStarted: "cold_nurture",
-    });
-  });
-
-  it("preserves handler state on stage.advanced", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeStageAdvancedEvent({ stage: "booking_initiated" });
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.state).toEqual({
-      contactId: "c1",
-      reminderSent: true,
-      stage: "booking_initiated",
-    });
-  });
-
-  it("preserves handler state on revenue.recorded", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeRevenueRecordedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.state).toEqual({
-      contactId: "c1",
-      reviewRequested: true,
-      platform: "google",
-    });
-  });
-
-  // --- backward compatibility ---
-
-  it("works without deps (backward compatible)", async () => {
-    const handler = new NurtureAgentHandler();
-    const event = makeDisqualifiedEvent();
-
-    const response = await handler.handle(event, {}, { organizationId: "org-1" });
-
-    expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
   });
 });

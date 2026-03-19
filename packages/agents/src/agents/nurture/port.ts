@@ -7,13 +7,13 @@ import type { AgentPort } from "../../ports.js";
 export const NURTURE_AGENT_PORT: AgentPort = {
   agentId: "nurture",
   version: "0.1.0",
-  inboundEvents: ["lead.disqualified", "stage.advanced", "revenue.recorded"],
-  outboundEvents: ["stage.advanced", "lead.qualified"],
+  inboundEvents: ["stage.advanced"],
+  outboundEvents: ["conversation.escalated"],
   tools: [
     {
       name: "start_cadence",
       description: "Start a multi-step follow-up cadence for a contact",
-      parameters: { contactId: "string", cadenceType: "string" },
+      parameters: { contactId: "string", cadenceId: "string" },
     },
     {
       name: "send_reminder",
@@ -27,9 +27,8 @@ export const NURTURE_AGENT_PORT: AgentPort = {
     },
   ],
   configSchema: {
-    coldNurtureCadenceId: "string",
-    postServiceCadenceId: "string",
-    reactivationDays: "number (default: 30)",
-    reviewRequestDelay: "number (default: 24h)",
+    enabledCadences: "string[] (cadence IDs to activate, default: all)",
+    reviewDelayDays: "number (days after service to request review, default: 7)",
+    maxConcurrentCadences: "number (max cadences per contact, default: 2)",
   },
 };

@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { SalesCloserHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
-import type { SalesCloserDeps } from "../types.js";
 
 function makeQualifiedEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -28,7 +27,7 @@ function makeQualifiedEvent(payload: Record<string, unknown> = {}) {
 }
 
 describe("SalesCloserHandler", () => {
-  it("emits stage.advanced with booking action when bookingUrl configured", async () => {
+  it("emits stage.advanced with booking_link when bookingUrl configured", async () => {
     const handler = new SalesCloserHandler();
     const event = makeQualifiedEvent();
 
@@ -54,7 +53,7 @@ describe("SalesCloserHandler", () => {
     );
   });
 
-  it("returns send_booking_link action when bookingUrl configured", async () => {
+  it("includes bookingUrl in action when configured", async () => {
     const handler = new SalesCloserHandler();
     const event = makeQualifiedEvent();
 
@@ -69,20 +68,12 @@ describe("SalesCloserHandler", () => {
       },
     );
 
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.appointment.book",
-          parameters: expect.objectContaining({
-            contactId: "c1",
-            bookingUrl: "https://cal.com/clinic/book",
-          }),
-        }),
-      ]),
-    );
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("customer-engagement.appointment.book");
+    expect(response.actions[0]!.parameters.bookingUrl).toBe("https://cal.com/clinic/book");
   });
 
-  it("returns book_appointment action when no bookingUrl (direct calendar)", async () => {
+  it("uses direct_booking when no bookingUrl", async () => {
     const handler = new SalesCloserHandler();
     const event = makeQualifiedEvent();
 
@@ -103,19 +94,8 @@ describe("SalesCloserHandler", () => {
         conversionAction: "direct_booking",
       }),
     );
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "customer-engagement.appointment.book",
-          parameters: expect.objectContaining({
-            contactId: "c1",
-            serviceType: "teeth-whitening",
-            durationMinutes: 30,
-          }),
-        }),
-      ]),
-    );
+    expect(response.actions[0]!.parameters.serviceType).toBe("teeth-whitening");
+    expect(response.actions[0]!.parameters.durationMinutes).toBe(30);
   });
 
   it("forwards attribution chain to outbound events", async () => {
@@ -180,13 +160,7 @@ describe("SalesCloserHandler", () => {
     const handler = new SalesCloserHandler();
     const event = makeQualifiedEvent();
 
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-      },
-    );
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
 
     expect(response.events[0]!.eventType).toBe("conversation.escalated");
   });
@@ -240,62 +214,11 @@ describe("SalesCloserHandler", () => {
       },
     );
 
-    const bookAction = response.actions.find(
-      (a) => a.actionType === "customer-engagement.appointment.book",
-    );
-    expect(bookAction).toBeDefined();
-    expect(bookAction!.parameters.sourceAdId).toBe("ad-1");
-    expect(bookAction!.parameters.sourceCampaignId).toBe("camp-1");
+    expect(response.actions[0]!.parameters.sourceAdId).toBe("ad-1");
+    expect(response.actions[0]!.parameters.sourceCampaignId).toBe("camp-1");
   });
 
-  it("checks availability before booking when dep provided", async () => {
-    const deps: SalesCloserDeps = {
-      getAvailableSlots: vi.fn().mockResolvedValue([
-        {
-          startTime: "2026-03-19T10:00:00Z",
-          endTime: "2026-03-19T11:00:00Z",
-          providerId: "p1",
-        },
-      ]),
-    };
-    const handler = new SalesCloserHandler(deps);
-    const event = makeQualifiedEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
-      },
-    );
-
-    expect(deps.getAvailableSlots).toHaveBeenCalled();
-    expect(response.state?.availableSlots).toBe(1);
-  });
-
-  it("escalates when no slots available", async () => {
-    const deps: SalesCloserDeps = {
-      getAvailableSlots: vi.fn().mockResolvedValue([]),
-    };
-    const handler = new SalesCloserHandler(deps);
-    const event = makeQualifiedEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
-      },
-    );
-
-    const escalation = response.events.find((e) => e.eventType === "conversation.escalated");
-    expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "no_available_slots" }));
-  });
-
-  it("works without deps (backward compatible)", async () => {
+  it("uses default serviceType and durationMinutes", async () => {
     const handler = new SalesCloserHandler();
     const event = makeQualifiedEvent();
 
@@ -304,13 +227,11 @@ describe("SalesCloserHandler", () => {
       {},
       {
         organizationId: "org-1",
-        profile: { booking: { bookingUrl: "https://cal.com/demo" } },
+        profile: { booking: {} },
       },
     );
 
-    expect(response.events.some((e) => e.eventType === "stage.advanced")).toBe(true);
-    expect(
-      response.actions.some((a) => a.actionType === "customer-engagement.appointment.book"),
-    ).toBe(true);
+    expect(response.actions[0]!.parameters.serviceType).toBe("consultation");
+    expect(response.actions[0]!.parameters.durationMinutes).toBe(60);
   });
 });

@@ -102,13 +102,7 @@ export {
   type ObjectionMatch,
 } from "./agents/lead-responder/index.js";
 
-export {
-  SALES_CLOSER_PORT,
-  SalesCloserHandler,
-  type AvailableSlot,
-  type ContactInfo,
-  type SalesCloserDeps,
-} from "./agents/sales-closer/index.js";
+export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
 
 export {
   AgentStateTracker,
@@ -117,13 +111,7 @@ export {
   type StateChangeListener,
 } from "./agent-state.js";
 
-export {
-  NURTURE_AGENT_PORT,
-  NurtureAgentHandler,
-  type NurtureAgentDeps,
-  type CadenceStatus,
-  type ActivityAnalysis,
-} from "./agents/nurture/index.js";
+export { NURTURE_AGENT_PORT, NurtureAgentHandler } from "./agents/nurture/index.js";
 
 export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
 
