@@ -32,6 +32,7 @@ export interface ProcessedAgent {
   success: boolean;
   outputEvents: string[];
   actionsExecuted: string[];
+  actionsFailed: string[];
   error?: string;
 }
 
@@ -63,9 +64,9 @@ export class EventLoop {
 
   async process(event: RoutedEventEnvelope, context: AgentContext): Promise<EventLoopResult> {
     const processed: ProcessedAgent[] = [];
-    await this.processRecursive(event, context, 0, processed);
-    const depth = processed.length > 0 ? Math.max(...processed.map((_, i) => i)) : 0;
-    return { processed, depth };
+    const maxDepthReached = { value: 0 };
+    await this.processRecursive(event, context, 0, processed, maxDepthReached);
+    return { processed, depth: maxDepthReached.value };
   }
 
   private async processRecursive(
@@ -73,6 +74,7 @@ export class EventLoop {
     context: AgentContext,
     depth: number,
     processed: ProcessedAgent[],
+    maxDepthReached: { value: number },
   ): Promise<void> {
     if (depth >= this.maxDepth) {
       return;
@@ -91,9 +93,14 @@ export class EventLoop {
         continue;
       }
 
-      // Skip scheduled/hybrid agents for non-urgent events
+      // Scheduled agents only process urgent events (and ScheduledRunner triggers)
+      // Hybrid agents process urgent events + chained events (depth > 0),
+      // but skip top-level non-urgent events
       const mode = registryEntry.executionMode;
-      if ((mode === "scheduled" || mode === "hybrid") && !isUrgent) {
+      if (mode === "scheduled" && !isUrgent) {
+        continue;
+      }
+      if (mode === "hybrid" && !isUrgent && depth === 0) {
         continue;
       }
 
@@ -109,7 +116,7 @@ export class EventLoop {
         destinationId: dest.id,
         action: event.eventType,
         payload: event.payload,
-        criticality: dest.criticality as "required" | "optional" | "best_effort",
+        criticality: dest.criticality,
       });
 
       if (!evaluation.approved) {
@@ -157,6 +164,7 @@ export class EventLoop {
           success: false,
           outputEvents: [],
           actionsExecuted: [],
+          actionsFailed: [],
           error,
         });
         continue;
@@ -164,9 +172,14 @@ export class EventLoop {
 
       // Execute actions
       const actionsExecuted: string[] = [];
+      const actionsFailed: string[] = [];
       for (const action of response.actions) {
-        await this.actionExecutor.execute(action, context, this.policyBridge);
-        actionsExecuted.push(action.actionType);
+        const actionResult = await this.actionExecutor.execute(action, context, this.policyBridge);
+        if (actionResult.success) {
+          actionsExecuted.push(action.actionType);
+        } else {
+          actionsFailed.push(action.actionType);
+        }
       }
 
       if (this.stateTracker) {
@@ -192,11 +205,15 @@ export class EventLoop {
         success: true,
         outputEvents: response.events.map((e) => e.eventType),
         actionsExecuted,
+        actionsFailed,
       });
 
       // Recurse for output events
       for (const outputEvent of response.events) {
-        await this.processRecursive(outputEvent, context, depth + 1, processed);
+        if (depth + 1 > maxDepthReached.value) {
+          maxDepthReached.value = depth + 1;
+        }
+        await this.processRecursive(outputEvent, context, depth + 1, processed, maxDepthReached);
       }
     }
   }

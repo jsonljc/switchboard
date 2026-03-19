@@ -47,9 +47,20 @@ function makeRegistry(): AgentRegistry {
   return registry;
 }
 
-function makeMockEventLoop(): EventLoop {
+function makeMockEventLoop(processed = 1): EventLoop {
   return {
-    process: vi.fn(async () => ({ processed: [], depth: 0 })),
+    process: vi.fn(async () => ({
+      processed: Array.from({ length: processed }, (_, i) => ({
+        eventId: `evt-${i}`,
+        eventType: "ad.performance_review",
+        agentId: "mock",
+        success: true,
+        outputEvents: [],
+        actionsExecuted: [],
+        actionsFailed: [],
+      })),
+      depth: 0,
+    })),
   } as unknown as EventLoop;
 }
 
@@ -95,7 +106,7 @@ describe("ScheduledRunner", () => {
       const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
       processFn
         .mockRejectedValueOnce(new Error("handler exploded"))
-        .mockResolvedValueOnce({ processed: [], depth: 0 });
+        .mockResolvedValueOnce({ processed: [{ agentId: "mock" }], depth: 0 });
 
       const runner = new ScheduledRunner({ registry, eventLoop });
       const results = await runner.runAll(ORG, makeContext());
@@ -108,6 +119,17 @@ describe("ScheduledRunner", () => {
 
       const succeeded = results.find((r) => r.triggered);
       expect(succeeded).toBeDefined();
+    });
+
+    it("reports triggered: false when EventLoop processes zero agents", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop(0);
+      const runner = new ScheduledRunner({ registry, eventLoop });
+
+      const results = await runner.runAll(ORG, makeContext());
+
+      expect(results).toHaveLength(2);
+      expect(results.every((r) => !r.triggered)).toBe(true);
     });
   });
 
@@ -140,6 +162,21 @@ describe("ScheduledRunner", () => {
       expect(result.agentId).toBe("ghost-agent");
       expect(result.triggered).toBe(false);
       expect(result.error).toBe("agent_not_found");
+
+      const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
+      expect(processFn).not.toHaveBeenCalled();
+    });
+
+    it("returns error for realtime agent", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const runner = new ScheduledRunner({ registry, eventLoop });
+
+      const result = await runner.runOne(ORG, "realtime-agent", makeContext());
+
+      expect(result.agentId).toBe("realtime-agent");
+      expect(result.triggered).toBe(false);
+      expect(result.error).toBe("agent_is_realtime");
 
       const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
       expect(processFn).not.toHaveBeenCalled();

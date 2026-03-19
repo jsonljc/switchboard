@@ -170,7 +170,7 @@ describe("EventLoop", () => {
     expect(result.depth).toBeLessThanOrEqual(3);
   });
 
-  it("skips scheduled agents for non-urgent events", async () => {
+  it("skips hybrid agents for top-level non-urgent events", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
       agentId: "ad-optimizer",
@@ -210,6 +210,129 @@ describe("EventLoop", () => {
 
     expect(result.processed).toHaveLength(0);
     expect(handler.handle).not.toHaveBeenCalled();
+  });
+
+  it("processes hybrid agents for chained events (depth > 0)", async () => {
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "revenue-tracker",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["revenue.recorded"],
+        emits: ["revenue.attributed"],
+        tools: [],
+      },
+    });
+    agentRegistry.register("org-1", {
+      agentId: "ad-optimizer",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["revenue.attributed"],
+        emits: ["ad.optimized"],
+        tools: [],
+      },
+      executionMode: "hybrid",
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    handlerRegistry.register(
+      "revenue-tracker",
+      makeHandler((event) => ({
+        events: [
+          createEventEnvelope({
+            organizationId: event.organizationId,
+            eventType: "revenue.attributed",
+            source: { type: "agent", id: "revenue-tracker" },
+            payload: { campaignId: "camp-1", amount: 100 },
+            correlationId: event.correlationId,
+            causationId: event.eventId,
+          }),
+        ],
+        actions: [],
+      })),
+    );
+
+    const adOptHandler = makeHandler(() => ({ events: [], actions: [] }));
+    handlerRegistry.register("ad-optimizer", adOptHandler);
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "revenue.recorded",
+      source: { type: "system", id: "payments" },
+      payload: { contactId: "c1", amount: 100 },
+    });
+
+    const result = await loop.process(event, { organizationId: "org-1" });
+
+    expect(result.processed).toHaveLength(2);
+    expect(result.processed[0]!.agentId).toBe("revenue-tracker");
+    expect(result.processed[1]!.agentId).toBe("ad-optimizer");
+    expect(adOptHandler.handle).toHaveBeenCalledTimes(1);
+    expect(result.depth).toBe(1);
+  });
+
+  it("tracks failed actions separately from successful ones", async () => {
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "test-agent",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["test.event"], emits: [], tools: [] },
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    handlerRegistry.register(
+      "test-agent",
+      makeHandler(() => ({
+        events: [],
+        actions: [
+          { actionType: "action.good", parameters: {} },
+          { actionType: "action.bad", parameters: {} },
+        ],
+      })),
+    );
+
+    const actionExecutor = new ActionExecutor();
+    actionExecutor.register("action.good", vi.fn().mockResolvedValue({ success: true }));
+    actionExecutor.register("action.bad", vi.fn().mockResolvedValue({ success: false }));
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor,
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "test.event",
+      source: { type: "system", id: "test" },
+      payload: {},
+    });
+
+    const result = await loop.process(event, { organizationId: "org-1" });
+
+    expect(result.processed[0]!.actionsExecuted).toEqual(["action.good"]);
+    expect(result.processed[0]!.actionsFailed).toEqual(["action.bad"]);
   });
 
   it("routes urgent events to hybrid agents", async () => {

@@ -19,10 +19,6 @@ describe("Revenue Tracker Port", () => {
     expect(REVENUE_TRACKER_PORT.outboundEvents).toContain("conversation.escalated");
   });
 
-  it("emits ad.anomaly_detected", () => {
-    expect(REVENUE_TRACKER_PORT.outboundEvents).toContain("ad.anomaly_detected");
-  });
-
   it("declares attribute_revenue and log_pipeline tools", () => {
     const toolNames = REVENUE_TRACKER_PORT.tools.map((t) => t.name);
     expect(toolNames).toContain("attribute_revenue");

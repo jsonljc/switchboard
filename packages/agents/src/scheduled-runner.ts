@@ -44,8 +44,9 @@ export class ScheduledRunner {
       });
 
       try {
-        await this.eventLoop.process(event, context);
-        results.push({ agentId: entry.agentId, triggered: true });
+        const result = await this.eventLoop.process(event, context);
+        const wasProcessed = result.processed.length > 0;
+        results.push({ agentId: entry.agentId, triggered: wasProcessed });
       } catch (err) {
         results.push({
           agentId: entry.agentId,
@@ -68,6 +69,10 @@ export class ScheduledRunner {
       return { agentId, triggered: false, error: "agent_not_found" };
     }
 
+    if (entry.executionMode === "realtime") {
+      return { agentId, triggered: false, error: "agent_is_realtime" };
+    }
+
     const event = createEventEnvelope({
       organizationId,
       eventType: "ad.performance_review",
@@ -76,8 +81,9 @@ export class ScheduledRunner {
     });
 
     try {
-      await this.eventLoop.process(event, context);
-      return { agentId, triggered: true };
+      const result = await this.eventLoop.process(event, context);
+      const wasProcessed = result.processed.length > 0;
+      return { agentId, triggered: wasProcessed };
     } catch (err) {
       return {
         agentId,
