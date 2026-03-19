@@ -188,7 +188,7 @@ describe("AdOptimizerHandler", () => {
     const handler = new AdOptimizerHandler();
     const event = makeAnomalyEvent();
     // Add attribution to the event
-    (event as Record<string, unknown>).attribution = {
+    (event as unknown as Record<string, unknown>).attribution = {
       fbclid: "fb-abc",
       gclid: null,
       ttclid: null,

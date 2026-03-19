@@ -125,7 +125,7 @@ describe("ScheduledRunner", () => {
       const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
       expect(processFn).toHaveBeenCalledTimes(1);
 
-      const event = processFn.mock.calls[0][0] as RoutedEventEnvelope;
+      const event = processFn.mock.calls[0]![0] as RoutedEventEnvelope;
       expect(event.eventType).toBe("ad.performance_review");
       expect(event.payload).toHaveProperty("triggeredBy", "manual");
     });
