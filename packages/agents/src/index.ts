@@ -64,3 +64,55 @@ export {
   type DispatcherConfig,
   type DispatchResult,
 } from "./dispatcher.js";
+
+export { createWebhookHandler, type WebhookHandlerConfig } from "./dispatch/webhook-handler.js";
+
+export {
+  InMemoryWebhookConfigProvider,
+  type WebhookConfigEntry,
+} from "./providers/webhook-config-provider.js";
+
+export {
+  ConversionBusBridge,
+  type ConversionBusBridgeOptions,
+} from "./bridges/conversion-bus-bridge.js";
+
+export {
+  validateConnectorConfig,
+  type ConnectorAdapter,
+  type ConnectorConfigValidation,
+  type ConnectorPort,
+} from "./connectors/connector-port.js";
+
+export {
+  createConnectorHandler,
+  type ConnectorHandlerConfig,
+} from "./dispatch/connector-handler.js";
+
+export { InMemoryConnectorConfigProvider } from "./providers/connector-config-provider.js";
+
+export { HubSpotConnectorAdapter } from "./connectors/hubspot-adapter.js";
+
+export {
+  LEAD_RESPONDER_PORT,
+  LeadResponderHandler,
+  type LeadResponderDeps,
+  type FAQMatch,
+  type LeadScore,
+  type ObjectionMatch,
+} from "./agents/lead-responder/index.js";
+
+export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
+
+export {
+  AgentStateTracker,
+  type ActivityStatus,
+  type AgentActivityState,
+  type StateChangeListener,
+} from "./agent-state.js";
+
+export { NURTURE_AGENT_PORT, NurtureAgentHandler } from "./agents/nurture/index.js";
+
+export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
+
+export { REVENUE_TRACKER_PORT, RevenueTrackerHandler } from "./agents/revenue-tracker/index.js";

@@ -11,6 +11,7 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
+COPY packages/agents/package.json packages/agents/
 COPY packages/create-switchboard-cartridge/package.json packages/create-switchboard-cartridge/
 COPY cartridges/digital-ads/package.json cartridges/digital-ads/
 COPY cartridges/crm/package.json cartridges/crm/

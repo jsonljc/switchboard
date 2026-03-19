@@ -6,6 +6,7 @@ import type { RoutedEventEnvelope } from "./events.js";
 import type { RoutePlan, DestinationType } from "./route-plan.js";
 import type { PolicyBridge } from "./policy-bridge.js";
 import type { DeliveryStore, DeliveryStatus } from "./delivery-store.js";
+import type { AgentStateTracker } from "./agent-state.js";
 
 export type DestinationHandler = (
   event: RoutedEventEnvelope,
@@ -23,17 +24,20 @@ export interface DispatcherConfig {
   deliveryStore: DeliveryStore;
   policyBridge: PolicyBridge;
   handlers: Partial<Record<DestinationType, DestinationHandler>>;
+  stateTracker?: AgentStateTracker;
 }
 
 export class Dispatcher {
   private store: DeliveryStore;
   private bridge: PolicyBridge;
   private handlers: Partial<Record<DestinationType, DestinationHandler>>;
+  private stateTracker?: AgentStateTracker;
 
   constructor(config: DispatcherConfig) {
     this.store = config.deliveryStore;
     this.bridge = config.policyBridge;
     this.handlers = config.handlers;
+    this.stateTracker = config.stateTracker;
   }
 
   async execute(plan: RoutePlan): Promise<DispatchResult[]> {
@@ -99,6 +103,14 @@ export class Dispatcher {
     }
 
     // 3. Dispatch
+    if (type === "agent" && this.stateTracker) {
+      this.stateTracker.startProcessing(
+        event.organizationId,
+        destinationId,
+        `Processing ${event.eventType}`,
+      );
+    }
+
     try {
       await handler(event, destinationId);
       await this.store.record({
@@ -108,6 +120,15 @@ export class Dispatcher {
         attempts: 1,
         lastAttemptAt: new Date().toISOString(),
       });
+
+      if (type === "agent" && this.stateTracker) {
+        this.stateTracker.completeProcessing(
+          event.organizationId,
+          destinationId,
+          `Processed ${event.eventType}`,
+        );
+      }
+
       return { destinationId, destinationType: type, status: "succeeded" };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -119,6 +140,11 @@ export class Dispatcher {
         lastAttemptAt: new Date().toISOString(),
         error,
       });
+
+      if (type === "agent" && this.stateTracker) {
+        this.stateTracker.setError(event.organizationId, destinationId, error);
+      }
+
       return { destinationId, destinationType: type, status: "failed", error };
     }
   }
