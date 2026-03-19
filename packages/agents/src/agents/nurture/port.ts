@@ -7,7 +7,7 @@ import type { AgentPort } from "../../ports.js";
 export const NURTURE_AGENT_PORT: AgentPort = {
   agentId: "nurture",
   version: "0.1.0",
-  inboundEvents: ["stage.advanced"],
+  inboundEvents: ["stage.advanced", "lead.disqualified"],
   outboundEvents: ["conversation.escalated"],
   tools: [
     {
