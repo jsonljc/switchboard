@@ -13,6 +13,8 @@ export const AGENT_EVENT_TYPES = [
   "revenue.recorded",
   "revenue.attributed",
   "ad.optimized",
+  "ad.anomaly_detected",
+  "ad.performance_review",
   "conversation.escalated",
 ] as const;
 
