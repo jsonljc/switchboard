@@ -23,8 +23,8 @@ describe("CartridgeManifest", () => {
     expect(DIGITAL_ADS_MANIFEST.defaultPolicies).toEqual(["digital-ads-default"]);
   });
 
-  it("defines exactly 111 actions (69 read + 42 write)", () => {
-    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(111);
+  it("defines exactly 114 actions (69 read + 42 write + 3 offline conversion)", () => {
+    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(114);
   });
 
   it("has correct read action types", () => {
@@ -130,6 +130,9 @@ describe("CartridgeManifest", () => {
       "digital-ads.memory.record_outcome",
       "digital-ads.memory.import",
       "digital-ads.geo_experiment.conclude",
+      "digital-ads.capi.dispatch",
+      "digital-ads.google.offline_conversion",
+      "digital-ads.tiktok.offline_conversion",
     ]);
     const reversibleActions = DIGITAL_ADS_MANIFEST.actions.filter(
       (a) => !irreversibleTypes.has(a.actionType),
