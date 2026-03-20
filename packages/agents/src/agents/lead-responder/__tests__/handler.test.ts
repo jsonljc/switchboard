@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { LeadResponderHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 import type { LeadResponderDeps } from "../types.js";
 
 function makeDeps(overrides: Partial<LeadResponderDeps> = {}): LeadResponderDeps {
@@ -323,6 +324,46 @@ describe("LeadResponderHandler", () => {
       lastScore: 75,
       lastTier: "hot",
       qualified: true,
+    });
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when contactId is missing", async () => {
+      const deps = makeDeps();
+      const handler = new LeadResponderHandler(deps);
+
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "lead.received",
+        source: { type: "webhook", id: "telegram" },
+        payload: { email: "john@example.com" },
+      });
+
+      await expect(handler.handle(event, {}, { organizationId: "org-1" })).rejects.toThrow(
+        PayloadValidationError,
+      );
+    });
+
+    it("includes agent name in validation error", async () => {
+      const deps = makeDeps();
+      const handler = new LeadResponderHandler(deps);
+
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "lead.received",
+        source: { type: "webhook", id: "telegram" },
+        payload: {},
+      });
+
+      let caught: Error | undefined;
+      try {
+        await handler.handle(event, {}, { organizationId: "org-1" });
+      } catch (err) {
+        caught = err as Error;
+      }
+
+      expect(caught).toBeInstanceOf(PayloadValidationError);
+      expect(caught!.message).toContain("lead-responder");
     });
   });
 });
