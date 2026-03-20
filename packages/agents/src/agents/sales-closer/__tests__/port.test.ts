@@ -13,10 +13,10 @@ describe("Sales Closer Port", () => {
     expect(SALES_CLOSER_PORT.inboundEvents).toContain("lead.qualified");
   });
 
-  it("emits stage.advanced and escalation events", () => {
+  it("declares only events the handler actually emits", () => {
     expect(SALES_CLOSER_PORT.outboundEvents).toContain("stage.advanced");
-    expect(SALES_CLOSER_PORT.outboundEvents).toContain("revenue.recorded");
     expect(SALES_CLOSER_PORT.outboundEvents).toContain("conversation.escalated");
+    expect(SALES_CLOSER_PORT.outboundEvents).not.toContain("revenue.recorded");
   });
 
   it("declares book_appointment and send_booking_link tools", () => {

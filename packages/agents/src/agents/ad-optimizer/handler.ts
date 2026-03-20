@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { validatePayload } from "../../validate-payload.js";
 
 export class AdOptimizerHandler implements AgentHandler {
   async handle(
@@ -28,7 +29,11 @@ export class AdOptimizerHandler implements AgentHandler {
   }
 
   private handleAttribution(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(
+      event.payload,
+      { amount: "number", campaignId: "string?" },
+      "ad-optimizer",
+    );
     const campaignId = payload.campaignId as string | null;
     const amount = payload.amount as number;
     const profile = context.profile ?? {};
@@ -47,14 +52,18 @@ export class AdOptimizerHandler implements AgentHandler {
           campaignId,
           amount,
           attributionModel: payload.attributionModel,
-          timestamp: new Date().toISOString(),
+          timestamp: event.occurredAt,
         },
       },
     };
   }
 
   private handleAnomaly(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(
+      event.payload,
+      { campaignId: "string", platform: "string", metric: "string", dropPercent: "number?" },
+      "ad-optimizer",
+    );
     const campaignId = payload.campaignId as string;
     const platform = payload.platform as string;
     const metric = payload.metric as string;
@@ -68,7 +77,10 @@ export class AdOptimizerHandler implements AgentHandler {
     const anomalyThreshold = (ads.anomalyThreshold as number) ?? 30;
     const dropPercent = payload.dropPercent as number | undefined;
 
-    if (dropPercent !== undefined && dropPercent < anomalyThreshold) {
+    if (dropPercent === undefined) {
+      return this.escalate(event, context, "missing_drop_percent");
+    }
+    if (dropPercent < anomalyThreshold) {
       return { events: [], actions: [] };
     }
 
@@ -159,7 +171,10 @@ export class AdOptimizerHandler implements AgentHandler {
       organizationId: context.organizationId,
       eventType: "conversation.escalated",
       source: { type: "agent", id: "ad-optimizer" },
-      payload: { reason },
+      payload: {
+        contactId: ((event.payload as Record<string, unknown>).contactId as string) ?? null,
+        reason,
+      },
       correlationId: event.correlationId,
       causationId: event.eventId,
       attribution: event.attribution,

@@ -29,8 +29,10 @@ describe("Nurture Agent Port", () => {
     expect(NURTURE_AGENT_PORT.outboundEvents).toContain("lead.qualified");
   });
 
-  it("emits stage.advanced events", () => {
-    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("stage.advanced");
+  it("declares only events the handler actually emits", () => {
+    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("lead.qualified");
+    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("conversation.escalated");
+    expect(NURTURE_AGENT_PORT.outboundEvents).not.toContain("stage.advanced");
   });
 
   it("declares start_cadence, send_reminder, and request_review tools", () => {

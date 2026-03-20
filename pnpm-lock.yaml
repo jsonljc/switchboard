@@ -74,6 +74,9 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.5
         version: 5.2.5
+      '@switchboard/agents':
+        specifier: workspace:^
+        version: link:../../packages/agents
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk

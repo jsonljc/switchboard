@@ -16,6 +16,10 @@ export interface AgentRouterConfig {
   connectors?: ConnectorDestinationConfig[];
 }
 
+function matchesOrg(config: { organizationId?: string }, eventOrgId: string): boolean {
+  return !config.organizationId || config.organizationId === eventOrgId;
+}
+
 export class AgentRouter {
   constructor(
     private registry: AgentRegistry,
@@ -28,17 +32,23 @@ export class AgentRouter {
     // 1. Find active agents that accept this event
     const agents = this.registry.findByInboundEvent(event.organizationId, event.eventType);
     for (const agent of agents) {
+      const isBlockingDestination =
+        agent.agentId === "revenue-tracker" && event.eventType === "stage.advanced";
+
       destinations.push({
         type: "agent",
         id: agent.agentId,
         criticality: "required",
-        sequencing: "parallel",
+        sequencing: isBlockingDestination ? "blocking" : "parallel",
       });
     }
 
-    // 2. Find native connectors subscribed to this event
+    // 2. Find native connectors subscribed to this event (org-scoped)
     const connectors = (this.config.connectors ?? []).filter(
-      (c) => c.enabled && c.subscribedEvents.includes(event.eventType),
+      (c) =>
+        c.enabled &&
+        c.subscribedEvents.includes(event.eventType) &&
+        matchesOrg(c, event.organizationId),
     );
     for (const connector of connectors) {
       destinations.push({
@@ -49,9 +59,12 @@ export class AgentRouter {
       });
     }
 
-    // 3. Find webhooks subscribed to this event
+    // 3. Find webhooks subscribed to this event (org-scoped)
     const webhooks = (this.config.webhooks ?? []).filter(
-      (w) => w.enabled && w.subscribedEvents.includes(event.eventType),
+      (w) =>
+        w.enabled &&
+        w.subscribedEvents.includes(event.eventType) &&
+        matchesOrg(w, event.organizationId),
     );
     for (const webhook of webhooks) {
       destinations.push({

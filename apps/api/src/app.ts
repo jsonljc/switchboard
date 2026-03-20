@@ -230,6 +230,12 @@ export async function buildServer() {
     app.log.info(`ConversionBus wired: ${registeredDispatchers.join(" + ")} registered`);
   }
 
+  // --- Agent orchestration system ---
+  const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
+  const agentSystem = bootstrapAgentSystem({ conversionBus });
+  app.decorate("agentSystem", agentSystem);
+  app.log.info("Agent orchestration system bootstrapped");
+
   // --- Execution queue setup ---
   let queue: Queue | null = null;
   let worker: Worker | null = null;

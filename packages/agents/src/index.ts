@@ -40,6 +40,7 @@ export {
 } from "./policy-bridge.js";
 
 export {
+  DEFAULT_MAX_RETRIES,
   InMemoryDeliveryStore,
   type DeliveryAttempt,
   type DeliveryStatus,
@@ -134,3 +135,27 @@ export {
   type ScheduledRunnerConfig,
   type ScheduledRunResult,
 } from "./scheduled-runner.js";
+
+export { validatePayload, PayloadValidationError } from "./validate-payload.js";
+
+export {
+  CorePolicyEngineAdapter,
+  type CoreDecisionResult,
+  type CoreEvaluateFn,
+  type CorePolicyEngineAdapterConfig,
+} from "./core-policy-adapter.js";
+
+export {
+  RetryExecutor,
+  type RetryExecutorConfig,
+  type RetryFn,
+  type RetryResult,
+} from "./retry-executor.js";
+
+export {
+  DeadLetterAlerter,
+  type DeadLetterAlerterConfig,
+  type SweepResult,
+} from "./dead-letter-alerter.js";
+
+export { canRequalify, type LifecycleStage } from "./lifecycle.js";

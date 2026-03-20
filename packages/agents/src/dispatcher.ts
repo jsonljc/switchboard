@@ -41,15 +41,24 @@ export class Dispatcher {
   }
 
   async execute(plan: RoutePlan): Promise<DispatchResult[]> {
-    const results: Promise<DispatchResult>[] = [];
+    const promises: Promise<DispatchResult>[] = [];
 
     for (const dest of plan.destinations) {
       if (dest.sequencing === "parallel") {
-        results.push(this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality));
+        promises.push(
+          this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality).catch(
+            (err): DispatchResult => ({
+              destinationId: dest.id,
+              destinationType: dest.type,
+              status: "failed",
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          ),
+        );
       }
     }
 
-    return Promise.all(results);
+    return Promise.all(promises);
   }
 
   private async dispatchOne(
@@ -69,13 +78,17 @@ export class Dispatcher {
     });
 
     if (!evaluation.approved) {
-      await this.store.record({
-        eventId: event.eventId,
-        destinationId,
-        status: "failed",
-        attempts: 0,
-        error: evaluation.reason ?? "blocked by policy",
-      });
+      try {
+        await this.store.record({
+          eventId: event.eventId,
+          destinationId,
+          status: "failed",
+          attempts: 0,
+          error: evaluation.reason ?? "blocked by policy",
+        });
+      } catch {
+        // Store failure should not crash the dispatch
+      }
       return {
         destinationId,
         destinationType: type,
@@ -87,13 +100,17 @@ export class Dispatcher {
     // 2. Find handler
     const handler = this.handlers[type];
     if (!handler) {
-      await this.store.record({
-        eventId: event.eventId,
-        destinationId,
-        status: "failed",
-        attempts: 1,
-        error: `No handler for destination type: ${type}`,
-      });
+      try {
+        await this.store.record({
+          eventId: event.eventId,
+          destinationId,
+          status: "failed",
+          attempts: 1,
+          error: `No handler for destination type: ${type}`,
+        });
+      } catch {
+        // Store failure should not crash the dispatch
+      }
       return {
         destinationId,
         destinationType: type,
@@ -113,13 +130,17 @@ export class Dispatcher {
 
     try {
       await handler(event, destinationId);
-      await this.store.record({
-        eventId: event.eventId,
-        destinationId,
-        status: "succeeded",
-        attempts: 1,
-        lastAttemptAt: new Date().toISOString(),
-      });
+      try {
+        await this.store.record({
+          eventId: event.eventId,
+          destinationId,
+          status: "succeeded",
+          attempts: 1,
+          lastAttemptAt: new Date().toISOString(),
+        });
+      } catch {
+        // Store failure should not crash the dispatch
+      }
 
       if (type === "agent" && this.stateTracker) {
         this.stateTracker.completeProcessing(
@@ -132,14 +153,18 @@ export class Dispatcher {
       return { destinationId, destinationType: type, status: "succeeded" };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      await this.store.record({
-        eventId: event.eventId,
-        destinationId,
-        status: "failed",
-        attempts: 1,
-        lastAttemptAt: new Date().toISOString(),
-        error,
-      });
+      try {
+        await this.store.record({
+          eventId: event.eventId,
+          destinationId,
+          status: "failed",
+          attempts: 1,
+          lastAttemptAt: new Date().toISOString(),
+          error,
+        });
+      } catch {
+        // Store failure should not crash the dispatch
+      }
 
       if (type === "agent" && this.stateTracker) {
         this.stateTracker.setError(event.organizationId, destinationId, error);

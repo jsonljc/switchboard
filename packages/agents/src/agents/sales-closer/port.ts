@@ -8,7 +8,7 @@ export const SALES_CLOSER_PORT: AgentPort = {
   agentId: "sales-closer",
   version: "0.1.0",
   inboundEvents: ["lead.qualified"],
-  outboundEvents: ["stage.advanced", "revenue.recorded", "conversation.escalated"],
+  outboundEvents: ["stage.advanced", "conversation.escalated"],
   tools: [
     {
       name: "book_appointment",

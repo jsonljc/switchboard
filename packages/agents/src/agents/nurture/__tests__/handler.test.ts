@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { NurtureAgentHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 
 function makeStageEvent(stage: string, payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -405,5 +406,141 @@ describe("NurtureAgentHandler", () => {
       }),
     );
     expect(response.actions).toHaveLength(0);
+  });
+
+  describe("lifecycle stage guard", () => {
+    it("skips requalification for treated contacts", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = makeDisqualifiedEvent({ requalify: true });
+
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          contactData: { lifecycleStage: "treated" },
+        },
+      );
+
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("conversation.escalated");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({
+          contactId: "c1",
+          reason: "requalify_blocked_by_lifecycle",
+        }),
+      );
+      expect(response.actions).toHaveLength(0);
+    });
+
+    it("skips requalification for booked contacts", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = makeDisqualifiedEvent({ requalify: true });
+
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          contactData: { lifecycleStage: "booked" },
+        },
+      );
+
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("conversation.escalated");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({
+          contactId: "c1",
+          reason: "requalify_blocked_by_lifecycle",
+        }),
+      );
+    });
+
+    it("allows requalification for churned contacts", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = makeDisqualifiedEvent({ requalify: true });
+
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          contactData: { lifecycleStage: "churned" },
+        },
+      );
+
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("lead.qualified");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({
+          contactId: "c1",
+          requalifiedFrom: "dormant",
+        }),
+      );
+    });
+
+    it("allows requalification when no contactData provided", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = makeDisqualifiedEvent({ requalify: true });
+
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+        },
+      );
+
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("lead.qualified");
+    });
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when contactId is missing from stage.advanced", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "stage.advanced",
+        source: { type: "agent", id: "sales-closer" },
+        payload: { stage: "booking_initiated" },
+      });
+
+      await expect(
+        handler.handle(event, {}, { organizationId: "org-1", profile: { nurture: {} } }),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
+    it("throws PayloadValidationError when contactId is missing from lead.disqualified", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "lead.disqualified",
+        source: { type: "agent", id: "lead-responder" },
+        payload: {},
+      });
+
+      await expect(
+        handler.handle(event, {}, { organizationId: "org-1", profile: { nurture: {} } }),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
+    it("throws PayloadValidationError when contactId is missing from revenue.recorded", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "revenue.recorded",
+        source: { type: "system", id: "payments" },
+        payload: {},
+      });
+
+      await expect(
+        handler.handle(event, {}, { organizationId: "org-1", profile: { nurture: {} } }),
+      ).rejects.toThrow(PayloadValidationError);
+    });
   });
 });

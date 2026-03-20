@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AdOptimizerHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 
 function makeAttributionEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -222,5 +223,105 @@ describe("AdOptimizerHandler", () => {
     );
     expect(response.events[0]!.causationId).toBe(event.eventId);
     expect(response.events[0]!.correlationId).toBe(event.correlationId);
+  });
+
+  describe("bug fixes", () => {
+    it("escalates when dropPercent is undefined instead of auto-pausing", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = makeAnomalyEvent({ dropPercent: undefined });
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { ads: { connectedPlatforms: ["meta"], anomalyThreshold: 30 } },
+        },
+      );
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("conversation.escalated");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({ reason: "missing_drop_percent" }),
+      );
+      expect(response.actions).toHaveLength(0);
+    });
+
+    it("includes contactId in escalation payload when available", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = makeAnomalyEvent({ contactId: "contact-42" });
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: {},
+        },
+      );
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("conversation.escalated");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({ contactId: "contact-42", reason: "no_ads_config" }),
+      );
+    });
+
+    it("uses event occurredAt instead of wall clock for attribution timestamp", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = makeAttributionEvent();
+      const fixedTimestamp = "2025-06-15T10:30:00.000Z";
+      (event as unknown as Record<string, unknown>).occurredAt = fixedTimestamp;
+      const response = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { ads: { connectedPlatforms: ["meta"] } },
+        },
+      );
+      expect(response.state).toBeDefined();
+      expect(
+        (response.state as Record<string, Record<string, unknown>>).lastAttribution!.timestamp,
+      ).toBe(fixedTimestamp);
+    });
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when campaignId is missing from anomaly event", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "ad.anomaly_detected",
+        source: { type: "system", id: "monitoring" },
+        payload: { platform: "meta", metric: "ROAS" },
+      });
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { ads: { connectedPlatforms: ["meta"] } },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
+    it("throws PayloadValidationError when amount is missing from attribution event", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "revenue.attributed",
+        source: { type: "agent", id: "revenue-tracker" },
+        payload: { campaignId: "camp-1" },
+      });
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { ads: { connectedPlatforms: ["meta"] } },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
   });
 });

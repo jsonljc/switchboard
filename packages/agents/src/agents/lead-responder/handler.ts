@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { validatePayload } from "../../validate-payload.js";
 import type { LeadResponderDeps, ObjectionMatch } from "./types.js";
 
 const DEFAULT_THRESHOLD = 40;
@@ -21,7 +22,7 @@ export class LeadResponderHandler implements AgentHandler {
       return { events: [], actions: [] };
     }
 
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(event.payload, { contactId: "string" }, "lead-responder");
     const contactId = payload.contactId as string;
     const threshold = (config.qualificationThreshold as number) ?? DEFAULT_THRESHOLD;
 
