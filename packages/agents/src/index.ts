@@ -158,4 +158,10 @@ export {
   type SweepResult,
 } from "./dead-letter-alerter.js";
 
-export { canRequalify, type LifecycleStage } from "./lifecycle.js";
+export { canRequalify, agentForStage, type LifecycleStage } from "./lifecycle.js";
+
+export {
+  ConversationRouter,
+  type ConversationRouterConfig,
+  type StageResolver,
+} from "./conversation-router.js";

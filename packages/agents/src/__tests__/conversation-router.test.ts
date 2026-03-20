@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { ConversationRouter } from "../conversation-router.js";
 import { createEventEnvelope } from "../events.js";
+import type { LifecycleStage } from "../lifecycle.js";
 
-function makeStore(stages: Record<string, string>) {
+function makeStore(stages: Record<string, LifecycleStage>) {
   return {
-    getStage: vi.fn(async (contactId: string) => stages[contactId] ?? "lead"),
+    getStage: vi.fn(
+      async (contactId: string): Promise<LifecycleStage | undefined> => stages[contactId] ?? "lead",
+    ),
   };
 }
 
