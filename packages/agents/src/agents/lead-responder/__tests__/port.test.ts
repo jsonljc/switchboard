@@ -13,6 +13,10 @@ describe("Lead Responder Port", () => {
     expect(LEAD_RESPONDER_PORT.inboundEvents).toContain("lead.received");
   });
 
+  it("accepts message.received event", () => {
+    expect(LEAD_RESPONDER_PORT.inboundEvents).toContain("message.received");
+  });
+
   it("emits qualification and escalation events", () => {
     expect(LEAD_RESPONDER_PORT.outboundEvents).toContain("lead.qualified");
     expect(LEAD_RESPONDER_PORT.outboundEvents).toContain("lead.disqualified");

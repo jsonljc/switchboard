@@ -7,7 +7,7 @@ import type { AgentPort } from "../../ports.js";
 export const LEAD_RESPONDER_PORT: AgentPort = {
   agentId: "lead-responder",
   version: "0.1.0",
-  inboundEvents: ["lead.received"],
+  inboundEvents: ["lead.received", "message.received"],
   outboundEvents: ["lead.qualified", "lead.disqualified", "conversation.escalated"],
   tools: [
     {

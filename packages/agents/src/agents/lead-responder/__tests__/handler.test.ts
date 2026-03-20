@@ -177,6 +177,24 @@ describe("LeadResponderHandler", () => {
     expect(response.actions).toHaveLength(0);
   });
 
+  it("handles message.received by scoring and qualifying", async () => {
+    const handler = new LeadResponderHandler({
+      scoreLead: () => ({ score: 80, tier: "hot" as const, factors: [] }),
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "message.received",
+      source: { type: "webhook", id: "whatsapp" },
+      payload: { contactId: "c1", messageText: "I want a consultation" },
+    });
+
+    const result = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(result.events.length).toBeGreaterThanOrEqual(1);
+    expect(result.events[0]!.eventType).toBe("lead.qualified");
+  });
+
   it("adds objection handling action when objectionText present", async () => {
     const deps = makeDeps({
       matchObjection: vi.fn().mockReturnValue({
@@ -324,6 +342,64 @@ describe("LeadResponderHandler", () => {
       lastScore: 75,
       lastTier: "hot",
       qualified: true,
+    });
+  });
+
+  describe("dependency error handling", () => {
+    it("escalates when scoreLead throws", async () => {
+      const deps = makeDeps({
+        scoreLead: vi.fn().mockImplementation(() => {
+          throw new Error("scoring service down");
+        }),
+      });
+      const handler = new LeadResponderHandler(deps);
+
+      const event = makeLeadEvent();
+      const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+      expect(response.events).toHaveLength(1);
+      expect(response.events[0]!.eventType).toBe("conversation.escalated");
+      expect(response.events[0]!.payload).toEqual(
+        expect.objectContaining({
+          contactId: "c1",
+          reason: "scoring_error",
+          error: "scoring service down",
+        }),
+      );
+      expect(response.actions).toHaveLength(0);
+    });
+
+    it("skips objection handling when matchObjection throws", async () => {
+      const deps = makeDeps({
+        matchObjection: vi.fn().mockImplementation(() => {
+          throw new Error("objection service down");
+        }),
+      });
+      const handler = new LeadResponderHandler(deps);
+
+      const event = makeLeadEvent({ objectionText: "too expensive" });
+      const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+      // Should still return the scoring result
+      expect(response.events[0]!.eventType).toBe("lead.qualified");
+      // No escalation from objection error — it's non-critical
+      expect(response.events.find((e) => e.eventType === "conversation.escalated")).toBeUndefined();
+    });
+
+    it("skips FAQ matching when matchFAQ throws", async () => {
+      const deps = makeDeps({
+        matchFAQ: vi.fn().mockImplementation(() => {
+          throw new Error("FAQ service down");
+        }),
+      });
+      const handler = new LeadResponderHandler(deps);
+
+      const event = makeLeadEvent({ messageText: "what are your hours?" });
+      const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+      // Should still return the scoring result
+      expect(response.events[0]!.eventType).toBe("lead.qualified");
+      expect(response.state).not.toHaveProperty("faqResponse");
     });
   });
 

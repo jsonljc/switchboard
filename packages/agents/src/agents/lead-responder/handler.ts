@@ -18,16 +18,42 @@ export class LeadResponderHandler implements AgentHandler {
     config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
-    if (event.eventType !== "lead.received") {
+    if (event.eventType !== "lead.received" && event.eventType !== "message.received") {
       return { events: [], actions: [] };
     }
 
-    const payload = validatePayload(event.payload, { contactId: "string" }, "lead-responder");
+    const payload = validatePayload(
+      event.payload,
+      { contactId: "string", objectionText: "string?", messageText: "string?" },
+      "lead-responder",
+    );
     const contactId = payload.contactId as string;
     const threshold = (config.qualificationThreshold as number) ?? DEFAULT_THRESHOLD;
 
     // Score the lead
-    const scoreResult = this.deps.scoreLead(payload);
+    let scoreResult;
+    try {
+      scoreResult = this.deps.scoreLead(payload);
+    } catch (err) {
+      return {
+        events: [
+          createEventEnvelope({
+            organizationId: context.organizationId,
+            eventType: "conversation.escalated",
+            source: { type: "agent", id: "lead-responder" },
+            payload: {
+              contactId,
+              reason: "scoring_error",
+              error: err instanceof Error ? err.message : String(err),
+            },
+            correlationId: event.correlationId,
+            causationId: event.eventId,
+            attribution: event.attribution,
+          }),
+        ],
+        actions: [],
+      };
+    }
     const qualified = scoreResult.score >= threshold;
 
     // Build outbound event
@@ -68,9 +94,13 @@ export class LeadResponderHandler implements AgentHandler {
     const messageText = payload.messageText as string | undefined;
     let faqResponse: string | undefined;
     if (messageText && this.deps.matchFAQ) {
-      const faqResult = this.deps.matchFAQ(messageText);
-      if (faqResult.matched) {
-        faqResponse = faqResult.answer;
+      try {
+        const faqResult = this.deps.matchFAQ(messageText);
+        if (faqResult.matched) {
+          faqResponse = faqResult.answer;
+        }
+      } catch {
+        // skip FAQ matching on error — non-critical
       }
     }
 
@@ -100,7 +130,12 @@ export class LeadResponderHandler implements AgentHandler {
       return undefined;
     }
 
-    const match = this.deps.matchObjection(objectionText);
+    let match: ObjectionMatch;
+    try {
+      match = this.deps.matchObjection(objectionText);
+    } catch {
+      return undefined;
+    }
     actions.push({
       actionType: "customer-engagement.conversation.handle_objection",
       parameters: { contactId, objectionText },
