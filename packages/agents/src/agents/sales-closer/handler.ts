@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { validatePayload } from "../../validate-payload.js";
 
 export class SalesCloserHandler implements AgentHandler {
   async handle(
@@ -16,7 +17,7 @@ export class SalesCloserHandler implements AgentHandler {
       return { events: [], actions: [] };
     }
 
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(event.payload, { contactId: "string" }, "sales-closer");
     const contactId = payload.contactId as string;
     const profile = context.profile ?? {};
     const booking = profile.booking as Record<string, unknown> | undefined;

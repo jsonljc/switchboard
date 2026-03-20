@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { SalesCloserHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 
 function makeQualifiedEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -233,5 +234,28 @@ describe("SalesCloserHandler", () => {
 
     expect(response.actions[0]!.parameters.serviceType).toBe("consultation");
     expect(response.actions[0]!.parameters.durationMinutes).toBe(60);
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when contactId is missing", async () => {
+      const handler = new SalesCloserHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "lead.qualified",
+        source: { type: "agent", id: "lead-responder" },
+        payload: {},
+      });
+
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { booking: {} },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
   });
 });
