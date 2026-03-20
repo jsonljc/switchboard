@@ -3,11 +3,14 @@ import {
   AgentRouter,
   AgentStateTracker,
   ConversionBusBridge,
+  CorePolicyEngineAdapter,
+  DeadLetterAlerter,
   EventLoop,
   HandlerRegistry,
   ActionExecutor,
   InMemoryDeliveryStore,
   PolicyBridge,
+  RetryExecutor,
   ScheduledRunner,
   LeadResponderHandler,
   SalesCloserHandler,
@@ -20,11 +23,34 @@ import {
   AD_OPTIMIZER_PORT,
   REVENUE_TRACKER_PORT,
   type AgentPort,
+  type CoreEvaluateFn,
+  type DeliveryStore,
+  type PolicyEngine,
 } from "@switchboard/agents";
 import type { ConversionBus } from "@switchboard/core";
 
+export interface AgentLogger {
+  warn(msg: string): void;
+  error(msg: string, err?: unknown): void;
+  info(msg: string): void;
+}
+
+const CONSOLE_LOGGER: AgentLogger = {
+  warn: (msg) => console.warn(msg),
+  error: (msg, err) => console.error(msg, err),
+  info: (msg) => console.warn(msg),
+};
+
 export interface AgentSystemOptions {
   conversionBus?: ConversionBus;
+  policyEngine?: PolicyEngine;
+  coreEvaluateFn?: CoreEvaluateFn;
+  organizationId?: string;
+  organizationIds?: string[];
+  deliveryStore?: DeliveryStore;
+  retryEnabled?: boolean;
+  maxRetries?: number;
+  logger?: AgentLogger;
 }
 
 export interface AgentSystem {
@@ -43,11 +69,26 @@ const DEFAULT_LEAD_SCORER = (_params: Record<string, unknown>) => ({
 });
 
 export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSystem {
+  const log = options.logger ?? CONSOLE_LOGGER;
   const registry = new AgentRegistry();
   const handlerRegistry = new HandlerRegistry();
   const stateTracker = new AgentStateTracker();
-  const deliveryStore = new InMemoryDeliveryStore();
-  const policyBridge = new PolicyBridge(null);
+  const deliveryStore = options.deliveryStore ?? new InMemoryDeliveryStore();
+
+  let policyEngine = options.policyEngine ?? null;
+  if (!policyEngine && options.coreEvaluateFn && options.organizationId) {
+    policyEngine = new CorePolicyEngineAdapter({
+      evaluate: options.coreEvaluateFn,
+      organizationId: options.organizationId,
+    });
+  }
+  if (!policyEngine) {
+    log.warn(
+      "[agent-system] No PolicyEngine provided — all agent actions will be auto-approved. " +
+        "Wire a PolicyEngine adapter for governance enforcement.",
+    );
+  }
+  const policyBridge = new PolicyBridge(policyEngine);
   const actionExecutor = new ActionExecutor();
 
   // Register all agent handlers
@@ -71,15 +112,54 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     stateTracker,
   });
 
-  const scheduledRunner = new ScheduledRunner({ registry, eventLoop });
+  const maxRetries = options.maxRetries ?? 3;
+  let retryExecutor: RetryExecutor | undefined;
+  let deadLetterAlerter: DeadLetterAlerter | undefined;
+
+  if (options.retryEnabled !== false) {
+    retryExecutor = new RetryExecutor({
+      store: deliveryStore,
+      retryFn: async (eventId, destinationId) => {
+        log.info(`[agent-system] Retrying delivery: ${eventId} -> ${destinationId}`);
+        return { success: true }; // TODO: wire to actual re-dispatch in Phase 2
+      },
+      maxRetries,
+    });
+
+    deadLetterAlerter = new DeadLetterAlerter({
+      store: deliveryStore,
+      onEscalation: (event) => {
+        log.warn(`[agent-system] Dead letter escalation: ${JSON.stringify(event.payload)}`);
+      },
+      maxRetries,
+    });
+  }
+
+  const scheduledRunner = new ScheduledRunner({
+    registry,
+    eventLoop,
+    retryExecutor,
+    deadLetterAlerter,
+  });
+
+  // Pre-register agents for known organizations
+  if (options.organizationIds) {
+    for (const orgId of options.organizationIds) {
+      registerAgentsForOrg(registry, orgId);
+    }
+  }
 
   // Wire ConversionBusBridge if bus provided
   if (options.conversionBus) {
     const bridge = new ConversionBusBridge({
       onEvent: (envelope) => {
+        // Lazy-register agents for orgs not yet registered
+        if (registry.listActive(envelope.organizationId).length === 0) {
+          registerAgentsForOrg(registry, envelope.organizationId);
+        }
         const context = { organizationId: envelope.organizationId };
         eventLoop.process(envelope, context).catch((err) => {
-          console.error("[agent-system] EventLoop error:", err);
+          log.error("[agent-system] EventLoop error:", err);
         });
       },
     });
@@ -99,17 +179,21 @@ export function registerAgentsForOrg(registry: AgentRegistry, organizationId: st
   ];
 
   for (const port of ports) {
-    registry.register(organizationId, {
-      agentId: port.agentId,
-      version: port.version,
-      installed: true,
-      status: "active",
-      config: {},
-      capabilities: {
-        accepts: port.inboundEvents,
-        emits: port.outboundEvents,
-        tools: port.tools.map((t) => t.name),
+    registry.register(
+      organizationId,
+      {
+        agentId: port.agentId,
+        version: port.version,
+        installed: true,
+        status: "active",
+        config: {},
+        capabilities: {
+          accepts: port.inboundEvents,
+          emits: port.outboundEvents,
+          tools: port.tools.map((t) => t.name),
+        },
       },
-    });
+      { forceOverwrite: true },
+    );
   }
 }
