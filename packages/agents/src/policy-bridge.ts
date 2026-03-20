@@ -29,7 +29,13 @@ export class PolicyBridge {
       return { approved: true };
     }
 
-    const result = await this.engine.evaluate(intent);
+    let result: { effect: string; reason?: string };
+    try {
+      result = await this.engine.evaluate(intent);
+    } catch {
+      // policy engine failure defaults to deny for safety
+      return { approved: false, reason: "policy_engine_error" };
+    }
 
     if (result.effect === "allow") {
       return { approved: true };

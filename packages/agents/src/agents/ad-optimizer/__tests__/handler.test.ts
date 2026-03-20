@@ -304,6 +304,26 @@ describe("AdOptimizerHandler", () => {
       ).rejects.toThrow(PayloadValidationError);
     });
 
+    it("throws PayloadValidationError when performance review payload is null", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "ad.performance_review",
+        source: { type: "system", id: "scheduled-runner" },
+        payload: null as unknown as Record<string, unknown>,
+      });
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { ads: { connectedPlatforms: ["meta"] } },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
     it("throws PayloadValidationError when amount is missing from attribution event", async () => {
       const handler = new AdOptimizerHandler();
       const event = createEventEnvelope({

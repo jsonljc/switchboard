@@ -182,3 +182,13 @@ export type { OutcomeStore, OptimisationProposal } from "./outcome/types.js";
 
 // Deployment Readiness
 export { DeploymentReadinessChecker } from "./deployment/readiness-checker.js";
+
+// Embedding Adapter
+export type { EmbeddingAdapter } from "./embedding-adapter.js";
+
+// Conversation Store
+export type {
+  ConversationStore,
+  Message,
+  LifecycleStage as ConversationLifecycleStage,
+} from "./conversation-store.js";

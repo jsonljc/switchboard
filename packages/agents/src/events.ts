@@ -16,6 +16,9 @@ export const AGENT_EVENT_TYPES = [
   "ad.anomaly_detected",
   "ad.performance_review",
   "conversation.escalated",
+  "message.received",
+  "message.sent",
+  "escalation.owner_replied",
 ] as const;
 
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];

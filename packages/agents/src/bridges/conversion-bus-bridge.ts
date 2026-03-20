@@ -43,12 +43,23 @@ export class ConversionBusBridge {
    */
   register(bus: ConversionBus): void {
     bus.subscribe("*", (event: ConversionEvent) => {
-      this.handleConversionEvent(event);
+      try {
+        this.handleConversionEvent(event);
+      } catch {
+        // agent pipeline errors must not propagate into the ConversionBus
+      }
     });
   }
 
   private handleConversionEvent(event: ConversionEvent): void {
     const agentEventType = CONVERSION_TO_AGENT_EVENT[event.type];
+
+    if (agentEventType === undefined) {
+      console.warn(
+        `[ConversionBusBridge] Unmapped conversion type "${event.type}" – skipping event`,
+      );
+      return;
+    }
 
     const attribution: AttributionChain = {
       fbclid: extractString(event.metadata, "fbclid"),

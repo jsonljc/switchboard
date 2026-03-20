@@ -8,7 +8,8 @@ export type DeliveryStatus =
   | "succeeded"
   | "failed"
   | "retrying"
-  | "dead_letter";
+  | "dead_letter"
+  | "skipped";
 
 export interface DeliveryAttempt {
   eventId: string;
@@ -19,6 +20,8 @@ export interface DeliveryAttempt {
   error?: string;
 }
 
+export const DEFAULT_MAX_RETRIES = 3;
+
 export interface DeliveryStore {
   record(attempt: DeliveryAttempt): Promise<void>;
   update(
@@ -28,6 +31,7 @@ export interface DeliveryStore {
   ): Promise<void>;
   getByEvent(eventId: string): Promise<DeliveryAttempt[]>;
   listRetryable(): Promise<DeliveryAttempt[]>;
+  sweepDeadLetters(maxRetries?: number): Promise<number>;
 }
 
 export class InMemoryDeliveryStore implements DeliveryStore {
@@ -70,5 +74,19 @@ export class InMemoryDeliveryStore implements DeliveryStore {
       }
     }
     return results;
+  }
+
+  async sweepDeadLetters(maxRetries: number = DEFAULT_MAX_RETRIES): Promise<number> {
+    let transitioned = 0;
+    for (const attempt of this.attempts.values()) {
+      if (
+        (attempt.status === "failed" || attempt.status === "retrying") &&
+        attempt.attempts >= maxRetries
+      ) {
+        attempt.status = "dead_letter";
+        transitioned++;
+      }
+    }
+    return transitioned;
   }
 }

@@ -36,12 +36,26 @@ type RegistrationInput = Omit<AgentRegistryEntry, "lastActiveAt" | "executionMod
 export class AgentRegistry {
   private entries = new Map<string, Map<string, AgentRegistryEntry>>();
 
-  register(organizationId: string, entry: RegistrationInput): void {
+  register(
+    organizationId: string,
+    entry: RegistrationInput,
+    options?: { forceOverwrite?: boolean },
+  ): void {
     let orgMap = this.entries.get(organizationId);
     if (!orgMap) {
       orgMap = new Map();
       this.entries.set(organizationId, orgMap);
     }
+
+    const forceOverwrite = options?.forceOverwrite ?? false;
+    const existingEntry = orgMap.get(entry.agentId);
+
+    if (existingEntry && !forceOverwrite) {
+      throw new Error(
+        `Agent "${entry.agentId}" already registered for organization "${organizationId}"`,
+      );
+    }
+
     orgMap.set(entry.agentId, {
       ...entry,
       executionMode: entry.executionMode ?? "realtime",
@@ -90,6 +104,10 @@ export class AgentRegistry {
     if (entry) {
       entry.config = config;
     }
+  }
+
+  listOrganizations(): string[] {
+    return [...this.entries.keys()];
   }
 
   remove(organizationId: string, agentId: string): boolean {

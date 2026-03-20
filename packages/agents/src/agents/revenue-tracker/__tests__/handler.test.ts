@@ -399,6 +399,34 @@ describe("RevenueTrackerHandler", () => {
   });
 
   describe("payload validation", () => {
+    it("throws PayloadValidationError when ad.optimized payload is null", async () => {
+      const handler = new RevenueTrackerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "ad.optimized",
+        source: { type: "agent", id: "ad-optimizer" },
+        payload: null as unknown as Record<string, unknown>,
+      });
+
+      await expect(handler.handle(event, {}, { organizationId: "org-1" })).rejects.toThrow(
+        PayloadValidationError,
+      );
+    });
+
+    it("throws PayloadValidationError when action missing from ad.optimized", async () => {
+      const handler = new RevenueTrackerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "ad.optimized",
+        source: { type: "agent", id: "ad-optimizer" },
+        payload: { campaignId: "camp-1" },
+      });
+
+      await expect(handler.handle(event, {}, { organizationId: "org-1" })).rejects.toThrow(
+        PayloadValidationError,
+      );
+    });
+
     it("throws PayloadValidationError when contactId missing from revenue.recorded", async () => {
       const handler = new RevenueTrackerHandler();
       const event = createEventEnvelope({

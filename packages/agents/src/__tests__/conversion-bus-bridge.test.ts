@@ -100,6 +100,21 @@ describe("ConversionBusBridge", () => {
     expect(attr!.ttclid).toBeNull();
   });
 
+  it("does not propagate errors from onEvent into the ConversionBus", () => {
+    const bus = new InMemoryConversionBus();
+    const bridge = new ConversionBusBridge({
+      onEvent: () => {
+        throw new Error("handler exploded");
+      },
+    });
+    bridge.register(bus);
+
+    // Should not throw — error is caught inside the bridge
+    expect(() => {
+      bus.emit(makeConversionEvent({ type: "inquiry" }));
+    }).not.toThrow();
+  });
+
   it("sets null for attribution fields when not provided", () => {
     const bus = new InMemoryConversionBus();
     const received: RoutedEventEnvelope[] = [];
@@ -116,5 +131,24 @@ describe("ConversionBusBridge", () => {
     expect(attr!.sourceAdId).toBeNull();
     expect(attr!.sourceCampaignId).toBeNull();
     expect(attr!.fbclid).toBeNull();
+  });
+
+  it("skips events with unmapped conversion type", () => {
+    const bus = new InMemoryConversionBus();
+    const received: RoutedEventEnvelope[] = [];
+    const bridge = new ConversionBusBridge({
+      onEvent: (env) => received.push(env),
+    });
+    bridge.register(bus);
+
+    // Emit an event with an unmapped type (cast to bypass TypeScript)
+    bus.emit(
+      makeConversionEvent({
+        type: "unmapped-type" as ConversionEvent["type"],
+      }),
+    );
+
+    // onEvent should NOT be called
+    expect(received).toHaveLength(0);
   });
 });

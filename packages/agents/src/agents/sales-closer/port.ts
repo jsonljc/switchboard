@@ -7,7 +7,7 @@ import type { AgentPort } from "../../ports.js";
 export const SALES_CLOSER_PORT: AgentPort = {
   agentId: "sales-closer",
   version: "0.1.0",
-  inboundEvents: ["lead.qualified"],
+  inboundEvents: ["lead.qualified", "message.received"],
   outboundEvents: ["stage.advanced", "conversation.escalated"],
   tools: [
     {

@@ -13,7 +13,7 @@ export class SalesCloserHandler implements AgentHandler {
     config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
-    if (event.eventType !== "lead.qualified") {
+    if (event.eventType !== "lead.qualified" && event.eventType !== "message.received") {
       return { events: [], actions: [] };
     }
 

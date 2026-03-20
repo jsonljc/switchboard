@@ -61,6 +61,26 @@ describe("PolicyBridge", () => {
     expect(result.requiresApproval).toBe(true);
   });
 
+  it("denies when policy engine throws (fail-closed)", async () => {
+    const policyEngine = {
+      evaluate: vi.fn().mockRejectedValue(new Error("engine unavailable")),
+    };
+    const bridge = new PolicyBridge(policyEngine);
+
+    const intent: DeliveryIntent = {
+      eventId: "evt-1",
+      destinationType: "agent",
+      destinationId: "lead-responder",
+      action: "lead.received",
+      payload: {},
+      criticality: "required",
+    };
+
+    const result = await bridge.evaluate(intent);
+    expect(result.approved).toBe(false);
+    expect(result.reason).toBe("policy_engine_error");
+  });
+
   it("approves when no policy engine is configured (permissive mode)", async () => {
     const bridge = new PolicyBridge(null);
 

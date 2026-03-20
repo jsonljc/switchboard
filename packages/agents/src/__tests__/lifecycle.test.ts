@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canRequalify } from "../lifecycle.js";
+import { canRequalify, agentForStage } from "../lifecycle.js";
 
 describe("canRequalify", () => {
   it("allows requalification for lead stage", () => {
@@ -24,5 +24,31 @@ describe("canRequalify", () => {
 
   it("allows requalification when stage is undefined", () => {
     expect(canRequalify(undefined)).toBe(true);
+  });
+});
+
+describe("agentForStage", () => {
+  it("maps lead to lead-responder", () => {
+    expect(agentForStage("lead")).toBe("lead-responder");
+  });
+
+  it("maps qualified to sales-closer", () => {
+    expect(agentForStage("qualified")).toBe("sales-closer");
+  });
+
+  it("maps booked to null (escalate)", () => {
+    expect(agentForStage("booked")).toBeNull();
+  });
+
+  it("maps treated to null (escalate)", () => {
+    expect(agentForStage("treated")).toBeNull();
+  });
+
+  it("maps churned to null (escalate)", () => {
+    expect(agentForStage("churned")).toBeNull();
+  });
+
+  it("defaults undefined to lead-responder", () => {
+    expect(agentForStage(undefined)).toBe("lead-responder");
   });
 });

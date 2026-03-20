@@ -126,6 +126,7 @@ export class AdOptimizerHandler implements AgentHandler {
     event: RoutedEventEnvelope,
     context: AgentContext,
   ): AgentResponse {
+    const payload = validatePayload(event.payload, { triggeredBy: "string?" }, "ad-optimizer");
     const profile = context.profile ?? {};
     const ads = profile.ads as Record<string, unknown> | undefined;
 
@@ -142,7 +143,7 @@ export class AdOptimizerHandler implements AgentHandler {
       payload: {
         action: "budget_review",
         platforms,
-        triggeredBy: (event.payload as Record<string, unknown>).triggeredBy ?? "schedule",
+        triggeredBy: (payload.triggeredBy as string) ?? "schedule",
       },
       correlationId: event.correlationId,
       causationId: event.eventId,
@@ -172,7 +173,12 @@ export class AdOptimizerHandler implements AgentHandler {
       eventType: "conversation.escalated",
       source: { type: "agent", id: "ad-optimizer" },
       payload: {
-        contactId: ((event.payload as Record<string, unknown>).contactId as string) ?? null,
+        contactId:
+          event.payload != null && typeof event.payload === "object"
+            ? typeof (event.payload as Record<string, unknown>).contactId === "string"
+              ? (event.payload as Record<string, unknown>).contactId
+              : null
+            : null,
         reason,
       },
       correlationId: event.correlationId,

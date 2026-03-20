@@ -58,6 +58,7 @@ declare module "fastify" {
     resolvedProfile: ResolvedProfile | null;
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
+    agentSystem: import("./agent-bootstrap.js").AgentSystem;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -232,7 +233,14 @@ export async function buildServer() {
 
   // --- Agent orchestration system ---
   const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
-  const agentSystem = bootstrapAgentSystem({ conversionBus });
+  const agentSystem = bootstrapAgentSystem({
+    conversionBus,
+    logger: {
+      warn: (msg: string) => app.log.warn(msg),
+      error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
+      info: (msg: string) => app.log.info(msg),
+    },
+  });
   app.decorate("agentSystem", agentSystem);
   app.log.info("Agent orchestration system bootstrapped");
 
@@ -343,8 +351,10 @@ export async function buildServer() {
   app.decorate("agentNotifier", agentNotifier);
   app.decorate("conversionBus", conversionBus);
 
-  // Resource cleanup on close — order: jobs → worker → queue → Redis → Prisma
+  // Resource cleanup on close — order: agents → jobs → worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
+    agentSystem.scheduledRunner.stop();
+
     await stopAllJobs();
 
     if (worker) {
