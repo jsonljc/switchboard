@@ -9,9 +9,10 @@ describe("Ad Optimizer Port", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it("accepts revenue.recorded and stage.advanced events", () => {
-    expect(AD_OPTIMIZER_PORT.inboundEvents).toContain("revenue.recorded");
-    expect(AD_OPTIMIZER_PORT.inboundEvents).toContain("stage.advanced");
+  it("accepts revenue.attributed, ad.anomaly_detected, and ad.performance_review", () => {
+    expect(AD_OPTIMIZER_PORT.inboundEvents).toContain("revenue.attributed");
+    expect(AD_OPTIMIZER_PORT.inboundEvents).toContain("ad.anomaly_detected");
+    expect(AD_OPTIMIZER_PORT.inboundEvents).toContain("ad.performance_review");
   });
 
   it("emits ad.optimized and conversation.escalated events", () => {
@@ -19,9 +20,9 @@ describe("Ad Optimizer Port", () => {
     expect(AD_OPTIMIZER_PORT.outboundEvents).toContain("conversation.escalated");
   });
 
-  it("declares send_conversion and diagnose_funnel tools", () => {
+  it("declares analyze_budget and adjust_budget tools", () => {
     const toolNames = AD_OPTIMIZER_PORT.tools.map((t) => t.name);
-    expect(toolNames).toContain("send_conversion");
-    expect(toolNames).toContain("diagnose_funnel");
+    expect(toolNames).toContain("analyze_budget");
+    expect(toolNames).toContain("adjust_budget");
   });
 });

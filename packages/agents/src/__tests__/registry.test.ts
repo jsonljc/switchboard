@@ -105,6 +105,37 @@ describe("AgentRegistry", () => {
     expect(registry.findByInboundEvent("unknown-org", "lead.received")).toEqual([]);
   });
 
+  it("stores executionMode on registration", () => {
+    const registry = new AgentRegistry();
+    registry.register("org-1", {
+      agentId: "ad-optimizer",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["revenue.attributed"], emits: ["ad.optimized"], tools: [] },
+      executionMode: "hybrid",
+    });
+
+    const entry = registry.get("org-1", "ad-optimizer");
+    expect(entry!.executionMode).toBe("hybrid");
+  });
+
+  it("defaults executionMode to realtime when not specified", () => {
+    const registry = new AgentRegistry();
+    registry.register("org-1", {
+      agentId: "lead-responder",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+    });
+
+    const entry = registry.get("org-1", "lead-responder");
+    expect(entry!.executionMode).toBe("realtime");
+  });
+
   it("updates runtime info", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {

@@ -12,125 +12,76 @@ export class AdOptimizerHandler implements AgentHandler {
     _config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
-    if (event.eventType === "revenue.recorded") {
-      return this.handleRevenue(event, context);
+    if (event.eventType === "revenue.attributed") {
+      return this.handleAttribution(event, context);
     }
 
-    if (event.eventType === "stage.advanced") {
-      return this.handleStage(event, context);
+    if (event.eventType === "ad.anomaly_detected") {
+      return this.handleAnomaly(event, context);
+    }
+
+    if (event.eventType === "ad.performance_review") {
+      return this.handlePerformanceReview(event, context);
     }
 
     return { events: [], actions: [] };
   }
 
-  private handleRevenue(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleAttribution(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
-    const contactId = payload.contactId as string;
+    const campaignId = payload.campaignId as string | null;
     const amount = payload.amount as number;
-    const currency = (payload.currency as string) ?? "USD";
     const profile = context.profile ?? {};
     const ads = profile.ads as Record<string, unknown> | undefined;
 
     if (!ads) {
-      return this.escalate(event, context, contactId, "no_ads_config");
+      return { events: [], actions: [] };
     }
 
-    const platforms = ads.connectedPlatforms as string[] | undefined;
-    if (!platforms || platforms.length === 0) {
-      return this.escalate(event, context, contactId, "no_connected_platforms");
-    }
-
-    const actions = platforms.map((platform) => ({
-      actionType: "digital-ads.conversion.send",
-      parameters: {
-        platform,
-        eventName: "Purchase",
-        contactId,
-        value: amount,
-        currency,
-        fbclid: event.attribution?.fbclid,
-        gclid: event.attribution?.gclid,
-        ttclid: event.attribution?.ttclid,
-        sourceCampaignId: event.attribution?.sourceCampaignId,
-        sourceAdId: event.attribution?.sourceAdId,
-      },
-    }));
-
-    const optimizedEvent = createEventEnvelope({
-      organizationId: context.organizationId,
-      eventType: "ad.optimized",
-      source: { type: "agent", id: "ad-optimizer" },
-      payload: {
-        contactId,
-        action: "conversion_sent",
-        platforms,
-        eventName: "Purchase",
-        value: amount,
-      },
-      correlationId: event.correlationId,
-      causationId: event.eventId,
-      attribution: event.attribution,
-    });
-
+    // Record attribution for later budget analysis (no real-time action)
     return {
-      events: [optimizedEvent],
-      actions,
+      events: [],
+      actions: [],
       state: {
-        contactId,
-        action: "conversion_sent",
-        platforms,
+        lastAttribution: {
+          campaignId,
+          amount,
+          attributionModel: payload.attributionModel,
+          timestamp: new Date().toISOString(),
+        },
       },
     };
   }
 
-  private handleStage(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleAnomaly(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
-    const contactId = payload.contactId as string;
-    const stage = payload.stage as string;
+    const campaignId = payload.campaignId as string;
+    const platform = payload.platform as string;
+    const metric = payload.metric as string;
     const profile = context.profile ?? {};
     const ads = profile.ads as Record<string, unknown> | undefined;
 
     if (!ads) {
-      return { events: [], actions: [] };
+      return this.escalate(event, context, "no_ads_config");
     }
 
-    const platforms = ads.connectedPlatforms as string[] | undefined;
-    const conversionEventMap = ads.conversionEventMap as Record<string, string> | undefined;
+    const anomalyThreshold = (ads.anomalyThreshold as number) ?? 30;
+    const dropPercent = payload.dropPercent as number | undefined;
 
-    if (!conversionEventMap || !conversionEventMap[stage]) {
+    if (dropPercent !== undefined && dropPercent < anomalyThreshold) {
       return { events: [], actions: [] };
     }
-
-    if (!platforms || platforms.length === 0) {
-      return { events: [], actions: [] };
-    }
-
-    const eventName = conversionEventMap[stage]!;
-
-    const actions = platforms.map((platform) => ({
-      actionType: "digital-ads.conversion.send",
-      parameters: {
-        platform,
-        eventName,
-        contactId,
-        fbclid: event.attribution?.fbclid,
-        gclid: event.attribution?.gclid,
-        ttclid: event.attribution?.ttclid,
-        sourceCampaignId: event.attribution?.sourceCampaignId,
-        sourceAdId: event.attribution?.sourceAdId,
-      },
-    }));
 
     const optimizedEvent = createEventEnvelope({
       organizationId: context.organizationId,
       eventType: "ad.optimized",
       source: { type: "agent", id: "ad-optimizer" },
       payload: {
-        contactId,
-        action: "stage_conversion_sent",
-        platforms,
-        eventName,
-        stage,
+        action: "anomaly_response",
+        campaignId,
+        platform,
+        metric,
+        recommendation: "pause_campaign",
       },
       correlationId: event.correlationId,
       causationId: event.eventId,
@@ -139,12 +90,62 @@ export class AdOptimizerHandler implements AgentHandler {
 
     return {
       events: [optimizedEvent],
-      actions,
+      actions: [
+        {
+          actionType: "digital-ads.campaign.adjust",
+          parameters: {
+            campaignId,
+            platform,
+            adjustment: "pause",
+            reason: `Anomaly detected: ${metric} dropped ${dropPercent ?? "unknown"}%`,
+          },
+        },
+      ],
       state: {
-        contactId,
-        action: "stage_conversion_sent",
-        stage,
-        eventName,
+        action: "anomaly_response",
+        campaignId,
+        platform,
+        metric,
+      },
+    };
+  }
+
+  private handlePerformanceReview(
+    event: RoutedEventEnvelope,
+    context: AgentContext,
+  ): AgentResponse {
+    const profile = context.profile ?? {};
+    const ads = profile.ads as Record<string, unknown> | undefined;
+
+    if (!ads) {
+      return this.escalate(event, context, "no_ads_config");
+    }
+
+    const platforms = (ads.connectedPlatforms as string[]) ?? [];
+
+    const optimizedEvent = createEventEnvelope({
+      organizationId: context.organizationId,
+      eventType: "ad.optimized",
+      source: { type: "agent", id: "ad-optimizer" },
+      payload: {
+        action: "budget_review",
+        platforms,
+        triggeredBy: (event.payload as Record<string, unknown>).triggeredBy ?? "schedule",
+      },
+      correlationId: event.correlationId,
+      causationId: event.eventId,
+      attribution: event.attribution,
+    });
+
+    return {
+      events: [optimizedEvent],
+      actions: platforms.map((platform) => ({
+        actionType: "digital-ads.budget.analyze",
+        parameters: { platform, lookbackDays: 7 },
+      })),
+      state: {
+        action: "budget_review",
+        platforms,
       },
     };
   }
@@ -152,17 +153,13 @@ export class AdOptimizerHandler implements AgentHandler {
   private escalate(
     event: RoutedEventEnvelope,
     context: AgentContext,
-    contactId: string,
     reason: string,
   ): AgentResponse {
     const escalationEvent = createEventEnvelope({
       organizationId: context.organizationId,
       eventType: "conversation.escalated",
       source: { type: "agent", id: "ad-optimizer" },
-      payload: {
-        contactId,
-        reason,
-      },
+      payload: { reason },
       correlationId: event.correlationId,
       causationId: event.eventId,
       attribution: event.attribution,

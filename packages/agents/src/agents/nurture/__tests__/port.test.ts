@@ -11,7 +11,10 @@ describe("Nurture Agent Port", () => {
 
   it("accepts stage.advanced events", () => {
     expect(NURTURE_AGENT_PORT.inboundEvents).toContain("stage.advanced");
-    expect(NURTURE_AGENT_PORT.inboundEvents).toHaveLength(1);
+  });
+
+  it("accepts lead.disqualified events", () => {
+    expect(NURTURE_AGENT_PORT.inboundEvents).toContain("lead.disqualified");
   });
 
   it("emits conversation.escalated events", () => {

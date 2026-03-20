@@ -25,6 +25,25 @@ function makeStageEvent(stage: string, payload: Record<string, unknown> = {}) {
   });
 }
 
+function makeDisqualifiedEvent(payload: Record<string, unknown> = {}) {
+  return createEventEnvelope({
+    organizationId: "org-1",
+    eventType: "lead.disqualified",
+    source: { type: "agent", id: "lead-responder" },
+    payload: { contactId: "c1", ...payload },
+    attribution: {
+      fbclid: "fb-abc",
+      gclid: null,
+      ttclid: null,
+      sourceCampaignId: "camp-1",
+      sourceAdId: "ad-1",
+      utmSource: "meta",
+      utmMedium: "paid",
+      utmCampaign: "spring",
+    },
+  });
+}
+
 describe("NurtureAgentHandler", () => {
   it("starts consultation-reminder cadence on booking_initiated", async () => {
     const handler = new NurtureAgentHandler();
@@ -249,6 +268,50 @@ describe("NurtureAgentHandler", () => {
 
     const response = await handler.handle(event, {}, { organizationId: "org-1" });
     expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(0);
+  });
+
+  it("starts cold-nurture cadence on lead.disqualified", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeDisqualifiedEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
+    expect(response.actions[0]!.parameters.contactId).toBe("c1");
+    expect(response.actions[0]!.parameters.cadenceId).toBe("cold-nurture");
+    expect(response.state).toEqual({ contactId: "c1", cadenceId: "cold-nurture" });
+  });
+
+  it("escalates with no_nurture_config on lead.disqualified when no nurture config", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeDisqualifiedEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
+    );
+
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        reason: "no_nurture_config",
+      }),
+    );
     expect(response.actions).toHaveLength(0);
   });
 });

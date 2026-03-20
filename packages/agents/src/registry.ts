@@ -4,6 +4,7 @@
 
 export type AgentStatus = "draft" | "active" | "paused" | "error" | "disabled";
 export type AgentHealth = "healthy" | "degraded" | "offline";
+export type ExecutionMode = "realtime" | "scheduled" | "hybrid";
 
 export interface AgentRuntime {
   provider: "openclaw";
@@ -23,11 +24,14 @@ export interface AgentRegistryEntry {
     emits: string[];
     tools: string[];
   };
+  executionMode: ExecutionMode;
   runtime?: AgentRuntime;
   lastActiveAt?: string;
 }
 
-type RegistrationInput = Omit<AgentRegistryEntry, "lastActiveAt">;
+type RegistrationInput = Omit<AgentRegistryEntry, "lastActiveAt" | "executionMode"> & {
+  executionMode?: ExecutionMode;
+};
 
 export class AgentRegistry {
   private entries = new Map<string, Map<string, AgentRegistryEntry>>();
@@ -38,7 +42,11 @@ export class AgentRegistry {
       orgMap = new Map();
       this.entries.set(organizationId, orgMap);
     }
-    orgMap.set(entry.agentId, { ...entry, lastActiveAt: undefined });
+    orgMap.set(entry.agentId, {
+      ...entry,
+      executionMode: entry.executionMode ?? "realtime",
+      lastActiveAt: undefined,
+    });
   }
 
   get(organizationId: string, agentId: string): AgentRegistryEntry | undefined {

@@ -2,15 +2,15 @@ import { describe, it, expect } from "vitest";
 import { AdOptimizerHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
 
-function makeRevenueEvent(payload: Record<string, unknown> = {}) {
+function makeAttributionEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
     organizationId: "org-1",
-    eventType: "revenue.recorded",
-    source: { type: "system", id: "payments" },
+    eventType: "revenue.attributed",
+    source: { type: "agent", id: "revenue-tracker" },
     payload: {
-      contactId: "c1",
+      campaignId: "camp-1",
       amount: 250,
-      currency: "USD",
+      attributionModel: "last_click",
       ...payload,
     },
     attribution: {
@@ -26,173 +26,51 @@ function makeRevenueEvent(payload: Record<string, unknown> = {}) {
   });
 }
 
-function makeStageEvent(stage: string, payload: Record<string, unknown> = {}) {
+function makeAnomalyEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
     organizationId: "org-1",
-    eventType: "stage.advanced",
-    source: { type: "agent", id: "sales-closer" },
+    eventType: "ad.anomaly_detected",
+    source: { type: "system", id: "monitoring" },
     payload: {
-      contactId: "c1",
-      stage,
+      campaignId: "camp-1",
+      platform: "meta",
+      metric: "ROAS",
+      dropPercent: 50,
       ...payload,
     },
-    attribution: {
-      fbclid: "fb-abc",
-      gclid: null,
-      ttclid: null,
-      sourceCampaignId: "camp-1",
-      sourceAdId: "ad-1",
-      utmSource: "meta",
-      utmMedium: "paid",
-      utmCampaign: "spring",
-    },
+  });
+}
+
+function makeReviewEvent(payload: Record<string, unknown> = {}) {
+  return createEventEnvelope({
+    organizationId: "org-1",
+    eventType: "ad.performance_review",
+    source: { type: "system", id: "scheduled-runner" },
+    payload: { agentId: "ad-optimizer", triggeredBy: "schedule", ...payload },
   });
 }
 
 describe("AdOptimizerHandler", () => {
-  it("sends conversion to connected platforms on revenue.recorded", async () => {
+  it("records attribution state without actions on revenue.attributed", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
+    const event = makeAttributionEvent();
     const response = await handler.handle(
       event,
       {},
       {
         organizationId: "org-1",
-        profile: {
-          ads: { connectedPlatforms: ["meta", "google"] },
-        },
+        profile: { ads: { connectedPlatforms: ["meta"] } },
       },
     );
-
-    expect(response.actions).toHaveLength(2);
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "digital-ads.conversion.send",
-          parameters: expect.objectContaining({
-            platform: "meta",
-            eventName: "Purchase",
-            contactId: "c1",
-            value: 250,
-          }),
-        }),
-        expect.objectContaining({
-          actionType: "digital-ads.conversion.send",
-          parameters: expect.objectContaining({
-            platform: "google",
-            eventName: "Purchase",
-          }),
-        }),
-      ]),
-    );
-  });
-
-  it("emits ad.optimized event on revenue.recorded", async () => {
-    const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: {
-          ads: { connectedPlatforms: ["meta"] },
-        },
-      },
-    );
-
-    expect(response.events).toHaveLength(1);
-    expect(response.events[0]!.eventType).toBe("ad.optimized");
-    expect(response.events[0]!.payload).toEqual(
-      expect.objectContaining({
-        contactId: "c1",
-        action: "conversion_sent",
-        platforms: ["meta"],
-        eventName: "Purchase",
-        value: 250,
-      }),
-    );
-  });
-
-  it("sends stage conversion when conversionEventMap configured", async () => {
-    const handler = new AdOptimizerHandler();
-    const event = makeStageEvent("booking_initiated");
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: {
-          ads: {
-            connectedPlatforms: ["meta"],
-            conversionEventMap: { booking_initiated: "Lead" },
-          },
-        },
-      },
-    );
-
-    expect(response.actions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionType: "digital-ads.conversion.send",
-          parameters: expect.objectContaining({
-            platform: "meta",
-            eventName: "Lead",
-            contactId: "c1",
-          }),
-        }),
-      ]),
-    );
-  });
-
-  it("skips stage.advanced when stage not in conversionEventMap", async () => {
-    const handler = new AdOptimizerHandler();
-    const event = makeStageEvent("nurture_started");
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: {
-          ads: {
-            connectedPlatforms: ["meta"],
-            conversionEventMap: { booking_initiated: "Lead" },
-          },
-        },
-      },
-    );
-
     expect(response.events).toHaveLength(0);
     expect(response.actions).toHaveLength(0);
+    expect(response.state).toBeDefined();
+    expect(response.state!.lastAttribution).toBeDefined();
   });
 
-  it("skips stage.advanced when no conversionEventMap", async () => {
+  it("returns empty when no ads config on revenue.attributed", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeStageEvent("booking_initiated");
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: {
-          ads: { connectedPlatforms: ["meta"] },
-        },
-      },
-    );
-
-    expect(response.events).toHaveLength(0);
-    expect(response.actions).toHaveLength(0);
-  });
-
-  it("escalates when no ads config in profile", async () => {
-    const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
+    const event = makeAttributionEvent();
     const response = await handler.handle(
       event,
       {},
@@ -201,94 +79,125 @@ describe("AdOptimizerHandler", () => {
         profile: {},
       },
     );
+    expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(0);
+  });
 
+  it("pauses campaign on anomaly above threshold", async () => {
+    const handler = new AdOptimizerHandler();
+    const event = makeAnomalyEvent({ dropPercent: 50 });
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { ads: { connectedPlatforms: ["meta"], anomalyThreshold: 30 } },
+      },
+    );
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("ad.optimized");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({ action: "anomaly_response", recommendation: "pause_campaign" }),
+    );
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("digital-ads.campaign.adjust");
+    expect(response.actions[0]!.parameters.adjustment).toBe("pause");
+  });
+
+  it("ignores anomaly below threshold", async () => {
+    const handler = new AdOptimizerHandler();
+    const event = makeAnomalyEvent({ dropPercent: 10 });
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { ads: { anomalyThreshold: 30 } },
+      },
+    );
+    expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(0);
+  });
+
+  it("escalates anomaly when no ads config", async () => {
+    const handler = new AdOptimizerHandler();
+    const event = makeAnomalyEvent();
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {},
+      },
+    );
     expect(response.events).toHaveLength(1);
     expect(response.events[0]!.eventType).toBe("conversation.escalated");
     expect(response.events[0]!.payload).toEqual(
-      expect.objectContaining({
-        contactId: "c1",
-        reason: "no_ads_config",
-      }),
+      expect.objectContaining({ reason: "no_ads_config" }),
     );
   });
 
-  it("escalates when no connected platforms", async () => {
+  it("runs budget review on ad.performance_review", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
+    const event = makeReviewEvent();
     const response = await handler.handle(
       event,
       {},
       {
         organizationId: "org-1",
-        profile: {
-          ads: { connectedPlatforms: [] },
-        },
+        profile: { ads: { connectedPlatforms: ["meta", "google"] } },
       },
     );
-
-    expect(response.events[0]!.eventType).toBe("conversation.escalated");
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("ad.optimized");
     expect(response.events[0]!.payload).toEqual(
-      expect.objectContaining({
-        reason: "no_connected_platforms",
-      }),
+      expect.objectContaining({ action: "budget_review", platforms: ["meta", "google"] }),
     );
+    expect(response.actions).toHaveLength(2);
+    expect(response.actions[0]!.actionType).toBe("digital-ads.budget.analyze");
   });
 
-  it("forwards attribution chain to outbound events", async () => {
+  it("escalates performance review when no ads config", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
+    const event = makeReviewEvent();
     const response = await handler.handle(
       event,
       {},
       {
         organizationId: "org-1",
-        profile: { ads: { connectedPlatforms: ["meta"] } },
+        profile: {},
       },
     );
-
-    expect(response.events[0]!.attribution).toBeDefined();
-    expect(response.events[0]!.attribution!.sourceCampaignId).toBe("camp-1");
-    expect(response.events[0]!.attribution!.fbclid).toBe("fb-abc");
-  });
-
-  it("sets causationId to the inbound event id", async () => {
-    const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { ads: { connectedPlatforms: ["meta"] } },
-      },
-    );
-
-    expect(response.events[0]!.causationId).toBe(event.eventId);
-    expect(response.events[0]!.correlationId).toBe(event.correlationId);
+    expect(response.events[0]!.eventType).toBe("conversation.escalated");
   });
 
   it("ignores unhandled event types", async () => {
     const handler = new AdOptimizerHandler();
-
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "lead.received",
       source: { type: "system", id: "test" },
       payload: {},
     });
-
     const response = await handler.handle(event, {}, { organizationId: "org-1" });
     expect(response.events).toHaveLength(0);
     expect(response.actions).toHaveLength(0);
   });
 
-  it("includes attribution in conversion action parameters", async () => {
+  it("forwards attribution chain to anomaly response events", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent();
-
+    const event = makeAnomalyEvent();
+    // Add attribution to the event
+    (event as unknown as Record<string, unknown>).attribution = {
+      fbclid: "fb-abc",
+      gclid: null,
+      ttclid: null,
+      sourceCampaignId: "camp-1",
+      sourceAdId: "ad-1",
+      utmSource: "meta",
+      utmMedium: "paid",
+      utmCampaign: "spring",
+    };
     const response = await handler.handle(
       event,
       {},
@@ -297,17 +206,12 @@ describe("AdOptimizerHandler", () => {
         profile: { ads: { connectedPlatforms: ["meta"] } },
       },
     );
-
-    const action = response.actions[0]!;
-    expect(action.parameters.fbclid).toBe("fb-abc");
-    expect(action.parameters.sourceCampaignId).toBe("camp-1");
-    expect(action.parameters.sourceAdId).toBe("ad-1");
+    expect(response.events[0]!.attribution).toBeDefined();
   });
 
-  it("uses currency from event payload when available", async () => {
+  it("sets causationId on emitted events", async () => {
     const handler = new AdOptimizerHandler();
-    const event = makeRevenueEvent({ currency: "EUR" });
-
+    const event = makeAnomalyEvent();
     const response = await handler.handle(
       event,
       {},
@@ -316,7 +220,7 @@ describe("AdOptimizerHandler", () => {
         profile: { ads: { connectedPlatforms: ["meta"] } },
       },
     );
-
-    expect(response.actions[0]!.parameters.currency).toBe("EUR");
+    expect(response.events[0]!.causationId).toBe(event.eventId);
+    expect(response.events[0]!.correlationId).toBe(event.correlationId);
   });
 });

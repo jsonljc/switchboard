@@ -19,13 +19,53 @@ export class NurtureAgentHandler implements AgentHandler {
     _config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
-    if (event.eventType !== "stage.advanced") {
-      return { events: [], actions: [] };
+    if (event.eventType === "stage.advanced") {
+      const payload = event.payload as Record<string, unknown>;
+      const contactId = payload.contactId as string;
+      const stage = payload.stage as string;
+      const profile = context.profile ?? {};
+      const nurture = profile.nurture as Record<string, unknown> | undefined;
+
+      if (!nurture) {
+        return this.escalate(event, context, contactId, "no_nurture_config");
+      }
+
+      const cadenceId = STAGE_TO_CADENCE[stage];
+      if (!cadenceId) {
+        return this.escalate(event, context, contactId, "unknown_nurture_stage");
+      }
+
+      const enabledCadences = nurture.enabledCadences as string[] | undefined;
+      if (enabledCadences && !enabledCadences.includes(cadenceId)) {
+        return this.escalate(event, context, contactId, "cadence_not_enabled");
+      }
+
+      return {
+        events: [],
+        actions: [
+          {
+            actionType: "customer-engagement.cadence.start",
+            parameters: { contactId, cadenceId },
+          },
+        ],
+        state: {
+          contactId,
+          stage,
+          cadenceId,
+        },
+      };
     }
 
+    if (event.eventType === "lead.disqualified") {
+      return this.handleDisqualified(event, context);
+    }
+
+    return { events: [], actions: [] };
+  }
+
+  private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
     const contactId = payload.contactId as string;
-    const stage = payload.stage as string;
     const profile = context.profile ?? {};
     const nurture = profile.nurture as Record<string, unknown> | undefined;
 
@@ -33,29 +73,15 @@ export class NurtureAgentHandler implements AgentHandler {
       return this.escalate(event, context, contactId, "no_nurture_config");
     }
 
-    const cadenceId = STAGE_TO_CADENCE[stage];
-    if (!cadenceId) {
-      return this.escalate(event, context, contactId, "unknown_nurture_stage");
-    }
-
-    const enabledCadences = nurture.enabledCadences as string[] | undefined;
-    if (enabledCadences && !enabledCadences.includes(cadenceId)) {
-      return this.escalate(event, context, contactId, "cadence_not_enabled");
-    }
-
     return {
       events: [],
       actions: [
         {
           actionType: "customer-engagement.cadence.start",
-          parameters: { contactId, cadenceId },
+          parameters: { contactId, cadenceId: "cold-nurture" },
         },
       ],
-      state: {
-        contactId,
-        stage,
-        cadenceId,
-      },
+      state: { contactId, cadenceId: "cold-nurture" },
     };
   }
 

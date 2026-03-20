@@ -247,6 +247,68 @@ describe("RevenueTrackerHandler", () => {
     expect(response.events[0]!.correlationId).toBe(event.correlationId);
   });
 
+  it("dispatches conversions to connected platforms on revenue.recorded", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeRevenueEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: {
+          revenue: {},
+          ads: { connectedPlatforms: ["meta", "google"] },
+        },
+      },
+    );
+
+    const conversionActions = response.actions.filter(
+      (a) => a.actionType === "digital-ads.conversion.send",
+    );
+
+    expect(conversionActions).toHaveLength(2);
+    expect(conversionActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parameters: expect.objectContaining({
+            platform: "meta",
+            eventName: "Purchase",
+            value: 500,
+          }),
+        }),
+        expect.objectContaining({
+          parameters: expect.objectContaining({
+            platform: "google",
+            eventName: "Purchase",
+            value: 500,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("skips conversion dispatch when no ads config", async () => {
+    const handler = new RevenueTrackerHandler();
+    const event = makeRevenueEvent();
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { revenue: {} },
+      },
+    );
+
+    const conversionActions = response.actions.filter(
+      (a) => a.actionType === "digital-ads.conversion.send",
+    );
+
+    expect(conversionActions).toHaveLength(0);
+    expect(response.events[0]!.eventType).toBe("revenue.attributed");
+  });
+
   it("ignores unhandled event types", async () => {
     const handler = new RevenueTrackerHandler();
 

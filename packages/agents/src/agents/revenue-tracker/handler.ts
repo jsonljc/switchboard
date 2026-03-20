@@ -57,9 +57,32 @@ export class RevenueTrackerHandler implements AgentHandler {
       attribution: event.attribution,
     });
 
+    // Dispatch conversions to connected ad platforms
+    const actions: Array<{ actionType: string; parameters: Record<string, unknown> }> = [];
+    const ads = profile.ads as Record<string, unknown> | undefined;
+    const platforms = (ads?.connectedPlatforms as string[] | undefined) ?? [];
+
+    for (const platform of platforms) {
+      actions.push({
+        actionType: "digital-ads.conversion.send",
+        parameters: {
+          platform,
+          eventName: "Purchase",
+          contactId,
+          value: amount,
+          currency,
+          fbclid: event.attribution?.fbclid,
+          gclid: event.attribution?.gclid,
+          ttclid: event.attribution?.ttclid,
+          sourceCampaignId: event.attribution?.sourceCampaignId,
+          sourceAdId: event.attribution?.sourceAdId,
+        },
+      });
+    }
+
     return {
       events: [attributedEvent],
-      actions: [],
+      actions,
       state: {
         contactId,
         amount,

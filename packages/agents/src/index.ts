@@ -29,6 +29,7 @@ export {
   type AgentRegistryEntry,
   type AgentRuntime,
   type AgentStatus,
+  type ExecutionMode,
 } from "./registry.js";
 
 export {
@@ -116,3 +117,20 @@ export { NURTURE_AGENT_PORT, NurtureAgentHandler } from "./agents/nurture/index.
 export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
 
 export { REVENUE_TRACKER_PORT, RevenueTrackerHandler } from "./agents/revenue-tracker/index.js";
+
+export { HandlerRegistry } from "./handler-registry.js";
+
+export { ActionExecutor, type ActionHandler, type ActionResult } from "./action-executor.js";
+
+export {
+  EventLoop,
+  type EventLoopConfig,
+  type EventLoopResult,
+  type ProcessedAgent,
+} from "./event-loop.js";
+
+export {
+  ScheduledRunner,
+  type ScheduledRunnerConfig,
+  type ScheduledRunResult,
+} from "./scheduled-runner.js";
