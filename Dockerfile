@@ -19,6 +19,7 @@ COPY cartridges/payments/package.json cartridges/payments/
 COPY cartridges/customer-engagement/package.json cartridges/customer-engagement/
 COPY cartridges/quant-trading/package.json cartridges/quant-trading/
 COPY cartridges/revenue-growth/package.json cartridges/revenue-growth/
+COPY cartridges/messaging/package.json cartridges/messaging/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
@@ -73,6 +74,9 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
+
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
 
@@ -123,6 +127,9 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
+
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
@@ -186,6 +193,9 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
+
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
 COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
 COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/
