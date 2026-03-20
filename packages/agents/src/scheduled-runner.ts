@@ -9,14 +9,17 @@ import type { EventLoop } from "./event-loop.js";
 import type { RetryExecutor } from "./retry-executor.js";
 import type { DeadLetterAlerter } from "./dead-letter-alerter.js";
 
+type RetryExecutorLike = Pick<RetryExecutor, "processRetries">;
+type DeadLetterAlerterLike = Pick<DeadLetterAlerter, "sweep">;
+
 const DEFAULT_SCHEDULED_EVENT = "scheduled.trigger";
 
 export interface ScheduledRunnerConfig {
   registry: AgentRegistry;
   eventLoop: EventLoop;
   intervalMs?: number;
-  retryExecutor?: RetryExecutor;
-  deadLetterAlerter?: DeadLetterAlerter;
+  retryExecutor?: RetryExecutorLike;
+  deadLetterAlerter?: DeadLetterAlerterLike;
 }
 
 export interface ScheduledRunResult {
@@ -31,8 +34,8 @@ export class ScheduledRunner {
   private registry: AgentRegistry;
   private eventLoop: EventLoop;
   private intervalMs: number;
-  private retryExecutor: RetryExecutor | undefined;
-  private deadLetterAlerter: DeadLetterAlerter | undefined;
+  private retryExecutor: RetryExecutorLike | undefined;
+  private deadLetterAlerter: DeadLetterAlerterLike | undefined;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: ScheduledRunnerConfig) {
