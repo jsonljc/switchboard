@@ -65,8 +65,22 @@ export class AgentStateTracker {
     });
   }
 
-  onStateChange(listener: StateChangeListener): void {
+  remove(organizationId: string, agentId: string): void {
+    this.states.get(organizationId)?.delete(agentId);
+  }
+
+  clearOrg(organizationId: string): void {
+    this.states.delete(organizationId);
+  }
+
+  onStateChange(listener: StateChangeListener): () => void {
     this.listeners.push(listener);
+    return () => {
+      const idx = this.listeners.indexOf(listener);
+      if (idx >= 0) {
+        this.listeners.splice(idx, 1);
+      }
+    };
   }
 
   private getOrCreate(organizationId: string, agentId: string): AgentActivityState {
@@ -101,7 +115,11 @@ export class AgentStateTracker {
     const state = this.getOrCreate(organizationId, agentId);
     Object.assign(state, partial);
     for (const listener of this.listeners) {
-      listener(organizationId, agentId, state);
+      try {
+        listener(organizationId, agentId, state);
+      } catch {
+        // Listener errors must not crash state updates
+      }
     }
   }
 }

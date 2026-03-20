@@ -80,4 +80,51 @@ describe("AgentStateTracker", () => {
       expect.objectContaining({ activityStatus: "working" }),
     );
   });
+
+  describe("memory management", () => {
+    it("removes agent state for a specific org+agent", () => {
+      const tracker = new AgentStateTracker();
+      tracker.startProcessing("org-1", "agent-1", "task");
+      tracker.completeProcessing("org-1", "agent-1", "done");
+      expect(tracker.get("org-1", "agent-1")).toBeDefined();
+      tracker.remove("org-1", "agent-1");
+      expect(tracker.get("org-1", "agent-1")).toBeUndefined();
+    });
+
+    it("clears all state for an organization", () => {
+      const tracker = new AgentStateTracker();
+      tracker.startProcessing("org-1", "agent-1", "task");
+      tracker.startProcessing("org-1", "agent-2", "task");
+      tracker.startProcessing("org-2", "agent-1", "task");
+      tracker.clearOrg("org-1");
+      expect(tracker.listForOrg("org-1")).toHaveLength(0);
+      expect(tracker.listForOrg("org-2")).toHaveLength(1);
+    });
+
+    it("returns unsubscribe function from onStateChange", () => {
+      const tracker = new AgentStateTracker();
+      const calls: string[] = [];
+      const unsub = tracker.onStateChange((_org, agentId) => {
+        calls.push(agentId);
+      });
+      tracker.startProcessing("org-1", "agent-1", "task");
+      expect(calls).toEqual(["agent-1"]);
+      unsub();
+      tracker.startProcessing("org-1", "agent-2", "task");
+      expect(calls).toEqual(["agent-1"]); // no new call after unsubscribe
+    });
+
+    it("wraps listener errors so they don't crash state updates", () => {
+      const tracker = new AgentStateTracker();
+      const calls: string[] = [];
+      tracker.onStateChange(() => {
+        throw new Error("listener boom");
+      });
+      tracker.onStateChange((_org, agentId) => {
+        calls.push(agentId);
+      });
+      expect(() => tracker.startProcessing("org-1", "agent-1", "task")).not.toThrow();
+      expect(calls).toEqual(["agent-1"]); // second listener still fires
+    });
+  });
 });
