@@ -309,6 +309,36 @@ describe("RevenueTrackerHandler", () => {
     expect(response.events[0]!.eventType).toBe("revenue.attributed");
   });
 
+  it("logs ad optimization activity on ad.optimized", async () => {
+    const handler = new RevenueTrackerHandler();
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "ad.optimized",
+      source: { type: "agent", id: "ad-optimizer" },
+      payload: {
+        action: "budget_review",
+        campaignId: "camp-1",
+        platforms: ["meta", "google"],
+        triggeredBy: "schedule",
+      },
+    });
+
+    const response = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("crm.activity.log");
+    expect(response.actions[0]!.parameters).toEqual(
+      expect.objectContaining({
+        activityType: "ad_optimization",
+        action: "budget_review",
+        campaignId: "camp-1",
+      }),
+    );
+    expect(response.state).toEqual({ action: "budget_review", campaignId: "camp-1", logged: true });
+  });
+
   it("ignores unhandled event types", async () => {
     const handler = new RevenueTrackerHandler();
 

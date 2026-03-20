@@ -65,7 +65,8 @@ export class EventLoop {
   async process(event: RoutedEventEnvelope, context: AgentContext): Promise<EventLoopResult> {
     const processed: ProcessedAgent[] = [];
     const maxDepthReached = { value: 0 };
-    await this.processRecursive(event, context, 0, processed, maxDepthReached);
+    const seenKeys = new Set<string>();
+    await this.processRecursive(event, context, 0, processed, maxDepthReached, seenKeys);
     return { processed, depth: maxDepthReached.value };
   }
 
@@ -75,10 +76,16 @@ export class EventLoop {
     depth: number,
     processed: ProcessedAgent[],
     maxDepthReached: { value: number },
+    seenKeys: Set<string>,
   ): Promise<void> {
     if (depth >= this.maxDepth) {
       return;
     }
+
+    if (seenKeys.has(event.idempotencyKey)) {
+      return;
+    }
+    seenKeys.add(event.idempotencyKey);
 
     const plan = this.router.resolve(event);
     const isUrgent = URGENT_EVENT_TYPES.includes(event.eventType);
@@ -213,7 +220,14 @@ export class EventLoop {
         if (depth + 1 > maxDepthReached.value) {
           maxDepthReached.value = depth + 1;
         }
-        await this.processRecursive(outputEvent, context, depth + 1, processed, maxDepthReached);
+        await this.processRecursive(
+          outputEvent,
+          context,
+          depth + 1,
+          processed,
+          maxDepthReached,
+          seenKeys,
+        );
       }
     }
   }

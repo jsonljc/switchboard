@@ -420,6 +420,57 @@ describe("EventLoop", () => {
     expect(state.eventsProcessed).toBe(1);
   });
 
+  it("deduplicates events by idempotencyKey", async () => {
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "test-agent",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["test.event"], emits: ["test.event"], tools: [] },
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    const handler = makeHandler((event) => ({
+      events: [
+        createEventEnvelope({
+          organizationId: event.organizationId,
+          eventType: "test.event",
+          source: { type: "agent", id: "test-agent" },
+          payload: {},
+          correlationId: event.correlationId,
+          idempotencyKey: "same-key",
+        }),
+      ],
+      actions: [],
+    }));
+    handlerRegistry.register("test-agent", handler);
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+      maxDepth: 5,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "test.event",
+      source: { type: "system", id: "test" },
+      payload: {},
+    });
+
+    const result = await loop.process(event, { organizationId: "org-1" });
+
+    // Initial event processes (unique key), output event processes (key "same-key"),
+    // but output's chained event with same key "same-key" gets deduped — only 2 not 5
+    expect(result.processed).toHaveLength(2);
+  });
+
   it("records handler errors without crashing the loop", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {

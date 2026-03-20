@@ -4,8 +4,10 @@
 
 import { createEventEnvelope } from "./events.js";
 import type { AgentContext } from "./ports.js";
-import type { AgentRegistry } from "./registry.js";
+import type { AgentRegistry, AgentRegistryEntry } from "./registry.js";
 import type { EventLoop } from "./event-loop.js";
+
+const DEFAULT_SCHEDULED_EVENT = "scheduled.trigger";
 
 export interface ScheduledRunnerConfig {
   registry: AgentRegistry;
@@ -27,6 +29,14 @@ export class ScheduledRunner {
     this.eventLoop = config.eventLoop;
   }
 
+  private resolveEventType(entry: AgentRegistryEntry): string {
+    const scheduledEventType = entry.config.scheduledEventType as string | undefined;
+    if (scheduledEventType) {
+      return scheduledEventType;
+    }
+    return entry.capabilities.accepts[0] ?? DEFAULT_SCHEDULED_EVENT;
+  }
+
   async runAll(organizationId: string, context: AgentContext): Promise<ScheduledRunResult[]> {
     const results: ScheduledRunResult[] = [];
     const entries = this.registry.listActive(organizationId);
@@ -36,9 +46,10 @@ export class ScheduledRunner {
         continue;
       }
 
+      const eventType = this.resolveEventType(entry);
       const event = createEventEnvelope({
         organizationId,
-        eventType: "ad.performance_review",
+        eventType,
         source: { type: "system", id: "scheduled-runner" },
         payload: { agentId: entry.agentId, triggeredBy: "schedule" },
       });
@@ -73,9 +84,10 @@ export class ScheduledRunner {
       return { agentId, triggered: false, error: "agent_is_realtime" };
     }
 
+    const eventType = this.resolveEventType(entry);
     const event = createEventEnvelope({
       organizationId,
-      eventType: "ad.performance_review",
+      eventType,
       source: { type: "system", id: "scheduled-runner" },
       payload: { agentId, triggeredBy: "manual" },
     });

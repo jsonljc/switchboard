@@ -81,7 +81,7 @@ describe("ScheduledRunner", () => {
       expect(results.every((r) => r.triggered)).toBe(true);
     });
 
-    it("creates ad.performance_review events", async () => {
+    it("uses event type from agent capabilities", async () => {
       const registry = makeRegistry();
       const eventLoop = makeMockEventLoop();
       const runner = new ScheduledRunner({ registry, eventLoop });
@@ -98,6 +98,28 @@ describe("ScheduledRunner", () => {
         expect(event.source).toEqual({ type: "system", id: "scheduled-runner" });
         expect(event.payload).toHaveProperty("triggeredBy", "schedule");
       }
+    });
+
+    it("uses scheduledEventType from config when set", async () => {
+      const registry = new AgentRegistry();
+      registry.register(ORG, {
+        agentId: "custom-scheduled",
+        version: "0.1.0",
+        installed: true,
+        status: "active",
+        config: { scheduledEventType: "custom.review" },
+        capabilities: { accepts: ["custom.review"], emits: [], tools: [] },
+        executionMode: "scheduled",
+      });
+
+      const eventLoop = makeMockEventLoop();
+      const runner = new ScheduledRunner({ registry, eventLoop });
+
+      await runner.runAll(ORG, makeContext());
+
+      const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
+      const event = processFn.mock.calls[0]![0] as RoutedEventEnvelope;
+      expect(event.eventType).toBe("custom.review");
     });
 
     it("captures errors without crashing", async () => {

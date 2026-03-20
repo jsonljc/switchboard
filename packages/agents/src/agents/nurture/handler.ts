@@ -60,10 +60,14 @@ export class NurtureAgentHandler implements AgentHandler {
       return this.handleDisqualified(event, context);
     }
 
+    if (event.eventType === "revenue.recorded") {
+      return this.handleRevenueRecorded(event, context);
+    }
+
     return { events: [], actions: [] };
   }
 
-  private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleRevenueRecorded(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
     const payload = event.payload as Record<string, unknown>;
     const contactId = payload.contactId as string;
     const profile = context.profile ?? {};
@@ -71,6 +75,58 @@ export class NurtureAgentHandler implements AgentHandler {
 
     if (!nurture) {
       return this.escalate(event, context, contactId, "no_nurture_config");
+    }
+
+    const reviewDelayDays = (nurture.reviewDelayDays as number) ?? 7;
+    const enabledCadences = nurture.enabledCadences as string[] | undefined;
+
+    if (enabledCadences && !enabledCadences.includes("post-purchase-review")) {
+      return { events: [], actions: [] };
+    }
+
+    return {
+      events: [],
+      actions: [
+        {
+          actionType: "customer-engagement.cadence.start",
+          parameters: {
+            contactId,
+            cadenceId: "post-purchase-review",
+            delayDays: reviewDelayDays,
+          },
+        },
+      ],
+      state: { contactId, cadenceId: "post-purchase-review", reviewDelayDays },
+    };
+  }
+
+  private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+    const payload = event.payload as Record<string, unknown>;
+    const contactId = payload.contactId as string;
+    const requalify = payload.requalify as boolean | undefined;
+    const profile = context.profile ?? {};
+    const nurture = profile.nurture as Record<string, unknown> | undefined;
+
+    if (!nurture) {
+      return this.escalate(event, context, contactId, "no_nurture_config");
+    }
+
+    if (requalify) {
+      const requalEvent = createEventEnvelope({
+        organizationId: context.organizationId,
+        eventType: "lead.qualified",
+        source: { type: "agent", id: "nurture" },
+        payload: { contactId, requalifiedFrom: "dormant" },
+        correlationId: event.correlationId,
+        causationId: event.eventId,
+        attribution: event.attribution,
+      });
+
+      return {
+        events: [requalEvent],
+        actions: [],
+        state: { contactId, requalified: true },
+      };
     }
 
     return {

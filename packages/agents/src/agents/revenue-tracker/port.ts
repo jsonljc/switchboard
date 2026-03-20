@@ -7,7 +7,7 @@ import type { AgentPort } from "../../ports.js";
 export const REVENUE_TRACKER_PORT: AgentPort = {
   agentId: "revenue-tracker",
   version: "0.1.0",
-  inboundEvents: ["revenue.recorded", "stage.advanced"],
+  inboundEvents: ["revenue.recorded", "stage.advanced", "ad.optimized"],
   outboundEvents: ["revenue.attributed", "conversation.escalated"],
   tools: [
     {
