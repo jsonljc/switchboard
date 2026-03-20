@@ -52,7 +52,7 @@ export class AdOptimizerHandler implements AgentHandler {
           campaignId,
           amount,
           attributionModel: payload.attributionModel,
-          timestamp: new Date().toISOString(),
+          timestamp: event.occurredAt,
         },
       },
     };
@@ -77,7 +77,10 @@ export class AdOptimizerHandler implements AgentHandler {
     const anomalyThreshold = (ads.anomalyThreshold as number) ?? 30;
     const dropPercent = payload.dropPercent as number | undefined;
 
-    if (dropPercent !== undefined && dropPercent < anomalyThreshold) {
+    if (dropPercent === undefined) {
+      return this.escalate(event, context, "missing_drop_percent");
+    }
+    if (dropPercent < anomalyThreshold) {
       return { events: [], actions: [] };
     }
 
@@ -168,7 +171,10 @@ export class AdOptimizerHandler implements AgentHandler {
       organizationId: context.organizationId,
       eventType: "conversation.escalated",
       source: { type: "agent", id: "ad-optimizer" },
-      payload: { reason },
+      payload: {
+        contactId: ((event.payload as Record<string, unknown>).contactId as string) ?? null,
+        reason,
+      },
       correlationId: event.correlationId,
       causationId: event.eventId,
       attribution: event.attribution,

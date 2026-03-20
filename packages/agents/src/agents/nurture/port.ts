@@ -8,7 +8,7 @@ export const NURTURE_AGENT_PORT: AgentPort = {
   agentId: "nurture",
   version: "0.1.0",
   inboundEvents: ["stage.advanced", "lead.disqualified", "revenue.recorded"],
-  outboundEvents: ["conversation.escalated", "lead.qualified", "stage.advanced"],
+  outboundEvents: ["lead.qualified", "conversation.escalated"],
   tools: [
     {
       name: "start_cadence",
