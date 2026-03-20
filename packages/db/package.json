@@ -22,7 +22,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@prisma/client": "^6.3.0",
+    "@prisma/client": "^7.5.0",
     "@switchboard/core": "workspace:*",
     "@switchboard/schemas": "workspace:*"
   },

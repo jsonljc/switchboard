@@ -195,8 +195,8 @@ importers:
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.71.2(react@19.2.4))
       '@prisma/client':
-        specifier: ^6.3.0
-        version: 6.19.2(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^7.5.0
+        version: 7.5.0(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
       '@radix-ui/react-checkbox':
         specifier: ^1.1.3
         version: 1.3.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -566,8 +566,8 @@ importers:
   packages/db:
     dependencies:
       '@prisma/client':
-        specifier: ^6.3.0
-        version: 6.19.2(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
+        specifier: ^7.5.0
+        version: 7.5.0(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)
       '@switchboard/core':
         specifier: workspace:*
         version: link:../core
@@ -1528,12 +1528,15 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@prisma/client@6.19.2':
-    resolution: {integrity: sha512-gR2EMvfK/aTxsuooaDA32D8v+us/8AAet+C3J1cc04SW35FPdZYgLF+iN4NDLUgAaUGTKdAB0CYenu1TAgGdMg==}
-    engines: {node: '>=18.18'}
+  '@prisma/client-runtime-utils@7.5.0':
+    resolution: {integrity: sha512-KnJ2b4Si/pcWEtK68uM+h0h1oh80CZt2suhLTVuLaSKg4n58Q9jBF/A42Kw6Ma+aThy1yAhfDeTC0JvEmeZnFQ==}
+
+  '@prisma/client@7.5.0':
+    resolution: {integrity: sha512-h4hF9ctp+kSRs7ENHGsFQmHAgHcfkOCxbYt6Ti9Xi8x7D+kP4tTi9x51UKmiTH/OqdyJAO+8V+r+JA5AWdav7w==}
+    engines: {node: ^20.19 || ^22.12 || >=24.0}
     peerDependencies:
       prisma: '*'
-      typescript: '>=5.1.0'
+      typescript: '>=5.4.0'
     peerDependenciesMeta:
       prisma:
         optional: true
@@ -5561,7 +5564,11 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@prisma/client@6.19.2(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)':
+  '@prisma/client-runtime-utils@7.5.0': {}
+
+  '@prisma/client@7.5.0(prisma@6.19.2(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@prisma/client-runtime-utils': 7.5.0
     optionalDependencies:
       prisma: 6.19.2(magicast@0.3.5)(typescript@5.9.3)
       typescript: 5.9.3
