@@ -74,6 +74,9 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
+COPY --from=build /app/packages/agents/package.json packages/agents/package.json
+COPY --from=build /app/packages/agents/dist/ packages/agents/dist/
+
 COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
 COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
