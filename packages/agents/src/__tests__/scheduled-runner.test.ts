@@ -155,6 +155,29 @@ describe("ScheduledRunner", () => {
     });
   });
 
+  describe("start / stop", () => {
+    it("starts and stops the timer", () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const runner = new ScheduledRunner({ registry, eventLoop, intervalMs: 60000 });
+
+      expect(runner.running).toBe(false);
+      runner.start();
+      expect(runner.running).toBe(true);
+
+      // Double start is idempotent
+      runner.start();
+      expect(runner.running).toBe(true);
+
+      runner.stop();
+      expect(runner.running).toBe(false);
+
+      // Double stop is idempotent
+      runner.stop();
+      expect(runner.running).toBe(false);
+    });
+  });
+
   describe("runOne", () => {
     it("triggers a specific agent", async () => {
       const registry = makeRegistry();
@@ -202,6 +225,61 @@ describe("ScheduledRunner", () => {
 
       const processFn = eventLoop.process as ReturnType<typeof vi.fn>;
       expect(processFn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("retry and dead letter integration", () => {
+    it("calls retryExecutor.processRetries on runAll", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const retryExecutor = {
+        processRetries: vi.fn().mockResolvedValue({ retried: 0, failed: 0 }),
+      };
+      const runner = new ScheduledRunner({ registry, eventLoop, retryExecutor });
+
+      await runner.runAll(ORG, makeContext());
+
+      expect(retryExecutor.processRetries).toHaveBeenCalledTimes(1);
+    });
+
+    it("calls deadLetterAlerter.sweep with orgId on runAll", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const deadLetterAlerter = { sweep: vi.fn().mockResolvedValue({ swept: 0, escalated: 0 }) };
+      const runner = new ScheduledRunner({ registry, eventLoop, deadLetterAlerter });
+
+      await runner.runAll(ORG, makeContext());
+
+      expect(deadLetterAlerter.sweep).toHaveBeenCalledTimes(1);
+      expect(deadLetterAlerter.sweep).toHaveBeenCalledWith(ORG);
+    });
+
+    it("does not fail when retryExecutor throws", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const retryExecutor = {
+        processRetries: vi.fn().mockRejectedValue(new Error("retry boom")),
+      };
+      const runner = new ScheduledRunner({ registry, eventLoop, retryExecutor });
+
+      const results = await runner.runAll(ORG, makeContext());
+
+      expect(results).toHaveLength(2);
+      expect(results.every((r) => r.triggered)).toBe(true);
+    });
+
+    it("does not fail when deadLetterAlerter throws", async () => {
+      const registry = makeRegistry();
+      const eventLoop = makeMockEventLoop();
+      const deadLetterAlerter = {
+        sweep: vi.fn().mockRejectedValue(new Error("alerter boom")),
+      };
+      const runner = new ScheduledRunner({ registry, eventLoop, deadLetterAlerter });
+
+      const results = await runner.runAll(ORG, makeContext());
+
+      expect(results).toHaveLength(2);
+      expect(results.every((r) => r.triggered)).toBe(true);
     });
   });
 });
