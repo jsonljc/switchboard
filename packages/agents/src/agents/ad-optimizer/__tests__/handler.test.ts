@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AdOptimizerHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 
 function makeAttributionEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -222,5 +223,47 @@ describe("AdOptimizerHandler", () => {
     );
     expect(response.events[0]!.causationId).toBe(event.eventId);
     expect(response.events[0]!.correlationId).toBe(event.correlationId);
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when campaignId is missing from anomaly event", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "ad.anomaly_detected",
+        source: { type: "system", id: "monitoring" },
+        payload: { platform: "meta", metric: "ROAS" },
+      });
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { ads: { connectedPlatforms: ["meta"] } },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
+    it("throws PayloadValidationError when amount is missing from attribution event", async () => {
+      const handler = new AdOptimizerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "revenue.attributed",
+        source: { type: "agent", id: "revenue-tracker" },
+        payload: { campaignId: "camp-1" },
+      });
+      await expect(
+        handler.handle(
+          event,
+          {},
+          {
+            organizationId: "org-1",
+            profile: { ads: { connectedPlatforms: ["meta"] } },
+          },
+        ),
+      ).rejects.toThrow(PayloadValidationError);
+    });
   });
 });
