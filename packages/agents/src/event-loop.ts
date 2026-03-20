@@ -70,6 +70,136 @@ export class EventLoop {
     return { processed, depth: maxDepthReached.value };
   }
 
+  private shouldSkipDestination(
+    event: RoutedEventEnvelope,
+    destId: string,
+    destType: string,
+    executionMode: string,
+    isUrgent: boolean,
+    depth: number,
+  ): boolean {
+    const targetAgentId = event.metadata?.targetAgentId as string | undefined;
+    if (targetAgentId && destType === "agent" && destId !== targetAgentId) {
+      return true;
+    }
+    if (executionMode === "scheduled" && !isUrgent) {
+      return true;
+    }
+    if (executionMode === "hybrid" && !isUrgent && depth === 0) {
+      return true;
+    }
+    return false;
+  }
+
+  private async recordDelivery(
+    eventId: string,
+    destinationId: string,
+    status: "failed" | "succeeded" | "skipped",
+    attempts: number,
+    error?: string,
+  ): Promise<void> {
+    try {
+      await this.deliveryStore.record({
+        eventId,
+        destinationId,
+        status,
+        attempts,
+        error,
+        ...(status === "succeeded" ? { lastAttemptAt: new Date().toISOString() } : {}),
+      });
+    } catch {
+      // store outage must not block event processing
+    }
+  }
+
+  private async executeActions(
+    response: AgentResponse,
+    context: AgentContext,
+  ): Promise<{ actionsExecuted: string[]; actionsFailed: string[] }> {
+    const actionsExecuted: string[] = [];
+    const actionsFailed: string[] = [];
+    for (const action of response.actions) {
+      const actionResult = await this.actionExecutor.execute(action, context, this.policyBridge);
+      if (actionResult.success) {
+        actionsExecuted.push(action.actionType);
+      } else {
+        actionsFailed.push(action.actionType);
+      }
+    }
+    return { actionsExecuted, actionsFailed };
+  }
+
+  private async processAgent(
+    event: RoutedEventEnvelope,
+    destId: string,
+    config: Record<string, unknown>,
+    handler: {
+      handle: (
+        e: RoutedEventEnvelope,
+        c: Record<string, unknown>,
+        ctx: AgentContext,
+      ) => Promise<AgentResponse>;
+    },
+    context: AgentContext,
+  ): Promise<{ result: ProcessedAgent; outputEvents: RoutedEventEnvelope[] }> {
+    if (this.stateTracker) {
+      this.stateTracker.startProcessing(
+        event.organizationId,
+        destId,
+        `Processing ${event.eventType}`,
+      );
+    }
+
+    let response: AgentResponse;
+    try {
+      response = await handler.handle(event, config, context);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      if (this.stateTracker) {
+        this.stateTracker.setError(event.organizationId, destId, error);
+      }
+      await this.recordDelivery(event.eventId, destId, "failed", 1, error);
+      return {
+        result: {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          agentId: destId,
+          success: false,
+          outputEvents: [],
+          actionsExecuted: [],
+          actionsFailed: [],
+          error,
+        },
+        outputEvents: [],
+      };
+    }
+
+    const { actionsExecuted, actionsFailed } = await this.executeActions(response, context);
+
+    if (this.stateTracker) {
+      this.stateTracker.completeProcessing(
+        event.organizationId,
+        destId,
+        `Processed ${event.eventType}`,
+      );
+    }
+
+    await this.recordDelivery(event.eventId, destId, "succeeded", 1);
+
+    return {
+      result: {
+        eventId: event.eventId,
+        eventType: event.eventType,
+        agentId: destId,
+        success: true,
+        outputEvents: response.events.map((e) => e.eventType),
+        actionsExecuted,
+        actionsFailed,
+      },
+      outputEvents: response.events,
+    };
+  }
+
   private async processRecursive(
     event: RoutedEventEnvelope,
     context: AgentContext,
@@ -78,11 +208,7 @@ export class EventLoop {
     maxDepthReached: { value: number },
     seenKeys: Set<string>,
   ): Promise<void> {
-    if (depth >= this.maxDepth) {
-      return;
-    }
-
-    if (seenKeys.has(event.idempotencyKey)) {
+    if (depth >= this.maxDepth || seenKeys.has(event.idempotencyKey)) {
       return;
     }
     seenKeys.add(event.idempotencyKey);
@@ -100,20 +226,16 @@ export class EventLoop {
         continue;
       }
 
-      // targetAgentId filtering: skip agents that don't match the target
-      const targetAgentId = event.metadata?.targetAgentId as string | undefined;
-      if (targetAgentId && dest.type === "agent" && dest.id !== targetAgentId) {
-        continue;
-      }
-
-      // Scheduled agents only process urgent events (and ScheduledRunner triggers)
-      // Hybrid agents process urgent events + chained events (depth > 0),
-      // but skip top-level non-urgent events
-      const mode = registryEntry.executionMode;
-      if (mode === "scheduled" && !isUrgent) {
-        continue;
-      }
-      if (mode === "hybrid" && !isUrgent && depth === 0) {
+      if (
+        this.shouldSkipDestination(
+          event,
+          dest.id,
+          dest.type,
+          registryEntry.executionMode,
+          isUrgent,
+          depth,
+        )
+      ) {
         continue;
       }
 
@@ -122,7 +244,6 @@ export class EventLoop {
         continue;
       }
 
-      // Policy check
       const evaluation = await this.policyBridge.evaluate({
         eventId: event.eventId,
         destinationType: "agent",
@@ -133,108 +254,27 @@ export class EventLoop {
       });
 
       if (!evaluation.approved) {
-        try {
-          await this.deliveryStore.record({
-            eventId: event.eventId,
-            destinationId: dest.id,
-            status: "failed",
-            attempts: 0,
-            error: evaluation.reason ?? "blocked by policy",
-          });
-        } catch {
-          // store outage must not block event processing
-        }
+        await this.recordDelivery(
+          event.eventId,
+          dest.id,
+          "failed",
+          0,
+          evaluation.reason ?? "blocked by policy",
+        );
         continue;
       }
 
-      // Execute handler
-      if (this.stateTracker) {
-        this.stateTracker.startProcessing(
-          event.organizationId,
-          dest.id,
-          `Processing ${event.eventType}`,
-        );
-      }
-
-      let response: AgentResponse;
-      try {
-        response = await handler.handle(event, registryEntry.config, context);
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
-
-        if (this.stateTracker) {
-          this.stateTracker.setError(event.organizationId, dest.id, error);
-        }
-
-        try {
-          await this.deliveryStore.record({
-            eventId: event.eventId,
-            destinationId: dest.id,
-            status: "failed",
-            attempts: 1,
-            error,
-          });
-        } catch {
-          // store outage must not block event processing
-        }
-
-        processed.push({
-          eventId: event.eventId,
-          eventType: event.eventType,
-          agentId: dest.id,
-          success: false,
-          outputEvents: [],
-          actionsExecuted: [],
-          actionsFailed: [],
-          error,
-        });
-        continue;
-      }
-
-      // Execute actions
-      const actionsExecuted: string[] = [];
-      const actionsFailed: string[] = [];
-      for (const action of response.actions) {
-        const actionResult = await this.actionExecutor.execute(action, context, this.policyBridge);
-        if (actionResult.success) {
-          actionsExecuted.push(action.actionType);
-        } else {
-          actionsFailed.push(action.actionType);
-        }
-      }
-
-      if (this.stateTracker) {
-        this.stateTracker.completeProcessing(
-          event.organizationId,
-          dest.id,
-          `Processed ${event.eventType}`,
-        );
-      }
-
-      try {
-        await this.deliveryStore.record({
-          eventId: event.eventId,
-          destinationId: dest.id,
-          status: "succeeded",
-          attempts: 1,
-          lastAttemptAt: new Date().toISOString(),
-        });
-      } catch {
-        // store outage must not block event processing
-      }
-
-      processed.push({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        agentId: dest.id,
-        success: true,
-        outputEvents: response.events.map((e) => e.eventType),
-        actionsExecuted,
-        actionsFailed,
-      });
+      const { result, outputEvents } = await this.processAgent(
+        event,
+        dest.id,
+        registryEntry.config,
+        handler,
+        context,
+      );
+      processed.push(result);
 
       // Recurse for output events
-      for (const outputEvent of response.events) {
+      for (const outputEvent of outputEvents) {
         if (depth + 1 > maxDepthReached.value) {
           maxDepthReached.value = depth + 1;
         }

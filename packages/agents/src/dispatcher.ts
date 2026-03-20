@@ -18,6 +18,7 @@ export interface DispatchResult {
   destinationType: DestinationType;
   status: DeliveryStatus | "blocked_by_policy";
   error?: string;
+  skippedReason?: string;
 }
 
 export interface DispatcherConfig {
@@ -40,25 +41,127 @@ export class Dispatcher {
     this.stateTracker = config.stateTracker;
   }
 
-  async execute(plan: RoutePlan): Promise<DispatchResult[]> {
-    const promises: Promise<DispatchResult>[] = [];
+  private async recordDelivery(
+    eventId: string,
+    destinationId: string,
+    status: "failed" | "succeeded" | "skipped",
+    attempts: number,
+    error?: string,
+  ): Promise<void> {
+    try {
+      await this.store.record({
+        eventId,
+        destinationId,
+        status,
+        attempts,
+        error,
+        ...(status === "succeeded" ? { lastAttemptAt: new Date().toISOString() } : {}),
+      });
+    } catch {
+      // Store failure should not crash the dispatch
+    }
+  }
 
-    for (const dest of plan.destinations) {
-      if (dest.sequencing === "parallel") {
-        promises.push(
-          this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality).catch(
-            (err): DispatchResult => ({
-              destinationId: dest.id,
-              destinationType: dest.type,
-              status: "failed",
-              error: err instanceof Error ? err.message : String(err),
-            }),
-          ),
+  async execute(plan: RoutePlan): Promise<DispatchResult[]> {
+    const results: DispatchResult[] = [];
+    const completedDestinations = new Map<string, DispatchResult>();
+
+    // Phase 1: Execute all "blocking" destinations sequentially
+    const blockingDests = plan.destinations.filter((d) => d.sequencing === "blocking");
+    for (const dest of blockingDests) {
+      const result = await this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality).catch(
+        (err): DispatchResult => ({
+          destinationId: dest.id,
+          destinationType: dest.type,
+          status: "failed",
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      results.push(result);
+      completedDestinations.set(dest.id, result);
+
+      // If a required blocking destination fails, skip all remaining destinations
+      if (dest.criticality === "required" && result.status === "failed") {
+        const remainingDests = plan.destinations.filter(
+          (d) => d.sequencing !== "blocking" || !completedDestinations.has(d.id),
         );
+        for (const skipped of remainingDests) {
+          const reason = `Required blocking destination ${dest.id} failed`;
+          const skippedResult: DispatchResult = {
+            destinationId: skipped.id,
+            destinationType: skipped.type,
+            status: "skipped",
+            skippedReason: reason,
+          };
+          results.push(skippedResult);
+          completedDestinations.set(skipped.id, skippedResult);
+          await this.recordDelivery(plan.event.eventId, skipped.id, "skipped", 0, reason);
+        }
+        return results;
       }
     }
 
-    return Promise.all(promises);
+    // Phase 2: Execute all "parallel" destinations concurrently
+    const parallelDests = plan.destinations.filter((d) => d.sequencing === "parallel");
+    const parallelPromises = parallelDests.map((dest) =>
+      this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality).catch(
+        (err): DispatchResult => ({
+          destinationId: dest.id,
+          destinationType: dest.type,
+          status: "failed",
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      ),
+    );
+
+    const parallelResults = await Promise.all(parallelPromises);
+    for (const result of parallelResults) {
+      results.push(result);
+      completedDestinations.set(result.destinationId, result);
+    }
+
+    // Phase 3: Execute "after_success" destinations based on their dependencies
+    const afterSuccessDests = plan.destinations.filter((d) => d.sequencing === "after_success");
+    for (const dest of afterSuccessDests) {
+      if (!dest.afterDestinationId) {
+        const reason = "Missing afterDestinationId dependency";
+        results.push({
+          destinationId: dest.id,
+          destinationType: dest.type,
+          status: "skipped",
+          skippedReason: reason,
+        });
+        await this.recordDelivery(plan.event.eventId, dest.id, "skipped", 0, reason);
+        continue;
+      }
+
+      const dependency = completedDestinations.get(dest.afterDestinationId);
+      if (!dependency || dependency.status !== "succeeded") {
+        const reason = `Dependency ${dest.afterDestinationId} did not succeed`;
+        results.push({
+          destinationId: dest.id,
+          destinationType: dest.type,
+          status: "skipped",
+          skippedReason: reason,
+        });
+        await this.recordDelivery(plan.event.eventId, dest.id, "skipped", 0, reason);
+        continue;
+      }
+
+      // Dependency succeeded - execute this destination
+      const result = await this.dispatchOne(plan.event, dest.type, dest.id, dest.criticality).catch(
+        (err): DispatchResult => ({
+          destinationId: dest.id,
+          destinationType: dest.type,
+          status: "failed",
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      results.push(result);
+      completedDestinations.set(dest.id, result);
+    }
+
+    return results;
   }
 
   private async dispatchOne(
@@ -67,7 +170,6 @@ export class Dispatcher {
     destinationId: string,
     criticality: string,
   ): Promise<DispatchResult> {
-    // 1. Policy check
     const evaluation = await this.bridge.evaluate({
       eventId: event.eventId,
       destinationType: type,
@@ -78,17 +180,13 @@ export class Dispatcher {
     });
 
     if (!evaluation.approved) {
-      try {
-        await this.store.record({
-          eventId: event.eventId,
-          destinationId,
-          status: "failed",
-          attempts: 0,
-          error: evaluation.reason ?? "blocked by policy",
-        });
-      } catch {
-        // Store failure should not crash the dispatch
-      }
+      await this.recordDelivery(
+        event.eventId,
+        destinationId,
+        "failed",
+        0,
+        evaluation.reason ?? "blocked by policy",
+      );
       return {
         destinationId,
         destinationType: type,
@@ -97,29 +195,13 @@ export class Dispatcher {
       };
     }
 
-    // 2. Find handler
     const handler = this.handlers[type];
     if (!handler) {
-      try {
-        await this.store.record({
-          eventId: event.eventId,
-          destinationId,
-          status: "failed",
-          attempts: 1,
-          error: `No handler for destination type: ${type}`,
-        });
-      } catch {
-        // Store failure should not crash the dispatch
-      }
-      return {
-        destinationId,
-        destinationType: type,
-        status: "failed",
-        error: `No handler for destination type: ${type}`,
-      };
+      const error = `No handler for destination type: ${type}`;
+      await this.recordDelivery(event.eventId, destinationId, "failed", 1, error);
+      return { destinationId, destinationType: type, status: "failed", error };
     }
 
-    // 3. Dispatch
     if (type === "agent" && this.stateTracker) {
       this.stateTracker.startProcessing(
         event.organizationId,
@@ -130,18 +212,7 @@ export class Dispatcher {
 
     try {
       await handler(event, destinationId);
-      try {
-        await this.store.record({
-          eventId: event.eventId,
-          destinationId,
-          status: "succeeded",
-          attempts: 1,
-          lastAttemptAt: new Date().toISOString(),
-        });
-      } catch {
-        // Store failure should not crash the dispatch
-      }
-
+      await this.recordDelivery(event.eventId, destinationId, "succeeded", 1);
       if (type === "agent" && this.stateTracker) {
         this.stateTracker.completeProcessing(
           event.organizationId,
@@ -149,27 +220,13 @@ export class Dispatcher {
           `Processed ${event.eventType}`,
         );
       }
-
       return { destinationId, destinationType: type, status: "succeeded" };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      try {
-        await this.store.record({
-          eventId: event.eventId,
-          destinationId,
-          status: "failed",
-          attempts: 1,
-          lastAttemptAt: new Date().toISOString(),
-          error,
-        });
-      } catch {
-        // Store failure should not crash the dispatch
-      }
-
+      await this.recordDelivery(event.eventId, destinationId, "failed", 1, error);
       if (type === "agent" && this.stateTracker) {
         this.stateTracker.setError(event.organizationId, destinationId, error);
       }
-
       return { destinationId, destinationType: type, status: "failed", error };
     }
   }
