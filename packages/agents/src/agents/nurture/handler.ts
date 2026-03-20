@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { canRequalify, type LifecycleStage } from "../../lifecycle.js";
 import { validatePayload } from "../../validate-payload.js";
 
 const STAGE_TO_CADENCE: Record<string, string> = {
@@ -106,7 +107,11 @@ export class NurtureAgentHandler implements AgentHandler {
   }
 
   private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = validatePayload(event.payload, { contactId: "string" }, "nurture");
+    const payload = validatePayload(
+      event.payload,
+      { contactId: "string", requalify: "boolean?" },
+      "nurture",
+    );
     const contactId = payload.contactId as string;
     const requalify = payload.requalify as boolean | undefined;
     const profile = context.profile ?? {};
@@ -117,6 +122,11 @@ export class NurtureAgentHandler implements AgentHandler {
     }
 
     if (requalify) {
+      const lifecycleStage = context.contactData?.lifecycleStage as LifecycleStage | undefined;
+      if (!canRequalify(lifecycleStage)) {
+        return this.escalate(event, context, contactId, "requalify_blocked_by_lifecycle");
+      }
+
       const requalEvent = createEventEnvelope({
         organizationId: context.organizationId,
         eventType: "lead.qualified",
