@@ -13,6 +13,10 @@ describe("Sales Closer Port", () => {
     expect(SALES_CLOSER_PORT.inboundEvents).toContain("lead.qualified");
   });
 
+  it("accepts message.received event", () => {
+    expect(SALES_CLOSER_PORT.inboundEvents).toContain("message.received");
+  });
+
   it("declares only events the handler actually emits", () => {
     expect(SALES_CLOSER_PORT.outboundEvents).toContain("stage.advanced");
     expect(SALES_CLOSER_PORT.outboundEvents).toContain("conversation.escalated");

@@ -166,6 +166,26 @@ describe("SalesCloserHandler", () => {
     expect(response.events[0]!.eventType).toBe("conversation.escalated");
   });
 
+  it("handles message.received the same as lead.qualified", async () => {
+    const handler = new SalesCloserHandler();
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "message.received",
+      source: { type: "webhook", id: "whatsapp" },
+      payload: { contactId: "c1" },
+    });
+
+    const context = {
+      organizationId: "org-1",
+      profile: { booking: { bookingUrl: "https://book.example.com" } },
+    };
+
+    const result = await handler.handle(event, {}, context);
+
+    expect(result.events.some((e) => e.eventType === "stage.advanced")).toBe(true);
+  });
+
   it("ignores non-lead.qualified events", async () => {
     const handler = new SalesCloserHandler();
 
