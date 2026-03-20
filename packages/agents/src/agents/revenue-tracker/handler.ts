@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { validatePayload } from "../../validate-payload.js";
 
 export class RevenueTrackerHandler implements AgentHandler {
   async handle(
@@ -28,7 +29,11 @@ export class RevenueTrackerHandler implements AgentHandler {
   }
 
   private handleRevenue(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(
+      event.payload,
+      { contactId: "string", amount: "number", currency: "string?" },
+      "revenue-tracker",
+    );
     const contactId = payload.contactId as string;
     const amount = payload.amount as number;
     const currency = (payload.currency as string) ?? "USD";
@@ -97,7 +102,11 @@ export class RevenueTrackerHandler implements AgentHandler {
   }
 
   private handleStage(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(
+      event.payload,
+      { contactId: "string", stage: "string" },
+      "revenue-tracker",
+    );
     const contactId = payload.contactId as string;
     const stage = payload.stage as string;
     const profile = context.profile ?? {};

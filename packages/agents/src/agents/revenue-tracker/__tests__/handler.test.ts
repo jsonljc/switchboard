@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RevenueTrackerHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
+import { PayloadValidationError } from "../../../validate-payload.js";
 
 function makeRevenueEvent(payload: Record<string, unknown> = {}) {
   return createEventEnvelope({
@@ -395,5 +396,35 @@ describe("RevenueTrackerHandler", () => {
 
     const payload = response.events[0]!.payload as Record<string, unknown>;
     expect(payload.currency).toBe("EUR");
+  });
+
+  describe("payload validation", () => {
+    it("throws PayloadValidationError when contactId missing from revenue.recorded", async () => {
+      const handler = new RevenueTrackerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "revenue.recorded",
+        source: { type: "system", id: "payments" },
+        payload: { amount: 500 },
+      });
+
+      await expect(
+        handler.handle(event, {}, { organizationId: "org-1", profile: { revenue: {} } }),
+      ).rejects.toThrow(PayloadValidationError);
+    });
+
+    it("throws PayloadValidationError when amount missing from revenue.recorded", async () => {
+      const handler = new RevenueTrackerHandler();
+      const event = createEventEnvelope({
+        organizationId: "org-1",
+        eventType: "revenue.recorded",
+        source: { type: "system", id: "payments" },
+        payload: { contactId: "c1" },
+      });
+
+      await expect(
+        handler.handle(event, {}, { organizationId: "org-1", profile: { revenue: {} } }),
+      ).rejects.toThrow(PayloadValidationError);
+    });
   });
 });
