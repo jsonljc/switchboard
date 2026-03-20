@@ -100,6 +100,12 @@ export class EventLoop {
         continue;
       }
 
+      // targetAgentId filtering: skip agents that don't match the target
+      const targetAgentId = event.metadata?.targetAgentId as string | undefined;
+      if (targetAgentId && dest.type === "agent" && dest.id !== targetAgentId) {
+        continue;
+      }
+
       // Scheduled agents only process urgent events (and ScheduledRunner triggers)
       // Hybrid agents process urgent events + chained events (depth > 0),
       // but skip top-level non-urgent events
@@ -127,13 +133,17 @@ export class EventLoop {
       });
 
       if (!evaluation.approved) {
-        await this.deliveryStore.record({
-          eventId: event.eventId,
-          destinationId: dest.id,
-          status: "failed",
-          attempts: 0,
-          error: evaluation.reason ?? "blocked by policy",
-        });
+        try {
+          await this.deliveryStore.record({
+            eventId: event.eventId,
+            destinationId: dest.id,
+            status: "failed",
+            attempts: 0,
+            error: evaluation.reason ?? "blocked by policy",
+          });
+        } catch {
+          // store outage must not block event processing
+        }
         continue;
       }
 
@@ -156,13 +166,17 @@ export class EventLoop {
           this.stateTracker.setError(event.organizationId, dest.id, error);
         }
 
-        await this.deliveryStore.record({
-          eventId: event.eventId,
-          destinationId: dest.id,
-          status: "failed",
-          attempts: 1,
-          error,
-        });
+        try {
+          await this.deliveryStore.record({
+            eventId: event.eventId,
+            destinationId: dest.id,
+            status: "failed",
+            attempts: 1,
+            error,
+          });
+        } catch {
+          // store outage must not block event processing
+        }
 
         processed.push({
           eventId: event.eventId,
@@ -197,13 +211,17 @@ export class EventLoop {
         );
       }
 
-      await this.deliveryStore.record({
-        eventId: event.eventId,
-        destinationId: dest.id,
-        status: "succeeded",
-        attempts: 1,
-        lastAttemptAt: new Date().toISOString(),
-      });
+      try {
+        await this.deliveryStore.record({
+          eventId: event.eventId,
+          destinationId: dest.id,
+          status: "succeeded",
+          attempts: 1,
+          lastAttemptAt: new Date().toISOString(),
+        });
+      } catch {
+        // store outage must not block event processing
+      }
 
       processed.push({
         eventId: event.eventId,
