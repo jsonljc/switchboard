@@ -5,6 +5,7 @@
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
 import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import { validatePayload } from "../../validate-payload.js";
 
 const STAGE_TO_CADENCE: Record<string, string> = {
   booking_initiated: "consultation-reminder",
@@ -20,7 +21,11 @@ export class NurtureAgentHandler implements AgentHandler {
     context: AgentContext,
   ): Promise<AgentResponse> {
     if (event.eventType === "stage.advanced") {
-      const payload = event.payload as Record<string, unknown>;
+      const payload = validatePayload(
+        event.payload,
+        { contactId: "string", stage: "string" },
+        "nurture",
+      );
       const contactId = payload.contactId as string;
       const stage = payload.stage as string;
       const profile = context.profile ?? {};
@@ -68,7 +73,7 @@ export class NurtureAgentHandler implements AgentHandler {
   }
 
   private handleRevenueRecorded(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(event.payload, { contactId: "string" }, "nurture");
     const contactId = payload.contactId as string;
     const profile = context.profile ?? {};
     const nurture = profile.nurture as Record<string, unknown> | undefined;
@@ -101,7 +106,7 @@ export class NurtureAgentHandler implements AgentHandler {
   }
 
   private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(event.payload, { contactId: "string" }, "nurture");
     const contactId = payload.contactId as string;
     const requalify = payload.requalify as boolean | undefined;
     const profile = context.profile ?? {};
