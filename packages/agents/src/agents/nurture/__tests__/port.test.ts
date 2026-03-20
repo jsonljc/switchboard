@@ -17,8 +17,20 @@ describe("Nurture Agent Port", () => {
     expect(NURTURE_AGENT_PORT.inboundEvents).toContain("lead.disqualified");
   });
 
+  it("accepts revenue.recorded events", () => {
+    expect(NURTURE_AGENT_PORT.inboundEvents).toContain("revenue.recorded");
+  });
+
   it("emits conversation.escalated events", () => {
     expect(NURTURE_AGENT_PORT.outboundEvents).toContain("conversation.escalated");
+  });
+
+  it("emits lead.qualified events for re-qualification", () => {
+    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("lead.qualified");
+  });
+
+  it("emits stage.advanced events", () => {
+    expect(NURTURE_AGENT_PORT.outboundEvents).toContain("stage.advanced");
   });
 
   it("declares start_cadence, send_reminder, and request_review tools", () => {

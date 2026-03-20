@@ -20,6 +20,10 @@ export class RevenueTrackerHandler implements AgentHandler {
       return this.handleStage(event, context);
     }
 
+    if (event.eventType === "ad.optimized") {
+      return this.handleAdOptimized(event, context);
+    }
+
     return { events: [], actions: [] };
   }
 
@@ -122,6 +126,29 @@ export class RevenueTrackerHandler implements AgentHandler {
         },
       ],
       state: { contactId, stage, logged: true },
+    };
+  }
+
+  private handleAdOptimized(event: RoutedEventEnvelope, _context: AgentContext): AgentResponse {
+    const payload = event.payload as Record<string, unknown>;
+    const action = payload.action as string;
+    const campaignId = payload.campaignId as string | undefined;
+
+    return {
+      events: [],
+      actions: [
+        {
+          actionType: "crm.activity.log",
+          parameters: {
+            activityType: "ad_optimization",
+            action,
+            campaignId: campaignId ?? null,
+            platforms: payload.platforms ?? null,
+            triggeredBy: payload.triggeredBy ?? null,
+          },
+        },
+      ],
+      state: { action, campaignId: campaignId ?? null, logged: true },
     };
   }
 

@@ -9,9 +9,10 @@ describe("Revenue Tracker Port", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it("accepts revenue.recorded and stage.advanced events", () => {
+  it("accepts revenue.recorded, stage.advanced, and ad.optimized events", () => {
     expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("revenue.recorded");
     expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("stage.advanced");
+    expect(REVENUE_TRACKER_PORT.inboundEvents).toContain("ad.optimized");
   });
 
   it("emits revenue.attributed and conversation.escalated events", () => {

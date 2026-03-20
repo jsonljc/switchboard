@@ -291,6 +291,98 @@ describe("NurtureAgentHandler", () => {
     expect(response.state).toEqual({ contactId: "c1", cadenceId: "cold-nurture" });
   });
 
+  it("emits lead.qualified on lead.disqualified with requalify flag", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = makeDisqualifiedEvent({ requalify: true });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]!.eventType).toBe("lead.qualified");
+    expect(response.events[0]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        requalifiedFrom: "dormant",
+      }),
+    );
+    expect(response.actions).toHaveLength(0);
+    expect(response.state).toEqual({ contactId: "c1", requalified: true });
+  });
+
+  it("starts post-purchase-review cadence on revenue.recorded", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "revenue.recorded",
+      source: { type: "system", id: "payments" },
+      payload: { contactId: "c1", amount: 500 },
+    });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: { reviewDelayDays: 3 } },
+      },
+    );
+
+    expect(response.actions).toHaveLength(1);
+    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
+    expect(response.actions[0]!.parameters.cadenceId).toBe("post-purchase-review");
+    expect(response.actions[0]!.parameters.delayDays).toBe(3);
+  });
+
+  it("uses default reviewDelayDays of 7 for revenue.recorded", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "revenue.recorded",
+      source: { type: "system", id: "payments" },
+      payload: { contactId: "c1", amount: 500 },
+    });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: {} },
+      },
+    );
+
+    expect(response.actions[0]!.parameters.delayDays).toBe(7);
+  });
+
+  it("skips review cadence when post-purchase-review not in enabledCadences", async () => {
+    const handler = new NurtureAgentHandler();
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "revenue.recorded",
+      source: { type: "system", id: "payments" },
+      payload: { contactId: "c1", amount: 500 },
+    });
+
+    const response = await handler.handle(
+      event,
+      {},
+      {
+        organizationId: "org-1",
+        profile: { nurture: { enabledCadences: ["consultation-reminder"] } },
+      },
+    );
+
+    expect(response.events).toHaveLength(0);
+    expect(response.actions).toHaveLength(0);
+  });
+
   it("escalates with no_nurture_config on lead.disqualified when no nurture config", async () => {
     const handler = new NurtureAgentHandler();
     const event = makeDisqualifiedEvent();
