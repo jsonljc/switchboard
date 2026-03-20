@@ -85,5 +85,8 @@ describe("AGENT_EVENT_TYPES", () => {
     expect(AGENT_EVENT_TYPES).toContain("revenue.attributed");
     expect(AGENT_EVENT_TYPES).toContain("ad.optimized");
     expect(AGENT_EVENT_TYPES).toContain("conversation.escalated");
+    expect(AGENT_EVENT_TYPES).toContain("message.received");
+    expect(AGENT_EVENT_TYPES).toContain("message.sent");
+    expect(AGENT_EVENT_TYPES).toContain("escalation.owner_replied");
   });
 });
