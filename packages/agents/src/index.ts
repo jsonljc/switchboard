@@ -134,3 +134,5 @@ export {
   type ScheduledRunnerConfig,
   type ScheduledRunResult,
 } from "./scheduled-runner.js";
+
+export { validatePayload, PayloadValidationError } from "./validate-payload.js";

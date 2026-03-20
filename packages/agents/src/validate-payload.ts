@@ -43,7 +43,7 @@ export function validatePayload(
   if (payload === null || payload === undefined || typeof payload !== "object") {
     throw new PayloadValidationError(
       agentId,
-      Object.keys(schema).filter((k) => !schema[k].endsWith("?")),
+      Object.keys(schema).filter((k) => !schema[k]!.endsWith("?")),
       [],
     );
   }

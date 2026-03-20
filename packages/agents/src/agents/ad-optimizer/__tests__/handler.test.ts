@@ -278,7 +278,7 @@ describe("AdOptimizerHandler", () => {
       );
       expect(response.state).toBeDefined();
       expect(
-        (response.state as Record<string, Record<string, unknown>>).lastAttribution.timestamp,
+        (response.state as Record<string, Record<string, unknown>>).lastAttribution!.timestamp,
       ).toBe(fixedTimestamp);
     });
   });
