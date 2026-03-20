@@ -136,6 +136,29 @@ describe("AgentRegistry", () => {
     expect(entry!.executionMode).toBe("realtime");
   });
 
+  it("lists all registered organizations", () => {
+    const registry = new AgentRegistry();
+    registry.register("org-1", {
+      agentId: "lead-responder",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+    });
+    registry.register("org-2", {
+      agentId: "lead-responder",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+    });
+
+    const orgs = registry.listOrganizations();
+    expect(orgs.sort()).toEqual(["org-1", "org-2"]);
+  });
+
   it("updates runtime info", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
@@ -157,5 +180,60 @@ describe("AgentRegistry", () => {
     const entry = registry.get("org-1", "lead-responder");
     expect(entry!.runtime?.sessionId).toBe("sess-123");
     expect(entry!.runtime?.health).toBe("healthy");
+  });
+
+  it("throws when re-registering the same agent without forceOverwrite", () => {
+    const registry = new AgentRegistry();
+    registry.register("org-1", {
+      agentId: "lead-responder",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+    });
+
+    expect(() => {
+      registry.register("org-1", {
+        agentId: "lead-responder",
+        version: "0.2.0",
+        installed: true,
+        status: "active",
+        config: {},
+        capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+      });
+    }).toThrow('Agent "lead-responder" already registered for organization "org-1"');
+  });
+
+  it("allows overwrite with forceOverwrite: true", () => {
+    const registry = new AgentRegistry();
+    registry.register("org-1", {
+      agentId: "lead-responder",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: { feature: "old" },
+      capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+    });
+
+    // Should not throw with forceOverwrite
+    expect(() => {
+      registry.register(
+        "org-1",
+        {
+          agentId: "lead-responder",
+          version: "0.2.0",
+          installed: true,
+          status: "active",
+          config: { feature: "new" },
+          capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
+        },
+        { forceOverwrite: true },
+      );
+    }).not.toThrow();
+
+    const entry = registry.get("org-1", "lead-responder");
+    expect(entry!.version).toBe("0.2.0");
+    expect(entry!.config).toEqual({ feature: "new" });
   });
 });

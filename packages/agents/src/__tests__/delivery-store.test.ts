@@ -60,6 +60,38 @@ describe("InMemoryDeliveryStore", () => {
     expect(failed!.error).toBe("Connection refused");
   });
 
+  it("sweeps failed deliveries to dead_letter after max retries", async () => {
+    const store = new InMemoryDeliveryStore();
+    await store.record({
+      eventId: "evt-1",
+      destinationId: "hook-1",
+      status: "failed",
+      attempts: 3,
+    });
+    await store.record({
+      eventId: "evt-2",
+      destinationId: "hook-2",
+      status: "failed",
+      attempts: 1,
+    });
+    await store.record({
+      eventId: "evt-3",
+      destinationId: "hook-3",
+      status: "retrying",
+      attempts: 5,
+    });
+
+    const transitioned = await store.sweepDeadLetters(3);
+    expect(transitioned).toBe(2);
+
+    const retryable = await store.listRetryable();
+    expect(retryable).toHaveLength(1);
+    expect(retryable[0]!.eventId).toBe("evt-2");
+
+    const all = await store.getByEvent("evt-1");
+    expect(all[0]!.status).toBe("dead_letter");
+  });
+
   it("lists failed deliveries for retry", async () => {
     const store = new InMemoryDeliveryStore();
     await store.record({

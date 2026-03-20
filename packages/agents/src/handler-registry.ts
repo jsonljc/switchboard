@@ -22,4 +22,8 @@ export class HandlerRegistry {
   listRegistered(): string[] {
     return [...this.handlers.keys()];
   }
+
+  remove(agentId: string): boolean {
+    return this.handlers.delete(agentId);
+  }
 }

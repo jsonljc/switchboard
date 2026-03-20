@@ -139,7 +139,11 @@ export class RevenueTrackerHandler implements AgentHandler {
   }
 
   private handleAdOptimized(event: RoutedEventEnvelope, _context: AgentContext): AgentResponse {
-    const payload = event.payload as Record<string, unknown>;
+    const payload = validatePayload(
+      event.payload,
+      { action: "string", campaignId: "string?", triggeredBy: "string?" },
+      "revenue-tracker",
+    );
     const action = payload.action as string;
     const campaignId = payload.campaignId as string | undefined;
 

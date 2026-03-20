@@ -51,4 +51,17 @@ describe("HandlerRegistry", () => {
 
     expect(registry.get("lead-responder")).toBe(second);
   });
+
+  it("removes a registered handler", () => {
+    const registry = new HandlerRegistry();
+    const handler = makeMockHandler();
+
+    registry.register("lead-responder", handler);
+    expect(registry.has("lead-responder")).toBe(true);
+
+    const removed = registry.remove("lead-responder");
+    expect(removed).toBe(true);
+    expect(registry.has("lead-responder")).toBe(false);
+    expect(registry.get("lead-responder")).toBeUndefined();
+  });
 });

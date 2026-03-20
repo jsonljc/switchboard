@@ -35,6 +35,7 @@ export interface WebhookDestinationConfig {
   subscribedEvents: string[];
   criticality: DestinationCriticality;
   enabled: boolean;
+  organizationId?: string;
 }
 
 export interface ConnectorDestinationConfig {
@@ -44,4 +45,5 @@ export interface ConnectorDestinationConfig {
   criticality: DestinationCriticality;
   enabled: boolean;
   config: Record<string, unknown>;
+  organizationId?: string;
 }

@@ -471,6 +471,48 @@ describe("EventLoop", () => {
     expect(result.processed).toHaveLength(2);
   });
 
+  it("continues processing when deliveryStore.record() throws", async () => {
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "test-agent",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: { accepts: ["test.event"], emits: [], tools: [] },
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    handlerRegistry.register(
+      "test-agent",
+      makeHandler(() => ({ events: [], actions: [] })),
+    );
+
+    const brokenStore = new InMemoryDeliveryStore();
+    brokenStore.record = vi.fn().mockRejectedValue(new Error("store down"));
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: brokenStore,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "test.event",
+      source: { type: "system", id: "test" },
+      payload: {},
+    });
+
+    // Should not throw despite store failure
+    const result = await loop.process(event, { organizationId: "org-1" });
+    expect(result.processed).toHaveLength(1);
+    expect(result.processed[0]!.success).toBe(true);
+  });
+
   it("records handler errors without crashing the loop", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
