@@ -17,9 +17,7 @@ COPY cartridges/digital-ads/package.json cartridges/digital-ads/
 COPY cartridges/crm/package.json cartridges/crm/
 COPY cartridges/payments/package.json cartridges/payments/
 COPY cartridges/customer-engagement/package.json cartridges/customer-engagement/
-COPY cartridges/quant-trading/package.json cartridges/quant-trading/
 COPY cartridges/revenue-growth/package.json cartridges/revenue-growth/
-COPY cartridges/messaging/package.json cartridges/messaging/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
@@ -68,17 +66,11 @@ COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
 COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
 COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
 
-COPY --from=build /app/cartridges/quant-trading/package.json cartridges/quant-trading/package.json
-COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/dist/
-
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
 COPY --from=build /app/packages/agents/package.json packages/agents/package.json
 COPY --from=build /app/packages/agents/dist/ packages/agents/dist/
-
-COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
-COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
@@ -125,14 +117,8 @@ COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
 COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
 COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
 
-COPY --from=build /app/cartridges/quant-trading/package.json cartridges/quant-trading/package.json
-COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/dist/
-
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
-
-COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
-COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
@@ -191,14 +177,8 @@ COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
 COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
 COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
 
-COPY --from=build /app/cartridges/quant-trading/package.json cartridges/quant-trading/package.json
-COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/dist/
-
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
-
-COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
-COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
 
 COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
 COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/
