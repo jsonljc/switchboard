@@ -193,5 +193,14 @@ export type {
   LifecycleStage as ConversationLifecycleStage,
 } from "./conversation-store.js";
 
+// Knowledge Store (RAG chunk persistence)
+export type {
+  KnowledgeStore,
+  KnowledgeChunk,
+  KnowledgeSourceType,
+  KnowledgeSearchOptions,
+  RetrievalResult,
+} from "./knowledge-store.js";
+
 // LLM Adapter (conversational, agent-facing)
 export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
