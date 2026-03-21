@@ -53,10 +53,10 @@ describe("IngestionPipeline", () => {
 
     expect(result.chunksCreated).toBeGreaterThan(0);
     expect(mockStore.stored.length).toBeGreaterThan(0);
-    expect(mockStore.stored[0].organizationId).toBe("org-1");
-    expect(mockStore.stored[0].agentId).toBe("lead-responder");
-    expect(mockStore.stored[0].sourceType).toBe("document");
-    expect(mockStore.stored[0].embedding).toHaveLength(1024);
+    expect(mockStore.stored[0]!.organizationId).toBe("org-1");
+    expect(mockStore.stored[0]!.agentId).toBe("lead-responder");
+    expect(mockStore.stored[0]!.sourceType).toBe("document");
+    expect(mockStore.stored[0]!.embedding).toHaveLength(1024);
   });
 
   it("uses embedBatch for efficient embedding", async () => {

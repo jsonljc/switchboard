@@ -34,7 +34,7 @@ export class ClaudeEmbeddingAdapter implements EmbeddingAdapter {
       texts: [text],
       model: this.model,
     });
-    return response.embeddings[0];
+    return response.embeddings[0] ?? [];
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {

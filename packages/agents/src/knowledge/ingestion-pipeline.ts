@@ -81,7 +81,7 @@ export class IngestionPipeline {
       documentId: input.documentId,
       content: tc.content,
       sourceType: input.sourceType,
-      embedding: embeddings[i],
+      embedding: embeddings[i] ?? [],
       chunkIndex: tc.index,
       metadata: input.metadata ?? {},
     }));

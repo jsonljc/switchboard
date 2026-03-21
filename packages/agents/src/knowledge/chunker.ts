@@ -42,7 +42,7 @@ function recursiveSplit(text: string, maxChars: number, separatorIdx: number): s
     return result;
   }
 
-  const separator = SPLIT_SEPARATORS[separatorIdx];
+  const separator = SPLIT_SEPARATORS[separatorIdx]!;
   const parts = splitBySeparator(text, separator);
 
   if (parts.length <= 1) {
@@ -90,12 +90,13 @@ export function chunkText(text: string, options?: ChunkOptions): TextChunk[] {
   // Apply overlap
   const result: TextChunk[] = [];
   for (let i = 0; i < rawChunks.length; i++) {
+    const current = rawChunks[i] ?? "";
     if (i === 0) {
-      result.push({ content: rawChunks[i].trim(), index: i });
+      result.push({ content: current.trim(), index: i });
     } else {
-      const prevContent = rawChunks[i - 1];
+      const prevContent = rawChunks[i - 1] ?? "";
       const overlapText = prevContent.slice(-overlapChars);
-      const combined = (overlapText + rawChunks[i]).trim();
+      const combined = (overlapText + current).trim();
       result.push({ content: combined, index: i });
     }
   }

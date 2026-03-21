@@ -165,3 +165,29 @@ export {
   type ConversationRouterConfig,
   type StageResolver,
 } from "./conversation-router.js";
+
+// LLM Adapters (Claude implementations)
+export {
+  ClaudeLLMAdapter,
+  ClaudeEmbeddingAdapter,
+  type ClaudeLLMAdapterConfig,
+  type LLMCompleteFn,
+  type ClaudeEmbeddingAdapterConfig,
+  type EmbeddingClient,
+} from "./llm/index.js";
+
+// Knowledge (RAG infrastructure)
+export {
+  chunkText,
+  IngestionPipeline,
+  KnowledgeRetriever,
+  computeConfidence,
+  type ChunkOptions,
+  type TextChunk,
+  type IngestionInput,
+  type IngestionResult,
+  type IngestionPipelineConfig,
+  type RetrievalConfig,
+  type RetrieveOptions,
+  type ConfidenceInput,
+} from "./knowledge/index.js";

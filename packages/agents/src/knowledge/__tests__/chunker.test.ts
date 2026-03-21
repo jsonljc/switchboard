@@ -5,8 +5,8 @@ describe("chunkText", () => {
   it("returns the full text as a single chunk when under limit", () => {
     const result = chunkText("Short text.", { maxTokens: 500 });
     expect(result).toHaveLength(1);
-    expect(result[0].content).toBe("Short text.");
-    expect(result[0].index).toBe(0);
+    expect(result[0]!.content).toBe("Short text.");
+    expect(result[0]!.index).toBe(0);
   });
 
   it("splits long text into multiple chunks", () => {
@@ -27,7 +27,7 @@ describe("chunkText", () => {
     const result = chunkText(text, { maxTokens: 500 });
     // Short enough to be one chunk
     expect(result).toHaveLength(1);
-    expect(result[0].content).toContain("Paragraph one");
+    expect(result[0]!.content).toContain("Paragraph one");
   });
 
   it("produces overlapping chunks", () => {
@@ -39,8 +39,8 @@ describe("chunkText", () => {
 
     // Check overlap: end of chunk N should appear at start of chunk N+1
     for (let i = 0; i < result.length - 1; i++) {
-      const currentEnd = result[i].content.slice(-40);
-      const nextStart = result[i + 1].content.slice(0, 100);
+      const currentEnd = result[i]!.content.slice(-40);
+      const nextStart = result[i + 1]!.content.slice(0, 100);
       // At least some overlap should exist
       const overlapWords = currentEnd.split(/\s+/).filter((w) => nextStart.includes(w));
       expect(overlapWords.length).toBeGreaterThan(0);
