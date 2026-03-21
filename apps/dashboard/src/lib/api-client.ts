@@ -1098,4 +1098,74 @@ export class SwitchboardClient {
       method: "POST",
     });
   }
+
+  async completeWizard(body: Record<string, unknown>) {
+    return this.request<{ success: boolean; purchasedAgents: string[]; agentsRegistered: number }>(
+      "/api/agents/wizard-complete",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  // Knowledge
+  async uploadKnowledge(body: Record<string, unknown>) {
+    return this.request<{ documentId: string; fileName: string; chunksCreated: number }>(
+      "/api/knowledge/upload",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  async listKnowledgeDocuments(agentId?: string) {
+    const params = agentId ? `?agentId=${agentId}` : "";
+    return this.request<{ documents: unknown[] }>(`/api/knowledge/documents${params}`);
+  }
+
+  async deleteKnowledgeDocument(documentId: string) {
+    return this.request<{ deleted: number }>(`/api/knowledge/documents/${documentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createCorrection(body: Record<string, unknown>) {
+    return this.request<{ documentId: string; correctionId: string }>(
+      "/api/knowledge/corrections",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  // Test Chat
+  async sendTestChatMessage(body: Record<string, unknown>) {
+    return this.request<{
+      reply: string;
+      confidence: number;
+      kbChunksUsed: number;
+      kbContext: string;
+      mode: string;
+    }>("/api/test-chat/message", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  // Go Live
+  async goLiveAgent(agentId: string) {
+    return this.request<{ agentId: string; status: string; message: string }>(
+      `/api/agents/go-live/${agentId}`,
+      { method: "PUT" },
+    );
+  }
+
+  // Escalations
+  async listEscalations(status = "pending") {
+    return this.request<{ escalations: unknown[] }>(`/api/escalations?status=${status}`);
+  }
+
+  async getEscalation(id: string) {
+    return this.request<{ escalation: unknown; conversationHistory: unknown[] }>(
+      `/api/escalations/${id}`,
+    );
+  }
+
+  async replyToEscalation(id: string, message: string) {
+    return this.request<{ escalation: unknown; replySent: boolean }>(
+      `/api/escalations/${id}/reply`,
+      { method: "POST", body: JSON.stringify({ message }) },
+    );
+  }
 }

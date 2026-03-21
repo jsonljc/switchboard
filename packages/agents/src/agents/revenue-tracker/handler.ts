@@ -4,21 +4,30 @@
 
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
-import type { AgentContext, AgentHandler, AgentResponse } from "../../ports.js";
+import type { AgentContext, AgentHandler, AgentResponse, ActionRequest } from "../../ports.js";
 import { validatePayload } from "../../validate-payload.js";
+import type { RevenueTrackerDeps } from "./types.js";
+
+const PLATFORM_TO_ACTION: Record<string, string> = {
+  meta: "digital-ads.capi.dispatch",
+  google: "digital-ads.google.offline_conversion",
+  tiktok: "digital-ads.tiktok.offline_conversion",
+};
 
 export class RevenueTrackerHandler implements AgentHandler {
+  constructor(private deps: RevenueTrackerDeps = {}) {}
+
   async handle(
     event: RoutedEventEnvelope,
-    _config: Record<string, unknown>,
+    config: Record<string, unknown>,
     context: AgentContext,
   ): Promise<AgentResponse> {
     if (event.eventType === "revenue.recorded") {
-      return this.handleRevenue(event, context);
+      return this.handleRevenue(event, config, context);
     }
 
     if (event.eventType === "stage.advanced") {
-      return this.handleStage(event, context);
+      return this.handleStage(event, config, context);
     }
 
     if (event.eventType === "ad.optimized") {
@@ -28,7 +37,11 @@ export class RevenueTrackerHandler implements AgentHandler {
     return { events: [], actions: [] };
   }
 
-  private handleRevenue(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleRevenue(
+    event: RoutedEventEnvelope,
+    config: Record<string, unknown>,
+    context: AgentContext,
+  ): AgentResponse {
     const payload = validatePayload(
       event.payload,
       { contactId: "string", amount: "number", currency: "string?" },
@@ -45,6 +58,9 @@ export class RevenueTrackerHandler implements AgentHandler {
     }
 
     const attributionModel = (revenue.attributionModel as string) ?? "last_click";
+    const retryOnFailure = config.retryOnFailure !== false;
+    const alertOnDeadLetter =
+      (config.alertOnDeadLetter as boolean) ?? this.deps.alertOnDeadLetter ?? true;
 
     const attributedEvent = createEventEnvelope({
       organizationId: context.organizationId,
@@ -66,14 +82,22 @@ export class RevenueTrackerHandler implements AgentHandler {
       attribution: event.attribution,
     });
 
-    // Dispatch conversions to connected ad platforms
-    const actions: Array<{ actionType: string; parameters: Record<string, unknown> }> = [];
+    // Determine which platforms to dispatch to
     const ads = profile.ads as Record<string, unknown> | undefined;
-    const platforms = (ads?.connectedPlatforms as string[] | undefined) ?? [];
+    const connectedPlatforms = (ads?.connectedPlatforms as string[]) ?? [];
+    const configPlatforms = config.platforms as string[] | undefined;
+    const targetPlatforms = configPlatforms
+      ? connectedPlatforms.filter((p) => configPlatforms.includes(p))
+      : connectedPlatforms;
 
-    for (const platform of platforms) {
+    const actions: ActionRequest[] = [];
+
+    for (const platform of targetPlatforms) {
+      const actionType = PLATFORM_TO_ACTION[platform];
+      if (!actionType) continue;
+
       actions.push({
-        actionType: "digital-ads.conversion.send",
+        actionType,
         parameters: {
           platform,
           eventName: "Purchase",
@@ -85,23 +109,44 @@ export class RevenueTrackerHandler implements AgentHandler {
           ttclid: event.attribution?.ttclid,
           sourceCampaignId: event.attribution?.sourceCampaignId,
           sourceAdId: event.attribution?.sourceAdId,
+          retryOnFailure,
+        },
+      });
+    }
+
+    // Alert owner on dead letter if enabled and no platforms dispatched
+    const events: RoutedEventEnvelope[] = [attributedEvent];
+    if (alertOnDeadLetter && targetPlatforms.length === 0 && connectedPlatforms.length > 0) {
+      actions.push({
+        actionType: "messaging.escalation.notify_owner",
+        parameters: {
+          reason: "no_matching_platforms",
+          contactId,
+          amount,
+          configuredPlatforms: configPlatforms ?? [],
+          connectedPlatforms,
         },
       });
     }
 
     return {
-      events: [attributedEvent],
+      events,
       actions,
       state: {
         contactId,
         amount,
         campaignId: event.attribution?.sourceCampaignId ?? null,
         attributionModel,
+        platformsDispatched: targetPlatforms,
       },
     };
   }
 
-  private handleStage(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private handleStage(
+    event: RoutedEventEnvelope,
+    config: Record<string, unknown>,
+    context: AgentContext,
+  ): AgentResponse {
     const payload = validatePayload(
       event.payload,
       { contactId: "string", stage: "string" },
@@ -116,8 +161,7 @@ export class RevenueTrackerHandler implements AgentHandler {
       return { events: [], actions: [] };
     }
 
-    const trackPipeline = revenue.trackPipeline !== false;
-
+    const trackPipeline = (config.trackPipeline ?? revenue.trackPipeline) !== false;
     if (!trackPipeline) {
       return { events: [], actions: [] };
     }
@@ -127,11 +171,7 @@ export class RevenueTrackerHandler implements AgentHandler {
       actions: [
         {
           actionType: "crm.activity.log",
-          parameters: {
-            contactId,
-            activityType: "stage_transition",
-            stage,
-          },
+          parameters: { contactId, activityType: "stage_transition", stage },
         },
       ],
       state: { contactId, stage, logged: true },
@@ -171,21 +211,18 @@ export class RevenueTrackerHandler implements AgentHandler {
     contactId: string,
     reason: string,
   ): AgentResponse {
-    const escalationEvent = createEventEnvelope({
-      organizationId: context.organizationId,
-      eventType: "conversation.escalated",
-      source: { type: "agent", id: "revenue-tracker" },
-      payload: {
-        contactId,
-        reason,
-      },
-      correlationId: event.correlationId,
-      causationId: event.eventId,
-      attribution: event.attribution,
-    });
-
     return {
-      events: [escalationEvent],
+      events: [
+        createEventEnvelope({
+          organizationId: context.organizationId,
+          eventType: "conversation.escalated",
+          source: { type: "agent", id: "revenue-tracker" },
+          payload: { contactId, reason },
+          correlationId: event.correlationId,
+          causationId: event.eventId,
+          attribution: event.attribution,
+        }),
+      ],
       actions: [],
     };
   }
