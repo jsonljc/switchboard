@@ -215,10 +215,52 @@ export class EventLoop {
 
     const plan = this.router.resolve(event);
     const isUrgent = URGENT_EVENT_TYPES.includes(event.eventType);
+    const targetAgentId = event.metadata?.targetAgentId as string | undefined;
+    let targetAgentProcessed = false;
 
-    for (const dest of plan.destinations) {
+    // Sort destinations: blocking first, then parallel, then after_success
+    const sequencingOrder: Record<string, number> = {
+      blocking: 0,
+      parallel: 1,
+      after_success: 2,
+    };
+    const sortedDests = [...plan.destinations].sort(
+      (a, b) => (sequencingOrder[a.sequencing] ?? 1) - (sequencingOrder[b.sequencing] ?? 1),
+    );
+
+    const completedDests = new Map<string, boolean>();
+    let blockingFailed = false;
+
+    for (const dest of sortedDests) {
       if (dest.type !== "agent") {
         continue;
+      }
+
+      // If a required blocking destination failed, skip non-blocking destinations
+      if (blockingFailed && dest.sequencing !== "blocking") {
+        await this.recordDelivery(
+          event.eventId,
+          dest.id,
+          "skipped",
+          0,
+          "Skipped due to blocking destination failure",
+        );
+        continue;
+      }
+
+      // If after_success, check that the dependency succeeded
+      if (dest.sequencing === "after_success" && dest.afterDestinationId) {
+        const depSucceeded = completedDests.get(dest.afterDestinationId);
+        if (!depSucceeded) {
+          await this.recordDelivery(
+            event.eventId,
+            dest.id,
+            "skipped",
+            0,
+            `Skipped: dependency '${dest.afterDestinationId}' did not succeed`,
+          );
+          continue;
+        }
       }
 
       const registryEntry = this.registry.get(event.organizationId, dest.id);
@@ -261,6 +303,10 @@ export class EventLoop {
           0,
           evaluation.reason ?? "blocked by policy",
         );
+        completedDests.set(dest.id, false);
+        if (dest.sequencing === "blocking" && dest.criticality === "required") {
+          blockingFailed = true;
+        }
         continue;
       }
 
@@ -272,6 +318,17 @@ export class EventLoop {
         context,
       );
       processed.push(result);
+      completedDests.set(dest.id, result.success);
+
+      if (targetAgentId && dest.id === targetAgentId) {
+        targetAgentProcessed = true;
+      }
+
+      // If a required blocking destination failed, set flag and skip recursion
+      if (dest.sequencing === "blocking" && dest.criticality === "required" && !result.success) {
+        blockingFailed = true;
+        continue;
+      }
 
       // Recurse for output events
       for (const outputEvent of outputEvents) {
@@ -287,6 +344,18 @@ export class EventLoop {
           seenKeys,
         );
       }
+    }
+
+    // If targetAgentId was set but no matching agent processed the event,
+    // record a manual_queue delivery per Phase 2 spec
+    if (targetAgentId && !targetAgentProcessed) {
+      await this.recordDelivery(
+        event.eventId,
+        "manual_queue",
+        "skipped",
+        0,
+        `Target agent '${targetAgentId}' not found or not active — routed to manual queue`,
+      );
     }
   }
 }
