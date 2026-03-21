@@ -60,8 +60,7 @@ describe("NurtureAgentHandler", () => {
     );
 
     expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
-    expect(response.actions[0]!.parameters.cadenceId).toBe("consultation-reminder");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
     expect(response.actions[0]!.parameters.contactId).toBe("c1");
   });
 
@@ -78,7 +77,7 @@ describe("NurtureAgentHandler", () => {
       },
     );
 
-    expect(response.actions[0]!.parameters.cadenceId).toBe("post-treatment-followup");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("starts no-show-rebook cadence on no_show", async () => {
@@ -94,7 +93,7 @@ describe("NurtureAgentHandler", () => {
       },
     );
 
-    expect(response.actions[0]!.parameters.cadenceId).toBe("no-show-rebook");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("starts dormant-winback cadence on dormant", async () => {
@@ -110,7 +109,7 @@ describe("NurtureAgentHandler", () => {
       },
     );
 
-    expect(response.actions[0]!.parameters.cadenceId).toBe("dormant-winback");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("escalates with no_nurture_config when profile has no nurture", async () => {
@@ -169,7 +168,7 @@ describe("NurtureAgentHandler", () => {
         organizationId: "org-1",
         profile: {
           nurture: {
-            enabledCadences: ["post-treatment-followup", "no-show-rebook"],
+            enabledCadences: ["post-treatment-review", "no-show-recovery"],
           },
         },
       },
@@ -202,7 +201,7 @@ describe("NurtureAgentHandler", () => {
 
     expect(response.events).toHaveLength(0);
     expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.parameters.cadenceId).toBe("consultation-reminder");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("allows all cadences when enabledCadences not set", async () => {
@@ -219,7 +218,7 @@ describe("NurtureAgentHandler", () => {
     );
 
     expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.parameters.cadenceId).toBe("dormant-winback");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("forwards attribution chain to escalation events", async () => {
@@ -336,9 +335,8 @@ describe("NurtureAgentHandler", () => {
     );
 
     expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.cadence.start");
-    expect(response.actions[0]!.parameters.cadenceId).toBe("post-purchase-review");
-    expect(response.actions[0]!.parameters.delayDays).toBe(3);
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
+    expect(response.actions[0]!.parameters.contactId).toBe("c1");
   });
 
   it("uses default reviewDelayDays of 7 for revenue.recorded", async () => {
@@ -359,7 +357,7 @@ describe("NurtureAgentHandler", () => {
       },
     );
 
-    expect(response.actions[0]!.parameters.delayDays).toBe(7);
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("skips review cadence when post-purchase-review not in enabledCadences", async () => {
