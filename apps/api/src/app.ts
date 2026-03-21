@@ -233,8 +233,16 @@ export async function buildServer() {
 
   // --- Agent orchestration system ---
   const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
+
+  let deliveryStore: import("@switchboard/agents").DeliveryStore | undefined;
+  if (prismaClient) {
+    const { PrismaDeliveryStore } = await import("@switchboard/db");
+    deliveryStore = new PrismaDeliveryStore(prismaClient);
+  }
+
   const agentSystem = bootstrapAgentSystem({
     conversionBus,
+    deliveryStore,
     logger: {
       warn: (msg: string) => app.log.warn(msg),
       error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
@@ -242,7 +250,9 @@ export async function buildServer() {
     },
   });
   app.decorate("agentSystem", agentSystem);
-  app.log.info("Agent orchestration system bootstrapped");
+  app.log.info(
+    `Agent orchestration system bootstrapped (delivery store: ${deliveryStore ? "prisma" : "in-memory"})`,
+  );
 
   // --- Execution queue setup ---
   let queue: Queue | null = null;

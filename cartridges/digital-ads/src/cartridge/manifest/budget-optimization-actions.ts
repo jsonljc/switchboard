@@ -53,6 +53,42 @@ export const budgetOptimizationActions: readonly ActionDefinition[] = [
     reversible: true,
   },
   {
+    actionType: "digital-ads.budget.increase",
+    name: "Increase Campaign Budget",
+    description: "Increase the daily budget of a campaign by a specified amount or percentage.",
+    parametersSchema: {
+      type: "object",
+      required: ["campaignId", "platform"],
+      properties: {
+        campaignId: { type: "string" },
+        platform: { type: "string", enum: ["meta", "google", "tiktok"] },
+        increaseAmount: { type: "number", description: "Dollar amount to increase" },
+        increasePercent: { type: "number", description: "Percentage to increase (alternative)" },
+        reason: { type: "string" },
+      },
+    },
+    baseRiskCategory: "high",
+    reversible: true,
+  },
+  {
+    actionType: "digital-ads.budget.decrease",
+    name: "Decrease Campaign Budget",
+    description: "Decrease the daily budget of a campaign by a specified amount or percentage.",
+    parametersSchema: {
+      type: "object",
+      required: ["campaignId", "platform"],
+      properties: {
+        campaignId: { type: "string" },
+        platform: { type: "string", enum: ["meta", "google", "tiktok"] },
+        decreaseAmount: { type: "number", description: "Dollar amount to decrease" },
+        decreasePercent: { type: "number", description: "Percentage to decrease (alternative)" },
+        reason: { type: "string" },
+      },
+    },
+    baseRiskCategory: "high",
+    reversible: true,
+  },
+  {
     actionType: "digital-ads.schedule.set",
     name: "Set Ad Schedule",
     description: "Set dayparting schedule for an ad set based on performance analysis.",
