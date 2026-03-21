@@ -107,4 +107,11 @@ export const queryKeys = {
     interventions: (accountId: string) => ["revenueGrowth", "interventions", accountId] as const,
     digest: (accountId: string) => ["revenueGrowth", "digest", accountId] as const,
   },
+  knowledge: {
+    all: ["knowledge"] as const,
+    documents: (agentId?: string) => ["knowledge", "documents", agentId] as const,
+  },
+  escalations: {
+    all: ["escalations"] as const,
+  },
 };
