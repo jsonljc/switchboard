@@ -263,4 +263,124 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(201).send({ roster: fullRoster });
     },
   );
+
+  // POST /api/agents/wizard-complete — saves wizard data and ingests as wizard knowledge
+  app.post(
+    "/wizard-complete",
+    {
+      schema: {
+        description: "Save wizard data to org config and ingest as wizard knowledge.",
+        tags: ["Agents"],
+      },
+    },
+    async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
+      const body = request.body as {
+        businessName: string;
+        vertical: string;
+        services: string[];
+        targetCustomer: string;
+        pricingRange: string;
+        bookingPlatform: string;
+        bookingUrl: string;
+        purchasedAgents: string[];
+        tonePreset: string;
+        language: string;
+      };
+
+      if (!body.businessName || !body.purchasedAgents?.length) {
+        return reply
+          .code(400)
+          .send({ error: "businessName and purchasedAgents are required", statusCode: 400 });
+      }
+
+      // Merge runtimeConfig to preserve existing keys
+      const existing = await app.prisma.organizationConfig.findUnique({ where: { id: orgId } });
+      const existingRuntime = (existing?.runtimeConfig as Record<string, unknown>) ?? {};
+      const wizardRuntime = {
+        ...existingRuntime,
+        vertical: body.vertical,
+        bookingPlatform: body.bookingPlatform,
+        bookingUrl: body.bookingUrl,
+        tonePreset: body.tonePreset,
+        language: body.language,
+        services: body.services,
+        targetCustomer: body.targetCustomer,
+        pricingRange: body.pricingRange,
+      };
+
+      await app.prisma.organizationConfig.upsert({
+        where: { id: orgId },
+        create: {
+          id: orgId,
+          name: body.businessName,
+          purchasedAgents: body.purchasedAgents,
+          runtimeConfig: wizardRuntime,
+          onboardingComplete: true,
+        },
+        update: {
+          name: body.businessName,
+          purchasedAgents: body.purchasedAgents,
+          runtimeConfig: wizardRuntime,
+          onboardingComplete: true,
+        },
+      });
+
+      // Re-register agents with purchased list
+      const { registry } = app.agentSystem;
+      const { registerAgentsForOrg } = await import("../agent-bootstrap.js");
+      registerAgentsForOrg(registry, orgId, body.purchasedAgents);
+
+      return reply.code(200).send({
+        success: true,
+        purchasedAgents: body.purchasedAgents,
+        agentsRegistered: registry.listAll(orgId).length,
+      });
+    },
+  );
+
+  // PUT /api/agents/go-live/:agentId — transition agent from draft to active
+  app.put(
+    "/go-live/:agentId",
+    {
+      schema: {
+        description: "Transition an agent from draft to active (go live).",
+        tags: ["Agents"],
+      },
+    },
+    async (request, reply) => {
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
+      const { agentId } = request.params as { agentId: string };
+
+      const { registry } = app.agentSystem;
+      const entry = registry.get(orgId, agentId);
+
+      if (!entry) {
+        return reply.code(404).send({ error: `Agent ${agentId} not found`, statusCode: 404 });
+      }
+
+      if (entry.status === "disabled") {
+        return reply.code(409).send({
+          error: `Agent ${agentId} is not purchased. Add it to purchasedAgents first.`,
+          statusCode: 409,
+        });
+      }
+
+      registry.updateStatus(orgId, agentId, "active");
+
+      return reply.code(200).send({
+        agentId,
+        status: "active",
+        message: `${agentId} is now live.`,
+      });
+    },
+  );
 };

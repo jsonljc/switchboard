@@ -13,6 +13,9 @@ import {
   BarChart3,
   Inbox,
   Bot,
+  BookOpen,
+  MessagesSquare,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
@@ -28,6 +31,9 @@ const NAV = [
   { href: "/results", label: "Results", icon: TrendingUp },
   { href: "/growth", label: "Growth", icon: LineChart },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/test-chat", label: "Test Chat", icon: MessagesSquare },
+  { href: "/escalations", label: "Escalations", icon: AlertTriangle },
   { href: "/approvals", label: "Decide", icon: ShieldCheck },
 ];
 
