@@ -93,24 +93,24 @@ export const knowledgeRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // Store chunks with zero-vector embeddings (real embeddings require API key)
-      const zeroVector = new Array(1024).fill(0).join(",");
+      const zeroVector = `[${new Array(1024).fill(0).join(",")}]`;
 
       for (let idx = 0; idx < chunks.length; idx++) {
         const chunkId = randomUUID();
-        const content = chunks[idx];
+        const content = chunks[idx] ?? "";
         const metadata = JSON.stringify({ fileName: body.fileName });
 
-        await app.prisma.$executeRawUnsafe(`
+        await app.prisma.$executeRaw`
           INSERT INTO "KnowledgeChunk" (
             "id", "organizationId", "agentId", "documentId",
             "content", "sourceType", "embedding", "chunkIndex",
             "metadata", "createdAt", "updatedAt"
           ) VALUES (
-            '${chunkId}', '${orgId}', '${agentId}', '${documentId}',
-            '${content?.replace(/'/g, "''")}', '${sourceType}', '[${zeroVector}]'::vector, ${idx},
-            '${metadata}'::jsonb, NOW(), NOW()
+            ${chunkId}, ${orgId}, ${agentId}, ${documentId},
+            ${content}, ${sourceType}, ${zeroVector}::vector, ${idx},
+            ${metadata}::jsonb, NOW(), NOW()
           )
-        `);
+        `;
       }
 
       return reply.code(201).send({
@@ -236,19 +236,20 @@ export const knowledgeRoutes: FastifyPluginAsync = async (app) => {
         wrongAnswer: body.wrongAnswer,
         correctAnswer: body.correctAnswer,
       });
-      const zeroVector = new Array(1024).fill(0).join(",");
+      const zeroVector = `[${new Array(1024).fill(0).join(",")}]`;
+      const correctionSourceType = "correction";
 
-      await app.prisma.$executeRawUnsafe(`
+      await app.prisma.$executeRaw`
         INSERT INTO "KnowledgeChunk" (
           "id", "organizationId", "agentId", "documentId",
           "content", "sourceType", "embedding", "chunkIndex",
           "metadata", "createdAt", "updatedAt"
         ) VALUES (
-          '${correctionId}', '${orgId}', '${body.agentId}', '${documentId}',
-          '${correctionContent.replace(/'/g, "''")}', 'correction', '[${zeroVector}]'::vector, 0,
-          '${metadata}'::jsonb, NOW(), NOW()
+          ${correctionId}, ${orgId}, ${body.agentId}, ${documentId},
+          ${correctionContent}, ${correctionSourceType}, ${zeroVector}::vector, ${0},
+          ${metadata}::jsonb, NOW(), NOW()
         )
-      `);
+      `;
 
       return reply.code(201).send({
         documentId,
