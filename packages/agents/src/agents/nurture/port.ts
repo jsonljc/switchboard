@@ -6,7 +6,7 @@ import type { AgentPort } from "../../ports.js";
 
 export const NURTURE_AGENT_PORT: AgentPort = {
   agentId: "nurture",
-  version: "0.1.0",
+  version: "0.2.0",
   inboundEvents: ["stage.advanced", "lead.disqualified", "revenue.recorded"],
   outboundEvents: ["lead.qualified", "conversation.escalated"],
   tools: [
@@ -27,8 +27,13 @@ export const NURTURE_AGENT_PORT: AgentPort = {
     },
   ],
   configSchema: {
-    enabledCadences: "string[] (cadence IDs to activate, default: all)",
-    reviewDelayDays: "number (days after service to request review, default: 7)",
-    maxConcurrentCadences: "number (max cadences per contact, default: 2)",
+    activeCadences:
+      "string[] (default: all — consultation-reminder, no-show-recovery, post-treatment-review, cold-lead-winback, dormant-client)",
+    dormantThresholdDays: "number (default: 60)",
+    reviewPlatformLink: "string (Google Maps URL or Facebook review link)",
+    reviewDelayDays: "number (default: 7)",
+    requalify: "boolean (default: false)",
+    tonePreset: "warm-professional | casual-conversational | direct-efficient (default: inherits)",
+    language: "en | ms | zh | en-sg (default: inherits)",
   },
 };

@@ -6,7 +6,7 @@ import type { AgentPort } from "../../ports.js";
 
 export const AD_OPTIMIZER_PORT: AgentPort = {
   agentId: "ad-optimizer",
-  version: "0.2.0",
+  version: "0.3.0",
   inboundEvents: ["revenue.attributed", "ad.anomaly_detected", "ad.performance_review"],
   outboundEvents: ["ad.optimized", "conversation.escalated"],
   tools: [
@@ -30,8 +30,11 @@ export const AD_OPTIMIZER_PORT: AgentPort = {
     },
   ],
   configSchema: {
-    connectedPlatforms: "string[] (platforms to optimize)",
-    budgetThresholds: "Record<string, number> (campaign spend limits)",
-    anomalyThreshold: "number (ROAS drop % to trigger alert, default: 30)",
+    anomalyThreshold: "number (% drop to trigger pause, default: 30)",
+    reviewInterval: "string (default: 5 min)",
+    approvalThreshold: "number (dollar amount above which changes need owner approval)",
+    platforms: "string[] — meta, google, tiktok (default: all connected)",
+    targetROAS: "number (ROAS target for budget increase triggers, default: 2.0)",
+    alertChannel: "whatsapp | telegram (default: whatsapp)",
   },
 };

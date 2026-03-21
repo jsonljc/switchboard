@@ -337,6 +337,7 @@ model OrganizationConfig {
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
+  purchasedAgents      String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -869,4 +870,29 @@ model Handoff {
   @@index([organizationId, status])
   @@index([sessionId])
   @@index([slaDeadlineAt])
+}
+
+// ── Knowledge Base (RAG) ──
+// DIMENSION LOCK-IN: Vector column is fixed at 1024 dimensions (Claude embeddings default).
+// Changing embedding providers with different dimensions requires:
+//   1. A new migration to ALTER the column dimension
+//   2. Full re-embedding of all existing chunks
+// This is acceptable — embedding provider changes are rare and deliberate.
+
+model KnowledgeChunk {
+  id              String   @id @default(uuid())
+  organizationId  String
+  agentId         String
+  documentId      String
+  content         String
+  sourceType      String   // "correction" | "wizard" | "document"
+  embedding       Unsupported("vector(1024)")
+  chunkIndex      Int
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, agentId])
+  @@index([documentId])
+  @@index([sourceType])
 }

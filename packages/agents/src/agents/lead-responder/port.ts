@@ -34,5 +34,11 @@ export const LEAD_RESPONDER_PORT: AgentPort = {
   configSchema: {
     qualificationThreshold: "number (default: 40)",
     maxTurnsBeforeEscalation: "number (default: 10)",
+    tonePreset:
+      "warm-professional | casual-conversational | direct-efficient (default: warm-professional)",
+    language: "en | ms | zh | en-sg (default: en)",
+    confidenceThreshold: "number 0-1 (default: 0.6)",
+    bookingLink: "string (optional)",
+    mode: "active | draft | test (default: active)",
   },
 };
