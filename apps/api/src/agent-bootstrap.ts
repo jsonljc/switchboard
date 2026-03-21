@@ -26,6 +26,10 @@ import {
   type CoreEvaluateFn,
   type DeliveryStore,
   type PolicyEngine,
+  type SalesCloserDeps,
+  type NurtureDeps,
+  type AdOptimizerDeps,
+  type RevenueTrackerDeps,
 } from "@switchboard/agents";
 import type { ConversionBus } from "@switchboard/core";
 
@@ -51,6 +55,10 @@ export interface AgentSystemOptions {
   retryEnabled?: boolean;
   maxRetries?: number;
   logger?: AgentLogger;
+  salesCloserDeps?: SalesCloserDeps;
+  nurtureDeps?: NurtureDeps;
+  adOptimizerDeps?: AdOptimizerDeps;
+  revenueTrackerDeps?: RevenueTrackerDeps;
 }
 
 export interface AgentSystem {
@@ -96,10 +104,13 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     "lead-responder",
     new LeadResponderHandler({ scoreLead: DEFAULT_LEAD_SCORER }),
   );
-  handlerRegistry.register("sales-closer", new SalesCloserHandler());
-  handlerRegistry.register("nurture", new NurtureAgentHandler());
-  handlerRegistry.register("ad-optimizer", new AdOptimizerHandler());
-  handlerRegistry.register("revenue-tracker", new RevenueTrackerHandler());
+  handlerRegistry.register("sales-closer", new SalesCloserHandler(options.salesCloserDeps ?? {}));
+  handlerRegistry.register("nurture", new NurtureAgentHandler(options.nurtureDeps ?? {}));
+  handlerRegistry.register("ad-optimizer", new AdOptimizerHandler(options.adOptimizerDeps ?? {}));
+  handlerRegistry.register(
+    "revenue-tracker",
+    new RevenueTrackerHandler(options.revenueTrackerDeps ?? {}),
+  );
 
   const router = new AgentRouter(registry);
   const eventLoop = new EventLoop({
@@ -121,15 +132,32 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
       store: deliveryStore,
       retryFn: async (eventId, destinationId) => {
         log.info(`[agent-system] Retrying delivery: ${eventId} -> ${destinationId}`);
-        return { success: true }; // TODO: wire to actual re-dispatch in Phase 2
+        // Event replay requires an event store to look up the original payload.
+        // Without one, mark the attempt as failed so it progresses toward dead_letter.
+        log.warn(
+          `[agent-system] Cannot replay event ${eventId} — no event store. ` +
+            `Delivery will be dead-lettered after ${maxRetries} attempts.`,
+        );
+        return { success: false };
       },
       maxRetries,
     });
 
     deadLetterAlerter = new DeadLetterAlerter({
       store: deliveryStore,
-      onEscalation: (event) => {
-        log.warn(`[agent-system] Dead letter escalation: ${JSON.stringify(event.payload)}`);
+      onEscalation: (escalationEvent) => {
+        log.warn(
+          `[agent-system] Dead letter escalation: ${JSON.stringify(escalationEvent.payload)}`,
+        );
+        // Route the escalation event through the event loop so agents
+        // listening for conversation.escalated (e.g. dashboard inbox) can act on it
+        eventLoop
+          .process(escalationEvent, {
+            organizationId: escalationEvent.organizationId,
+          })
+          .catch((err) => {
+            log.error("[agent-system] Failed to process dead letter escalation:", err);
+          });
       },
       maxRetries,
     });
@@ -169,7 +197,11 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   return { registry, handlerRegistry, eventLoop, stateTracker, scheduledRunner, actionExecutor };
 }
 
-export function registerAgentsForOrg(registry: AgentRegistry, organizationId: string): void {
+export function registerAgentsForOrg(
+  registry: AgentRegistry,
+  organizationId: string,
+  purchasedAgents?: string[],
+): void {
   const ports: AgentPort[] = [
     LEAD_RESPONDER_PORT,
     SALES_CLOSER_PORT,
@@ -179,13 +211,16 @@ export function registerAgentsForOrg(registry: AgentRegistry, organizationId: st
   ];
 
   for (const port of ports) {
+    const isPurchased =
+      !purchasedAgents || purchasedAgents.length === 0 || purchasedAgents.includes(port.agentId);
+
     registry.register(
       organizationId,
       {
         agentId: port.agentId,
         version: port.version,
         installed: true,
-        status: "active",
+        status: isPurchased ? "active" : "disabled",
         config: {},
         capabilities: {
           accepts: port.inboundEvents,

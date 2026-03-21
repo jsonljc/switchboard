@@ -23,8 +23,8 @@ describe("CartridgeManifest", () => {
     expect(DIGITAL_ADS_MANIFEST.defaultPolicies).toEqual(["digital-ads-default"]);
   });
 
-  it("defines exactly 114 actions (69 read + 42 write + 3 offline conversion)", () => {
-    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(114);
+  it("defines exactly 116 actions (69 read + 44 write + 3 offline conversion)", () => {
+    expect(DIGITAL_ADS_MANIFEST.actions).toHaveLength(116);
   });
 
   it("has correct read action types", () => {
@@ -174,5 +174,11 @@ describe("CartridgeManifest", () => {
     const bad = { ...DIGITAL_ADS_MANIFEST, version: "not-semver" };
     const errors = validateManifest(bad);
     expect(errors.some((e) => e.field === "version" && e.message.includes("semver"))).toBe(true);
+  });
+
+  it("includes budget increase and decrease actions", () => {
+    const actionTypes = DIGITAL_ADS_MANIFEST.actions.map((a) => a.actionType);
+    expect(actionTypes).toContain("digital-ads.budget.increase");
+    expect(actionTypes).toContain("digital-ads.budget.decrease");
   });
 });

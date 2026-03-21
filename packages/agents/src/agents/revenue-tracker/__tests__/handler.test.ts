@@ -264,8 +264,16 @@ describe("RevenueTrackerHandler", () => {
       },
     );
 
+    expect(response.actions.some((a) => a.actionType === "digital-ads.capi.dispatch")).toBe(true);
+    expect(
+      response.actions.some((a) => a.actionType === "digital-ads.google.offline_conversion"),
+    ).toBe(true);
+
     const conversionActions = response.actions.filter(
-      (a) => a.actionType === "digital-ads.conversion.send",
+      (a) =>
+        a.actionType === "digital-ads.capi.dispatch" ||
+        a.actionType === "digital-ads.google.offline_conversion" ||
+        a.actionType === "digital-ads.tiktok.offline_conversion",
     );
 
     expect(conversionActions).toHaveLength(2);
@@ -303,7 +311,10 @@ describe("RevenueTrackerHandler", () => {
     );
 
     const conversionActions = response.actions.filter(
-      (a) => a.actionType === "digital-ads.conversion.send",
+      (a) =>
+        a.actionType === "digital-ads.capi.dispatch" ||
+        a.actionType === "digital-ads.google.offline_conversion" ||
+        a.actionType === "digital-ads.tiktok.offline_conversion",
     );
 
     expect(conversionActions).toHaveLength(0);
