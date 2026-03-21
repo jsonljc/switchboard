@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { generateIntegrationGuide } from "@switchboard/core";
 import { requireRole } from "../utils/require-role.js";
 
 const OrgConfigPutBody = z.object({
@@ -109,43 +108,6 @@ export const orgConfigRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return reply.code(200).send({ config });
-    },
-  );
-
-  // GET /api/organizations/:orgId/integration — returns integration guide
-  app.get(
-    "/:orgId/integration",
-    {
-      schema: {
-        description: "Get integration guide for the organization's chosen runtime type.",
-        tags: ["Organizations"],
-      },
-    },
-    async (request, reply) => {
-      if (!app.prisma) {
-        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
-      }
-
-      const { orgId } = request.params as { orgId: string };
-      const query = request.query as { runtimeType?: string };
-
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
-        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
-      }
-
-      const config = await app.prisma.organizationConfig.findUnique({ where: { id: orgId } });
-      const runtimeType = query.runtimeType ?? config?.runtimeType ?? "http";
-
-      const apiBaseUrl = process.env["API_BASE_URL"] ?? "http://localhost:3000";
-
-      const guide = generateIntegrationGuide({
-        runtimeType,
-        apiBaseUrl,
-        apiKey: "<your-api-key>",
-        organizationId: orgId,
-      });
-
-      return reply.code(200).send({ guide });
     },
   );
 };

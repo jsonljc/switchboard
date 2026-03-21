@@ -109,15 +109,7 @@
                 "message": "db cannot import from cartridges."
               },
               {
-                "group": ["@switchboard/quant-trading", "@switchboard/quant-trading/*"],
-                "message": "db cannot import from cartridges."
-              },
-              {
                 "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
-                "message": "db cannot import from cartridges."
-              },
-              {
-                "group": ["@switchboard/messaging", "@switchboard/messaging/*"],
                 "message": "db cannot import from cartridges."
               },
               {
@@ -189,14 +181,6 @@
               {
                 "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
                 "message": "core cannot import from cartridges."
-              },
-              {
-                "group": ["@switchboard/quant-trading", "@switchboard/quant-trading/*"],
-                "message": "core cannot import from cartridges."
-              },
-              {
-                "group": ["@switchboard/messaging", "@switchboard/messaging/*"],
-                "message": "core cannot import from cartridges."
               }
             ]
           }
@@ -249,15 +233,7 @@
                 "message": "Cartridges cannot import from other cartridges."
               },
               {
-                "group": ["@switchboard/quant-trading", "@switchboard/quant-trading/*"],
-                "message": "Cartridges cannot import from other cartridges."
-              },
-              {
                 "group": ["@switchboard/revenue-growth", "@switchboard/revenue-growth/*"],
-                "message": "Cartridges cannot import from other cartridges."
-              },
-              {
-                "group": ["@switchboard/messaging", "@switchboard/messaging/*"],
                 "message": "Cartridges cannot import from other cartridges."
               }
             ]
