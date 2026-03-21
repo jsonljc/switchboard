@@ -26,6 +26,10 @@ import {
   type CoreEvaluateFn,
   type DeliveryStore,
   type PolicyEngine,
+  type SalesCloserDeps,
+  type NurtureDeps,
+  type AdOptimizerDeps,
+  type RevenueTrackerDeps,
 } from "@switchboard/agents";
 import type { ConversionBus } from "@switchboard/core";
 
@@ -51,6 +55,10 @@ export interface AgentSystemOptions {
   retryEnabled?: boolean;
   maxRetries?: number;
   logger?: AgentLogger;
+  salesCloserDeps?: SalesCloserDeps;
+  nurtureDeps?: NurtureDeps;
+  adOptimizerDeps?: AdOptimizerDeps;
+  revenueTrackerDeps?: RevenueTrackerDeps;
 }
 
 export interface AgentSystem {
@@ -96,10 +104,13 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     "lead-responder",
     new LeadResponderHandler({ scoreLead: DEFAULT_LEAD_SCORER }),
   );
-  handlerRegistry.register("sales-closer", new SalesCloserHandler());
-  handlerRegistry.register("nurture", new NurtureAgentHandler());
-  handlerRegistry.register("ad-optimizer", new AdOptimizerHandler());
-  handlerRegistry.register("revenue-tracker", new RevenueTrackerHandler());
+  handlerRegistry.register("sales-closer", new SalesCloserHandler(options.salesCloserDeps ?? {}));
+  handlerRegistry.register("nurture", new NurtureAgentHandler(options.nurtureDeps ?? {}));
+  handlerRegistry.register("ad-optimizer", new AdOptimizerHandler(options.adOptimizerDeps ?? {}));
+  handlerRegistry.register(
+    "revenue-tracker",
+    new RevenueTrackerHandler(options.revenueTrackerDeps ?? {}),
+  );
 
   const router = new AgentRouter(registry);
   const eventLoop = new EventLoop({
@@ -169,7 +180,11 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   return { registry, handlerRegistry, eventLoop, stateTracker, scheduledRunner, actionExecutor };
 }
 
-export function registerAgentsForOrg(registry: AgentRegistry, organizationId: string): void {
+export function registerAgentsForOrg(
+  registry: AgentRegistry,
+  organizationId: string,
+  purchasedAgents?: string[],
+): void {
   const ports: AgentPort[] = [
     LEAD_RESPONDER_PORT,
     SALES_CLOSER_PORT,
@@ -179,13 +194,16 @@ export function registerAgentsForOrg(registry: AgentRegistry, organizationId: st
   ];
 
   for (const port of ports) {
+    const isPurchased =
+      !purchasedAgents || purchasedAgents.length === 0 || purchasedAgents.includes(port.agentId);
+
     registry.register(
       organizationId,
       {
         agentId: port.agentId,
         version: port.version,
         installed: true,
-        status: "active",
+        status: isPurchased ? "active" : "disabled",
         config: {},
         capabilities: {
           accepts: port.inboundEvents,

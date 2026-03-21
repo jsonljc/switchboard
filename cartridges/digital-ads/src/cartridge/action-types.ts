@@ -118,6 +118,8 @@ export type WriteActionType =
   // Phase 4: Bid & Budget
   | "digital-ads.bid.update_strategy"
   | "digital-ads.budget.reallocate"
+  | "digital-ads.budget.increase"
+  | "digital-ads.budget.decrease"
   | "digital-ads.schedule.set"
   // Phase 5: Creative (writes)
   | "digital-ads.creative.upload"

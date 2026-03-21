@@ -99,12 +99,19 @@ export {
   LEAD_RESPONDER_PORT,
   LeadResponderHandler,
   type LeadResponderDeps,
+  type LeadResponderConversationDeps,
   type FAQMatch,
   type LeadScore,
   type ObjectionMatch,
+  type TonePreset,
+  type SupportedLanguage,
 } from "./agents/lead-responder/index.js";
 
-export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
+export {
+  SALES_CLOSER_PORT,
+  SalesCloserHandler,
+  type SalesCloserDeps,
+} from "./agents/sales-closer/index.js";
 
 export {
   AgentStateTracker,
@@ -113,11 +120,23 @@ export {
   type StateChangeListener,
 } from "./agent-state.js";
 
-export { NURTURE_AGENT_PORT, NurtureAgentHandler } from "./agents/nurture/index.js";
+export {
+  NURTURE_AGENT_PORT,
+  NurtureAgentHandler,
+  type NurtureDeps,
+} from "./agents/nurture/index.js";
 
-export { AD_OPTIMIZER_PORT, AdOptimizerHandler } from "./agents/ad-optimizer/index.js";
+export {
+  AD_OPTIMIZER_PORT,
+  AdOptimizerHandler,
+  type AdOptimizerDeps,
+} from "./agents/ad-optimizer/index.js";
 
-export { REVENUE_TRACKER_PORT, RevenueTrackerHandler } from "./agents/revenue-tracker/index.js";
+export {
+  REVENUE_TRACKER_PORT,
+  RevenueTrackerHandler,
+  type RevenueTrackerDeps,
+} from "./agents/revenue-tracker/index.js";
 
 export { HandlerRegistry } from "./handler-registry.js";
 

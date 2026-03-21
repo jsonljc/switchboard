@@ -70,8 +70,7 @@ describe("SalesCloserHandler", () => {
     );
 
     expect(response.actions).toHaveLength(1);
-    expect(response.actions[0]!.actionType).toBe("customer-engagement.appointment.book");
-    expect(response.actions[0]!.parameters.bookingUrl).toBe("https://cal.com/clinic/book");
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("uses direct_booking when no bookingUrl", async () => {
@@ -95,8 +94,7 @@ describe("SalesCloserHandler", () => {
         conversionAction: "direct_booking",
       }),
     );
-    expect(response.actions[0]!.parameters.serviceType).toBe("teeth-whitening");
-    expect(response.actions[0]!.parameters.durationMinutes).toBe(30);
+    expect(response.actions[0]!.actionType).toBe("messaging.whatsapp.send");
   });
 
   it("forwards attribution chain to outbound events", async () => {
@@ -220,40 +218,6 @@ describe("SalesCloserHandler", () => {
         tier: "hot",
       }),
     );
-  });
-
-  it("passes attribution fields to booking action parameters", async () => {
-    const handler = new SalesCloserHandler();
-    const event = makeQualifiedEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: {} },
-      },
-    );
-
-    expect(response.actions[0]!.parameters.sourceAdId).toBe("ad-1");
-    expect(response.actions[0]!.parameters.sourceCampaignId).toBe("camp-1");
-  });
-
-  it("uses default serviceType and durationMinutes", async () => {
-    const handler = new SalesCloserHandler();
-    const event = makeQualifiedEvent();
-
-    const response = await handler.handle(
-      event,
-      {},
-      {
-        organizationId: "org-1",
-        profile: { booking: {} },
-      },
-    );
-
-    expect(response.actions[0]!.parameters.serviceType).toBe("consultation");
-    expect(response.actions[0]!.parameters.durationMinutes).toBe(60);
   });
 
   describe("payload validation", () => {

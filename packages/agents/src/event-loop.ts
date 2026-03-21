@@ -215,6 +215,8 @@ export class EventLoop {
 
     const plan = this.router.resolve(event);
     const isUrgent = URGENT_EVENT_TYPES.includes(event.eventType);
+    const targetAgentId = event.metadata?.targetAgentId as string | undefined;
+    let targetAgentProcessed = false;
 
     for (const dest of plan.destinations) {
       if (dest.type !== "agent") {
@@ -273,6 +275,10 @@ export class EventLoop {
       );
       processed.push(result);
 
+      if (targetAgentId && dest.id === targetAgentId) {
+        targetAgentProcessed = true;
+      }
+
       // Recurse for output events
       for (const outputEvent of outputEvents) {
         if (depth + 1 > maxDepthReached.value) {
@@ -287,6 +293,18 @@ export class EventLoop {
           seenKeys,
         );
       }
+    }
+
+    // If targetAgentId was set but no matching agent processed the event,
+    // record a manual_queue delivery per Phase 2 spec
+    if (targetAgentId && !targetAgentProcessed) {
+      await this.recordDelivery(
+        event.eventId,
+        "manual_queue",
+        "skipped",
+        0,
+        `Target agent '${targetAgentId}' not found or not active — routed to manual queue`,
+      );
     }
   }
 }

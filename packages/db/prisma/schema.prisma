@@ -337,6 +337,7 @@ model OrganizationConfig {
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
+  purchasedAgents      String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
