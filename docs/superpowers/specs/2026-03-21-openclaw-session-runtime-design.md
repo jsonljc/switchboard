@@ -39,6 +39,16 @@
 
 - OpenClaw never persists state, never holds credentials, never executes side effects directly. If OpenClaw disappears mid-run, Switchboard has everything needed to resume or cancel.
 - Switchboard is the system of record for workflow state; OpenClaw is stateless between invocations except for transient in-memory reasoning state.
+- **Dual session state split:** OpenClaw Gateway is the source of truth for OpenClaw runtime session state (agent loop progress, inference state). Switchboard is the source of truth for governed business workflow state (approvals, audit, checkpoints, tool history, pause/resume). This is an intentional architectural split — Switchboard does not rely on OpenClaw session replay or transcript durability for workflow continuity.
+
+### OpenClaw Integration Constraints
+
+These constraints are derived from OpenClaw's documented capabilities and inform implementation decisions throughout:
+
+1. **No per-session dynamic MCP injection.** OpenClaw ACP bridge mode does not support per-session `mcpServers` configuration. Switchboard tools must be exposed as stable Gateway plugins, with session/role scoping enforced by Switchboard-issued tokens and OpenClaw agent allowlists — not by dynamically wiring different MCP servers per session.
+2. **Gateway RPC is the native invocation path.** OpenClaw exposes `agent`, `agent.wait`, and lifecycle/tool event streams via its Gateway. The Switchboard worker should invoke runs and observe completion through these APIs, not rely on OpenClaw calling back to Switchboard.
+3. **OpenClaw ACP `loadSession` does not reconstruct full tool/system history.** This confirms the design choice to keep checkpoint/resume state in Switchboard rather than relying on OpenClaw's session replay.
+4. **OpenClaw runs are session-based and serialized per session.** This aligns with the one-active-run-per-session invariant in Section 2.
 
 ---
 
@@ -503,7 +513,7 @@ OpenClaw interacts with Switchboard exclusively through tools. Tools are either 
 
 4. **`allowedActionTypes` gates `switchboard_execute`.** Even if OpenClaw calls `switchboard_execute` with an action type outside its role's envelope, the orchestrator rejects it before policy evaluation. Hard boundary.
 
-5. **Tool registration happens at session creation.** Tool definitions included in the invocation payload are exactly the merged tool pack. OpenClaw cannot discover or request additional tools mid-session.
+5. **Tool scoping is enforced server-side, not via per-session MCP injection.** Switchboard tools are exposed to OpenClaw as stable Gateway plugins (not dynamically injected per session via ACP, which does not support per-session `mcpServers` in bridge mode). Session and role scoping is enforced by two mechanisms: (a) Switchboard-issued short-lived session tokens that encode org/role/session boundaries — tool calls with invalid or out-of-scope tokens are rejected, and (b) OpenClaw agent-level allowlists that restrict which tools a given agent role can invoke. The merged tool pack from the role manifest determines both the Switchboard token scope and the OpenClaw allowlist configuration.
 
 6. **`send_customer_message` is a governed write.** Outbound messaging is sensitive even when it feels lightweight.
 
@@ -511,10 +521,11 @@ OpenClaw interacts with Switchboard exclusively through tools. Tools are either 
 
 ### Reuse of Existing Infrastructure
 
-- MCP server's `toolFilter` parameter filters to the merged tool pack.
+- Switchboard tools are exposed as stable OpenClaw Gateway plugins. The existing MCP server tool definitions provide the schema source for these plugins.
 - Read tools reuse the existing `CartridgeReadAdapter` path.
 - Write tools reuse the existing `ExecutionService.execute()` path.
-- No new tool dispatch infrastructure needed.
+- Session/role scoping is enforced at the Switchboard API layer (token validation), not at the OpenClaw tool registration layer.
+- No new tool dispatch infrastructure needed — existing MCP/HTTP adapter paths handle all tool calls.
 
 ---
 
@@ -615,8 +626,11 @@ interface SessionManager {
 
 ```typescript
 interface SessionWorker {
-  // OpenClaw invocation (transport concern)
+  // OpenClaw invocation via Gateway RPC (transport concern)
   invokeOpenClaw(payload: SessionResumePayload): Promise<void>;
+
+  // Watch run completion via Gateway lifecycle stream (agent.wait)
+  awaitRunCompletion(sessionId: string, runId: string): Promise<RunTerminalOutcome>;
 
   // Resume job handler
   handleResumeJob(sessionId: string): Promise<void>;
@@ -632,14 +646,14 @@ interface SessionWorker {
 
 ### Session Endpoints
 
-| Method | Path                                     | Description                                             |
-| ------ | ---------------------------------------- | ------------------------------------------------------- |
-| `POST` | `/api/sessions`                          | Create session and trigger initial OpenClaw invocation  |
-| `GET`  | `/api/sessions`                          | List sessions (filtered by org, role, status)           |
-| `GET`  | `/api/sessions/:id`                      | Session detail (runs, pauses, tool history)             |
-| `POST` | `/api/sessions/:id/cancel`               | Cancel a running or paused session                      |
-| `POST` | `/api/sessions/:id/runs/:runId/callback` | Callback/event ingestion for OpenClaw terminal outcomes |
-| `GET`  | `/api/sessions/:id/resume-payload`       | Debug/inspect: preview resume payload                   |
+| Method | Path                                     | Description                                               |
+| ------ | ---------------------------------------- | --------------------------------------------------------- |
+| `POST` | `/api/sessions`                          | Create session and trigger initial OpenClaw invocation    |
+| `GET`  | `/api/sessions`                          | List sessions (filtered by org, role, status)             |
+| `GET`  | `/api/sessions/:id`                      | Session detail (runs, pauses, tool history)               |
+| `POST` | `/api/sessions/:id/cancel`               | Cancel a running or paused session                        |
+| `POST` | `/api/sessions/:id/runs/:runId/callback` | Fallback webhook ingestion for OpenClaw terminal outcomes |
+| `GET`  | `/api/sessions/:id/resume-payload`       | Debug/inspect: preview resume payload                     |
 
 ### Session Creation Flow
 
@@ -649,8 +663,8 @@ interface SessionWorker {
 4. Validate: required cartridges enabled, principal authorized, concurrent session limit not exceeded.
 5. `SessionManager.createSession()` → `AgentSession` (status: `running`).
 6. Create `AgentRun` (runIndex: 0, triggerType: `initial`).
-7. Build initial invocation payload (goal, roleConfig, session-scoped tool definitions, session/run/trace IDs).
-8. Issue session-scoped auth token (short-lived, scoped to org + role tool pack).
+7. Issue session-scoped auth token (short-lived, scoped to org + role tool pack + session boundary).
+8. Build initial invocation payload (goal, roleConfig, session/run/trace IDs, auth token). Tools are not injected per session — they are stable Gateway plugins; the auth token enforces scope.
 9. Enqueue invocation job → worker picks it up.
 10. Return `{ sessionId, runId, traceId, status: "running" }`.
 
@@ -664,33 +678,35 @@ interface SessionWorker {
    c. Enqueue resume job with `resumeToken` as idempotency key (once only, via outbox pattern).
 4. Return normal approval response (existing behavior unchanged).
 
-### Callback Endpoint
+### Run Completion Detection
 
-`POST /api/sessions/:id/runs/:runId/callback` — transport-dependent ingestion path for OpenClaw terminal outcomes. May be delivered via webhook or event. Accepts:
+**Primary: Gateway RPC / streaming.** The Switchboard worker invokes OpenClaw via Gateway RPC and watches for completion via `agent.wait` or lifecycle/tool event streams. This is the most native OpenClaw integration — the worker starts a run, subscribes to the lifecycle stream, and processes the terminal outcome when the run ends.
+
+**Fallback: Callback endpoint.** `POST /api/sessions/:id/runs/:runId/callback` exists as a fallback webhook ingestion path for environments where Gateway streaming is unavailable. Accepts:
 
 - Run completed: `{ outcome: "completed", summary, runMetadata }`
 - Run paused: `{ outcome: "paused", checkpoint: AgentCheckpoint, pauseReason: PauseReason, approvalId?: string }`
 - Run failed: `{ outcome: "failed", error, failureMetadata }`
 
-The authoritative tool execution record lives in Switchboard (recorded via tool calls during the run). The callback carries the terminal outcome, checkpoint, and optional run-level metadata — not the authoritative tool record.
+The authoritative tool execution record lives in Switchboard (recorded via tool calls during the run). The terminal outcome carries the checkpoint and run-level metadata — not the authoritative tool record.
 
-**Callback authentication:** The callback endpoint validates the session-scoped auth token (the same token issued to OpenClaw for tool calls). The token is included in a `Authorization: Bearer <token>` header. Additionally, the endpoint verifies the `runId` matches the currently active run for the session. Requests with expired, invalid, or mismatched tokens are rejected with 401.
+**Callback authentication:** The callback endpoint validates the session-scoped auth token (the same token issued to OpenClaw for tool calls). The token is included in an `Authorization: Bearer <token>` header. Additionally, the endpoint verifies the `runId` matches the currently active run for the session. Requests with expired, invalid, or mismatched tokens are rejected with 401.
 
 ### Worker
 
-**Interaction model (Model X):** The worker starts/resumes OpenClaw runs, but OpenClaw calls Switchboard tools directly during its reasoning loop. The worker does not synchronously mediate individual tool calls. Reads and writes flow through the existing Switchboard tool and execution paths.
+**Interaction model (Model X):** The worker starts/resumes OpenClaw runs via Gateway RPC, but OpenClaw calls Switchboard tools directly during its reasoning loop. The worker does not synchronously mediate individual tool calls. Reads and writes flow through the existing Switchboard tool and execution paths.
 
 **Worker flow:**
 
 1. Load session, verify status is `running` and run is active.
 2. Verify `resumeToken` hasn't been consumed (idempotent guard).
 3. Build payload:
-   - Initial run: goal + roleConfig + session-scoped tool definitions + auth token.
+   - Initial run: goal + roleConfig + session-scoped auth token.
    - Resume run: `SessionManager.buildResumePayload()`.
-4. Invoke OpenClaw via configured transport (HTTP/webhook).
-5. OpenClaw performs its reasoning loop, calling Switchboard tools directly.
-6. OpenClaw returns terminal outcome via callback endpoint.
-7. Worker (or callback handler) processes outcome:
+4. Invoke OpenClaw run via Gateway RPC. Subscribe to lifecycle stream (`agent.wait` or lifecycle events).
+5. OpenClaw performs its reasoning loop, calling Switchboard tools directly via stable Gateway plugins.
+6. Worker observes terminal outcome from Gateway lifecycle stream (or receives it via fallback callback).
+7. Process outcome:
    - Completed → `SessionManager.completeSession()`.
    - Paused → `SessionManager.pauseSession()`.
    - Failed → `SessionManager.failSession()`.
