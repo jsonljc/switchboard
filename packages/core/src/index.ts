@@ -192,3 +192,6 @@ export type {
   Message,
   LifecycleStage as ConversationLifecycleStage,
 } from "./conversation-store.js";
+
+// LLM Adapter (conversational, agent-facing)
+export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
