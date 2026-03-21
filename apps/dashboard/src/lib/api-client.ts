@@ -1098,4 +1098,11 @@ export class SwitchboardClient {
       method: "POST",
     });
   }
+
+  async completeWizard(body: Record<string, unknown>) {
+    return this.request<{ success: boolean; purchasedAgents: string[]; agentsRegistered: number }>(
+      "/api/agents/wizard-complete",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
 }

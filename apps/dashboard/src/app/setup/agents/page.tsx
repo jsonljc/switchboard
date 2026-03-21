@@ -82,13 +82,16 @@ export default function SetupAgentsPage() {
         body: JSON.stringify({
           vertical,
           businessName,
-          services,
+          services: services
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
           targetCustomer,
           pricingRange,
-          platform,
+          bookingPlatform: platform,
           bookingUrl,
-          selectedAgents,
-          tone,
+          purchasedAgents: selectedAgents,
+          tonePreset: tone,
           language,
         }),
       });
