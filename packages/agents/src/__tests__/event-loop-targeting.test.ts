@@ -195,7 +195,7 @@ describe("EventLoop targetAgentId Filtering", () => {
     expect(salesHandler.handle).toHaveBeenCalledTimes(1);
   });
 
-  it("routes message.received with targetAgentId: 'nonexistent-agent' to no agent (0 processed)", async () => {
+  it("routes message.received with targetAgentId: 'nonexistent-agent' to manual_queue", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
       agentId: "lead-responder",
@@ -228,13 +228,14 @@ describe("EventLoop targetAgentId Filtering", () => {
     handlerRegistry.register("lead-responder", leadHandler);
     handlerRegistry.register("sales-closer", salesHandler);
 
+    const deliveryStore = new InMemoryDeliveryStore();
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
       registry: agentRegistry,
       handlers: handlerRegistry,
       actionExecutor: new ActionExecutor(),
       policyBridge: new PolicyBridge(null),
-      deliveryStore: new InMemoryDeliveryStore(),
+      deliveryStore,
     });
 
     const event = createEventEnvelope({
@@ -250,9 +251,12 @@ describe("EventLoop targetAgentId Filtering", () => {
     expect(result.processed).toHaveLength(0);
     expect(leadHandler.handle).not.toHaveBeenCalled();
     expect(salesHandler.handle).not.toHaveBeenCalled();
+
+    const deliveries = await deliveryStore.getByEvent(event.eventId);
+    expect(deliveries.some((d) => d.destinationId === "manual_queue")).toBe(true);
   });
 
-  it("routes message.received with targetAgentId to disabled agent (0 processed)", async () => {
+  it("routes message.received with targetAgentId to disabled agent to manual_queue", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
       agentId: "lead-responder",
@@ -271,13 +275,14 @@ describe("EventLoop targetAgentId Filtering", () => {
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
     handlerRegistry.register("lead-responder", leadHandler);
 
+    const deliveryStore = new InMemoryDeliveryStore();
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
       registry: agentRegistry,
       handlers: handlerRegistry,
       actionExecutor: new ActionExecutor(),
       policyBridge: new PolicyBridge(null),
-      deliveryStore: new InMemoryDeliveryStore(),
+      deliveryStore,
     });
 
     const event = createEventEnvelope({
@@ -292,6 +297,9 @@ describe("EventLoop targetAgentId Filtering", () => {
 
     expect(result.processed).toHaveLength(0);
     expect(leadHandler.handle).not.toHaveBeenCalled();
+
+    const deliveries = await deliveryStore.getByEvent(event.eventId);
+    expect(deliveries.some((d) => d.destinationId === "manual_queue")).toBe(true);
   });
 
   it("recursive output events from targeted handler do NOT inherit targetAgentId", async () => {
