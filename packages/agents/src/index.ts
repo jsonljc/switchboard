@@ -99,9 +99,12 @@ export {
   LEAD_RESPONDER_PORT,
   LeadResponderHandler,
   type LeadResponderDeps,
+  type LeadResponderConversationDeps,
   type FAQMatch,
   type LeadScore,
   type ObjectionMatch,
+  type TonePreset,
+  type SupportedLanguage,
 } from "./agents/lead-responder/index.js";
 
 export { SALES_CLOSER_PORT, SalesCloserHandler } from "./agents/sales-closer/index.js";
