@@ -425,25 +425,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
 
-  cartridges/messaging:
-    dependencies:
-      '@switchboard/cartridge-sdk':
-        specifier: workspace:*
-        version: link:../../packages/cartridge-sdk
-      '@switchboard/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@switchboard/schemas':
-        specifier: workspace:*
-        version: link:../../packages/schemas
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
-
   cartridges/payments:
     dependencies:
       '@switchboard/cartridge-sdk':
@@ -459,22 +440,6 @@ importers:
       stripe:
         specifier: ^17.0.0
         version: 17.7.0
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
-
-  cartridges/quant-trading:
-    dependencies:
-      '@switchboard/cartridge-sdk':
-        specifier: workspace:*
-        version: link:../../packages/cartridge-sdk
-      '@switchboard/schemas':
-        specifier: workspace:*
-        version: link:../../packages/schemas
     devDependencies:
       typescript:
         specifier: ^5.7.0

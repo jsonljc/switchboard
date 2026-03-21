@@ -472,18 +472,6 @@ The lowest-scoring constraint that falls below its threshold becomes the "bindin
 
 ---
 
-### 10. `cartridges/quant-trading` — Trading Operations
-
-Stock and crypto trading with governance guardrails. All market orders are critical risk (irreversible), limit orders are high risk (cancellable before fill).
-
-**8 actions:** market buy/sell, limit buy/sell, cancel order, close position, rebalance portfolio, set stop loss
-
-**Risk Computation:** `quantity * currentPrice` against portfolio percentage. Market orders compute real-time dollars at risk. Limit orders use limit price. Close position uses market value.
-
-**External API:** `TradingProvider` interface with mock provider seeded with portfolio data (AAPL, GOOGL, TSLA, $100K portfolio, $50K cash).
-
----
-
 ## Application Deep Dives
 
 ### 11. `apps/api` — The REST API Server
