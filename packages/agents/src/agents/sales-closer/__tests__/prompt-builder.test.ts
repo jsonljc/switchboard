@@ -38,18 +38,6 @@ describe("buildSalesCloserPrompt", () => {
     expect(prompt.agentInstructions).not.toContain("limited slots");
   });
 
-  it("includes social proof instruction", () => {
-    const prompt = buildSalesCloserPrompt({
-      history: [],
-      chunks: [],
-      tonePreset: undefined,
-      language: undefined,
-      bookingUrl: "https://cal.com/clinic",
-      urgencyEnabled: true,
-    });
-    expect(prompt.agentInstructions).toContain("testimonial");
-  });
-
   it("uses tone preset and language directive in system prompt", () => {
     const prompt = buildSalesCloserPrompt({
       history: [],

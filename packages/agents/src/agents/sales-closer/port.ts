@@ -30,9 +30,15 @@ export const SALES_CLOSER_PORT: AgentPort = {
     },
   ],
   configSchema: {
-    defaultServiceType: "string (default: consultation)",
-    defaultDurationMinutes: "number (default: 60)",
-    maxFollowUpAttempts: "number (default: 3)",
+    confidenceThreshold: "number 0-1 (default: 0.6)",
+    maxTurnsBeforeEscalation: "number (default: 10)",
+    tonePreset:
+      "warm-professional | casual-conversational | direct-efficient (default: warm-professional)",
+    language: "en | ms | zh | en-sg (default: en)",
+    bookingUrl: "string (optional — overrides profile.booking.bookingUrl)",
+    urgencyEnabled: "boolean (default: true)",
+    followUpDays: "number[] (default: [1, 3, 7])",
+    mode: "active | draft | test (default: active)",
   },
   conversionActionTypes: ["booking", "checkout_link"],
 };
