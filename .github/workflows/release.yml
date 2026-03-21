@@ -32,11 +32,11 @@ jobs:
       DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
       - uses: actions/setup-node@v6
         with:
