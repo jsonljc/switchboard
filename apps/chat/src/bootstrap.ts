@@ -257,7 +257,7 @@ export async function createChatRuntime(
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
 
     const anthropicApiKey = clinicConfig?.anthropicApiKey ?? process.env["ANTHROPIC_API_KEY"] ?? "";
-    const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
+    const openaiApiKey = "";
     const adAccountId =
       clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
 
@@ -285,7 +285,7 @@ export async function createChatRuntime(
 
     const clinicContext = {
       adAccountId,
-      clinicName: clinicConfig?.clinicName ?? process.env["CLINIC_NAME"],
+      clinicName: clinicConfig?.clinicName,
     };
 
     // Use SkinAwareInterpreter when a skin is loaded; fall back to ClinicInterpreter
@@ -333,8 +333,7 @@ export async function createChatRuntime(
       const faqs = resolvedProfile.profile.faqs;
 
       llmBusinessProfile = {
-        businessName:
-          biz?.name ?? resolvedProfile.profile.name ?? process.env["CLINIC_NAME"] ?? "our clinic",
+        businessName: biz?.name ?? resolvedProfile.profile.name ?? "our clinic",
         personaName: resolvedProfile.llmContext?.persona ?? "the team",
         services: catalog
           ?.map((s) => (s.typicalValue ? `${s.name} ($${s.typicalValue})` : s.name))

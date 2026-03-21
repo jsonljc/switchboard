@@ -63,7 +63,6 @@ switchboard/
 │   └── db               # Prisma schema and client
 ├── cartridges/
 │   ├── digital-ads      # Meta/Google Ads cartridge (pause, resume, budget, targeting)
-│   ├── quant-trading    # Quantitative trading cartridge (order management, risk limits)
 │   ├── payments         # Payments cartridge (Stripe invoices, refunds, payouts)
 │   ├── crm              # CRM cartridge (contacts, deals, activities)
 │   └── customer-engagement # Customer engagement cartridge (appointments, messaging)
@@ -90,7 +89,6 @@ schemas
    │        │      └──► mcp-server
    │        │
    │        ├──► digital-ads
-   │        ├──► quant-trading
    │        ├──► payments
    │        ├──► crm
    │        └──► customer-engagement

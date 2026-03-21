@@ -17,7 +17,6 @@ cartridges/digital-ads/          — Multi-platform ad management (Meta, Google,
 cartridges/crm/                  — Contacts, deals, activities, pipeline
 cartridges/payments/             — Stripe-backed payment operations
 cartridges/revenue-growth/       — Autonomous revenue optimization (Theory of Constraints)
-cartridges/quant-trading/        — Stock/crypto trading operations
 
 apps/api/          — Fastify REST API (port 3000)
 apps/chat/         — Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
