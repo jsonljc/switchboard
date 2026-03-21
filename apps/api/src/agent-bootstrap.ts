@@ -180,7 +180,11 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   return { registry, handlerRegistry, eventLoop, stateTracker, scheduledRunner, actionExecutor };
 }
 
-export function registerAgentsForOrg(registry: AgentRegistry, organizationId: string): void {
+export function registerAgentsForOrg(
+  registry: AgentRegistry,
+  organizationId: string,
+  purchasedAgents?: string[],
+): void {
   const ports: AgentPort[] = [
     LEAD_RESPONDER_PORT,
     SALES_CLOSER_PORT,
@@ -190,13 +194,16 @@ export function registerAgentsForOrg(registry: AgentRegistry, organizationId: st
   ];
 
   for (const port of ports) {
+    const isPurchased =
+      !purchasedAgents || purchasedAgents.length === 0 || purchasedAgents.includes(port.agentId);
+
     registry.register(
       organizationId,
       {
         agentId: port.agentId,
         version: port.version,
         installed: true,
-        status: "active",
+        status: isPurchased ? "active" : "disabled",
         config: {},
         capabilities: {
           accepts: port.inboundEvents,
