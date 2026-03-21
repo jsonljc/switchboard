@@ -16,16 +16,14 @@ function makeMockLLM(reply = "Great choice! Book here: https://cal.com/book", co
 
 function makeMockRetriever() {
   return {
-    retrieve: vi
-      .fn()
-      .mockResolvedValue([
-        {
-          chunkId: "ch1",
-          content: "Botox treatment info",
-          similarity: 0.85,
-          sourceType: "document",
-        },
-      ]),
+    retrieve: vi.fn().mockResolvedValue([
+      {
+        chunkId: "ch1",
+        content: "Botox treatment info",
+        similarity: 0.85,
+        sourceType: "document",
+      },
+    ]),
   } as unknown as KnowledgeRetriever;
 }
 
