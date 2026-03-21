@@ -48,6 +48,8 @@ export interface ConversationSession {
   escalated: boolean;
   /** Metadata for tracking */
   metadata: Record<string, unknown>;
+  /** Current lead state machine state (for lifecycle tracking above the flow engine). */
+  machineState?: string;
 }
 
 /**

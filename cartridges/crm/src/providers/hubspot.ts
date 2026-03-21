@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // HubSpot CRM Provider — Real HubSpot API v3 integration
 // ---------------------------------------------------------------------------
@@ -10,7 +11,7 @@ import type {
   CrmActivity,
   CrmPipelineStage,
 } from "./crm-provider.js";
-import { withRetry, CircuitBreaker } from "@switchboard/core";
+import { withRetry, CircuitBreaker, normalizePhone, normalizeEmail } from "@switchboard/core";
 
 export interface HubSpotConfig {
   /** HubSpot private app access token */
@@ -638,6 +639,11 @@ export class HubSpotCrmProvider implements CrmProvider {
       assignedStaffId: raw.properties["hubspot_owner_id"] ?? null,
       sourceAdId: raw.properties["hs_analytics_source_data_1"] ?? null,
       sourceCampaignId: raw.properties["hs_analytics_source_data_2"] ?? null,
+      gclid: raw.properties["gclid"] ?? null,
+      fbclid: raw.properties["fbclid"] ?? null,
+      ttclid: raw.properties["ttclid"] ?? null,
+      normalizedPhone: raw.properties["phone"] ? normalizePhone(raw.properties["phone"]) : null,
+      normalizedEmail: raw.properties["email"] ? normalizeEmail(raw.properties["email"]) : null,
       utmSource: raw.properties["hs_analytics_source"] ?? null,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,

@@ -101,10 +101,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       };
     },
     async linkAccount() {
-      return undefined as any;
+      // SAFETY: NextAuth adapter requires these methods but they are unused
+      // with credentials + email-only providers (no OAuth linking)
+      return undefined as never;
     },
     async unlinkAccount() {
-      return undefined as any;
+      // SAFETY: No OAuth providers — account unlinking is never called
+      return undefined as never;
     },
     async createSession(session) {
       await prisma.dashboardSession.create({
@@ -142,7 +145,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         where: { sessionToken: session.sessionToken },
         data: { expires: session.expires },
       });
-      return session as any;
+      // SAFETY: NextAuth expects the full session object returned, but we only
+      // update `expires` — the returned type is compatible at runtime
+      return session as typeof session & { userId: string; expires: Date };
     },
     async deleteSession(sessionToken) {
       await prisma.dashboardSession.delete({ where: { sessionToken } }).catch(() => {});
@@ -201,8 +206,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token.id) {
         session.user.id = token.id as string;
       }
-      (session as any).organizationId = token.organizationId;
-      (session as any).principalId = token.principalId;
+      // SAFETY: Extending session with custom fields from JWT token — NextAuth's
+      // type definitions don't include custom fields, but the session object is
+      // a plain object that accepts additional properties at runtime
+      (session as unknown as Record<string, unknown>).organizationId = token.organizationId;
+      (session as unknown as Record<string, unknown>).principalId = token.principalId;
       return session;
     },
   },

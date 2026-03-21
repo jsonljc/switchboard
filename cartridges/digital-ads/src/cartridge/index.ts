@@ -26,16 +26,25 @@ import type {
   ConnectionHealth,
   GuardrailConfig,
   RiskInput,
+  ResolvedEntity,
 } from "@switchboard/schemas";
 import type { HealthCheckResult } from "./types.js";
 import type { PlatformType, PlatformCredentials } from "../platforms/types.js";
-import type { VerticalType } from "../core/types.js";
 import type { AdPlatformProvider } from "./providers/provider.js";
+import type { HandlerContext } from "./actions/handler-context.js";
 import { DIGITAL_ADS_MANIFEST } from "./manifest.js";
 import { DEFAULT_DIGITAL_ADS_GUARDRAILS } from "./defaults/guardrails.js";
 import { computeRiskInput } from "./risk/categories.js";
 import { createSessionState } from "./context/session.js";
-import { resolveFunnel, resolveBenchmarks } from "../platforms/registry.js";
+
+// Extracted modules
+import { isPlatformType, READ_ACTIONS, failResult, buildHandlerRegistry } from "./constants.js";
+import { buildEnrichment } from "./enrich-context.js";
+import {
+  captureSnapshot as captureSnapshotFn,
+  searchCampaigns as searchCampaignsFn,
+  resolveEntity as resolveEntityFn,
+} from "./entity-operations.js";
 
 // Already-extracted action handlers
 import { executeConnect } from "./actions/connect.js";
@@ -61,27 +70,6 @@ import {
   executeAdCreate,
 } from "./actions/creation-mutations.js";
 
-// Domain handler registries
-import type { ActionHandler, HandlerContext } from "./actions/handler-context.js";
-import { reportingHandlers } from "./actions/reporting-handlers.js";
-import { signalHealthHandlers } from "./actions/signal-health-handlers.js";
-import { audienceHandlers } from "./actions/audience-handlers.js";
-import { creativeHandlers } from "./actions/creative-handlers.js";
-import { creativeTestingHandlers } from "./actions/creative-testing-handlers.js";
-import { experimentHandlers } from "./actions/experiment-handlers.js";
-import { budgetOptimizationHandlers } from "./actions/budget-optimization-handlers.js";
-import { strategyHandlers } from "./actions/strategy-handlers.js";
-import { complianceHandlers } from "./actions/compliance-handlers.js";
-import { measurementHandlers } from "./actions/measurement-handlers.js";
-import { pacingHandlers } from "./actions/pacing-handlers.js";
-import { alertingHandlers } from "./actions/alerting-handlers.js";
-import { forecastingHandlers } from "./actions/forecasting-handlers.js";
-import { deduplicationHandlers } from "./actions/deduplication-handlers.js";
-import { memoryHandlers } from "./actions/memory-handlers.js";
-import { geoExperimentHandlers } from "./actions/geo-experiment-handlers.js";
-import { kpiSeasonalHandlers } from "./actions/kpi-seasonal-handlers.js";
-import { guidedSetupHandlers } from "./actions/guided-setup-handlers.js";
-
 // Module instances used directly by the cartridge
 import { FlightManager } from "../pacing/flight-manager.js";
 import { CreativeTestingQueue } from "../creative/testing-queue.js";
@@ -91,139 +79,6 @@ import { AccountMemory } from "../core/account-memory.js";
 import { SeasonalCalendar } from "../core/analysis/seasonality.js";
 import type { NotificationChannelConfig } from "../notifications/types.js";
 import type { MetaCredentials } from "../platforms/types.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const VALID_PLATFORMS = new Set<string>(["meta", "google", "tiktok"]);
-const VALID_VERTICALS = new Set<string>(["commerce", "leadgen", "brand"]);
-
-const READ_ACTIONS = new Set<string>([
-  "digital-ads.platform.connect",
-  "digital-ads.funnel.diagnose",
-  "digital-ads.portfolio.diagnose",
-  "digital-ads.snapshot.fetch",
-  "digital-ads.structure.analyze",
-  "digital-ads.health.check",
-  "digital-ads.report.performance",
-  "digital-ads.report.creative",
-  "digital-ads.report.audience",
-  "digital-ads.report.placement",
-  "digital-ads.report.comparison",
-  "digital-ads.auction.insights",
-  "digital-ads.signal.pixel.diagnose",
-  "digital-ads.signal.capi.diagnose",
-  "digital-ads.signal.emq.check",
-  "digital-ads.account.learning_phase",
-  "digital-ads.account.delivery.diagnose",
-  "digital-ads.audience.list",
-  "digital-ads.audience.insights",
-  "digital-ads.budget.recommend",
-  "digital-ads.creative.list",
-  "digital-ads.creative.analyze",
-  "digital-ads.creative.generate",
-  "digital-ads.creative.score_assets",
-  "digital-ads.creative.generate_brief",
-  "digital-ads.experiment.check",
-  "digital-ads.experiment.list",
-  "digital-ads.optimization.review",
-  "digital-ads.rule.list",
-  "digital-ads.strategy.recommend",
-  "digital-ads.strategy.mediaplan",
-  "digital-ads.reach.estimate",
-  "digital-ads.compliance.review_status",
-  "digital-ads.compliance.audit",
-  "digital-ads.measurement.lift_study.check",
-  "digital-ads.measurement.attribution.compare",
-  "digital-ads.measurement.mmm_export",
-  "digital-ads.attribution.multi_touch",
-  "digital-ads.attribution.compare_models",
-  "digital-ads.attribution.channel_roles",
-  "digital-ads.pacing.check",
-  "digital-ads.alert.anomaly_scan",
-  "digital-ads.alert.budget_forecast",
-  "digital-ads.alert.policy_scan",
-  "digital-ads.alert.send_notifications",
-  "digital-ads.forecast.budget_scenario",
-  "digital-ads.forecast.diminishing_returns",
-  "digital-ads.plan.annual",
-  "digital-ads.plan.quarterly",
-  "digital-ads.catalog.health",
-  "digital-ads.creative.test_queue",
-  "digital-ads.creative.test_evaluate",
-  "digital-ads.creative.power_calculate",
-  "digital-ads.kpi.list",
-  "digital-ads.kpi.compute",
-  "digital-ads.deduplication.analyze",
-  "digital-ads.deduplication.estimate_overlap",
-  "digital-ads.geo_experiment.design",
-  "digital-ads.geo_experiment.analyze",
-  "digital-ads.geo_experiment.power",
-  "digital-ads.memory.insights",
-  "digital-ads.memory.list",
-  "digital-ads.memory.recommend",
-  "digital-ads.memory.export",
-  "digital-ads.ltv.project",
-  "digital-ads.ltv.optimize",
-  "digital-ads.ltv.allocate",
-  "digital-ads.seasonal.calendar",
-  "digital-ads.seasonal.events",
-]);
-
-function isPlatformType(v: unknown): v is PlatformType {
-  return typeof v === "string" && VALID_PLATFORMS.has(v);
-}
-
-function isVerticalType(v: unknown): v is VerticalType {
-  return typeof v === "string" && VALID_VERTICALS.has(v);
-}
-
-function failResult(summary: string, step: string, error: string): ExecuteResult {
-  return {
-    success: false,
-    summary,
-    externalRefs: {},
-    rollbackAvailable: false,
-    partialFailures: [{ step, error }],
-    durationMs: 0,
-    undoRecipe: null,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Combined handler registry — built once from all domain handler maps
-// ---------------------------------------------------------------------------
-
-function buildHandlerRegistry(): Map<string, ActionHandler> {
-  const registry = new Map<string, ActionHandler>();
-  const sources: ReadonlyMap<string, ActionHandler>[] = [
-    reportingHandlers,
-    signalHealthHandlers,
-    audienceHandlers,
-    creativeHandlers,
-    creativeTestingHandlers,
-    experimentHandlers,
-    budgetOptimizationHandlers,
-    strategyHandlers,
-    complianceHandlers,
-    measurementHandlers,
-    pacingHandlers,
-    alertingHandlers,
-    forecastingHandlers,
-    deduplicationHandlers,
-    memoryHandlers,
-    geoExperimentHandlers,
-    kpiSeasonalHandlers,
-    guidedSetupHandlers,
-  ];
-  for (const source of sources) {
-    for (const [key, handler] of source) {
-      registry.set(key, handler);
-    }
-  }
-  return registry;
-}
 
 // ---------------------------------------------------------------------------
 // Cartridge
@@ -309,206 +164,7 @@ export class DigitalAdsCartridge implements Cartridge {
     parameters: Record<string, unknown>,
     _context: CartridgeContext,
   ): Promise<Record<string, unknown>> {
-    const enriched: Record<string, unknown> = {};
-
-    switch (actionType) {
-      case "digital-ads.funnel.diagnose": {
-        const platform = parameters.platform;
-        const vertical = parameters.vertical;
-        if (isPlatformType(platform) && isVerticalType(vertical)) {
-          try {
-            enriched.resolvedFunnel = resolveFunnel(platform, vertical);
-            enriched.resolvedBenchmarks = resolveBenchmarks(platform, vertical);
-          } catch {
-            // Will fail during execution with a better error
-          }
-        }
-        break;
-      }
-
-      case "digital-ads.portfolio.diagnose": {
-        const platforms = parameters.platforms;
-        if (Array.isArray(platforms)) {
-          const resolved: Array<{ platform: string; funnel: unknown; benchmarks: unknown }> = [];
-          for (const p of platforms) {
-            if (isPlatformType(p?.platform) && isVerticalType(parameters.vertical)) {
-              try {
-                resolved.push({
-                  platform: p.platform,
-                  funnel: resolveFunnel(p.platform, parameters.vertical as VerticalType),
-                  benchmarks: resolveBenchmarks(p.platform, parameters.vertical as VerticalType),
-                });
-              } catch {
-                // Individual platform resolution failure
-              }
-            }
-          }
-          enriched.resolvedPlatforms = resolved;
-        }
-        break;
-      }
-
-      case "digital-ads.snapshot.fetch": {
-        const timeRange = parameters.timeRange as { since?: string; until?: string } | undefined;
-        if (timeRange) {
-          if (!timeRange.since || !timeRange.until) {
-            enriched.validationError = "timeRange requires both 'since' and 'until' dates";
-          } else {
-            const since = new Date(timeRange.since);
-            const until = new Date(timeRange.until);
-            if (since > until) {
-              enriched.validationError = "timeRange.since must be before timeRange.until";
-            }
-            enriched.periodDays =
-              Math.ceil((until.getTime() - since.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          }
-        }
-        break;
-      }
-
-      case "digital-ads.platform.connect": {
-        const creds = parameters.credentials as PlatformCredentials | undefined;
-        if (creds && isPlatformType(parameters.platform)) {
-          if (creds.platform !== parameters.platform) {
-            enriched.validationError = `Credential platform "${creds.platform}" doesn't match requested platform "${parameters.platform}"`;
-          }
-        }
-        break;
-      }
-
-      // Write actions: enrich with current entity state for risk scoring
-      case "digital-ads.campaign.pause":
-      case "digital-ads.campaign.resume":
-      case "digital-ads.campaign.adjust_budget": {
-        if (this.writeProvider && parameters.campaignId) {
-          try {
-            const campaign = await this.writeProvider.getCampaign(parameters.campaignId as string);
-            enriched.currentBudget = campaign.dailyBudget / 100;
-            enriched.campaignName = campaign.name;
-            enriched.campaignStatus = campaign.status;
-            enriched.deliveryStatus = campaign.deliveryStatus;
-            enriched.objective = campaign.objective;
-            enriched.endTime = campaign.endTime;
-          } catch {
-            // Continue without enrichment
-          }
-        }
-        break;
-      }
-
-      case "digital-ads.adset.pause":
-      case "digital-ads.adset.resume":
-      case "digital-ads.adset.adjust_budget":
-      case "digital-ads.targeting.modify": {
-        if (this.writeProvider && parameters.adSetId) {
-          try {
-            const adSet = await this.writeProvider.getAdSet(parameters.adSetId as string);
-            enriched.currentBudget = adSet.dailyBudget / 100;
-            enriched.adSetName = adSet.name;
-            enriched.adSetStatus = adSet.status;
-            enriched.deliveryStatus = adSet.deliveryStatus;
-            enriched.endTime = adSet.endTime;
-          } catch {
-            // Continue without enrichment
-          }
-        }
-        break;
-      }
-
-      case "digital-ads.structure.analyze":
-      case "digital-ads.health.check":
-        break;
-
-      // Reporting — validate connection
-      case "digital-ads.report.performance":
-      case "digital-ads.report.creative":
-      case "digital-ads.report.audience":
-      case "digital-ads.report.placement":
-      case "digital-ads.report.comparison":
-      case "digital-ads.auction.insights":
-      case "digital-ads.signal.pixel.diagnose":
-      case "digital-ads.signal.capi.diagnose":
-      case "digital-ads.signal.emq.check":
-      case "digital-ads.account.learning_phase":
-      case "digital-ads.account.delivery.diagnose":
-      case "digital-ads.audience.list":
-      case "digital-ads.audience.insights":
-      case "digital-ads.reach.estimate":
-      case "digital-ads.creative.list":
-      case "digital-ads.creative.analyze":
-      case "digital-ads.experiment.check":
-      case "digital-ads.experiment.list":
-      case "digital-ads.rule.list":
-      case "digital-ads.compliance.review_status":
-      case "digital-ads.compliance.audit":
-      case "digital-ads.measurement.lift_study.check":
-      case "digital-ads.measurement.attribution.compare":
-      case "digital-ads.measurement.mmm_export":
-      case "digital-ads.alert.budget_forecast":
-      case "digital-ads.alert.policy_scan":
-      case "digital-ads.catalog.health":
-      case "digital-ads.catalog.product_sets": {
-        if (!this.session.connections.has("meta")) {
-          enriched.validationError =
-            "No Meta connection established. Run digital-ads.platform.connect first.";
-        }
-        break;
-      }
-
-      // Actions that require no API — local computation only
-      case "digital-ads.strategy.recommend":
-      case "digital-ads.strategy.mediaplan":
-      case "digital-ads.budget.recommend":
-      case "digital-ads.optimization.review":
-      case "digital-ads.creative.generate":
-      case "digital-ads.creative.score_assets":
-      case "digital-ads.creative.generate_brief":
-      case "digital-ads.alert.anomaly_scan":
-      case "digital-ads.alert.send_notifications":
-      case "digital-ads.alert.configure_notifications":
-      case "digital-ads.forecast.budget_scenario":
-      case "digital-ads.forecast.diminishing_returns":
-      case "digital-ads.plan.annual":
-      case "digital-ads.plan.quarterly":
-      case "digital-ads.pacing.check":
-      case "digital-ads.pacing.create_flight":
-      case "digital-ads.pacing.auto_adjust":
-      case "digital-ads.creative.test_queue":
-      case "digital-ads.creative.test_evaluate":
-      case "digital-ads.creative.test_create":
-      case "digital-ads.creative.test_conclude":
-      case "digital-ads.creative.power_calculate":
-      case "digital-ads.attribution.multi_touch":
-      case "digital-ads.attribution.compare_models":
-      case "digital-ads.attribution.channel_roles":
-      case "digital-ads.kpi.list":
-      case "digital-ads.kpi.compute":
-      case "digital-ads.kpi.register":
-      case "digital-ads.kpi.remove":
-      case "digital-ads.deduplication.analyze":
-      case "digital-ads.deduplication.estimate_overlap":
-      case "digital-ads.geo_experiment.design":
-      case "digital-ads.geo_experiment.analyze":
-      case "digital-ads.geo_experiment.power":
-      case "digital-ads.geo_experiment.create":
-      case "digital-ads.geo_experiment.conclude":
-      case "digital-ads.memory.insights":
-      case "digital-ads.memory.list":
-      case "digital-ads.memory.recommend":
-      case "digital-ads.memory.record":
-      case "digital-ads.memory.record_outcome":
-      case "digital-ads.memory.export":
-      case "digital-ads.memory.import":
-      case "digital-ads.ltv.project":
-      case "digital-ads.ltv.optimize":
-      case "digital-ads.ltv.allocate":
-      case "digital-ads.seasonal.calendar":
-      case "digital-ads.seasonal.events":
-      case "digital-ads.seasonal.add_event":
-        break;
-    }
-
-    return enriched;
+    return buildEnrichment(actionType, parameters, this.session, this.writeProvider);
   }
 
   async execute(
@@ -722,113 +378,23 @@ export class DigitalAdsCartridge implements Cartridge {
   async captureSnapshot(
     actionType: string,
     parameters: Record<string, unknown>,
-    _context: CartridgeContext,
+    context: CartridgeContext,
   ): Promise<Record<string, unknown>> {
-    // For write actions, capture entity state before mutation
-    if (!READ_ACTIONS.has(actionType) && this.writeProvider) {
-      const campaignId = parameters.campaignId as string | undefined;
-      const adSetId = parameters.adSetId as string | undefined;
-
-      if (campaignId) {
-        try {
-          const campaign = await this.writeProvider.getCampaign(campaignId);
-          return {
-            campaignId,
-            status: campaign.status,
-            dailyBudget: campaign.dailyBudget / 100,
-            deliveryStatus: campaign.deliveryStatus,
-          };
-        } catch {
-          return { campaignId, error: "Could not capture pre-mutation state" };
-        }
-      }
-
-      if (adSetId) {
-        try {
-          const adSet = await this.writeProvider.getAdSet(adSetId);
-          return {
-            adSetId,
-            status: adSet.status,
-            dailyBudget: adSet.dailyBudget / 100,
-            deliveryStatus: adSet.deliveryStatus,
-          };
-        } catch {
-          return { adSetId, error: "Could not capture pre-mutation state" };
-        }
-      }
-    }
-
-    return {};
+    return captureSnapshotFn(actionType, parameters, context, this.writeProvider);
   }
 
   /** Search campaigns via write provider (for entity resolution) */
   async searchCampaigns(query: string): Promise<CampaignInfo[]> {
-    if (!this.writeProvider) return [];
-    return this.writeProvider.searchCampaigns(query);
+    return searchCampaignsFn(query, this.writeProvider);
   }
 
   /** Resolve an entity reference to a campaign */
   async resolveEntity(
     inputRef: string,
     entityType: string,
-    _context: Record<string, unknown>,
-  ): Promise<import("@switchboard/schemas").ResolvedEntity> {
-    if (!this.writeProvider) {
-      return {
-        id: "",
-        inputRef,
-        resolvedType: entityType,
-        resolvedId: "",
-        resolvedName: "",
-        confidence: 0,
-        alternatives: [],
-        status: "not_found",
-      };
-    }
-
-    const matches = await this.writeProvider.searchCampaigns(inputRef);
-
-    if (matches.length === 1) {
-      const match = matches[0]!;
-      return {
-        id: match.id,
-        inputRef,
-        resolvedType: entityType,
-        resolvedId: match.id,
-        resolvedName: match.name,
-        confidence: 0.95,
-        alternatives: [],
-        status: "resolved",
-      };
-    }
-
-    if (matches.length > 1) {
-      return {
-        id: "",
-        inputRef,
-        resolvedType: entityType,
-        resolvedId: "",
-        resolvedName: "",
-        confidence: 0.5,
-        alternatives: matches.map((m) => ({
-          id: m.id,
-          name: m.name,
-          score: 0.5,
-        })),
-        status: "ambiguous",
-      };
-    }
-
-    return {
-      id: "",
-      inputRef,
-      resolvedType: entityType,
-      resolvedId: "",
-      resolvedName: "",
-      confidence: 0,
-      alternatives: [],
-      status: "not_found",
-    };
+    context: Record<string, unknown>,
+  ): Promise<ResolvedEntity> {
+    return resolveEntityFn(inputRef, entityType, context, this.writeProvider);
   }
 
   /** Get all captured snapshots */

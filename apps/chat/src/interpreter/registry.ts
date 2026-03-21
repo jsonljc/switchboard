@@ -148,7 +148,7 @@ export class InterpreterRegistry {
         }
 
         // Below threshold — save as fallback and try next
-        console.log(
+        console.warn(
           `[registry] ${name} returned confidence ${result.confidence} < ${minConfidence} for ${primaryActionType}, trying next`,
         );
         lastResult = tagged;

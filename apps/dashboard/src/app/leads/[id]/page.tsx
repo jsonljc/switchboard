@@ -8,7 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AlertTriangle, User, MessageSquare, Hand } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, AlertTriangle, User, MessageSquare, Hand, DollarSign } from "lucide-react";
 
 interface Contact {
   id: string;
@@ -71,6 +80,10 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overrideLoading, setOverrideLoading] = useState(false);
+  const [markPaidOpen, setMarkPaidOpen] = useState(false);
+  const [markPaidAmount, setMarkPaidAmount] = useState("");
+  const [markPaidRef, setMarkPaidRef] = useState("");
+  const [markPaidLoading, setMarkPaidLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -124,9 +137,7 @@ export default function LeadDetailPage() {
 
   if (authStatus === "unauthenticated") redirect("/login");
 
-  const stage: LeadStage = deals.length > 0
-    ? (STAGE_MAP[deals[0]!.stage] ?? "NEW")
-    : "NEW";
+  const stage: LeadStage = deals.length > 0 ? (STAGE_MAP[deals[0]!.stage] ?? "NEW") : "NEW";
 
   const isOverridden = conversation?.status === "human_override";
 
@@ -141,17 +152,48 @@ export default function LeadDetailPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setConversation((prev) => prev ? { ...prev, status: data.status } : prev);
+        setConversation((prev) => (prev ? { ...prev, status: data.status } : prev));
       }
     } finally {
       setOverrideLoading(false);
     }
   };
 
+  const handleMarkPaid = async () => {
+    const deal = deals[0];
+    if (!deal || !contact) return;
+    const amount = parseFloat(markPaidAmount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    setMarkPaidLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/crm/deals/${deal.id}/mark-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          contactId: contact.id,
+          reference: markPaidRef || undefined,
+        }),
+      });
+      if (res.ok) {
+        setMarkPaidOpen(false);
+        setMarkPaidAmount("");
+        setMarkPaidRef("");
+        fetchData();
+      }
+    } finally {
+      setMarkPaidLoading(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="space-y-4">
-        <Link href="/leads" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/leads"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to Leads
         </Link>
         <Card className="border-destructive">
@@ -160,7 +202,9 @@ export default function LeadDetailPage() {
               <AlertTriangle className="h-4 w-4" />
               <span className="font-medium">{error}</span>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchData}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={fetchData}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -179,7 +223,8 @@ export default function LeadDetailPage() {
 
   if (!contact) return null;
 
-  const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "Unknown";
+  const displayName =
+    [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "Unknown";
 
   // Parse conversation messages from the conversations endpoint
   // Messages are stored as JSON in the ConversationState
@@ -188,7 +233,10 @@ export default function LeadDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/leads" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        href="/leads"
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Back to Leads
       </Link>
 
@@ -233,6 +281,56 @@ export default function LeadDetailPage() {
               <div>
                 <span className="text-muted-foreground block">Deal Stage</span>
                 <span className="capitalize">{deals[0]!.stage.replace(/_/g, " ")}</span>
+              </div>
+            )}
+            {deals.length > 0 && stage !== "LOST" && deals[0]!.stage !== "won" && (
+              <div>
+                <span className="text-muted-foreground block">Payment</span>
+                <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="mt-1">
+                      <DollarSign className="h-3 w-3 mr-1" />
+                      Mark as Paid
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Record Payment</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="amount">Amount ($)</Label>
+                        <Input
+                          id="amount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={markPaidAmount}
+                          onChange={(e) => setMarkPaidAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reference">Reference (optional)</Label>
+                        <Input
+                          id="reference"
+                          placeholder="Invoice #, POS receipt, etc."
+                          value={markPaidRef}
+                          onChange={(e) => setMarkPaidRef(e.target.value)}
+                        />
+                      </div>
+                      <Button
+                        onClick={handleMarkPaid}
+                        disabled={
+                          markPaidLoading || !markPaidAmount || parseFloat(markPaidAmount) <= 0
+                        }
+                        className="w-full"
+                      >
+                        {markPaidLoading ? "Recording..." : "Record Payment"}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </div>

@@ -238,5 +238,69 @@
     "persona": "enthusiastic fitness coordinator",
     "tone": "energetic and supportive",
     "bannedTopics": ["medical advice", "specific diet plans without nutritionist consultation"]
+  },
+  "localisation": {
+    "market": "US",
+    "languages": ["en"],
+    "naturalness": "casual",
+    "tone": "energetic and supportive"
+  },
+  "booking": {
+    "bookingUrl": "https://peakperformance.example.com/book",
+    "bookingPhone": "+15559876543",
+    "requireDeposit": false,
+    "cancellationWindowHours": 24,
+    "maxAdvanceBookingDays": 30
+  },
+  "escalationConfig": {
+    "contacts": [
+      {
+        "id": "manager-taylor",
+        "name": "Taylor Brooks",
+        "channel": "whatsapp",
+        "channelId": "+15559876543",
+        "priority": 1
+      }
+    ],
+    "slaMinutes": 30,
+    "holdingMessage": "Let me get our team lead to help you out. Hang tight!",
+    "autoEscalateAfterTurns": 10
+  },
+  "conversationConfig": {
+    "flowMode": "hybrid",
+    "qualificationSignals": [
+      {
+        "id": "fitness_goal",
+        "name": "Fitness Goal",
+        "question": "What fitness goal are you working towards?",
+        "required": true,
+        "mappedField": "serviceInterest"
+      },
+      {
+        "id": "experience",
+        "name": "Experience Level",
+        "question": "What's your current fitness experience?",
+        "options": ["Beginner", "Intermediate", "Advanced"],
+        "required": true,
+        "mappedField": "timeline"
+      },
+      {
+        "id": "schedule",
+        "name": "Preferred Schedule",
+        "question": "When do you prefer to work out?",
+        "options": ["Morning", "Afternoon", "Evening", "Flexible"],
+        "required": false,
+        "mappedField": "signals.preferredSchedule"
+      }
+    ],
+    "maxTurnsBeforeEscalation": 10,
+    "silenceTimeoutMinutes": 30,
+    "reactivationWindowHours": 72
+  },
+  "persona": {
+    "name": "Jordan",
+    "role": "Fitness Coordinator",
+    "personality": "Energetic, motivational, and knowledgeable about fitness",
+    "greetingTemplate": "Hey! I'm {{name}}, your fitness coordinator at {{businessName}}. Ready to level up your fitness? 💪"
   }
 }

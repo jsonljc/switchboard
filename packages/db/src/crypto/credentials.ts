@@ -79,10 +79,13 @@ export function decryptCredentials(
 
 /**
  * Check if a value looks like an encrypted credential (base64 with correct min length).
+ * Packed format: salt(32) + iv(16) + authTag(16) + ciphertext(>=2) = >=66 bytes => >=88 base64 chars.
+ * Verifies decoded length matches expected structure to reduce false positives.
  */
 export function isEncrypted(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  // Minimum: salt(32) + iv(16) + authTag(16) + at least 1 byte ciphertext = 65 bytes → ~88 base64 chars
-  if (value.length < 80) return false;
-  return /^[A-Za-z0-9+/]+=*$/.test(value);
+  if (value.length < 88) return false;
+  if (!/^[A-Za-z0-9+/]+=*$/.test(value)) return false;
+  const decodedLength = Math.floor((value.replace(/=+$/, "").length * 3) / 4);
+  return decodedLength >= SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH + 1;
 }

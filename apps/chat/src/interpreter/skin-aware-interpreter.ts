@@ -8,6 +8,7 @@ import type { ClinicContext } from "../clinic/types.js";
 import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
 import type { ModelRouter } from "../clinic/model-router-types.js";
 import { detectPromptInjection } from "./injection-detector.js";
+import { buildLanguageInstruction } from "./language-support.js";
 
 export interface SkinAwareInterpreterOptions {
   skin?: ResolvedSkin | null;
@@ -134,7 +135,18 @@ export class SkinAwareInterpreter extends ClinicInterpreter {
       );
     }
 
-    // 6. Available tools from resolved skin
+    // 6. Language support
+    const profileAny = this.resolvedProfile as unknown as Record<string, unknown> | null;
+    const localisation = profileAny?.["localisation"] as Record<string, unknown> | undefined;
+    const availableLangs = localisation?.["languages"];
+    if (Array.isArray(availableLangs) && availableLangs.length > 0) {
+      const langInstruction = buildLanguageInstruction(null, availableLangs as string[]);
+      if (langInstruction) {
+        parts.push(langInstruction);
+      }
+    }
+
+    // 7. Available tools from resolved skin
     if (this.resolvedSkin?.tools?.length) {
       parts.push("");
       parts.push("Available tools:");

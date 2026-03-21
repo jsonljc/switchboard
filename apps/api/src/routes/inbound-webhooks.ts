@@ -1,21 +1,18 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Inbound Webhook Receivers — Stripe events + lead capture forms
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createLogger } from "../logger.js";
-import type { CartridgeContext } from "@switchboard/cartridge-sdk";
+import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 
 const logger = createLogger("inbound-webhooks");
 
-/** Default system context for webhook-triggered actions */
-function systemContext(orgId?: string): CartridgeContext {
-  return {
-    principalId: "system:webhook",
-    organizationId: orgId ?? null,
-    connectionCredentials: {},
-  };
+function timingSafeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
@@ -103,7 +100,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
                 lastName: { type: "string" },
                 email: { type: "string" },
                 phone: { type: "string" },
-                treatmentInterest: { type: "string" },
+                serviceInterest: { type: "string" },
                 message: { type: "string" },
               },
             },
@@ -122,7 +119,7 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
           lastName?: string;
           email?: string;
           phone?: string;
-          treatmentInterest?: string;
+          serviceInterest?: string;
           message?: string;
         };
         // Facebook-specific fields
@@ -138,7 +135,12 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         if (fbAppSecret) {
           const rawBody = JSON.stringify(request.body);
           const expectedSig = createHmac("sha256", fbAppSecret).update(rawBody).digest("hex");
-          if (submission.signature !== `sha256=${expectedSig}`) {
+          const sigBuffer = Buffer.from(submission.signature);
+          const expectedBuffer = Buffer.from(`sha256=${expectedSig}`);
+          if (
+            sigBuffer.length !== expectedBuffer.length ||
+            !timingSafeEqual(sigBuffer, expectedBuffer)
+          ) {
             return reply.code(401).send({ error: "Invalid Facebook signature" });
           }
         }
@@ -150,8 +152,8 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         {
           leadId,
           source: submission.source,
-          email: submission.fields.email,
-          treatmentInterest: submission.fields.treatmentInterest,
+          hasEmail: !!submission.fields.email,
+          serviceInterest: submission.fields.serviceInterest,
         },
         "Received form submission",
       );
@@ -172,6 +174,214 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
           processingError: true,
         });
       }
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/inbound/booking-confirmed — Receive booking confirmations
+  // from Calendly, Setmore, or custom booking systems
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    "/booking-confirmed",
+    {
+      schema: {
+        description:
+          "Receive booking confirmation webhooks from external booking systems (Calendly, Setmore, custom).",
+        tags: ["Inbound Webhooks"],
+        body: {
+          type: "object",
+          properties: {
+            leadId: { type: "string", description: "Lead attribution ID from booking URL" },
+            contactExternalId: {
+              type: "string",
+              description: "Channel sender ID (e.g. WhatsApp phone number)",
+            },
+            bookingId: { type: "string", description: "External booking system ID" },
+            service: { type: "string", description: "Service/treatment booked" },
+            provider: { type: "string", description: "Provider/staff name" },
+            scheduledAt: {
+              type: "string",
+              format: "date-time",
+              description: "Appointment date/time",
+            },
+            source: {
+              type: "string",
+              enum: ["calendly", "setmore", "acuity", "custom"],
+              description: "Booking platform source",
+            },
+            organizationId: { type: "string" },
+          },
+          required: ["bookingId", "source"],
+        },
+      },
+    },
+    async (request, reply) => {
+      // HMAC signature verification
+      const bookingWebhookSecret = process.env["BOOKING_WEBHOOK_SECRET"];
+      if (bookingWebhookSecret) {
+        const signature = request.headers["x-webhook-signature"] as string | undefined;
+        if (!signature) {
+          return reply.code(401).send({ error: "Missing x-webhook-signature header" });
+        }
+        const rawBody =
+          typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+        const expectedSig = createHmac("sha256", bookingWebhookSecret)
+          .update(rawBody)
+          .digest("hex");
+        const sigBuf = Buffer.from(signature);
+        const expectedBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
+          logger.warn("Invalid booking webhook signature");
+          return reply.code(401).send({ error: "Invalid signature" });
+        }
+      }
+
+      const booking = request.body as {
+        leadId?: string;
+        contactExternalId?: string;
+        bookingId: string;
+        service?: string;
+        provider?: string;
+        scheduledAt?: string;
+        source: string;
+        organizationId?: string;
+      };
+
+      logger.info(
+        {
+          bookingId: booking.bookingId,
+          source: booking.source,
+          leadId: booking.leadId,
+          service: booking.service,
+        },
+        "Received booking confirmation",
+      );
+
+      try {
+        await handleBookingConfirmation(app, booking);
+        return reply.code(200).send({
+          received: true,
+          bookingId: booking.bookingId,
+        });
+      } catch (err) {
+        logger.error(
+          { err, bookingId: booking.bookingId },
+          "Error processing booking confirmation",
+        );
+        return reply.code(200).send({
+          received: true,
+          bookingId: booking.bookingId,
+          processingError: true,
+        });
+      }
+    },
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /api/inbound/revenue — Receive revenue events from external systems
+  // ─────────────────────────────────────────────────────────────────────────
+  app.post(
+    "/revenue",
+    {
+      schema: {
+        description:
+          "Receive revenue events from external systems (POS, CRM, custom) with HMAC verification.",
+        tags: ["Inbound Webhooks"],
+      },
+    },
+    async (request, reply) => {
+      const webhookSecret = process.env["REVENUE_WEBHOOK_SECRET"];
+      if (!webhookSecret) {
+        logger.warn("REVENUE_WEBHOOK_SECRET not configured — rejecting webhook");
+        return reply.code(500).send({ error: "Webhook secret not configured" });
+      }
+
+      // Verify HMAC signature
+      const signature = request.headers["x-switchboard-signature"] as string | undefined;
+      if (!signature) {
+        return reply.code(401).send({ error: "Missing X-Switchboard-Signature header" });
+      }
+
+      const rawBody =
+        typeof request.body === "string" ? request.body : JSON.stringify(request.body);
+      const expectedSig = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+
+      if (!timingSafeCompare(signature, expectedSig)) {
+        logger.warn("Invalid revenue webhook signature");
+        return reply.code(401).send({ error: "Invalid signature" });
+      }
+
+      // Validate payload against RevenueEventSchema
+      const { RevenueEventSchema } = await import("@switchboard/schemas");
+      const parseResult = RevenueEventSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.code(400).send({ error: parseResult.error.format() });
+      }
+
+      const event = parseResult.data;
+
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available" });
+      }
+
+      // Look up organization from header
+      const orgId = request.headers["x-organization-id"] as string | undefined;
+      if (!orgId) {
+        return reply.code(400).send({ error: "Missing X-Organization-Id header" });
+      }
+
+      // Look up contact
+      const contact = await app.prisma.crmContact.findFirst({
+        where: { id: event.contactId, organizationId: orgId },
+        select: { id: true, sourceAdId: true, sourceCampaignId: true },
+      });
+
+      if (!contact) {
+        return reply.code(404).send({ error: "Contact not found" });
+      }
+
+      const eventTimestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+
+      // Persist revenue event
+      await app.prisma.revenueEvent.create({
+        data: {
+          contactId: event.contactId,
+          organizationId: orgId,
+          amount: event.amount,
+          currency: event.currency,
+          source: event.source ?? "api",
+          reference: event.reference ?? null,
+          recordedBy: event.recordedBy,
+          timestamp: eventTimestamp,
+        },
+      });
+
+      // Emit to ConversionBus (best-effort)
+      if (app.conversionBus) {
+        app.conversionBus.emit({
+          type: "purchased",
+          contactId: event.contactId,
+          organizationId: orgId,
+          value: event.amount,
+          sourceAdId: contact.sourceAdId ?? undefined,
+          sourceCampaignId: contact.sourceCampaignId ?? undefined,
+          timestamp: eventTimestamp,
+          metadata: {
+            source: event.source ?? "api",
+            reference: event.reference,
+            recordedBy: event.recordedBy,
+            currency: event.currency,
+            inboundWebhook: true,
+          },
+        });
+      }
+
+      logger.info(
+        { contactId: event.contactId, amount: event.amount, orgId },
+        "Revenue event received via inbound webhook",
+      );
+
+      return reply.code(201).send({ recorded: true, contactId: event.contactId });
     },
   );
 
@@ -203,11 +413,13 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
 
       const verifyToken = process.env["FACEBOOK_VERIFY_TOKEN"];
 
-      if (
-        query["hub.mode"] === "subscribe" &&
-        query["hub.verify_token"] === verifyToken &&
-        query["hub.challenge"]
-      ) {
+      const tokenMatches =
+        verifyToken &&
+        query["hub.verify_token"] &&
+        query["hub.verify_token"].length === verifyToken.length &&
+        timingSafeEqual(Buffer.from(query["hub.verify_token"]), Buffer.from(verifyToken));
+
+      if (query["hub.mode"] === "subscribe" && tokenMatches && query["hub.challenge"]) {
         return reply.code(200).send(query["hub.challenge"]);
       }
 
@@ -227,27 +439,26 @@ async function handleStripeEvent(
   switch (event.type) {
     case "payment_intent.succeeded": {
       logger.info({ paymentIntentId: obj["id"], amount: obj["amount"] }, "Payment succeeded");
-      // Dispatch to orchestrator: log payment, update CRM deal stage
-      const customerEngagement = app.storageContext.cartridges.get("customer-engagement");
-      if (customerEngagement) {
-        try {
-          await customerEngagement.execute(
-            "payment.log",
-            {
-              paymentId: obj["id"],
-              amount: obj["amount"],
-              currency: obj["currency"],
-              customerId: obj["customer"],
-              status: "succeeded",
-            },
-            systemContext(),
-          );
-        } catch (err) {
-          logger.warn(
-            { err, paymentId: obj["id"] },
-            "Failed to log payment via customer-engagement cartridge",
-          );
-        }
+      try {
+        await executeGovernedSystemAction({
+          orchestrator: app.orchestrator,
+          actionType: "payment.log",
+          cartridgeId: "customer-engagement",
+          organizationId: String(
+            (obj["metadata"] as Record<string, unknown> | undefined)?.["organizationId"] ??
+              "system",
+          ),
+          parameters: {
+            paymentId: obj["id"],
+            amount: obj["amount"],
+            currency: obj["currency"],
+            customerId: obj["customer"],
+            status: "succeeded",
+          },
+          idempotencyKey: `stripe:${event.id}`,
+        });
+      } catch (err) {
+        logger.warn({ err, paymentId: obj["id"] }, "Failed to log payment via governance");
       }
       break;
     }
@@ -297,59 +508,131 @@ async function handleFormSubmission(
       lastName?: string;
       email?: string;
       phone?: string;
-      treatmentInterest?: string;
+      serviceInterest?: string;
       message?: string;
     };
   },
 ): Promise<void> {
-  // Step 1: Create CRM contact
-  const crmCartridge = app.storageContext.cartridges.get("crm");
-  if (crmCartridge) {
-    try {
-      await crmCartridge.execute(
-        "crm.contact.create",
-        {
-          email: submission.fields.email ?? `lead-${leadId}@unknown.com`,
-          firstName: submission.fields.firstName,
-          lastName: submission.fields.lastName,
-          phone: submission.fields.phone,
-          channel: submission.source,
-          properties: {
-            leadId,
-            source: submission.source,
-            formId: submission.formId,
-            treatmentInterest: submission.fields.treatmentInterest,
-            submittedAt: submission.submittedAt ?? new Date().toISOString(),
-          },
-        },
-        systemContext(),
-      );
-    } catch (err) {
-      logger.warn({ err, leadId }, "Failed to create CRM contact");
-    }
-  }
-
-  // Step 2: Trigger customer engagement qualification
-  const peCartridge = app.storageContext.cartridges.get("customer-engagement");
-  if (peCartridge) {
-    try {
-      await peCartridge.execute(
-        "lead.qualify",
-        {
+  // Step 1: Create CRM contact via governance
+  try {
+    await executeGovernedSystemAction({
+      orchestrator: app.orchestrator,
+      actionType: "crm.contact.create",
+      cartridgeId: "crm",
+      organizationId: "system",
+      parameters: {
+        email: submission.fields.email ?? `lead-${leadId}@unknown.com`,
+        firstName: submission.fields.firstName,
+        lastName: submission.fields.lastName,
+        phone: submission.fields.phone,
+        channel: submission.source,
+        properties: {
           leadId,
           source: submission.source,
-          firstName: submission.fields.firstName,
-          phone: submission.fields.phone,
-          treatmentInterest: submission.fields.treatmentInterest,
+          formId: submission.formId,
+          serviceInterest: submission.fields.serviceInterest,
+          submittedAt: submission.submittedAt ?? new Date().toISOString(),
         },
-        systemContext(),
-      );
-    } catch (err) {
-      logger.warn({ err, leadId }, "Failed to qualify lead");
-    }
+      },
+      idempotencyKey: `form:contact:${leadId}`,
+    });
+  } catch (err) {
+    logger.warn({ err, leadId }, "Failed to create CRM contact via governance");
+  }
+
+  // Step 2: Trigger customer engagement qualification via governance
+  try {
+    await executeGovernedSystemAction({
+      orchestrator: app.orchestrator,
+      actionType: "lead.qualify",
+      cartridgeId: "customer-engagement",
+      organizationId: "system",
+      parameters: {
+        leadId,
+        source: submission.source,
+        firstName: submission.fields.firstName,
+        phone: submission.fields.phone,
+        serviceInterest: submission.fields.serviceInterest,
+      },
+      idempotencyKey: `form:qualify:${leadId}`,
+    });
+  } catch (err) {
+    logger.warn({ err, leadId }, "Failed to qualify lead via governance");
   }
 
   logger.info({ leadId, source: submission.source }, "Form submission processed");
+}
+
+// ── Booking Confirmation Handler ──
+
+async function handleBookingConfirmation(
+  app: import("fastify").FastifyInstance,
+  booking: {
+    leadId?: string;
+    contactExternalId?: string;
+    bookingId: string;
+    service?: string;
+    provider?: string;
+    scheduledAt?: string;
+    source: string;
+    organizationId?: string;
+  },
+): Promise<void> {
+  const orgId = booking.organizationId;
+
+  // Step 1: Update CRM deal stage to booked via governance
+  if (booking.leadId || booking.contactExternalId) {
+    try {
+      await executeGovernedSystemAction({
+        orchestrator: app.orchestrator,
+        actionType: "crm.deal.create",
+        cartridgeId: "crm",
+        organizationId: orgId ?? "system",
+        parameters: {
+          name: `Booking: ${booking.service ?? "Appointment"}`,
+          stage: "booked",
+          pipeline: "lead-conversion",
+          contactExternalId: booking.contactExternalId,
+          properties: {
+            bookingId: booking.bookingId,
+            service: booking.service,
+            provider: booking.provider,
+            scheduledAt: booking.scheduledAt,
+            source: booking.source,
+            leadId: booking.leadId,
+          },
+        },
+        idempotencyKey: `booking:deal:${booking.bookingId}`,
+      });
+    } catch (err) {
+      logger.warn({ err, bookingId: booking.bookingId }, "Failed to create CRM deal for booking");
+    }
+  }
+
+  // Step 2: Emit booking conversion event for ad attribution feedback loop
+  const conversionBus = app.conversionBus;
+
+  if (conversionBus && orgId) {
+    conversionBus.emit({
+      type: "booked",
+      contactId: booking.contactExternalId ?? booking.leadId ?? booking.bookingId,
+      organizationId: orgId,
+      value: 1,
+      timestamp: new Date(),
+      metadata: {
+        bookingId: booking.bookingId,
+        service: booking.service,
+        source: booking.source,
+        scheduledAt: booking.scheduledAt,
+      },
+    });
+    logger.info({ bookingId: booking.bookingId, orgId }, "Booking conversion event emitted");
+  }
+
+  logger.info(
+    { bookingId: booking.bookingId, source: booking.source, service: booking.service },
+    "Booking confirmation processed",
+  );
 }
 
 // ── Stripe Signature Verification ──

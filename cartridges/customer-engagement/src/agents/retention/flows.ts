@@ -4,24 +4,24 @@
 
 import type { ConversationFlowDefinition } from "../../conversation/types.js";
 
-/** Dormant patient win-back flow */
+/** Dormant customer win-back flow */
 export const winBackFlow: ConversationFlowDefinition = {
   id: "win-back",
-  name: "Dormant Patient Win-Back",
-  description: "Re-engages dormant patients with personalized outreach.",
-  variables: ["contactName", "lastServiceType", "daysSinceLastVisit", "clinicName"],
+  name: "Dormant Customer Win-Back",
+  description: "Re-engages dormant customers with personalized outreach.",
+  variables: ["contactName", "lastServiceType", "daysSinceLastVisit", "businessName"],
   steps: [
     {
       id: "reintro",
       type: "message",
       template:
-        "Hi {{contactName}}, it's been a while since your last visit to {{clinicName}}! We've missed you.",
+        "Hi {{contactName}}, it's been a while since your last visit to {{businessName}}! We've missed you.",
     },
     {
       id: "offer",
       type: "message",
       template:
-        "We have some exciting new treatments that complement your previous {{lastServiceType}}. Would you like to hear about them?",
+        "We have some exciting new services that complement your previous {{lastServiceType}}. Would you like to hear about them?",
     },
     {
       id: "interest_question",
@@ -29,7 +29,7 @@ export const winBackFlow: ConversationFlowDefinition = {
       template: "What would be most helpful for you?",
       options: [
         "Schedule a follow-up consultation",
-        "Learn about new treatments",
+        "Learn about new services",
         "Not interested right now",
       ],
     },

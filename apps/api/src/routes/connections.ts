@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import { getConnectionStore } from "../utils/connection-store.js";
+import { CreateConnectionBodySchema, UpdateConnectionBodySchema } from "../validation.js";
 
 function redactCredentials<T extends { credentials: unknown }>(
   connection: T,
@@ -33,20 +34,14 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
       }
 
-      const body = request.body as {
-        serviceId: string;
-        serviceName: string;
-        authType: string;
-        credentials: Record<string, unknown>;
-        scopes?: string[];
-      };
-
-      if (!body.serviceId || !body.serviceName || !body.authType || !body.credentials) {
+      const parsed = CreateConnectionBodySchema.safeParse(request.body);
+      if (!parsed.success) {
         return reply.code(400).send({
-          error: "serviceId, serviceName, authType, and credentials are required",
+          error: parsed.error.issues.map((i) => i.message).join("; "),
           statusCode: 400,
         });
       }
+      const body = parsed.data;
 
       const store = await getConnectionStore(app.prisma);
 
@@ -181,12 +176,14 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const { id } = request.params as { id: string };
-      const body = request.body as {
-        serviceName?: string;
-        authType?: string;
-        credentials?: Record<string, unknown>;
-        scopes?: string[];
-      };
+      const parsed = UpdateConnectionBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: parsed.error.issues.map((i) => i.message).join("; "),
+          statusCode: 400,
+        });
+      }
+      const body = parsed.data;
 
       if (!hasEncryptionKey()) {
         return reply.code(503).send({

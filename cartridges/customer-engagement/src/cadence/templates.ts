@@ -64,7 +64,7 @@ export const consultationReminderCadence: CadenceDefinition = {
 export const noShowRebookCadence: CadenceDefinition = {
   id: "no-show-rebook",
   name: "No-Show Rebook",
-  description: "Re-engagement sequence after a patient no-shows.",
+  description: "Re-engagement sequence after a customer no-shows.",
   trigger: { event: "appointment_no_show" },
   steps: [
     {
@@ -94,12 +94,12 @@ export const noShowRebookCadence: CadenceDefinition = {
 };
 
 /**
- * Post-Treatment Follow-up — checks in after treatment.
+ * Post-Service Follow-up — checks in after service completion.
  */
 export const postTreatmentCadence: CadenceDefinition = {
   id: "post-treatment-followup",
-  name: "Post-Treatment Follow-up",
-  description: "Multi-step check-in sequence after treatment completion.",
+  name: "Post-Service Follow-up",
+  description: "Multi-step check-in sequence after service completion.",
   trigger: { event: "service_completed", stage: "service_completed" },
   steps: [
     {
@@ -109,7 +109,7 @@ export const postTreatmentCadence: CadenceDefinition = {
         contactId: "{{contactId}}",
         phoneNumber: "{{phoneNumber}}",
         message:
-          "Hi {{contactName}}, hope you're feeling great after your {{serviceType}} today! If you have any questions, don't hesitate to reach out.",
+          "Hi {{contactName}}, hope everything went well with your {{serviceType}} today! If you have any questions, don't hesitate to reach out.",
       },
       delayMs: 4 * HOUR, // 4 hours after treatment
     },
@@ -120,7 +120,7 @@ export const postTreatmentCadence: CadenceDefinition = {
         contactId: "{{contactId}}",
         phoneNumber: "{{phoneNumber}}",
         message:
-          "{{contactName}}, it's been 3 days since your {{serviceType}}. How are you feeling? Everything looking good?",
+          "{{contactName}}, it's been 3 days since your {{serviceType}}. How was your experience? Everything looking good?",
       },
       delayMs: 3 * DAY,
     },
@@ -140,12 +140,12 @@ export const postTreatmentCadence: CadenceDefinition = {
 };
 
 /**
- * Review Request — solicits reviews from satisfied patients.
+ * Review Request — solicits reviews from satisfied customers.
  */
 export const reviewRequestCadence: CadenceDefinition = {
   id: "review-request",
   name: "Review Request",
-  description: "Review solicitation for patients who haven't left a review.",
+  description: "Review solicitation for customers who haven't left a review.",
   trigger: { event: "service_completed" },
   steps: [
     {
@@ -175,13 +175,13 @@ export const reviewRequestCadence: CadenceDefinition = {
 };
 
 /**
- * Dormant Win-Back — re-engages patients who haven't visited in 90+ days.
+ * Dormant Win-Back — re-engages customers who haven't visited in 90+ days.
  */
 export const dormantWinBackCadence: CadenceDefinition = {
   id: "dormant-winback",
-  name: "Dormant Patient Win-Back",
-  description: "Re-engagement sequence for patients inactive for 90+ days.",
-  trigger: { event: "patient_dormant", stage: "dormant" },
+  name: "Dormant Customer Win-Back",
+  description: "Re-engagement sequence for customers inactive for 90+ days.",
+  trigger: { event: "customer_dormant", stage: "dormant" },
   steps: [
     {
       index: 0,
@@ -190,7 +190,7 @@ export const dormantWinBackCadence: CadenceDefinition = {
         contactId: "{{contactId}}",
         phoneNumber: "{{phoneNumber}}",
         message:
-          "Hi {{contactName}}, we haven't seen you in a while at {{clinicName}}. We'd love to welcome you back! Reply to schedule a visit.",
+          "Hi {{contactName}}, we haven't seen you in a while at {{businessName}}. We'd love to welcome you back! Reply to schedule a visit.",
       },
       delayMs: 0,
     },
@@ -201,7 +201,7 @@ export const dormantWinBackCadence: CadenceDefinition = {
         contactId: "{{contactId}}",
         phoneNumber: "{{phoneNumber}}",
         message:
-          "{{contactName}}, we have some exciting new treatments that might interest you. Would you like to learn more?",
+          "{{contactName}}, we have some exciting new services that might interest you. Would you like to learn more?",
       },
       delayMs: 7 * DAY,
       condition: { variable: "responded", operator: "neq", value: true },

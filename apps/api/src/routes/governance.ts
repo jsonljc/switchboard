@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { profileToPosture } from "@switchboard/core";
 import type { GovernanceProfileStore } from "@switchboard/core";
-import type { GovernanceProfile } from "@switchboard/schemas";
+import { SetGovernanceProfileBodySchema, EmergencyHaltBodySchema } from "../validation.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -69,7 +69,6 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { orgId } = request.params as { orgId: string };
-      const body = request.body as { profile: GovernanceProfile };
 
       if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
         return reply.code(403).send({
@@ -79,25 +78,21 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      if (!body.profile) {
-        return reply.code(400).send({ error: "profile is required", statusCode: 400 });
-      }
-
-      const validProfiles = ["observe", "guarded", "strict", "locked"];
-      if (!validProfiles.includes(body.profile)) {
+      const parsed = SetGovernanceProfileBodySchema.safeParse(request.body);
+      if (!parsed.success) {
         return reply.code(400).send({
-          error: `Invalid profile: ${body.profile}. Must be one of: ${validProfiles.join(", ")}`,
+          error: parsed.error.issues.map((i) => i.message).join("; "),
           statusCode: 400,
         });
       }
 
       const store = app.governanceProfileStore;
-      await store.set(orgId, body.profile);
+      await store.set(orgId, parsed.data.profile);
 
-      const posture = profileToPosture(body.profile);
+      const posture = profileToPosture(parsed.data.profile);
       return reply.code(200).send({
         organizationId: orgId,
-        profile: body.profile,
+        profile: parsed.data.profile,
         posture,
       });
     },
@@ -113,7 +108,14 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const body = request.body as { organizationId?: string; reason?: string };
+      const parsed = EmergencyHaltBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: parsed.error.issues.map((i) => i.message).join("; "),
+          statusCode: 400,
+        });
+      }
+      const body = parsed.data;
       const orgId = body.organizationId ?? request.organizationIdFromAuth ?? null;
 
       if (!orgId) {

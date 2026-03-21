@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // Geo-Holdout Experiment Manager — Geographic incrementality measurement
 // ---------------------------------------------------------------------------

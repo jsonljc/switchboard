@@ -178,4 +178,71 @@ export const reportingSignalActions: readonly ActionDefinition[] = [
     baseRiskCategory: "low",
     reversible: true,
   },
+  {
+    actionType: "digital-ads.capi.dispatch",
+    name: "Send Meta CAPI Conversion",
+    description: "Send an offline conversion event to Meta Conversions API for optimization.",
+    parametersSchema: {
+      type: "object",
+      required: ["eventName", "eventTime"],
+      properties: {
+        eventName: {
+          type: "string",
+          enum: ["Purchase", "Lead", "CompleteRegistration"],
+        },
+        eventTime: { type: "string", description: "ISO 8601 timestamp" },
+        userData: {
+          type: "object",
+          description: "Hashed user data (email, phone, fbclid)",
+        },
+        customData: {
+          type: "object",
+          description: "Event value, currency, content IDs",
+        },
+      },
+    },
+    baseRiskCategory: "medium",
+    reversible: false,
+  },
+  {
+    actionType: "digital-ads.google.offline_conversion",
+    name: "Send Google Offline Conversion",
+    description: "Upload an offline conversion to Google Ads for optimization.",
+    parametersSchema: {
+      type: "object",
+      required: ["conversionAction", "gclid", "conversionDateTime"],
+      properties: {
+        conversionAction: { type: "string" },
+        gclid: { type: "string" },
+        conversionDateTime: { type: "string" },
+        conversionValue: { type: "number" },
+        currencyCode: { type: "string" },
+      },
+    },
+    baseRiskCategory: "medium",
+    reversible: false,
+  },
+  {
+    actionType: "digital-ads.tiktok.offline_conversion",
+    name: "Send TikTok Offline Conversion",
+    description: "Send an offline conversion event to TikTok Events API.",
+    parametersSchema: {
+      type: "object",
+      required: ["eventName", "ttclid", "timestamp"],
+      properties: {
+        eventName: {
+          type: "string",
+          enum: ["CompletePayment", "SubmitForm"],
+        },
+        ttclid: { type: "string" },
+        timestamp: { type: "string" },
+        eventProperties: {
+          type: "object",
+          description: "Event value and currency",
+        },
+      },
+    },
+    baseRiskCategory: "medium",
+    reversible: false,
+  },
 ];

@@ -134,6 +134,116 @@ export const LLMContextSchema = z.object({
 });
 export type LLMContext = z.infer<typeof LLMContextSchema>;
 
+export const FAQRecordSchema = z.object({
+  /** Canonical question text */
+  question: z.string().min(1),
+  /** Alternative phrasings to match against */
+  variants: z.array(z.string()).optional(),
+  /** Approved answer text */
+  answer: z.string().min(1),
+  /** Topic domain (e.g. "pricing", "procedure", "aftercare") */
+  topic: z.string().optional(),
+  /** Whether this FAQ contains sensitive content requiring careful handling */
+  sensitive: z.boolean().optional(),
+});
+export type FAQRecord = z.infer<typeof FAQRecordSchema>;
+
+// ---------------------------------------------------------------------------
+// Localisation & Conversation Config Sub-schemas
+// ---------------------------------------------------------------------------
+
+export const EmojiPolicySchema = z.object({
+  allowed: z.boolean(),
+  maxPerMessage: z.number().nonnegative().optional(),
+  preferredSet: z.array(z.string()).optional(),
+});
+export type EmojiPolicy = z.infer<typeof EmojiPolicySchema>;
+
+export const LocalisationConfigSchema = z.object({
+  market: z.enum(["SG", "MY", "US", "UK", "AU", "generic"]),
+  languages: z.array(z.string()).min(1),
+  naturalness: z.enum(["formal", "semi_formal", "casual"]).optional(),
+  tone: z.string().optional(),
+  emoji: EmojiPolicySchema.optional(),
+});
+export type LocalisationConfig = z.infer<typeof LocalisationConfigSchema>;
+
+export const OfferRecordSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  validUntil: z.string().optional(),
+  serviceIds: z.array(z.string()).optional(),
+  discountPercent: z.number().min(0).max(100).optional(),
+  discountAmount: z.number().nonnegative().optional(),
+  conditions: z.string().optional(),
+});
+export type OfferRecord = z.infer<typeof OfferRecordSchema>;
+
+export const BookingConfigSchema = z.object({
+  bookingUrl: z.string().optional(),
+  bookingPhone: z.string().optional(),
+  requireDeposit: z.boolean().optional(),
+  depositAmount: z.number().nonnegative().optional(),
+  cancellationWindowHours: z.number().nonnegative().optional(),
+  maxAdvanceBookingDays: z.number().positive().optional(),
+});
+export type BookingConfig = z.infer<typeof BookingConfigSchema>;
+
+export const EscalationContactSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  channel: z.string().min(1),
+  channelId: z.string().min(1),
+  priority: z.number().optional(),
+});
+export type EscalationContact = z.infer<typeof EscalationContactSchema>;
+
+export const EscalationConfigSchema = z.object({
+  contacts: z.array(EscalationContactSchema).min(1),
+  slaMinutes: z.number().positive().optional(),
+  holdingMessage: z.string().optional(),
+  autoEscalateAfterTurns: z.number().positive().optional(),
+});
+export type EscalationConfig = z.infer<typeof EscalationConfigSchema>;
+
+export const LearningConfigSchema = z.object({
+  enableAutoOptimisation: z.boolean().optional(),
+  optimisationFrequency: z.enum(["daily", "weekly"]).optional(),
+  autoApplyTimingChanges: z.boolean().optional(),
+  requireOwnerApprovalForContent: z.boolean().optional(),
+  minSampleSize: z.number().positive().optional(),
+});
+export type LearningConfig = z.infer<typeof LearningConfigSchema>;
+
+export const QualificationSignalSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  question: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  required: z.boolean().optional(),
+  mappedField: z.string().optional(),
+});
+export type QualificationSignal = z.infer<typeof QualificationSignalSchema>;
+
+export const ConversationConfigSchema = z.object({
+  flowMode: z.enum(["qualification", "booking", "faq_only", "hybrid"]).optional(),
+  qualificationSignals: z.array(QualificationSignalSchema).optional(),
+  maxTurnsBeforeEscalation: z.number().positive().optional(),
+  silenceTimeoutMinutes: z.number().positive().optional(),
+  reactivationWindowHours: z.number().positive().optional(),
+});
+export type ConversationConfig = z.infer<typeof ConversationConfigSchema>;
+
+export const AgentPersonaSchema = z.object({
+  name: z.string().min(1),
+  role: z.string().optional(),
+  personality: z.string().optional(),
+  greetingTemplate: z.string().optional(),
+  signoffTemplate: z.string().optional(),
+});
+export type AgentPersona = z.infer<typeof AgentPersonaSchema>;
+
 // ---------------------------------------------------------------------------
 // Root Schema
 // ---------------------------------------------------------------------------
@@ -156,6 +266,16 @@ export const BusinessProfileSchema = z.object({
   reviewPlatforms: z.array(z.string()).optional(),
   hours: z.record(z.string(), HoursEntrySchema).optional(),
   policies: z.array(PolicyEntrySchema).optional(),
+  faqs: z.array(FAQRecordSchema).optional(),
   llmContext: LLMContextSchema.optional(),
+
+  // --- New fields for AI Agent System ---
+  localisation: LocalisationConfigSchema.optional(),
+  offers: z.array(OfferRecordSchema).optional(),
+  booking: BookingConfigSchema.optional(),
+  escalationConfig: EscalationConfigSchema.optional(),
+  learningPreferences: LearningConfigSchema.optional(),
+  conversationConfig: ConversationConfigSchema.optional(),
+  persona: AgentPersonaSchema.optional(),
 });
 export type BusinessProfile = z.infer<typeof BusinessProfileSchema>;

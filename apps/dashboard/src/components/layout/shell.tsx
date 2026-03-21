@@ -3,22 +3,44 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, TrendingUp, ShieldCheck, Users, LineChart } from "lucide-react";
+import {
+  LayoutDashboard,
+  TrendingUp,
+  ShieldCheck,
+  Users,
+  LineChart,
+  MessageSquare,
+  BarChart3,
+  Inbox,
+  Bot,
+  BookOpen,
+  MessagesSquare,
+  AlertTriangle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
+import { useInboxCount } from "@/hooks/use-inbox";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
 const NAV = [
   { href: "/mission", label: "Today", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/conversations", label: "Chats", icon: MessageSquare },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/campaigns", label: "Campaigns", icon: BarChart3 },
   { href: "/results", label: "Results", icon: TrendingUp },
   { href: "/growth", label: "Growth", icon: LineChart },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/test-chat", label: "Test Chat", icon: MessagesSquare },
+  { href: "/escalations", label: "Escalations", icon: AlertTriangle },
   { href: "/approvals", label: "Decide", icon: ShieldCheck },
 ];
 
 export function Shell() {
   const pathname = usePathname();
   const pendingCount = useApprovalCount();
+  const inboxCount = useInboxCount();
   const { data: orgData } = useOrgConfig();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -40,7 +62,9 @@ export function Shell() {
           <nav className="flex items-center gap-0 flex-1 justify-center">
             {NAV.map((item) => {
               const active = isActive(item.href);
-              const count = item.href === "/approvals" && pendingCount > 0 ? pendingCount : null;
+              const count =
+                (item.href === "/approvals" && pendingCount > 0 ? pendingCount : null) ??
+                (item.href === "/inbox" && inboxCount > 0 ? inboxCount : null);
 
               return (
                 <Link
@@ -104,6 +128,11 @@ export function Shell() {
                   {item.href === "/approvals" && pendingCount > 0 && (
                     <span className="absolute -top-0.5 -right-1 text-[9px] font-medium text-muted-foreground">
                       {pendingCount}
+                    </span>
+                  )}
+                  {item.href === "/inbox" && inboxCount > 0 && (
+                    <span className="absolute -top-0.5 -right-1 text-[9px] font-medium text-muted-foreground">
+                      {inboxCount}
                     </span>
                   )}
                 </div>

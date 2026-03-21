@@ -37,11 +37,22 @@ import { SlackApprovalNotifier } from "./notifications/slack-notifier.js";
 import { WhatsAppApprovalNotifier } from "./notifications/whatsapp-notifier.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChatRuntimeConfig } from "./runtime.js";
-import type { ChannelAdapter } from "./adapters/adapter.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerAllCartridges, DEFAULT_CHAT_AVAILABLE_ACTIONS } from "./cartridge-registrar.js";
 import { ResponseGenerator } from "./composer/response-generator.js";
 import { ProactiveSender } from "./notifications/proactive-sender.js";
+import {
+  ConversationRouter,
+  InMemorySessionStore,
+  RedisSessionStore,
+  qualificationFlow,
+  bookingFlow,
+  objectionHandlingFlow,
+  reviewRequestFlow,
+  postTreatmentFlow,
+  resolveCadenceTemplates,
+} from "@switchboard/customer-engagement";
+import { startCadenceWorker, registerCadenceDefinition } from "./jobs/cadence-worker.js";
 
 /** Configuration for clinic mode (LLM interpreter + read tools). */
 export interface ClinicConfig {
@@ -227,6 +238,20 @@ export async function createChatRuntime(
   const useLlmInterpreter = skinIdEnv || clinicConfig;
   let campaignRefreshTimer: ReturnType<typeof setInterval> | null = null;
   let responseGenerator: ResponseGenerator | null = null;
+  let llmConversationEngine:
+    | import("./conversation/llm-conversation-engine.js").LLMConversationEngine
+    | null = null;
+  let llmBusinessProfile:
+    | import("./conversation/llm-conversation-engine.js").BusinessProfile
+    | null = null;
+
+  // Create Redis client (shared by model router + session store)
+  let chatRedis: import("ioredis").default | undefined;
+  const chatRedisUrl = process.env["REDIS_URL"];
+  if (chatRedisUrl) {
+    const { default: IORedis } = await import("ioredis");
+    chatRedis = new IORedis(chatRedisUrl);
+  }
 
   if (useLlmInterpreter && !interpreter) {
     const { createModelRouter } = await import("./clinic/model-router-factory.js");
@@ -235,14 +260,6 @@ export async function createChatRuntime(
     const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
     const adAccountId =
       clinicConfig?.adAccountId ?? process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock";
-
-    // Create Redis client for model router if REDIS_URL is available
-    let chatRedis: import("ioredis").default | undefined;
-    const chatRedisUrl = process.env["REDIS_URL"];
-    if (chatRedisUrl) {
-      const { default: IORedis } = await import("ioredis");
-      chatRedis = new IORedis(chatRedisUrl);
-    }
 
     const modelRouter = createModelRouter(
       {
@@ -295,6 +312,41 @@ export async function createChatRuntime(
         modelRouter,
       });
       console.warn("[Chat] ResponseGenerator initialized (LLM response generation enabled)");
+    }
+
+    // Create LLM Conversation Engine for lead bot natural responses
+    if (llmConfig.apiKey) {
+      const { LLMConversationEngine } = await import("./conversation/llm-conversation-engine.js");
+      llmConversationEngine = new LLMConversationEngine(
+        { ...llmConfig, maxTokens: 200, temperature: 0.6 },
+        modelRouter,
+      );
+      console.warn("[Chat] LLMConversationEngine initialized (natural lead conversations enabled)");
+    }
+
+    // Build business profile for LLM conversation context
+    if (resolvedProfile) {
+      const biz = resolvedProfile.profile.business;
+      const catalog = resolvedProfile.profile.services?.catalog;
+      const hours = resolvedProfile.profile.hours;
+      const booking = resolvedProfile.profile.booking;
+      const faqs = resolvedProfile.profile.faqs;
+
+      llmBusinessProfile = {
+        businessName:
+          biz?.name ?? resolvedProfile.profile.name ?? process.env["CLINIC_NAME"] ?? "our clinic",
+        personaName: resolvedProfile.llmContext?.persona ?? "the team",
+        services: catalog
+          ?.map((s) => (s.typicalValue ? `${s.name} ($${s.typicalValue})` : s.name))
+          .join(", "),
+        hours: hours
+          ? Object.entries(hours)
+              .map(([day, h]) => `${day}: ${h.open}–${h.close}`)
+              .join(", ")
+          : undefined,
+        bookingMethod: booking?.bookingUrl ?? booking?.bookingPhone ?? biz?.phone,
+        faqs: faqs?.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n"),
+      };
     }
 
     // Create CartridgeReadAdapter for read intents
@@ -398,6 +450,64 @@ export async function createChatRuntime(
   // Create ConversionBus for CRM → ads attribution feedback loop
   const conversionBus = new InMemoryConversionBus();
 
+  // Wire CAPIDispatcher to ConversionBus so lead bot events reach Meta CAPI (standalone mode)
+  if (process.env["META_PIXEL_ID"] && process.env["META_ADS_ACCESS_TOKEN"]) {
+    try {
+      const { CAPIDispatcher, createMetaAdsWriteProvider } =
+        await import("@switchboard/digital-ads");
+      const adsProvider = createMetaAdsWriteProvider({
+        accessToken: process.env["META_ADS_ACCESS_TOKEN"],
+        adAccountId: process.env["META_ADS_ACCOUNT_ID"] ?? "act_mock",
+      });
+      const dispatcher = new CAPIDispatcher({
+        adsProvider,
+        crmProvider:
+          crmProvider ??
+          ({ searchContacts: async () => [], getContact: async () => null } as never),
+        pixelId: process.env["META_PIXEL_ID"],
+      });
+      dispatcher.register(conversionBus);
+      console.warn("[Chat] CAPIDispatcher registered on ConversionBus");
+    } catch (err) {
+      console.error("[Bootstrap] Failed to wire CAPIDispatcher:", err);
+    }
+  }
+
+  // Lead bot mode: wire ConversationRouter when SKIN_ID is set and LEAD_BOT_MODE is enabled.
+  // This routes lead messages through qualification → booking flows instead of the
+  // owner/operator interpreter pipeline.
+  let leadRouter: ConversationRouter | null = null;
+  const isLeadBot = skinIdEnv && process.env["LEAD_BOT_MODE"] === "true";
+  if (isLeadBot) {
+    const sessionStore = chatRedis ? new RedisSessionStore(chatRedis) : new InMemorySessionStore();
+
+    leadRouter = new ConversationRouter({
+      sessionStore,
+      flows: new Map([
+        [qualificationFlow.id, qualificationFlow],
+        [bookingFlow.id, bookingFlow],
+        [objectionHandlingFlow.id, objectionHandlingFlow],
+        [reviewRequestFlow.id, reviewRequestFlow],
+        [postTreatmentFlow.id, postTreatmentFlow],
+      ]),
+      defaultFlowId: qualificationFlow.id,
+      faqs: resolvedProfile?.profile?.faqs,
+      businessName: resolvedProfile?.profile?.name,
+      objectionTrees: resolvedProfile?.objectionTrees ?? [],
+    });
+    console.warn(
+      `[Chat] Lead bot mode enabled: qualification → booking flow, ` +
+        `session store=${chatRedis ? "redis" : "in-memory"}`,
+    );
+  }
+
+  // Wire OutcomeStore for conversation outcome tracking (enables OutcomePipeline)
+  let outcomeStore: import("@switchboard/core").OutcomeStore | undefined;
+  if (process.env["DATABASE_URL"]) {
+    const { getDb, PrismaOutcomeStore } = await import("@switchboard/db");
+    outcomeStore = new PrismaOutcomeStore(getDb());
+  }
+
   const runtime = new ChatRuntime({
     adapter,
     interpreter,
@@ -415,46 +525,61 @@ export async function createChatRuntime(
     responseGenerator,
     dataFlowExecutor,
     conversionBus,
+    isLeadBot: !!isLeadBot,
+    leadRouter,
+    outcomeStore,
+    llmConversationEngine,
+    llmBusinessProfile,
   });
+
+  // Start cadence worker for follow-up automation when lead bot mode is enabled
+  let stopCadenceWorker: (() => void) | null = null;
+  if (isLeadBot) {
+    // Register default cadence templates (consultation-reminder, post-treatment-followup, etc.)
+    const templates = resolveCadenceTemplates();
+    for (const template of templates) {
+      registerCadenceDefinition(template);
+    }
+
+    let cadenceStore: import("@switchboard/db").CadenceStore | undefined;
+    if (process.env["DATABASE_URL"]) {
+      const { getDb, PrismaCadenceStore } = await import("@switchboard/db");
+      cadenceStore = new PrismaCadenceStore(getDb());
+    }
+
+    stopCadenceWorker = startCadenceWorker({
+      notifier: agentNotifier,
+      cadenceStore,
+      intervalMs: 5 * 60 * 1000, // Evaluate every 5 minutes
+    });
+  }
+
+  // Silence detector — flags conversations with 72h+ of inactivity as unresponsive
+  let stopSilenceDetector: (() => void) | null = null;
+  if (isLeadBot && outcomeStore) {
+    const { startSilenceDetector } = await import("./jobs/silence-detector.js");
+    const { OutcomePipeline } = await import("@switchboard/core");
+    const { getDb } = await import("@switchboard/db");
+    stopSilenceDetector = startSilenceDetector({
+      prisma: getDb(),
+      outcomePipeline: new OutcomePipeline(outcomeStore),
+    });
+  }
 
   const cleanup = () => {
     if (campaignRefreshTimer) {
       clearInterval(campaignRefreshTimer);
+    }
+    if (stopCadenceWorker) {
+      stopCadenceWorker();
+    }
+    if (stopSilenceDetector) {
+      stopSilenceDetector();
     }
   };
 
   return { runtime, cleanup, failedMessageStore, agentNotifier };
 }
 
-/**
- * Create a lightweight managed runtime for provisioned channels.
- * Uses ApiOrchestratorAdapter — no local storage, cartridges, or orchestrator.
- * The API server handles all governance, policies, and audit.
- */
-export async function createManagedRuntime(config: {
-  adapter: ChannelAdapter;
-  apiUrl: string;
-  apiKey?: string;
-  failedMessageStore?: FailedMessageStore;
-}): Promise<ChatRuntime> {
-  const apiAdapter = new ApiOrchestratorAdapter({
-    baseUrl: config.apiUrl,
-    apiKey: config.apiKey,
-  });
-
-  const interpreter = new RuleBasedInterpreter({
-    diagnosticDefaults: { platform: "meta" },
-  });
-  const interpreterRegistry = new InterpreterRegistry();
-  interpreterRegistry.register("rule-based", interpreter, 1000);
-  interpreterRegistry.setDefaultFallbackChain(["rule-based"]);
-
-  return new ChatRuntime({
-    adapter: config.adapter,
-    interpreter,
-    interpreterRegistry,
-    orchestrator: apiAdapter,
-    failedMessageStore: config.failedMessageStore,
-    availableActions: DEFAULT_CHAT_AVAILABLE_ACTIONS,
-  });
-}
+// Re-export from dedicated module
+export { createManagedRuntime } from "./managed-runtime.js";

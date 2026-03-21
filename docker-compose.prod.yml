@@ -1,0 +1,179 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
+      - REDIS_URL=redis://redis:6379
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
+      - INTERNAL_SETUP_SECRET=${INTERNAL_SETUP_SECRET}
+      - API_KEYS=${API_KEYS:-}
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
+      - META_PIXEL_ID=${META_PIXEL_ID:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - CHAT_PUBLIC_URL=${CHAT_PUBLIC_URL:-http://chat:3001}
+      - CHAT_INTERNAL_URL=http://chat:3001
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+
+  chat:
+    build:
+      context: .
+      target: chat
+    restart: unless-stopped
+    environment:
+      - CHAT_PORT=3001
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
+      - REDIS_URL=redis://redis:6379
+      - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN:-}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - WHATSAPP_APP_SECRET=${WHATSAPP_APP_SECRET:-}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SKIN_ID=${SKIN_ID:-}
+      - PROFILE_ID=${PROFILE_ID:-}
+      - LEAD_BOT_MODE=${LEAD_BOT_MODE:-false}
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
+      - META_PIXEL_ID=${META_PIXEL_ID:-}
+      - SWITCHBOARD_API_URL=http://api:3000
+      - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    restart: unless-stopped
+    environment:
+      - PORT=3002
+      - NODE_ENV=production
+      - SWITCHBOARD_API_URL=http://api:3000
+      - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
+      - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot_etc:/etc/letsencrypt:ro
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - api
+      - chat
+      - dashboard
+    networks:
+      - internal
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_etc:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    # Run: docker compose -f docker-compose.prod.yml run certbot certonly --webroot -w /var/www/certbot -d your-domain.com
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+
+  db-migrate:
+    build:
+      context: .
+      target: api
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "packages/db/prisma/schema.prisma"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-switchboard}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-switchboard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-switchboard}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/var/lib/redis/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  redis_data:
+  certbot_etc:
+  certbot_var:
+  certbot_webroot:
+
+networks:
+  internal:
+    driver: bridge

@@ -117,7 +117,8 @@ export class CAPIDispatcher {
     let contact: CrmContact | null;
     try {
       contact = await this.config.crmProvider.getContact(event.contactId);
-    } catch {
+    } catch (err) {
+      console.warn("[CAPIDispatcher] CRM lookup failed for contact", event.contactId, err);
       return { sent: false, reason: "CRM lookup failed" };
     }
 
@@ -138,6 +139,7 @@ export class CAPIDispatcher {
     const capiEvent: CAPIEvent = {
       eventName,
       eventTime: Math.floor(event.timestamp.getTime() / 1000),
+      eventId: generateEventId(event.contactId, event.type, event.timestamp),
       userData: buildUserData(contact),
       customData: {
         value: event.value,
@@ -165,6 +167,12 @@ export class CAPIDispatcher {
       return { sent: false, eventName, reason: `CAPI send failed: ${message}` };
     }
   }
+}
+
+function generateEventId(contactId: string, eventType: string, timestamp: Date): string {
+  return createHash("sha256")
+    .update(`${contactId}:${eventType}:${timestamp.getTime()}`)
+    .digest("hex");
 }
 
 // Export the hash utility for testing

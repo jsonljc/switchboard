@@ -182,6 +182,13 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async sendTextReply(threadId: string, text: string): Promise<void> {
+    // Simulate typing to appear human-like
+    const delayMs = this.typingDelay(text);
+    if (delayMs > 0) {
+      await this.apiCall("sendChatAction", { chat_id: threadId, action: "typing" }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     await this.apiCall("sendMessage", {
       chat_id: threadId,
       text,
@@ -239,6 +246,12 @@ export class TelegramAdapter implements ChannelAdapter {
       return String(callback["id"]);
     }
     return null;
+  }
+
+  /** Calculate a human-like typing delay based on response word count. */
+  private typingDelay(text: string): number {
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    return Math.min(Math.max(Math.round((wordCount / 50) * 60_000), 1500), 4000);
   }
 
   private async apiCall(method: string, body: Record<string, unknown>): Promise<unknown> {

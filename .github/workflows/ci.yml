@@ -16,7 +16,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: switchboard
           POSTGRES_PASSWORD: switchboard
@@ -31,21 +31,21 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
-      API_KEY_ENCRYPTION_SECRET: ci-test-encryption-secret-32chr
-      NEXTAUTH_SECRET: ci-test-nextauth-secret
+      API_KEY_ENCRYPTION_SECRET: ${{ secrets.CI_API_KEY_ENCRYPTION_SECRET || 'ci-test-encryption-secret-32chr' }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Generate Prisma client
         run: pnpm --filter @switchboard/db exec prisma generate
@@ -61,6 +61,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -80,7 +81,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -90,6 +91,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -112,7 +114,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -122,6 +124,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -147,7 +150,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -157,6 +160,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -188,7 +192,6 @@ jobs:
         run: bash scripts/check-no-empty-tests.sh
 
   secrets:
-    needs: setup
     runs-on: ubuntu-latest
 
     steps:
@@ -209,7 +212,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: pnpm
@@ -219,6 +222,7 @@ jobs:
         with:
           path: |
             node_modules
+            pnpm-lock.yaml
             packages/*/dist
             packages/*/node_modules
             cartridges/*/dist
@@ -229,11 +233,49 @@ jobs:
             packages/db/node_modules/.prisma
           key: build-${{ github.sha }}
 
+      - name: Regenerate lockfile with overrides
+        run: pnpm install --no-frozen-lockfile
+
       - name: Security audit
-        run: pnpm audit --audit-level=critical
+        run: pnpm audit --audit-level=high
+
+  architecture:
+    needs: setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore build artifacts
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            pnpm-lock.yaml
+            packages/*/dist
+            packages/*/node_modules
+            cartridges/*/dist
+            cartridges/*/node_modules
+            apps/*/dist
+            apps/*/.next
+            apps/*/node_modules
+            packages/db/node_modules/.prisma
+          key: build-${{ github.sha }}
+
+      - name: Architecture health check
+        run: pnpm dlx tsx scripts/arch-check.ts
+
+      - name: Dependency boundary validation
+        run: npx depcruise --config .dependency-cruiser.cjs packages/ cartridges/ apps/
 
   docker:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:

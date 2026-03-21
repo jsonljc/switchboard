@@ -70,7 +70,7 @@ export function StepComplete({
         title: "Simulation complete",
         description: `Decision: ${data.finalDecision ?? data.explanation ?? "Success"}`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Simulation",
         description: "Test simulation completed (no live cartridge action).",
@@ -110,11 +110,13 @@ export function StepComplete({
             <div key={ch.channel} className="p-3 rounded-lg border space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm capitalize">{ch.channel}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  ch.status === "active"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-yellow-100 text-yellow-700"
-                }`}>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    ch.status === "active"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-yellow-100 text-yellow-700"
+                  }`}
+                >
                   {ch.status}
                 </span>
               </div>
@@ -124,10 +126,10 @@ export function StepComplete({
               {ch.webhookUrl && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium">Webhook URL:</p>
-                  <code className="text-xs bg-muted p-2 rounded block break-all">{ch.webhookUrl}</code>
-                  {ch.note && (
-                    <p className="text-xs text-muted-foreground">{ch.note}</p>
-                  )}
+                  <code className="text-xs bg-muted p-2 rounded block break-all">
+                    {ch.webhookUrl}
+                  </code>
+                  {ch.note && <p className="text-xs text-muted-foreground">{ch.note}</p>}
                 </div>
               )}
               {ch.channel === "telegram" && ch.status === "active" && (
@@ -171,7 +173,10 @@ export function StepComplete({
 }
 
 function generateClientGuide(runtimeType: string, organizationId: string): IntegrationGuide {
-  const baseUrl = typeof window !== "undefined" ? window.location.origin.replace(/:\d+$/, ":3000") : "http://localhost:3000";
+  const baseUrl =
+    typeof window !== "undefined"
+      ? window.location.origin.replace(/:\d+$/, ":3000")
+      : "http://localhost:3000";
 
   if (runtimeType === "openclaw") {
     return {
@@ -183,19 +188,23 @@ function generateClientGuide(runtimeType: string, organizationId: string): Integ
           title: "Add to openclaw.json",
           description: "Add the Switchboard MCP server configuration.",
           language: "json",
-          code: JSON.stringify({
-            mcpServers: {
-              switchboard: {
-                command: "npx",
-                args: ["-y", "@switchboard/mcp-server"],
-                env: {
-                  SWITCHBOARD_API_URL: baseUrl,
-                  SWITCHBOARD_API_KEY: "<your-api-key>",
-                  SWITCHBOARD_ORG_ID: organizationId,
+          code: JSON.stringify(
+            {
+              mcpServers: {
+                switchboard: {
+                  command: "npx",
+                  args: ["-y", "@switchboard/mcp-server"],
+                  env: {
+                    SWITCHBOARD_API_URL: baseUrl,
+                    SWITCHBOARD_API_KEY: "<your-api-key>",
+                    SWITCHBOARD_ORG_ID: organizationId,
+                  },
                 },
               },
             },
-          }, null, 2),
+            null,
+            2,
+          ),
         },
       ],
     };
@@ -211,19 +220,23 @@ function generateClientGuide(runtimeType: string, organizationId: string): Integ
           title: "Claude Desktop / Cursor config",
           description: "Add this to your MCP configuration file.",
           language: "json",
-          code: JSON.stringify({
-            mcpServers: {
-              switchboard: {
-                command: "npx",
-                args: ["-y", "@switchboard/mcp-server"],
-                env: {
-                  SWITCHBOARD_API_URL: baseUrl,
-                  SWITCHBOARD_API_KEY: "<your-api-key>",
-                  SWITCHBOARD_ORG_ID: organizationId,
+          code: JSON.stringify(
+            {
+              mcpServers: {
+                switchboard: {
+                  command: "npx",
+                  args: ["-y", "@switchboard/mcp-server"],
+                  env: {
+                    SWITCHBOARD_API_URL: baseUrl,
+                    SWITCHBOARD_API_KEY: "<your-api-key>",
+                    SWITCHBOARD_ORG_ID: organizationId,
+                  },
                 },
               },
             },
-          }, null, 2),
+            null,
+            2,
+          ),
         },
       ],
     };
@@ -237,7 +250,8 @@ function generateClientGuide(runtimeType: string, organizationId: string): Integ
       steps: [
         {
           title: "Channels provisioned",
-          description: "Your messaging channels are set up and ready to use. Check the Channel Status section above for details.",
+          description:
+            "Your messaging channels are set up and ready to use. Check the Channel Status section above for details.",
         },
       ],
     };

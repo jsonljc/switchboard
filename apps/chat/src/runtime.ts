@@ -1,22 +1,14 @@
-import { createHash } from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
-import { guardInterpreterOutput } from "./interpreter/schema-guard.js";
 import { createConversation, transitionConversation } from "./conversation/state.js";
 import { getThread, setThread } from "./conversation/threads.js";
-import {
-  composeHelpMessage,
-  composeUncertainReply,
-  composeWelcomeMessage,
-} from "./composer/reply.js";
 import type {
   ResponseGenerator,
   ResponseContext,
   GeneratedResponse,
 } from "./composer/response-generator.js";
 import { ResponseHumanizer } from "./composer/humanize.js";
-import { handleReadIntent } from "./clinic/read-handler.js";
 import type {
   RuntimeOrchestrator,
   StorageContext,
@@ -27,28 +19,33 @@ import type {
   ResolvedProfile,
   DataFlowExecutor,
   ConversionBus,
+  HandoffStore,
+  OutcomeStore,
 } from "@switchboard/core";
-import { inferCartridgeId, matchesAny } from "@switchboard/core";
+import { OutcomePipeline, HandoffNotifier } from "@switchboard/core";
+import type { ApprovalNotifier } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
-import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
+import type {
+  LLMConversationEngine,
+  BusinessProfile as LLMBusinessProfile,
+} from "./conversation/llm-conversation-engine.js";
 import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
 import type { ConversationRouter } from "@switchboard/customer-engagement";
+import { findMedicalClaims } from "@switchboard/customer-engagement";
+import { isWithinWhatsAppWindow } from "./adapters/whatsapp.js";
+import { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
-// Extracted handlers
-import type { HandlerContext } from "./handlers/handler-context.js";
-import type { OperatorState } from "./handlers/handler-context.js";
-import { handleProposeResult, handlePlanResult } from "./handlers/proposal-handler.js";
-import { handleUndo, handleKillSwitch } from "./handlers/system-commands.js";
-import { handleCallbackQuery, extractCallbackQueryId } from "./handlers/callback-handler.js";
+// Extracted modules
+import type { HandlerContext, OperatorState } from "./handlers/handler-context.js";
 import { handleLeadMessage } from "./handlers/lead-handler.js";
+import { templateFallback } from "./runtime-helpers.js";
 import {
-  handleStatusCommand,
-  handlePauseCommand,
-  handleResumeCommand,
-  handleAutonomyCommand,
-  handleAutonomyStatusCommand,
-} from "./handlers/cockpit-commands.js";
+  linkCrmContact,
+  handleConsentKeywords,
+  handleCommands,
+  interpretAndProcess,
+} from "./message-pipeline.js";
 
 export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
 
@@ -85,6 +82,18 @@ export interface ChatRuntimeConfig {
   leadRouter?: ConversationRouter | null;
   /** Optional ConversionBus for emitting conversion events (CRM → ads feedback loop). */
   conversionBus?: ConversionBus | null;
+  /** Optional HandoffStore for persisting escalation packages. */
+  handoffStore?: HandoffStore | null;
+  /** Optional ApprovalNotifier for sending handoff alerts. */
+  approvalNotifier?: ApprovalNotifier | null;
+  /** Optional OutcomeStore for recording conversation outcomes and response variants. */
+  outcomeStore?: OutcomeStore | null;
+  /** Optional LLM conversation engine for natural lead bot responses. */
+  llmConversationEngine?: LLMConversationEngine | null;
+  /** Business profile for LLM conversation context. */
+  llmBusinessProfile?: LLMBusinessProfile | null;
+  /** Minimum delay in ms before sending a response (typing simulation). Default: 0. */
+  typingDelayMs?: number;
 }
 
 export class ChatRuntime {
@@ -107,6 +116,13 @@ export class ChatRuntime {
   private isLeadBot: boolean;
   private leadRouter: ConversationRouter | null;
   private conversionBus: ConversionBus | null;
+  private handoffStore: HandoffStore | null;
+  private handoffNotifier: HandoffNotifier | null;
+  private outcomePipeline: OutcomePipeline | null;
+  private llmConversationEngine: LLMConversationEngine | null;
+  private llmBusinessProfile: LLMBusinessProfile | null;
+  private typingDelayMs: number;
+  private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
   // Fallback in-memory tracker when no storage is available
@@ -138,6 +154,17 @@ export class ChatRuntime {
     this.isLeadBot = config.isLeadBot ?? false;
     this.leadRouter = config.leadRouter ?? null;
     this.conversionBus = config.conversionBus ?? null;
+    this.handoffStore = config.handoffStore ?? null;
+    this.handoffNotifier = config.approvalNotifier
+      ? new HandoffNotifier(config.approvalNotifier)
+      : null;
+    this.outcomePipeline = config.outcomeStore ? new OutcomePipeline(config.outcomeStore) : null;
+    this.llmConversationEngine = config.llmConversationEngine ?? null;
+    this.llmBusinessProfile = config.llmBusinessProfile ?? null;
+    this.typingDelayMs = config.typingDelayMs ?? 0;
+    this.dialogueMiddleware = new DialogueMiddleware({
+      resolvedProfile: config.resolvedProfile ?? null,
+    });
 
     // Initialize banned phrase filter from skin config
     const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
@@ -169,9 +196,46 @@ export class ChatRuntime {
   // Shared helpers (used by this class and passed to extracted handlers)
   // ---------------------------------------------------------------------------
 
-  /** Send text reply with banned phrase filtering applied. */
+  /** Send text reply with banned phrase filtering and typing delay applied. */
   private async sendFilteredReply(threadId: string, text: string): Promise<void> {
-    await this.adapter.sendTextReply(threadId, this.filterOutgoing(text));
+    // Typing delay simulation (H5) — wait before sending to appear human
+    if (this.typingDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.typingDelayMs));
+    }
+
+    let filtered = this.filterOutgoing(text);
+
+    // Post-generation medical claim validation
+    const violations = findMedicalClaims([filtered]);
+    if (violations.length > 0) {
+      console.warn(
+        `[MedicalClaimFilter] Blocked outbound message with violations: ${violations.join(", ")}`,
+      );
+      filtered =
+        "I'd be happy to help with that question. For specific details about procedures and outcomes, " +
+        "I'd recommend speaking directly with our team who can provide accurate, personalized information.";
+    }
+
+    // WhatsApp 24h window enforcement: send template if outside window
+    if (this.adapter.channel === "whatsapp") {
+      const conversation = await getThread(threadId);
+      const lastInbound = conversation?.lastInboundAt ?? null;
+      if (!isWithinWhatsAppWindow(lastInbound)) {
+        console.warn(
+          `[WhatsApp] 24h window expired for ${threadId}, sending template instead of freeform`,
+        );
+        if ("sendTemplateMessage" in this.adapter) {
+          await (
+            this.adapter as {
+              sendTemplateMessage: (id: string, name: string, lang: string) => Promise<void>;
+            }
+          ).sendTemplateMessage(threadId, "follow_up_notification", "en");
+        }
+        return;
+      }
+    }
+
+    await this.adapter.sendTextReply(threadId, filtered);
   }
 
   /** Apply banned phrase filter to card text fields. */
@@ -187,7 +251,6 @@ export class ChatRuntime {
 
   /**
    * Compose a user-facing response: LLM-generated when available, template fallback otherwise.
-   * Applies terminology substitution and banned phrase filtering.
    */
   private async composeResponse(
     context: ResponseContext,
@@ -197,75 +260,15 @@ export class ChatRuntime {
     if (this.responseGenerator) {
       result = await this.responseGenerator.generate(context, orgId);
     } else {
-      result = this.templateFallback(context);
+      result = templateFallback(context, this.resolvedSkin, this.resolvedProfile);
     }
-    // Post-process: terminology substitution, then banned phrase filter
     result.text = this.filterOutgoing(this.humanizer.applyTerminology(result.text));
     return result;
-  }
-
-  /**
-   * Template-based fallback preserving exact current behavior per response type.
-   */
-  private templateFallback(context: ResponseContext): GeneratedResponse {
-    let text: string;
-
-    switch (context.type) {
-      case "welcome":
-        text = composeWelcomeMessage(
-          this.resolvedSkin,
-          this.resolvedProfile?.profile?.business?.name ?? undefined,
-          context.availableActions,
-        );
-        break;
-
-      case "uncertain":
-        text = composeUncertainReply(context.availableActions);
-        break;
-
-      case "clarification":
-        text = context.clarificationQuestion ?? composeUncertainReply(context.availableActions);
-        break;
-
-      case "denial": {
-        const detail = context.denialDetail ?? context.explanation ?? "that action is not allowed";
-        text = `I can't do that \u2014 ${lowercaseFirst(detail)}.`;
-        break;
-      }
-
-      case "result_success":
-        text = `All set! ${context.summary ?? "Action completed."}`;
-        break;
-
-      case "result_failure":
-        text = `Something went wrong: ${lowercaseFirst(context.summary ?? "the action failed")}.`;
-        break;
-
-      case "diagnostic":
-        text = context.data ?? "No diagnostic data available.";
-        break;
-
-      case "read_data":
-        text = context.data ?? "No data available.";
-        break;
-
-      case "error":
-        text = context.errorMessage
-          ? `Error: ${context.errorMessage}`
-          : "An unexpected error occurred.";
-        break;
-
-      default:
-        text = "I'm not sure how to respond to that.";
-    }
-
-    return { text, usedLLM: false };
   }
 
   private async recordAssistantMessage(threadId: string, text: string): Promise<void> {
     const conversation = await getThread(threadId);
     if (conversation) {
-      // Track first reply time for response time metrics
       if (!conversation.firstReplyAt) {
         conversation.firstReplyAt = new Date();
       }
@@ -282,17 +285,14 @@ export class ChatRuntime {
   }
 
   private async getLastExecutedEnvelopeId(threadId: string): Promise<string | null> {
-    // Try DB lookup: find most recent executed envelope for this thread
     if (this.storage) {
       const envelopes = await this.storage.envelopes.list({
         status: "executed",
         limit: 1,
       });
-      // Filter by conversationId matching threadId
       const match = envelopes.find((e) => e.conversationId === threadId);
       if (match) return match.id;
     }
-    // Fallback to in-memory
     return this.lastExecutedEnvelopeFallback.get(threadId) ?? null;
   }
 
@@ -347,7 +347,6 @@ export class ChatRuntime {
     }
 
     const threadId = message.threadId ?? message.id;
-    const ctx = this.buildHandlerContext();
 
     // Get or create conversation
     let conversation = await getThread(threadId);
@@ -359,68 +358,10 @@ export class ChatRuntime {
         message.principalId,
         message.organizationId ?? null,
       );
-      // Auto-link to CRM contact by external ID (e.g. WhatsApp phone, Telegram user ID)
-      if (this.crmProvider) {
-        try {
-          const existing = await this.crmProvider.findByExternalId(
-            message.principalId,
-            message.channel,
-          );
-          if (existing) {
-            conversation.crmContactId = existing.id;
-          } else {
-            // Auto-create CRM contact for new chat users
-            const phone = message.channel === "whatsapp" ? message.principalId : undefined;
-            const contact = await this.crmProvider.createContact({
-              externalId: message.principalId,
-              channel: message.channel,
-              firstName: message.metadata?.["firstName"] as string | undefined,
-              lastName: message.metadata?.["lastName"] as string | undefined,
-              phone,
-              sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
-              sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
-              utmSource: message.metadata?.["utmSource"] as string | undefined,
-              properties: {
-                source: "chat",
-                ...(message.metadata?.["username"]
-                  ? { telegramUsername: message.metadata["username"] }
-                  : {}),
-                ...(message.metadata?.["contactName"]
-                  ? { displayName: message.metadata["contactName"] }
-                  : {}),
-              },
-            });
-            conversation.crmContactId = contact.id;
-
-            // Log activity so there's a record of how the contact was created
-            await this.crmProvider.logActivity({
-              type: "note",
-              subject: "Contact auto-created from chat",
-              body: `Created from ${message.channel} conversation`,
-              contactIds: [contact.id],
-            });
-
-            // Emit inquiry conversion event for ad attribution feedback
-            if (this.conversionBus && message.organizationId) {
-              this.conversionBus.emit({
-                type: "inquiry",
-                contactId: contact.id,
-                organizationId: message.organizationId,
-                value: 1,
-                sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
-                sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
-                timestamp: new Date(),
-                metadata: { channel: message.channel, source: "chat_auto_create" },
-              });
-            }
-          }
-        } catch {
-          // Non-critical — continue without CRM link
-        }
-      }
+      await linkCrmContact(this.buildPipelineDeps(), message, conversation);
       await setThread(conversation);
 
-      // Welcome message for first-time users
+      // Welcome message for first-time users (routed through sendFilteredReply for safety — H7)
       const welcomeResponse = await this.composeResponse(
         {
           type: "welcome",
@@ -428,9 +369,21 @@ export class ChatRuntime {
         },
         message.organizationId ?? undefined,
       );
-      await this.adapter.sendTextReply(threadId, welcomeResponse.text);
+      await this.sendFilteredReply(threadId, welcomeResponse.text);
       await this.recordAssistantMessage(threadId, welcomeResponse.text);
       isNewConversation = true;
+
+      // Emit inquiry event to ConversionBus for new lead bot conversations
+      if (this.isLeadBot && this.conversionBus) {
+        this.conversionBus.emit({
+          type: "inquiry",
+          contactId: threadId,
+          organizationId: message.organizationId ?? "default",
+          value: 0,
+          timestamp: new Date(),
+          metadata: { channel: message.channel },
+        });
+      }
     }
 
     if (!conversation.organizationId && message.organizationId) {
@@ -438,9 +391,42 @@ export class ChatRuntime {
       await setThread(conversation);
     }
 
+    // Handle unsupported message types — capture lead but reply with guidance
+    if (message.metadata?.["unsupported"]) {
+      conversation.lastInboundAt = new Date();
+      await setThread(conversation);
+      const ackText =
+        "Thanks for reaching out! I'm better with text — could you describe what you need?";
+      await this.sendFilteredReply(threadId, ackText);
+      await this.recordAssistantMessage(threadId, ackText);
+      return;
+    }
+
+    // Track last inbound message time for WhatsApp 24h conversation window enforcement
+    conversation.lastInboundAt = new Date();
+    await setThread(conversation);
+
+    // Consent keyword handling (opt-out / opt-in)
+    const consentHandled = await handleConsentKeywords(
+      this.buildPipelineDeps(),
+      message,
+      threadId,
+      conversation,
+    );
+    if (consentHandled) return;
+
     // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
     if (this.isLeadBot && this.leadRouter) {
-      await handleLeadMessage(ctx, this.leadRouter, message, threadId);
+      const ctx = this.buildHandlerContext();
+      await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware, {
+        handoffStore: this.handoffStore,
+        handoffNotifier: this.handoffNotifier,
+        outcomePipeline: this.outcomePipeline,
+        conversionBus: this.conversionBus,
+        crmProvider: this.crmProvider,
+        llmEngine: this.llmConversationEngine,
+        businessProfile: this.llmBusinessProfile,
+      });
       return;
     }
 
@@ -455,318 +441,52 @@ export class ChatRuntime {
       return;
     }
 
-    // Handle help command
-    if (/^help$/i.test(message.text.trim())) {
-      const helpText = composeHelpMessage(
-        this.availableActions,
-        (this.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
-          | Record<string, string>
-          | undefined,
-      );
-      await this.sendFilteredReply(threadId, helpText);
-      await this.recordAssistantMessage(threadId, helpText);
-      return;
-    }
+    // Handle commands (help, cockpit, callbacks)
+    const commandHandled = await handleCommands(
+      this.buildPipelineDeps(),
+      message,
+      threadId,
+      rawPayload,
+    );
+    if (commandHandled) return;
 
-    // Handle cockpit commands (agent management)
-    const trimmedText = message.text.trim();
-
-    if (/^\/?status$/i.test(trimmedText)) {
-      await handleStatusCommand(ctx, threadId, message.principalId, message.organizationId);
-      return;
-    }
-
-    if (/^\/?pause$/i.test(trimmedText)) {
-      await handlePauseCommand(ctx, threadId, message.principalId, message.organizationId);
-      return;
-    }
-
-    if (/^\/?resume$/i.test(trimmedText)) {
-      await handleResumeCommand(ctx, threadId, message.principalId, message.organizationId);
-      return;
-    }
-
-    if (/^\/?autonomy[-_]?status$/i.test(trimmedText)) {
-      await handleAutonomyStatusCommand(ctx, threadId, message.principalId, message.organizationId);
-      return;
-    }
-
-    const autonomyMatch = trimmedText.match(/^\/?autonomy(?:\s+(.+))?$/i);
-    if (autonomyMatch) {
-      await handleAutonomyCommand(
-        ctx,
-        threadId,
-        message.principalId,
-        message.organizationId,
-        autonomyMatch[1],
-      );
-      return;
-    }
-
-    // Handle callback queries (approval button taps)
-    if (
-      message.text.startsWith("{") &&
-      message.text.includes('"action"') &&
-      message.text.includes('"approvalId"')
-    ) {
-      // Dismiss the button loading spinner in Telegram
-      const cbqId = extractCallbackQueryId(rawPayload);
-      if (cbqId && this.adapter.answerCallbackQuery) {
-        await this.adapter.answerCallbackQuery(cbqId);
-      }
-      await handleCallbackQuery(ctx, threadId, message.text, message.principalId);
-      return;
-    }
-
-    // Interpret the message — use registry if available, else single interpreter
-    // Include recent messages for conversation continuity
-    const recentMessages = conversation.messages
-      .slice(-this.maxContextMessages)
-      .map((m) => ({ role: m.role, text: m.text }));
-    const conversationContext: Record<string, unknown> = {
+    // Interpret and process proposals
+    await interpretAndProcess(
+      this.buildPipelineDeps(),
+      message,
+      threadId,
       conversation,
-      recentMessages,
-    };
-
-    let rawResult;
-    if (this.interpreterRegistry) {
-      rawResult = await this.interpreterRegistry.interpret(
-        message.text,
-        conversationContext,
-        this.availableActions,
-        message.organizationId,
-      );
-    } else {
-      rawResult = await this.interpreter.interpret(
-        message.text,
-        conversationContext,
-        this.availableActions,
-      );
-    }
-
-    // Schema-guard interpreter output before trusting it
-    const guard = guardInterpreterOutput(rawResult);
-    if (!guard.valid || !guard.data) {
-      console.error("Interpreter output failed schema guard:", guard.errors);
-      const uncertainResponse = await this.composeResponse(
-        {
-          type: "uncertain",
-          userMessage: message.text,
-          availableActions: this.availableActions,
-        },
-        message.organizationId ?? undefined,
-      );
-      await this.adapter.sendTextReply(threadId, uncertainResponse.text);
-      await this.recordAssistantMessage(threadId, uncertainResponse.text);
-      return;
-    }
-    const result = guard.data;
-
-    // Handle read intents (no governance pipeline needed)
-    if (result.readIntent && result.proposals.length === 0) {
-      if (!this.readAdapter) {
-        await this.sendFilteredReply(threadId, "Read operations are not configured.");
-        return;
-      }
-      try {
-        const readResult = await handleReadIntent(
-          result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
-          {
-            readAdapter: this.readAdapter,
-            cartridgeId: "digital-ads",
-            actorId: message.principalId,
-            organizationId: message.organizationId,
-          },
-        );
-        await this.sendFilteredReply(threadId, readResult.text);
-      } catch (err) {
-        console.error("Read intent error:", err);
-        await this.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
-      }
-      return;
-    }
-
-    // If clarification needed
-    if (result.needsClarification || result.confidence < 0.5) {
-      // Welcome already handled the greeting — skip duplicate "I didn't catch that"
-      if (isNewConversation && result.confidence === 0) {
-        return;
-      }
-      const clarifyResponse = await this.composeResponse(
-        {
-          type: "clarification",
-          clarificationQuestion: result.clarificationQuestion ?? undefined,
-          userMessage: message.text,
-          availableActions: this.availableActions,
-        },
-        message.organizationId ?? undefined,
-      );
-      conversation = transitionConversation(conversation, {
-        type: "set_clarifying",
-        question: clarifyResponse.text,
-      });
-      await setThread(conversation);
-      await this.adapter.sendTextReply(threadId, clarifyResponse.text);
-      return;
-    }
-
-    // If no proposals, uncertain
-    if (result.proposals.length === 0) {
-      if (isNewConversation) return;
-      const noProposalResponse = await this.composeResponse(
-        {
-          type: "uncertain",
-          userMessage: message.text,
-          availableActions: this.availableActions,
-        },
-        message.organizationId ?? undefined,
-      );
-      await this.adapter.sendTextReply(threadId, noProposalResponse.text);
-      return;
-    }
-
-    // If a goalBrief is present and decomposable, try to build and execute a plan
-    if (result.goalBrief?.decomposable && this.planGraphBuilder && this.capabilityRegistry) {
-      try {
-        const capabilities = this.capabilityRegistry.enrichAvailableActions(this.availableActions);
-        const plan = this.planGraphBuilder.buildPlan(result.goalBrief, capabilities, {
-          principalId: message.principalId,
-          organizationId: message.organizationId ?? undefined,
-          cartridgeId: "digital-ads",
-        });
-
-        if (plan && plan.steps.length > 0 && this.dataFlowExecutor) {
-          const planResult = await this.dataFlowExecutor.execute(plan, {
-            principalId: message.principalId,
-            organizationId: message.organizationId ?? undefined,
-          });
-
-          await handlePlanResult(ctx, threadId, planResult, message.principalId);
-          return;
-        }
-        // No DataFlowExecutor — fall through to single-action proposal
-      } catch (err) {
-        console.warn(
-          "[Runtime] Plan building/execution failed, falling through to proposal flow:",
-          err,
-        );
-        // Fall through to single-proposal flow
-      }
-    }
-
-    // Handle undo command
-    if (result.proposals[0]?.actionType === "system.undo") {
-      await handleUndo(ctx, threadId, message.principalId);
-      return;
-    }
-
-    // Handle kill switch (emergency pause all)
-    if (result.proposals[0]?.actionType === "system.kill_switch") {
-      await handleKillSwitch(ctx, threadId, message.principalId, message.organizationId);
-      return;
-    }
-
-    // Rate limit proposals per principal (defense against compute DoS)
-    if (!this.checkProposalRateLimit(message.principalId)) {
-      await this.sendFilteredReply(
-        threadId,
-        "You're sending too many requests. Please wait a moment and try again.",
-      );
-      return;
-    }
-
-    // Skin tool filter enforcement — reject proposals for disallowed action types
-    if (this.resolvedSkin) {
-      const { include, exclude } = this.resolvedSkin.toolFilter;
-      for (const proposal of result.proposals) {
-        const included = matchesAny(proposal.actionType, include);
-        const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
-        if (!included || excluded) {
-          await this.sendFilteredReply(
-            threadId,
-            `Action "${proposal.actionType}" is not available in the current configuration.`,
-          );
-          return;
-        }
-      }
-    }
-
-    // Set proposals on conversation
-    conversation = transitionConversation(conversation, {
-      type: "set_proposals",
-      proposalIds: result.proposals.map((p) => p.id),
-    });
-    await setThread(conversation);
-
-    // Process each proposal through the orchestrator
-    for (const proposal of result.proposals) {
-      // Build entity refs from the parameters (e.g. campaignRef -> campaign entity)
-      const entityRefs: Array<{ inputRef: string; entityType: string }> = [];
-      if (proposal.parameters["campaignRef"]) {
-        entityRefs.push({
-          inputRef: proposal.parameters["campaignRef"] as string,
-          entityType: "campaign",
-        });
-      }
-
-      // Infer cartridge from action type
-      const cartridgeId =
-        inferCartridgeId(proposal.actionType, this.storage?.cartridges ?? undefined) ??
-        "digital-ads";
-
-      try {
-        const idempotencyKey = createHash("sha256")
-          .update(message.principalId)
-          .update(message.id)
-          .update(proposal.actionType)
-          .digest("hex");
-
-        const proposeResult = await this.orchestrator.resolveAndPropose({
-          actionType: proposal.actionType,
-          parameters: proposal.parameters,
-          principalId: message.principalId,
-          cartridgeId,
-          entityRefs,
-          message: message.text,
-          organizationId: message.organizationId,
-          idempotencyKey,
-        });
-
-        // Handle different outcomes
-        if ("needsClarification" in proposeResult) {
-          conversation = transitionConversation(conversation, {
-            type: "set_clarifying",
-            question: proposeResult.question,
-          });
-          await setThread(conversation);
-          await this.sendFilteredReply(threadId, proposeResult.question);
-        } else if ("notFound" in proposeResult) {
-          await this.sendFilteredReply(threadId, proposeResult.explanation);
-        } else {
-          await handleProposeResult(ctx, threadId, proposeResult, message.principalId);
-        }
-      } catch (err) {
-        console.error("Proposal processing error:", err);
-        this.failedMessageStore
-          ?.record({
-            channel: message.channel,
-            organizationId: message.organizationId ?? undefined,
-            rawPayload: rawPayload as Record<string, unknown>,
-            stage: "propose",
-            errorMessage: safeErrorMessage(err),
-            errorStack: err instanceof Error ? err.stack : undefined,
-          })
-          .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
-        await this.sendFilteredReply(
-          threadId,
-          `Error processing request: ${safeErrorMessage(err)}`,
-        );
-      }
-    }
+      isNewConversation,
+      rawPayload,
+    );
   }
-}
 
-function lowercaseFirst(s: string): string {
-  if (!s) return s;
-  return s[0]!.toLowerCase() + s.slice(1);
+  /** Build pipeline dependencies object for extracted pipeline functions. */
+  private buildPipelineDeps() {
+    return {
+      adapter: this.adapter,
+      interpreter: this.interpreter,
+      interpreterRegistry: this.interpreterRegistry,
+      orchestrator: this.orchestrator,
+      availableActions: this.availableActions,
+      storage: this.storage,
+      readAdapter: this.readAdapter,
+      failedMessageStore: this.failedMessageStore,
+      maxContextMessages: this.maxContextMessages,
+      capabilityRegistry: this.capabilityRegistry,
+      planGraphBuilder: this.planGraphBuilder,
+      resolvedSkin: this.resolvedSkin,
+      crmProvider: this.crmProvider,
+      dataFlowExecutor: this.dataFlowExecutor,
+      isLeadBot: this.isLeadBot,
+      leadRouter: this.leadRouter,
+      conversionBus: this.conversionBus,
+      dialogueMiddleware: this.dialogueMiddleware,
+      composeResponse: (ctx: ResponseContext, orgId?: string) => this.composeResponse(ctx, orgId),
+      sendFilteredReply: (tid: string, txt: string) => this.sendFilteredReply(tid, txt),
+      recordAssistantMessage: (tid: string, txt: string) => this.recordAssistantMessage(tid, txt),
+      checkProposalRateLimit: (pid: string) => this.checkProposalRateLimit(pid),
+      buildHandlerContext: () => this.buildHandlerContext(),
+    };
+  }
 }

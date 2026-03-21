@@ -7,14 +7,14 @@ import type { ConversationFlowDefinition } from "../types.js";
 export const bookingFlow: ConversationFlowDefinition = {
   id: "booking",
   name: "Appointment Booking",
-  description: "Guides patients through the appointment booking process.",
-  variables: ["contactName", "serviceType", "providerName", "clinicName"],
+  description: "Guides customers through the appointment booking process.",
+  variables: ["contactName", "serviceType", "providerName", "businessName"],
   steps: [
     {
       id: "intro",
       type: "message",
       template:
-        "Let's get your {{serviceType}} appointment scheduled at {{clinicName}}, {{contactName}}.",
+        "Let's get your {{serviceType}} appointment scheduled at {{businessName}}, {{contactName}}.",
     },
     {
       id: "preference_question",

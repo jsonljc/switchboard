@@ -48,6 +48,18 @@ class WhatsAppApiError extends Error {
   }
 }
 
+/** WhatsApp 24-hour conversation window duration in milliseconds. */
+const WHATSAPP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Check whether we are inside the WhatsApp 24-hour conversation window.
+ * Outside the window, only pre-approved template messages may be sent.
+ */
+export function isWithinWhatsAppWindow(lastInboundAt: Date | null): boolean {
+  if (!lastInboundAt) return false;
+  return Date.now() - lastInboundAt.getTime() < WHATSAPP_WINDOW_MS;
+}
+
 export class WhatsAppAdapter implements ChannelAdapter {
   readonly channel = "whatsapp" as const;
   private token: string;
@@ -100,7 +112,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
     "hub.verify_token"?: string;
     "hub.challenge"?: string;
   }): { status: number; body: string } {
-    if (query["hub.mode"] === "subscribe" && query["hub.verify_token"] === this.verifyToken) {
+    const providedToken = query["hub.verify_token"] ?? "";
+    const tokenMatch =
+      this.verifyToken !== null &&
+      providedToken.length === this.verifyToken.length &&
+      timingSafeEqual(Buffer.from(providedToken), Buffer.from(this.verifyToken));
+    if (query["hub.mode"] === "subscribe" && tokenMatch) {
       return { status: 200, body: query["hub.challenge"] ?? "" };
     }
     return { status: 403, body: "Verification failed" };
@@ -180,8 +197,31 @@ export class WhatsAppAdapter implements ChannelAdapter {
       }
     }
 
-    // Only handle text messages
-    if (msgType !== "text") return null;
+    // Capture non-text messages as leads instead of silently dropping
+    if (msgType !== "text") {
+      const from = msg["from"] as string;
+      const msgId = msg["id"] as string;
+      const timestamp = msg["timestamp"] as string;
+      const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
+      const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
+        | string
+        | undefined;
+      const metadata: Record<string, unknown> = { unsupported: true, originalType: msgType };
+      if (contactName) metadata["contactName"] = contactName;
+
+      return {
+        id: msgId ?? `wa_${Date.now()}`,
+        channel: "whatsapp",
+        channelMessageId: msgId ?? `wa_${Date.now()}`,
+        principalId: from ?? "unknown",
+        text: "",
+        threadId: from,
+        timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+        metadata,
+        attachments: [],
+        organizationId: null,
+      };
+    }
 
     const textObj = msg["text"] as Record<string, unknown>;
     const text = textObj?.["body"] as string;
@@ -224,11 +264,45 @@ export class WhatsAppAdapter implements ChannelAdapter {
   }
 
   async sendTextReply(threadId: string, text: string): Promise<void> {
+    // Simulate typing: mark message as read, then delay before responding
+    const delayMs = this.typingDelay(text);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     await this.sendMessage(threadId, {
       messaging_product: "whatsapp",
       to: threadId,
       type: "text",
       text: { body: text },
+    });
+  }
+
+  /**
+   * Send a pre-approved WhatsApp template message.
+   * Required for messages outside the 24-hour conversation window.
+   */
+  async sendTemplateMessage(
+    threadId: string,
+    templateName: string,
+    languageCode: string,
+    components?: Array<{
+      type: "body" | "header" | "button";
+      parameters: Array<{ type: "text"; text: string }>;
+    }>,
+  ): Promise<void> {
+    const template: Record<string, unknown> = {
+      name: templateName,
+      language: { code: languageCode },
+    };
+    if (components && components.length > 0) {
+      template["components"] = components;
+    }
+    await this.sendMessage(threadId, {
+      messaging_product: "whatsapp",
+      to: threadId,
+      type: "template",
+      template,
     });
   }
 
@@ -277,6 +351,12 @@ export class WhatsAppAdapter implements ChannelAdapter {
     const value = changes?.["value"] as Record<string, unknown>;
     const messages = value?.["messages"] as Array<Record<string, unknown>>;
     return (messages?.[0]?.["id"] as string) ?? null;
+  }
+
+  /** Calculate a human-like typing delay based on response word count. */
+  private typingDelay(text: string): number {
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    return Math.min(Math.max(Math.round((wordCount / 50) * 60_000), 1500), 4000);
   }
 
   private async sendMessage(_to: string, body: Record<string, unknown>): Promise<void> {

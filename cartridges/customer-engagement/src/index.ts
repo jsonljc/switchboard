@@ -115,6 +115,24 @@ export type {
 // Conversation flow templates (for lead bot qualification)
 export { qualificationFlow } from "./conversation/templates/qualification.js";
 export { bookingFlow } from "./conversation/templates/booking.js";
+export { objectionHandlingFlow } from "./conversation/templates/objection-handling.js";
+export { reviewRequestFlow } from "./conversation/templates/review-request.js";
+export { postTreatmentFlow } from "./conversation/templates/post-treatment.js";
+
+// FAQ matcher
+export { matchFAQ, formatFAQResponse } from "./conversation/faq-matcher.js";
+export type { FAQMatchResult } from "./conversation/faq-matcher.js";
+
+// Lead state machine
+export {
+  LeadConversationState,
+  getPrimaryMoveForState,
+  getGoalForState,
+  STATE_GOALS,
+} from "./conversation/lead-state-machine.js";
+
+// Intent classifier
+export type { MessageIntent } from "./conversation/intent-classifier.js";
 
 // Cadence engine
 export { evaluateCadenceStep } from "./cadence/engine.js";
@@ -127,6 +145,9 @@ export type {
   CadenceStep,
   CadenceStatus,
 } from "./cadence/types.js";
+
+// Medical claim scanning (reusable across interceptor + lead reply path)
+export { findMedicalClaims } from "./cartridge/interceptors/medical-claim-filter.js";
 
 // Agents
 export type { AgentModule, AgentType } from "./agents/types.js";

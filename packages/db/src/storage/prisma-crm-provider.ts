@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { normalizePhone, normalizeEmail } from "@switchboard/core";
 import type {
   CrmProvider,
   CrmContact,
@@ -37,8 +38,8 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async getContact(contactId: string): Promise<CrmContact | null> {
-    const row = await this.prisma.crmContact.findUnique({
-      where: { id: contactId },
+    const row = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
     });
     if (!row) return null;
     return toContact(row);
@@ -133,6 +134,8 @@ export class PrismaCrmProvider implements CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
@@ -148,6 +151,10 @@ export class PrismaCrmProvider implements CrmProvider {
         assignedStaffId: data.assignedStaffId ?? null,
         sourceAdId: data.sourceAdId ?? null,
         sourceCampaignId: data.sourceCampaignId ?? null,
+        fbclid: data.fbclid ?? null,
+        ttclid: data.ttclid ?? null,
+        normalizedPhone: data.phone ? normalizePhone(data.phone) : null,
+        normalizedEmail: data.email ? normalizeEmail(data.email) : null,
         utmSource: data.utmSource ?? null,
         organizationId: this.organizationId ?? null,
         properties: (data.properties as object) ?? {},
@@ -159,6 +166,15 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async updateContact(contactId: string, data: Record<string, unknown>): Promise<CrmContact> {
+    // Verify org ownership before updating
+    const existing = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Contact ${contactId} not found`);
+    }
+
     const updateData: Record<string, unknown> = {};
     if (data["email"] !== undefined) updateData["email"] = data["email"];
     if (data["firstName"] !== undefined) updateData["firstName"] = data["firstName"];
@@ -172,6 +188,12 @@ export class PrismaCrmProvider implements CrmProvider {
     if (data["sourceAdId"] !== undefined) updateData["sourceAdId"] = data["sourceAdId"];
     if (data["sourceCampaignId"] !== undefined)
       updateData["sourceCampaignId"] = data["sourceCampaignId"];
+    if (data["fbclid"] !== undefined) updateData["fbclid"] = data["fbclid"];
+    if (data["ttclid"] !== undefined) updateData["ttclid"] = data["ttclid"];
+    if (data["normalizedPhone"] !== undefined)
+      updateData["normalizedPhone"] = data["normalizedPhone"];
+    if (data["normalizedEmail"] !== undefined)
+      updateData["normalizedEmail"] = data["normalizedEmail"];
     if (data["utmSource"] !== undefined) updateData["utmSource"] = data["utmSource"];
     if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
 
@@ -183,6 +205,14 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async archiveContact(contactId: string): Promise<void> {
+    // Verify org ownership before archiving
+    const existing = await this.prisma.crmContact.findFirst({
+      where: { id: contactId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Contact ${contactId} not found`);
+    }
     await this.prisma.crmContact.update({
       where: { id: contactId },
       data: { status: "archived" },
@@ -213,6 +243,14 @@ export class PrismaCrmProvider implements CrmProvider {
   }
 
   async archiveDeal(dealId: string): Promise<void> {
+    // Verify org ownership before archiving
+    const existing = await this.prisma.crmDeal.findFirst({
+      where: { id: dealId, ...this.orgFilter() },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error(`Deal ${dealId} not found`);
+    }
     await this.prisma.crmDeal.update({
       where: { id: dealId },
       data: { stage: "closed_lost" },
@@ -237,6 +275,29 @@ export class PrismaCrmProvider implements CrmProvider {
       },
     });
     return toActivity(row);
+  }
+
+  async findByNormalizedPhone(phone: string): Promise<CrmContact | null> {
+    const row = await this.prisma.crmContact.findFirst({
+      where: { normalizedPhone: phone, ...this.orgFilter() },
+    });
+    return row ? toContact(row) : null;
+  }
+
+  async findByNormalizedEmail(email: string): Promise<CrmContact | null> {
+    const row = await this.prisma.crmContact.findFirst({
+      where: { normalizedEmail: email, ...this.orgFilter() },
+    });
+    return row ? toContact(row) : null;
+  }
+
+  async addAlias(contactId: string, channel: string, externalId: string): Promise<void> {
+    // Upsert to handle the @@unique([channel, externalId]) constraint gracefully
+    await this.prisma.contactAlias.upsert({
+      where: { channel_externalId: { channel, externalId } },
+      update: { contactId },
+      create: { contactId, channel, externalId },
+    });
   }
 
   async healthCheck(): Promise<ConnectionHealth> {
@@ -268,6 +329,11 @@ function toContact(row: {
   assignedStaffId: string | null;
   sourceAdId: string | null;
   sourceCampaignId?: string | null;
+  gclid?: string | null;
+  fbclid?: string | null;
+  ttclid?: string | null;
+  normalizedPhone?: string | null;
+  normalizedEmail?: string | null;
   utmSource: string | null;
   properties: unknown;
   createdAt: Date;
@@ -287,6 +353,11 @@ function toContact(row: {
     assignedStaffId: row.assignedStaffId,
     sourceAdId: row.sourceAdId,
     sourceCampaignId: row.sourceCampaignId ?? null,
+    gclid: row.gclid ?? null,
+    fbclid: row.fbclid ?? null,
+    ttclid: row.ttclid ?? null,
+    normalizedPhone: row.normalizedPhone ?? null,
+    normalizedEmail: row.normalizedEmail ?? null,
     utmSource: row.utmSource,
     properties: (row.properties as Record<string, unknown>) ?? {},
     createdAt: row.createdAt.toISOString(),

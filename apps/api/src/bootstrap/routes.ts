@@ -32,8 +32,19 @@ import { conversationsRoutes } from "../routes/conversations.js";
 import { agentsRoutes } from "../routes/agents.js";
 import { operatorConfigRoutes } from "../routes/operator-config.js";
 import { revenueGrowthRoutes } from "../routes/revenue-growth.js";
+import { businessConfigRoutes } from "../routes/business-config.js";
+import { flowBuilderRoutes } from "../routes/flow-builder.js";
+import { deploymentRoutes } from "../routes/deployment.js";
+import { setupRoutes } from "../routes/setup.js";
+import { revenueRoutes } from "../routes/revenue.js";
+import { handoffRoutes } from "../routes/handoff.js";
+import { knowledgeRoutes } from "../routes/knowledge.js";
+import { testChatRoutes } from "../routes/test-chat.js";
+import { escalationsRoutes } from "../routes/escalations.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // Setup routes are registered before auth — bootstrap needs to work pre-auth
+  await app.register(setupRoutes, { prefix: "/api/setup" });
   await app.register(actionsRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
@@ -63,4 +74,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(agentsRoutes, { prefix: "/api/agents" });
   await app.register(operatorConfigRoutes, { prefix: "/api/operator-config" });
   await app.register(revenueGrowthRoutes, { prefix: "/api/revenue-growth" });
+  await app.register(businessConfigRoutes, { prefix: "/api/business-config" });
+  await app.register(flowBuilderRoutes, { prefix: "/api/flows" });
+  await app.register(deploymentRoutes, { prefix: "/api/deployment" });
+  await app.register(revenueRoutes, { prefix: "/api/revenue" });
+  await app.register(handoffRoutes, { prefix: "/api/handoff" });
+  await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
+  await app.register(testChatRoutes, { prefix: "/api/test-chat" });
+  await app.register(escalationsRoutes, { prefix: "/api/escalations" });
 }

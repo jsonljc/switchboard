@@ -65,6 +65,20 @@ export const queryKeys = {
     list: (status?: string) => ["dlq", "list", status] as const,
     stats: () => ["dlq", "stats"] as const,
   },
+  conversations: {
+    all: ["conversations"] as const,
+    list: (filters?: Record<string, string | undefined>) =>
+      ["conversations", "list", filters] as const,
+    detail: (id: string) => ["conversations", "detail", id] as const,
+  },
+  reports: {
+    all: ["reports"] as const,
+    pilot: () => ["reports", "pilot"] as const,
+  },
+  campaigns: {
+    all: ["campaigns"] as const,
+    attribution: () => ["campaigns", "attribution"] as const,
+  },
   crm: {
     all: ["crm"] as const,
     contacts: () => ["crm", "contacts"] as const,
@@ -74,6 +88,12 @@ export const queryKeys = {
     all: ["agents"] as const,
     roster: () => ["agents", "roster"] as const,
     state: () => ["agents", "state"] as const,
+    activity: () => ["agents", "activity"] as const,
+  },
+  inbox: {
+    all: ["inbox"] as const,
+    list: () => ["inbox", "list"] as const,
+    count: () => ["inbox", "count"] as const,
   },
   operatorConfig: {
     all: ["operatorConfig"] as const,
@@ -86,5 +106,12 @@ export const queryKeys = {
     connectors: (accountId: string) => ["revenueGrowth", "connectors", accountId] as const,
     interventions: (accountId: string) => ["revenueGrowth", "interventions", accountId] as const,
     digest: (accountId: string) => ["revenueGrowth", "digest", accountId] as const,
+  },
+  knowledge: {
+    all: ["knowledge"] as const,
+    documents: (agentId?: string) => ["knowledge", "documents", agentId] as const,
+  },
+  escalations: {
+    all: ["escalations"] as const,
   },
 };

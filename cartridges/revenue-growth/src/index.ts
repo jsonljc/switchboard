@@ -23,6 +23,10 @@ export type { CartridgeConnector, DataCollectionDeps, RevGrowthDeps } from "./da
 export { MetaAdsConnector } from "./data/meta-ads-connector.js";
 export type { MetaAdsConnectorConfig } from "./data/meta-ads-connector.js";
 
+// CRM data port
+export { NullCrmAdapter, MockCrmAdapter, CrmConnector } from "./data/crm-data-port.js";
+export type { CrmDataPort, CrmLead, CrmDeal, CrmStageConversion } from "./data/crm-data-port.js";
+
 // Scorers
 export { scoreSignalHealth } from "./scorers/signal-health.js";
 export { scoreCreativeDepth } from "./scorers/creative-depth.js";
@@ -32,7 +36,7 @@ export { scoreSalesProcess } from "./scorers/sales-process.js";
 
 // Constraint engine
 export { identifyConstraints } from "./constraint-engine/engine.js";
-export type { ConstraintResult } from "./constraint-engine/engine.js";
+export type { ConstraintResult, ScorerContext } from "./constraint-engine/engine.js";
 
 // Action engine
 export {
@@ -41,6 +45,52 @@ export {
   estimateImpact,
   lookupActionType,
 } from "./action-engine/engine.js";
+
+// Planning
+export { ActionPlanner } from "./planning/action-planner.js";
+export type { PlannerContext } from "./planning/action-planner.js";
+export { applyBudgetCap, validateSpendIncrease } from "./planning/budget-guardrails.js";
+export type { BudgetLimits, BudgetCapResult } from "./planning/budget-guardrails.js";
+
+// Execution
+export { InterventionLifecycle } from "./execution/lifecycle.js";
+export { determineEscalationLevel } from "./execution/escalation.js";
+export { InMemoryDispatcher } from "./execution/dispatcher.js";
+export type {
+  InterventionDispatcher,
+  GovernanceGate,
+  DispatchResult,
+} from "./execution/dispatcher.js";
+
+// Learning
+export { AccountProfileManager } from "./learning/account-profile.js";
+export type { AccountProfileDeps } from "./learning/account-profile.js";
+
+// Monitoring
+export { PostChangeMonitor } from "./monitoring/post-change-monitor.js";
+
+// Creative
+export { analyzeCreativeGaps } from "./creative/gap-analysis.js";
+export { generateCreativeStrategy } from "./creative/strategy-generator.js";
+export type { CreativeStrategy, CreativeRecommendation } from "./creative/strategy-generator.js";
+export { MockImageGenerator, OpenAIImageGenerator } from "./creative/image-generator.js";
+export type {
+  ImageGenerator,
+  GeneratedImage,
+  ImageGenerateOptions,
+} from "./creative/image-generator.js";
+export { AdReviewChecker } from "./creative/ad-review-checker.js";
+export type {
+  CreativeAssetForReview,
+  AdReviewResult,
+  AdReviewViolation,
+} from "./creative/ad-review-checker.js";
+export { CreativePipeline } from "./creative/pipeline.js";
+export type { CreativePipelineDeps, CreativePipelineResult } from "./creative/pipeline.js";
+
+// Campaign deployment
+export { CampaignDeployer } from "./execution/campaign-deploy.js";
+export type { CampaignConfig, CampaignDeployResult } from "./execution/campaign-deploy.js";
 
 // Stores
 export type {
@@ -51,12 +101,18 @@ export type {
   RevenueAccountRecord,
   WeeklyDigestStore,
   WeeklyDigestRecord,
+  AccountProfileStore,
+  MonitorCheckpointStore,
+  TestCampaignStore,
 } from "./stores/index.js";
 export {
   InMemoryInterventionStore,
   InMemoryDiagnosticCycleStore,
   InMemoryRevenueAccountStore,
   InMemoryWeeklyDigestStore,
+  InMemoryAccountProfileStore,
+  InMemoryMonitorCheckpointStore,
+  InMemoryTestCampaignStore,
 } from "./stores/index.js";
 
 // Outcome tracking

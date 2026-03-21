@@ -4,16 +4,10 @@ import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import swagger from "@fastify/swagger";
-import swaggerUi from "@fastify/swagger-ui";
 import {
   LifecycleOrchestrator,
   ExecutionService,
   CompositeNotifier,
-  SkinLoader,
-  SkinResolver,
-  ToolRegistry,
-  ProfileResolver,
   setMetrics,
 } from "@switchboard/core";
 import type {
@@ -25,7 +19,6 @@ import type {
   ResolvedProfile,
   AgentNotifier,
 } from "@switchboard/core";
-import type { Policy } from "@switchboard/schemas";
 import { SmbActivityLog, AuditLedger } from "@switchboard/core";
 import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
 import { initTelemetry } from "./telemetry/otel-init.js";
@@ -42,6 +35,8 @@ import {
 } from "./bootstrap/cartridges.js";
 import { startBackgroundJobs } from "./bootstrap/jobs.js";
 import { registerRoutes } from "./bootstrap/routes.js";
+import { registerSwagger } from "./bootstrap/swagger.js";
+import { loadAndApplySkin, resolveBusinessProfile } from "./bootstrap/skin.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
@@ -63,6 +58,7 @@ declare module "fastify" {
     resolvedProfile: ResolvedProfile | null;
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
+    agentSystem: import("./agent-bootstrap.js").AgentSystem;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -112,69 +108,8 @@ export async function buildServer() {
     timeWindow: parseInt(process.env["RATE_LIMIT_WINDOW_MS"] ?? "60000", 10),
   });
 
-  // OpenAPI documentation
-  await app.register(swagger, {
-    openapi: {
-      info: {
-        title: "Switchboard API",
-        description: "AI agent guardrail and approval orchestration API",
-        version: "0.1.0",
-      },
-      tags: [
-        { name: "Actions", description: "Propose, execute, undo, and batch actions" },
-        {
-          name: "Execute",
-          description:
-            "Single endpoint: propose + conditional execute (EXECUTED | PENDING_APPROVAL | DENIED)",
-        },
-        {
-          name: "Approvals",
-          description: "Respond to approval requests and list pending approvals",
-        },
-        { name: "Simulate", description: "Dry-run action evaluation without side effects" },
-        { name: "Policies", description: "CRUD operations for guardrail policies" },
-        { name: "Identity", description: "Manage identity specs and role overlays" },
-        { name: "Audit", description: "Query audit ledger and verify chain integrity" },
-        { name: "Health", description: "Health and readiness checks" },
-        { name: "Interpreters", description: "Natural-language action interpretation" },
-        { name: "Cartridges", description: "Registered cartridge manifests and metadata" },
-        { name: "Connections", description: "Service connection credential management" },
-        { name: "Organizations", description: "Organization provisioning and configuration" },
-        { name: "DLQ", description: "Dead letter queue for failed inbound messages" },
-        { name: "Token Usage", description: "LLM token usage tracking and reporting" },
-        { name: "Alerts", description: "Alert rules and notifications" },
-        { name: "Scheduled Reports", description: "Automated reporting schedules" },
-        { name: "CRM", description: "CRM entity management (contacts, deals, activities)" },
-        { name: "Competence", description: "Agent competence assessment and tracking" },
-        { name: "Webhooks", description: "Outbound webhook configuration" },
-        { name: "Inbound", description: "Inbound webhook receivers (Telegram, Slack, WhatsApp)" },
-        { name: "Messages", description: "Inbound message processing and routing" },
-        { name: "SMB", description: "SMB-tier pipeline and tier management" },
-        { name: "Governance", description: "Governance profiles and emergency halt" },
-        { name: "Campaigns", description: "Campaign read operations via digital-ads cartridge" },
-        { name: "Reports", description: "Clinic and vertical reporting endpoints" },
-        { name: "Conversations", description: "Conversation listing and management" },
-        { name: "Agents", description: "Agent roster and activity state management" },
-      ],
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: "http",
-            scheme: "bearer",
-            description: "API key passed as Bearer token. Set API_KEYS env var to enable.",
-          },
-        },
-      },
-      security: [{ bearerAuth: [] }],
-    },
-  });
-
-  // Only expose Swagger UI outside production (or when explicitly enabled)
-  if (process.env.NODE_ENV !== "production" || process.env["ENABLE_SWAGGER"] === "true") {
-    await app.register(swaggerUi, {
-      routePrefix: "/docs",
-    });
-  }
+  // OpenAPI documentation + optional Swagger UI
+  await registerSwagger(app);
 
   // Global error handler — consistent error format, no stack leaks in production
   app.setErrorHandler((error: FastifyError, _request, reply) => {
@@ -238,84 +173,23 @@ export async function buildServer() {
   await wireEscalationNotifier();
 
   // --- Resolve business profile (optional, loaded from PROFILE_ID in cartridge bootstrap) ---
-  let resolvedProfile: ResolvedProfile | null = null;
-  if (businessProfile) {
-    const profileResolver = new ProfileResolver();
-    resolvedProfile = profileResolver.resolve(businessProfile);
-    app.log.info({ profileId: businessProfile.id }, "Business profile resolved for agent context");
-  }
+  const resolvedProfile: ResolvedProfile | null = businessProfile
+    ? resolveBusinessProfile(businessProfile, app.log)
+    : null;
 
   // --- Skin loading (optional, controlled by SKIN_ID env var) ---
-  let resolvedSkin: ResolvedSkin | null = null;
   const skinId = process.env["SKIN_ID"];
-  if (skinId) {
-    const skinsDir = new URL("../../../skins", import.meta.url).pathname;
-    const skinLoader = new SkinLoader(skinsDir);
-    const skinResolver = new SkinResolver();
-    const toolRegistry = new ToolRegistry();
-
-    for (const cartridgeId of storage.cartridges.list()) {
-      const cartridge = storage.cartridges.get(cartridgeId);
-      if (cartridge) {
-        toolRegistry.registerCartridge(cartridgeId, cartridge.manifest);
-      }
-    }
-
-    const skin = await skinLoader.load(skinId);
-    resolvedSkin = skinResolver.resolve(skin, toolRegistry);
-    app.log.info(
-      { skinId, tools: resolvedSkin.tools.length, profile: resolvedSkin.governance.profile },
-      `Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
-    );
-  }
-
-  // Apply skin governance profile and seed policy overrides
-  if (resolvedSkin) {
-    await governanceProfileStore.set(null, resolvedSkin.governance.profile);
-    app.log.info(
-      { profile: resolvedSkin.governance.profile },
-      "Skin governance profile set as global default",
-    );
-
-    if (resolvedSkin.governance.policyOverrides?.length) {
-      const now = new Date();
-      for (let i = 0; i < resolvedSkin.governance.policyOverrides.length; i++) {
-        const override = resolvedSkin.governance.policyOverrides[i]!;
-        const approvalRequirement =
-          override.effect === "require_approval"
-            ? ((override.effectParams?.["approvalRequirement"] as Policy["approvalRequirement"]) ??
-              "standard")
-            : undefined;
-
-        await storage.policies.save({
-          id: `skin_${resolvedSkin.manifest.id}_${i}`,
-          name: override.name,
-          description: override.description ?? `Skin policy: ${override.name}`,
-          organizationId: null,
-          cartridgeId: null,
-          priority: 9000 + i,
-          active: true,
-          rule: override.rule as Policy["rule"],
-          effect: override.effect,
-          effectParams: override.effectParams ?? {},
-          approvalRequirement,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-      app.log.info(
-        { count: resolvedSkin.governance.policyOverrides.length },
-        "Skin policy overrides seeded",
-      );
-    }
-  }
+  const resolvedSkin: ResolvedSkin | null = skinId
+    ? await loadAndApplySkin(skinId, storage, governanceProfileStore, app.log)
+    : null;
 
   // --- ConversionBus wiring (CRM → ads feedback loop) ---
   const { InMemoryConversionBus } = await import("@switchboard/core");
   const conversionBus = new InMemoryConversionBus();
 
   if (adsWriteProvider && prismaClient) {
-    const { CAPIDispatcher, OutcomeTracker } = await import("@switchboard/digital-ads");
+    const { CAPIDispatcher, OutcomeTracker, TikTokDispatcher, GoogleOfflineDispatcher } =
+      await import("@switchboard/digital-ads");
     const { PrismaCrmProvider } = await import("@switchboard/db");
 
     const dispatcher = new CAPIDispatcher({
@@ -328,8 +202,57 @@ export async function buildServer() {
     const outcomeTracker = new OutcomeTracker();
     outcomeTracker.register(conversionBus);
 
-    app.log.info("ConversionBus wired: CAPIDispatcher + OutcomeTracker registered");
+    const registeredDispatchers = ["CAPIDispatcher", "OutcomeTracker"];
+
+    // TikTok Events API dispatcher (gated by TIKTOK_PIXEL_ID)
+    const tiktokPixelId = process.env["TIKTOK_PIXEL_ID"];
+    if (tiktokPixelId) {
+      const tiktokDispatcher = new TikTokDispatcher({
+        sendEvent: async (_pixelId, _event) => ({ success: true }), // stub — real TikTok API client to come
+        crmProvider: new PrismaCrmProvider(prismaClient),
+        pixelId: tiktokPixelId,
+      });
+      tiktokDispatcher.register(conversionBus);
+      registeredDispatchers.push("TikTokDispatcher");
+    }
+
+    // Google Offline Conversions dispatcher (gated by GOOGLE_CONVERSION_ACTION_ID)
+    const googleConversionActionId = process.env["GOOGLE_CONVERSION_ACTION_ID"];
+    if (googleConversionActionId) {
+      const googleDispatcher = new GoogleOfflineDispatcher({
+        uploadConversion: async (_conversion) => ({ success: true }), // stub — real Google Ads client to come
+        crmProvider: new PrismaCrmProvider(prismaClient),
+        conversionActionId: googleConversionActionId,
+      });
+      googleDispatcher.register(conversionBus);
+      registeredDispatchers.push("GoogleOfflineDispatcher");
+    }
+
+    app.log.info(`ConversionBus wired: ${registeredDispatchers.join(" + ")} registered`);
   }
+
+  // --- Agent orchestration system ---
+  const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
+
+  let deliveryStore: import("@switchboard/agents").DeliveryStore | undefined;
+  if (prismaClient) {
+    const { PrismaDeliveryStore } = await import("@switchboard/db");
+    deliveryStore = new PrismaDeliveryStore(prismaClient);
+  }
+
+  const agentSystem = bootstrapAgentSystem({
+    conversionBus,
+    deliveryStore,
+    logger: {
+      warn: (msg: string) => app.log.warn(msg),
+      error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
+      info: (msg: string) => app.log.info(msg),
+    },
+  });
+  app.decorate("agentSystem", agentSystem);
+  app.log.info(
+    `Agent orchestration system bootstrapped (delivery store: ${deliveryStore ? "prisma" : "in-memory"})`,
+  );
 
   // --- Execution queue setup ---
   let queue: Queue | null = null;
@@ -438,8 +361,10 @@ export async function buildServer() {
   app.decorate("agentNotifier", agentNotifier);
   app.decorate("conversionBus", conversionBus);
 
-  // Resource cleanup on close — order: jobs → worker → queue → Redis → Prisma
+  // Resource cleanup on close — order: agents → jobs → worker → queue → Redis → Prisma
   app.addHook("onClose", async () => {
+    agentSystem.scheduledRunner.stop();
+
     await stopAllJobs();
 
     if (worker) {

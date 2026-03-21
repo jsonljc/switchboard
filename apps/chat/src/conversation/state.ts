@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ConversationStatus } from "@switchboard/schemas";
+import type { ConversationStatus, LeadProfile } from "@switchboard/schemas";
 
 export interface ConversationMessage {
   role: "user" | "assistant";
@@ -20,9 +20,17 @@ export interface ConversationStateData {
   clarificationQuestion: string | null;
   messages: ConversationMessage[];
   firstReplyAt: Date | null;
+  /** Timestamp of the last inbound (user) message. Used for WhatsApp 24h window enforcement. */
+  lastInboundAt: Date | null;
   lastActivityAt: Date;
   expiresAt: Date;
   crmContactId: string | null;
+  /** Typed lead profile that accumulates intelligence over conversation turns. */
+  leadProfile: LeadProfile | null;
+  /** Detected language of the user (resolved from recent messages). */
+  detectedLanguage: string | null;
+  /** Current lead state machine state (e.g. QUALIFYING, BOOKING_PUSH). */
+  machineState: string | null;
 }
 
 export function createConversation(
@@ -44,9 +52,13 @@ export function createConversation(
     clarificationQuestion: null,
     messages: [],
     firstReplyAt: null,
+    lastInboundAt: null,
     lastActivityAt: new Date(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     crmContactId: null,
+    leadProfile: null,
+    detectedLanguage: null,
+    machineState: null,
   };
 }
 
@@ -55,6 +67,7 @@ type ConversationAction =
   | { type: "set_awaiting_approval"; approvalIds: string[] }
   | { type: "set_proposals"; proposalIds: string[] }
   | { type: "add_message"; message: ConversationMessage }
+  | { type: "update_lead_profile"; profile: Partial<LeadProfile> }
   | { type: "complete" }
   | { type: "expire" }
   | { type: "resume" };
@@ -92,6 +105,12 @@ export function transitionConversation(
       return {
         ...updated,
         messages: [...updated.messages, action.message],
+      };
+
+    case "update_lead_profile":
+      return {
+        ...updated,
+        leadProfile: { ...(updated.leadProfile ?? {}), ...action.profile },
       };
 
     case "complete":

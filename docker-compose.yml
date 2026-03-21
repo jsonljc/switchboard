@@ -68,9 +68,9 @@ services:
       - SWITCHBOARD_API_URL=http://api:3000
       - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
-      - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET:?API_KEY_ENCRYPTION_SECRET is required}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3002}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-dev-secret-not-for-production}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
     depends_on:
       api:
         condition: service_healthy

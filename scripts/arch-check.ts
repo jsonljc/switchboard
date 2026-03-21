@@ -8,10 +8,14 @@
  * - `as any` usage count per package
  * - Package file counts (monolith detection)
  * - Dockerfile vs workspace cartridge comparison
+ * - ESLint config sync (cartridge blocklists)
+ *
+ * Exit codes:
+ * - 0: no error-level issues
+ * - 1: error-level issues found (files >600 lines without eslint-disable, packages with 0 tests, Dockerfile gaps, ESLint config out of sync)
  */
 
-import { execSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -21,6 +25,7 @@ const ERROR_LINES = 600;
 interface FileInfo {
   path: string;
   lines: number;
+  hasEslintDisable: boolean;
 }
 
 interface PackageInfo {
@@ -73,6 +78,15 @@ function countAny(filePath: string): number {
   }
 }
 
+function hasEslintDisableMaxLines(filePath: string): boolean {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    return content.includes("eslint-disable max-lines");
+  } catch {
+    return false;
+  }
+}
+
 function getPackageDirs(): string[] {
   const dirs: string[] = [];
   for (const base of ["packages", "cartridges", "apps"]) {
@@ -104,7 +118,11 @@ function analyzePackage(pkgDir: string): PackageInfo {
     anyCount += countAny(file);
     const lines = countLines(file);
     if (lines > WARN_LINES) {
-      longFiles.push({ path: relative(ROOT, file), lines });
+      longFiles.push({
+        path: relative(ROOT, file),
+        lines,
+        hasEslintDisable: hasEslintDisableMaxLines(file),
+      });
     }
   }
 
@@ -139,25 +157,41 @@ function checkDockerfile(): string[] {
   return issues;
 }
 
-// ─── Dependency-Cruiser Check ───
+// ─── ESLint Config Sync Check ───
 
-function runDepCruise(): string {
+function checkEslintSync(): string[] {
+  const issues: string[] = [];
   try {
-    const result = execSync(
-      "npx depcruise --config .dependency-cruiser.cjs packages/ cartridges/ apps/ 2>&1",
-      { cwd: ROOT, encoding: "utf-8", timeout: 30000 },
-    );
-    return result;
-  } catch (e: unknown) {
-    const err = e as { stdout?: string; stderr?: string };
-    return err.stdout || err.stderr || "dependency-cruiser not available";
+    const eslintConfig = readFileSync(join(ROOT, ".eslintrc.json"), "utf-8");
+    const cartridgesDir = join(ROOT, "cartridges");
+    const cartridges = readdirSync(cartridgesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+
+    for (const cartridge of cartridges) {
+      // Check if the cartridge appears in the db override's no-restricted-imports
+      // (db cannot import from cartridges)
+      // We need to verify two things:
+      // 1. The cartridge is in the db override blocklist
+      // 2. The cartridge is in the cartridge cross-import blocklist
+      const hasDbBlock = eslintConfig.includes(`"@switchboard/${cartridge}"`);
+      if (!hasDbBlock) {
+        issues.push(
+          `Cartridge "${cartridge}" is missing from .eslintrc.json blocklists — add it to the db override and cartridge cross-import override`,
+        );
+      }
+    }
+  } catch {
+    issues.push("Could not read .eslintrc.json");
   }
+  return issues;
 }
 
 // ─── Main Report ───
 
 function main(): void {
   const packages = getPackageDirs().map(analyzePackage);
+  let hasErrors = false;
 
   console.error("\n╔══════════════════════════════════════════════════╗");
   console.error("║        ARCHITECTURE HEALTH CHECK REPORT         ║");
@@ -168,8 +202,18 @@ function main(): void {
   if (allLongFiles.length > 0) {
     console.error(`⚠  FILES OVER ${WARN_LINES} LINES (god module candidates):`);
     for (const f of allLongFiles.sort((a, b) => b.lines - a.lines)) {
-      const level = f.lines > ERROR_LINES ? "🔴" : "🟡";
-      console.error(`   ${level} ${f.path}: ${f.lines} lines`);
+      if (f.lines > ERROR_LINES) {
+        if (f.hasEslintDisable) {
+          console.error(`   🟡 ${f.path}: ${f.lines} lines (eslint-disable — legacy debt)`);
+        } else {
+          console.error(
+            `   🔴 ${f.path}: ${f.lines} lines (ERROR — needs eslint-disable or splitting)`,
+          );
+          hasErrors = true;
+        }
+      } else {
+        console.error(`   🟡 ${f.path}: ${f.lines} lines`);
+      }
     }
   } else {
     console.error(`✅ No files over ${WARN_LINES} lines`);
@@ -181,8 +225,12 @@ function main(): void {
   if (lowTestPkgs.length > 0) {
     console.error("⚠  PACKAGES WITH <3 TEST FILES:");
     for (const p of lowTestPkgs) {
-      const level = p.testFiles === 0 ? "🔴" : "🟡";
-      console.error(`   ${level} ${p.name}: ${p.testFiles} test files (${p.srcFiles} source files)`);
+      if (p.testFiles === 0) {
+        console.error(`   🔴 ${p.name}: ${p.testFiles} test files (${p.srcFiles} source files)`);
+        hasErrors = true;
+      } else {
+        console.error(`   🟡 ${p.name}: ${p.testFiles} test files (${p.srcFiles} source files)`);
+      }
     }
   } else {
     console.error("✅ All packages have adequate test coverage");
@@ -216,28 +264,44 @@ function main(): void {
     console.error("⚠  DOCKERFILE ISSUES:");
     for (const issue of dockerIssues) {
       console.error(`   🔴 ${issue}`);
+      hasErrors = true;
     }
   } else {
     console.error("✅ Dockerfile includes all cartridges");
   }
   console.error("");
 
-  // 6. Dependency-cruiser
-  console.error("🔍 DEPENDENCY BOUNDARY CHECK:");
-  const depResult = runDepCruise();
-  if (depResult.includes("no dependency violations found")) {
-    console.error("   ✅ No dependency violations");
+  // 6. ESLint config sync
+  const eslintIssues = checkEslintSync();
+  if (eslintIssues.length > 0) {
+    console.error("⚠  ESLINT CONFIG SYNC ISSUES:");
+    for (const issue of eslintIssues) {
+      console.error(`   🔴 ${issue}`);
+      hasErrors = true;
+    }
   } else {
-    console.error(depResult);
+    console.error("✅ ESLint blocklists include all cartridges");
   }
   console.error("");
 
   // Summary
-  const totalIssues = allLongFiles.length + lowTestPkgs.length + anyPkgs.reduce((s, p) => s + p.anyCount, 0) + dockerIssues.length;
+  const totalIssues =
+    allLongFiles.length +
+    lowTestPkgs.length +
+    anyPkgs.reduce((s, p) => s + p.anyCount, 0) +
+    dockerIssues.length +
+    eslintIssues.length;
   if (totalIssues === 0) {
     console.error("🎉 Architecture health: EXCELLENT — no issues found");
   } else {
     console.error(`📋 Architecture health: ${totalIssues} issue(s) found — review above`);
+  }
+
+  if (hasErrors) {
+    console.error("\n❌ ERROR-LEVEL issues found — failing CI check");
+    process.exit(1);
+  } else {
+    console.error("\n✅ No error-level issues — CI check passed");
   }
   console.error("");
 }

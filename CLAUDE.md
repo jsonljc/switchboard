@@ -1,185 +1,147 @@
-# Switchboard — Project Rules for Claude Code
+# Switchboard — Claude Code Instructions
 
-## Architecture
+Governance-first AI operations platform (TypeScript monorepo, pnpm + Turborepo). For deep architecture details see `docs/ARCHITECTURE.md`.
 
-Switchboard is a TypeScript monorepo using pnpm workspaces. The dependency layers are strictly ordered — **NEVER VIOLATE** these import rules:
+---
 
-```
-schemas        → no @switchboard/* imports (leaf package)
-cartridge-sdk  → may import @switchboard/schemas only
-core           → may import @switchboard/schemas, @switchboard/cartridge-sdk
-db             → may import @switchboard/schemas, @switchboard/core (NEVER cartridge imports)
-apps/*         → may import any @switchboard/* package; may read skins/
-cartridges/*   → may import @switchboard/schemas, @switchboard/cartridge-sdk, @switchboard/core (NEVER db or apps)
-skins/         → pure JSON data; not a package; not importable
-```
-
-Circular dependencies between packages are **forbidden**.
-
-### Package Layout
+## Codebase Map
 
 ```
-packages/schemas         — Zod schemas, shared types (incl. SkinManifest, BusinessProfile, CRM provider types)
-packages/cartridge-sdk   — Cartridge interface & base classes
-packages/core            — Orchestrator, policy engine, ToolRegistry, SkinLoader/Resolver, ProfileLoader/Resolver
-packages/db              — Prisma client, store implementations
-apps/api                 — Fastify REST API server
-apps/chat                — Chat/webhook server (Telegram, Slack, WhatsApp)
-apps/dashboard           — Next.js admin dashboard
-apps/mcp-server          — MCP protocol server
-cartridges/*             — Domain-specific cartridge implementations
-skins/                   — Vertical deployment manifests (JSON, loaded at boot via SKIN_ID)
-profiles/                — Business profiles (JSON, loaded at boot via PROFILE_ID)
+packages/schemas/         — Zod schemas & shared types (no internal deps)
+packages/cartridge-sdk/   — Cartridge interface, builders, test harness
+packages/core/            — Orchestrator, policy engine, governance logic
+packages/db/              — Prisma ORM, store implementations, credential encryption
+
+cartridges/customer-engagement/  — Leads, conversations, appointments, cadences
+cartridges/digital-ads/          — Multi-platform ad management (Meta, Google, TikTok)
+cartridges/crm/                  — Contacts, deals, activities, pipeline
+cartridges/payments/             — Stripe-backed payment operations
+cartridges/revenue-growth/       — Autonomous revenue optimization (Theory of Constraints)
+cartridges/quant-trading/        — Stock/crypto trading operations
+
+apps/api/          — Fastify REST API (port 3000)
+apps/chat/         — Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
+apps/dashboard/    — Next.js admin dashboard (port 3002)
+apps/mcp-server/   — MCP server for LLM tool use
+
+skins/      — Vertical deployment configs (clinic, gym, generic, commerce)
+profiles/   — Per-business instance configs (clinic-demo, gym-demo)
 ```
 
-### Key Concepts
+### Dependency Layers (enforced by ESLint + dependency-cruiser)
 
-- **Skin** = vertical template shared by all businesses of a type (e.g. all dental clinics share the `clinic` skin). Controls tool filtering, governance profile, terminology, playbooks, and channels.
-- **Business Profile** = per-instance knowledge for a specific business (e.g. THIS dental clinic). Contains services catalog, team, policies, hours, objection trees, cadence templates, scoring config, compliance flags, and LLM context (persona, tone, banned topics).
-- **Cartridge** = domain-specific capability module (e.g. `customer-engagement`, `digital-ads`, `payments`). Cartridges define actions, agents, and interceptors.
+```
+Layer 1: schemas         → No @switchboard/* imports
+Layer 2: cartridge-sdk   → schemas only
+Layer 3: core            → schemas + cartridge-sdk
+Layer 4: db              → schemas + core (NEVER cartridges)
+Layer 5: cartridges/*    → schemas + cartridge-sdk + core (NEVER db/apps/other cartridges)
+Layer 6: apps/*          → May import anything
+```
 
-## Build / Test / Lint Commands
+Circular dependencies are forbidden and enforced in CI.
+
+---
+
+## Build / Test / Lint
 
 ```bash
-pnpm build              # Build all packages (Turbo)
-pnpm lint               # Lint all packages
-pnpm test               # Run all tests
-pnpm test -- --coverage # Run tests with coverage report
-pnpm typecheck           # TypeScript type checking
-pnpm format:check        # Check Prettier formatting
-
-# Run a single package's tests
-pnpm --filter @switchboard/core test
-
-# Database
-pnpm db:generate         # Generate Prisma client
-pnpm db:migrate          # Run migrations
-pnpm db:seed             # Seed database
+pnpm build                        # Build all (Turbo)
+pnpm lint                         # Lint all
+pnpm test                         # Run all tests
+pnpm test -- --coverage           # Tests with coverage
+pnpm typecheck                    # TypeScript type checking
+pnpm format:check                 # Check Prettier formatting
+pnpm --filter @switchboard/core test  # Single package tests
+pnpm db:generate                  # Generate Prisma client
+pnpm db:migrate                   # Run migrations
+pnpm db:seed                      # Seed database
 ```
+
+---
 
 ## Code Conventions
 
-- **ESM only** — all packages use ES modules with `"type": "module"`
-- **`.js` extensions** — use `.js` extensions in relative imports (TypeScript resolves them)
-- **Unused variables** — prefix with `_` (e.g., `_unused`); the linter enforces this
-- **No `console.log`** — use `console.warn` or `console.error` (or a logger). `no-console` rule is active
-- **No `any`** — avoid `@typescript-eslint/no-explicit-any`; use proper types or `unknown`
-- **Prettier** — formatting is enforced (semi, double quotes, 2-space indent, trailing commas, 100 char width)
+- **ESM only** — `"type": "module"` everywhere
+- **`.js` extensions** in relative imports (TypeScript resolves them)
+- **Unused variables** — prefix with `_` (enforced by linter)
+- **No `console.log`** — use `console.warn` or `console.error`
+- **No `any`** — use proper types or `unknown`
+- **Prettier** — semi, double quotes, 2-space indent, trailing commas, 100 char width
 
-## Testing Requirements
+---
 
-- Every new module or feature **must** include tests
+## Testing
+
+- Every new module **must** include tests (`*.test.ts`, co-located with source)
 - Run `pnpm test` and `pnpm typecheck` before committing
-- Global coverage thresholds: statements 55%, branches 50%, functions 52%, lines 55%
-- **Sensitive packages have elevated thresholds** (per-package `vitest.config.ts`):
-  - `packages/core`: 65/65/70/65 (statements/branches/functions/lines)
-  - `cartridges/payments`: 70/70/75/70 (target: 80/70/75/80)
-  - `cartridges/customer-engagement`: 60/60/70/60 (target: 80/70/75/80)
-- Test files use the pattern `*.test.ts` and are co-located with source files
+- Global thresholds: statements 55%, branches 50%, functions 52%, lines 55%
+- Elevated thresholds (per-package `vitest.config.ts`):
+  - `core`: 65/65/70/65
+  - `payments`: 70/70/75/70
+  - `customer-engagement`: 60/60/70/60
+  - `crm`: 50/50/55/50
 
-## Commit Message Format
+---
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+## Commit Messages
+
+[Conventional Commits](https://www.conventionalcommits.org/) enforced by commitlint:
 
 ```
 feat: add webhook retry logic
 fix: handle null provider response
 chore: update dependencies
-docs: clarify API authentication flow
-refactor: extract validation into shared util
-test: add coverage for orchestrator edge cases
 ```
 
-The commit message is validated by commitlint on every commit. Non-conforming messages are **rejected**.
-
-## Environment Variables
-
-See `.env.example` for the full list. Key variables:
-
-| Variable                                | Purpose                                       |
-| --------------------------------------- | --------------------------------------------- |
-| `DATABASE_URL`                          | PostgreSQL connection string                  |
-| `REDIS_URL`                             | Redis for rate limiting, queues               |
-| `PORT` / `CHAT_PORT` / `DASHBOARD_PORT` | Server ports (3000 / 3001 / 3002)             |
-| `API_KEYS`                              | Comma-separated API keys for auth             |
-| `API_KEY_ENCRYPTION_SECRET`             | Encryption secret for stored API keys         |
-| `NEXTAUTH_SECRET`                       | NextAuth session secret                       |
-| `CREDENTIALS_ENCRYPTION_KEY`            | Encrypt stored third-party credentials        |
-| `SKIN_ID`                               | Vertical skin to load (e.g. `clinic`)         |
-| `PROFILE_ID`                            | Business profile to load (e.g. `clinic-demo`) |
-
-Never commit `.env` files or secrets to the repository.
+---
 
 ## Architecture Enforcement
 
-### File Size Limits
+### File Size
 
-- **Warn** when a file exceeds **400 lines** (excluding blanks and comments)
-- **Never** create or allow a file to grow past **600 lines** — split it first
-- When modifying a file, check its line count; if it exceeds 400 lines after the change, suggest splitting
+- **Error at 600 lines** (excluding blanks/comments) — blocks commits
+- **Warn at 400 lines** — split proactively
+- Existing oversized files have `/* eslint-disable max-lines */` — don't add code without splitting first
 
 ### New Module Checklist
 
-Every new `.ts` source file (non-test, non-index, non-types) **must** have:
-- A corresponding `__tests__/<name>.test.ts` test file
-- Proper layer placement (utility in core, domain logic in cartridge, types in schemas)
-- No `any` — use proper types or `unknown`
-- `.js` extensions on all relative imports
+- Corresponding `__tests__/<name>.test.ts` test file
+- Proper layer placement
+- No `any`, `.js` extensions on all relative imports
 
 ### New Cartridge Checklist
 
-When creating a new cartridge:
-- Verify it does **not** import from `@switchboard/db` or any `apps/*` package
-- Verify it does **not** import from other cartridges
-- Ensure it has a `manifest.ts` and `defaults/guardrails.ts`
-- Ensure it has at least one test file
-- Verify it is registered in at least one app (`apps/api` or `apps/mcp-server`)
-- Verify the `Dockerfile` includes it (base stage `COPY` + production stage `COPY --from=build`)
-- The `.dependency-cruiser.cjs` rules auto-apply — no manual config updates needed
+- Does NOT import from `@switchboard/db`, `apps/*`, or other cartridges
+- Has `manifest.ts` and `defaults/guardrails.ts`
+- Has at least one test file
+- Registered in at least one app
+- Added to Dockerfile (`COPY` in base + production stages)
+- Added to `.eslintrc.json` blocklists (cross-cartridge + db overrides)
 
 ### Refactoring Principles
 
-- **No premature abstractions**: don't create helpers/utilities for things used in only 1 place
-- **Check for existing utils** before creating new ones — search `cartridge-sdk`, `core`, and `schemas` first
-- **No grab-bag utils.ts files**: every extracted file must have a single clear responsibility
-- If a refactor creates more than 3 new files, justify why
-- If it creates a new package, justify why it can't be a directory in an existing package
+- No premature abstractions — check `cartridge-sdk`, `core`, `schemas` for existing utils first
+- No grab-bag `utils.ts` — every file has a single clear responsibility
+- If a refactor creates >3 new files, justify why
 
-### Barrel File Hygiene
+### Barrel Files
 
-- When adding exports to an `index.ts` barrel file, flag if total exports exceed **40 symbols**
+- Flag if an `index.ts` exceeds 40 exported symbols
 - Prefer selective re-exports over `export *`
 
-### Dependency Boundaries (enforced by dependency-cruiser)
+---
 
-These rules are automatically enforced at pre-commit and in CI via `dependency-cruiser`:
-- `schemas` → no `@switchboard/*` imports
-- `cartridge-sdk` → only `@switchboard/schemas`
-- `core` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`
-- `db` → only `@switchboard/schemas`, `@switchboard/core`
-- `cartridges/*` → only `@switchboard/schemas`, `@switchboard/cartridge-sdk`, `@switchboard/core`
-- No cartridge-to-cartridge imports
-- No circular dependencies
+## Pre-Commit & CI
 
-## Pre-Commit Hooks
+**Pre-commit (Husky):** lint-staged (ESLint + Prettier) + commitlint
 
-Husky runs these hooks automatically:
+**CI (8 parallel jobs):** typecheck, lint, test (with coverage), secrets (gitleaks), security (pnpm audit), architecture (dependency-cruiser), docker build
 
-- **pre-commit**: lint-staged (ESLint fix + Prettier format on staged files), then dependency-cruiser boundary validation
-- **commit-msg**: commitlint (validates conventional commit format)
+**Branch protection:** PRs required, all status checks must pass, enforced for admins. No direct pushes to `main`.
 
-## Branch Protection
+---
 
-`main` branch is protected via GitHub API:
+## Environment Variables
 
-- **Required status checks**: typecheck, lint, test, security (must pass before merge)
-- **Strict mode**: branches must be up-to-date with `main` before merging
-- **PRs required**: direct pushes to `main` are blocked
-- **Enforced for admins**: no bypass, even for repo owners
-
-## Security Scanning
-
-- **Gitleaks**: scans git history for hardcoded secrets (API keys, tokens, passwords) in CI
-- **CodeQL**: weekly SAST scanning for OWASP Top 10 vulnerabilities (SQL injection, XSS, etc.)
-- **pnpm audit**: dependency CVE scanning on every CI run
-- **CODEOWNERS**: `.github/CODEOWNERS` defines ownership for sensitive paths
+See `.env.example` for the full list. Never commit `.env` files or secrets.

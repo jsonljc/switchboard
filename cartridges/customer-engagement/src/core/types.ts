@@ -90,7 +90,7 @@ export const CUSTOMER_JOURNEY_SCHEMA: JourneySchema = {
 };
 
 // ---------------------------------------------------------------------------
-// Clinic Types
+// Business Types
 // ---------------------------------------------------------------------------
 
 /** Business type — open string to allow profile-defined verticals. */
@@ -98,10 +98,15 @@ export type BusinessType = string;
 
 /** Default business types. */
 export const DEFAULT_BUSINESS_TYPES: BusinessType[] = [
+  "aesthetics",
   "dental",
   "dermatology",
-  "aesthetics",
   "orthodontics",
+  "interior_design",
+  "automotive",
+  "renovation",
+  "education",
+  "service_business",
   "general",
   "specialty",
 ];
@@ -112,7 +117,7 @@ export const DEFAULT_BUSINESS_TYPES: BusinessType[] = [
 
 export interface StageMetrics {
   count: number;
-  /** Average value per patient at this stage (null if not applicable) */
+  /** Average value per customer at this stage (null if not applicable) */
   averageValue: number | null;
 }
 
@@ -309,17 +314,11 @@ export type ServiceType = string;
 
 /** Default service types. */
 export const DEFAULT_SERVICE_TYPES: ServiceType[] = [
-  "botox",
-  "filler",
-  "laser",
-  "chemical_peel",
-  "microneedling",
-  "dental_cleaning",
-  "whitening",
-  "orthodontics",
-  "implants",
-  "crowns",
-  "general_checkup",
+  "consultation",
+  "assessment",
+  "standard_service",
+  "premium_service",
+  "follow_up",
   "other",
 ];
 

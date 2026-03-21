@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type {
   IdentitySpec,
   AuditEntry,
@@ -121,11 +122,78 @@ export interface OperatorSummary {
     costPerLead30d: number | null;
     costPerQualifiedLead30d: number | null;
     costPerBooking30d: number | null;
+    outcomeBreakdown?: {
+      booked: number;
+      lost: number;
+      escalated_unresolved: number;
+      escalated_resolved: number;
+      unresponsive: number;
+      reactivated: number;
+    };
   };
   operator: {
     actionsToday: number;
     deniedToday: number;
   };
+  speedToLead?: {
+    averageMs: number | null;
+    p50Ms: number | null;
+    p95Ms: number | null;
+    percentWithin60s: number | null;
+    sampleSize: number;
+  };
+}
+
+export interface CampaignAttribution {
+  campaignId: string;
+  name: string;
+  leads: number;
+  bookings: number;
+  paid: number;
+  revenue: number;
+  spend: number | null;
+  costPerLead: number | null;
+  costPerBooking: number | null;
+  roas: number | null;
+}
+
+export interface PilotReportData {
+  period: { startDate: string; endDate: string; days: number };
+  speedToLead: {
+    medianMs: number | null;
+    percentWithin2Min: number | null;
+    sampleSize: number;
+    baseline: string | null;
+  };
+  conversion: {
+    leads: number;
+    payingPatients: number;
+    ratePercent: number | null;
+    baselinePercent: number | null;
+  };
+  costPerPatient: {
+    amount: number | null;
+    currency: string;
+    adSpend: number | null;
+    totalRevenue: number | null;
+    roas: number | null;
+    baselineAmount: number | null;
+  };
+  funnel: {
+    leads: number;
+    qualified: number;
+    booked: number;
+    showedUp: number;
+    paid: number;
+  };
+  campaigns: Array<{
+    name: string;
+    spend: number | null;
+    leads: number;
+    payingPatients: number;
+    revenue: number;
+    costPerPatient: number | null;
+  }>;
 }
 
 export interface CreateScheduledReportInput {
@@ -733,6 +801,10 @@ export class SwitchboardClient {
     return this.request<{ summary: OperatorSummary }>("/api/reports/operator-summary");
   }
 
+  async getCampaignAttribution() {
+    return this.request<{ campaigns: CampaignAttribution[] }>("/api/reports/campaign-attribution");
+  }
+
   async getClinicReport(params?: { startDate?: string; endDate?: string; adSpend?: number }) {
     const query = new URLSearchParams();
     if (params?.startDate) query.set("startDate", params.startDate);
@@ -770,6 +842,10 @@ export class SwitchboardClient {
         costPerLead: number | null;
       };
     }>(`/api/reports/clinic${qs ? `?${qs}` : ""}`);
+  }
+
+  async getPilotReport() {
+    return this.request<{ report: PilotReportData | null; message?: string }>("/api/reports/pilot");
   }
 
   // Conversations
@@ -857,6 +933,27 @@ export class SwitchboardClient {
     return this.request<{ data: unknown[]; total: number; limit: number; offset: number }>(
       `/api/crm/deals${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  async updateDeal(id: string, updates: { stage?: string; amount?: number }) {
+    return this.request<{ deal: unknown }>(`/api/crm/deals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async createRevenueEvent(event: {
+    contactId: string;
+    amount: number;
+    currency: string;
+    source: string;
+    reference: string;
+    recordedBy: string;
+  }) {
+    return this.request<{ event: unknown }>("/api/revenue", {
+      method: "POST",
+      body: JSON.stringify(event),
+    });
   }
 
   // Agent Roster & State
@@ -984,6 +1081,91 @@ export class SwitchboardClient {
   async getRevGrowthDigest(accountId: string) {
     return this.request<{ digest: RevGrowthDigest | null; summary: string }>(
       `/api/revenue-growth/${accountId}/digest`,
+    );
+  }
+
+  // Handoff Inbox
+  async listPendingHandoffs() {
+    return this.request<{ items: unknown[]; total: number }>("/api/handoff/pending");
+  }
+
+  async getHandoffCount() {
+    return this.request<{ count: number }>("/api/handoff/count");
+  }
+
+  async releaseHandoff(id: string) {
+    return this.request<{ released: boolean }>(`/api/handoff/${id}/release`, {
+      method: "POST",
+    });
+  }
+
+  async completeWizard(body: Record<string, unknown>) {
+    return this.request<{ success: boolean; purchasedAgents: string[]; agentsRegistered: number }>(
+      "/api/agents/wizard-complete",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  // Knowledge
+  async uploadKnowledge(body: Record<string, unknown>) {
+    return this.request<{ documentId: string; fileName: string; chunksCreated: number }>(
+      "/api/knowledge/upload",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  async listKnowledgeDocuments(agentId?: string) {
+    const params = agentId ? `?agentId=${agentId}` : "";
+    return this.request<{ documents: unknown[] }>(`/api/knowledge/documents${params}`);
+  }
+
+  async deleteKnowledgeDocument(documentId: string) {
+    return this.request<{ deleted: number }>(`/api/knowledge/documents/${documentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createCorrection(body: Record<string, unknown>) {
+    return this.request<{ documentId: string; correctionId: string }>(
+      "/api/knowledge/corrections",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  // Test Chat
+  async sendTestChatMessage(body: Record<string, unknown>) {
+    return this.request<{
+      reply: string;
+      confidence: number;
+      kbChunksUsed: number;
+      kbContext: string;
+      mode: string;
+    }>("/api/test-chat/message", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  // Go Live
+  async goLiveAgent(agentId: string) {
+    return this.request<{ agentId: string; status: string; message: string }>(
+      `/api/agents/go-live/${agentId}`,
+      { method: "PUT" },
+    );
+  }
+
+  // Escalations
+  async listEscalations(status = "pending") {
+    return this.request<{ escalations: unknown[] }>(`/api/escalations?status=${status}`);
+  }
+
+  async getEscalation(id: string) {
+    return this.request<{ escalation: unknown; conversationHistory: unknown[] }>(
+      `/api/escalations/${id}`,
+    );
+  }
+
+  async replyToEscalation(id: string, message: string) {
+    return this.request<{ escalation: unknown; replySent: boolean }>(
+      `/api/escalations/${id}/reply`,
+      { method: "POST", body: JSON.stringify({ message }) },
     );
   }
 }

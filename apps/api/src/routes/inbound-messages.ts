@@ -301,7 +301,7 @@ async function getConversationRouter(
         id: "qualification",
         name: "Lead Qualification",
         description: "Qualify incoming leads through a conversational flow",
-        variables: ["patientName", "patientPhone", "treatmentInterest"],
+        variables: ["patientName", "patientPhone", "serviceInterest"],
         steps: [
           {
             id: "greeting",
@@ -325,7 +325,7 @@ async function getConversationRouter(
             id: "book_action",
             type: "action" as const,
             actionType: "appointment.check_availability",
-            actionParameters: { treatmentInterest: "{{treatmentInterest}}" },
+            actionParameters: { serviceInterest: "{{serviceInterest}}" },
             template: "Let me look up available times for you...",
           },
           {

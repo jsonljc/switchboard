@@ -55,6 +55,7 @@ export const ConversationStateSchema = z.object({
   pendingApprovalIds: z.array(z.string()),
   clarificationQuestion: z.string().nullable(),
   firstReplyAt: z.coerce.date().nullable().optional(),
+  lastInboundAt: z.coerce.date().nullable().optional(),
   lastActivityAt: z.coerce.date(),
   expiresAt: z.coerce.date(),
   crmContactId: z.string().nullable().optional(),

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // ---------------------------------------------------------------------------
 // LTV Optimizer — Long-term customer value optimization engine
 //

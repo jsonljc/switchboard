@@ -6,6 +6,12 @@ import type {
   CadenceTemplateDef,
   ComplianceConfig,
   LLMContext,
+  LocalisationConfig,
+  BookingConfig,
+  EscalationConfig,
+  LearningConfig,
+  ConversationConfig,
+  AgentPersona,
 } from "@switchboard/schemas";
 
 /** Resolved profile ready for consumption by cartridges and interpreters. */
@@ -26,6 +32,18 @@ export interface ResolvedProfile {
   llmContext: Required<LLMContext>;
   /** Composite system prompt fragment built from profile data. */
   systemPromptFragment: string;
+  /** Localisation configuration with defaults applied. */
+  localisation: Required<LocalisationConfig>;
+  /** Booking configuration with defaults applied. */
+  booking: Required<BookingConfig>;
+  /** Escalation configuration (null if not set). */
+  escalationConfig: EscalationConfig | null;
+  /** Learning preferences with defaults applied. */
+  learningPreferences: Required<LearningConfig>;
+  /** Conversation configuration with defaults applied. */
+  conversationConfig: Required<ConversationConfig>;
+  /** Agent persona (null if not set). */
+  persona: AgentPersona | null;
 }
 
 /** Default scoring constants (matching the original customer-engagement hardcoded values). */
@@ -61,6 +79,43 @@ const DEFAULT_LLM_CONTEXT: Required<LLMContext> = {
   bannedTopics: [],
 };
 
+/** Default localisation — generic market, English only. */
+const DEFAULT_LOCALISATION: Required<LocalisationConfig> = {
+  market: "generic",
+  languages: ["en"],
+  naturalness: "semi_formal",
+  tone: "warm and professional",
+  emoji: { allowed: false, maxPerMessage: 1, preferredSet: [] },
+};
+
+/** Default booking config. */
+const DEFAULT_BOOKING: Required<BookingConfig> = {
+  bookingUrl: "",
+  bookingPhone: "",
+  requireDeposit: false,
+  depositAmount: 0,
+  cancellationWindowHours: 24,
+  maxAdvanceBookingDays: 90,
+};
+
+/** Default learning preferences. */
+const DEFAULT_LEARNING: Required<LearningConfig> = {
+  enableAutoOptimisation: false,
+  optimisationFrequency: "weekly",
+  autoApplyTimingChanges: true,
+  requireOwnerApprovalForContent: true,
+  minSampleSize: 30,
+};
+
+/** Default conversation config. */
+const DEFAULT_CONVERSATION: Required<ConversationConfig> = {
+  flowMode: "hybrid",
+  qualificationSignals: [],
+  maxTurnsBeforeEscalation: 15,
+  silenceTimeoutMinutes: 30,
+  reactivationWindowHours: 72,
+};
+
 /**
  * Resolves a BusinessProfile into a configuration object usable by cartridges and interpreters.
  *
@@ -81,6 +136,11 @@ export class ProfileResolver {
     const llmContext = this.resolveLLMContext(profile.llmContext);
     const systemPromptFragment = this.buildSystemPromptFragment(profile);
 
+    const localisation = this.resolveLocalisation(profile.localisation);
+    const booking = this.resolveBooking(profile.booking);
+    const learningPreferences = this.resolveLearning(profile.learningPreferences);
+    const conversationConfig = this.resolveConversation(profile.conversationConfig);
+
     return {
       profile,
       journey: profile.journey,
@@ -90,6 +150,71 @@ export class ProfileResolver {
       compliance,
       llmContext,
       systemPromptFragment,
+      localisation,
+      booking,
+      escalationConfig: profile.escalationConfig ?? null,
+      learningPreferences,
+      conversationConfig,
+      persona: profile.persona ?? null,
+    };
+  }
+
+  private resolveLocalisation(config?: LocalisationConfig): Required<LocalisationConfig> {
+    if (!config) return { ...DEFAULT_LOCALISATION };
+    return {
+      market: config.market ?? DEFAULT_LOCALISATION.market,
+      languages: config.languages ?? DEFAULT_LOCALISATION.languages,
+      naturalness: config.naturalness ?? DEFAULT_LOCALISATION.naturalness,
+      tone: config.tone ?? DEFAULT_LOCALISATION.tone,
+      emoji: config.emoji
+        ? {
+            allowed: config.emoji.allowed ?? DEFAULT_LOCALISATION.emoji.allowed,
+            maxPerMessage: config.emoji.maxPerMessage ?? DEFAULT_LOCALISATION.emoji.maxPerMessage,
+            preferredSet: config.emoji.preferredSet ?? DEFAULT_LOCALISATION.emoji.preferredSet,
+          }
+        : { ...DEFAULT_LOCALISATION.emoji },
+    };
+  }
+
+  private resolveBooking(config?: BookingConfig): Required<BookingConfig> {
+    if (!config) return { ...DEFAULT_BOOKING };
+    return {
+      bookingUrl: config.bookingUrl ?? DEFAULT_BOOKING.bookingUrl,
+      bookingPhone: config.bookingPhone ?? DEFAULT_BOOKING.bookingPhone,
+      requireDeposit: config.requireDeposit ?? DEFAULT_BOOKING.requireDeposit,
+      depositAmount: config.depositAmount ?? DEFAULT_BOOKING.depositAmount,
+      cancellationWindowHours:
+        config.cancellationWindowHours ?? DEFAULT_BOOKING.cancellationWindowHours,
+      maxAdvanceBookingDays: config.maxAdvanceBookingDays ?? DEFAULT_BOOKING.maxAdvanceBookingDays,
+    };
+  }
+
+  private resolveLearning(config?: LearningConfig): Required<LearningConfig> {
+    if (!config) return { ...DEFAULT_LEARNING };
+    return {
+      enableAutoOptimisation:
+        config.enableAutoOptimisation ?? DEFAULT_LEARNING.enableAutoOptimisation,
+      optimisationFrequency: config.optimisationFrequency ?? DEFAULT_LEARNING.optimisationFrequency,
+      autoApplyTimingChanges:
+        config.autoApplyTimingChanges ?? DEFAULT_LEARNING.autoApplyTimingChanges,
+      requireOwnerApprovalForContent:
+        config.requireOwnerApprovalForContent ?? DEFAULT_LEARNING.requireOwnerApprovalForContent,
+      minSampleSize: config.minSampleSize ?? DEFAULT_LEARNING.minSampleSize,
+    };
+  }
+
+  private resolveConversation(config?: ConversationConfig): Required<ConversationConfig> {
+    if (!config) return { ...DEFAULT_CONVERSATION };
+    return {
+      flowMode: config.flowMode ?? DEFAULT_CONVERSATION.flowMode,
+      qualificationSignals:
+        config.qualificationSignals ?? DEFAULT_CONVERSATION.qualificationSignals,
+      maxTurnsBeforeEscalation:
+        config.maxTurnsBeforeEscalation ?? DEFAULT_CONVERSATION.maxTurnsBeforeEscalation,
+      silenceTimeoutMinutes:
+        config.silenceTimeoutMinutes ?? DEFAULT_CONVERSATION.silenceTimeoutMinutes,
+      reactivationWindowHours:
+        config.reactivationWindowHours ?? DEFAULT_CONVERSATION.reactivationWindowHours,
     };
   }
 

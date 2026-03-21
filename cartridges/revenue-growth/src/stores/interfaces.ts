@@ -12,6 +12,10 @@ import type {
   ConstraintType,
   DiagnosticCycle,
   WeeklyDigest,
+  AccountLearningProfile,
+  MonitorCheckpoint,
+  TestCampaign,
+  TestCampaignStatus,
 } from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
@@ -88,6 +92,39 @@ export interface WeeklyDigestStore {
   save(digest: WeeklyDigestRecord): Promise<void>;
   getLatest(accountId: string): Promise<WeeklyDigestRecord | null>;
   listByAccount(accountId: string, limit?: number): Promise<WeeklyDigestRecord[]>;
+}
+
+// ---------------------------------------------------------------------------
+// AccountProfileStore — CRUD for account learning profiles
+// ---------------------------------------------------------------------------
+
+export interface AccountProfileStore {
+  save(profile: AccountLearningProfile): Promise<void>;
+  getByAccountId(accountId: string): Promise<AccountLearningProfile | null>;
+}
+
+// ---------------------------------------------------------------------------
+// MonitorCheckpointStore — CRUD for post-change monitoring checkpoints
+// ---------------------------------------------------------------------------
+
+export interface MonitorCheckpointStore {
+  save(checkpoint: MonitorCheckpoint): Promise<void>;
+  listByIntervention(interventionId: string): Promise<MonitorCheckpoint[]>;
+  getLatest(interventionId: string): Promise<MonitorCheckpoint | null>;
+}
+
+// ---------------------------------------------------------------------------
+// TestCampaignStore — CRUD for creative testing campaigns
+// ---------------------------------------------------------------------------
+
+export interface TestCampaignStore {
+  save(campaign: TestCampaign): Promise<void>;
+  getById(id: string): Promise<TestCampaign | null>;
+  listByAccount(
+    accountId: string,
+    opts?: { status?: TestCampaignStatus; limit?: number },
+  ): Promise<TestCampaign[]>;
+  updateStatus(id: string, status: TestCampaignStatus): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

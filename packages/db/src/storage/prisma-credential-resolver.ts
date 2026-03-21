@@ -66,9 +66,12 @@ export class PrismaCredentialResolver implements ConnectionCredentialResolver {
         if (connection) {
           result[platformKey] = connection.credentials;
         }
-      } catch {
+      } catch (err) {
         // Credential decryption may fail if encryption key is missing.
         // Skip this service — cartridge will use boot-time creds for this platform.
+        console.warn(
+          `[credential-resolver] failed to resolve ${serviceId} for org=${organizationId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

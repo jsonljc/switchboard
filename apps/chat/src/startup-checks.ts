@@ -1,0 +1,64 @@
+// ---------------------------------------------------------------------------
+// Startup Checks — validate required config before server boot
+// ---------------------------------------------------------------------------
+
+interface CheckResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Validate required environment variables before the chat server starts.
+ * Fails fast with clear error messages if critical config is missing.
+ */
+export function runStartupChecks(): CheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Core infrastructure
+  if (!process.env["DATABASE_URL"]) {
+    warnings.push("DATABASE_URL is not set — running without database (in-memory only)");
+  }
+
+  if (!process.env["REDIS_URL"]) {
+    warnings.push("REDIS_URL is not set — dedup and session store will use in-memory fallbacks");
+  }
+
+  // Lead bot mode requires profile + skin
+  if (process.env["LEAD_BOT_MODE"] === "true") {
+    if (!process.env["PROFILE_ID"]) {
+      errors.push("LEAD_BOT_MODE=true requires PROFILE_ID to be set (e.g. PROFILE_ID=clinic-demo)");
+    }
+    if (!process.env["SKIN_ID"]) {
+      errors.push("LEAD_BOT_MODE=true requires SKIN_ID to be set (e.g. SKIN_ID=clinic)");
+    }
+  }
+
+  // Require at least one channel token
+  const hasTelegram = !!process.env["TELEGRAM_BOT_TOKEN"];
+  const hasWhatsApp = !!process.env["WHATSAPP_TOKEN"] && !!process.env["WHATSAPP_PHONE_NUMBER_ID"];
+  const hasSlack = !!process.env["SLACK_BOT_TOKEN"];
+
+  if (!hasTelegram && !hasWhatsApp && !hasSlack) {
+    errors.push(
+      "At least one channel must be configured: " +
+        "TELEGRAM_BOT_TOKEN, WHATSAPP_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN",
+    );
+  }
+
+  // Credential encryption key in production
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env["DATABASE_URL"] &&
+    !process.env["CREDENTIALS_ENCRYPTION_KEY"]
+  ) {
+    errors.push("CREDENTIALS_ENCRYPTION_KEY is required in production when DATABASE_URL is set");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+  };
+}

@@ -14,10 +14,23 @@ export interface CrmContact {
   assignedStaffId: string | null;
   sourceAdId: string | null;
   sourceCampaignId: string | null;
+  gclid: string | null;
+  fbclid: string | null;
+  ttclid: string | null;
+  normalizedPhone: string | null;
+  normalizedEmail: string | null;
   utmSource: string | null;
   createdAt: string;
   updatedAt: string;
   properties: Record<string, unknown>;
+}
+
+export interface ContactAlias {
+  id: string;
+  contactId: string;
+  channel: string;
+  externalId: string;
+  createdAt: string;
 }
 
 export interface CrmDeal {
@@ -81,6 +94,8 @@ export interface CrmProvider {
     assignedStaffId?: string;
     sourceAdId?: string;
     sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
     utmSource?: string;
     properties?: Record<string, unknown>;
   }): Promise<CrmContact>;
@@ -102,6 +117,11 @@ export interface CrmProvider {
     contactIds?: string[];
     dealIds?: string[];
   }): Promise<CrmActivity>;
+
+  // Identity resolution
+  findByNormalizedPhone?(phone: string): Promise<CrmContact | null>;
+  findByNormalizedEmail?(email: string): Promise<CrmContact | null>;
+  addAlias?(contactId: string, channel: string, externalId: string): Promise<void>;
 
   // Health
   healthCheck(): Promise<ConnectionHealth>;

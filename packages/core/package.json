@@ -9,6 +9,90 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./engine": {
+      "types": "./dist/engine/index.d.ts",
+      "import": "./dist/engine/index.js"
+    },
+    "./identity": {
+      "types": "./dist/identity/index.d.ts",
+      "import": "./dist/identity/index.js"
+    },
+    "./approval": {
+      "types": "./dist/approval/index.d.ts",
+      "import": "./dist/approval/index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "import": "./dist/storage/index.js"
+    },
+    "./orchestrator": {
+      "types": "./dist/orchestrator/index.d.ts",
+      "import": "./dist/orchestrator/index.js"
+    },
+    "./audit": {
+      "types": "./dist/audit/index.d.ts",
+      "import": "./dist/audit/index.js"
+    },
+    "./competence": {
+      "types": "./dist/competence/index.d.ts",
+      "import": "./dist/competence/index.js"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry/index.d.ts",
+      "import": "./dist/telemetry/index.js"
+    },
+    "./notifications": {
+      "types": "./dist/notifications/index.d.ts",
+      "import": "./dist/notifications/index.js"
+    },
+    "./guardrail-state": {
+      "types": "./dist/guardrail-state/index.d.ts",
+      "import": "./dist/guardrail-state/index.js"
+    },
+    "./runtime-adapters": {
+      "types": "./dist/runtime-adapters/index.d.ts",
+      "import": "./dist/runtime-adapters/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.js"
+    },
+    "./enrichment": {
+      "types": "./dist/enrichment/index.d.ts",
+      "import": "./dist/enrichment/index.js"
+    },
+    "./data-flow": {
+      "types": "./dist/data-flow/index.d.ts",
+      "import": "./dist/data-flow/index.js"
+    },
+    "./smb": {
+      "types": "./dist/smb/index.d.ts",
+      "import": "./dist/smb/index.js"
+    },
+    "./capability": {
+      "types": "./dist/capability/index.d.ts",
+      "import": "./dist/capability/index.js"
+    },
+    "./planning": {
+      "types": "./dist/planning/index.d.ts",
+      "import": "./dist/planning/index.js"
+    },
+    "./skin": {
+      "types": "./dist/skin/index.d.ts",
+      "import": "./dist/skin/index.js"
+    },
+    "./profile": {
+      "types": "./dist/profile/index.d.ts",
+      "import": "./dist/profile/index.js"
+    },
+    "./tool-registry": {
+      "types": "./dist/tool-registry/index.d.ts",
+      "import": "./dist/tool-registry/index.js"
+    },
+    "./agents": {
+      "types": "./dist/agents/index.d.ts",
+      "import": "./dist/agents/index.js"
     }
   },
   "scripts": {

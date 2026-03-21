@@ -257,7 +257,9 @@ describe("Revenue Growth API", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json().summary).toContain("deferred");
+      const body = res.json();
+      expect(body.outcome).toBe("executed");
+      expect(body.summary).toContain("deferred");
     });
   });
 

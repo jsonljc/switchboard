@@ -288,6 +288,134 @@ export type DiagnosticRunOutput = z.infer<typeof DiagnosticRunOutputSchema>;
 // Weekly Digest — LLM-backed summary of diagnostic history
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Escalation — Escalation level for constraint-based interventions
+// ---------------------------------------------------------------------------
+
+export const EscalationLevelSchema = z.enum(["INFO", "WARN", "ESCALATE", "CRITICAL"]);
+export type EscalationLevel = z.infer<typeof EscalationLevelSchema>;
+
+export const EscalationResultSchema = z.object({
+  level: EscalationLevelSchema,
+  constraintType: ConstraintTypeSchema,
+  cycleCount: z.number().int().nonnegative(),
+  score: z.number().min(0).max(100),
+  reason: z.string(),
+});
+export type EscalationResult = z.infer<typeof EscalationResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Account Learning Profile — Per-account learning state
+// ---------------------------------------------------------------------------
+
+export const CreativePatternSchema = z.object({
+  format: z.string(),
+  hookType: z.string().optional(),
+  performanceScore: z.number().min(0).max(100),
+  sampleSize: z.number().int().nonnegative(),
+});
+export type CreativePattern = z.infer<typeof CreativePatternSchema>;
+
+export const ConstraintHistoryEntrySchema = z.object({
+  constraintType: ConstraintTypeSchema,
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime().nullable(),
+  cycleCount: z.number().int().positive(),
+});
+export type ConstraintHistoryEntry = z.infer<typeof ConstraintHistoryEntrySchema>;
+
+export const AccountLearningProfileSchema = z.object({
+  accountId: z.string(),
+  organizationId: z.string(),
+  creativePatterns: z.array(CreativePatternSchema),
+  constraintHistory: z.array(ConstraintHistoryEntrySchema),
+  calibration: z.record(
+    z.string(),
+    z.object({
+      successRate: z.number().min(0).max(1),
+      avgImprovement: z.number().nonnegative(),
+      totalCount: z.number().int().nonnegative(),
+    }),
+  ),
+  updatedAt: z.string().datetime(),
+});
+export type AccountLearningProfile = z.infer<typeof AccountLearningProfileSchema>;
+
+// ---------------------------------------------------------------------------
+// Monitor Checkpoint — Post-change monitoring state
+// ---------------------------------------------------------------------------
+
+export const MonitorCheckpointSchema = z.object({
+  id: z.string(),
+  interventionId: z.string(),
+  accountId: z.string(),
+  checkpointHours: z.number(),
+  checkedAt: z.string().datetime(),
+  metricName: z.string(),
+  metricValue: z.number(),
+  baselineValue: z.number(),
+  deltaPercent: z.number(),
+  anomalyDetected: z.boolean(),
+  recommendation: z.string().nullable(),
+});
+export type MonitorCheckpoint = z.infer<typeof MonitorCheckpointSchema>;
+
+// ---------------------------------------------------------------------------
+// Creative Gap Analysis — Creative portfolio gap scoring
+// ---------------------------------------------------------------------------
+
+export const CreativeGapCriterionSchema = z.object({
+  name: z.string(),
+  score: z.number().min(0).max(100),
+  weight: z.number().min(0).max(1),
+  weightedScore: z.number().min(0).max(100),
+  findings: z.array(z.string()),
+});
+export type CreativeGapCriterion = z.infer<typeof CreativeGapCriterionSchema>;
+
+export const CreativeGapResultSchema = z.object({
+  overallScore: z.number().min(0).max(100),
+  criteria: z.array(CreativeGapCriterionSchema),
+  significantGaps: z.array(z.string()),
+  hasSignificantGaps: z.boolean(),
+  analyzedAt: z.string().datetime(),
+});
+export type CreativeGapResult = z.infer<typeof CreativeGapResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Test Campaign — Creative testing campaign lifecycle
+// ---------------------------------------------------------------------------
+
+export const TestCampaignStatusSchema = z.enum([
+  "DRAFT",
+  "READY",
+  "DEPLOYING",
+  "ACTIVE",
+  "PAUSED",
+  "COMPLETED",
+  "FAILED",
+]);
+export type TestCampaignStatus = z.infer<typeof TestCampaignStatusSchema>;
+
+export const TestCampaignSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  organizationId: z.string(),
+  constraintType: ConstraintTypeSchema,
+  status: TestCampaignStatusSchema,
+  creativeAssetIds: z.array(z.string()),
+  budget: z.number().nonnegative(),
+  startedAt: z.string().datetime().nullable(),
+  completedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type TestCampaign = z.infer<typeof TestCampaignSchema>;
+
+// ---------------------------------------------------------------------------
+// Weekly Digest — LLM-backed summary of diagnostic history
+// ---------------------------------------------------------------------------
+
 export const WeeklyDigestSchema = z.object({
   id: z.string(),
   accountId: z.string(),

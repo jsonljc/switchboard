@@ -34,10 +34,25 @@ export interface OperatorSummary {
     costPerLead30d: number | null;
     costPerQualifiedLead30d: number | null;
     costPerBooking30d: number | null;
+    outcomeBreakdown: {
+      booked: number;
+      lost: number;
+      escalated_unresolved: number;
+      escalated_resolved: number;
+      unresponsive: number;
+      reactivated: number;
+    };
   };
   operator: {
     actionsToday: number;
     deniedToday: number;
+  };
+  speedToLead: {
+    averageMs: number | null;
+    p50Ms: number | null;
+    p95Ms: number | null;
+    percentWithin60s: number | null;
+    sampleSize: number;
   };
 }
 
@@ -59,10 +74,11 @@ export async function buildOperatorSummary(deps: OperatorSummaryDeps): Promise<O
   const start7Days = startOfDay(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
   const start30Days = startOfDay(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000));
 
-  const [outcomes, operator, spend] = await Promise.all([
+  const [outcomes, operator, spend, speedToLead] = await Promise.all([
     buildOutcomeSummary(deps.prisma, deps.organizationId, start30Days),
     buildOperatorActivitySummary(deps.prisma, deps.organizationId, todayStart),
     buildSpendSummary(deps.prisma, deps.organizationId, now, todayStart, start7Days, start30Days),
+    buildSpeedToLead(deps.prisma, deps.organizationId, start30Days),
   ]);
 
   const summary: OperatorSummary = {
@@ -84,6 +100,7 @@ export async function buildOperatorSummary(deps: OperatorSummaryDeps): Promise<O
           : null,
     },
     operator,
+    speedToLead,
   };
 
   if (deps.redis) {
@@ -102,6 +119,14 @@ async function buildOutcomeSummary(
   qualifiedLeads30d: number;
   bookings30d: number;
   revenue30d: number | null;
+  outcomeBreakdown: {
+    booked: number;
+    lost: number;
+    escalated_unresolved: number;
+    escalated_resolved: number;
+    unresponsive: number;
+    reactivated: number;
+  };
 }> {
   const orgFilter = { organizationId };
   const dateFilter = { createdAt: { gte: start30Days } };
@@ -140,11 +165,36 @@ async function buildOutcomeSummary(
     }),
   ]);
 
+  const outcomeEvents = await prisma.outcomeEvent.groupBy({
+    by: ["outcomeType"],
+    where: {
+      organizationId,
+      timestamp: { gte: start30Days },
+    },
+    _count: { id: true },
+  });
+
+  const outcomeBreakdown = {
+    booked: 0,
+    lost: 0,
+    escalated_unresolved: 0,
+    escalated_resolved: 0,
+    unresponsive: 0,
+    reactivated: 0,
+  };
+  for (const row of outcomeEvents) {
+    const key = row.outcomeType as keyof typeof outcomeBreakdown;
+    if (key in outcomeBreakdown) {
+      outcomeBreakdown[key] = row._count.id;
+    }
+  }
+
   return {
     leads30d,
     qualifiedLeads30d: qualifiedDeals.length,
     bookings30d: bookingDeals.length,
     revenue30d: revenue._sum.amount ?? null,
+    outcomeBreakdown,
   };
 }
 
@@ -291,6 +341,62 @@ async function fetchSpend(
   });
 
   return roundCurrency(rows.reduce((sum, row) => sum + Number(row["spend"] ?? 0), 0));
+}
+
+async function buildSpeedToLead(
+  prisma: PrismaClient,
+  organizationId: string,
+  start30Days: Date,
+): Promise<OperatorSummary["speedToLead"]> {
+  const conversations = await prisma.conversationState.findMany({
+    where: {
+      organizationId,
+      firstReplyAt: { not: null },
+      lastActivityAt: { gte: start30Days },
+    },
+    select: { firstReplyAt: true, messages: true },
+  });
+
+  const responseTimes: number[] = [];
+  for (const conv of conversations) {
+    let messages: Array<{ role: string; timestamp: string }> = [];
+    try {
+      messages =
+        typeof conv.messages === "string"
+          ? (JSON.parse(conv.messages) as Array<{ role: string; timestamp: string }>)
+          : ((conv.messages as Array<{ role: string; timestamp: string }>) ?? []);
+    } catch {
+      continue;
+    }
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    if (firstUserMsg && conv.firstReplyAt) {
+      const userMsgTime = new Date(firstUserMsg.timestamp).getTime();
+      const replyTime = new Date(conv.firstReplyAt).getTime();
+      const diff = replyTime - userMsgTime;
+      if (diff >= 0) {
+        responseTimes.push(diff);
+      }
+    }
+  }
+
+  if (responseTimes.length === 0) {
+    return { averageMs: null, p50Ms: null, p95Ms: null, percentWithin60s: null, sampleSize: 0 };
+  }
+
+  responseTimes.sort((a, b) => a - b);
+  const avg = responseTimes.reduce((sum, t) => sum + t, 0) / responseTimes.length;
+  const p50 = responseTimes[Math.floor(responseTimes.length * 0.5)]!;
+  const p95 = responseTimes[Math.floor(responseTimes.length * 0.95)]!;
+  const within60s = responseTimes.filter((t) => t <= 60_000).length;
+  const percentWithin60s = Math.round((within60s / responseTimes.length) * 100);
+
+  return {
+    averageMs: Math.round(avg),
+    p50Ms: p50,
+    p95Ms: p95,
+    percentWithin60s,
+    sampleSize: responseTimes.length,
+  };
 }
 
 function startOfDay(date: Date): Date {

@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+
+const mockExecuteGovernedSystemAction = vi.fn().mockResolvedValue({
+  outcome: "executed",
+  executionResult: { success: true },
+  envelopeId: "env_test",
+});
+
+vi.mock("../services/system-governed-actions.js", () => ({
+  executeGovernedSystemAction: (...args: unknown[]) => mockExecuteGovernedSystemAction(...args),
+}));
+
 import { inboundWebhooksRoutes } from "../routes/inbound-webhooks.js";
 
 function buildStripeSignature(payload: string, secret: string): string {
@@ -36,6 +47,7 @@ describe("Inbound Webhooks API", () => {
     app = Fastify({ logger: false });
 
     app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("orchestrator", {} as any);
 
     await app.register(inboundWebhooksRoutes, { prefix: "/api/inbound" });
   });
@@ -115,12 +127,7 @@ describe("Inbound Webhooks API", () => {
       expect(res.json().eventId).toBe("evt_valid");
     });
 
-    it("dispatches payment_intent.succeeded to cartridge", async () => {
-      const mockCartridge = {
-        execute: vi.fn().mockResolvedValue({ data: {} }),
-      };
-      mockCartridges.get.mockReturnValue(mockCartridge);
-
+    it("dispatches payment_intent.succeeded through governance", async () => {
       const payload = JSON.stringify({
         id: "evt_pay",
         type: "payment_intent.succeeded",
@@ -141,10 +148,12 @@ describe("Inbound Webhooks API", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(mockCartridge.execute).toHaveBeenCalledWith(
-        "payment.log",
-        expect.objectContaining({ paymentId: "pi_1" }),
-        expect.any(Object),
+      expect(mockExecuteGovernedSystemAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: "payment.log",
+          cartridgeId: "customer-engagement",
+          parameters: expect.objectContaining({ paymentId: "pi_1" }),
+        }),
       );
     });
   });
@@ -159,7 +168,7 @@ describe("Inbound Webhooks API", () => {
           fields: {
             firstName: "Alice",
             email: "alice@example.com",
-            treatmentInterest: "Botox",
+            serviceInterest: "Botox",
           },
         },
       });
@@ -184,6 +193,78 @@ describe("Inbound Webhooks API", () => {
       });
 
       expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe("POST /api/inbound/booking-confirmed", () => {
+    it("receives a booking confirmation", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_abc123",
+          source: "calendly",
+          service: "Teeth Whitening",
+          contactExternalId: "15551234567",
+          scheduledAt: "2026-03-20T14:00:00Z",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().received).toBe(true);
+      expect(res.json().bookingId).toBe("cal_abc123");
+    });
+
+    it("creates CRM deal on booking confirmation via governance", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_deal1",
+          source: "calendly",
+          service: "Consultation",
+          contactExternalId: "15551234567",
+          organizationId: "org_clinic1",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockExecuteGovernedSystemAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: "crm.deal.create",
+          cartridgeId: "crm",
+          organizationId: "org_clinic1",
+          parameters: expect.objectContaining({
+            name: "Booking: Consultation",
+            stage: "booked",
+          }),
+        }),
+      );
+    });
+
+    it("emits booking conversion event when conversionBus is available", async () => {
+      const mockEmit = vi.fn();
+      (app as unknown as Record<string, unknown>)["conversionBus"] = { emit: mockEmit };
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/inbound/booking-confirmed",
+        payload: {
+          bookingId: "cal_conv1",
+          source: "setmore",
+          contactExternalId: "15559876543",
+          organizationId: "org_clinic1",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockEmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "booked",
+          contactId: "15559876543",
+          organizationId: "org_clinic1",
+        }),
+      );
     });
   });
 

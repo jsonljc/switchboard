@@ -1,6 +1,178 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface MessageEntry {
+  role: string;
+  text: string;
+  timestamp: string;
+}
+
+interface ConversationRow {
+  id: string;
+  threadId: string;
+  channel: string;
+  principalId: string;
+  organizationId: string | null;
+  status: string;
+  currentIntent: string | null;
+  messages: unknown;
+  firstReplyAt: Date | null;
+  lastActivityAt: Date;
+}
+
+export interface ConversationSummary {
+  id: string;
+  threadId: string;
+  channel: string;
+  principalId: string;
+  organizationId: string | null;
+  status: string;
+  currentIntent: string | null;
+  messageCount: number;
+  lastMessage: string | null;
+  firstReplyAt: string | null;
+  lastActivityAt: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  threadId: string;
+  channel: string;
+  principalId: string;
+  organizationId: string | null;
+  status: string;
+  currentIntent: string | null;
+  firstReplyAt: string | null;
+  lastActivityAt: string;
+  messages: MessageEntry[];
+}
+
+export interface ConversationListResult {
+  conversations: ConversationSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+export function safeParseMessages(raw: unknown): MessageEntry[] {
+  if (Array.isArray(raw)) return raw as MessageEntry[];
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as MessageEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function lastMessagePreview(messages: MessageEntry[]): string | null {
+  if (messages.length === 0) return null;
+  const last = messages[messages.length - 1];
+  return last ? (last.text ?? null) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Testable business-logic functions
+// ---------------------------------------------------------------------------
+
+interface PrismaLike {
+  conversationState: {
+    findMany: (args: Record<string, unknown>) => Promise<ConversationRow[]>;
+    count: (args: Record<string, unknown>) => Promise<number>;
+    findFirst: (args: Record<string, unknown>) => Promise<ConversationRow | null>;
+    findUnique: (args: Record<string, unknown>) => Promise<ConversationRow | null>;
+    update: (args: Record<string, unknown>) => Promise<ConversationRow>;
+  };
+}
+
+export interface ListOptions {
+  limit?: number;
+  offset?: number;
+  status?: string;
+  channel?: string;
+  principalId?: string;
+}
+
+export async function buildConversationList(
+  prisma: PrismaLike,
+  orgId: string,
+  opts: ListOptions = {},
+): Promise<ConversationListResult> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+
+  const where: Record<string, unknown> = { organizationId: orgId };
+  if (opts.status) where["status"] = opts.status;
+  if (opts.channel) where["channel"] = opts.channel;
+  if (opts.principalId) where["principalId"] = opts.principalId;
+
+  const [rows, total] = await Promise.all([
+    prisma.conversationState.findMany({
+      where,
+      orderBy: { lastActivityAt: "desc" },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.conversationState.count({ where }),
+  ]);
+
+  const conversations: ConversationSummary[] = rows.map((row) => {
+    const msgs = safeParseMessages(row.messages);
+    return {
+      id: row.id,
+      threadId: row.threadId,
+      channel: row.channel,
+      principalId: row.principalId,
+      organizationId: row.organizationId ?? null,
+      status: row.status,
+      currentIntent: row.currentIntent,
+      messageCount: msgs.length,
+      lastMessage: lastMessagePreview(msgs),
+      firstReplyAt: row.firstReplyAt?.toISOString() ?? null,
+      lastActivityAt: row.lastActivityAt.toISOString(),
+    };
+  });
+
+  return { conversations, total, limit, offset };
+}
+
+export async function buildConversationDetail(
+  prisma: PrismaLike,
+  orgId: string,
+  threadId: string,
+): Promise<ConversationDetail | null> {
+  const row = await prisma.conversationState.findFirst({
+    where: { threadId, organizationId: orgId },
+  });
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    threadId: row.threadId,
+    channel: row.channel,
+    principalId: row.principalId,
+    organizationId: row.organizationId ?? null,
+    status: row.status,
+    currentIntent: row.currentIntent,
+    firstReplyAt: row.firstReplyAt?.toISOString() ?? null,
+    lastActivityAt: row.lastActivityAt.toISOString(),
+    messages: safeParseMessages(row.messages),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fastify query schema
+// ---------------------------------------------------------------------------
+
 const conversationsQuerySchema = z.object({
   status: z.string().optional(),
   channel: z.string().optional(),
@@ -8,6 +180,10 @@ const conversationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Route plugin
+// ---------------------------------------------------------------------------
 
 export const conversationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/conversations — list conversations with filters
@@ -28,62 +204,29 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "Invalid query", details: parsed.error.format() });
       }
 
-      const limit = parsed.data.limit ?? 50;
-      const offset = parsed.data.offset ?? 0;
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(403).send({ error: "Organization scope required" });
+      }
 
-      const where: Record<string, unknown> = {};
-      if (parsed.data.status) where["status"] = parsed.data.status;
-      if (parsed.data.channel) where["channel"] = parsed.data.channel;
-      if (parsed.data.principalId) where["principalId"] = parsed.data.principalId;
-      if (request.organizationIdFromAuth) where["organizationId"] = request.organizationIdFromAuth;
-
-      const [rows, total] = await Promise.all([
-        prisma.conversationState.findMany({
-          where,
-          orderBy: { lastActivityAt: "desc" },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.conversationState.count({ where }),
-      ]);
-
-      const conversations = rows.map(
-        (row: {
-          id: string;
-          threadId: string;
-          channel: string;
-          principalId: string;
-          status: string;
-          currentIntent: string | null;
-          firstReplyAt: Date | null;
-          lastActivityAt: Date;
-        }) => ({
-          id: row.id,
-          threadId: row.threadId,
-          channel: row.channel,
-          principalId: row.principalId,
-          organizationId: (row as { organizationId?: string | null }).organizationId ?? null,
-          status: row.status,
-          currentIntent: row.currentIntent,
-          firstReplyAt: row.firstReplyAt?.toISOString() ?? null,
-          lastActivityAt: row.lastActivityAt.toISOString(),
-        }),
-      );
-
-      return reply.send({
-        conversations,
-        total,
-        limit,
-        offset,
+      const result = await buildConversationList(prisma as unknown as PrismaLike, orgId, {
+        limit: parsed.data.limit,
+        offset: parsed.data.offset,
+        status: parsed.data.status,
+        channel: parsed.data.channel,
+        principalId: parsed.data.principalId,
       });
+
+      return reply.send(result);
     },
   );
 
+  // GET /api/conversations/:threadId — single conversation with messages
   app.get(
-    "/:id",
+    "/:threadId",
     {
       schema: {
-        description: "Get a single conversation by ID.",
+        description: "Get a single conversation by threadId.",
         tags: ["Conversations"],
       },
     },
@@ -91,41 +234,28 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       const prisma = app.prisma;
       if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
 
-      const { id } = request.params as { id: string };
-      const where: Record<string, unknown> = { id };
-      if (request.organizationIdFromAuth) {
-        where["organizationId"] = request.organizationIdFromAuth;
+      const { threadId } = request.params as { threadId: string };
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(403).send({ error: "Organization scope required" });
       }
 
-      const row = await prisma.conversationState.findFirst({ where });
-      if (!row) {
+      const detail = await buildConversationDetail(
+        prisma as unknown as PrismaLike,
+        orgId,
+        threadId,
+      );
+      if (!detail) {
         return reply.code(404).send({ error: "Conversation not found" });
       }
 
-      const messages =
-        typeof row.messages === "string"
-          ? safeParseMessages(row.messages)
-          : Array.isArray(row.messages)
-            ? row.messages
-            : [];
-
-      return reply.send({
-        id: row.id,
-        threadId: row.threadId,
-        channel: row.channel,
-        principalId: row.principalId,
-        organizationId: row.organizationId,
-        status: row.status,
-        currentIntent: row.currentIntent,
-        firstReplyAt: row.firstReplyAt?.toISOString() ?? null,
-        lastActivityAt: row.lastActivityAt.toISOString(),
-        messages,
-      });
+      return reply.send(detail);
     },
   );
 
+  // PATCH /api/conversations/:threadId/override — toggle human override
   app.patch(
-    "/:id/override",
+    "/:threadId/override",
     {
       schema: {
         description: "Toggle human override for a conversation.",
@@ -136,34 +266,27 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       const prisma = app.prisma;
       if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
 
-      const { id } = request.params as { id: string };
+      const { threadId } = request.params as { threadId: string };
       const body = request.body as { override?: boolean };
-      const where: Record<string, unknown> = { id };
-      if (request.organizationIdFromAuth) {
-        where["organizationId"] = request.organizationIdFromAuth;
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(403).send({ error: "Organization scope required" });
       }
 
-      const existing = await prisma.conversationState.findFirst({ where });
+      const existing = await (prisma as unknown as PrismaLike).conversationState.findFirst({
+        where: { threadId, organizationId: orgId },
+      });
       if (!existing) {
         return reply.code(404).send({ error: "Conversation not found" });
       }
 
       const status = body.override === false ? "active" : "human_override";
-      const updated = await prisma.conversationState.update({
+      const updated = await (prisma as unknown as PrismaLike).conversationState.update({
         where: { id: existing.id },
         data: { status, lastActivityAt: new Date() },
       });
 
-      return reply.send({ id: updated.id, status: updated.status });
+      return reply.send({ id: updated.id, threadId: updated.threadId, status: updated.status });
     },
   );
 };
-
-function safeParseMessages(raw: string): Array<{ role: string; text: string; timestamp: string }> {
-  try {
-    const parsed = JSON.parse(raw) as Array<{ role: string; text: string; timestamp: string }>;
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}

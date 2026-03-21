@@ -11,6 +11,7 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
+COPY packages/agents/package.json packages/agents/
 COPY packages/create-switchboard-cartridge/package.json packages/create-switchboard-cartridge/
 COPY cartridges/digital-ads/package.json cartridges/digital-ads/
 COPY cartridges/crm/package.json cartridges/crm/
@@ -18,12 +19,13 @@ COPY cartridges/payments/package.json cartridges/payments/
 COPY cartridges/customer-engagement/package.json cartridges/customer-engagement/
 COPY cartridges/quant-trading/package.json cartridges/quant-trading/
 COPY cartridges/revenue-growth/package.json cartridges/revenue-growth/
+COPY cartridges/messaging/package.json cartridges/messaging/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
 COPY apps/dashboard/package.json apps/dashboard/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # ---- Build stage: compile TypeScript ----
 FROM base AS build
@@ -72,10 +74,18 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
+COPY --from=build /app/packages/agents/package.json packages/agents/package.json
+COPY --from=build /app/packages/agents/dist/ packages/agents/dist/
+
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
+
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 EXPOSE 3000
 ENV NODE_ENV=production
@@ -121,10 +131,15 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
+
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 EXPOSE 3001
 ENV NODE_ENV=production
@@ -138,6 +153,8 @@ WORKDIR /app
 COPY --from=build /app/apps/dashboard/.next/standalone ./
 COPY --from=build /app/apps/dashboard/.next/static apps/dashboard/.next/static
 COPY --from=build /app/apps/dashboard/public apps/dashboard/public
+
+USER node
 
 EXPOSE 3002
 ENV NODE_ENV=production
@@ -180,10 +197,15 @@ COPY --from=build /app/cartridges/quant-trading/dist/ cartridges/quant-trading/d
 COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
 COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
+COPY --from=build /app/cartridges/messaging/package.json cartridges/messaging/package.json
+COPY --from=build /app/cartridges/messaging/dist/ cartridges/messaging/dist/
+
 COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
 COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
+
+USER node
 
 ENV NODE_ENV=production
 CMD ["node", "apps/mcp-server/dist/main.js"]

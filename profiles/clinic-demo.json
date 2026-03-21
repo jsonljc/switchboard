@@ -246,6 +246,53 @@
     "friday": { "open": "08:00", "close": "15:00" },
     "saturday": { "open": "09:00", "close": "13:00" }
   },
+  "faqs": [
+    {
+      "question": "Does teeth whitening hurt?",
+      "variants": ["Is whitening painful?", "Will teeth whitening cause pain?"],
+      "answer": "Most patients experience little to no discomfort during professional whitening. Some temporary sensitivity is normal and usually resolves within 24-48 hours.",
+      "topic": "procedure"
+    },
+    {
+      "question": "How much does a dental cleaning cost?",
+      "variants": [
+        "Cleaning price",
+        "What is the cost for a cleaning?",
+        "How much is a hygiene visit?"
+      ],
+      "answer": "A standard dental cleaning is $150. With most insurance plans, preventive cleanings are covered twice per year with little to no out-of-pocket cost.",
+      "topic": "pricing"
+    },
+    {
+      "question": "Do you accept my insurance?",
+      "variants": [
+        "What insurance do you take?",
+        "Is my insurance accepted?",
+        "Insurance plans accepted"
+      ],
+      "answer": "We accept most major dental insurance plans including Delta Dental, Cigna, Aetna, MetLife, and United Healthcare. Please contact us with your specific plan for verification.",
+      "topic": "billing"
+    },
+    {
+      "question": "How long does a dental implant procedure take?",
+      "variants": ["Implant timeline", "How long for implants?"],
+      "answer": "The implant process typically spans 3-6 months total. The surgical placement takes about 1-2 hours, followed by a healing period of 3-6 months before the final crown is placed.",
+      "topic": "procedure",
+      "sensitive": true
+    },
+    {
+      "question": "What should I do in a dental emergency?",
+      "variants": ["Emergency dental care", "I have a dental emergency", "Broken tooth what to do"],
+      "answer": "For dental emergencies during business hours, call us immediately at +15551234567. After hours, call our emergency line at +15559876543. For severe bleeding or facial trauma, go to your nearest emergency room.",
+      "topic": "emergency"
+    },
+    {
+      "question": "What payment options do you offer?",
+      "variants": ["Payment plans", "Financing options", "Can I pay in installments?"],
+      "answer": "We accept cash, all major credit cards, and offer CareCredit financing for treatments over $500. We also provide flexible payment plans for larger procedures.",
+      "topic": "billing"
+    }
+  ],
   "policies": [
     {
       "topic": "Cancellation",
@@ -269,5 +316,81 @@
     "persona": "friendly dental office coordinator",
     "tone": "warm and professional",
     "bannedTopics": ["competitor pricing", "medical diagnoses outside dentistry"]
+  },
+  "localisation": {
+    "market": "SG",
+    "languages": ["en", "zh"],
+    "naturalness": "semi_formal",
+    "tone": "warm and professional",
+    "emoji": {
+      "allowed": true,
+      "maxPerMessage": 1,
+      "preferredSet": ["😊", "👋", "✅"]
+    }
+  },
+  "booking": {
+    "bookingUrl": "https://brightsmile.example.com/book",
+    "bookingPhone": "+15551234567",
+    "requireDeposit": false,
+    "cancellationWindowHours": 24,
+    "maxAdvanceBookingDays": 60
+  },
+  "escalationConfig": {
+    "contacts": [
+      {
+        "id": "dr-chen",
+        "name": "Dr. Sarah Chen",
+        "channel": "whatsapp",
+        "channelId": "+15551234567",
+        "priority": 1
+      }
+    ],
+    "slaMinutes": 30,
+    "holdingMessage": "I'm connecting you with our team. They'll be with you shortly!",
+    "autoEscalateAfterTurns": 12
+  },
+  "learningPreferences": {
+    "enableAutoOptimisation": true,
+    "optimisationFrequency": "weekly",
+    "autoApplyTimingChanges": true,
+    "requireOwnerApprovalForContent": true,
+    "minSampleSize": 30
+  },
+  "conversationConfig": {
+    "flowMode": "hybrid",
+    "qualificationSignals": [
+      {
+        "id": "service_interest",
+        "name": "Service Interest",
+        "question": "What service are you interested in?",
+        "required": true,
+        "mappedField": "serviceInterest"
+      },
+      {
+        "id": "timeline",
+        "name": "Timeline",
+        "question": "When are you looking to come in?",
+        "options": ["As soon as possible", "Within a week", "Just exploring"],
+        "required": true,
+        "mappedField": "timeline"
+      },
+      {
+        "id": "insurance",
+        "name": "Insurance",
+        "question": "Do you have dental insurance?",
+        "options": ["Yes", "No", "Not sure"],
+        "required": false,
+        "mappedField": "hasInsurance"
+      }
+    ],
+    "maxTurnsBeforeEscalation": 12,
+    "silenceTimeoutMinutes": 30,
+    "reactivationWindowHours": 72
+  },
+  "persona": {
+    "name": "Sophia",
+    "role": "Patient Coordinator",
+    "personality": "Warm, patient, and knowledgeable about dental care",
+    "greetingTemplate": "Hi there! I'm {{name}}, your patient coordinator at {{businessName}}. How can I help you today?"
   }
 }

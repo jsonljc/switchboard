@@ -17,3 +17,4 @@ export { CartridgeTestHarness } from "./test-harness.js";
 export type { HarnessReport, HarnessStepResult, HarnessOptions } from "./test-harness.js";
 export { SERVICE_REGISTRY, getServiceById, getServiceByCartridge } from "./service-registry.js";
 export type { ServiceRegistryEntry } from "./service-registry.js";
+export { parseParams, ParamValidationError } from "./parse-params.js";

@@ -8,6 +8,8 @@ import type {
   FlowStep,
   BranchCondition,
 } from "./types.js";
+import type { LeadScoreInput } from "../core/types.js";
+import { computeLeadScore } from "../core/scoring/lead-score.js";
 
 /**
  * Create a new conversation state for a flow.
@@ -111,6 +113,13 @@ export function executeNextStep(
 
     case "score": {
       const output = interpolate(step.template ?? "Evaluating...", newState.variables);
+      const scoreInput = buildLeadScoreInput(newState.variables);
+      const scoreResult = computeLeadScore(scoreInput);
+      newState.variables = {
+        ...newState.variables,
+        leadScore: scoreResult.score,
+        leadScoreTier: scoreResult.tier,
+      };
       newState.history.push({ stepId: step.id, output, timestamp: new Date() });
       newState.currentStepIndex = resolveNextStep(flow, step, newState);
       return { output, state: newState };
@@ -210,4 +219,38 @@ function evaluateCondition(
     default:
       return false;
   }
+}
+
+/**
+ * Build a LeadScoreInput from accumulated conversation variables.
+ * Maps question answers (stored as selectedOption_<stepId>) to scoring dimensions.
+ */
+function buildLeadScoreInput(variables: Record<string, unknown>): LeadScoreInput {
+  const timelineOption = Number(variables["selectedOption_timeline_question"] ?? 0);
+  const budgetOption = Number(variables["selectedOption_budget_question"] ?? 0);
+  const insuranceOption = Number(variables["selectedOption_insurance_question"] ?? 0);
+
+  // Timeline → urgency: option 1 ("ASAP") = 9, option 2 ("within a month") = 6, option 3 ("exploring") = 2
+  const urgencyMap: Record<number, number> = { 1: 9, 2: 6, 3: 2 };
+  const urgencyLevel = urgencyMap[timelineOption] ?? 3;
+
+  // Budget → budgetIndicator: option 1 ("has budget") = 8, option 2 ("pricing first") = 4, option 3 ("flexible") = 6
+  const budgetMap: Record<number, number> = { 1: 8, 2: 4, 3: 6 };
+  const budgetIndicator = budgetMap[budgetOption] ?? 3;
+
+  // Insurance → hasInsurance: option 1 = yes
+  const hasInsurance = insuranceOption === 1;
+
+  return {
+    serviceValue: 300, // default mid-range estimate
+    urgencyLevel,
+    hasInsurance,
+    isReturning: false,
+    source: "organic",
+    engagementScore: 7, // responded to all questions
+    responseSpeedMs: null,
+    hasMedicalHistory: false,
+    budgetIndicator,
+    eventDriven: false,
+  };
 }
