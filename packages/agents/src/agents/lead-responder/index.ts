@@ -8,5 +8,9 @@ export type {
   FAQMatch,
 } from "./types.js";
 export { getTonePreset, TONE_PRESETS, type TonePreset } from "./tone-presets.js";
-export { getLanguageDirective, LANGUAGE_DIRECTIVES, type SupportedLanguage } from "./language-directives.js";
+export {
+  getLanguageDirective,
+  LANGUAGE_DIRECTIVES,
+  type SupportedLanguage,
+} from "./language-directives.js";
 export { buildConversationPrompt, type PromptBuildInput } from "./prompt-builder.js";

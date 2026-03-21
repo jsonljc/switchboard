@@ -66,9 +66,7 @@ describe("LeadResponderHandler — LLM conversation flow", () => {
     const event = makeMessageReceivedEvent();
     const result = await handler.handle(event, {}, { organizationId: "org-1" });
 
-    const sendAction = result.actions.find(
-      (a) => a.actionType === "messaging.whatsapp.send",
-    );
+    const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeDefined();
     expect(sendAction!.parameters.content).toContain("Thanks for your interest");
 
@@ -158,14 +156,14 @@ describe("LeadResponderHandler — LLM conversation flow", () => {
   it("escalates when confidence below threshold", async () => {
     const convDeps = makeConversationDeps({
       llm: {
-        generateReply: vi
-          .fn()
-          .mockResolvedValue({ reply: "I'm not sure...", confidence: 0.3 }),
+        generateReply: vi.fn().mockResolvedValue({ reply: "I'm not sure...", confidence: 0.3 }),
       },
       retriever: {
-        retrieve: vi.fn().mockResolvedValue([
-          { content: "Some info", sourceType: "document" as const, similarity: 0.5 },
-        ]),
+        retrieve: vi
+          .fn()
+          .mockResolvedValue([
+            { content: "Some info", sourceType: "document" as const, similarity: 0.5 },
+          ]),
       } as unknown as KnowledgeRetriever,
     });
 
@@ -183,13 +181,9 @@ describe("LeadResponderHandler — LLM conversation flow", () => {
 
     const escalation = result.events.find((e) => e.eventType === "conversation.escalated");
     expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(
-      expect.objectContaining({ reason: "low_confidence" }),
-    );
+    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "low_confidence" }));
 
-    const sendAction = result.actions.find(
-      (a) => a.actionType === "messaging.whatsapp.send",
-    );
+    const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
   });
 
@@ -299,9 +293,7 @@ describe("LeadResponderHandler — LLM conversation flow", () => {
 
     const escalation = result.events.find((e) => e.eventType === "conversation.escalated");
     expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(
-      expect.objectContaining({ reason: "max_turns_exceeded" }),
-    );
+    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "max_turns_exceeded" }));
   });
 
   it("falls back to scoring-only for message.received when no conversation deps", async () => {
@@ -313,9 +305,7 @@ describe("LeadResponderHandler — LLM conversation flow", () => {
     const result = await handler.handle(event, {}, { organizationId: "org-1" });
 
     expect(result.events[0]!.eventType).toBe("lead.qualified");
-    const sendAction = result.actions.find(
-      (a) => a.actionType === "messaging.whatsapp.send",
-    );
+    const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
   });
 });
@@ -329,11 +319,7 @@ describe("LeadResponderHandler — test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "test" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "test" }, { organizationId: "org-1" });
 
     const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
@@ -347,11 +333,7 @@ describe("LeadResponderHandler — test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "draft" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "draft" }, { organizationId: "org-1" });
 
     const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
@@ -381,11 +363,7 @@ describe("LeadResponderHandler — test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "test" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "test" }, { organizationId: "org-1" });
 
     expect(result.state?.reply).toBeDefined();
     expect(result.state?.reply).toContain("Thanks for your interest");
