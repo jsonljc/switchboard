@@ -18,7 +18,6 @@
     "@switchboard/core": "workspace:*",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
-    "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/digital-ads": "workspace:*",
     "@switchboard/payments": "workspace:*",
     "@switchboard/crm": "workspace:*",
