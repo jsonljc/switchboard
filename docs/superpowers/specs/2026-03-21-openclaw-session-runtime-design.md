@@ -42,6 +42,77 @@
 
 ---
 
+## Shared Type Definitions
+
+Types referenced across multiple sections. Defined here once to avoid ambiguity.
+
+```typescript
+// Session status enum
+type SessionStatus = "running" | "paused" | "completed" | "failed" | "cancelled";
+
+// Pause reason enum (matches AgentPause.pauseReason)
+type PauseReason = "pending_approval" | "waiting_human" | "rate_limited" | "error_backoff";
+
+// Approval posture enum
+type ApprovalPosture = "conservative" | "balanced" | "autonomous";
+
+// A single tool call recorded during a run
+interface ToolEvent {
+  stepIndex: number;
+  toolName: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  timestamp: string;
+  outcome: "executed" | "denied" | "pending_approval";
+  envelopeId?: string;
+  approvalId?: string;
+}
+
+// Approval outcome passed to SessionManager.markResumable
+interface ApprovalOutcome {
+  approvalId: string;
+  action: "approve" | "reject" | "patch";
+  patchValue?: Record<string, unknown>;
+  respondedBy: string;
+  resolvedAt: string;
+}
+
+// Merged manifest + org overrides, computed at session creation
+interface ResolvedRoleConfig {
+  roleId: string;
+  version: string;
+
+  // Tool surface (preserves read/write distinction)
+  toolPack: {
+    reads: string[];
+    writes: string[];
+  };
+
+  // Governance
+  governanceProfile: string;
+  guardrailSet: string;
+  approvalPosture: ApprovalPosture;
+  allowedActionTypes: string[];
+  thresholds: Record<string, number>;
+
+  // Runtime
+  runtimeInstructionTemplate: string; // resolved content, not a path
+  checkpointSchema: Record<string, unknown>; // resolved schema, not a path
+
+  // Permissions
+  allowedChannels: string[];
+
+  // Safety envelope
+  safetyEnvelope: {
+    maxRunsPerSession: number;
+    maxToolCallsPerRun: number;
+    sessionTimeoutMs: number;
+  };
+}
+```
+
+---
+
 ## 2. Session State Machine
 
 ### Three Models
@@ -72,7 +143,7 @@ AgentSession (the durable container)
 | createdAt        | datetime |                                                                                                       |
 | updatedAt        | datetime |                                                                                                       |
 
-`toolHistory` is append-only and may be materialized from normalized tool-event records. The normalized `ToolEvent` store is the authoritative factual record; the session-level JSON is a denormalized snapshot for fast resume payload building.
+`toolHistory` is append-only and may be materialized from normalized tool-event records. The normalized `ToolEvent` store is the authoritative factual record; the session-level JSON is a denormalized snapshot for fast resume payload building. `toolHistory` size is bounded indirectly by `safetyEnvelope.maxToolCallsPerRun` (per run) and `safetyEnvelope.maxRunsPerSession` (per session). For long sessions approaching practical limits, the resume payload may truncate older entries and rely on the checkpoint's `completedSteps` summaries for continuity. The normalized `ToolEvent` store retains the full untruncated history for audit.
 
 ### AgentRun
 
@@ -93,19 +164,19 @@ AgentSession (the durable container)
 
 ### AgentPause
 
-| Field             | Type     | Notes                                                                |
-| ----------------- | -------- | -------------------------------------------------------------------- |
-| id                | uuid     |                                                                      |
-| sessionId         | fk       |                                                                      |
-| runId             | fk       | The run that paused                                                  |
-| pauseReason       | enum     | `pending_approval`, `waiting_human`, `rate_limited`, `error_backoff` |
-| approvalId        | string   | nullable — links to Switchboard approval                             |
-| checkpoint        | json     | Checkpoint snapshot at pause time                                    |
-| checkpointVersion | int      | Distinguishes checkpoints across multiple pauses                     |
-| resumeToken       | string   | Idempotency token for safe re-invocation                             |
-| resumeStatus      | enum     | `pending`, `consumed`, `expired`, `cancelled`                        |
-| createdAt         | datetime |                                                                      |
-| resolvedAt        | datetime | nullable                                                             |
+| Field         | Type     | Notes                                                                |
+| ------------- | -------- | -------------------------------------------------------------------- |
+| id            | uuid     |                                                                      |
+| sessionId     | fk       |                                                                      |
+| runId         | fk       | The run that paused                                                  |
+| pauseReason   | enum     | `pending_approval`, `waiting_human`, `rate_limited`, `error_backoff` |
+| approvalId    | string   | nullable — links to Switchboard approval                             |
+| checkpoint    | json     | Checkpoint snapshot at pause time                                    |
+| pauseSequence | int      | Monotonic counter distinguishing pauses within a session             |
+| resumeToken   | string   | Idempotency token for safe re-invocation                             |
+| resumeStatus  | enum     | `pending`, `consumed`, `expired`, `cancelled`                        |
+| createdAt     | datetime |                                                                      |
+| resolvedAt    | datetime | nullable                                                             |
 
 ### State Transitions
 
@@ -139,12 +210,34 @@ AgentSession (the durable container)
 
 **Terminal states:** `completed`, `failed`, and `cancelled` are terminal. No transitions out.
 
+**Cancellation from non-terminal states:**
+
+- `running → cancelled` — Active `AgentRun` is marked `cancelled`. If OpenClaw is mid-run, the session-scoped token is invalidated so further tool calls are rejected.
+- `paused → cancelled` — Associated `AgentPause.resumeStatus` transitions to `cancelled`. Any pending approval linked to the pause is not automatically resolved (the approval may have independent significance).
+
+**Checkpoint duplication clarification:**
+
+- `AgentSession.checkpoint` is the "current working checkpoint" — used by `buildResumePayload` to construct the resume context.
+- `AgentPause.checkpoint` is the historical snapshot for audit and debugging — it records what the checkpoint looked like at the specific moment of that pause.
+- On pause, both are written. On resume, `buildResumePayload` reads from `AgentSession.checkpoint`.
+
 **Invariants:**
 
 - Every transition is recorded as an audit entry with the session's `traceId`.
 - `running` sessions have exactly one active `AgentRun`; `paused` sessions have zero active runs.
 - `checkpoint` on the session is updated every time a run pauses (latest wins).
 - Pause/failure reasons live on `AgentPause` or `AgentRun`, not on `AgentSession.status`.
+
+**Resume token expiration:**
+
+- Resume tokens expire after `safetyEnvelope.sessionTimeoutMs` from the pause creation time.
+- Expiration is checked at both enqueue time (in the approval handler) and dequeue time (in the worker). If expired at dequeue, the worker transitions `resumeStatus` to `expired` and does not invoke OpenClaw.
+- Stale pauses (token expired, approval never resolved) are cleaned up by a periodic sweep that transitions them to `expired` and optionally fails the parent session per policy.
+
+**Concurrent resume handling:**
+
+- If two approval responses arrive for the same pause simultaneously, the atomic `resumeStatus: pending → consumed` transition ensures exactly one succeeds.
+- The second caller finds `resumeStatus !== "pending"` and receives: an idempotent success if the approval outcome matches what was already recorded, or a 409 Conflict if a different outcome was recorded.
 
 ---
 
@@ -223,14 +316,8 @@ interface SessionResumePayload {
   // The original goal
   goal: string;
 
-  // Factual record
-  toolHistory: Array<{
-    stepIndex: number;
-    toolName: string;
-    input: Record<string, unknown>;
-    output: Record<string, unknown>;
-    timestamp: string;
-  }>;
+  // Factual record (uses shared ToolEvent type)
+  toolHistory: ToolEvent[];
 
   // Working memory from last pause
   checkpoint: AgentCheckpoint;
@@ -238,22 +325,11 @@ interface SessionResumePayload {
   // What resolved
   resumeTrigger: {
     type: "approval_resolved" | "manual_resume" | "retry";
-    approvalOutcome?: {
-      approvalId: string;
-      action: "approve" | "reject" | "patch";
-      patchValue?: Record<string, unknown>;
-      respondedBy: string;
-      resolvedAt: string;
-    };
+    approvalOutcome?: ApprovalOutcome;
   };
 
-  // Role config (merged manifest + org overrides)
-  roleConfig: {
-    toolPack: string[];
-    policyProfile: string;
-    approvalPosture: string;
-    runtimeInstructionTemplate: string;
-  };
+  // Role config (merged manifest + org overrides, see Shared Type Definitions)
+  roleConfig: ResolvedRoleConfig;
 }
 ```
 
@@ -294,6 +370,8 @@ agent-roles/
 ```
 
 Mirrors the pattern in `cartridges/*/manifest.ts` and `cartridges/*/defaults/guardrails.ts`.
+
+**Layer placement:** `agent-roles/` is a top-level directory consumed by `apps/api` at startup (not a separate pnpm workspace package). Manifests are static TypeScript files that export typed objects conforming to `AgentRoleManifest`. They may import types from `@switchboard/schemas` but must not import runtime code from `core`, `db`, or cartridges. The manifest loader in `apps/api` reads these at startup, resolves `instructionTemplatePath` and `checkpointSchemaPath` to content, and produces normalized `AgentRoleManifest` objects. This follows the same pattern as `skins/` and `profiles/`, which are also top-level directories loaded by apps at startup.
 
 ### Manifest Shape
 
@@ -414,7 +492,7 @@ OpenClaw interacts with Switchboard exclusively through tools. Tools are either 
 
 ### Design Rules
 
-1. **`switchboard_execute` is the canonical write primitive.** `send_customer_message` and `create_followup_task` are convenience wrappers — they resolve to `switchboard_execute` calls with the appropriate `actionType` and `cartridgeId`. Governance is identical.
+1. **`switchboard_execute` is the canonical write primitive.** `send_customer_message` and `create_followup_task` are registered as distinct MCP tools with their own schemas (so OpenClaw sees them as named, typed tools). Internally, they resolve to `switchboard_execute` calls with the appropriate `actionType` and `cartridgeId`. Governance is identical — they are ergonomic aliases, not separate execution paths. They appear in tool pack definitions by their own names (e.g., a role's `toolPack.writes` lists `"send_customer_message"`, not `"switchboard_execute:customer-engagement:send_message"`).
 
 2. **Role manifests control the tool surface.** An `ad-operator` never sees `send_customer_message`. A `support-agent` never sees `get_campaign_metrics`. The merged role config determines which tools are registered for a given session.
 
@@ -592,6 +670,8 @@ interface SessionWorker {
 - Run failed: `{ outcome: "failed", error, failureMetadata }`
 
 The authoritative tool execution record lives in Switchboard (recorded via tool calls during the run). The callback carries the terminal outcome, checkpoint, and optional run-level metadata — not the authoritative tool record.
+
+**Callback authentication:** The callback endpoint validates the session-scoped auth token (the same token issued to OpenClaw for tool calls). The token is included in a `Authorization: Bearer <token>` header. Additionally, the endpoint verifies the `runId` matches the currently active run for the session. Requests with expired, invalid, or mismatched tokens are rejected with 401.
 
 ### Worker
 
