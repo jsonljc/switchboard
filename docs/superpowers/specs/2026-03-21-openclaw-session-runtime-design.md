@@ -74,6 +74,17 @@ interface ToolEvent {
   output: Record<string, unknown>;
   timestamp: string;
   outcome: "executed" | "denied" | "pending_approval";
+  // Set when a pending_approval outcome later resolves. The original `outcome`
+  // stays "pending_approval" for audit fidelity; `resolvedOutcome` records what
+  // actually happened after approval.
+  resolvedOutcome?: "executed" | "denied" | "failed";
+  resolvedAt?: string;
+  executionResult?: {
+    success: boolean;
+    summary: string;
+    externalRefs?: Record<string, string>;
+    rollbackAvailable?: boolean;
+  };
   envelopeId?: string;
   approvalId?: string;
 }
@@ -85,6 +96,15 @@ interface ApprovalOutcome {
   patchValue?: Record<string, unknown>;
   respondedBy: string;
   resolvedAt: string;
+  // The result of executing the approved action. Null on rejection or if
+  // execution failed. This ensures OpenClaw knows *what happened* after
+  // approval, not just *that approval happened*.
+  executionResult: {
+    success: boolean;
+    summary: string;
+    externalRefs?: Record<string, string>;
+    rollbackAvailable?: boolean;
+  } | null;
 }
 
 // Merged manifest + org overrides, computed at session creation
@@ -177,19 +197,29 @@ AgentSession (the durable container)
 
 ### AgentPause
 
-| Field         | Type     | Notes                                                                |
-| ------------- | -------- | -------------------------------------------------------------------- |
-| id            | uuid     |                                                                      |
-| sessionId     | fk       |                                                                      |
-| runId         | fk       | The run that paused                                                  |
-| pauseReason   | enum     | `pending_approval`, `waiting_human`, `rate_limited`, `error_backoff` |
-| approvalId    | string   | nullable — links to Switchboard approval                             |
-| checkpoint    | json     | Checkpoint snapshot at pause time                                    |
-| pauseSequence | int      | Monotonic counter distinguishing pauses within a session             |
-| resumeToken   | string   | Idempotency token for safe re-invocation                             |
-| resumeStatus  | enum     | `pending`, `consumed`, `expired`, `cancelled`                        |
-| createdAt     | datetime |                                                                      |
-| resolvedAt    | datetime | nullable                                                             |
+| Field         | Type     | Notes                                                                                      |
+| ------------- | -------- | ------------------------------------------------------------------------------------------ |
+| id            | uuid     |                                                                                            |
+| sessionId     | fk       |                                                                                            |
+| runId         | fk       | The run that paused                                                                        |
+| pausePhase    | enum     | `provisional`, `checkpointed` — see two-phase pause below                                  |
+| pauseReason   | enum     | `pending_approval`, `waiting_human`, `rate_limited`, `error_backoff`                       |
+| approvalId    | string   | nullable — links to Switchboard approval                                                   |
+| checkpoint    | json     | **Nullable.** Null during `provisional` phase; backfilled when OpenClaw returns checkpoint |
+| pauseSequence | int      | Monotonic counter distinguishing pauses within a session                                   |
+| resumeToken   | string   | Idempotency token for safe re-invocation                                                   |
+| resumeStatus  | enum     | `pending`, `consumed`, `expired`, `cancelled`                                              |
+| createdAt     | datetime |                                                                                            |
+| resolvedAt    | datetime | nullable                                                                                   |
+
+**Two-phase pause (approval-before-checkpoint race):**
+
+A `PENDING_APPROVAL` outcome can be approved by a human before OpenClaw returns its checkpoint. To handle this race:
+
+1. **Provisional phase:** When `switchboard_execute` returns `PENDING_APPROVAL`, `SessionManager` immediately creates an `AgentPause` row with `pausePhase: "provisional"`, `checkpoint: null`, and `resumeStatus: "pending"`. The session remains `running` (OpenClaw is still active, building its checkpoint).
+2. **Checkpoint arrival:** When OpenClaw returns its terminal outcome with checkpoint data, `SessionManager` backfills `AgentPause.checkpoint`, transitions `pausePhase` to `"checkpointed"`, copies the checkpoint to `AgentSession.checkpoint`, and transitions the session to `paused`.
+3. **Early approval resolution:** If the approval resolves while `pausePhase` is still `"provisional"`, the approval handler stores the `ApprovalOutcome` (including `executionResult`) on the pause row and transitions `resumeStatus: pending → consumed`. The resume job is enqueued but **gated on checkpoint arrival** — the worker checks `pausePhase === "checkpointed"` before invoking OpenClaw. If still provisional, the worker re-enqueues with backoff.
+4. **Normal case:** If the checkpoint arrives before approval resolution, the flow is unchanged — the pause row is already `"checkpointed"` when the approval handler runs.
 
 ### State Transitions
 
@@ -215,7 +245,7 @@ AgentSession (the durable container)
 
 **Valid transitions:**
 
-- `running → paused` — OpenClaw returns checkpoint after `PENDING_APPROVAL` or handoff.
+- `running → paused` — OpenClaw returns checkpoint after `PENDING_APPROVAL` or handoff. Note: an `AgentPause` row may already exist in `provisional` phase (created at `PENDING_APPROVAL` time); the session transitions to `paused` only when the checkpoint arrives and `pausePhase` becomes `checkpointed`.
 - `paused → running` — Approval resolves, SessionManager triggers resume. Requires an unresolved pause record, a valid unconsumed `resumeToken`, and any required approval outcome persisted in session state. Must atomically consume the pause's `resumeToken`.
 - `running → completed` — OpenClaw signals goal achieved or no further actions.
 - `running → failed` — Unrecoverable error or max retries exceeded.
@@ -522,10 +552,10 @@ OpenClaw interacts with Switchboard exclusively through tools. Tools are either 
 ### Reuse of Existing Infrastructure
 
 - Switchboard tools are exposed as stable OpenClaw Gateway plugins. The existing MCP server tool definitions provide the schema source for these plugins.
-- Read tools reuse the existing `CartridgeReadAdapter` path.
+- Read tools reuse the existing `CartridgeReadAdapter` path — **with one required fix:** the read adapter must call `buildCartridgeContext()` (via `credentialResolver`) to resolve org-scoped connection credentials per call, instead of passing `connectionCredentials: {}`. Without this, read operations that require provider connections (e.g., Meta campaign metrics in the digital-ads cartridge) will fail after pause/resume or in any session without pre-established ephemeral cartridge state.
 - Write tools reuse the existing `ExecutionService.execute()` path.
 - Session/role scoping is enforced at the Switchboard API layer (token validation), not at the OpenClaw tool registration layer.
-- No new tool dispatch infrastructure needed — existing MCP/HTTP adapter paths handle all tool calls.
+- **Dispatch infrastructure is reusable; tool definitions are not.** The routing, auth, and governance mechanisms (orchestrator, policy engine, `CartridgeReadAdapter`, `ExecutionService`) carry over. However, the _tool schemas and handlers_ for the session-runtime surface (`get_campaign_metrics`, `get_operator_config`, `get_audit_context`, `get_session_state`, etc.) are new and distinct from the current MCP tool surface (`get_campaign`, `search_campaigns`, `pause_campaign`, etc.). Phase 1 requires implementing these new tool definitions and their dispatch handlers.
 
 ---
 
@@ -550,7 +580,9 @@ ExecutionService.execute()
 
 - `EXECUTED` → append to session's tool history, increment `currentStep`, continue.
 - `DENIED` → append to tool history with denial reason, OpenClaw receives denial and may re-plan or end.
-- `PENDING_APPROVAL` → create `AgentPause` with `approvalId` at pause time (not inferred later), store checkpoint from OpenClaw, persist tool event, then transition session to `paused`.
+- `PENDING_APPROVAL` → two-phase pause:
+  1.  **Immediately** (before returning to OpenClaw): create provisional `AgentPause` with `approvalId`, `pausePhase: "provisional"`, `checkpoint: null`. Persist `ToolEvent` with `outcome: "pending_approval"`. Session stays `running`.
+  2.  **When OpenClaw returns checkpoint**: backfill `AgentPause.checkpoint`, transition `pausePhase → "checkpointed"`, copy checkpoint to `AgentSession.checkpoint`, transition session to `paused`. If the approval already resolved (early approval race), the resume job — already enqueued and waiting on `pausePhase` — can now proceed.
 
 `SessionManager` does not replace or wrap `ExecutionService`. It observes outcomes and manages session state transitions.
 
@@ -558,24 +590,26 @@ ExecutionService.execute()
 
 After `respondToApproval` succeeds, the API layer checks whether the approval is linked to an `AgentPause`:
 
-1. `ApprovalResponse` returned (existing behavior).
+1. `ApprovalResponse` returned (existing behavior — includes `executionResult`).
 2. Look up `AgentPause` by `approvalId`.
 3. If found and `resumeStatus === "pending"`:
-   a. Store approval outcome in session state.
-   b. Transition `resumeStatus`: `pending → consumed` (atomic, with pause row locked by `approvalId`).
-   c. Transition `session.status` to `running`.
-   d. Create new `AgentRun` (`triggerType: resume_approval`).
-   e. Enqueue resume job (once only, via outbox/job record pattern).
+   a. Build `ApprovalOutcome` including `executionResult` from the `ApprovalResponse` (captures whether the approved action succeeded, failed, or produced outputs).
+   b. Store approval outcome on the pause row and in session state.
+   c. Update the corresponding `ToolEvent`: set `resolvedOutcome` to `"executed"` or `"failed"` based on `executionResult.success`, copy `executionResult` onto the event.
+   d. Transition `resumeStatus`: `pending → consumed` (atomic, with pause row locked by `approvalId`).
+   e. **If `pausePhase === "checkpointed"`:** transition `session.status` to `running`, create new `AgentRun` (`triggerType: resume_approval`), enqueue resume job.
+   f. **If `pausePhase === "provisional"` (early approval race):** enqueue resume job gated on checkpoint arrival. The worker will poll/wait for `pausePhase → "checkpointed"` before invoking OpenClaw.
 4. Return normal approval response (existing behavior unchanged).
 
 ### Changes to Existing Code
 
-| File                                          | Change                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `packages/core/src/orchestrator/lifecycle.ts` | No semantic changes; at most small additive hooks for session correlation and resume-safe coordination |
-| `packages/core/src/execution-service.ts`      | No semantic changes; SessionManager wraps at a higher level                                            |
-| `apps/api/src/routes/approvals.ts`            | After `respondToApproval`, check for linked pause and enqueue resume (~20 lines)                       |
-| `apps/api/src/routes/execute.ts`              | No changes; session-scoped execution goes through new session routes                                   |
+| File                                          | Change                                                                                                                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/orchestrator/lifecycle.ts` | No semantic changes; at most small additive hooks for session correlation and resume-safe coordination                                                                                   |
+| `packages/core/src/execution-service.ts`      | No semantic changes; SessionManager wraps at a higher level                                                                                                                              |
+| `packages/core/src/cartridge-read-adapter.ts` | Accept `credentialResolver` + `organizationId`; call `buildCartridgeContext()` to resolve org-scoped connection credentials per read call instead of passing `connectionCredentials: {}` |
+| `apps/api/src/routes/approvals.ts`            | After `respondToApproval`, check for linked pause, capture `executionResult`, build `ApprovalOutcome`, update `ToolEvent`, enqueue resume (~40 lines)                                    |
+| `apps/api/src/routes/execute.ts`              | No changes; session-scoped execution goes through new session routes                                                                                                                     |
 
 ### New Code in `packages/core/src/sessions/`
 
@@ -670,12 +704,13 @@ interface SessionWorker {
 
 ### Resume Flow (triggered by approval resolution)
 
-1. `POST /api/approvals/:id/respond` → `orchestrator.respondToApproval()`.
+1. `POST /api/approvals/:id/respond` → `orchestrator.respondToApproval()` → returns `ApprovalResponse` including `executionResult`.
 2. Look up `AgentPause` by `approvalId`.
 3. If found and `resumeStatus === "pending"`:
-   a. Extract `pauseId` from the looked-up `AgentPause`, then call `SessionManager.markResumable(pauseId, approvalOutcome)` — stores approval outcome, transitions `resumeStatus: pending → consumed` (atomic).
-   b. Create `AgentRun` (`triggerType: resume_approval`).
-   c. Enqueue resume job with `resumeToken` as idempotency key (once only, via outbox pattern).
+   a. Build `ApprovalOutcome` with `executionResult` from `ApprovalResponse`.
+   b. Call `SessionManager.markResumable(pauseId, approvalOutcome)` — stores approval outcome (including execution result), updates corresponding `ToolEvent` with `resolvedOutcome` and `executionResult`, transitions `resumeStatus: pending → consumed` (atomic).
+   c. **If `pausePhase === "checkpointed"` (normal case):** create `AgentRun` (`triggerType: resume_approval`), enqueue resume job with `resumeToken` as idempotency key.
+   d. **If `pausePhase === "provisional"` (early approval race):** enqueue resume job gated on checkpoint arrival. Worker re-enqueues with backoff until `pausePhase === "checkpointed"`.
 4. Return normal approval response (existing behavior unchanged).
 
 ### Run Completion Detection
@@ -730,23 +765,29 @@ Distinguish transport failure from reasoning failure:
 
 **Deliverables:**
 
-1. `packages/core/src/sessions/` — SessionManager, state machine, store interfaces, checkpoint schema validation.
-2. `packages/db` — Prisma models: `AgentSession`, `AgentRun`, `AgentPause`, `AgentRoleOverride`. Store implementations.
+1. `packages/core/src/sessions/` — SessionManager, state machine (including two-phase pause), store interfaces, checkpoint schema validation.
+2. `packages/db` — Prisma models: `AgentSession`, `AgentRun`, `AgentPause` (with `pausePhase`), `AgentRoleOverride`. Store implementations.
 3. `agent-roles/ad-operator/` — Manifest, guardrails, instruction template, checkpoint schema extension.
-4. `apps/api` — Session endpoints. Callback/event ingestion path for OpenClaw terminal outcomes. Resume logic in approval route. Worker for invocation/retry.
-5. Tool surface for ad-operator: `get_campaign_metrics`, `get_operator_config`, `get_audit_context`, `get_session_state` (reads). `switchboard_execute` with `allowedActionTypes` scoped to digital-ads actions (writes).
-6. Session-scoped tool auth: short-lived token issued at invocation, scoped to org + role tool pack.
-7. Operator-facing summary: after each run completes or pauses, write operator-readable summary to audit.
+4. `apps/api` — Session endpoints. Callback/event ingestion path for OpenClaw terminal outcomes. Resume logic in approval route (with `executionResult` capture and early-approval race handling). Worker for invocation/retry (with `pausePhase` gate).
+5. **New tool definitions and handlers** for ad-operator: `get_campaign_metrics`, `get_operator_config`, `get_audit_context`, `get_session_state` (reads). `switchboard_execute` with `allowedActionTypes` scoped to digital-ads actions (writes). These are new tool schemas and dispatch handlers — distinct from the existing MCP tool surface.
+6. **Session-scoped tool auth:** Token issuer (JWT or opaque, encoding sessionId + organizationId + roleId + tool scope), token validator middleware, token invalidation on session cancel/complete. This is new infrastructure — the current MCP auth resolves only `actorId`/`organizationId` from a static API key with no session awareness.
+7. **`CartridgeReadAdapter` credential rehydration:** Extend the read adapter to resolve org-scoped connection credentials via `credentialResolver` per call, replacing the current `connectionCredentials: {}` pass-through. Required for Meta-dependent read operations in the digital-ads cartridge.
+8. **Legacy AgentRunner coexistence gate:** Add `runtimeMode: "legacy" | "openclaw"` to `AdsOperatorConfig`. The existing `AgentRunner` skips configs with `runtimeMode: "openclaw"`. Pilot orgs are switched to `"openclaw"`, preventing conflicting autonomous actions from two systems targeting the same ad accounts.
+9. Operator-facing summary: after each run completes or pauses, write operator-readable summary to audit.
 
 **Go/no-go for Phase 2:**
 
 - Session create → invoke → tool calls → execute → audit works end-to-end.
 - `PENDING_APPROVAL` → pause → approval resolves → resume works reliably.
+- **Early approval race**: approval resolving before checkpoint arrival is handled correctly (provisional pause → checkpoint backfill → gated resume).
+- **Execution result continuity**: approved actions' `executionResult` is captured in `ApprovalOutcome`, reflected in `ToolEvent.resolvedOutcome`, and included in the resume payload so OpenClaw knows what happened.
+- **Per-session token scope**: session-scoped tokens enforce org/role/session boundaries. Token invalidation on cancel prevents stale tool calls. Tokens cannot be reused across sessions.
+- **Read-path credential rehydration**: `get_campaign_metrics` and other provider-dependent reads work after pause/resume without relying on ephemeral cartridge session state.
+- **Legacy runner isolation**: pilot orgs with `runtimeMode: "openclaw"` are skipped by the existing `AgentRunner`. No conflicting autonomous actions.
 - OpenClaw invocation contract is stable for `initial`, `paused`, `completed`, and `failed` outcomes.
 - Retry/backoff handles OpenClaw transport failures.
 - API inspection plus audit summaries provide sufficient operator visibility. Full dashboard session UI is optional for pilot.
 - No credential leakage to OpenClaw.
-- Session-scoped tokens expire correctly and cannot be reused outside the session/run boundary.
 
 ### Phase 2: Customer Conversations
 
@@ -795,7 +836,7 @@ Distinguish transport failure from reasoning failure:
 
 - **Multi-agent coordination** — each role operates independently against Switchboard.
 - **OpenClaw-side implementation details** — Switchboard defines the contract; OpenClaw's internals are out of scope.
-- **Migration of `packages/agents` event mesh** — it continues to exist; this design runs on the orchestrator path.
+- **Full migration of `packages/agents` event mesh** — it continues to exist for non-pilot orgs; this design runs on the orchestrator path. Pilot orgs are gated via `runtimeMode: "openclaw"` on `AdsOperatorConfig`, which disables the legacy `AgentRunner` for those orgs. Full migration is a later decision once the session runtime is proven.
 - **Dashboard UI for session management** — separate design once the API surface is stable.
 
 ---
