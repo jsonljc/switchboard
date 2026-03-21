@@ -102,6 +102,9 @@ interface ResolvedRoleConfig {
   // Permissions
   allowedChannels: string[];
 
+  // Limits (enforced at session creation, not passed to OpenClaw)
+  maxConcurrentSessions: number;
+
   // Safety envelope
   safetyEnvelope: {
     maxRunsPerSession: number;
@@ -138,7 +141,7 @@ AgentSession (the durable container)
 | checkpoint       | json     | Structured checkpoint from OpenClaw (nullable until first pause)                                      |
 | checkpointAt     | datetime | When the latest checkpoint was recorded                                                               |
 | toolHistory      | json     | Denormalized cache for fast resume payload building (materialized from normalized tool-event records) |
-| approvalOutcomes | json     | Array of `{ approvalId, result, resolvedAt }` accumulated across pauses                               |
+| approvalOutcomes | json     | Array of `ApprovalOutcome` accumulated across pauses (see Shared Type Definitions)                    |
 | traceId          | string   | Correlation across runs                                                                               |
 | createdAt        | datetime |                                                                                                       |
 | updatedAt        | datetime |                                                                                                       |
@@ -451,7 +454,7 @@ model AgentRoleOverride {
    - `autonomyLevel` can only move toward more conservative unless an explicit admin policy permits escalation.
    - `channelOverrides` must be a **subset** of `manifest.allowedChannels`.
    - Overrides cannot widen `allowedActionTypes`.
-3. `thresholds`, `escalationContacts`, and `schedule` layer org-specific values onto manifest `defaultThresholds`.
+3. `thresholds`, `escalationContacts`, and `schedule` layer org-specific values onto manifest `defaultThresholds`. The manifest's `defaultThresholds` becomes `thresholds` in the resolved config after org overrides are applied.
 4. Merge is computed at session creation time and included in the resume payload as `roleConfig`.
 
 ### Validation
@@ -655,8 +658,8 @@ interface SessionWorker {
 
 1. `POST /api/approvals/:id/respond` → `orchestrator.respondToApproval()`.
 2. Look up `AgentPause` by `approvalId`.
-3. If found, `resumeStatus === "pending"`:
-   a. `SessionManager.markResumable(pauseId, approvalOutcome)` — stores approval outcome, transitions `resumeStatus: pending → consumed` (atomic).
+3. If found and `resumeStatus === "pending"`:
+   a. Extract `pauseId` from the looked-up `AgentPause`, then call `SessionManager.markResumable(pauseId, approvalOutcome)` — stores approval outcome, transitions `resumeStatus: pending → consumed` (atomic).
    b. Create `AgentRun` (`triggerType: resume_approval`).
    c. Enqueue resume job with `resumeToken` as idempotency key (once only, via outbox pattern).
 4. Return normal approval response (existing behavior unchanged).
@@ -666,7 +669,7 @@ interface SessionWorker {
 `POST /api/sessions/:id/runs/:runId/callback` — transport-dependent ingestion path for OpenClaw terminal outcomes. May be delivered via webhook or event. Accepts:
 
 - Run completed: `{ outcome: "completed", summary, runMetadata }`
-- Run paused: `{ outcome: "paused", checkpoint: AgentCheckpoint }`
+- Run paused: `{ outcome: "paused", checkpoint: AgentCheckpoint, pauseReason: PauseReason, approvalId?: string }`
 - Run failed: `{ outcome: "failed", error, failureMetadata }`
 
 The authoritative tool execution record lives in Switchboard (recorded via tool calls during the run). The callback carries the terminal outcome, checkpoint, and optional run-level metadata — not the authoritative tool record.
