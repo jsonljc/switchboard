@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Message } from "./conversation-store.js";
+import type { ModelConfig } from "./model-router.js";
 
 export interface RetrievedChunk {
   content: string;
@@ -29,5 +30,5 @@ export interface LLMReply {
 }
 
 export interface LLMAdapter {
-  generateReply(prompt: ConversationPrompt): Promise<LLMReply>;
+  generateReply(prompt: ConversationPrompt, modelConfig?: ModelConfig): Promise<LLMReply>;
 }

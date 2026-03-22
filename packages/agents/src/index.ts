@@ -60,13 +60,6 @@ export {
 
 export { AgentRouter, type AgentRouterConfig } from "./router.js";
 
-export {
-  Dispatcher,
-  type DestinationHandler,
-  type DispatcherConfig,
-  type DispatchResult,
-} from "./dispatcher.js";
-
 export { createWebhookHandler, type WebhookHandlerConfig } from "./dispatch/webhook-handler.js";
 
 export {
@@ -184,6 +177,28 @@ export {
   type ConversationRouterConfig,
   type StageResolver,
 } from "./conversation-router.js";
+
+// Concurrency & Safety
+export {
+  ContactMutex,
+  LoopDetector,
+  type ContactMutexConfig,
+  type LoopDetectorConfig,
+} from "./concurrency.js";
+
+// Escalation
+export {
+  EscalationService,
+  type EscalateInput,
+  type EscalateResult,
+  type EscalationNotifier,
+  type EscalationPriority,
+  type EscalationReason,
+  type EscalationRecord,
+  type EscalationServiceConfig,
+  type EscalationStatus,
+  type EscalationStore,
+} from "./escalation.js";
 
 // LLM Adapters (Claude implementations)
 export {

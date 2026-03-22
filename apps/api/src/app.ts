@@ -504,6 +504,28 @@ export async function buildServer() {
   // Prometheus metrics endpoint (excluded from auth like /health)
   app.get("/metrics", metricsRoute);
 
+  // --- Per-org LLM concurrency limiter ---
+  const { OrgConcurrencyLimiter } = await import("./middleware/rate-limiter.js");
+  const llmLimiter = new OrgConcurrencyLimiter({ maxConcurrent: 5, queueTimeoutMs: 30_000 });
+
+  app.addHook("preHandler", async (request, reply) => {
+    const path = request.url;
+    if (!path.startsWith("/api/test-chat") && !path.startsWith("/api/knowledge")) {
+      return;
+    }
+    const orgId = request.organizationIdFromAuth ?? "default";
+    try {
+      const release = await llmLimiter.acquire(orgId);
+      request.raw.on("close", release);
+    } catch {
+      return reply.code(503).send({
+        error: "Too many concurrent requests. Please retry.",
+        statusCode: 503,
+        retryAfter: 5,
+      });
+    }
+  });
+
   // --- Register all API routes ---
   await registerRoutes(app);
 

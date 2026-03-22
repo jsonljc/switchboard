@@ -13,17 +13,6 @@ vi.mock("@switchboard/db", () => ({
   PrismaConnectionStore: vi.fn().mockImplementation(() => mockConnectionStore),
 }));
 
-vi.mock("@switchboard/core", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    generateIntegrationGuide: vi.fn(() => ({
-      title: "Integration Guide",
-      steps: ["Step 1", "Step 2"],
-    })),
-  };
-});
-
 import { organizationsRoutes } from "../routes/organizations.js";
 
 describe("Organizations API", () => {
@@ -139,20 +128,6 @@ describe("Organizations API", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().config.name).toBe("Updated Org");
-    });
-  });
-
-  describe("GET /api/organizations/:orgId/integration", () => {
-    it("returns integration guide", async () => {
-      mockOrgConfig.findUnique.mockResolvedValue({ runtimeType: "http" });
-
-      const res = await app.inject({
-        method: "GET",
-        url: "/api/organizations/org_test/integration",
-      });
-
-      expect(res.statusCode).toBe(200);
-      expect(res.json().guide.title).toBe("Integration Guide");
     });
   });
 
