@@ -232,3 +232,6 @@ export {
   type RetrieveOptions,
   type ConfidenceInput,
 } from "./knowledge/index.js";
+
+// Context extraction (LLM-based conversation signal analysis)
+export { extractConversationContext, parseContextResponse } from "./context-extractor.js";
