@@ -105,7 +105,8 @@
   },
   "dependencies": {
     "@switchboard/schemas": "workspace:*",
-    "@switchboard/cartridge-sdk": "workspace:*"
+    "@switchboard/cartridge-sdk": "workspace:*",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

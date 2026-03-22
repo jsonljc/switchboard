@@ -896,3 +896,110 @@ model KnowledgeChunk {
   @@index([documentId])
   @@index([sourceType])
 }
+
+// ── Conversation Persistence (Architecture Hardening) ──
+
+model ConversationMessage {
+  id        String   @id @default(uuid())
+  contactId String
+  orgId     String
+  direction String   // "inbound" | "outbound"
+  content   String
+  channel   String   // "whatsapp" | "telegram" | "dashboard"
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([contactId, orgId])
+  @@index([createdAt])
+}
+
+model ContactLifecycle {
+  id        String   @id @default(uuid())
+  contactId String
+  orgId     String
+  stage     String   @default("lead") // lead, qualified, booked, treated, churned
+  optedOut  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([contactId, orgId])
+  @@index([orgId])
+}
+
+model AgentRegistration {
+  id            String   @id @default(uuid())
+  orgId         String
+  agentId       String
+  agentRole     String?
+  executionMode String   @default("realtime") // realtime, scheduled, hybrid
+  status        String   @default("active") // active, disabled, draft, error
+  config        Json     @default("{}")
+  configVersion Int      @default(1)
+  capabilities  Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([orgId, agentId])
+  @@index([orgId])
+  @@index([status])
+}
+
+model RoasSnapshot {
+  id                String   @id @default(uuid())
+  orgId             String
+  entityType        String   @default("campaign") // campaign, adset, account
+  entityId          String
+  platform          String   // meta, google, tiktok
+  adAccountId       String?
+  roas              Float
+  spend             Float
+  revenue           Float
+  currency          String   @default("USD") @db.VarChar(3)
+  campaignStatus    String?
+  attributionWindow String?
+  dataFreshnessAt   DateTime?
+  snapshotDate      DateTime @db.Date
+  optimizerRunId    String?
+  createdAt         DateTime @default(now())
+
+  @@unique([orgId, entityType, entityId, snapshotDate])
+  @@index([orgId, platform])
+  @@index([snapshotDate])
+  @@index([optimizerRunId])
+}
+
+model LlmUsageLog {
+  id           String   @id @default(uuid())
+  orgId        String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  taskType     String
+  durationMs   Int?
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([model])
+}
+
+model EscalationRecord {
+  id                  String    @id @default(uuid())
+  orgId               String
+  contactId           String
+  reason              String    // low_confidence, booking_question, pricing_exception, etc.
+  reasonDetails       String?
+  sourceAgent         String
+  priority            String    @default("medium") // low, medium, high, urgent
+  conversationSummary String?
+  status              String    @default("open") // open, acknowledged, snoozed, resolved
+  metadata            Json      @default("{}")
+  acknowledgedAt      DateTime?
+  resolvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId, status])
+  @@index([contactId])
+  @@index([createdAt])
+}
