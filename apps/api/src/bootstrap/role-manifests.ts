@@ -2,11 +2,15 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import type { AgentRoleManifest } from "@switchboard/schemas";
 import { AgentRoleManifestSchema } from "@switchboard/schemas";
+import type { RoleCheckpointValidator } from "@switchboard/core/sessions";
+import { compileRoleCheckpointValidator } from "./compile-role-checkpoint-validator.js";
 
 export interface LoadedManifest {
   manifest: AgentRoleManifest;
   instruction: string;
   checkpointSchema: unknown;
+  /** Compiled JSON Schema validator, if schema was present and valid */
+  checkpointValidate?: RoleCheckpointValidator;
   manifestDir: string;
 }
 
@@ -62,10 +66,13 @@ export async function loadRoleManifests(options?: {
         logger.warn(`Checkpoint schema not found at ${checkpointSchemaPath}, using base schema`);
       }
 
+      const checkpointValidate = compileRoleCheckpointValidator(checkpointSchema);
+
       manifests.set(parsed.id, {
         manifest: parsed,
         instruction,
         checkpointSchema,
+        checkpointValidate,
         manifestDir: path.dirname(manifestPath),
       });
 

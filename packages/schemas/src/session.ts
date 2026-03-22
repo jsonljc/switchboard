@@ -78,6 +78,8 @@ export const ToolEventSchema = z.object({
   durationMs: z.number().int().nonnegative().nullable(),
   envelopeId: z.string().uuid().nullable(),
   timestamp: z.coerce.date(),
+  /** Stable id from gateway for dedupe on worker retry (optional for legacy rows) */
+  gatewayIdempotencyKey: z.string().min(1).optional(),
 });
 export type ToolEvent = z.infer<typeof ToolEventSchema>;
 
@@ -133,6 +135,10 @@ export const AgentSessionSchema = z.object({
   principalId: z.string().min(1),
   status: SessionStatusSchema,
   safetyEnvelope: SafetyEnvelopeSchema,
+  /** Effective tool pack at session creation (merged manifest + org override) */
+  allowedToolPack: z.array(z.string()),
+  /** Effective governance profile at session creation */
+  governanceProfile: z.string().min(1),
   /** Denormalized cumulative counters for fast safetyEnvelope checks */
   toolCallCount: z.number().int().nonnegative(),
   mutationCount: z.number().int().nonnegative(),
@@ -144,6 +150,9 @@ export const AgentSessionSchema = z.object({
   traceId: z.string().min(1),
   startedAt: z.coerce.date(),
   completedAt: z.coerce.date().nullable(),
+  /** Set when status becomes failed */
+  errorMessage: z.string().nullable(),
+  errorCode: z.string().optional(),
 });
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
 
@@ -193,26 +202,63 @@ export type ResumePayload = z.infer<typeof ResumePayloadSchema>;
 // Gateway Interface Contract
 // ---------------------------------------------------------------------------
 
-export const GatewayInvokeRequestSchema = z.object({
+const GatewayInvokeRequestSharedSchema = z.object({
   sessionId: z.string().uuid(),
   runId: z.string().uuid(),
   roleId: z.string().min(1),
   sessionToken: z.string().min(1),
-  /** Initial invocation: instruction + tools + safety limits */
-  instruction: z.string().optional(),
-  toolPack: z.array(z.string()).optional(),
-  safetyLimits: SafetyEnvelopeSchema.optional(),
-  /** Resume invocation: checkpoint + approval outcome + history */
-  resumePayload: ResumePayloadSchema.optional(),
+  traceId: z.string().min(1),
+  /** Stable per worker invocation for gateway/tool idempotency */
+  idempotencyKey: z.string().min(1),
 });
+
+export const GatewayInitialInvokeRequestSchema = GatewayInvokeRequestSharedSchema.extend({
+  kind: z.literal("initial"),
+  instruction: z.string().min(1),
+  allowedToolPack: z.array(z.string()),
+  governanceProfile: z.string().min(1),
+  safetyLimits: SafetyEnvelopeSchema,
+});
+export type GatewayInitialInvokeRequest = z.infer<typeof GatewayInitialInvokeRequestSchema>;
+
+export const GatewayResumeInvokeRequestSchema = GatewayInvokeRequestSharedSchema.extend({
+  kind: z.literal("resume"),
+  resumePayload: ResumePayloadSchema,
+});
+export type GatewayResumeInvokeRequest = z.infer<typeof GatewayResumeInvokeRequestSchema>;
+
+export const GatewayInvokeRequestSchema = z.discriminatedUnion("kind", [
+  GatewayInitialInvokeRequestSchema,
+  GatewayResumeInvokeRequestSchema,
+]);
 export type GatewayInvokeRequest = z.infer<typeof GatewayInvokeRequestSchema>;
+
+/** Tool call from gateway before Switchboard assigns id, sessionId, runId, stepIndex, timestamp */
+export const GatewayToolCallInputSchema = z.object({
+  idempotencyKey: z.string().min(1),
+  toolName: z.string().min(1),
+  parameters: z.record(z.unknown()),
+  result: z.record(z.unknown()).nullable(),
+  isMutation: z.boolean(),
+  dollarsAtRisk: z.number().nonnegative(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  envelopeId: z.string().uuid().nullable(),
+});
+export type GatewayToolCallInput = z.infer<typeof GatewayToolCallInputSchema>;
+
+/** Populated by HttpGatewayClient from response headers; optional in JSON body from gateway */
+export const GatewayCorrelationMetaSchema = z.object({
+  gatewayRequestId: z.string().optional(),
+  runtimeCorrelationId: z.string().optional(),
+});
+export type GatewayCorrelationMeta = z.infer<typeof GatewayCorrelationMetaSchema>;
 
 export const GatewayInvokeResponseSchema = z.object({
   status: z.enum(["completed", "paused", "failed"]),
   /** Checkpoint state when paused */
   checkpoint: AgentCheckpointSchema.optional(),
   /** Tool calls made during this invocation */
-  toolCalls: z.array(ToolEventSchema.omit({ id: true, sessionId: true, runId: true })).optional(),
+  toolCalls: z.array(GatewayToolCallInputSchema).optional(),
   /** Final result when completed */
   result: z.record(z.unknown()).optional(),
   /** Error details when failed */
@@ -222,8 +268,42 @@ export const GatewayInvokeResponseSchema = z.object({
       message: z.string(),
     })
     .optional(),
+  /** Transport may merge header-derived ids (see docs/openclaw-gateway-contract.md) */
+  correlation: GatewayCorrelationMetaSchema.optional(),
 });
 export type GatewayInvokeResponse = z.infer<typeof GatewayInvokeResponseSchema>;
+
+export const GatewayHealthResponseSchema = z.object({
+  ok: z.boolean(),
+  version: z.string().optional(),
+});
+export type GatewayHealthResponse = z.infer<typeof GatewayHealthResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Session callback (gateway → Switchboard terminal outcomes)
+// ---------------------------------------------------------------------------
+
+export const SessionRunCallbackBodySchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("completed"),
+    toolCalls: z.array(GatewayToolCallInputSchema).optional(),
+    result: z.record(z.unknown()).optional(),
+  }),
+  z.object({
+    status: z.literal("paused"),
+    checkpoint: AgentCheckpointSchema,
+    toolCalls: z.array(GatewayToolCallInputSchema).optional(),
+  }),
+  z.object({
+    status: z.literal("failed"),
+    error: z.object({
+      code: z.string(),
+      message: z.string(),
+    }),
+    toolCalls: z.array(GatewayToolCallInputSchema).optional(),
+  }),
+]);
+export type SessionRunCallbackBody = z.infer<typeof SessionRunCallbackBodySchema>;
 
 // ---------------------------------------------------------------------------
 // API Request/Response schemas

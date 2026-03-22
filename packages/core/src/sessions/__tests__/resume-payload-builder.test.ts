@@ -15,6 +15,8 @@ describe("buildResumePayload", () => {
       maxDollarsAtRisk: 10_000,
       sessionTimeoutMs: 30 * 60 * 1000,
     },
+    allowedToolPack: ["t1"],
+    governanceProfile: "guarded",
     toolCallCount: 5,
     mutationCount: 2,
     dollarsAtRisk: 1_000,
@@ -24,6 +26,7 @@ describe("buildResumePayload", () => {
     traceId: "trace-1",
     startedAt: new Date("2026-01-01T00:00:00Z"),
     completedAt: null,
+    errorMessage: null,
   };
 
   const basePause: AgentPause = {

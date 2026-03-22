@@ -9,6 +9,10 @@ export type {
 export { mergeRoleConfig } from "./role-config-merger.js";
 export type { ManifestDefaults } from "./role-config-merger.js";
 export { validateCheckpoint } from "./checkpoint-validator.js";
+export type {
+  CheckpointValidationResult,
+  RoleCheckpointValidator,
+} from "./checkpoint-validator.js";
 export { buildResumePayload } from "./resume-payload-builder.js";
 export {
   SessionManager,
@@ -22,3 +26,6 @@ export type {
   PauseSessionInput,
   ResumeResult,
 } from "./session-manager.js";
+export { applyGatewayOutcomeToSession } from "./apply-gateway-outcome.js";
+export type { GatewayOutcomeLogger } from "./apply-gateway-outcome.js";
+export { isFinalBullMqJobAttempt } from "./bullmq-attempts.js";

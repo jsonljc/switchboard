@@ -1,9 +1,9 @@
-import type { PrismaClient } from "@prisma/client";
 import type { AgentRun, RunTriggerType, RunOutcome } from "@switchboard/schemas";
 import type { RunStore } from "@switchboard/core/sessions";
+import type { PrismaDbClient } from "../prisma-db.js";
 
 export class PrismaRunStore implements RunStore {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaDbClient) {}
 
   async save(run: AgentRun): Promise<void> {
     await this.prisma.agentRun.create({

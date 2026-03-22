@@ -1,9 +1,9 @@
-import type { PrismaClient } from "@prisma/client";
 import type { ToolEvent } from "@switchboard/schemas";
 import type { ToolEventStore } from "@switchboard/core/sessions";
+import type { PrismaDbClient } from "../prisma-db.js";
 
 export class PrismaToolEventStore implements ToolEventStore {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaDbClient) {}
 
   async record(event: ToolEvent): Promise<void> {
     await this.prisma.toolEvent.create({
@@ -20,8 +20,19 @@ export class PrismaToolEventStore implements ToolEventStore {
         durationMs: event.durationMs ?? undefined,
         envelopeId: event.envelopeId ?? undefined,
         timestamp: event.timestamp,
+        gatewayIdempotencyKey: event.gatewayIdempotencyKey ?? undefined,
       },
     });
+  }
+
+  async findByGatewayIdempotencyKey(
+    sessionId: string,
+    gatewayIdempotencyKey: string,
+  ): Promise<ToolEvent | null> {
+    const row = await this.prisma.toolEvent.findFirst({
+      where: { sessionId, gatewayIdempotencyKey },
+    });
+    return row ? toToolEvent(row) : null;
   }
 
   async listBySession(sessionId: string): Promise<ToolEvent[]> {
@@ -73,6 +84,7 @@ function toToolEvent(row: {
   durationMs: number | null;
   envelopeId: string | null;
   timestamp: Date;
+  gatewayIdempotencyKey: string | null;
 }): ToolEvent {
   return {
     id: row.id,
@@ -87,5 +99,6 @@ function toToolEvent(row: {
     durationMs: row.durationMs,
     envelopeId: row.envelopeId,
     timestamp: row.timestamp,
+    ...(row.gatewayIdempotencyKey ? { gatewayIdempotencyKey: row.gatewayIdempotencyKey } : {}),
   };
 }
