@@ -2,10 +2,10 @@ import type { ExecuteAction } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { ApprovalRequest } from "@switchboard/schemas";
 
-/** Outcome of a single execute request (unified for runtimes e.g. OpenClaw). */
+/** Outcome of a single execute request (unified for runtimes e.g. MCP, API). */
 export type ExecuteOutcome = "EXECUTED" | "PENDING_APPROVAL" | "DENIED";
 
-/** Request shape for runtime execute (API, OpenClaw, future MCP). */
+/** Request shape for runtime execute (API, MCP). */
 export interface RuntimeExecuteRequest {
   /** Actor (principal) performing the action. */
   actorId: string;
@@ -43,7 +43,7 @@ export interface RuntimeExecuteResponse {
   governanceNote?: string;
 }
 
-/** Adapter interface for runtimes (OpenClaw, MCP, etc.). ExecutionService is the default implementation. */
+/** Adapter interface for runtimes (MCP, API, etc.). ExecutionService is the default implementation. */
 export interface RuntimeAdapter {
   execute(request: RuntimeExecuteRequest): Promise<RuntimeExecuteResponse>;
 }

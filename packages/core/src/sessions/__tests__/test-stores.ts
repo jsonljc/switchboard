@@ -162,16 +162,6 @@ export class InMemoryToolEventStore implements ToolEventStore {
     this.items.push({ ...event });
   }
 
-  async findByGatewayIdempotencyKey(
-    sessionId: string,
-    gatewayIdempotencyKey: string,
-  ): Promise<ToolEvent | null> {
-    const e = this.items.find(
-      (ev) => ev.sessionId === sessionId && ev.gatewayIdempotencyKey === gatewayIdempotencyKey,
-    );
-    return e ? { ...e } : null;
-  }
-
   async listBySession(sessionId: string): Promise<ToolEvent[]> {
     return this.items
       .filter((e) => e.sessionId === sessionId)

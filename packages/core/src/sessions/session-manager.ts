@@ -54,8 +54,6 @@ export interface RecordToolCallInput {
   dollarsAtRisk: number;
   durationMs: number | null;
   envelopeId: string | null;
-  /** Gateway idempotency key — duplicate records are skipped without double-counting */
-  gatewayIdempotencyKey?: string;
 }
 
 export interface PauseSessionInput {
@@ -137,8 +135,6 @@ export class SessionManager {
       principalId: input.principalId,
       status: "running",
       safetyEnvelope: merged.safetyEnvelope,
-      allowedToolPack: merged.toolPack,
-      governanceProfile: merged.governanceProfile,
       toolCallCount: 0,
       mutationCount: 0,
       dollarsAtRisk: 0,
@@ -148,7 +144,6 @@ export class SessionManager {
       traceId: randomUUID(),
       startedAt: now,
       completedAt: null,
-      errorMessage: null,
     };
 
     const run: AgentRun = {
@@ -183,14 +178,6 @@ export class SessionManager {
   async recordToolCall(sessionId: string, input: RecordToolCallInput): Promise<ToolEvent> {
     const session = await this.requireSession(sessionId);
     this.assertNotTerminal(session);
-
-    if (input.gatewayIdempotencyKey) {
-      const existing = await this.deps.toolEvents.findByGatewayIdempotencyKey(
-        sessionId,
-        input.gatewayIdempotencyKey,
-      );
-      if (existing) return existing;
-    }
 
     // Enforce safety envelope BEFORE recording
     const env = session.safetyEnvelope;
@@ -229,9 +216,6 @@ export class SessionManager {
       durationMs: input.durationMs,
       envelopeId: input.envelopeId,
       timestamp: new Date(),
-      ...(input.gatewayIdempotencyKey
-        ? { gatewayIdempotencyKey: input.gatewayIdempotencyKey }
-        : {}),
     };
 
     await this.deps.toolEvents.record(event);
@@ -368,10 +352,7 @@ export class SessionManager {
   // failSession
   // -------------------------------------------------------------------------
 
-  async failSession(
-    sessionId: string,
-    opts: { runId: string; error?: string; errorCode?: string },
-  ): Promise<void> {
+  async failSession(sessionId: string, opts: { runId: string; error?: string }): Promise<void> {
     const session = await this.requireSession(sessionId);
     this.assertTransition(session.status, "failed");
 
@@ -379,8 +360,6 @@ export class SessionManager {
     await this.deps.sessions.update(sessionId, {
       status: "failed",
       completedAt: now,
-      errorMessage: opts.error ?? null,
-      ...(opts.errorCode !== undefined ? { errorCode: opts.errorCode } : {}),
     });
     await this.deps.runs.update(opts.runId, { outcome: "failed", completedAt: now });
   }

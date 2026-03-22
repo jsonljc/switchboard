@@ -171,7 +171,7 @@ describe("AgentRegistry", () => {
     });
 
     registry.updateRuntime("org-1", "lead-responder", {
-      provider: "openclaw",
+      provider: "switchboard",
       sessionId: "sess-123",
       health: "healthy",
       lastHeartbeatAt: "2026-03-18T10:00:00Z",

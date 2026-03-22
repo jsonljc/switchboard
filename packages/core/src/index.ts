@@ -45,7 +45,7 @@ export * from "./notifications/index.js";
 // Guardrail State Store
 export * from "./guardrail-state/index.js";
 
-// Runtime Adapters (OpenClaw, MCP, HTTP, integration guide)
+// Runtime Adapters (MCP, API)
 export * from "./runtime-adapters/index.js";
 
 // Execution Service (propose + conditional execute facade)
@@ -205,5 +205,5 @@ export type {
 // LLM Adapter (conversational, agent-facing)
 export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
 
-// Sessions (OpenClaw session runtime)
+// Sessions (session runtime)
 export * from "./sessions/index.js";

@@ -7,7 +7,7 @@ export type AgentHealth = "healthy" | "degraded" | "offline";
 export type ExecutionMode = "realtime" | "scheduled" | "hybrid";
 
 export interface AgentRuntime {
-  provider: "openclaw";
+  provider: "switchboard";
   sessionId?: string;
   health?: AgentHealth;
   lastHeartbeatAt?: string;

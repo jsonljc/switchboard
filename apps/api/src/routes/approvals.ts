@@ -76,13 +76,12 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
               resolvedAt: new Date().toISOString(),
             });
 
-            if (result && app.sessionInvocationQueue) {
-              await app.sessionInvocationQueue.add("invoke", {
-                sessionId: result.session.id,
-                runId: result.run.id,
-                resumeToken: result.resumeToken,
-                attempt: 0,
-              });
+            // Gateway invocation removed — WorkflowEngine will handle resume dispatch in Phase 3.
+            if (result) {
+              app.log.info(
+                { sessionId: result.session.id, runId: result.run.id },
+                "Session resumed after approval (workflow dispatch pending Phase 3)",
+              );
             }
           } catch (err) {
             // Log but don't fail the approval response — resume is best-effort.
