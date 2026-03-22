@@ -60,12 +60,15 @@ switchboard/
 │   ├── schemas          # Zod domain types (Envelope, Policy, RiskScore, etc.)
 │   ├── core             # Policy engine, risk scorer, orchestrator, audit ledger
 │   ├── cartridge-sdk    # SDK for building cartridges (ActionBuilder, TestCartridge)
-│   └── db               # Prisma schema and client
+│   ├── db               # Prisma schema and client
+│   ├── agents           # Agent runtime — EventLoop, LLM infra, escalation, concurrency
+│   └── create-switchboard-cartridge  # Scaffolding CLI for new cartridges
 ├── cartridges/
-│   ├── digital-ads      # Meta/Google Ads cartridge (pause, resume, budget, targeting)
-│   ├── payments         # Payments cartridge (Stripe invoices, refunds, payouts)
-│   ├── crm              # CRM cartridge (contacts, deals, activities)
-│   └── customer-engagement # Customer engagement cartridge (appointments, messaging)
+│   ├── digital-ads      # Multi-platform ad management (Meta, Google, TikTok)
+│   ├── payments         # Stripe-backed payment operations
+│   ├── crm              # Contacts, deals, activities, pipeline
+│   ├── customer-engagement # Leads, conversations, appointments, cadences
+│   └── revenue-growth   # Autonomous revenue optimization (Theory of Constraints)
 ├── apps/
 │   ├── api              # Fastify REST API with Swagger UI
 │   ├── chat             # Chat interface (Telegram bot)

@@ -100,9 +100,10 @@ export async function sendProactiveNotification(
               error: `Unknown channel: ${channel}`,
             });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         logger?.error({ err, channel, recipient }, "Failed to send proactive notification");
-        results.push({ channel, recipient, success: false, error: err.message });
+        results.push({ channel, recipient, success: false, error: message });
       }
     }
   }

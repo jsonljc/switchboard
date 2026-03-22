@@ -160,9 +160,10 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return reply.send({ success: true, data: governedAction.executionResult?.data ?? null });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       app.log.error({ err, reportId: id }, "Manual report run failed");
-      return reply.code(500).send({ error: "Report run failed", detail: err.message });
+      return reply.code(500).send({ error: "Report run failed", detail: message });
     }
   });
 };

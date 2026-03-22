@@ -8,10 +8,11 @@ export async function GET() {
     const client = await getApiClient();
     const data = await client.getIdentitySpecByPrincipal(session.principalId);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
@@ -22,10 +23,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = await client.createIdentitySpec(body);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
@@ -37,10 +39,11 @@ export async function PUT(request: NextRequest) {
     const { id, ...updates } = body;
     const data = await client.updateIdentitySpec(id, updates);
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: err.message },
-      { status: err.message === "Unauthorized" ? 401 : 500 },
+      { error: message },
+      { status: message === "Unauthorized" ? 401 : 500 },
     );
   }
 }
