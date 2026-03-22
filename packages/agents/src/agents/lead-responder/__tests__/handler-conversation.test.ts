@@ -415,7 +415,7 @@ describe("thread integration", () => {
               similarity: 0.85,
             },
           ]),
-        },
+        } as unknown as import("../../../knowledge/retrieval.js").KnowledgeRetriever,
         conversationStore: {
           getHistory: vi.fn().mockResolvedValue([]),
           appendMessage: vi.fn(),
