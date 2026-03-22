@@ -178,6 +178,28 @@ export {
   type StageResolver,
 } from "./conversation-router.js";
 
+// Concurrency & Safety
+export {
+  ContactMutex,
+  LoopDetector,
+  type ContactMutexConfig,
+  type LoopDetectorConfig,
+} from "./concurrency.js";
+
+// Escalation
+export {
+  EscalationService,
+  type EscalateInput,
+  type EscalateResult,
+  type EscalationNotifier,
+  type EscalationPriority,
+  type EscalationReason,
+  type EscalationRecord,
+  type EscalationServiceConfig,
+  type EscalationStatus,
+  type EscalationStore,
+} from "./escalation.js";
+
 // LLM Adapters (Claude implementations)
 export {
   ClaudeLLMAdapter,
