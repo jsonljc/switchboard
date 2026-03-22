@@ -235,3 +235,6 @@ export {
 
 // Context extraction (LLM-based conversation signal analysis)
 export { extractConversationContext, parseContextResponse } from "./context-extractor.js";
+
+// Summary refresh (LLM-based conversation summarization)
+export { refreshSummary, shouldRefreshSummary } from "./summary-refresher.js";
