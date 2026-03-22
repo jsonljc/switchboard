@@ -2,6 +2,7 @@ import {
   AgentRegistry,
   AgentRouter,
   AgentStateTracker,
+  ConversationRouter,
   ConversionBusBridge,
   CorePolicyEngineAdapter,
   DeadLetterAlerter,
@@ -25,6 +26,7 @@ import {
   type AgentPort,
   type CoreEvaluateFn,
   type DeliveryStore,
+  type LifecycleStage,
   type PolicyEngine,
   type SalesCloserDeps,
   type NurtureDeps,
@@ -59,6 +61,13 @@ export interface AgentSystemOptions {
   nurtureDeps?: NurtureDeps;
   adOptimizerDeps?: AdOptimizerDeps;
   revenueTrackerDeps?: RevenueTrackerDeps;
+  conversationStore?: {
+    getStage(contactId: string): Promise<LifecycleStage | undefined>;
+  };
+  registryStore?: {
+    persistRegistration(orgId: string, input: Record<string, unknown>): Promise<void>;
+    loadAll(orgId: string): Promise<Array<Record<string, unknown>>>;
+  };
 }
 
 export interface AgentSystem {
@@ -68,6 +77,7 @@ export interface AgentSystem {
   stateTracker: AgentStateTracker;
   scheduledRunner: ScheduledRunner;
   actionExecutor: ActionExecutor;
+  conversationRouter?: ConversationRouter;
 }
 
 const DEFAULT_LEAD_SCORER = (_params: Record<string, unknown>) => ({
@@ -123,6 +133,14 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     stateTracker,
   });
 
+  // Wire ConversationRouter if store provided
+  let conversationRouter: ConversationRouter | undefined;
+  if (options.conversationStore) {
+    conversationRouter = new ConversationRouter({
+      getStage: options.conversationStore.getStage,
+    });
+  }
+
   const maxRetries = options.maxRetries ?? 3;
   let retryExecutor: RetryExecutor | undefined;
   let deadLetterAlerter: DeadLetterAlerter | undefined;
@@ -174,6 +192,23 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   if (options.organizationIds) {
     for (const orgId of options.organizationIds) {
       registerAgentsForOrg(registry, orgId);
+
+      // Persist registrations if store provided
+      if (options.registryStore) {
+        for (const agent of registry.listActive(orgId)) {
+          options.registryStore
+            .persistRegistration(orgId, {
+              agentId: agent.agentId,
+              status: "active",
+              executionMode: "realtime",
+              config: {},
+              capabilities: {},
+            })
+            .catch((err) => {
+              log.error(`[agent-system] Failed to persist registration for ${agent.agentId}:`, err);
+            });
+        }
+      }
     }
   }
 
@@ -184,17 +219,60 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
         // Lazy-register agents for orgs not yet registered
         if (registry.listActive(envelope.organizationId).length === 0) {
           registerAgentsForOrg(registry, envelope.organizationId);
+
+          // Persist registrations if store provided
+          if (options.registryStore) {
+            for (const agent of registry.listActive(envelope.organizationId)) {
+              options.registryStore
+                .persistRegistration(envelope.organizationId, {
+                  agentId: agent.agentId,
+                  status: "active",
+                  executionMode: "realtime",
+                  config: {},
+                  capabilities: {},
+                })
+                .catch((err) => {
+                  log.error(
+                    `[agent-system] Failed to persist registration for ${agent.agentId}:`,
+                    err,
+                  );
+                });
+            }
+          }
         }
         const context = { organizationId: envelope.organizationId };
-        eventLoop.process(envelope, context).catch((err) => {
-          log.error("[agent-system] EventLoop error:", err);
-        });
+
+        const processEnvelope = (transformed: typeof envelope) => {
+          eventLoop.process(transformed, context).catch((err) => {
+            log.error("[agent-system] EventLoop error:", err);
+          });
+        };
+
+        if (conversationRouter) {
+          conversationRouter
+            .transform(envelope)
+            .then(processEnvelope)
+            .catch((err) => {
+              log.error("[agent-system] ConversationRouter error:", err);
+              processEnvelope(envelope);
+            });
+        } else {
+          processEnvelope(envelope);
+        }
       },
     });
     bridge.register(options.conversionBus);
   }
 
-  return { registry, handlerRegistry, eventLoop, stateTracker, scheduledRunner, actionExecutor };
+  return {
+    registry,
+    handlerRegistry,
+    eventLoop,
+    stateTracker,
+    scheduledRunner,
+    actionExecutor,
+    conversationRouter,
+  };
 }
 
 export function registerAgentsForOrg(
