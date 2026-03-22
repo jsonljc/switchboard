@@ -204,3 +204,6 @@ export type {
 
 // LLM Adapter (conversational, agent-facing)
 export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
+
+// Sessions (OpenClaw session runtime)
+export * from "./sessions/index.js";

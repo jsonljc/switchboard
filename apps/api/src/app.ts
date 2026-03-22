@@ -59,6 +59,9 @@ declare module "fastify" {
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
+    sessionManager: import("@switchboard/core/sessions").SessionManager | null;
+    sessionInvocationQueue: import("bullmq").Queue | null;
+    roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -254,6 +257,65 @@ export async function buildServer() {
     `Agent orchestration system bootstrapped (delivery store: ${deliveryStore ? "prisma" : "in-memory"})`,
   );
 
+  // --- Session runtime bootstrap (optional — requires DATABASE_URL + SESSION_TOKEN_SECRET) ---
+  let sessionManager: import("@switchboard/core/sessions").SessionManager | null = null;
+  const roleManifests = new Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>();
+
+  if (prismaClient && process.env["SESSION_TOKEN_SECRET"]) {
+    const { SessionManager } = await import("@switchboard/core/sessions");
+    const {
+      PrismaSessionStore,
+      PrismaRunStore,
+      PrismaPauseStore,
+      PrismaToolEventStore,
+      PrismaRoleOverrideStore,
+    } = await import("@switchboard/db");
+    const { loadRoleManifests } = await import("./bootstrap/role-manifests.js");
+
+    const loadedManifests = await loadRoleManifests({ logger: app.log });
+    for (const [id, loaded] of loadedManifests) {
+      roleManifests.set(id, loaded);
+    }
+
+    sessionManager = new SessionManager({
+      sessions: new PrismaSessionStore(prismaClient),
+      runs: new PrismaRunStore(prismaClient),
+      pauses: new PrismaPauseStore(prismaClient),
+      toolEvents: new PrismaToolEventStore(prismaClient),
+      roleOverrides: new PrismaRoleOverrideStore(prismaClient),
+      maxConcurrentSessions: parseInt(process.env["MAX_CONCURRENT_SESSIONS"] ?? "10", 10),
+    });
+
+    app.log.info(`Session runtime enabled with ${loadedManifests.size} role manifest(s)`);
+  }
+
+  // --- Session invocation queue + worker (requires Redis + sessionManager) ---
+  let sessionInvocationQueue: Queue | null = null;
+  let sessionInvocationWorker: Worker | null = null;
+  const sessionRedisUrl = process.env["REDIS_URL"];
+  const gatewayUrl = process.env["OPENCLAW_GATEWAY_URL"];
+  const sessionTokenSecret = process.env["SESSION_TOKEN_SECRET"];
+
+  if (sessionManager && sessionRedisUrl && gatewayUrl && sessionTokenSecret) {
+    const { createSessionInvocationQueue, createSessionInvocationWorker } =
+      await import("./jobs/session-invocation.js");
+    const sessionConnection = { url: sessionRedisUrl };
+    sessionInvocationQueue = createSessionInvocationQueue(sessionConnection);
+    sessionInvocationWorker = createSessionInvocationWorker({
+      connection: sessionConnection,
+      sessionManager,
+      roleManifests,
+      openclawGatewayUrl: gatewayUrl,
+      sessionTokenSecret,
+      logger: app.log,
+    });
+    app.log.info("Session invocation worker started");
+  }
+
+  app.decorate("sessionManager", sessionManager);
+  app.decorate("roleManifests", roleManifests);
+  app.decorate("sessionInvocationQueue", sessionInvocationQueue);
+
   // --- Execution queue setup ---
   let queue: Queue | null = null;
   let worker: Worker | null = null;
@@ -367,6 +429,12 @@ export async function buildServer() {
 
     await stopAllJobs();
 
+    if (sessionInvocationWorker) {
+      await sessionInvocationWorker.close();
+    }
+    if (sessionInvocationQueue) {
+      await sessionInvocationQueue.close();
+    }
     if (worker) {
       await worker.close();
     }

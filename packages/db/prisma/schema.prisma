@@ -897,6 +897,109 @@ model KnowledgeChunk {
   @@index([sourceType])
 }
 
+// ---------------------------------------------------------------------------
+// OpenClaw Session Runtime (Phase 1)
+// ---------------------------------------------------------------------------
+
+model AgentSession {
+  id             String    @id @default(uuid())
+  organizationId String
+  roleId         String
+  principalId    String
+  status         String    @default("running")
+  safetyEnvelope Json
+  toolCallCount  Int       @default(0)
+  mutationCount  Int       @default(0)
+  dollarsAtRisk  Float     @default(0)
+  currentStep    Int       @default(0)
+  toolHistory    Json      @default("[]")
+  checkpoint     Json?
+  traceId        String
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  runs       AgentRun[]
+  pauses     AgentPause[]
+  toolEvents ToolEvent[]
+
+  @@index([organizationId, status])
+  @@index([principalId])
+  @@index([traceId])
+}
+
+model AgentRun {
+  id            String    @id @default(uuid())
+  sessionId     String
+  runIndex      Int
+  triggerType   String    @default("initial")
+  resumeContext Json?
+  outcome       String?
+  stepRange     Json?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, runIndex])
+  @@index([sessionId])
+}
+
+model AgentPause {
+  id              String    @id @default(uuid())
+  sessionId       String
+  runId           String
+  pauseIndex      Int
+  approvalId      String
+  resumeStatus    String    @default("pending")
+  resumeToken     String
+  checkpoint      Json
+  approvalOutcome Json?
+  createdAt       DateTime  @default(now())
+  resumedAt       DateTime?
+
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, pauseIndex])
+  @@unique([approvalId])
+  @@index([sessionId])
+}
+
+model ToolEvent {
+  id            String   @id @default(uuid())
+  sessionId     String
+  runId         String
+  stepIndex     Int
+  toolName      String
+  parameters    Json
+  result        Json?
+  isMutation    Boolean  @default(false)
+  dollarsAtRisk Float    @default(0)
+  durationMs    Int?
+  envelopeId    String?
+  timestamp     DateTime @default(now())
+
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // stepIndex is monotonic across all runs in a session (tied to session.currentStep)
+  @@unique([sessionId, stepIndex])
+  @@index([sessionId])
+  @@index([runId])
+}
+
+model AgentRoleOverride {
+  id                        String   @id @default(uuid())
+  organizationId            String
+  roleId                    String
+  allowedTools              String[] @default([])
+  safetyEnvelopeOverride    Json?
+  governanceProfileOverride String?
+  additionalGuardrails      Json?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@unique([organizationId, roleId])
+}
+
 // ── Conversation Persistence (Architecture Hardening) ──
 
 model ConversationMessage {

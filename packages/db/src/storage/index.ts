@@ -14,3 +14,8 @@ export { PrismaDiagnosticCycleStore } from "./prisma-diagnostic-cycle-store.js";
 export { PrismaRevenueAccountStore } from "./prisma-revenue-account-store.js";
 export { PrismaWeeklyDigestStore } from "./prisma-weekly-digest-store.js";
 export { createPrismaStorage } from "./factory.js";
+export { PrismaSessionStore } from "./prisma-session-store.js";
+export { PrismaRunStore } from "./prisma-run-store.js";
+export { PrismaPauseStore } from "./prisma-pause-store.js";
+export { PrismaToolEventStore } from "./prisma-tool-event-store.js";
+export { PrismaRoleOverrideStore } from "./prisma-role-override-store.js";

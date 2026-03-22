@@ -62,10 +62,41 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
           patchValue: body.patchValue,
         });
 
+        // Session resume hook: check if this approval is linked to a paused agent session.
+        // All state transitions are encapsulated in SessionManager.resumeAfterApproval().
+        // Rule: No route directly mutates session stores.
+        let resumeWarning: string | undefined;
+        if (app.sessionManager && body.action === "approve") {
+          try {
+            const result = await app.sessionManager.resumeAfterApproval(id, {
+              approvalId: id,
+              action: body.action,
+              patchValue: body.patchValue,
+              respondedBy: body.respondedBy,
+              resolvedAt: new Date().toISOString(),
+            });
+
+            if (result && app.sessionInvocationQueue) {
+              await app.sessionInvocationQueue.add("invoke", {
+                sessionId: result.session.id,
+                runId: result.run.id,
+                resumeToken: result.resumeToken,
+                attempt: 0,
+              });
+            }
+          } catch (err) {
+            // Log but don't fail the approval response — resume is best-effort.
+            // Return warning so caller knows the resume did not proceed.
+            app.log.error({ err, approvalId: id }, "Failed to enqueue session resume");
+            resumeWarning = err instanceof Error ? err.message : "Failed to enqueue session resume";
+          }
+        }
+
         return reply.code(200).send({
           envelope: response.envelope,
           approvalState: response.approvalState,
           executionResult: response.executionResult,
+          ...(resumeWarning ? { resumeWarning } : {}),
         });
       } catch (err) {
         if (err instanceof StaleVersionError) {

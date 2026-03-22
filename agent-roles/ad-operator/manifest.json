@@ -1,0 +1,17 @@
+{
+  "id": "ad-operator",
+  "name": "Ad Operator",
+  "description": "Manages digital advertising campaigns across Meta, Google, and TikTok. Reads performance metrics, proposes budget changes, and pauses underperforming campaigns.",
+  "version": "1.0.0",
+  "toolPack": ["digital-ads"],
+  "governanceProfile": "guarded",
+  "safetyEnvelope": {
+    "maxToolCalls": 200,
+    "maxMutations": 50,
+    "maxDollarsAtRisk": 10000,
+    "sessionTimeoutMs": 1800000
+  },
+  "instructionPath": "./defaults/instruction.md",
+  "checkpointSchemaPath": "./defaults/checkpoint-schema.json",
+  "maxConcurrentSessions": 3
+}
