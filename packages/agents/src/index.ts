@@ -20,6 +20,7 @@ export {
   type AgentPort,
   type AgentResponse,
   type PortValidationResult,
+  type ThreadUpdate,
   type ToolDeclaration,
 } from "./ports.js";
 

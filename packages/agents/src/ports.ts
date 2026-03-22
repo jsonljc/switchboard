@@ -2,6 +2,8 @@
 // Agent Port Interface — standard contract for hireable agents
 // ---------------------------------------------------------------------------
 
+import type { ConversationThread, AgentContextData, ThreadStage } from "@switchboard/schemas";
+
 export interface ToolDeclaration {
   name: string;
   description: string;
@@ -31,12 +33,24 @@ export interface AgentContext {
   profile?: Record<string, unknown>;
   conversationHistory?: Array<{ role: string; content: string }>;
   contactData?: Record<string, unknown>;
+  /** Loaded ConversationThread for this contact (if available). */
+  thread?: ConversationThread;
+}
+
+export interface ThreadUpdate {
+  stage?: ThreadStage;
+  assignedAgent?: string;
+  agentContext?: AgentContextData;
+  currentSummary?: string;
+  messageCount?: number;
 }
 
 export interface AgentResponse {
   events: import("./events.js").RoutedEventEnvelope[];
   actions: ActionRequest[];
   state?: Record<string, unknown>;
+  /** Thread updates to persist after processing. */
+  threadUpdate?: ThreadUpdate;
 }
 
 export interface ActionRequest {
