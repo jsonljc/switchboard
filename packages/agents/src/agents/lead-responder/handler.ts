@@ -12,6 +12,11 @@ import { buildConversationPrompt } from "./prompt-builder.js";
 import type { TonePreset } from "./tone-presets.js";
 import type { SupportedLanguage } from "./language-directives.js";
 import type { LeadResponderDeps, ObjectionMatch } from "./types.js";
+import type { ConversationThread } from "@switchboard/schemas";
+import { extractConversationContext } from "../../context-extractor.js";
+import { refreshSummary, shouldRefreshSummary } from "../../summary-refresher.js";
+import { SUMMARY_REFRESH_INTERVAL } from "@switchboard/core";
+import type { ThreadUpdate } from "../../ports.js";
 
 const DEFAULT_THRESHOLD = 40;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
@@ -103,6 +108,16 @@ export class LeadResponderHandler implements AgentHandler {
       agentId: "lead-responder",
     });
 
+    // 4.5. Load thread context from event metadata
+    const thread = (event.metadata?.conversationThread as ConversationThread) ?? undefined;
+    const existingContext = thread?.agentContext ?? {
+      objectionsEncountered: [],
+      preferencesLearned: {},
+      offersMade: [],
+      topicsDiscussed: [],
+      sentimentTrend: "unknown" as const,
+    };
+
     // 5. Build ConversationPrompt
     const prompt = buildConversationPrompt({
       history: [...history, inboundMessage],
@@ -111,6 +126,7 @@ export class LeadResponderHandler implements AgentHandler {
       language,
       bookingLink,
       testMode,
+      threadContext: existingContext,
     });
 
     // 6. Generate LLM reply
@@ -216,6 +232,35 @@ export class LeadResponderHandler implements AgentHandler {
     };
     await conv.conversationStore.appendMessage(contactId, outboundMessage);
 
+    // 12. Extract updated context (non-blocking, best-effort)
+    let threadUpdate: ThreadUpdate | undefined;
+    if (thread) {
+      const newMessageCount = (thread.messageCount ?? 0) + 1;
+      const updatedContext = await extractConversationContext(
+        conv.llm,
+        [...history, inboundMessage, outboundMessage],
+        existingContext,
+      );
+
+      threadUpdate = {
+        stage: qualified ? "qualified" : thread.stage === "new" ? "responding" : thread.stage,
+        agentContext: updatedContext,
+        messageCount: newMessageCount,
+      };
+
+      // 13. Refresh summary if at interval
+      if (shouldRefreshSummary(newMessageCount, SUMMARY_REFRESH_INTERVAL)) {
+        const summary = await refreshSummary(conv.llm, [
+          ...history,
+          inboundMessage,
+          outboundMessage,
+        ]);
+        if (summary) {
+          threadUpdate.currentSummary = summary;
+        }
+      }
+    }
+
     return {
       events,
       actions,
@@ -226,6 +271,7 @@ export class LeadResponderHandler implements AgentHandler {
         confidence,
         reply: llmReply.reply,
       },
+      threadUpdate,
     };
   }
 

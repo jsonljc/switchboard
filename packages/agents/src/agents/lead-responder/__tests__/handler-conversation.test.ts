@@ -386,3 +386,84 @@ describe("LeadResponderHandler — test mode", () => {
     );
   });
 });
+
+describe("thread integration", () => {
+  it("reads thread context from event metadata and returns threadUpdate", async () => {
+    const handler = new LeadResponderHandler({
+      scoreLead: () => ({ score: 30, tier: "cool", factors: [] }),
+      conversation: {
+        llm: {
+          generateReply: vi
+            .fn()
+            .mockResolvedValueOnce({ reply: "Hi! How can I help?", confidence: 0.8 })
+            .mockResolvedValueOnce({
+              reply: JSON.stringify({
+                objectionsEncountered: [],
+                preferencesLearned: {},
+                topicsDiscussed: ["greeting"],
+                sentimentTrend: "positive",
+                offersMade: [],
+              }),
+              confidence: 0.9,
+            }),
+        },
+        retriever: {
+          retrieve: vi.fn().mockResolvedValue([
+            {
+              content: "Welcome! We offer various treatments.",
+              sourceType: "document",
+              similarity: 0.85,
+            },
+          ]),
+        },
+        conversationStore: {
+          getHistory: vi.fn().mockResolvedValue([]),
+          appendMessage: vi.fn(),
+          getStage: vi.fn().mockResolvedValue("lead"),
+          setStage: vi.fn(),
+          isOptedOut: vi.fn().mockResolvedValue(false),
+          setOptOut: vi.fn(),
+        },
+      },
+    });
+
+    const event = {
+      eventId: "e-1",
+      eventType: "message.received",
+      organizationId: "org-1",
+      occurredAt: new Date().toISOString(),
+      source: { type: "webhook", id: "whatsapp" },
+      correlationId: "cor-1",
+      idempotencyKey: "idem-1",
+      payload: { contactId: "c-1", messageText: "Hello" },
+      metadata: {
+        conversationThread: {
+          id: "t-1",
+          contactId: "c-1",
+          organizationId: "org-1",
+          stage: "new",
+          assignedAgent: "lead-responder",
+          agentContext: {
+            objectionsEncountered: [],
+            preferencesLearned: {},
+            offersMade: [],
+            topicsDiscussed: [],
+            sentimentTrend: "unknown",
+          },
+          currentSummary: "",
+          followUpSchedule: { nextFollowUpAt: null, reason: null, cadenceId: null },
+          lastOutcomeAt: null,
+          messageCount: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+    } as unknown as import("../../../events.js").RoutedEventEnvelope;
+
+    const result = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    expect(result.threadUpdate).toBeDefined();
+    expect(result.threadUpdate!.stage).toBe("responding");
+    expect(result.threadUpdate!.messageCount).toBe(1);
+  });
+});

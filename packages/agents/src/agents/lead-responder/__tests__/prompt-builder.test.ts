@@ -98,4 +98,36 @@ describe("buildConversationPrompt", () => {
 
     expect(prompt.agentInstructions).toContain("test mode");
   });
+
+  it("includes thread context in instructions", () => {
+    const prompt = buildConversationPrompt({
+      history: [],
+      chunks: [],
+      tonePreset: undefined,
+      language: undefined,
+      threadContext: {
+        objectionsEncountered: ["too expensive"],
+        preferencesLearned: { time: "mornings" },
+        offersMade: [],
+        topicsDiscussed: ["pricing"],
+        sentimentTrend: "positive",
+      },
+    });
+
+    expect(prompt.agentInstructions).toContain("CONVERSATION MEMORY");
+    expect(prompt.agentInstructions).toContain("too expensive");
+    expect(prompt.agentInstructions).toContain("time: mornings");
+    expect(prompt.agentInstructions).toContain("positive");
+  });
+
+  it("omits memory block when no thread context", () => {
+    const prompt = buildConversationPrompt({
+      history: [],
+      chunks: [],
+      tonePreset: undefined,
+      language: undefined,
+    });
+
+    expect(prompt.agentInstructions).not.toContain("CONVERSATION MEMORY");
+  });
 });
