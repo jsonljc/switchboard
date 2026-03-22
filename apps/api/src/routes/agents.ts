@@ -292,6 +292,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         purchasedAgents: string[];
         tonePreset: string;
         language: string;
+        agentTones?: Record<string, string>;
       };
 
       if (!body.businessName || !body.purchasedAgents?.length) {
@@ -313,6 +314,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         services: body.services,
         targetCustomer: body.targetCustomer,
         pricingRange: body.pricingRange,
+        agentTones: body.agentTones ?? {},
       };
 
       await app.prisma.organizationConfig.upsert({
