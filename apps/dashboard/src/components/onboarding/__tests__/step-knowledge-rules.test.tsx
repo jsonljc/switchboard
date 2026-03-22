@@ -28,12 +28,17 @@ describe("StepKnowledgeRules", () => {
     const onRulesChange = vi.fn();
     render(<StepKnowledgeRules {...defaultProps} onRulesChange={onRulesChange} />);
     fireEvent.click(screen.getByText(/Max discount/i));
-    expect(onRulesChange).toHaveBeenCalledWith([{ type: "max-discount", value: "" }]);
+    expect(onRulesChange).toHaveBeenCalledWith([
+      expect.objectContaining({ type: "max-discount", value: "" }),
+    ]);
   });
 
   it("shows added rules with input fields", () => {
     render(
-      <StepKnowledgeRules {...defaultProps} rules={[{ type: "max-discount", value: "15" }]} />,
+      <StepKnowledgeRules
+        {...defaultProps}
+        rules={[{ id: "r1", type: "max-discount", value: "15" }]}
+      />,
     );
     const input = screen.getByDisplayValue("15");
     expect(input).toBeTruthy();
@@ -44,7 +49,7 @@ describe("StepKnowledgeRules", () => {
     render(
       <StepKnowledgeRules
         {...defaultProps}
-        rules={[{ type: "max-discount", value: "15" }]}
+        rules={[{ id: "r1", type: "max-discount", value: "15" }]}
         onRulesChange={onRulesChange}
       />,
     );

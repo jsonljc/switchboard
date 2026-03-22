@@ -53,7 +53,7 @@ export function StepKnowledgeRules({
   onRulesChange,
 }: StepKnowledgeRulesProps) {
   const addRule = (type: BehavioralRule["type"]) => {
-    onRulesChange([...rules, { type, value: "" }]);
+    onRulesChange([...rules, { id: crypto.randomUUID(), type, value: "" }]);
   };
 
   const updateRule = (index: number, value: string) => {
@@ -102,7 +102,7 @@ export function StepKnowledgeRules({
         {rules.map((rule, index) => {
           const template = RULE_TEMPLATES.find((t) => t.type === rule.type);
           return (
-            <div key={index} className="flex items-center gap-2">
+            <div key={rule.id} className="flex items-center gap-2">
               <div className="flex-1">
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">

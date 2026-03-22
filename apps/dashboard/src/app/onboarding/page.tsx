@@ -22,6 +22,7 @@ const STEP_LABELS = [
 ];
 
 export interface BehavioralRule {
+  id: string;
   type: "max-discount" | "always-escalate" | "never-discuss" | "custom";
   value: string;
 }
@@ -102,8 +103,17 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
     setLaunchStatus("launching");
     try {
+      const assertOk = async (res: Response, label: string) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            (data as Record<string, string>).error ?? `${label} failed (${res.status})`,
+          );
+        }
+      };
+
       // 1. Persist business config + activate agents
-      await fetch("/api/dashboard/agents/wizard-complete", {
+      const wizardRes = await fetch("/api/dashboard/agents/wizard-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,10 +131,11 @@ export default function OnboardingPage() {
           language: "en",
         }),
       });
+      await assertOk(wizardRes, "Agent setup");
 
       // 2. Upload knowledge (if provided)
       if (knowledgeText.trim()) {
-        await fetch("/api/dashboard/knowledge/upload", {
+        const knowledgeRes = await fetch("/api/dashboard/knowledge/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -134,6 +145,7 @@ export default function OnboardingPage() {
             sourceType: "wizard",
           }),
         });
+        await assertOk(knowledgeRes, "Knowledge upload");
       }
 
       // 3. Upload behavioral rules as knowledge chunks
@@ -153,7 +165,7 @@ export default function OnboardingPage() {
         });
 
       if (ruleTexts.length > 0) {
-        await fetch("/api/dashboard/knowledge/upload", {
+        const rulesRes = await fetch("/api/dashboard/knowledge/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -163,6 +175,7 @@ export default function OnboardingPage() {
             sourceType: "wizard",
           }),
         });
+        await assertOk(rulesRes, "Rules upload");
       }
 
       // 4. Provision channels
@@ -196,11 +209,12 @@ export default function OnboardingPage() {
       }
 
       if (channelsToProvision.length > 0) {
-        await fetch("/api/dashboard/organizations/provision", {
+        const provisionRes = await fetch("/api/dashboard/organizations/provision", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channels: channelsToProvision }),
         });
+        await assertOk(provisionRes, "Channel provisioning");
       }
 
       setLaunchStatus("done");
@@ -216,6 +230,12 @@ export default function OnboardingPage() {
       setLaunchStatus("idle");
     } finally {
       setIsSubmitting(false);
+      setChannels((prev) => ({
+        ...prev,
+        founderTelegramToken: "",
+        founderWhatsAppToken: "",
+        customerWhatsAppToken: "",
+      }));
     }
   };
 
