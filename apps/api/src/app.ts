@@ -289,9 +289,32 @@ export async function buildServer() {
     app.log.info(`Session runtime enabled with ${loadedManifests.size} role manifest(s)`);
   }
 
+  // --- Session invocation queue + worker (requires Redis + sessionManager) ---
+  let sessionInvocationQueue: Queue | null = null;
+  let sessionInvocationWorker: Worker | null = null;
+  const sessionRedisUrl = process.env["REDIS_URL"];
+  const gatewayUrl = process.env["OPENCLAW_GATEWAY_URL"];
+  const sessionTokenSecret = process.env["SESSION_TOKEN_SECRET"];
+
+  if (sessionManager && sessionRedisUrl && gatewayUrl && sessionTokenSecret) {
+    const { createSessionInvocationQueue, createSessionInvocationWorker } =
+      await import("./jobs/session-invocation.js");
+    const sessionConnection = { url: sessionRedisUrl };
+    sessionInvocationQueue = createSessionInvocationQueue(sessionConnection);
+    sessionInvocationWorker = createSessionInvocationWorker({
+      connection: sessionConnection,
+      sessionManager,
+      roleManifests,
+      openclawGatewayUrl: gatewayUrl,
+      sessionTokenSecret,
+      logger: app.log,
+    });
+    app.log.info("Session invocation worker started");
+  }
+
   app.decorate("sessionManager", sessionManager);
   app.decorate("roleManifests", roleManifests);
-  app.decorate("sessionInvocationQueue", null); // Set by jobs bootstrap if enabled
+  app.decorate("sessionInvocationQueue", sessionInvocationQueue);
 
   // --- Execution queue setup ---
   let queue: Queue | null = null;
@@ -406,6 +429,12 @@ export async function buildServer() {
 
     await stopAllJobs();
 
+    if (sessionInvocationWorker) {
+      await sessionInvocationWorker.close();
+    }
+    if (sessionInvocationQueue) {
+      await sessionInvocationQueue.close();
+    }
     if (worker) {
       await worker.close();
     }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { validateCheckpoint } from "../checkpoint-validator.js";
-import { AgentCheckpointSchema, z } from "@switchboard/schemas";
+import { AgentCheckpointSchema } from "@switchboard/schemas";
 
 describe("validateCheckpoint", () => {
   it("accepts valid checkpoint with all fields", () => {

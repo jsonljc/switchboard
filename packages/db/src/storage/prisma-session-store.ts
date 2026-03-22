@@ -77,6 +77,46 @@ export class PrismaSessionStore implements SessionStore {
 
     return this.prisma.agentSession.count({ where });
   }
+
+  async createIfUnderLimit(session: AgentSession, maxConcurrent: number): Promise<boolean> {
+    // Serializable transaction: atomically check count and insert
+    return this.prisma.$transaction(
+      async (tx) => {
+        const activeCount = await tx.agentSession.count({
+          where: {
+            organizationId: session.organizationId,
+            roleId: session.roleId,
+            status: { in: ["running", "paused"] },
+          },
+        });
+
+        if (activeCount >= maxConcurrent) return false;
+
+        await tx.agentSession.create({
+          data: {
+            id: session.id,
+            organizationId: session.organizationId,
+            roleId: session.roleId,
+            principalId: session.principalId,
+            status: session.status,
+            safetyEnvelope: session.safetyEnvelope as object,
+            toolCallCount: session.toolCallCount,
+            mutationCount: session.mutationCount,
+            dollarsAtRisk: session.dollarsAtRisk,
+            currentStep: session.currentStep,
+            toolHistory: session.toolHistory as object[],
+            checkpoint: session.checkpoint ? (session.checkpoint as object) : undefined,
+            traceId: session.traceId,
+            startedAt: session.startedAt,
+            completedAt: session.completedAt ?? undefined,
+          },
+        });
+
+        return true;
+      },
+      { isolationLevel: "Serializable" },
+    );
+  }
 }
 
 function toAgentSession(row: {

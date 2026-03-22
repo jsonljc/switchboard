@@ -63,6 +63,17 @@ export class InMemorySessionStore implements SessionStore {
     if (filter.roleId) results = results.filter((s) => s.roleId === filter.roleId);
     return results.length;
   }
+
+  async createIfUnderLimit(session: AgentSession, maxConcurrent: number): Promise<boolean> {
+    // In-memory: single-threaded Node makes this naturally atomic
+    const active = await this.countActive({
+      organizationId: session.organizationId,
+      roleId: session.roleId,
+    });
+    if (active >= maxConcurrent) return false;
+    this.items.set(session.id, { ...session });
+    return true;
+  }
 }
 
 // ---------------------------------------------------------------------------

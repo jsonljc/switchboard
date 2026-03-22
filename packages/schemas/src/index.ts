@@ -1,6 +1,3 @@
-// Re-export zod for downstream packages that need runtime schema construction
-export { z } from "zod";
-
 // Core types
 export * from "./principals.js";
 export * from "./risk.js";

@@ -102,16 +102,6 @@ export class SessionManager {
   async createSession(
     input: CreateSessionInput,
   ): Promise<{ session: AgentSession; run: AgentRun }> {
-    const activeCount = await this.deps.sessions.countActive({
-      organizationId: input.organizationId,
-      roleId: input.roleId,
-    });
-    if (activeCount >= this.deps.maxConcurrentSessions) {
-      throw new Error(
-        `Concurrent session limit (${this.deps.maxConcurrentSessions}) exceeded for org ${input.organizationId} role ${input.roleId}`,
-      );
-    }
-
     const orgOverride = await this.deps.roleOverrides.getByOrgAndRole(
       input.organizationId,
       input.roleId,
@@ -157,7 +147,17 @@ export class SessionManager {
       completedAt: null,
     };
 
-    await this.deps.sessions.create(session);
+    // Atomic check-and-insert: prevents TOCTOU race on concurrent session creation
+    const created = await this.deps.sessions.createIfUnderLimit(
+      session,
+      this.deps.maxConcurrentSessions,
+    );
+    if (!created) {
+      throw new Error(
+        `Concurrent session limit (${this.deps.maxConcurrentSessions}) exceeded for org ${input.organizationId} role ${input.roleId}`,
+      );
+    }
+
     await this.deps.runs.save(run);
 
     return { session, run };

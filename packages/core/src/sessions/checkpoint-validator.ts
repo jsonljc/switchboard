@@ -1,6 +1,6 @@
 import { AgentCheckpointSchema } from "@switchboard/schemas";
 import type { AgentCheckpoint } from "@switchboard/schemas";
-import type { z } from "@switchboard/schemas";
+import type { z } from "zod";
 
 const MAX_CHECKPOINT_BYTES = 500 * 1024; // 500KB
 

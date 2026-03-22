@@ -25,6 +25,15 @@ export interface SessionStore {
   }): Promise<AgentSession[]>;
   /** Count active (non-terminal) sessions for concurrency limiting */
   countActive(filter: { organizationId: string; roleId?: string }): Promise<number>;
+  /**
+   * Atomically check the active session count and insert a new session only
+   * if the count is below `maxConcurrent`. Returns true if the session was
+   * created, false if the limit was already reached.
+   *
+   * Prevents TOCTOU race between countActive() and create().
+   * Prisma implementations should use a serializable transaction.
+   */
+  createIfUnderLimit(session: AgentSession, maxConcurrent: number): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
