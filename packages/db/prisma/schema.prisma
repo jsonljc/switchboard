@@ -323,7 +323,7 @@ model DashboardVerificationToken {
 model OrganizationConfig {
   id                   String   @id // orgId
   name                 String
-  runtimeType          String   @default("http") // openclaw, mcp, http, managed
+  runtimeType          String   @default("http") // mcp, http, managed
   runtimeConfig        Json     @default("{}")
   governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
   tier                 String   @default("smb") // smb, enterprise

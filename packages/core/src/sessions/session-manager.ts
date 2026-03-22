@@ -413,7 +413,7 @@ export class SessionManager {
   }
 
   /**
-   * Ensure runId belongs to the session and has not completed (callback / gateway binding).
+   * Ensure runId belongs to the session and has not completed.
    */
   async verifyActiveRunForSession(sessionId: string, runId: string): Promise<void> {
     const run = await this.deps.runs.getById(runId);

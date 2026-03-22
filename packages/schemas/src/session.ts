@@ -169,7 +169,7 @@ export const AgentRoleOverrideSchema = z.object({
 export type AgentRoleOverride = z.infer<typeof AgentRoleOverrideSchema>;
 
 // ---------------------------------------------------------------------------
-// Resume Payload — sent to Gateway on resume
+// Resume Payload — sent on session resume
 // ---------------------------------------------------------------------------
 
 export const ResumePayloadSchema = z.object({
