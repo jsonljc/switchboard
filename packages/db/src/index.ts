@@ -62,3 +62,10 @@ export { PrismaOutcomeStore } from "./storage/prisma-outcome-store.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaDeliveryStore } from "./stores/prisma-delivery-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
+export {
+  PrismaSessionStore,
+  PrismaRunStore,
+  PrismaPauseStore,
+  PrismaToolEventStore,
+  PrismaRoleOverrideStore,
+} from "./storage/index.js";

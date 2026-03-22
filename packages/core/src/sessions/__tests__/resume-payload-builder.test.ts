@@ -102,7 +102,7 @@ describe("buildResumePayload", () => {
     });
 
     expect(payload.toolHistory).toHaveLength(1);
-    expect(payload.toolHistory[0].toolName).toBe("get_campaign_metrics");
+    expect(payload.toolHistory[0]!.toolName).toBe("get_campaign_metrics");
   });
 
   it("clamps remaining budget to zero (no negative values)", () => {
