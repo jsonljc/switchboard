@@ -2,6 +2,8 @@
 // Lifecycle Stage Guard
 // ---------------------------------------------------------------------------
 
+import type { ThreadStage } from "@switchboard/schemas";
+
 export type LifecycleStage = "lead" | "qualified" | "booked" | "treated" | "churned";
 
 const NON_REQUALIFIABLE_STAGES: LifecycleStage[] = ["treated", "booked"];
@@ -26,4 +28,20 @@ const STAGE_TO_AGENT: Record<LifecycleStage, string | null> = {
 export function agentForStage(stage: LifecycleStage | undefined): string | null {
   if (!stage) return "lead-responder";
   return STAGE_TO_AGENT[stage];
+}
+
+const THREAD_STAGE_TO_AGENT: Record<ThreadStage, string | null> = {
+  new: "lead-responder",
+  responding: "lead-responder",
+  qualifying: "lead-responder",
+  qualified: "sales-closer",
+  closing: "sales-closer",
+  won: null,
+  lost: null,
+  nurturing: "nurture",
+};
+
+export function agentForThreadStage(stage: ThreadStage | undefined): string | null {
+  if (!stage) return "lead-responder";
+  return THREAD_STAGE_TO_AGENT[stage];
 }

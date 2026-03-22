@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { canRequalify, agentForStage } from "../lifecycle.js";
+import { canRequalify, agentForStage, agentForThreadStage } from "../lifecycle.js";
+import type { ThreadStage } from "@switchboard/schemas";
 
 describe("canRequalify", () => {
   it("allows requalification for lead stage", () => {
@@ -50,5 +51,24 @@ describe("agentForStage", () => {
 
   it("defaults undefined to lead-responder", () => {
     expect(agentForStage(undefined)).toBe("lead-responder");
+  });
+});
+
+describe("agentForThreadStage", () => {
+  it.each([
+    ["new", "lead-responder"],
+    ["responding", "lead-responder"],
+    ["qualifying", "lead-responder"],
+    ["qualified", "sales-closer"],
+    ["closing", "sales-closer"],
+    ["nurturing", "nurture"],
+    ["won", null],
+    ["lost", null],
+  ] as [ThreadStage, string | null][])("maps %s -> %s", (stage, expected) => {
+    expect(agentForThreadStage(stage)).toBe(expected);
+  });
+
+  it("returns lead-responder for undefined stage", () => {
+    expect(agentForThreadStage(undefined)).toBe("lead-responder");
   });
 });
