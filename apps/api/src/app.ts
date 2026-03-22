@@ -246,28 +246,29 @@ export async function buildServer() {
 
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
+  let knowledgeStore: import("@switchboard/core").KnowledgeStore | null = null;
   if (prismaClient && process.env["ANTHROPIC_API_KEY"]) {
     const { buildConversationDeps } = await import("./bootstrap/conversation-deps.js");
     const { PrismaConversationStore, PrismaKnowledgeStore } = await import("@switchboard/db");
+    knowledgeStore = new PrismaKnowledgeStore(prismaClient);
     conversationDeps = buildConversationDeps({
       anthropicApiKey: process.env["ANTHROPIC_API_KEY"],
       voyageApiKey: process.env["VOYAGE_API_KEY"],
       conversationStore: new PrismaConversationStore(prismaClient, "default"),
-      knowledgeStore: new PrismaKnowledgeStore(prismaClient),
+      knowledgeStore,
     });
     if (conversationDeps) {
       app.log.info("Conversation deps wired (LLM + knowledge retriever)");
     }
   }
 
-  // Build ingestion pipeline — reuses embedding adapter from conversation deps
+  // Build ingestion pipeline — reuses embedding adapter and knowledge store from conversation deps
   let ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null = null;
-  if (conversationDeps && prismaClient) {
+  if (conversationDeps && knowledgeStore) {
     const { IngestionPipeline } = await import("@switchboard/agents");
-    const { PrismaKnowledgeStore } = await import("@switchboard/db");
 
     ingestionPipeline = new IngestionPipeline({
-      store: new PrismaKnowledgeStore(prismaClient),
+      store: knowledgeStore,
       embedding: conversationDeps.embeddingAdapter,
     });
   }

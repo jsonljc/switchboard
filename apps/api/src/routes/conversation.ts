@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createEventEnvelope } from "@switchboard/agents";
 import type { RoutedEventEnvelope } from "@switchboard/agents";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -12,22 +13,25 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
         body: {
           type: "object",
           required: ["contactId", "messageText", "organizationId"],
+          additionalProperties: false,
           properties: {
-            contactId: { type: "string" },
-            messageText: { type: "string" },
-            channel: { type: "string", default: "whatsapp" },
-            organizationId: { type: "string" },
+            contactId: { type: "string", minLength: 1, maxLength: 255 },
+            messageText: { type: "string", minLength: 1, maxLength: 4000 },
+            channel: { type: "string", default: "whatsapp", maxLength: 50 },
+            organizationId: { type: "string", minLength: 1, maxLength: 255 },
             metadata: { type: "object" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { contactId, messageText, channel, organizationId, metadata } = request.body as {
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
+      const { contactId, messageText, channel, metadata } = request.body as {
         contactId: string;
         messageText: string;
         channel?: string;
-        organizationId: string;
         metadata?: Record<string, unknown>;
       };
 
@@ -36,9 +40,9 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Agent system not available" });
       }
 
-      // 1. Create message.received event
+      // 1. Create message.received event (orgId from auth scope, not request body)
       let event: RoutedEventEnvelope = createEventEnvelope({
-        organizationId,
+        organizationId: orgId,
         eventType: "message.received",
         source: { type: "webhook", id: channel ?? "whatsapp" },
         payload: { contactId, messageText, channel: channel ?? "whatsapp" },
@@ -57,7 +61,6 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
       // 3. Check for owner escalation (no agent handles this stage)
       if (event.metadata?.escalateToOwner) {
         return reply.code(200).send({
-          replies: [],
           escalated: true,
           reason: "no_agent_for_stage",
           agentId: null,
@@ -65,15 +68,15 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // 4. Process through EventLoop
+      // Note: replies are delivered by the ActionExecutor directly via the messaging channel,
+      // not returned in this response. This endpoint confirms processing status only.
       try {
-        const result = await agentSystem.eventLoop.process(event, { organizationId });
+        const result = await agentSystem.eventLoop.process(event, { organizationId: orgId });
 
-        // 5. Analyze processing results
         let escalated = false;
         let handedOffTo: string | null = null;
 
         for (const agent of result.processed) {
-          // Check output event types for escalation/handoff signals
           for (const evtType of agent.outputEvents) {
             if (evtType === "conversation.escalated") {
               escalated = true;
@@ -83,29 +86,16 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
             }
           }
 
-          // Check actionsExecuted for messaging actions (reply was sent by ActionExecutor)
-          const hasSendAction = agent.actionsExecuted.some(
-            (a) => a.startsWith("messaging.") && a.endsWith(".send"),
-          );
-
-          // If agent failed or was unrouted, mark as escalation
           if (!agent.success || agent.agentId === "unrouted") {
             escalated = true;
           }
-
-          // Replies are delivered by the ActionExecutor directly; track them here
-          if (hasSendAction) {
-            // ActionExecutor already sent the message — no need to collect reply text
-          }
         }
 
-        // If nothing processed, treat as unrouted
         if (result.processed.length === 0) {
           escalated = true;
         }
 
         return reply.code(200).send({
-          replies: [],
           escalated,
           handedOffTo,
           agentId: (event.metadata?.targetAgentId as string) ?? "lead-responder",

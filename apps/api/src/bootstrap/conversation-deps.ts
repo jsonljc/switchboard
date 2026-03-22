@@ -56,7 +56,8 @@ export function buildConversationDeps(input: ConversationDepsInput): Conversatio
     });
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`);
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Anthropic API error: ${response.status} ${errorBody}`);
     }
 
     const data = (await response.json()) as {
@@ -86,6 +87,9 @@ export function buildConversationDeps(input: ConversationDepsInput): Conversatio
         });
 
         if (!resp.ok) {
+          console.warn(
+            `[conversation-deps] Voyage API error ${resp.status} — falling back to zero-vector embeddings`,
+          );
           return { embeddings: params.texts.map(() => new Array(1024).fill(0)) };
         }
 

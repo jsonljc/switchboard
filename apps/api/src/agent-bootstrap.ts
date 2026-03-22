@@ -126,6 +126,7 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     new SalesCloserHandler({
       ...options.salesCloserDeps,
       conversation: options.salesCloserConversationDeps,
+      // Closure captures `registry` by reference — safe because agents are registered below
       isAgentActive: options.organizationIds
         ? (_orgId, agentId) => registry.listActive(_orgId).some((a) => a.agentId === agentId)
         : undefined,
