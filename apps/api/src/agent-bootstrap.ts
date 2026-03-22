@@ -26,8 +26,10 @@ import {
   type AgentPort,
   type CoreEvaluateFn,
   type DeliveryStore,
+  type LeadResponderConversationDeps,
   type LifecycleStage,
   type PolicyEngine,
+  type SalesCloserConversationDeps,
   type SalesCloserDeps,
   type NurtureDeps,
   type AdOptimizerDeps,
@@ -61,6 +63,8 @@ export interface AgentSystemOptions {
   nurtureDeps?: NurtureDeps;
   adOptimizerDeps?: AdOptimizerDeps;
   revenueTrackerDeps?: RevenueTrackerDeps;
+  leadResponderConversationDeps?: LeadResponderConversationDeps;
+  salesCloserConversationDeps?: SalesCloserConversationDeps;
   conversationStore?: {
     getStage(contactId: string): Promise<LifecycleStage | undefined>;
   };
@@ -112,9 +116,22 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   // Register all agent handlers
   handlerRegistry.register(
     "lead-responder",
-    new LeadResponderHandler({ scoreLead: DEFAULT_LEAD_SCORER }),
+    new LeadResponderHandler({
+      scoreLead: DEFAULT_LEAD_SCORER,
+      conversation: options.leadResponderConversationDeps,
+    }),
   );
-  handlerRegistry.register("sales-closer", new SalesCloserHandler(options.salesCloserDeps ?? {}));
+  handlerRegistry.register(
+    "sales-closer",
+    new SalesCloserHandler({
+      ...options.salesCloserDeps,
+      conversation: options.salesCloserConversationDeps,
+      // Closure captures `registry` by reference — safe because agents are registered below
+      isAgentActive: options.organizationIds
+        ? (_orgId, agentId) => registry.listActive(_orgId).some((a) => a.agentId === agentId)
+        : undefined,
+    }),
+  );
   handlerRegistry.register("nurture", new NurtureAgentHandler(options.nurtureDeps ?? {}));
   handlerRegistry.register("ad-optimizer", new AdOptimizerHandler(options.adOptimizerDeps ?? {}));
   handlerRegistry.register(

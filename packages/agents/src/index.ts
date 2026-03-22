@@ -104,6 +104,7 @@ export {
   SALES_CLOSER_PORT,
   SalesCloserHandler,
   type SalesCloserDeps,
+  type SalesCloserConversationDeps,
 } from "./agents/sales-closer/index.js";
 
 export {

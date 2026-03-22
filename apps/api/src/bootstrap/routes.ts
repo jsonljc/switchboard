@@ -42,6 +42,7 @@ import { knowledgeRoutes } from "../routes/knowledge.js";
 import { testChatRoutes } from "../routes/test-chat.js";
 import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
+import { agentConversationRoutes } from "../routes/conversation.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -84,4 +85,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(testChatRoutes, { prefix: "/api/test-chat" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
+  await app.register(agentConversationRoutes, { prefix: "/api/conversation" });
 }

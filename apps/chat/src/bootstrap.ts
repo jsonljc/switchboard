@@ -529,6 +529,8 @@ export async function createChatRuntime(
     outcomeStore,
     llmConversationEngine,
     llmBusinessProfile,
+    eventLoopApiUrl: process.env["SWITCHBOARD_API_URL"],
+    eventLoopApiKey: process.env["SWITCHBOARD_API_KEY"],
   });
 
   // Start cadence worker for follow-up automation when lead bot mode is enabled

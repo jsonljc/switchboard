@@ -60,6 +60,7 @@ export { PrismaBusinessConfigStore } from "./storage/prisma-business-config-stor
 export type { ConfigVersionRecord } from "./storage/prisma-business-config-store.js";
 export { PrismaOutcomeStore } from "./storage/prisma-outcome-store.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
+export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
 export { PrismaDeliveryStore } from "./stores/prisma-delivery-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
 export {

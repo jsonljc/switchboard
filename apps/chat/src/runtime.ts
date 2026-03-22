@@ -38,7 +38,7 @@ import { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
 // Extracted modules
 import type { HandlerContext, OperatorState } from "./handlers/handler-context.js";
-import { handleLeadMessage } from "./handlers/lead-handler.js";
+import { handleLeadMessage, delegateToEventLoop } from "./handlers/lead-handler.js";
 import { templateFallback } from "./runtime-helpers.js";
 import {
   linkCrmContact,
@@ -94,6 +94,10 @@ export interface ChatRuntimeConfig {
   llmBusinessProfile?: LLMBusinessProfile | null;
   /** Minimum delay in ms before sending a response (typing simulation). Default: 0. */
   typingDelayMs?: number;
+  /** When set, delegate lead messages to the Switchboard API EventLoop instead of local router. */
+  eventLoopApiUrl?: string;
+  /** API key for authenticating with the EventLoop API. */
+  eventLoopApiKey?: string;
 }
 
 export class ChatRuntime {
@@ -122,6 +126,8 @@ export class ChatRuntime {
   private llmConversationEngine: LLMConversationEngine | null;
   private llmBusinessProfile: LLMBusinessProfile | null;
   private typingDelayMs: number;
+  private eventLoopApiUrl: string | null;
+  private eventLoopApiKey: string | null;
   private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
@@ -162,6 +168,8 @@ export class ChatRuntime {
     this.llmConversationEngine = config.llmConversationEngine ?? null;
     this.llmBusinessProfile = config.llmBusinessProfile ?? null;
     this.typingDelayMs = config.typingDelayMs ?? 0;
+    this.eventLoopApiUrl = config.eventLoopApiUrl ?? null;
+    this.eventLoopApiKey = config.eventLoopApiKey ?? null;
     this.dialogueMiddleware = new DialogueMiddleware({
       resolvedProfile: config.resolvedProfile ?? null,
     });
@@ -415,7 +423,18 @@ export class ChatRuntime {
     );
     if (consentHandled) return;
 
-    // Lead bot mode — route through ConversationRouter instead of interpreter pipeline
+    // Lead bot mode — delegate to EventLoop API when configured, otherwise use local router
+    if (this.isLeadBot && this.eventLoopApiUrl) {
+      const ctx = this.buildHandlerContext();
+      await delegateToEventLoop(
+        ctx,
+        { apiUrl: this.eventLoopApiUrl, apiKey: this.eventLoopApiKey ?? undefined },
+        message,
+        threadId,
+      );
+      return;
+    }
+
     if (this.isLeadBot && this.leadRouter) {
       const ctx = this.buildHandlerContext();
       await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware, {
