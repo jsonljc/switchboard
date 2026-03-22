@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "crypto";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import type { KnowledgeSourceType } from "@switchboard/core";
 
 interface DocumentListItem {
   documentId: string;
@@ -78,11 +79,32 @@ export const knowledgeRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const documentId = randomUUID();
       const agentId = body.agentId ?? "global";
-      const sourceType = body.sourceType ?? "document";
+      const sourceType: KnowledgeSourceType =
+        (body.sourceType as KnowledgeSourceType) ?? "document";
 
-      // Simple word-based chunking: 500 words per chunk
+      // Use IngestionPipeline when available (real embeddings), otherwise fall back to zero-vector
+      if (app.ingestionPipeline) {
+        const documentId = randomUUID();
+        const result = await app.ingestionPipeline.ingest({
+          organizationId: orgId,
+          agentId,
+          documentId,
+          sourceType,
+          content: body.content,
+          metadata: { fileName: body.fileName },
+        });
+
+        return reply.code(201).send({
+          documentId: result.documentId,
+          fileName: body.fileName,
+          chunksCreated: result.chunksCreated,
+        });
+      }
+
+      // Fallback: zero-vector embeddings (no embedding API key configured)
+      const documentId = randomUUID();
+
       const words = body.content.split(/\s+/);
       const chunkSize = 500;
       const chunks = [];
@@ -92,7 +114,6 @@ export const knowledgeRoutes: FastifyPluginAsync = async (app) => {
         chunks.push(chunkWords.join(" "));
       }
 
-      // Store chunks with zero-vector embeddings (real embeddings require API key)
       const zeroVector = `[${new Array(1024).fill(0).join(",")}]`;
 
       for (let idx = 0; idx < chunks.length; idx++) {

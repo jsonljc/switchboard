@@ -31,6 +31,65 @@ import type {
   BusinessProfile,
 } from "../conversation/llm-conversation-engine.js";
 
+export interface EventLoopDelegateConfig {
+  apiUrl: string;
+  apiKey?: string;
+}
+
+export async function delegateToEventLoop(
+  ctx: HandlerContext,
+  config: EventLoopDelegateConfig,
+  message: IncomingMessage,
+  threadId: string,
+): Promise<void> {
+  const url = `${config.apiUrl}/api/conversation/message`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (config.apiKey) {
+    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        contactId: threadId,
+        messageText: message.text,
+        channel: message.channel ?? "whatsapp",
+        organizationId: message.organizationId ?? "default",
+        metadata: message.metadata,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[LeadBot] EventLoop API error: ${res.status} ${res.statusText}`);
+      await ctx.sendFilteredReply(threadId, "Sorry, something went wrong. Please try again.");
+      return;
+    }
+
+    const body = (await res.json()) as {
+      replies: string[];
+      escalated: boolean;
+      handedOffTo?: string | null;
+    };
+
+    for (const reply of body.replies) {
+      await ctx.sendFilteredReply(threadId, reply);
+      await ctx.recordAssistantMessage(threadId, reply);
+    }
+
+    if (body.escalated) {
+      await ctx.sendFilteredReply(
+        threadId,
+        "Let me get one of our team to help you directly. They'll be with you shortly!",
+      );
+    }
+  } catch (err) {
+    console.error("[LeadBot] EventLoop delegation error:", err);
+    await ctx.sendFilteredReply(threadId, "Sorry, something went wrong. Please try again.");
+  }
+}
+
 export interface LeadHandlerDeps {
   handoffStore?: HandoffStore | null;
   handoffNotifier?: HandoffNotifier | null;

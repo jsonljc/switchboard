@@ -59,6 +59,7 @@ declare module "fastify" {
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
+    ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null;
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
     sessionInvocationQueue: import("bullmq").Queue | null;
     roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
@@ -243,9 +244,46 @@ export async function buildServer() {
     deliveryStore = new PrismaDeliveryStore(prismaClient);
   }
 
+  // --- Conversation deps (LLM + knowledge for agent handlers) ---
+  let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
+  if (prismaClient && process.env["ANTHROPIC_API_KEY"]) {
+    const { buildConversationDeps } = await import("./bootstrap/conversation-deps.js");
+    const { PrismaConversationStore, PrismaKnowledgeStore } = await import("@switchboard/db");
+    conversationDeps = buildConversationDeps({
+      anthropicApiKey: process.env["ANTHROPIC_API_KEY"],
+      voyageApiKey: process.env["VOYAGE_API_KEY"],
+      conversationStore: new PrismaConversationStore(prismaClient, "default"),
+      knowledgeStore: new PrismaKnowledgeStore(prismaClient),
+    });
+    if (conversationDeps) {
+      app.log.info("Conversation deps wired (LLM + knowledge retriever)");
+    }
+  }
+
+  // Build ingestion pipeline — reuses embedding adapter from conversation deps
+  let ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null = null;
+  if (conversationDeps && prismaClient) {
+    const { IngestionPipeline } = await import("@switchboard/agents");
+    const { PrismaKnowledgeStore } = await import("@switchboard/db");
+
+    ingestionPipeline = new IngestionPipeline({
+      store: new PrismaKnowledgeStore(prismaClient),
+      embedding: conversationDeps.embeddingAdapter,
+    });
+  }
+
   const agentSystem = bootstrapAgentSystem({
     conversionBus,
     deliveryStore,
+    leadResponderConversationDeps: conversationDeps ?? undefined,
+    salesCloserConversationDeps: conversationDeps ?? undefined,
+    conversationStore: conversationDeps?.conversationStore
+      ? {
+          getStage: conversationDeps.conversationStore.getStage.bind(
+            conversationDeps.conversationStore,
+          ),
+        }
+      : undefined,
     logger: {
       warn: (msg: string) => app.log.warn(msg),
       error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
@@ -253,6 +291,7 @@ export async function buildServer() {
     },
   });
   app.decorate("agentSystem", agentSystem);
+  app.decorate("ingestionPipeline", ingestionPipeline);
   app.log.info(
     `Agent orchestration system bootstrapped (delivery store: ${deliveryStore ? "prisma" : "in-memory"})`,
   );
