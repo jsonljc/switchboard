@@ -93,7 +93,7 @@ Scan each changed file for these patterns. Only flag issues in NEW or MODIFIED c
 
 **4a. Import boundaries:**
 
-- In `packages/core/` files: flag any import from `@switchboard/digital-ads`, `@switchboard/customer-engagement`, `@switchboard/payments`, `@switchboard/crm`, `@switchboard/quant-trading`, `@switchboard/revenue-growth`, or `@switchboard/db`
+- In `packages/core/` files: flag any import from `@switchboard/digital-ads`, `@switchboard/customer-engagement`, `@switchboard/payments`, `@switchboard/crm`, `@switchboard/revenue-growth`, or `@switchboard/db`
 - In `cartridges/*/` files: flag any import from `@switchboard/db` or from another cartridge
 - In `packages/schemas/` files: flag any `@switchboard/*` import
 - PASS if: all imports respect the layer model
