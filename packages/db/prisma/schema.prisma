@@ -323,7 +323,7 @@ model DashboardVerificationToken {
 model OrganizationConfig {
   id                   String   @id // orgId
   name                 String
-  runtimeType          String   @default("http") // openclaw, mcp, http, managed
+  runtimeType          String   @default("http") // mcp, http, managed
   runtimeConfig        Json     @default("{}")
   governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
   tier                 String   @default("smb") // smb, enterprise
@@ -898,7 +898,7 @@ model KnowledgeChunk {
 }
 
 // ---------------------------------------------------------------------------
-// OpenClaw Session Runtime (Phase 1)
+// Session Runtime
 // ---------------------------------------------------------------------------
 
 model AgentSession {
@@ -908,8 +908,6 @@ model AgentSession {
   principalId       String
   status            String    @default("running")
   safetyEnvelope    Json
-  allowedToolPack   String[]  @default([])
-  governanceProfile String    @default("")
   toolCallCount     Int       @default(0)
   mutationCount     Int       @default(0)
   dollarsAtRisk     Float     @default(0)
@@ -919,8 +917,6 @@ model AgentSession {
   traceId           String
   startedAt         DateTime  @default(now())
   completedAt       DateTime?
-  errorMessage      String?
-  errorCode         String?
 
   runs       AgentRun[]
   pauses     AgentPause[]
@@ -981,13 +977,11 @@ model ToolEvent {
   durationMs            Int?
   envelopeId            String?
   timestamp             DateTime @default(now())
-  gatewayIdempotencyKey String?
 
   session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   // stepIndex is monotonic across all runs in a session (tied to session.currentStep)
   @@unique([sessionId, stepIndex])
-  @@unique([sessionId, gatewayIdempotencyKey])
   @@index([sessionId])
   @@index([runId])
 }

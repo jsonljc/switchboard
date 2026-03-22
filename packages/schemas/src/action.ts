@@ -46,7 +46,7 @@ export const MagnitudeSchema = z
   .optional();
 export type Magnitude = z.infer<typeof MagnitudeSchema>;
 
-/** Canonical action shape for execute/propose requests (e.g. OpenClaw, API). */
+/** Canonical action shape for execute/propose requests (e.g. MCP, API). */
 export const ExecuteActionSchema = z.object({
   actionType: z.string().min(1),
   parameters: z.record(z.string(), z.unknown()),

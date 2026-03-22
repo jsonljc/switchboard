@@ -4,7 +4,7 @@ import type { RuntimeAdapter } from "./types.js";
 
 /**
  * Payload shape when an MCP client invokes a side-effect tool.
- * Mirrors the OpenClaw adapter pattern for consistency.
+ * Maps MCP tool call payloads to the runtime execute request format.
  */
 export interface McpToolCallPayload {
   /** MCP tool name (e.g. "pause_campaign", "adjust_budget"). */

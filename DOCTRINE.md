@@ -5,17 +5,20 @@
 Only Switchboard can execute privileged actions.
 
 Agents can:
+
 - Propose
 - Analyze
 - Suggest
 
 Agents cannot:
+
 - Hold credentials
 - Execute mutations directly
 - Bypass approval
 - Modify production state
 
 Switchboard is the only entity allowed to:
+
 - Call Meta Marketing API
 - Inject credentials
 - Mutate campaigns
@@ -41,11 +44,13 @@ Blindness is a feature, not a limitation.
 Mutations require sealed, payload-bound approval tokens.
 
 Every mutating action must require:
+
 - `approval_token`
 - `snapshot_id`
 - `idempotency_key`
 
 The approval token must:
+
 - Be bound to the exact payload hash
 - Expire quickly
 - Be single-use
@@ -59,15 +64,18 @@ No token → no execution.
 Every state change must be reversible.
 
 Before any mutation:
+
 - Capture Last Known Good State.
 - Store structural metadata.
 - Timestamp and hash the snapshot.
 
 After mutation:
+
 - Verify outcome.
 - Log before/after diff.
 
 Revert must:
+
 - Be callable from Telegram.
 - Require approval for destructive restore.
 - Restore deterministically.
@@ -79,6 +87,7 @@ Undo is not optional. It is structural.
 Models suggest. Code decides.
 
 All guardrails must be implemented as deterministic logic:
+
 - Budget delta caps
 - Max entity mutation limits
 - Minimum data thresholds
@@ -87,6 +96,7 @@ All guardrails must be implemented as deterministic logic:
 - Duplicate call detection
 
 Never rely on:
+
 - Prompt instructions
 - "Please behave"
 - Model-based risk scoring alone
@@ -108,6 +118,7 @@ The tool boundary is the control boundary.
 ## 7. Audit Is Non-Optional
 
 Every action must generate:
+
 - Who requested
 - What was proposed
 - What was approved
@@ -124,6 +135,7 @@ Receipts over intelligence.
 Autonomy must have cost ceilings.
 
 Switchboard must enforce:
+
 - Step count limits
 - Repeated identical call detection
 - Token budget ceilings
@@ -137,8 +149,8 @@ No infinite loops. No runaway spend.
 Models are replaceable. Governance is not.
 
 Switchboard must not depend on:
-- Manus
-- OpenClaw
+
+- Any external AI runtime or orchestrator
 - Claude
 - OpenAI
 - Any specific LLM
@@ -149,6 +161,7 @@ You cannot swap governance without breaking trust.
 ## 10. Clinics Don't Buy Intelligence
 
 They buy:
+
 - Stability
 - Predictability
 - Undo
@@ -170,11 +183,13 @@ If a feature increases intelligence but decreases control, it violates the doctr
 > Switchboard does not govern agents. Switchboard governs execution.
 
 If you follow this document strictly, you don't need:
+
 - Hook governance
 - Platform dependence
 - Impossible tool lockdown fantasies
 
 You only need:
+
 - Credential sovereignty
 - Deterministic gates
 - Tool boundary enforcement

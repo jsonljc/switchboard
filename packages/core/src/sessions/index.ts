@@ -26,6 +26,3 @@ export type {
   PauseSessionInput,
   ResumeResult,
 } from "./session-manager.js";
-export { applyGatewayOutcomeToSession } from "./apply-gateway-outcome.js";
-export type { GatewayOutcomeLogger } from "./apply-gateway-outcome.js";
-export { isFinalBullMqJobAttempt } from "./bullmq-attempts.js";

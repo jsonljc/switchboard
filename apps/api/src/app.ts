@@ -61,13 +61,7 @@ declare module "fastify" {
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
     ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null;
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
-    applyGatewayOutcomeForRun:
-      | import("./jobs/session-invocation.js").ApplyGatewayOutcomeForRunFn
-      | null;
-    sessionInvocationQueue: import("bullmq").Queue | null;
     roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
-    /** Present when session worker + OpenClaw gateway URL are configured */
-    cancelSessionWithGateway: ((sessionId: string) => Promise<void>) | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -307,10 +301,6 @@ export async function buildServer() {
   const roleManifests = new Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>();
   const maxConcurrentSessionsEnv = parseInt(process.env["MAX_CONCURRENT_SESSIONS"] ?? "10", 10);
 
-  let applyGatewayOutcomeForRun:
-    | import("./jobs/session-invocation.js").ApplyGatewayOutcomeForRunFn
-    | null = null;
-
   if (prismaClient && process.env["SESSION_TOKEN_SECRET"]) {
     const { SessionManager } = await import("@switchboard/core/sessions");
     const {
@@ -319,7 +309,6 @@ export async function buildServer() {
       PrismaPauseStore,
       PrismaToolEventStore,
       PrismaRoleOverrideStore,
-      applyGatewayOutcomeForRunWithAdvisoryLock,
     } = await import("@switchboard/db");
     const { loadRoleManifests } = await import("./bootstrap/role-manifests.js");
 
@@ -341,124 +330,11 @@ export async function buildServer() {
       getRoleCheckpointValidator,
     });
 
-    const sessionManagerBase = {
-      maxConcurrentSessions: maxConcurrentSessionsEnv,
-      getRoleCheckpointValidator,
-    };
-    applyGatewayOutcomeForRun = (params) =>
-      applyGatewayOutcomeForRunWithAdvisoryLock({
-        prisma: prismaClient,
-        sessionManagerBase,
-        ...params,
-      });
-
     app.log.info(`Session runtime enabled with ${loadedManifests.size} role manifest(s)`);
   }
 
-  // --- Session invocation queue + worker (requires Redis + sessionManager) ---
-  let sessionInvocationQueue: Queue | null = null;
-  let sessionInvocationWorker: Worker | null = null;
-  let cancelSessionWithGateway: ((sessionId: string) => Promise<void>) | null = null;
-  let stopOpenClawGatewayHealthProbe: (() => void) | null = null;
-  const sessionRedisUrl = process.env["REDIS_URL"];
-  const gatewayUrl = process.env["OPENCLAW_GATEWAY_URL"];
-  const sessionTokenSecret = process.env["SESSION_TOKEN_SECRET"];
-
-  if (
-    sessionManager &&
-    applyGatewayOutcomeForRun &&
-    sessionRedisUrl &&
-    gatewayUrl &&
-    sessionTokenSecret
-  ) {
-    const { createSessionInvocationQueue, createSessionInvocationWorker } =
-      await import("./jobs/session-invocation.js");
-    const { HttpGatewayClient } = await import("./gateway/http-gateway-client.js");
-    const { ResilientGatewayClient } = await import("./gateway/resilient-gateway-client.js");
-    const { GatewayCircuitBreaker } = await import("./gateway/circuit-breaker.js");
-    const { SessionGatewayInflightRegistry } =
-      await import("./gateway/session-gateway-inflight.js");
-    const { startOpenClawGatewayHealthProbes } = await import("./gateway/openclaw-health-probe.js");
-    const sessionConnection = { url: sessionRedisUrl };
-    sessionInvocationQueue = createSessionInvocationQueue(sessionConnection);
-    const manifestCaps = [...roleManifests.values()].map((m) => m.manifest.maxConcurrentSessions);
-    const minRoleCap = manifestCaps.length ? Math.min(...manifestCaps) : maxConcurrentSessionsEnv;
-    const workerConcurrency = Math.min(maxConcurrentSessionsEnv, minRoleCap);
-    const fetchTimeoutMs = parseInt(
-      process.env["OPENCLAW_GATEWAY_FETCH_TIMEOUT_MS"] ?? "120000",
-      10,
-    );
-    const maxRetries = parseInt(process.env["OPENCLAW_GATEWAY_MAX_RETRIES"] ?? "2", 10);
-    const retryDelayMs = parseInt(process.env["OPENCLAW_GATEWAY_RETRY_DELAY_MS"] ?? "500", 10);
-    const breakerFailureThreshold = parseInt(
-      process.env["OPENCLAW_GATEWAY_BREAKER_FAILURE_THRESHOLD"] ?? "5",
-      10,
-    );
-    const breakerCooldownMs = parseInt(
-      process.env["OPENCLAW_GATEWAY_BREAKER_COOLDOWN_MS"] ?? "30000",
-      10,
-    );
-    const httpGatewayClient = new HttpGatewayClient({
-      baseUrl: gatewayUrl,
-      fetchTimeoutMs,
-      maxRetries,
-      retryDelayMs,
-    });
-    const gatewayCircuitBreaker = new GatewayCircuitBreaker(
-      breakerFailureThreshold,
-      breakerCooldownMs,
-    );
-    const gatewayClient = new ResilientGatewayClient(httpGatewayClient, gatewayCircuitBreaker);
-    const sessionGatewayInflightRegistry = new SessionGatewayInflightRegistry();
-    sessionInvocationWorker = createSessionInvocationWorker({
-      connection: sessionConnection,
-      sessionManager,
-      roleManifests,
-      gatewayClient,
-      sessionTokenSecret,
-      workerConcurrency,
-      applyGatewayOutcomeForRun,
-      inflightRegistry: sessionGatewayInflightRegistry,
-      logger: app.log,
-    });
-    const { cancelSessionWithGatewayPropagation } =
-      await import("./sessions/cancel-session-gateway.js");
-    cancelSessionWithGateway = async (sessionId: string) => {
-      await cancelSessionWithGatewayPropagation({
-        sessionManager,
-        gatewayClient,
-        sessionTokenSecret,
-        sessionId,
-        inflightRegistry: sessionGatewayInflightRegistry,
-        logger: app.log,
-      });
-    };
-    const healthProbeIntervalMs = parseInt(
-      process.env["OPENCLAW_GATEWAY_HEALTH_PROBE_INTERVAL_MS"] ?? "30000",
-      10,
-    );
-    stopOpenClawGatewayHealthProbe = startOpenClawGatewayHealthProbes({
-      gatewayClient,
-      intervalMs: healthProbeIntervalMs,
-      logger: app.log,
-    });
-    app.log.info(
-      {
-        workerConcurrency,
-        fetchTimeoutMs,
-        breakerFailureThreshold,
-        breakerCooldownMs,
-        healthProbeIntervalMs,
-      },
-      "Session invocation worker started (OpenClaw gateway + health probes + inflight abort)",
-    );
-  }
-
   app.decorate("sessionManager", sessionManager);
-  app.decorate("applyGatewayOutcomeForRun", applyGatewayOutcomeForRun);
   app.decorate("roleManifests", roleManifests);
-  app.decorate("sessionInvocationQueue", sessionInvocationQueue);
-  app.decorate("cancelSessionWithGateway", cancelSessionWithGateway);
 
   // --- Execution queue setup ---
   let queue: Queue | null = null;
@@ -573,16 +449,6 @@ export async function buildServer() {
 
     await stopAllJobs();
 
-    if (stopOpenClawGatewayHealthProbe) {
-      stopOpenClawGatewayHealthProbe();
-      stopOpenClawGatewayHealthProbe = null;
-    }
-    if (sessionInvocationWorker) {
-      await sessionInvocationWorker.close();
-    }
-    if (sessionInvocationQueue) {
-      await sessionInvocationQueue.close();
-    }
     if (worker) {
       await worker.close();
     }

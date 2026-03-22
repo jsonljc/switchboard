@@ -33,16 +33,6 @@ export { PrismaClient };
 export type { Prisma } from "@prisma/client";
 export type { PrismaDbClient } from "./prisma-db.js";
 export { isRootPrismaClient } from "./prisma-db.js";
-export {
-  applyGatewayOutcomeForRunWithAdvisoryLock,
-  advisoryLockInt32Pair,
-  createSessionManagerForPrismaClient,
-  isTerminalSessionStatusForGatewayCallback,
-  RunCallbackRunNotFoundError,
-  RunCallbackSessionMismatchError,
-  RunCallbackSessionNotFoundError,
-} from "./sessions/apply-gateway-outcome-locked.js";
-export type { ApplyGatewayOutcomeForRunParams } from "./sessions/apply-gateway-outcome-locked.js";
 
 export {
   createPrismaStorage,

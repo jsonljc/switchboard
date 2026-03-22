@@ -10,7 +10,7 @@ import type {
 
 /**
  * Single facade for "propose + conditional execute".
- * Used by POST /api/execute and by runtime adapters (OpenClaw, MCP).
+ * Used by POST /api/execute and by runtime adapters (MCP, API).
  */
 export class ExecutionService implements RuntimeAdapter {
   private storage: StorageContext | null;

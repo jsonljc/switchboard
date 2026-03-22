@@ -14,8 +14,6 @@ export class PrismaSessionStore implements SessionStore {
         principalId: session.principalId,
         status: session.status,
         safetyEnvelope: session.safetyEnvelope as object,
-        allowedToolPack: session.allowedToolPack,
-        governanceProfile: session.governanceProfile,
         toolCallCount: session.toolCallCount,
         mutationCount: session.mutationCount,
         dollarsAtRisk: session.dollarsAtRisk,
@@ -25,8 +23,6 @@ export class PrismaSessionStore implements SessionStore {
         traceId: session.traceId,
         startedAt: session.startedAt,
         completedAt: session.completedAt ?? undefined,
-        errorMessage: session.errorMessage ?? undefined,
-        errorCode: session.errorCode ?? undefined,
       },
     });
   }
@@ -47,10 +43,6 @@ export class PrismaSessionStore implements SessionStore {
     if (updates.checkpoint !== undefined) data.checkpoint = updates.checkpoint as object;
     if (updates.completedAt !== undefined) data.completedAt = updates.completedAt;
     if (updates.toolHistory !== undefined) data.toolHistory = updates.toolHistory as object[];
-    if (updates.allowedToolPack !== undefined) data.allowedToolPack = updates.allowedToolPack;
-    if (updates.governanceProfile !== undefined) data.governanceProfile = updates.governanceProfile;
-    if (updates.errorMessage !== undefined) data.errorMessage = updates.errorMessage;
-    if (updates.errorCode !== undefined) data.errorCode = updates.errorCode;
 
     await this.prisma.agentSession.update({ where: { id }, data });
   }
@@ -111,8 +103,6 @@ export class PrismaSessionStore implements SessionStore {
             principalId: session.principalId,
             status: session.status,
             safetyEnvelope: session.safetyEnvelope as object,
-            allowedToolPack: session.allowedToolPack,
-            governanceProfile: session.governanceProfile,
             toolCallCount: session.toolCallCount,
             mutationCount: session.mutationCount,
             dollarsAtRisk: session.dollarsAtRisk,
@@ -122,8 +112,6 @@ export class PrismaSessionStore implements SessionStore {
             traceId: session.traceId,
             startedAt: session.startedAt,
             completedAt: session.completedAt ?? undefined,
-            errorMessage: session.errorMessage ?? undefined,
-            errorCode: session.errorCode ?? undefined,
           },
         });
 
@@ -141,8 +129,6 @@ function toAgentSession(row: {
   principalId: string;
   status: string;
   safetyEnvelope: unknown;
-  allowedToolPack: string[];
-  governanceProfile: string;
   toolCallCount: number;
   mutationCount: number;
   dollarsAtRisk: number;
@@ -152,8 +138,6 @@ function toAgentSession(row: {
   traceId: string;
   startedAt: Date;
   completedAt: Date | null;
-  errorMessage: string | null;
-  errorCode: string | null;
 }): AgentSession {
   return {
     id: row.id,
@@ -162,8 +146,6 @@ function toAgentSession(row: {
     principalId: row.principalId,
     status: row.status as SessionStatus,
     safetyEnvelope: row.safetyEnvelope as AgentSession["safetyEnvelope"],
-    allowedToolPack: row.allowedToolPack ?? [],
-    governanceProfile: row.governanceProfile ?? "",
     toolCallCount: row.toolCallCount,
     mutationCount: row.mutationCount,
     dollarsAtRisk: row.dollarsAtRisk,
@@ -173,7 +155,5 @@ function toAgentSession(row: {
     traceId: row.traceId,
     startedAt: row.startedAt,
     completedAt: row.completedAt,
-    errorMessage: row.errorMessage ?? null,
-    errorCode: row.errorCode ?? undefined,
   };
 }
