@@ -63,3 +63,6 @@ export * from "./conversation-flow.js";
 
 // Outcome event tracking
 export * from "./outcome-event.js";
+
+// Session runtime types
+export * from "./session.js";
