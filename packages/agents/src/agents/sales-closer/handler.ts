@@ -5,13 +5,23 @@
 import { randomUUID } from "node:crypto";
 import { createEventEnvelope } from "../../events.js";
 import type { RoutedEventEnvelope } from "../../events.js";
-import type { AgentContext, AgentHandler, AgentResponse, ActionRequest } from "../../ports.js";
+import type {
+  AgentContext,
+  AgentHandler,
+  AgentResponse,
+  ActionRequest,
+  ThreadUpdate,
+} from "../../ports.js";
 import { validatePayload } from "../../validate-payload.js";
 import { computeConfidence } from "../../knowledge/retrieval.js";
 import { buildSalesCloserPrompt } from "./prompt-builder.js";
 import type { TonePreset } from "../lead-responder/tone-presets.js";
 import type { SupportedLanguage } from "../lead-responder/language-directives.js";
 import type { SalesCloserDeps } from "./types.js";
+import type { ConversationThread } from "@switchboard/schemas";
+import { extractConversationContext } from "../../context-extractor.js";
+import { refreshSummary, shouldRefreshSummary } from "../../summary-refresher.js";
+import { SUMMARY_REFRESH_INTERVAL } from "@switchboard/core";
 
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
 const DEFAULT_FOLLOW_UP_DAYS = [1, 3, 7];
@@ -101,6 +111,16 @@ export class SalesCloserHandler implements AgentHandler {
       agentId: "sales-closer",
     });
 
+    // 4.5. Load thread context
+    const thread = (event.metadata?.conversationThread as ConversationThread) ?? undefined;
+    const existingContext = thread?.agentContext ?? {
+      objectionsEncountered: [],
+      preferencesLearned: {},
+      offersMade: [],
+      topicsDiscussed: [],
+      sentimentTrend: "unknown" as const,
+    };
+
     // 5. Build ConversationPrompt
     const prompt = buildSalesCloserPrompt({
       history: [...history, inboundMessage],
@@ -109,6 +129,7 @@ export class SalesCloserHandler implements AgentHandler {
       language,
       bookingUrl,
       urgencyEnabled,
+      threadContext: existingContext,
     });
 
     // 6. Generate LLM reply
@@ -164,10 +185,38 @@ export class SalesCloserHandler implements AgentHandler {
     };
     await conv.conversationStore.appendMessage(contactId, outboundMessage);
 
+    // 11. Extract updated context
+    let threadUpdate: ThreadUpdate | undefined;
+    if (thread) {
+      const newMessageCount = (thread.messageCount ?? 0) + 1;
+      const updatedContext = await extractConversationContext(
+        conv.llm,
+        [...history, inboundMessage, outboundMessage],
+        existingContext,
+      );
+
+      threadUpdate = {
+        agentContext: updatedContext,
+        messageCount: newMessageCount,
+      };
+
+      if (shouldRefreshSummary(newMessageCount, SUMMARY_REFRESH_INTERVAL)) {
+        const summary = await refreshSummary(conv.llm, [
+          ...history,
+          inboundMessage,
+          outboundMessage,
+        ]);
+        if (summary) {
+          threadUpdate.currentSummary = summary;
+        }
+      }
+    }
+
     return {
       events: [],
       actions,
       state: { contactId, confidence, reply: llmReply.reply },
+      threadUpdate,
     };
   }
 
