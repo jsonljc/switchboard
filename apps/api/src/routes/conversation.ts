@@ -95,6 +95,22 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
           escalated = true;
         }
 
+        // 5. Save thread updates from agent processing
+        if (result.processed.length > 0) {
+          const thread = event.metadata?.conversationThread as { id: string } | undefined;
+          if (thread && agentSystem.threadStore) {
+            for (const agent of result.processed) {
+              if (agent.threadUpdate) {
+                try {
+                  await agentSystem.threadStore.update(thread.id, agent.threadUpdate);
+                } catch (err) {
+                  app.log.error({ err, threadId: thread.id }, "Failed to save thread update");
+                }
+              }
+            }
+          }
+        }
+
         return reply.code(200).send({
           escalated,
           handedOffTo,

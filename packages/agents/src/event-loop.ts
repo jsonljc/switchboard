@@ -37,6 +37,8 @@ export interface ProcessedAgent {
   actionsExecuted: string[];
   actionsFailed: string[];
   error?: string;
+  /** Thread updates from agent (if any). */
+  threadUpdate?: import("./ports.js").ThreadUpdate;
 }
 
 export interface EventLoopResult {
@@ -200,6 +202,7 @@ export class EventLoop {
         outputEvents: response.events.map((e) => e.eventType),
         actionsExecuted,
         actionsFailed,
+        threadUpdate: response.threadUpdate,
       },
       outputEvents: response.events,
     };

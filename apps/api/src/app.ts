@@ -243,6 +243,13 @@ export async function buildServer() {
     deliveryStore = new PrismaDeliveryStore(prismaClient);
   }
 
+  // --- Thread store for per-contact derived state ---
+  let threadStore: import("@switchboard/core").ConversationThreadStore | undefined;
+  if (prismaClient) {
+    const { PrismaConversationThreadStore } = await import("@switchboard/db");
+    threadStore = new PrismaConversationThreadStore(prismaClient);
+  }
+
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
   let knowledgeStore: import("@switchboard/core").KnowledgeStore | null = null;
@@ -284,6 +291,7 @@ export async function buildServer() {
           ),
         }
       : undefined,
+    threadStore,
     logger: {
       warn: (msg: string) => app.log.warn(msg),
       error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
