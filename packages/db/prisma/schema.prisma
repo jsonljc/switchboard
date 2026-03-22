@@ -1029,6 +1029,25 @@ model ContactLifecycle {
   @@index([orgId])
 }
 
+model ConversationThread {
+  id              String    @id @default(uuid())
+  contactId       String
+  organizationId  String
+  stage           String    @default("new") // ThreadStage enum
+  assignedAgent   String    @default("lead-responder")
+  agentContext    Json      @default("{}")  // AgentContextData JSON
+  currentSummary  String    @default("")
+  followUpSchedule Json     @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
+  lastOutcomeAt   DateTime?
+  messageCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([contactId, organizationId])
+  @@index([organizationId])
+  @@index([stage])
+}
+
 model AgentRegistration {
   id            String   @id @default(uuid())
   orgId         String
