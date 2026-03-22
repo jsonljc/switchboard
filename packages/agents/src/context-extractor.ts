@@ -80,7 +80,7 @@ export async function extractConversationContext(
         ...existing.preferencesLearned,
         ...extracted.preferencesLearned,
       },
-      offersMade: [...existing.offersMade, ...extracted.offersMade],
+      offersMade: dedupeOffers([...existing.offersMade, ...extracted.offersMade]),
       topicsDiscussed: dedupe([...existing.topicsDiscussed, ...extracted.topicsDiscussed]),
       sentimentTrend: extracted.sentimentTrend,
     };
@@ -91,4 +91,15 @@ export async function extractConversationContext(
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr)];
+}
+
+function dedupeOffers(
+  offers: Array<{ description: string; date: Date }>,
+): Array<{ description: string; date: Date }> {
+  const seen = new Set<string>();
+  return offers.filter((o) => {
+    if (seen.has(o.description)) return false;
+    seen.add(o.description);
+    return true;
+  });
 }
