@@ -80,6 +80,11 @@ export interface ToolEventStore {
   record(event: ToolEvent): Promise<void>;
   listBySession(sessionId: string): Promise<ToolEvent[]>;
   listByRun(runId: string): Promise<ToolEvent[]>;
+  /** Dedupe gateway tool calls on worker retry */
+  findByGatewayIdempotencyKey(
+    sessionId: string,
+    gatewayIdempotencyKey: string,
+  ): Promise<ToolEvent | null>;
   /** Count for safetyEnvelope checks without loading all records */
   countBySession(sessionId: string): Promise<{
     totalCalls: number;

@@ -1,9 +1,9 @@
-import type { PrismaClient } from "@prisma/client";
 import type { AgentRoleOverride } from "@switchboard/schemas";
 import type { RoleOverrideStore } from "@switchboard/core/sessions";
+import type { PrismaDbClient } from "../prisma-db.js";
 
 export class PrismaRoleOverrideStore implements RoleOverrideStore {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaDbClient) {}
 
   async save(override: AgentRoleOverride): Promise<void> {
     await this.prisma.agentRoleOverride.create({

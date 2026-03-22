@@ -43,9 +43,12 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       expect(session.status).toBe("running");
+      expect(session.allowedToolPack).toEqual(["digital-ads", "crm"]);
+      expect(session.governanceProfile).toBe("guarded");
       expect(session.toolCallCount).toBe(0);
       expect(session.mutationCount).toBe(0);
       expect(session.dollarsAtRisk).toBe(0);
@@ -65,6 +68,7 @@ describe("SessionManager", () => {
           roleId: "ad-operator",
           principalId: `user-${i}`,
           manifestDefaults: defaultManifest,
+          maxConcurrentSessionsForRole: 100,
         });
       }
 
@@ -74,8 +78,34 @@ describe("SessionManager", () => {
           roleId: "ad-operator",
           principalId: "user-6",
           manifestDefaults: defaultManifest,
+          maxConcurrentSessionsForRole: 100,
         }),
       ).rejects.toThrow("Concurrent session limit");
+    });
+
+    it("uses min of global cap and per-role manifest cap", async () => {
+      const lowRoleCapManager = new SessionManager({
+        ...stores,
+        maxConcurrentSessions: 10,
+      });
+      for (let i = 0; i < 2; i++) {
+        await lowRoleCapManager.createSession({
+          organizationId: "org-1",
+          roleId: "ad-operator",
+          principalId: `user-${i}`,
+          manifestDefaults: defaultManifest,
+          maxConcurrentSessionsForRole: 2,
+        });
+      }
+      await expect(
+        lowRoleCapManager.createSession({
+          organizationId: "org-1",
+          roleId: "ad-operator",
+          principalId: "user-x",
+          manifestDefaults: defaultManifest,
+          maxConcurrentSessionsForRole: 2,
+        }),
+      ).rejects.toThrow(/Concurrent session limit \(2\) exceeded/);
     });
   });
 
@@ -90,6 +120,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       const event = await manager.recordToolCall(session.id, {
@@ -118,6 +149,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.recordToolCall(session.id, {
@@ -145,6 +177,7 @@ describe("SessionManager", () => {
           ...defaultManifest,
           safetyEnvelope: { ...defaultManifest.safetyEnvelope, maxToolCalls: 1 },
         },
+        maxConcurrentSessionsForRole: 100,
       });
 
       // First call succeeds
@@ -173,6 +206,36 @@ describe("SessionManager", () => {
         }),
       ).rejects.toThrow(SafetyEnvelopeExceededError);
     });
+
+    it("skips duplicate gateway idempotency keys without double-counting", async () => {
+      const { session, run } = await manager.createSession({
+        organizationId: "org-1",
+        roleId: "ad-operator",
+        principalId: "user-1",
+        manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
+      });
+
+      const input = {
+        runId: run.id,
+        toolName: "get_metrics",
+        parameters: {},
+        result: {},
+        isMutation: false,
+        dollarsAtRisk: 0,
+        durationMs: 50,
+        envelopeId: null,
+        gatewayIdempotencyKey: "gw-step-1",
+      } as const;
+
+      const a = await manager.recordToolCall(session.id, { ...input });
+      const b = await manager.recordToolCall(session.id, { ...input });
+      expect(a.id).toBe(b.id);
+
+      const updated = await manager.getSession(session.id);
+      expect(updated!.toolCallCount).toBe(1);
+      expect(updated!.currentStep).toBe(1);
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -186,6 +249,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       const pause = await manager.pauseSession(session.id, {
@@ -205,12 +269,48 @@ describe("SessionManager", () => {
       expect(updatedRun!.outcome).toBe("paused_for_approval");
     });
 
+    it("rejects checkpoint when role extension validator fails", async () => {
+      const strictManager = new SessionManager({
+        ...stores,
+        maxConcurrentSessions: 5,
+        getRoleCheckpointValidator: (roleId) =>
+          roleId === "ad-operator"
+            ? (value: unknown) => {
+                const ext = (value as { extensions?: { foo?: string } })?.extensions;
+                if (ext?.foo === "ok")
+                  return { valid: true as const, checkpoint: { agentState: {} } };
+                return { valid: false as const, errors: ["extensions.foo must be ok"] };
+              }
+            : undefined,
+      });
+
+      const { session, run } = await strictManager.createSession({
+        organizationId: "org-1",
+        roleId: "ad-operator",
+        principalId: "user-1",
+        manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
+      });
+
+      await expect(
+        strictManager.pauseSession(session.id, {
+          runId: run.id,
+          approvalId: "appr-1",
+          checkpoint: { agentState: { step: 1 }, extensions: { foo: "bad" } },
+        }),
+      ).rejects.toThrow(/extensions.foo must be ok/);
+
+      const unchanged = await strictManager.getSession(session.id);
+      expect(unchanged!.status).toBe("running");
+    });
+
     it("rejects pause from terminal state", async () => {
       const { session, run } = await manager.createSession({
         organizationId: "org-1",
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.completeSession(session.id, { runId: run.id });
@@ -236,6 +336,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.pauseSession(session.id, {
@@ -268,6 +369,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.pauseSession(session.id, {
@@ -297,6 +399,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.completeSession(session.id, { runId: run.id });
@@ -318,12 +421,19 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
-      await manager.failSession(session.id, { runId: run.id, error: "timeout" });
+      await manager.failSession(session.id, {
+        runId: run.id,
+        error: "timeout",
+        errorCode: "TIMEOUT",
+      });
 
       const updated = await manager.getSession(session.id);
       expect(updated!.status).toBe("failed");
+      expect(updated!.errorMessage).toBe("timeout");
+      expect(updated!.errorCode).toBe("TIMEOUT");
     });
   });
 
@@ -333,17 +443,21 @@ describe("SessionManager", () => {
 
   describe("cancelSession", () => {
     it("cancels from running state", async () => {
-      const { session } = await manager.createSession({
+      const { session, run } = await manager.createSession({
         organizationId: "org-1",
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.cancelSession(session.id);
 
       const updated = await manager.getSession(session.id);
       expect(updated!.status).toBe("cancelled");
+      const runAfter = await stores.runs.getById(run.id);
+      expect(runAfter!.outcome).toBe("cancelled");
+      expect(runAfter!.completedAt).not.toBeNull();
     });
 
     it("cancels from paused state", async () => {
@@ -352,6 +466,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.pauseSession(session.id, {
@@ -364,6 +479,10 @@ describe("SessionManager", () => {
 
       const updated = await manager.getSession(session.id);
       expect(updated!.status).toBe("cancelled");
+      const runAfter = await stores.runs.getById(run.id);
+      expect(runAfter!.outcome).toBe("paused_for_approval");
+      const pauses = await stores.pauses.listBySession(session.id);
+      expect(pauses.every((p) => p.resumeStatus !== "pending")).toBe(true);
     });
 
     it("rejects from terminal state", async () => {
@@ -372,6 +491,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       await manager.completeSession(session.id, { runId: run.id });
@@ -391,6 +511,7 @@ describe("SessionManager", () => {
         roleId: "ad-operator",
         principalId: "user-1",
         manifestDefaults: defaultManifest,
+        maxConcurrentSessionsForRole: 100,
       });
 
       // Read-only tool call

@@ -15,6 +15,7 @@ import type {
 } from "./store-interfaces.js";
 import { canTransition, SessionTransitionError } from "./state-machine.js";
 import { validateCheckpoint } from "./checkpoint-validator.js";
+import type { RoleCheckpointValidator } from "./checkpoint-validator.js";
 import type { ManifestDefaults } from "./role-config-merger.js";
 import { mergeRoleConfig } from "./role-config-merger.js";
 
@@ -28,7 +29,10 @@ export interface SessionManagerDeps {
   pauses: PauseStore;
   toolEvents: ToolEventStore;
   roleOverrides: RoleOverrideStore;
+  /** Global ceiling (e.g. env); combined with per-role manifest cap at create time */
   maxConcurrentSessions: number;
+  /** Optional role-specific checkpoint extension (JSON Schema / Ajv), keyed by roleId */
+  getRoleCheckpointValidator?: (roleId: string) => RoleCheckpointValidator | undefined;
 }
 
 export interface CreateSessionInput {
@@ -37,6 +41,8 @@ export interface CreateSessionInput {
   principalId: string;
   manifestDefaults: ManifestDefaults;
   safetyEnvelopeOverride?: Partial<AgentSession["safetyEnvelope"]>;
+  /** From role manifest maxConcurrentSessions — capped by deps.maxConcurrentSessions */
+  maxConcurrentSessionsForRole: number;
 }
 
 export interface RecordToolCallInput {
@@ -48,6 +54,8 @@ export interface RecordToolCallInput {
   dollarsAtRisk: number;
   durationMs: number | null;
   envelopeId: string | null;
+  /** Gateway idempotency key — duplicate records are skipped without double-counting */
+  gatewayIdempotencyKey?: string;
 }
 
 export interface PauseSessionInput {
@@ -113,6 +121,11 @@ export class SessionManager {
       requestOverride: input.safetyEnvelopeOverride,
     });
 
+    const effectiveConcurrentCap = Math.min(
+      this.deps.maxConcurrentSessions,
+      input.maxConcurrentSessionsForRole,
+    );
+
     const sessionId = randomUUID();
     const runId = randomUUID();
     const now = new Date();
@@ -124,6 +137,8 @@ export class SessionManager {
       principalId: input.principalId,
       status: "running",
       safetyEnvelope: merged.safetyEnvelope,
+      allowedToolPack: merged.toolPack,
+      governanceProfile: merged.governanceProfile,
       toolCallCount: 0,
       mutationCount: 0,
       dollarsAtRisk: 0,
@@ -133,6 +148,7 @@ export class SessionManager {
       traceId: randomUUID(),
       startedAt: now,
       completedAt: null,
+      errorMessage: null,
     };
 
     const run: AgentRun = {
@@ -148,13 +164,10 @@ export class SessionManager {
     };
 
     // Atomic check-and-insert: prevents TOCTOU race on concurrent session creation
-    const created = await this.deps.sessions.createIfUnderLimit(
-      session,
-      this.deps.maxConcurrentSessions,
-    );
+    const created = await this.deps.sessions.createIfUnderLimit(session, effectiveConcurrentCap);
     if (!created) {
       throw new Error(
-        `Concurrent session limit (${this.deps.maxConcurrentSessions}) exceeded for org ${input.organizationId} role ${input.roleId}`,
+        `Concurrent session limit (${effectiveConcurrentCap}) exceeded for org ${input.organizationId} role ${input.roleId}`,
       );
     }
 
@@ -170,6 +183,14 @@ export class SessionManager {
   async recordToolCall(sessionId: string, input: RecordToolCallInput): Promise<ToolEvent> {
     const session = await this.requireSession(sessionId);
     this.assertNotTerminal(session);
+
+    if (input.gatewayIdempotencyKey) {
+      const existing = await this.deps.toolEvents.findByGatewayIdempotencyKey(
+        sessionId,
+        input.gatewayIdempotencyKey,
+      );
+      if (existing) return existing;
+    }
 
     // Enforce safety envelope BEFORE recording
     const env = session.safetyEnvelope;
@@ -208,6 +229,9 @@ export class SessionManager {
       durationMs: input.durationMs,
       envelopeId: input.envelopeId,
       timestamp: new Date(),
+      ...(input.gatewayIdempotencyKey
+        ? { gatewayIdempotencyKey: input.gatewayIdempotencyKey }
+        : {}),
     };
 
     await this.deps.toolEvents.record(event);
@@ -232,6 +256,14 @@ export class SessionManager {
     const validation = validateCheckpoint(input.checkpoint);
     if (!validation.valid) {
       throw new Error(`Invalid checkpoint: ${validation.errors.join(", ")}`);
+    }
+
+    const roleValidate = this.deps.getRoleCheckpointValidator?.(session.roleId);
+    if (roleValidate) {
+      const roleResult = roleValidate(input.checkpoint);
+      if (!roleResult.valid) {
+        throw new Error(`Invalid checkpoint: ${roleResult.errors.join(", ")}`);
+      }
     }
 
     const existingPauses = await this.deps.pauses.listBySession(sessionId);
@@ -336,12 +368,20 @@ export class SessionManager {
   // failSession
   // -------------------------------------------------------------------------
 
-  async failSession(sessionId: string, opts: { runId: string; error?: string }): Promise<void> {
+  async failSession(
+    sessionId: string,
+    opts: { runId: string; error?: string; errorCode?: string },
+  ): Promise<void> {
     const session = await this.requireSession(sessionId);
     this.assertTransition(session.status, "failed");
 
     const now = new Date();
-    await this.deps.sessions.update(sessionId, { status: "failed", completedAt: now });
+    await this.deps.sessions.update(sessionId, {
+      status: "failed",
+      completedAt: now,
+      errorMessage: opts.error ?? null,
+      ...(opts.errorCode !== undefined ? { errorCode: opts.errorCode } : {}),
+    });
     await this.deps.runs.update(opts.runId, { outcome: "failed", completedAt: now });
   }
 
@@ -353,12 +393,32 @@ export class SessionManager {
     const session = await this.requireSession(sessionId);
     this.assertTransition(session.status, "cancelled");
 
-    await this.deps.sessions.update(sessionId, { status: "cancelled", completedAt: new Date() });
+    const pauses = await this.deps.pauses.listBySession(sessionId);
+    for (const p of pauses) {
+      if (p.resumeStatus === "pending") {
+        await this.deps.pauses.update(p.id, { resumeStatus: "cancelled" });
+      }
+    }
+
+    const runs = await this.deps.runs.listBySession(sessionId);
+    const now = new Date();
+    for (const run of runs) {
+      if (run.outcome === null) {
+        await this.deps.runs.update(run.id, { outcome: "cancelled", completedAt: now });
+      }
+    }
+
+    await this.deps.sessions.update(sessionId, { status: "cancelled", completedAt: now });
   }
 
   // -------------------------------------------------------------------------
   // Read-only accessors
   // -------------------------------------------------------------------------
+
+  /** Ordered by runIndex ascending */
+  async listRunsForSession(sessionId: string): Promise<AgentRun[]> {
+    return this.deps.runs.listBySession(sessionId);
+  }
 
   async getSession(sessionId: string): Promise<AgentSession | null> {
     return this.deps.sessions.getById(sessionId);
@@ -371,6 +431,19 @@ export class SessionManager {
   async getPauseByResumeToken(sessionId: string, resumeToken: string): Promise<AgentPause | null> {
     const pauses = await this.deps.pauses.listBySession(sessionId);
     return pauses.find((p) => p.resumeToken === resumeToken) ?? null;
+  }
+
+  /**
+   * Ensure runId belongs to the session and has not completed (callback / gateway binding).
+   */
+  async verifyActiveRunForSession(sessionId: string, runId: string): Promise<void> {
+    const run = await this.deps.runs.getById(runId);
+    if (!run || run.sessionId !== sessionId) {
+      throw new Error(`Run ${runId} not found for session ${sessionId}`);
+    }
+    if (run.outcome !== null) {
+      throw new Error(`Run ${runId} is already terminal (outcome=${run.outcome})`);
+    }
   }
 
   // -------------------------------------------------------------------------
