@@ -37,6 +37,8 @@ import { startBackgroundJobs } from "./bootstrap/jobs.js";
 import { registerRoutes } from "./bootstrap/routes.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { loadAndApplySkin, resolveBusinessProfile } from "./bootstrap/skin.js";
+import { buildOperatorDeps } from "./bootstrap/operator-deps.js";
+import { PrismaOperatorCommandStore } from "@switchboard/db";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
@@ -420,6 +422,19 @@ export async function buildServer() {
       });
     });
   }
+
+  // --- Operator deps — requires Prisma ---
+  let operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null = null;
+  if (prismaClient) {
+    try {
+      const commandStore = new PrismaOperatorCommandStore(prismaClient);
+      operatorDeps = buildOperatorDeps({ commandStore });
+      app.log.info("[boot] Operator command system wired");
+    } catch (err) {
+      app.log.warn({ err }, "[boot] Operator deps unavailable — operator routes disabled");
+    }
+  }
+  app.decorate("operatorDeps", operatorDeps);
 
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
