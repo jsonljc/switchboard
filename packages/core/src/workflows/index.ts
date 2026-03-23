@@ -22,3 +22,16 @@ export type {
   StepExecutionOutcome,
   StepExecutionResult as WorkflowStepExecutionResult,
 } from "./step-executor.js";
+export {
+  createWorkflowPlan,
+  advanceStep,
+  canReplan,
+  getNextPendingStep,
+  areAllStepsTerminal,
+} from "./workflow-plan.js";
+export {
+  createApprovalCheckpoint,
+  resolveCheckpoint,
+  isCheckpointExpired,
+} from "./approval-checkpoint.js";
+export type { CreateCheckpointInput, ResolveInput } from "./approval-checkpoint.js";
