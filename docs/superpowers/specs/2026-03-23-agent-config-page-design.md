@@ -182,7 +182,7 @@ Example stored config for a Sales Closer:
 
 **Defaults:** If a config key is not set, the UI shows the middle/"balanced" option as selected. This matches the backend defaults (`qualificationThreshold: 40`, `followUpDays: [1, 3, 7]`, `approvalThreshold: undefined`).
 
-**Merge behavior:** The PUT endpoint merges the updated fields into the existing config object — it does not replace the entire config. This preserves keys set during onboarding (like `bookingLink`, `language`) that aren't surfaced on this page.
+**Full-config send:** The PUT endpoint replaces the entire `config` object. To preserve keys not surfaced on this page (like `bookingLink`, `language`), the UI initializes its local `behaviorConfig` state from the full `agent.config` and always sends the complete object on every save. Every debounced save sends both `displayName` and `config` together to avoid partial-update race conditions.
 
 ---
 
