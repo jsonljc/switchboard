@@ -72,3 +72,6 @@ export * from "./conversation-thread.js";
 
 // Workflow execution types
 export * from "./workflow.js";
+
+// Scheduler trigger types
+export * from "./scheduler.js";
