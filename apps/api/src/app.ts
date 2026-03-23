@@ -407,6 +407,19 @@ export async function buildServer() {
   }
   app.decorate("schedulerService", schedulerDeps?.service ?? null);
 
+  // Wire scheduler into EventLoop (EventLoop is created before schedulerDeps)
+  if (schedulerDeps) {
+    agentSystem.eventLoop.setScheduler(schedulerDeps.service, async (trigger) => {
+      await schedulerDeps!.triggerHandler({
+        data: {
+          triggerId: trigger.id,
+          organizationId: trigger.organizationId,
+          action: trigger.action,
+        },
+      });
+    });
+  }
+
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
   if (process.env["TELEGRAM_BOT_TOKEN"]) {

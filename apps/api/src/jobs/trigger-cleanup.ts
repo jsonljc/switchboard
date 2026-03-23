@@ -1,8 +1,13 @@
 import type { TriggerStore } from "@switchboard/core";
 
-export function createTriggerCleanupJob(store: TriggerStore): () => Promise<number> {
+export function createTriggerCleanupJob(
+  store: TriggerStore,
+): () => Promise<{ expired: number; deleted: number }> {
   return async () => {
-    return store.deleteExpired(new Date());
+    const now = new Date();
+    const expired = await store.expireOverdue(now);
+    const deleted = await store.deleteExpired(now);
+    return { expired, deleted };
   };
 }
 
@@ -29,7 +34,10 @@ export function startTriggerCleanupJob(config: TriggerCleanupConfig): () => void
   const run = async () => {
     if (stopped) return;
     try {
-      const deleted = await cleanup();
+      const { expired, deleted } = await cleanup();
+      if (expired > 0) {
+        logger?.info(`Trigger cleanup: marked ${expired} overdue triggers as expired`);
+      }
       if (deleted > 0) {
         logger?.info(`Trigger cleanup: purged ${deleted} expired triggers`);
       }

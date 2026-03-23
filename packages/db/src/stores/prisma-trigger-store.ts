@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ScheduledTrigger, TriggerFilters, TriggerStatus } from "@switchboard/schemas";
+import type { TriggerStore } from "@switchboard/core";
 
 type PrismaRecord = {
   id: string;
@@ -31,7 +32,7 @@ function toScheduledTrigger(record: PrismaRecord): ScheduledTrigger {
   };
 }
 
-export class PrismaTriggerStore {
+export class PrismaTriggerStore implements TriggerStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   async save(trigger: ScheduledTrigger): Promise<void> {
@@ -86,6 +87,17 @@ export class PrismaTriggerStore {
         expiresAt: { lt: before },
         status: { in: ["fired", "cancelled", "expired"] },
       },
+    });
+    return result.count;
+  }
+
+  async expireOverdue(now: Date): Promise<number> {
+    const result = await this.prisma.scheduledTriggerRecord.updateMany({
+      where: {
+        status: "active",
+        expiresAt: { lt: now },
+      },
+      data: { status: "expired" },
     });
     return result.count;
   }

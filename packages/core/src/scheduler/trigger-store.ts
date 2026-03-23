@@ -6,4 +6,6 @@ export interface TriggerStore {
   findByFilters(filters: TriggerFilters): Promise<ScheduledTrigger[]>;
   updateStatus(id: string, status: TriggerStatus): Promise<void>;
   deleteExpired(before: Date): Promise<number>;
+  /** Mark active triggers whose expiresAt has passed as "expired". */
+  expireOverdue(now: Date): Promise<number>;
 }

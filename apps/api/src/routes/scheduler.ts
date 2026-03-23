@@ -28,11 +28,21 @@ export async function schedulerRoutes(app: FastifyInstance): Promise<void> {
 
   // Create trigger
   app.post("/triggers", async (request, reply) => {
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.status(401).send({ error: "Organization context required" });
+    }
+
     const parsed = CreateTriggerBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply
         .status(400)
         .send({ error: "Invalid trigger input", details: parsed.error.issues });
+    }
+
+    // Enforce org scoping — callers can only create triggers for their own org
+    if (parsed.data.organizationId !== orgId) {
+      return reply.status(403).send({ error: "Cannot create triggers for another organization" });
     }
 
     const triggerId = await scheduler.registerTrigger(parsed.data);
@@ -41,7 +51,19 @@ export async function schedulerRoutes(app: FastifyInstance): Promise<void> {
 
   // Cancel trigger
   app.delete<{ Params: { id: string } }>("/triggers/:id", async (request, reply) => {
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.status(401).send({ error: "Organization context required" });
+    }
+
     try {
+      // Verify trigger belongs to the requesting org before cancelling
+      const triggers = await scheduler.listPendingTriggers({ organizationId: orgId });
+      const trigger = triggers.find((t) => t.id === request.params.id);
+      if (!trigger) {
+        return reply.status(404).send({ error: `Trigger not found: ${request.params.id}` });
+      }
+
       await scheduler.cancelTrigger(request.params.id);
       return reply.status(204).send();
     } catch (err: unknown) {
@@ -53,10 +75,17 @@ export async function schedulerRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // List triggers
+  // List triggers (org-scoped via auth)
   app.get("/triggers", async (request, reply) => {
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.status(401).send({ error: "Organization context required" });
+    }
+
     const filters = TriggerFiltersSchema.parse(request.query);
-    const triggers = await scheduler.listPendingTriggers(filters);
+    // Enforce org scoping — callers can only list their own triggers
+    const scopedFilters = { ...filters, organizationId: orgId };
+    const triggers = await scheduler.listPendingTriggers(scopedFilters);
     return reply.send({ triggers });
   });
 }

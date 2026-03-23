@@ -77,6 +77,19 @@ export class EventLoop {
     this.maxDepth = config.maxDepth ?? 10;
   }
 
+  /**
+   * Wire scheduler after construction (needed when scheduler is built after EventLoop).
+   */
+  setScheduler(
+    scheduler: SchedulerService,
+    onTriggerFired?: (trigger: ScheduledTrigger) => void | Promise<void>,
+  ): void {
+    this.scheduler = scheduler;
+    if (onTriggerFired) {
+      this.onTriggerFired = onTriggerFired;
+    }
+  }
+
   async process(event: RoutedEventEnvelope, context: AgentContext): Promise<EventLoopResult> {
     const processed: ProcessedAgent[] = [];
     const maxDepthReached = { value: 0 };

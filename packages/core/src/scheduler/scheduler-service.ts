@@ -6,7 +6,7 @@ import type {
   EventPattern,
 } from "@switchboard/schemas";
 import type { TriggerStore } from "./trigger-store.js";
-import { validateTriggerTransition } from "./trigger-types.js";
+import { validateTriggerTransition, filterMatchingTriggers } from "./trigger-types.js";
 import { randomUUID } from "node:crypto";
 
 export interface RegisterTriggerInput {
@@ -82,15 +82,7 @@ export function createSchedulerService(deps: SchedulerServiceDeps): SchedulerSer
         type: "event_match",
       });
 
-      return candidates.filter((trigger) => {
-        if (!trigger.eventPattern) return false;
-        if (trigger.eventPattern.type !== eventType) return false;
-
-        for (const [key, value] of Object.entries(trigger.eventPattern.filters)) {
-          if (eventData[key] !== value) return false;
-        }
-        return true;
-      });
+      return filterMatchingTriggers(candidates, eventType, eventData);
     },
   };
 }

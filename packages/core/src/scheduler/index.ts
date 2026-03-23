@@ -4,6 +4,7 @@ export {
   validateTriggerTransition,
   TriggerTransitionError,
   isTerminalTriggerStatus,
+  filterMatchingTriggers,
 } from "./trigger-types.js";
 export type { TriggerStore } from "./trigger-store.js";
 export { createSchedulerService } from "./scheduler-service.js";

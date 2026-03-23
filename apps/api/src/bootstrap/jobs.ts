@@ -190,7 +190,7 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
       const { PrismaTriggerStore } = await import("@switchboard/db");
       const triggerStore = new PrismaTriggerStore(prismaClient);
       stopTriggerCleanup = startTriggerCleanupJob({
-        store: triggerStore as unknown as import("@switchboard/core").TriggerStore,
+        store: triggerStore,
         intervalMs: 3_600_000, // 1 hour
         logger,
       });

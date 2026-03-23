@@ -27,7 +27,7 @@ export function buildSchedulerDeps(
   workflowEngine: TriggerWorkflowEngine,
 ): SchedulerDeps {
   const connection = { url: redisUrl };
-  const store = new PrismaTriggerStore(prisma) as unknown as TriggerStore;
+  const store: TriggerStore = new PrismaTriggerStore(prisma);
   const queue = createSchedulerQueue(connection);
   const service = new BullMQSchedulerService(store, queue);
 

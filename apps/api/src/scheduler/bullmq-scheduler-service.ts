@@ -1,7 +1,7 @@
 import type { Queue } from "bullmq";
 import type { SchedulerService, RegisterTriggerInput, TriggerStore } from "@switchboard/core";
 import type { ScheduledTrigger, TriggerFilters } from "@switchboard/schemas";
-import { validateTriggerTransition } from "@switchboard/core";
+import { validateTriggerTransition, filterMatchingTriggers } from "@switchboard/core";
 import { randomUUID } from "node:crypto";
 import type { SchedulerJobData } from "../queue/scheduler-queue.js";
 import { computeTimerDelay, computeCronRepeatOpts } from "../queue/scheduler-queue.js";
@@ -87,14 +87,6 @@ export class BullMQSchedulerService implements SchedulerService {
       type: "event_match",
     });
 
-    return candidates.filter((trigger) => {
-      if (!trigger.eventPattern) return false;
-      if (trigger.eventPattern.type !== eventType) return false;
-
-      for (const [key, value] of Object.entries(trigger.eventPattern.filters)) {
-        if (eventData[key] !== value) return false;
-      }
-      return true;
-    });
+    return filterMatchingTriggers(candidates, eventType, eventData);
   }
 }

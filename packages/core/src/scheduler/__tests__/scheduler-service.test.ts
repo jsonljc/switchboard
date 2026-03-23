@@ -8,6 +8,7 @@ import {
   validateTriggerTransition,
   TriggerTransitionError,
   isTerminalTriggerStatus,
+  filterMatchingTriggers,
 } from "../trigger-types.js";
 
 function createInMemoryTriggerStore(): TriggerStore {
@@ -45,8 +46,22 @@ function createInMemoryTriggerStore(): TriggerStore {
     async deleteExpired(before: Date): Promise<number> {
       let count = 0;
       for (const [id, trigger] of triggers) {
-        if (trigger.expiresAt && trigger.expiresAt < before) {
+        if (
+          trigger.expiresAt &&
+          trigger.expiresAt < before &&
+          ["fired", "cancelled", "expired"].includes(trigger.status)
+        ) {
           triggers.delete(id);
+          count++;
+        }
+      }
+      return count;
+    },
+    async expireOverdue(now: Date): Promise<number> {
+      let count = 0;
+      for (const [id, trigger] of triggers) {
+        if (trigger.status === "active" && trigger.expiresAt && trigger.expiresAt < now) {
+          triggers.set(id, { ...trigger, status: "expired" });
           count++;
         }
       }
@@ -283,5 +298,102 @@ describe("SchedulerService (in-memory)", () => {
       const matchEur = await service.matchEvent("org-1", "payment.received", { currency: "EUR" });
       expect(matchEur).toHaveLength(0);
     });
+  });
+
+  describe("expireOverdue", () => {
+    it("marks active triggers past expiresAt as expired", async () => {
+      const id = await service.registerTrigger({
+        organizationId: "org-1",
+        type: "event_match",
+        fireAt: null,
+        cronExpression: null,
+        eventPattern: { type: "payment.received", filters: {} },
+        action: { type: "resume_workflow", payload: {} },
+        sourceWorkflowId: null,
+        expiresAt: new Date("2026-03-01T00:00:00Z"),
+      });
+
+      const expired = await store.expireOverdue(new Date("2026-03-23T00:00:00Z"));
+      expect(expired).toBe(1);
+
+      const trigger = await store.findById(id);
+      expect(trigger!.status).toBe("expired");
+    });
+
+    it("does not expire triggers without expiresAt", async () => {
+      await service.registerTrigger({
+        organizationId: "org-1",
+        type: "timer",
+        fireAt: new Date("2026-04-01T10:00:00Z"),
+        cronExpression: null,
+        eventPattern: null,
+        action: { type: "spawn_workflow", payload: {} },
+        sourceWorkflowId: null,
+        expiresAt: null,
+      });
+
+      const expired = await store.expireOverdue(new Date("2026-03-23T00:00:00Z"));
+      expect(expired).toBe(0);
+    });
+
+    it("does not expire already-cancelled triggers", async () => {
+      const id = await service.registerTrigger({
+        organizationId: "org-1",
+        type: "timer",
+        fireAt: new Date("2026-04-01T10:00:00Z"),
+        cronExpression: null,
+        eventPattern: null,
+        action: { type: "spawn_workflow", payload: {} },
+        sourceWorkflowId: null,
+        expiresAt: new Date("2026-03-01T00:00:00Z"),
+      });
+
+      await service.cancelTrigger(id);
+      const expired = await store.expireOverdue(new Date("2026-03-23T00:00:00Z"));
+      expect(expired).toBe(0);
+    });
+  });
+});
+
+describe("filterMatchingTriggers", () => {
+  const makeTrigger = (eventPattern: ScheduledTrigger["eventPattern"]): ScheduledTrigger => ({
+    id: "t-1",
+    organizationId: "org-1",
+    type: "event_match",
+    fireAt: null,
+    cronExpression: null,
+    eventPattern,
+    action: { type: "emit_event", payload: {} },
+    sourceWorkflowId: null,
+    status: "active",
+    createdAt: new Date(),
+    expiresAt: null,
+  });
+
+  it("matches triggers with matching event type and empty filters", () => {
+    const triggers = [makeTrigger({ type: "order.placed", filters: {} })];
+    expect(filterMatchingTriggers(triggers, "order.placed", {})).toHaveLength(1);
+  });
+
+  it("rejects triggers with different event type", () => {
+    const triggers = [makeTrigger({ type: "order.placed", filters: {} })];
+    expect(filterMatchingTriggers(triggers, "order.cancelled", {})).toHaveLength(0);
+  });
+
+  it("rejects triggers when filter values don't match event data", () => {
+    const triggers = [makeTrigger({ type: "order.placed", filters: { region: "US" } })];
+    expect(filterMatchingTriggers(triggers, "order.placed", { region: "EU" })).toHaveLength(0);
+  });
+
+  it("matches when all filter values are present in event data", () => {
+    const triggers = [makeTrigger({ type: "order.placed", filters: { region: "US" } })];
+    expect(
+      filterMatchingTriggers(triggers, "order.placed", { region: "US", amount: 50 }),
+    ).toHaveLength(1);
+  });
+
+  it("skips triggers with null eventPattern", () => {
+    const triggers = [makeTrigger(null)];
+    expect(filterMatchingTriggers(triggers, "order.placed", {})).toHaveLength(0);
   });
 });
