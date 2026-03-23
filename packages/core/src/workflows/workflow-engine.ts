@@ -149,6 +149,10 @@ export class WorkflowEngine {
 
       if (result.outcome === "completed") {
         workflow = await this.handleStepSuccess(workflowId, workflow, nextStep, action, result);
+        // If handleStepSuccess transitioned to scheduled, stop the loop
+        if (workflow.status === "scheduled") {
+          return workflow;
+        }
         shouldContinue = true;
         continue;
       }
@@ -217,14 +221,32 @@ export class WorkflowEngine {
     const updatedPlan = advanceStep(workflow.plan, nextStep.index, "completed", {
       result: result.result ?? null,
     });
+    const updatedCounters = {
+      ...workflow.counters,
+      stepsCompleted: workflow.counters.stepsCompleted + 1,
+      dollarsAtRisk: workflow.counters.dollarsAtRisk + action.dollarsAtRisk,
+    };
+
+    // Check if step result requests scheduling
+    const stepResult = result.result as Record<string, unknown> | undefined;
+    if (stepResult?.scheduleRequest) {
+      await this.deps.workflows.update(workflowId, {
+        plan: updatedPlan,
+        currentStepIndex: nextStep.index + 1,
+        counters: updatedCounters,
+        status: "scheduled",
+        metadata: {
+          ...workflow.metadata,
+          scheduleRequest: stepResult.scheduleRequest,
+        },
+      });
+      return this.requireWorkflow(workflowId);
+    }
+
     await this.deps.workflows.update(workflowId, {
       plan: updatedPlan,
       currentStepIndex: nextStep.index + 1,
-      counters: {
-        ...workflow.counters,
-        stepsCompleted: workflow.counters.stepsCompleted + 1,
-        dollarsAtRisk: workflow.counters.dollarsAtRisk + action.dollarsAtRisk,
-      },
+      counters: updatedCounters,
     });
     return this.requireWorkflow(workflowId);
   }

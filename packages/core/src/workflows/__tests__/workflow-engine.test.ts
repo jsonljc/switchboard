@@ -332,6 +332,62 @@ describe("WorkflowEngine", () => {
     });
   });
 
+  describe("scheduled state", () => {
+    it("transitions to scheduled when step result contains scheduleRequest", async () => {
+      const mockExecutor: WorkflowStepExecutor = {
+        execute: vi.fn().mockResolvedValueOnce({
+          outcome: "completed",
+          result: {
+            scheduleRequest: {
+              fireAt: new Date(Date.now() + 7200_000).toISOString(),
+              reason: "Follow up in 2 hours",
+            },
+          },
+        }),
+      };
+      const deps = makeDeps({ stepExecutor: mockExecutor });
+      const engine = new WorkflowEngine(deps);
+
+      const action = createPendingAction({
+        intent: "schedule_follow_up",
+        organizationId: "org-1",
+        sourceAgent: "nurture",
+        humanSummary: "Schedule follow-up in 2 hours",
+        targetEntities: [],
+        parameters: {},
+        confidence: 0.9,
+        riskLevel: "low",
+        dollarsAtRisk: 0,
+        requiredCapabilities: [],
+        dryRunSupported: false,
+        approvalRequired: "auto",
+      });
+
+      const workflow = await engine.createWorkflow({
+        organizationId: "org-1",
+        triggerType: "operator_command",
+        sourceAgent: "nurture",
+        actions: [action],
+        strategy: "sequential",
+        safetyEnvelope: {
+          maxSteps: 5,
+          maxDollarsAtRisk: 100,
+          timeoutMs: 300000,
+          maxReplans: 3,
+        },
+        metadata: {},
+      });
+
+      const result = await engine.startWorkflow(workflow.id);
+      expect(result.status).toBe("scheduled");
+      // Schedule request stored in metadata for API layer to read
+      expect(result.metadata.scheduleRequest).toBeDefined();
+      expect((result.metadata.scheduleRequest as { reason: string }).reason).toBe(
+        "Follow up in 2 hours",
+      );
+    });
+  });
+
   describe("resumeAfterApproval", () => {
     it("resumes workflow after approval and completes", async () => {
       let callCount = 0;
