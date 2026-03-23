@@ -6,3 +6,4 @@ export {
   type CommandLLM,
 } from "./operator-types.js";
 export { CommandInterpreter, type CommandInterpreterDeps } from "./command-interpreter.js";
+export { CommandGuardrailEvaluator } from "./command-guardrail-evaluator.js";
