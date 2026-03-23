@@ -75,3 +75,4 @@ export {
 export { PrismaConversationThreadStore } from "./stores/prisma-thread-store.js";
 export { PrismaWorkflowStore } from "./stores/prisma-workflow-store.js";
 export { PrismaTriggerStore } from "./stores/prisma-trigger-store.js";
+export { PrismaOperatorCommandStore } from "./stores/prisma-command-store.js";

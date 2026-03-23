@@ -1228,3 +1228,35 @@ model ScheduledTriggerRecord {
   @@index([sourceWorkflowId])
   @@index([fireAt])
 }
+
+model OperatorRequestRecord {
+  id             String   @id @default(uuid())
+  organizationId String
+  operatorId     String
+  channel        String
+  rawInput       String
+  receivedAt     DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model OperatorCommandRecord {
+  id              String    @id @default(uuid())
+  requestId       String
+  organizationId  String
+  intent          String
+  entities        Json      @default("[]")
+  parameters      Json      @default("{}")
+  parseConfidence Float
+  guardrailResult Json
+  status          String    @default("parsed")
+  workflowIds     Json      @default("[]")
+  resultSummary   String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([organizationId])
+  @@index([requestId])
+  @@index([status])
+}
