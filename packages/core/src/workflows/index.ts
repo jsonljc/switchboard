@@ -35,3 +35,9 @@ export {
   isCheckpointExpired,
 } from "./approval-checkpoint.js";
 export type { CreateCheckpointInput, ResolveInput } from "./approval-checkpoint.js";
+export { WorkflowEngine } from "./workflow-engine.js";
+export type {
+  WorkflowEngineDeps,
+  WorkflowStepExecutor,
+  CreateWorkflowInput,
+} from "./workflow-engine.js";
