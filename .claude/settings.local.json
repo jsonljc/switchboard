@@ -151,7 +151,10 @@
       "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/dashboard typecheck)",
       "Bash(/usr/local/lib/node_modules/corepack/shims/pnpm --filter @switchboard/dashboard typecheck)",
       "Bash(/usr/local/lib/node_modules/corepack/shims/pnpm --filter @switchboard/dashboard build)",
-      "Bash(cat ~/.zshrc 2>/dev/null | grep -i pnpm; ls /usr/local/lib/node_modules/pnpm 2>/dev/null; npm list -g --depth=0 2>/dev/null | grep pnpm; corepack enable 2>/dev/null && which pnpm 2>/dev/null; ls ~/switchboard/node_modules/.bin/ 2>/dev/null | head -10)"
+      "Bash(cat ~/.zshrc 2>/dev/null | grep -i pnpm; ls /usr/local/lib/node_modules/pnpm 2>/dev/null; npm list -g --depth=0 2>/dev/null | grep pnpm; corepack enable 2>/dev/null && which pnpm 2>/dev/null; ls ~/switchboard/node_modules/.bin/ 2>/dev/null | head -10)",
+      "Bash(sl push:*)",
+      "mcp__plugin_browser_browser_tools__browser_launch",
+      "Bash(open http://localhost:3002/team)"
     ]
   }
 }
