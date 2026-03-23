@@ -213,3 +213,9 @@ export * from "./sessions/index.js";
 
 // Workflows (workflow execution runtime)
 export * from "./workflows/index.js";
+
+// Scheduler (trigger registration, state machine, event matching)
+export * from "./scheduler/index.js";
+
+// Operator Command Store
+export * from "./operator/index.js";

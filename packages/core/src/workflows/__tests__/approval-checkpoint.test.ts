@@ -281,6 +281,80 @@ describe("ApprovalCheckpoint", () => {
       expect(updated!.resolution!.selectedAlternative).toBe(1);
     });
 
+    it("rejects field edits for non-modifiable fields", async () => {
+      const action = createPendingAction({
+        intent: "send_email",
+        targetEntities: [{ type: "contact", id: "contact-1" }],
+        parameters: { subject: "Hello", body: "World", recipient: "test@test.com" },
+        humanSummary: "Send email to contact",
+        confidence: 0.9,
+        riskLevel: "low",
+        dollarsAtRisk: 0,
+        requiredCapabilities: ["email"],
+        dryRunSupported: true,
+        approvalRequired: "human_review",
+        sourceAgent: "test-agent",
+        organizationId: "org-1",
+      });
+
+      const checkpoint = createApprovalCheckpoint({
+        workflowId: "workflow-1",
+        stepIndex: 0,
+        action,
+        reason: "Email requires manual approval",
+        ttlMs: 3600000,
+        modifiableFields: ["subject", "body"],
+      });
+
+      await store.create(checkpoint);
+
+      await expect(
+        resolveCheckpoint(store, checkpoint.id, {
+          decidedBy: "operator-1",
+          action: "modify",
+          fieldEdits: { subject: "New Subject", recipient: "hacker@evil.com" },
+        }),
+      ).rejects.toThrow("Fields not modifiable: recipient");
+    });
+
+    it("allows field edits within modifiableFields", async () => {
+      const action = createPendingAction({
+        intent: "send_email",
+        targetEntities: [{ type: "contact", id: "contact-1" }],
+        parameters: { subject: "Hello", body: "World" },
+        humanSummary: "Send email to contact",
+        confidence: 0.9,
+        riskLevel: "low",
+        dollarsAtRisk: 0,
+        requiredCapabilities: ["email"],
+        dryRunSupported: true,
+        approvalRequired: "human_review",
+        sourceAgent: "test-agent",
+        organizationId: "org-1",
+      });
+
+      const checkpoint = createApprovalCheckpoint({
+        workflowId: "workflow-1",
+        stepIndex: 0,
+        action,
+        reason: "Email requires manual approval",
+        ttlMs: 3600000,
+        modifiableFields: ["subject", "body"],
+      });
+
+      await store.create(checkpoint);
+
+      // Should not throw — both fields are in modifiableFields
+      await resolveCheckpoint(store, checkpoint.id, {
+        decidedBy: "operator-1",
+        action: "modify",
+        fieldEdits: { subject: "Updated" },
+      });
+
+      const updated = await store.getById(checkpoint.id);
+      expect(updated!.status).toBe("modified");
+    });
+
     it("throws when checkpoint not found", async () => {
       await expect(
         resolveCheckpoint(store, "nonexistent-id", {

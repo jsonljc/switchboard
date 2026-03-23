@@ -92,7 +92,7 @@ export class WorkflowEngine {
     return this.runSteps(workflowId);
   }
 
-  async resumeAfterApproval(workflowId: string, _checkpointId: string): Promise<WorkflowExecution> {
+  async resumeAfterApproval(workflowId: string, checkpointId: string): Promise<WorkflowExecution> {
     const workflow = await this.requireWorkflow(workflowId);
     this.assertTransition(workflow.status, "running");
     await this.deps.workflows.update(workflowId, { status: "running" });
@@ -101,7 +101,15 @@ export class WorkflowEngine {
     if (!step) throw new Error(`Step ${workflow.currentStepIndex} not found in plan`);
     const action = await this.deps.actions.getById(step.actionId);
     if (!action) throw new Error(`Action ${step.actionId} not found`);
-    await this.deps.actions.update(action.id, { status: "approved" });
+
+    // Apply field edits from "modified" checkpoints before re-execution
+    const checkpoint = await this.deps.checkpoints.getById(checkpointId);
+    if (checkpoint?.resolution?.fieldEdits) {
+      const updatedParams = { ...action.parameters, ...checkpoint.resolution.fieldEdits };
+      await this.deps.actions.update(action.id, { status: "approved", parameters: updatedParams });
+    } else {
+      await this.deps.actions.update(action.id, { status: "approved" });
+    }
 
     return this.runSteps(workflowId);
   }
@@ -149,6 +157,10 @@ export class WorkflowEngine {
 
       if (result.outcome === "completed") {
         workflow = await this.handleStepSuccess(workflowId, workflow, nextStep, action, result);
+        // If handleStepSuccess transitioned to scheduled, stop the loop
+        if (workflow.status === "scheduled") {
+          return workflow;
+        }
         shouldContinue = true;
         continue;
       }
@@ -217,14 +229,32 @@ export class WorkflowEngine {
     const updatedPlan = advanceStep(workflow.plan, nextStep.index, "completed", {
       result: result.result ?? null,
     });
+    const updatedCounters = {
+      ...workflow.counters,
+      stepsCompleted: workflow.counters.stepsCompleted + 1,
+      dollarsAtRisk: workflow.counters.dollarsAtRisk + action.dollarsAtRisk,
+    };
+
+    // Check if step result requests scheduling
+    const stepResult = result.result as Record<string, unknown> | undefined;
+    if (stepResult?.scheduleRequest) {
+      await this.deps.workflows.update(workflowId, {
+        plan: updatedPlan,
+        currentStepIndex: nextStep.index + 1,
+        counters: updatedCounters,
+        status: "scheduled",
+        metadata: {
+          ...workflow.metadata,
+          scheduleRequest: stepResult.scheduleRequest,
+        },
+      });
+      return this.requireWorkflow(workflowId);
+    }
+
     await this.deps.workflows.update(workflowId, {
       plan: updatedPlan,
       currentStepIndex: nextStep.index + 1,
-      counters: {
-        ...workflow.counters,
-        stepsCompleted: workflow.counters.stepsCompleted + 1,
-        dollarsAtRisk: workflow.counters.dollarsAtRisk + action.dollarsAtRisk,
-      },
+      counters: updatedCounters,
     });
     return this.requireWorkflow(workflowId);
   }
@@ -273,6 +303,9 @@ export class WorkflowEngine {
     }
     if (counters.dollarsAtRisk >= safetyEnvelope.maxDollarsAtRisk) {
       return `Safety envelope exceeded: maxDollarsAtRisk (${counters.dollarsAtRisk}/${safetyEnvelope.maxDollarsAtRisk})`;
+    }
+    if (counters.replansUsed >= safetyEnvelope.maxReplans) {
+      return `Safety envelope exceeded: maxReplans (${counters.replansUsed}/${safetyEnvelope.maxReplans})`;
     }
     const elapsedMs = Date.now() - workflow.startedAt.getTime();
     if (elapsedMs >= safetyEnvelope.timeoutMs) {

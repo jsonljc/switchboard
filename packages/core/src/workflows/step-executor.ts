@@ -85,26 +85,36 @@ export class StepExecutor {
     await this.deps.actionStore.update(action.id, { status: "executing" });
 
     // 3. Execute via ActionExecutor (bypass policy — already checked)
-    const execResult = await this.deps.actionExecutor.execute(
-      { actionType: action.intent, parameters: action.parameters },
-      context,
-      { evaluate: async () => ({ approved: true }) },
-    );
+    try {
+      const execResult = await this.deps.actionExecutor.execute(
+        { actionType: action.intent, parameters: action.parameters },
+        context,
+        { evaluate: async () => ({ approved: true }) },
+      );
 
-    if (execResult.success) {
+      if (execResult.success) {
+        await this.deps.actionStore.update(action.id, {
+          status: "completed",
+          resolvedAt: new Date(),
+          resolvedBy: "auto",
+        });
+        return { outcome: "completed", result: execResult.result };
+      }
+
       await this.deps.actionStore.update(action.id, {
-        status: "completed",
+        status: "failed",
         resolvedAt: new Date(),
         resolvedBy: "auto",
       });
-      return { outcome: "completed", result: execResult.result };
+      return { outcome: "failed", error: execResult.error };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      await this.deps.actionStore.update(action.id, {
+        status: "failed",
+        resolvedAt: new Date(),
+        resolvedBy: "auto",
+      });
+      return { outcome: "failed", error: `Action executor threw: ${errorMessage}` };
     }
-
-    await this.deps.actionStore.update(action.id, {
-      status: "failed",
-      resolvedAt: new Date(),
-      resolvedBy: "auto",
-    });
-    return { outcome: "failed", error: execResult.error };
   }
 }

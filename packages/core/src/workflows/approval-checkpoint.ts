@@ -55,6 +55,19 @@ export async function resolveCheckpoint(
       `Checkpoint ${checkpointId} is already resolved (status: ${checkpoint.status})`,
     );
   }
+
+  // Validate modifiableFields constraint
+  if (input.action === "modify" && input.fieldEdits) {
+    const invalidFields = Object.keys(input.fieldEdits).filter(
+      (f) => !checkpoint.modifiableFields.includes(f),
+    );
+    if (invalidFields.length > 0) {
+      throw new Error(
+        `Fields not modifiable: ${invalidFields.join(", ")}. Allowed: ${checkpoint.modifiableFields.join(", ")}`,
+      );
+    }
+  }
+
   const statusMap: Record<string, ApprovalCheckpoint["status"]> = {
     approve: "approved",
     reject: "rejected",

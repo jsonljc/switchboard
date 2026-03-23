@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi } from "vitest";
 import { EventLoop } from "../event-loop.js";
 import { AgentRegistry } from "../registry.js";
@@ -513,6 +514,93 @@ describe("EventLoop", () => {
     expect(result.processed[0]!.success).toBe(true);
   });
 
+  it("checks for matching triggers when processing events", async () => {
+    const agentRegistry = new AgentRegistry();
+    const handlerRegistry = new HandlerRegistry();
+
+    const mockScheduler = {
+      matchEvent: vi.fn(async () => []),
+      registerTrigger: vi.fn(),
+      cancelTrigger: vi.fn(),
+      listPendingTriggers: vi.fn(),
+    };
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+      scheduler: mockScheduler,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "payment.received",
+      source: { type: "webhook", id: "stripe" },
+      payload: { amount: 100 },
+    });
+
+    await loop.process(event, { organizationId: "org-1" });
+
+    expect(mockScheduler.matchEvent).toHaveBeenCalledWith(
+      "org-1",
+      "payment.received",
+      expect.objectContaining({ amount: 100 }),
+    );
+  });
+
+  it("fires matched triggers by invoking onTriggerFired callback", async () => {
+    const agentRegistry = new AgentRegistry();
+    const handlerRegistry = new HandlerRegistry();
+
+    const mockTrigger = {
+      id: "trig-1",
+      organizationId: "org-1",
+      type: "event_match" as const,
+      action: { type: "resume_workflow" as const, payload: { workflowId: "wf-1" } },
+      status: "active" as const,
+      eventPattern: { type: "payment.received", filters: {} },
+      fireAt: null,
+      cronExpression: null,
+      sourceWorkflowId: "wf-1",
+      createdAt: new Date(),
+      expiresAt: null,
+    };
+
+    const mockScheduler = {
+      matchEvent: vi.fn(async () => [mockTrigger]),
+      registerTrigger: vi.fn(),
+      cancelTrigger: vi.fn(),
+      listPendingTriggers: vi.fn(),
+    };
+
+    const onTriggerFired = vi.fn();
+
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+      scheduler: mockScheduler,
+      onTriggerFired,
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "payment.received",
+      source: { type: "webhook", id: "stripe" },
+      payload: { amount: 100 },
+    });
+
+    await loop.process(event, { organizationId: "org-1" });
+
+    expect(onTriggerFired).toHaveBeenCalledWith(mockTrigger);
+  });
+
   it("records handler errors without crashing the loop", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
@@ -556,5 +644,62 @@ describe("EventLoop", () => {
 
     const state = stateTracker.get("org-1", "broken-agent")!;
     expect(state.activityStatus).toBe("error");
+  });
+
+  it("setScheduler wires scheduler after construction", async () => {
+    const agentRegistry = new AgentRegistry();
+    const handlerRegistry = new HandlerRegistry();
+
+    const mockTrigger = {
+      id: "trig-late",
+      organizationId: "org-1",
+      type: "event_match" as const,
+      action: { type: "emit_event" as const, payload: {} },
+      status: "active" as const,
+      eventPattern: { type: "order.placed", filters: {} },
+      fireAt: null,
+      cronExpression: null,
+      sourceWorkflowId: null,
+      createdAt: new Date(),
+      expiresAt: null,
+    };
+
+    const mockScheduler = {
+      matchEvent: vi.fn(async () => [mockTrigger]),
+      registerTrigger: vi.fn(),
+      cancelTrigger: vi.fn(),
+      listPendingTriggers: vi.fn(),
+    };
+
+    const onTriggerFired = vi.fn();
+
+    // Create loop WITHOUT scheduler
+    const loop = new EventLoop({
+      router: new AgentRouter(agentRegistry),
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+    });
+
+    // Wire scheduler after construction
+    loop.setScheduler(mockScheduler, onTriggerFired);
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "order.placed",
+      source: { type: "system", id: "test" },
+      payload: { orderId: "ord-1" },
+    });
+
+    await loop.process(event, { organizationId: "org-1" });
+
+    expect(mockScheduler.matchEvent).toHaveBeenCalledWith(
+      "org-1",
+      "order.placed",
+      expect.objectContaining({ orderId: "ord-1" }),
+    );
+    expect(onTriggerFired).toHaveBeenCalledWith(mockTrigger);
   });
 });

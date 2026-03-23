@@ -311,6 +311,44 @@ describe("StepExecutor", () => {
     });
   });
 
+  describe("Handles executor exceptions", () => {
+    it("should mark as failed when action executor throws an exception", async () => {
+      const action = makeAction();
+      await actionStore.create(action);
+
+      vi.mocked(mockPolicyBridge.evaluate).mockResolvedValue({ approved: true });
+      vi.mocked(mockActionExecutor.execute).mockRejectedValue(new Error("Connection timeout"));
+
+      const result = await executor.execute(action, mockContext);
+
+      expect(result.outcome).toBe("failed");
+      expect(result.error).toContain("Action executor threw");
+      expect(result.error).toContain("Connection timeout");
+
+      // Verify action is marked as failed, not stuck in "executing"
+      const updatedAction = await actionStore.getById(action.id);
+      expect(updatedAction?.status).toBe("failed");
+      expect(updatedAction?.resolvedAt).toBeInstanceOf(Date);
+      expect(updatedAction?.resolvedBy).toBe("auto");
+    });
+
+    it("should handle non-Error exceptions from executor", async () => {
+      const action = makeAction();
+      await actionStore.create(action);
+
+      vi.mocked(mockPolicyBridge.evaluate).mockResolvedValue({ approved: true });
+      vi.mocked(mockActionExecutor.execute).mockRejectedValue("string error");
+
+      const result = await executor.execute(action, mockContext);
+
+      expect(result.outcome).toBe("failed");
+      expect(result.error).toContain("string error");
+
+      const updatedAction = await actionStore.getById(action.id);
+      expect(updatedAction?.status).toBe("failed");
+    });
+  });
+
   describe("Integration scenarios", () => {
     it("should handle action with custom parameters and context", async () => {
       const action = makeAction({

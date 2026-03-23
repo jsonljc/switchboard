@@ -11,6 +11,8 @@ import type { DeliveryStore } from "./delivery-store.js";
 import type { AgentStateTracker } from "./agent-state.js";
 import type { HandlerRegistry } from "./handler-registry.js";
 import type { ActionExecutor } from "./action-executor.js";
+import type { SchedulerService } from "@switchboard/core";
+import type { ScheduledTrigger } from "@switchboard/schemas";
 
 const URGENT_EVENT_TYPES = ["ad.anomaly_detected", "ad.performance_review"];
 
@@ -25,6 +27,8 @@ export interface EventLoopConfig {
   contactMutex?: {
     acquire(orgId: string, contactId: string): Promise<() => void>;
   };
+  scheduler?: SchedulerService;
+  onTriggerFired?: (trigger: ScheduledTrigger) => void | Promise<void>;
   maxDepth?: number;
 }
 
@@ -55,6 +59,8 @@ export class EventLoop {
   private deliveryStore: DeliveryStore;
   private stateTracker?: AgentStateTracker;
   private contactMutex?: EventLoopConfig["contactMutex"];
+  private scheduler?: SchedulerService;
+  private onTriggerFired?: (trigger: ScheduledTrigger) => void | Promise<void>;
   private maxDepth: number;
 
   constructor(config: EventLoopConfig) {
@@ -66,7 +72,22 @@ export class EventLoop {
     this.deliveryStore = config.deliveryStore;
     this.stateTracker = config.stateTracker;
     this.contactMutex = config.contactMutex;
+    this.scheduler = config.scheduler;
+    this.onTriggerFired = config.onTriggerFired;
     this.maxDepth = config.maxDepth ?? 10;
+  }
+
+  /**
+   * Wire scheduler after construction (needed when scheduler is built after EventLoop).
+   */
+  setScheduler(
+    scheduler: SchedulerService,
+    onTriggerFired?: (trigger: ScheduledTrigger) => void | Promise<void>,
+  ): void {
+    this.scheduler = scheduler;
+    if (onTriggerFired) {
+      this.onTriggerFired = onTriggerFired;
+    }
   }
 
   async process(event: RoutedEventEnvelope, context: AgentContext): Promise<EventLoopResult> {
@@ -220,6 +241,21 @@ export class EventLoop {
       return;
     }
     seenKeys.add(event.idempotencyKey);
+
+    // Check for event-match triggers
+    if (this.scheduler) {
+      const eventData = (event.payload ?? {}) as Record<string, unknown>;
+      const matchedTriggers = await this.scheduler.matchEvent(
+        event.organizationId,
+        event.eventType,
+        eventData,
+      );
+      for (const trigger of matchedTriggers) {
+        if (this.onTriggerFired) {
+          await this.onTriggerFired(trigger);
+        }
+      }
+    }
 
     // Acquire contact mutex at depth 0 only (top-level processing)
     const contactId = (event.payload as Record<string, unknown>)?.contactId as string | undefined;

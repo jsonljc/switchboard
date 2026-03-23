@@ -6,6 +6,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
+import { OperatorChatWidget } from "@/components/operator-chat/operator-chat-widget";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <ErrorBoundary>
               <AppShell>{children}</AppShell>
             </ErrorBoundary>
+            <OperatorChatWidget />
             <Toaster />
           </QueryProvider>
         </AuthProvider>
