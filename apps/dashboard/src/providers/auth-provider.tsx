@@ -10,6 +10,7 @@ const DEV_SESSION = {
     id: "dev-user",
     email: "dev@switchboard.local",
     name: "Dev User",
+    role: "staff",
   },
   organizationId: "org_dev",
   principalId: "principal_dev",
