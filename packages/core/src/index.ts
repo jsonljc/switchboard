@@ -210,3 +210,6 @@ export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from ".
 
 // Sessions (session runtime)
 export * from "./sessions/index.js";
+
+// Workflows (workflow execution runtime)
+export * from "./workflows/index.js";
