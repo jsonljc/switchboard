@@ -1,98 +1,227 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaConversationThreadStore } from "../prisma-thread-store.js";
 
-function mockPrisma() {
+const now = new Date("2026-03-23T12:00:00Z");
+
+function makeMockPrisma() {
   return {
     conversationThread: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
     },
-  } as unknown as import("@prisma/client").PrismaClient;
+  };
+}
+
+function makeThread(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "thread-1",
+    contactId: "contact-1",
+    organizationId: "org-1",
+    stage: "new" as const,
+    assignedAgent: "lead-responder",
+    agentContext: {
+      objectionsEncountered: [],
+      preferencesLearned: {},
+      offersMade: [],
+      topicsDiscussed: [],
+      sentimentTrend: "unknown" as const,
+    },
+    currentSummary: "",
+    followUpSchedule: { nextFollowUpAt: null, reason: null, cadenceId: null },
+    lastOutcomeAt: null,
+    messageCount: 0,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
 }
 
 describe("PrismaConversationThreadStore", () => {
-  let prisma: ReturnType<typeof mockPrisma>;
+  let prisma: ReturnType<typeof makeMockPrisma>;
   let store: PrismaConversationThreadStore;
 
   beforeEach(() => {
-    prisma = mockPrisma();
-    store = new PrismaConversationThreadStore(prisma);
+    prisma = makeMockPrisma();
+    store = new PrismaConversationThreadStore(prisma as never);
   });
 
-  it("getByContact returns null when no thread exists", async () => {
-    (prisma.conversationThread.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-    const result = await store.getByContact("c-1", "org-1");
-    expect(result).toBeNull();
-    expect(prisma.conversationThread.findUnique).toHaveBeenCalledWith({
-      where: { contactId_organizationId: { contactId: "c-1", organizationId: "org-1" } },
+  describe("getByContact", () => {
+    it("returns null when no thread exists", async () => {
+      const result = await store.getByContact("contact-1", "org-1");
+      expect(result).toBeNull();
+      expect(prisma.conversationThread.findUnique).toHaveBeenCalledWith({
+        where: {
+          contactId_organizationId: { contactId: "contact-1", organizationId: "org-1" },
+        },
+      });
+    });
+
+    it("maps all fields from Prisma row", async () => {
+      const row = makeThread({
+        stage: "responding",
+        agentContext: {
+          objectionsEncountered: ["too expensive"],
+          preferencesLearned: { time: "morning" },
+          offersMade: [{ description: "10% off", date: now }],
+          topicsDiscussed: ["pricing"],
+          sentimentTrend: "positive",
+        },
+        currentSummary: "Interested lead",
+        messageCount: 5,
+        lastOutcomeAt: now,
+      });
+      prisma.conversationThread.findUnique.mockResolvedValue(row);
+
+      const result = await store.getByContact("contact-1", "org-1");
+
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("thread-1");
+      expect(result!.contactId).toBe("contact-1");
+      expect(result!.organizationId).toBe("org-1");
+      expect(result!.stage).toBe("responding");
+      expect(result!.assignedAgent).toBe("lead-responder");
+      expect(result!.currentSummary).toBe("Interested lead");
+      expect(result!.messageCount).toBe(5);
+      expect(result!.lastOutcomeAt).toEqual(now);
+      expect(result!.agentContext.objectionsEncountered).toEqual(["too expensive"]);
+      expect(result!.agentContext.preferencesLearned).toEqual({ time: "morning" });
+      expect(result!.agentContext.offersMade).toHaveLength(1);
+      expect(result!.agentContext.sentimentTrend).toBe("positive");
+      expect(result!.followUpSchedule.nextFollowUpAt).toBeNull();
+      expect(result!.createdAt).toEqual(now);
+      expect(result!.updatedAt).toEqual(now);
     });
   });
 
-  it("getByContact maps Prisma row to ConversationThread", async () => {
-    const now = new Date();
-    (prisma.conversationThread.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "t-1",
-      contactId: "c-1",
-      organizationId: "org-1",
-      stage: "responding",
-      assignedAgent: "lead-responder",
-      agentContext: {
-        objectionsEncountered: ["price"],
+  describe("create", () => {
+    it("persists a new thread with all fields", async () => {
+      const thread = makeThread();
+      await store.create(thread);
+
+      expect(prisma.conversationThread.create).toHaveBeenCalledWith({
+        data: {
+          id: "thread-1",
+          contactId: "contact-1",
+          organizationId: "org-1",
+          stage: "new",
+          assignedAgent: "lead-responder",
+          agentContext: thread.agentContext,
+          currentSummary: "",
+          followUpSchedule: thread.followUpSchedule,
+          lastOutcomeAt: null,
+          messageCount: 0,
+        },
+      });
+    });
+
+    it("passes JSON objects for agentContext and followUpSchedule", async () => {
+      const thread = makeThread({
+        agentContext: {
+          objectionsEncountered: ["price"],
+          preferencesLearned: { day: "monday" },
+          offersMade: [],
+          topicsDiscussed: ["demo"],
+          sentimentTrend: "neutral",
+        },
+        followUpSchedule: { nextFollowUpAt: now, reason: "demo scheduled", cadenceId: "cad-1" },
+      });
+
+      await store.create(thread);
+
+      const call = prisma.conversationThread.create.mock.calls[0]![0]!;
+      expect(call.data.agentContext).toEqual(thread.agentContext);
+      expect(call.data.followUpSchedule).toEqual(thread.followUpSchedule);
+    });
+  });
+
+  describe("update", () => {
+    it("updates stage only", async () => {
+      await store.update("thread-1", { stage: "qualifying" });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { stage: "qualifying" },
+      });
+    });
+
+    it("updates assignedAgent only", async () => {
+      await store.update("thread-1", { assignedAgent: "sales-closer" });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { assignedAgent: "sales-closer" },
+      });
+    });
+
+    it("updates agentContext only", async () => {
+      const agentContext = {
+        objectionsEncountered: ["too expensive"],
         preferencesLearned: {},
         offersMade: [],
-        topicsDiscussed: [],
-        sentimentTrend: "neutral",
-      },
-      currentSummary: "Lead asked about pricing.",
-      followUpSchedule: { nextFollowUpAt: null, reason: null, cadenceId: null },
-      lastOutcomeAt: null,
-      messageCount: 5,
-      createdAt: now,
-      updatedAt: now,
+        topicsDiscussed: ["pricing"],
+        sentimentTrend: "negative" as const,
+      };
+      await store.update("thread-1", { agentContext });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { agentContext },
+      });
     });
 
-    const result = await store.getByContact("c-1", "org-1");
-    expect(result).not.toBeNull();
-    expect(result!.stage).toBe("responding");
-    expect(result!.agentContext.objectionsEncountered).toEqual(["price"]);
-    expect(result!.messageCount).toBe(5);
-  });
-
-  it("create persists a new thread", async () => {
-    const now = new Date();
-    const thread = {
-      id: "t-1",
-      contactId: "c-1",
-      organizationId: "org-1",
-      stage: "new" as const,
-      assignedAgent: "lead-responder",
-      agentContext: {
-        objectionsEncountered: [],
-        preferencesLearned: {},
-        offersMade: [],
-        topicsDiscussed: [],
-        sentimentTrend: "unknown" as const,
-      },
-      currentSummary: "",
-      followUpSchedule: { nextFollowUpAt: null, reason: null, cadenceId: null },
-      lastOutcomeAt: null,
-      messageCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await store.create(thread);
-    expect(prisma.conversationThread.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ id: "t-1", contactId: "c-1", stage: "new" }),
+    it("updates currentSummary only", async () => {
+      await store.update("thread-1", { currentSummary: "Updated summary" });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { currentSummary: "Updated summary" },
+      });
     });
-  });
 
-  it("update applies partial changes", async () => {
-    await store.update("t-1", { stage: "qualifying", messageCount: 6 });
-    expect(prisma.conversationThread.update).toHaveBeenCalledWith({
-      where: { id: "t-1" },
-      data: expect.objectContaining({ stage: "qualifying", messageCount: 6 }),
+    it("updates followUpSchedule only", async () => {
+      const followUpSchedule = { nextFollowUpAt: now, reason: "check in", cadenceId: null };
+      await store.update("thread-1", { followUpSchedule });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { followUpSchedule },
+      });
+    });
+
+    it("updates lastOutcomeAt only", async () => {
+      await store.update("thread-1", { lastOutcomeAt: now });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { lastOutcomeAt: now },
+      });
+    });
+
+    it("updates messageCount only", async () => {
+      await store.update("thread-1", { messageCount: 15 });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { messageCount: 15 },
+      });
+    });
+
+    it("updates multiple fields at once", async () => {
+      await store.update("thread-1", {
+        stage: "qualified",
+        assignedAgent: "sales-closer",
+        messageCount: 10,
+        currentSummary: "Hot lead, ready to close",
+      });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: {
+          stage: "qualified",
+          assignedAgent: "sales-closer",
+          messageCount: 10,
+          currentSummary: "Hot lead, ready to close",
+        },
+      });
+    });
+
+    it("only includes defined fields in data payload", async () => {
+      await store.update("thread-1", { stage: "won" });
+      const call = prisma.conversationThread.update.mock.calls[0]![0]!;
+      expect(Object.keys(call.data)).toEqual(["stage"]);
     });
   });
 });
