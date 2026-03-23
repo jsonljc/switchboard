@@ -8,3 +8,9 @@ export {
 export { CommandInterpreter, type CommandInterpreterDeps } from "./command-interpreter.js";
 export { CommandGuardrailEvaluator } from "./command-guardrail-evaluator.js";
 export { SummaryFormatter } from "./summary-formatter.js";
+export {
+  CommandRouter,
+  type CommandRouterDeps,
+  type AgentQueryHandler,
+  type WorkflowSpawner,
+} from "./command-router.js";
