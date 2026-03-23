@@ -5,3 +5,4 @@ export {
   type CommandRouterResult,
   type CommandLLM,
 } from "./operator-types.js";
+export { CommandInterpreter, type CommandInterpreterDeps } from "./command-interpreter.js";
