@@ -18,6 +18,7 @@ import { startRevGrowthRunner } from "../jobs/revenue-growth-runner.js";
 import { startOutcomeChecker } from "../jobs/outcome-checker.js";
 import { startOptimisationRunner } from "../jobs/optimisation-runner.js";
 import { startLeadDigestJob } from "../jobs/lead-digest-job.js";
+import { startTriggerCleanupJob } from "../jobs/trigger-cleanup.js";
 import type { AuditLedger } from "@switchboard/core";
 import {
   createBackgroundJobsQueue,
@@ -116,6 +117,7 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
   let stopOutcomeChecker = () => {};
   let stopOptimisationRunner = () => {};
   let stopLeadDigest = () => {};
+  let stopTriggerCleanup = () => {};
   let backgroundQueue: Queue | null = null;
   let backgroundWorker: Worker | null = null;
 
@@ -184,6 +186,14 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
         notifier: agentNotifier,
         logger,
       });
+
+      const { PrismaTriggerStore } = await import("@switchboard/db");
+      const triggerStore = new PrismaTriggerStore(prismaClient);
+      stopTriggerCleanup = startTriggerCleanupJob({
+        store: triggerStore as unknown as import("@switchboard/core").TriggerStore,
+        intervalMs: 3_600_000, // 1 hour
+        logger,
+      });
     }
   }
 
@@ -201,6 +211,7 @@ export async function startBackgroundJobs(deps: JobDeps): Promise<{
       stopOutcomeChecker();
       stopOptimisationRunner();
       stopLeadDigest();
+      stopTriggerCleanup();
       if (backgroundWorker) {
         await backgroundWorker.close();
       }
