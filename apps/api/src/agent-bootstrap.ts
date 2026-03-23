@@ -35,7 +35,7 @@ import {
   type AdOptimizerDeps,
   type RevenueTrackerDeps,
 } from "@switchboard/agents";
-import type { ConversionBus } from "@switchboard/core";
+import type { ConversionBus, ConversationThreadStore } from "@switchboard/core";
 
 export interface AgentLogger {
   warn(msg: string): void;
@@ -72,6 +72,8 @@ export interface AgentSystemOptions {
     persistRegistration(orgId: string, input: Record<string, unknown>): Promise<void>;
     loadAll(orgId: string): Promise<Array<Record<string, unknown>>>;
   };
+  /** Thread store for per-contact conversation state. */
+  threadStore?: ConversationThreadStore;
 }
 
 export interface AgentSystem {
@@ -81,7 +83,9 @@ export interface AgentSystem {
   stateTracker: AgentStateTracker;
   scheduledRunner: ScheduledRunner;
   actionExecutor: ActionExecutor;
+  policyBridge: PolicyBridge;
   conversationRouter?: ConversationRouter;
+  threadStore?: ConversationThreadStore;
 }
 
 const DEFAULT_LEAD_SCORER = (_params: Record<string, unknown>) => ({
@@ -155,6 +159,7 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   if (options.conversationStore) {
     conversationRouter = new ConversationRouter({
       getStage: options.conversationStore.getStage,
+      threadStore: options.threadStore,
     });
   }
 
@@ -288,7 +293,9 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     stateTracker,
     scheduledRunner,
     actionExecutor,
+    policyBridge,
     conversationRouter,
+    threadStore: options.threadStore,
   };
 }
 

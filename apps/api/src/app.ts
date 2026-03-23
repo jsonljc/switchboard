@@ -62,6 +62,7 @@ declare module "fastify" {
     ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null;
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
     roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
+    workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -243,6 +244,13 @@ export async function buildServer() {
     deliveryStore = new PrismaDeliveryStore(prismaClient);
   }
 
+  // --- Thread store for per-contact derived state ---
+  let threadStore: import("@switchboard/core").ConversationThreadStore | undefined;
+  if (prismaClient) {
+    const { PrismaConversationThreadStore } = await import("@switchboard/db");
+    threadStore = new PrismaConversationThreadStore(prismaClient);
+  }
+
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
   let knowledgeStore: import("@switchboard/core").KnowledgeStore | null = null;
@@ -284,6 +292,7 @@ export async function buildServer() {
           ),
         }
       : undefined,
+    threadStore,
     logger: {
       warn: (msg: string) => app.log.warn(msg),
       error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
@@ -335,6 +344,40 @@ export async function buildServer() {
 
   app.decorate("sessionManager", sessionManager);
   app.decorate("roleManifests", roleManifests);
+
+  // --- Workflow engine bootstrap (optional — requires DATABASE_URL) ---
+  let workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null = null;
+  if (prismaClient) {
+    const { buildWorkflowDeps } = await import("./bootstrap/workflow-deps.js");
+    const stepPolicyBridge: import("@switchboard/core").StepExecutorPolicyBridge = {
+      evaluate: async (intent: {
+        eventId: string;
+        destinationType: string;
+        destinationId: string;
+        action: string;
+        payload: unknown;
+        criticality: string;
+      }) => {
+        // Cast to DeliveryIntent — StepExecutorPolicyBridge uses loose types for structural typing
+        const deliveryIntent: import("@switchboard/agents").DeliveryIntent = {
+          ...intent,
+          destinationType: intent.destinationType as never,
+          criticality: intent.criticality as never,
+        };
+        const result = await agentSystem.policyBridge.evaluate(deliveryIntent);
+        return {
+          approved: result.approved,
+          requiresApproval: result.requiresApproval ?? false,
+          reason: result.reason,
+        };
+      },
+    };
+    workflowDeps = buildWorkflowDeps(prismaClient, agentSystem.actionExecutor, stepPolicyBridge);
+    if (workflowDeps) {
+      app.log.info("Workflow engine bootstrapped");
+    }
+  }
+  app.decorate("workflowDeps", workflowDeps);
 
   // --- Execution queue setup ---
   let queue: Queue | null = null;

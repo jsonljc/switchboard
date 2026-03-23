@@ -117,7 +117,10 @@
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm --filter @switchboard/agents lint 2>&1)",
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm --filter @switchboard/agents test -- --run src/agents/lead-responder/__tests__/handler.test.ts src/agents/lead-responder/__tests__/handler-conversation.test.ts 2>&1)",
       "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm test 2>&1 | grep -E \"\\(Test Files|Tests |FAIL|Tasks:\\)\")",
-      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm typecheck 2>&1 | grep -E \"\\(Tasks:|error\\)\")"
+      "Bash(export PATH=\"/usr/local/bin:/usr/bin:/bin:/usr/local/lib/node_modules/corepack/shims:$PATH\" && pnpm typecheck 2>&1 | grep -E \"\\(Tasks:|error\\)\")",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/schemas test conversation-thread 2>&1 | head -50)",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/schemas typecheck)",
+      "Bash(node -e \"import\\('@switchboard/schemas'\\).then\\(m => console.log\\(Object.keys\\(m\\).filter\\(k => k.includes\\('TERMINAL'\\)\\)\\)\\)\")"
     ]
   }
 }

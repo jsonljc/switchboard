@@ -3,8 +3,10 @@
 // ---------------------------------------------------------------------------
 
 import type { ConversationPrompt, Message, RetrievedChunk } from "@switchboard/core";
+import type { AgentContextData } from "@switchboard/schemas";
 import { getTonePreset, type TonePreset } from "./tone-presets.js";
 import { getLanguageDirective, type SupportedLanguage } from "./language-directives.js";
+import { buildThreadContextBlock } from "../../thread-prompt-utils.js";
 
 export interface PromptBuildInput {
   history: Message[];
@@ -13,6 +15,7 @@ export interface PromptBuildInput {
   language: SupportedLanguage | undefined;
   bookingLink?: string;
   testMode?: boolean;
+  threadContext?: AgentContextData;
 }
 
 const AGENT_INSTRUCTIONS = `You are the Lead Responder agent for a med spa business. Your job is to:
@@ -39,6 +42,10 @@ export function buildConversationPrompt(input: PromptBuildInput): ConversationPr
 
   if (input.testMode) {
     instructions += TEST_MODE_ADDENDUM;
+  }
+
+  if (input.threadContext) {
+    instructions += buildThreadContextBlock(input.threadContext);
   }
 
   return {

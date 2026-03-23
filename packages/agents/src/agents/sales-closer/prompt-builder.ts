@@ -3,11 +3,13 @@
 // ---------------------------------------------------------------------------
 
 import type { ConversationPrompt, Message, RetrievedChunk } from "@switchboard/core";
+import type { AgentContextData } from "@switchboard/schemas";
 import { getTonePreset, type TonePreset } from "../lead-responder/tone-presets.js";
 import {
   getLanguageDirective,
   type SupportedLanguage,
 } from "../lead-responder/language-directives.js";
+import { buildThreadContextBlock } from "../../thread-prompt-utils.js";
 
 export interface SalesCloserPromptInput {
   history: Message[];
@@ -16,6 +18,7 @@ export interface SalesCloserPromptInput {
   language: SupportedLanguage | undefined;
   bookingUrl?: string;
   urgencyEnabled?: boolean;
+  threadContext?: AgentContextData;
 }
 
 const AGENT_INSTRUCTIONS = `You are the Sales Closer agent for a med spa business. Your job is to:
@@ -41,6 +44,10 @@ export function buildSalesCloserPrompt(input: SalesCloserPromptInput): Conversat
 
   if (input.bookingUrl) {
     instructions += `\n\nBooking link: ${input.bookingUrl} — share this when the client is ready to book.`;
+  }
+
+  if (input.threadContext) {
+    instructions += buildThreadContextBlock(input.threadContext);
   }
 
   return {

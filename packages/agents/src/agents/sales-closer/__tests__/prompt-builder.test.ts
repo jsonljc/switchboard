@@ -50,4 +50,24 @@ describe("buildSalesCloserPrompt", () => {
     expect(prompt.systemPrompt).toContain("concise");
     expect(prompt.systemPrompt).toContain("Malay");
   });
+
+  it("includes thread context in instructions", () => {
+    const prompt = buildSalesCloserPrompt({
+      history: [],
+      chunks: [],
+      tonePreset: undefined,
+      language: undefined,
+      threadContext: {
+        objectionsEncountered: ["timing concern"],
+        preferencesLearned: { treatment: "facial" },
+        offersMade: [{ description: "20% off", date: new Date() }],
+        topicsDiscussed: ["booking"],
+        sentimentTrend: "positive",
+      },
+    });
+    expect(prompt.agentInstructions).toContain("CONVERSATION MEMORY");
+    expect(prompt.agentInstructions).toContain("timing concern");
+    expect(prompt.agentInstructions).toContain("treatment: facial");
+    expect(prompt.agentInstructions).toContain("20% off");
+  });
 });

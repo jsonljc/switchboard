@@ -1029,6 +1029,25 @@ model ContactLifecycle {
   @@index([orgId])
 }
 
+model ConversationThread {
+  id              String    @id @default(uuid())
+  contactId       String
+  organizationId  String
+  stage           String    @default("new") // ThreadStage enum
+  assignedAgent   String    @default("lead-responder")
+  agentContext    Json      @default("{}")  // AgentContextData JSON
+  currentSummary  String    @default("")
+  followUpSchedule Json     @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
+  lastOutcomeAt   DateTime?
+  messageCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([contactId, organizationId])
+  @@index([organizationId])
+  @@index([stage])
+}
+
 model AgentRegistration {
   id            String   @id @default(uuid())
   orgId         String
@@ -1105,4 +1124,85 @@ model EscalationRecord {
   @@index([orgId, status])
   @@index([contactId])
   @@index([createdAt])
+}
+
+// ── Workflow Engine ──
+
+model WorkflowExecution {
+  id               String    @id @default(uuid())
+  organizationId   String
+  triggerType      String
+  triggerRef       String?
+  sourceAgent      String?
+  status           String
+  plan             Json
+  currentStepIndex Int       @default(0)
+  safetyEnvelope   Json
+  counters         Json
+  metadata         Json      @default("{}")
+  traceId          String
+  error            String?
+  errorCode        String?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  pendingActions        PendingActionRecord[]
+  approvalCheckpoints   ApprovalCheckpointRecord[]
+
+  @@index([organizationId, status])
+  @@index([traceId])
+  @@index([sourceAgent])
+}
+
+model PendingActionRecord {
+  id                   String    @id @default(uuid())
+  idempotencyKey       String    @unique
+  workflowId           String?
+  stepIndex            Int?
+  status               String
+  intent               String
+  targetEntities       Json
+  parameters           Json
+  humanSummary         String
+  confidence           Float
+  riskLevel            String
+  dollarsAtRisk        Float     @default(0)
+  requiredCapabilities String[]
+  dryRunSupported      Boolean   @default(false)
+  approvalRequired     String
+  fallback             Json?
+  sourceAgent          String
+  sourceWorkflow       String?
+  organizationId       String
+  createdAt            DateTime  @default(now())
+  expiresAt            DateTime?
+  resolvedAt           DateTime?
+  resolvedBy           String?
+
+  workflow   WorkflowExecution? @relation(fields: [workflowId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([workflowId])
+  @@index([sourceAgent])
+}
+
+model ApprovalCheckpointRecord {
+  id               String   @id @default(uuid())
+  workflowId       String
+  stepIndex        Int
+  actionId         String
+  reason           String
+  options          String[]
+  modifiableFields String[]
+  alternatives     Json     @default("[]")
+  notifyChannels   String[]
+  status           String
+  resolution       Json?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  workflow   WorkflowExecution @relation(fields: [workflowId], references: [id])
+
+  @@unique([workflowId, stepIndex])
+  @@index([status])
 }

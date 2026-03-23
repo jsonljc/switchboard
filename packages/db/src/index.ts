@@ -72,3 +72,5 @@ export {
   PrismaToolEventStore,
   PrismaRoleOverrideStore,
 } from "./storage/index.js";
+export { PrismaConversationThreadStore } from "./stores/prisma-thread-store.js";
+export { PrismaWorkflowStore } from "./stores/prisma-workflow-store.js";

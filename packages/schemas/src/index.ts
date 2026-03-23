@@ -66,3 +66,9 @@ export * from "./outcome-event.js";
 
 // Session runtime types
 export * from "./session.js";
+
+// Conversation thread (per-contact derived state)
+export * from "./conversation-thread.js";
+
+// Workflow execution types
+export * from "./workflow.js";

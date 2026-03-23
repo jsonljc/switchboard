@@ -211,6 +211,77 @@ describe("SalesCloserHandler — conversation flow", () => {
     );
   });
 
+  it("reads thread context from event metadata and returns threadUpdate", async () => {
+    const deps: SalesCloserDeps = {
+      conversation: {
+        llm: {
+          generateReply: vi
+            .fn()
+            .mockResolvedValueOnce({
+              reply: "Great choice! Book here: https://cal.com/book",
+              confidence: 0.9,
+            })
+            .mockResolvedValueOnce({
+              reply: JSON.stringify({
+                objectionsEncountered: [],
+                preferencesLearned: {},
+                topicsDiscussed: ["botox"],
+                sentimentTrend: "positive",
+                offersMade: [],
+              }),
+              confidence: 0.9,
+            }),
+        },
+        retriever: makeMockRetriever(),
+        conversationStore: makeMockConversationStore(),
+      },
+    };
+    const handler = new SalesCloserHandler(deps);
+
+    const event = {
+      eventId: "e-1",
+      eventType: "message.received",
+      organizationId: "org-1",
+      occurredAt: new Date().toISOString(),
+      source: { type: "webhook", id: "whatsapp" },
+      correlationId: "cor-1",
+      idempotencyKey: "idem-1",
+      payload: { contactId: "c1", messageText: "I want Botox" },
+      metadata: {
+        conversationThread: {
+          id: "t-1",
+          contactId: "c1",
+          organizationId: "org-1",
+          stage: "qualifying",
+          assignedAgent: "sales-closer",
+          agentContext: {
+            objectionsEncountered: [],
+            preferencesLearned: {},
+            offersMade: [],
+            topicsDiscussed: [],
+            sentimentTrend: "unknown",
+          },
+          currentSummary: "",
+          followUpSchedule: { nextFollowUpAt: null, reason: null, cadenceId: null },
+          lastOutcomeAt: null,
+          messageCount: 2,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      },
+    } as unknown as import("../../../events.js").RoutedEventEnvelope;
+
+    const result = await handler.handle(
+      event,
+      { bookingUrl: "https://cal.com/book" },
+      { organizationId: "org-1", profile: { booking: { bookingUrl: "https://cal.com/book" } } },
+    );
+
+    expect(result.threadUpdate).toBeDefined();
+    expect(result.threadUpdate!.messageCount).toBe(3);
+    expect(result.threadUpdate!.agentContext).toBeDefined();
+  });
+
   it("falls back to deterministic booking when no conversation deps", async () => {
     const handler = new SalesCloserHandler({});
     const event = makeMessageEvent();

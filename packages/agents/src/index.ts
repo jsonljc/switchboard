@@ -20,6 +20,7 @@ export {
   type AgentPort,
   type AgentResponse,
   type PortValidationResult,
+  type ThreadUpdate,
   type ToolDeclaration,
 } from "./ports.js";
 
@@ -171,7 +172,12 @@ export {
   type SweepResult,
 } from "./dead-letter-alerter.js";
 
-export { canRequalify, agentForStage, type LifecycleStage } from "./lifecycle.js";
+export {
+  canRequalify,
+  agentForStage,
+  agentForThreadStage,
+  type LifecycleStage,
+} from "./lifecycle.js";
 
 export {
   ConversationRouter,
@@ -226,3 +232,9 @@ export {
   type RetrieveOptions,
   type ConfidenceInput,
 } from "./knowledge/index.js";
+
+// Context extraction (LLM-based conversation signal analysis)
+export { extractConversationContext, parseContextResponse } from "./context-extractor.js";
+
+// Summary refresh (LLM-based conversation summarization)
+export { refreshSummary, shouldRefreshSummary } from "./summary-refresher.js";

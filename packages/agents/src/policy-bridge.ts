@@ -14,11 +14,17 @@ export interface DeliveryIntent {
 export interface PolicyEvaluation {
   approved: boolean;
   requiresApproval?: boolean;
+  /** Granular approval level when requiresApproval is true */
+  approvalLevel?: "standard" | "elevated" | "mandatory";
   reason?: string;
 }
 
 export interface PolicyEngine {
-  evaluate(intent: DeliveryIntent): Promise<{ effect: string; reason?: string }>;
+  evaluate(intent: DeliveryIntent): Promise<{
+    effect: string;
+    reason?: string;
+    approvalLevel?: string;
+  }>;
 }
 
 export class PolicyBridge {
@@ -29,7 +35,7 @@ export class PolicyBridge {
       return { approved: true };
     }
 
-    let result: { effect: string; reason?: string };
+    let result: { effect: string; reason?: string; approvalLevel?: string };
     try {
       result = await this.engine.evaluate(intent);
     } catch {
@@ -42,7 +48,12 @@ export class PolicyBridge {
     }
 
     if (result.effect === "require_approval") {
-      return { approved: false, requiresApproval: true, reason: result.reason };
+      return {
+        approved: false,
+        requiresApproval: true,
+        approvalLevel: (result.approvalLevel as PolicyEvaluation["approvalLevel"]) ?? "standard",
+        reason: result.reason,
+      };
     }
 
     return { approved: false, reason: result.reason };

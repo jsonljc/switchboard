@@ -16,6 +16,9 @@ export interface RetrievedChunk {
   metadata?: Record<string, unknown>;
 }
 
+// Note: Thread context (AgentContextData) is deliberately NOT a field on ConversationPrompt.
+// It's injected into agentInstructions as a text block by each agent's prompt builder,
+// keeping this interface provider-agnostic and free of agent-specific concerns.
 export interface ConversationPrompt {
   systemPrompt: string;
   conversationHistory: Message[];
