@@ -63,6 +63,7 @@ declare module "fastify" {
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
     roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
+    schedulerService: import("@switchboard/core").SchedulerService | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -397,6 +398,15 @@ export async function buildServer() {
     };
   }
 
+  // --- Scheduler service bootstrap (optional — requires DATABASE_URL + REDIS_URL + workflow engine) ---
+  let schedulerDeps: import("./bootstrap/scheduler-deps.js").SchedulerDeps | null = null;
+  if (prismaClient && redisUrl && workflowDeps) {
+    const { buildSchedulerDeps } = await import("./bootstrap/scheduler-deps.js");
+    schedulerDeps = buildSchedulerDeps(prismaClient, redisUrl, workflowDeps.workflowEngine);
+    app.log.info("Scheduler service bootstrapped");
+  }
+  app.decorate("schedulerService", schedulerDeps?.service ?? null);
+
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
   if (process.env["TELEGRAM_BOT_TOKEN"]) {
@@ -491,6 +501,10 @@ export async function buildServer() {
     agentSystem.scheduledRunner.stop();
 
     await stopAllJobs();
+
+    if (schedulerDeps) {
+      await schedulerDeps.cleanup();
+    }
 
     if (worker) {
       await worker.close();
