@@ -23,6 +23,7 @@ function createMockStore(): TriggerStore {
       if (t) triggers.set(id, { ...t, status });
     }),
     deleteExpired: vi.fn(async () => 0),
+    expireOverdue: vi.fn(async () => 0),
   };
 }
 

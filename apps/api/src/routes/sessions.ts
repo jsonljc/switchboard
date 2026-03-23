@@ -28,24 +28,26 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
 
       if (!assertOrgAccess(request, body.organizationId, reply)) return;
 
-      // Lookup role manifest
-      const loaded = app.roleManifests.get(body.roleId);
-      if (!loaded) {
-        return reply.code(404).send({ error: `Role '${body.roleId}' not found` });
-      }
+      // Role manifests removed — use safe defaults for legacy session creation
+      const manifestDefaults = {
+        safetyEnvelope: {
+          sessionTimeoutMs: 300_000,
+          maxToolCalls: 50,
+          maxMutations: 10,
+          maxDollarsAtRisk: 100,
+        },
+        toolPack: [] as string[],
+        governanceProfile: "default",
+      };
 
       try {
         const { session, run } = await app.sessionManager.createSession({
           organizationId: body.organizationId,
           roleId: body.roleId,
           principalId: body.principalId,
-          manifestDefaults: {
-            safetyEnvelope: loaded.manifest.safetyEnvelope,
-            toolPack: loaded.manifest.toolPack,
-            governanceProfile: loaded.manifest.governanceProfile,
-          },
+          manifestDefaults,
           safetyEnvelopeOverride: body.safetyEnvelopeOverride,
-          maxConcurrentSessionsForRole: loaded.manifest.maxConcurrentSessions,
+          maxConcurrentSessionsForRole: 10,
         });
 
         // Issue session-scoped token
