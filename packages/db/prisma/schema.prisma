@@ -1148,6 +1148,7 @@ model WorkflowExecution {
 
   pendingActions        PendingActionRecord[]
   approvalCheckpoints   ApprovalCheckpointRecord[]
+  triggers              ScheduledTriggerRecord[]
 
   @@index([organizationId, status])
   @@index([traceId])
@@ -1205,4 +1206,25 @@ model ApprovalCheckpointRecord {
 
   @@unique([workflowId, stepIndex])
   @@index([status])
+}
+
+model ScheduledTriggerRecord {
+  id                String    @id @default(uuid())
+  organizationId    String
+  type              String    // "timer" | "cron" | "event_match"
+  fireAt            DateTime?
+  cronExpression    String?
+  eventPattern      Json?     // { type: string, filters: Record<string, unknown> }
+  action            Json      // { type: string, payload: Record<string, unknown> }
+  sourceWorkflowId  String?
+  status            String    @default("active") // "active" | "fired" | "cancelled" | "expired"
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime?
+
+  workflow          WorkflowExecution? @relation(fields: [sourceWorkflowId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([status, type])
+  @@index([sourceWorkflowId])
+  @@index([fireAt])
 }
