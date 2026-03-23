@@ -25,6 +25,9 @@ export interface BuildOperatorDepsOptions {
 export function buildOperatorDeps(options: BuildOperatorDepsOptions): OperatorDeps {
   const stubLLM: CommandLLM = {
     async parseCommand() {
+      console.warn(
+        "[OperatorDeps] No LLM configured — all commands will be rejected. Pass llm option to buildOperatorDeps.",
+      );
       return {
         intent: "unknown",
         entities: [],

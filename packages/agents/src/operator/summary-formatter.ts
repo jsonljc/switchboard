@@ -38,11 +38,12 @@ export class SummaryFormatter {
     return details ? `Done — ${verb}. ${details}.` : `Done — ${verb}.`;
   }
 
-  private wrapRich(summary: string, data: Record<string, unknown>): string {
+  private wrapRich(_summary: string, data: Record<string, unknown>): string {
+    const verb = "Result";
     const lines = Object.entries(data).map(
       ([k, v]) => `- **${this.camelToWords(k)}**: ${String(v)}`,
     );
-    return `${summary}\n\n${lines.join("\n")}`;
+    return `${verb}\n\n${lines.join("\n")}`;
   }
 
   private intentToVerb(intent: string): string {

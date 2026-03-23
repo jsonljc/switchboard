@@ -8,6 +8,10 @@ import type {
 } from "@switchboard/schemas";
 import type { OperatorCommandStore } from "@switchboard/core";
 
+type CommandRow = Awaited<
+  ReturnType<PrismaClient["operatorCommandRecord"]["findUniqueOrThrow"]>
+>;
+
 export class PrismaOperatorCommandStore implements OperatorCommandStore {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -31,12 +35,20 @@ export class PrismaOperatorCommandStore implements OperatorCommandStore {
         requestId: command.requestId,
         organizationId: command.organizationId,
         intent: command.intent,
-        entities: JSON.parse(JSON.stringify(command.entities)),
-        parameters: JSON.parse(JSON.stringify(command.parameters)),
+        entities: command.entities as unknown as Parameters<
+          PrismaClient["operatorCommandRecord"]["create"]
+        >[0]["data"]["entities"],
+        parameters: command.parameters as unknown as Parameters<
+          PrismaClient["operatorCommandRecord"]["create"]
+        >[0]["data"]["parameters"],
         parseConfidence: command.parseConfidence,
-        guardrailResult: JSON.parse(JSON.stringify(command.guardrailResult)),
+        guardrailResult: command.guardrailResult as unknown as Parameters<
+          PrismaClient["operatorCommandRecord"]["create"]
+        >[0]["data"]["guardrailResult"],
         status: command.status,
-        workflowIds: JSON.parse(JSON.stringify(command.workflowIds)),
+        workflowIds: command.workflowIds as unknown as Parameters<
+          PrismaClient["operatorCommandRecord"]["create"]
+        >[0]["data"]["workflowIds"],
         resultSummary: command.resultSummary,
         completedAt: command.completedAt,
       },
@@ -55,7 +67,11 @@ export class PrismaOperatorCommandStore implements OperatorCommandStore {
         ...(updates?.resultSummary !== undefined ? { resultSummary: updates.resultSummary } : {}),
         ...(updates?.completedAt !== undefined ? { completedAt: updates.completedAt } : {}),
         ...(updates?.workflowIds !== undefined
-          ? { workflowIds: JSON.parse(JSON.stringify(updates.workflowIds)) }
+          ? {
+              workflowIds: updates.workflowIds as unknown as Parameters<
+                PrismaClient["operatorCommandRecord"]["update"]
+              >[0]["data"]["workflowIds"],
+            }
           : {}),
       },
     });
@@ -97,21 +113,21 @@ export class PrismaOperatorCommandStore implements OperatorCommandStore {
     };
   }
 
-  private toCommand(row: Record<string, unknown>): OperatorCommand {
+  private toCommand(row: CommandRow): OperatorCommand {
     return {
-      id: row.id as string,
-      requestId: row.requestId as string,
-      organizationId: row.organizationId as string,
-      intent: row.intent as string,
-      entities: row.entities as CommandEntity[],
+      id: row.id,
+      requestId: row.requestId,
+      organizationId: row.organizationId,
+      intent: row.intent,
+      entities: row.entities as unknown as CommandEntity[],
       parameters: row.parameters as Record<string, unknown>,
-      parseConfidence: row.parseConfidence as number,
-      guardrailResult: row.guardrailResult as GuardrailResult,
+      parseConfidence: row.parseConfidence,
+      guardrailResult: row.guardrailResult as unknown as GuardrailResult,
       status: row.status as CommandStatus,
-      workflowIds: row.workflowIds as string[],
-      resultSummary: (row.resultSummary as string) ?? null,
-      createdAt: row.createdAt as Date,
-      completedAt: (row.completedAt as Date) ?? null,
+      workflowIds: row.workflowIds as unknown as string[],
+      resultSummary: row.resultSummary ?? null,
+      createdAt: row.createdAt,
+      completedAt: row.completedAt ?? null,
     };
   }
 }

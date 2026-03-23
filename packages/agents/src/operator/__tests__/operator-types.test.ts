@@ -27,4 +27,10 @@ describe("operator-types constants", () => {
     expect(READ_ONLY_INTENTS.has("pause_campaigns")).toBe(false);
     expect(READ_ONLY_INTENTS.has("reassign_leads")).toBe(false);
   });
+
+  it("INTENT_AGENT_MAP covers all LAUNCH_INTENTS", () => {
+    for (const intent of LAUNCH_INTENTS) {
+      expect(INTENT_AGENT_MAP).toHaveProperty(intent);
+    }
+  });
 });

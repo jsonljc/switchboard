@@ -17,7 +17,7 @@ describe("operatorRoutes", () => {
   beforeEach(async () => {
     app = Fastify();
     // Mock operator deps on Fastify instance
-    (app as Record<string, unknown>).operatorDeps = {
+    (app as unknown as Record<string, unknown>).operatorDeps = {
       interpreter: { interpret: mockInterpret },
       guardrailEvaluator: { evaluate: mockEvaluate },
       router: { dispatch: mockDispatch },
@@ -35,9 +35,9 @@ describe("operatorRoutes", () => {
       },
     };
     // Mock auth
-    app.decorateRequest("organizationIdFromAuth", null);
+    app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (req) => {
-      (req as Record<string, unknown>).organizationIdFromAuth = "org-1";
+      (req as unknown as Record<string, unknown>).organizationIdFromAuth = "org-1";
     });
 
     await app.register(operatorRoutes, { prefix: "/api/operator" });
@@ -131,8 +131,8 @@ describe("operatorRoutes", () => {
   it("POST /command — returns 401 without org context", async () => {
     // Override the hook to not set orgId
     const app2 = Fastify();
-    (app2 as Record<string, unknown>).operatorDeps = (app as Record<string, unknown>).operatorDeps;
-    app2.decorateRequest("organizationIdFromAuth", null);
+    (app2 as unknown as Record<string, unknown>).operatorDeps = (app as unknown as Record<string, unknown>).operatorDeps;
+    app2.decorateRequest("organizationIdFromAuth", undefined);
     await app2.register(operatorRoutes, { prefix: "/api/operator" });
     await app2.ready();
 

@@ -14,6 +14,7 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "application/json",
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        "x-organization-id": session.organizationId,
       },
       body: JSON.stringify({
         rawInput: body.rawInput,
