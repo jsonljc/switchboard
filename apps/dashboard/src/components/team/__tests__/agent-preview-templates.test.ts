@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getPreviewMessage } from "../agent-preview-templates.js";
+import { getPreviewMessage } from "../agent-preview-templates";
 
 describe("getPreviewMessage", () => {
   it("generates warm greeting for responder", () => {
