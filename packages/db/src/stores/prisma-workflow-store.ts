@@ -1,10 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
-
-// Local type aliases matching @switchboard/core store interfaces.
-// Structural typing — no cross-layer import.
+import { mapRowToWorkflow, mapRowToAction, mapRowToCheckpoint } from "./prisma-workflow-mappers.js";
+import type {
+  WorkflowExecution,
+  PendingAction,
+  ApprovalCheckpoint,
+} from "./prisma-workflow-mappers.js";
 
 // ---------------------------------------------------------------------------
-// Enums
+// Enums (local — structural typing, no cross-layer import)
 // ---------------------------------------------------------------------------
 
 type WorkflowStatus =
@@ -18,8 +21,6 @@ type WorkflowStatus =
   | "failed"
   | "cancelled";
 
-type WorkflowTriggerType = "event" | "schedule" | "operator_command" | "agent_initiated";
-
 type PendingActionStatus =
   | "proposed"
   | "approved"
@@ -29,146 +30,8 @@ type PendingActionStatus =
   | "rejected"
   | "expired";
 
-type RiskLevel = "low" | "medium" | "high" | "critical";
-
-type ApprovalType = "auto" | "human_review" | "operator_approval";
-
-type WorkflowStepStatus = "pending" | "executing" | "completed" | "failed" | "skipped";
-
-type ApprovalCheckpointStatus = "pending" | "approved" | "rejected" | "modified" | "expired";
-
 // ---------------------------------------------------------------------------
-// Workflow Safety Envelope
-// ---------------------------------------------------------------------------
-
-interface WorkflowSafetyEnvelope {
-  maxSteps: number;
-  maxDollarsAtRisk: number;
-  timeoutMs: number;
-  maxReplans: number;
-}
-
-// ---------------------------------------------------------------------------
-// Pending Action
-// ---------------------------------------------------------------------------
-
-interface TargetEntity {
-  type: string;
-  id: string;
-}
-
-interface ActionFallback {
-  action: string;
-  reason: string;
-}
-
-interface PendingAction {
-  id: string;
-  idempotencyKey: string;
-  workflowId: string | null;
-  stepIndex: number | null;
-  status: PendingActionStatus;
-  intent: string;
-  targetEntities: TargetEntity[];
-  parameters: Record<string, unknown>;
-  humanSummary: string;
-  confidence: number;
-  riskLevel: RiskLevel;
-  dollarsAtRisk: number;
-  requiredCapabilities: string[];
-  dryRunSupported: boolean;
-  approvalRequired: ApprovalType;
-  fallback: ActionFallback | null;
-  sourceAgent: string;
-  sourceWorkflow: string | null;
-  organizationId: string;
-  createdAt: Date;
-  expiresAt: Date | null;
-  resolvedAt: Date | null;
-  resolvedBy: string | null;
-}
-
-// ---------------------------------------------------------------------------
-// Workflow Plan
-// ---------------------------------------------------------------------------
-
-interface WorkflowStep {
-  index: number;
-  actionId: string;
-  dependsOn: number[];
-  status: WorkflowStepStatus;
-  result: Record<string, unknown> | null;
-}
-
-type WorkflowPlanStrategy = "sequential" | "parallel_where_possible";
-
-interface WorkflowPlan {
-  steps: WorkflowStep[];
-  strategy: WorkflowPlanStrategy;
-  replannedCount: number;
-}
-
-// ---------------------------------------------------------------------------
-// Workflow Execution
-// ---------------------------------------------------------------------------
-
-interface WorkflowExecution {
-  id: string;
-  organizationId: string;
-  triggerType: WorkflowTriggerType;
-  triggerRef: string | null;
-  sourceAgent: string | null;
-  status: WorkflowStatus;
-  plan: WorkflowPlan;
-  currentStepIndex: number;
-  safetyEnvelope: WorkflowSafetyEnvelope;
-  counters: {
-    stepsCompleted: number;
-    dollarsAtRisk: number;
-    replansUsed: number;
-  };
-  metadata: Record<string, unknown>;
-  traceId: string;
-  error: string | null;
-  errorCode: string | null;
-  startedAt: Date;
-  completedAt: Date | null;
-}
-
-// ---------------------------------------------------------------------------
-// Approval Checkpoint
-// ---------------------------------------------------------------------------
-
-interface ApprovalAlternative {
-  label: string;
-  parameters: Record<string, unknown>;
-}
-
-interface ApprovalResolution {
-  decidedBy: string;
-  decidedAt: Date;
-  selectedAlternative: number | null;
-  fieldEdits: Record<string, unknown> | null;
-}
-
-interface ApprovalCheckpoint {
-  id: string;
-  workflowId: string;
-  stepIndex: number;
-  actionId: string;
-  reason: string;
-  options: Array<"approve" | "reject" | "modify">;
-  modifiableFields: string[];
-  alternatives: ApprovalAlternative[];
-  notifyChannels: Array<"telegram" | "whatsapp" | "dashboard">;
-  status: ApprovalCheckpointStatus;
-  resolution: ApprovalResolution | null;
-  createdAt: Date;
-  expiresAt: Date;
-}
-
-// ---------------------------------------------------------------------------
-// Store Interfaces
+// Store Interfaces (structural match with @switchboard/core)
 // ---------------------------------------------------------------------------
 
 interface WorkflowStore {
@@ -238,34 +101,9 @@ export class PrismaWorkflowStore {
       },
 
       getById: async (id: string): Promise<WorkflowExecution | null> => {
-        const row = await this.prisma.workflowExecution.findUnique({
-          where: { id },
-        });
-
+        const row = await this.prisma.workflowExecution.findUnique({ where: { id } });
         if (!row) return null;
-
-        return {
-          id: row.id,
-          organizationId: row.organizationId,
-          triggerType: row.triggerType as WorkflowTriggerType,
-          triggerRef: row.triggerRef,
-          sourceAgent: row.sourceAgent,
-          status: row.status as WorkflowStatus,
-          plan: row.plan as unknown as WorkflowPlan,
-          currentStepIndex: row.currentStepIndex,
-          safetyEnvelope: row.safetyEnvelope as unknown as WorkflowSafetyEnvelope,
-          counters: row.counters as unknown as {
-            stepsCompleted: number;
-            dollarsAtRisk: number;
-            replansUsed: number;
-          },
-          metadata: row.metadata as unknown as Record<string, unknown>,
-          traceId: row.traceId,
-          error: row.error,
-          errorCode: row.errorCode,
-          startedAt: row.startedAt,
-          completedAt: row.completedAt,
-        };
+        return mapRowToWorkflow(row);
       },
 
       update: async (id: string, updates: Partial<WorkflowExecution>): Promise<void> => {
@@ -283,10 +121,7 @@ export class PrismaWorkflowStore {
         if (updates.errorCode !== undefined) data.errorCode = updates.errorCode;
         if (updates.completedAt !== undefined) data.completedAt = updates.completedAt;
 
-        await this.prisma.workflowExecution.update({
-          where: { id },
-          data,
-        });
+        await this.prisma.workflowExecution.update({ where: { id }, data });
       },
 
       list: async (filter: {
@@ -296,7 +131,6 @@ export class PrismaWorkflowStore {
         limit?: number;
       }): Promise<WorkflowExecution[]> => {
         const where: Record<string, unknown> = {};
-
         if (filter.organizationId) where.organizationId = filter.organizationId;
         if (filter.status) where.status = filter.status;
         if (filter.sourceAgent) where.sourceAgent = filter.sourceAgent;
@@ -306,29 +140,7 @@ export class PrismaWorkflowStore {
           take: filter.limit,
           orderBy: { startedAt: "desc" },
         });
-
-        return rows.map((row) => ({
-          id: row.id,
-          organizationId: row.organizationId,
-          triggerType: row.triggerType as WorkflowTriggerType,
-          triggerRef: row.triggerRef,
-          sourceAgent: row.sourceAgent,
-          status: row.status as WorkflowStatus,
-          plan: row.plan as unknown as WorkflowPlan,
-          currentStepIndex: row.currentStepIndex,
-          safetyEnvelope: row.safetyEnvelope as unknown as WorkflowSafetyEnvelope,
-          counters: row.counters as unknown as {
-            stepsCompleted: number;
-            dollarsAtRisk: number;
-            replansUsed: number;
-          },
-          metadata: row.metadata as unknown as Record<string, unknown>,
-          traceId: row.traceId,
-          error: row.error,
-          errorCode: row.errorCode,
-          startedAt: row.startedAt,
-          completedAt: row.completedAt,
-        }));
+        return rows.map(mapRowToWorkflow);
       },
     };
 
@@ -364,51 +176,19 @@ export class PrismaWorkflowStore {
       },
 
       getById: async (id: string): Promise<PendingAction | null> => {
-        const row = await this.prisma.pendingActionRecord.findUnique({
-          where: { id },
-        });
-
+        const row = await this.prisma.pendingActionRecord.findUnique({ where: { id } });
         if (!row) return null;
-
-        return {
-          id: row.id,
-          idempotencyKey: row.idempotencyKey,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          status: row.status as PendingActionStatus,
-          intent: row.intent,
-          targetEntities: row.targetEntities as unknown as TargetEntity[],
-          parameters: row.parameters as unknown as Record<string, unknown>,
-          humanSummary: row.humanSummary,
-          confidence: row.confidence,
-          riskLevel: row.riskLevel as RiskLevel,
-          dollarsAtRisk: row.dollarsAtRisk,
-          requiredCapabilities: row.requiredCapabilities,
-          dryRunSupported: row.dryRunSupported,
-          approvalRequired: row.approvalRequired as ApprovalType,
-          fallback: row.fallback as unknown as ActionFallback | null,
-          sourceAgent: row.sourceAgent,
-          sourceWorkflow: row.sourceWorkflow,
-          organizationId: row.organizationId,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-          resolvedAt: row.resolvedAt,
-          resolvedBy: row.resolvedBy,
-        };
+        return mapRowToAction(row);
       },
 
       update: async (id: string, updates: Partial<PendingAction>): Promise<void> => {
         const data: Record<string, unknown> = {};
-
         if (updates.status !== undefined) data.status = updates.status;
         if (updates.parameters !== undefined) data.parameters = updates.parameters as object;
         if (updates.resolvedAt !== undefined) data.resolvedAt = updates.resolvedAt;
         if (updates.resolvedBy !== undefined) data.resolvedBy = updates.resolvedBy;
 
-        await this.prisma.pendingActionRecord.update({
-          where: { id },
-          data,
-        });
+        await this.prisma.pendingActionRecord.update({ where: { id }, data });
       },
 
       listByWorkflow: async (workflowId: string): Promise<PendingAction[]> => {
@@ -416,32 +196,7 @@ export class PrismaWorkflowStore {
           where: { workflowId },
           orderBy: { createdAt: "asc" },
         });
-
-        return rows.map((row) => ({
-          id: row.id,
-          idempotencyKey: row.idempotencyKey,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          status: row.status as PendingActionStatus,
-          intent: row.intent,
-          targetEntities: row.targetEntities as unknown as TargetEntity[],
-          parameters: row.parameters as unknown as Record<string, unknown>,
-          humanSummary: row.humanSummary,
-          confidence: row.confidence,
-          riskLevel: row.riskLevel as RiskLevel,
-          dollarsAtRisk: row.dollarsAtRisk,
-          requiredCapabilities: row.requiredCapabilities,
-          dryRunSupported: row.dryRunSupported,
-          approvalRequired: row.approvalRequired as ApprovalType,
-          fallback: row.fallback as unknown as ActionFallback | null,
-          sourceAgent: row.sourceAgent,
-          sourceWorkflow: row.sourceWorkflow,
-          organizationId: row.organizationId,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-          resolvedAt: row.resolvedAt,
-          resolvedBy: row.resolvedBy,
-        }));
+        return rows.map(mapRowToAction);
       },
 
       listByStatus: async (
@@ -450,39 +205,11 @@ export class PrismaWorkflowStore {
         limit?: number,
       ): Promise<PendingAction[]> => {
         const rows = await this.prisma.pendingActionRecord.findMany({
-          where: {
-            organizationId,
-            status,
-          },
+          where: { organizationId, status },
           take: limit,
           orderBy: { createdAt: "asc" },
         });
-
-        return rows.map((row) => ({
-          id: row.id,
-          idempotencyKey: row.idempotencyKey,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          status: row.status as PendingActionStatus,
-          intent: row.intent,
-          targetEntities: row.targetEntities as unknown as TargetEntity[],
-          parameters: row.parameters as unknown as Record<string, unknown>,
-          humanSummary: row.humanSummary,
-          confidence: row.confidence,
-          riskLevel: row.riskLevel as RiskLevel,
-          dollarsAtRisk: row.dollarsAtRisk,
-          requiredCapabilities: row.requiredCapabilities,
-          dryRunSupported: row.dryRunSupported,
-          approvalRequired: row.approvalRequired as ApprovalType,
-          fallback: row.fallback as unknown as ActionFallback | null,
-          sourceAgent: row.sourceAgent,
-          sourceWorkflow: row.sourceWorkflow,
-          organizationId: row.organizationId,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-          resolvedAt: row.resolvedAt,
-          resolvedBy: row.resolvedBy,
-        }));
+        return rows.map(mapRowToAction);
       },
     };
 
@@ -508,27 +235,9 @@ export class PrismaWorkflowStore {
       },
 
       getById: async (id: string): Promise<ApprovalCheckpoint | null> => {
-        const row = await this.prisma.approvalCheckpointRecord.findUnique({
-          where: { id },
-        });
-
+        const row = await this.prisma.approvalCheckpointRecord.findUnique({ where: { id } });
         if (!row) return null;
-
-        return {
-          id: row.id,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          actionId: row.actionId,
-          reason: row.reason,
-          options: row.options as Array<"approve" | "reject" | "modify">,
-          modifiableFields: row.modifiableFields,
-          alternatives: row.alternatives as unknown as ApprovalAlternative[],
-          notifyChannels: row.notifyChannels as Array<"telegram" | "whatsapp" | "dashboard">,
-          status: row.status as ApprovalCheckpointStatus,
-          resolution: row.resolution as unknown as ApprovalResolution | null,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-        };
+        return mapRowToCheckpoint(row);
       },
 
       getByWorkflowAndStep: async (
@@ -538,66 +247,28 @@ export class PrismaWorkflowStore {
         const row = await this.prisma.approvalCheckpointRecord.findUnique({
           where: { workflowId_stepIndex: { workflowId, stepIndex } },
         });
-
         if (!row) return null;
-
-        return {
-          id: row.id,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          actionId: row.actionId,
-          reason: row.reason,
-          options: row.options as Array<"approve" | "reject" | "modify">,
-          modifiableFields: row.modifiableFields,
-          alternatives: row.alternatives as unknown as ApprovalAlternative[],
-          notifyChannels: row.notifyChannels as Array<"telegram" | "whatsapp" | "dashboard">,
-          status: row.status as ApprovalCheckpointStatus,
-          resolution: row.resolution as unknown as ApprovalResolution | null,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-        };
+        return mapRowToCheckpoint(row);
       },
 
       update: async (id: string, updates: Partial<ApprovalCheckpoint>): Promise<void> => {
         const data: Record<string, unknown> = {};
-
         if (updates.status !== undefined) data.status = updates.status;
         if (updates.resolution !== undefined) {
           data.resolution = updates.resolution ? (updates.resolution as object) : undefined;
         }
-
-        await this.prisma.approvalCheckpointRecord.update({
-          where: { id },
-          data,
-        });
+        await this.prisma.approvalCheckpointRecord.update({ where: { id }, data });
       },
 
       listPending: async (organizationId: string): Promise<ApprovalCheckpoint[]> => {
         const rows = await this.prisma.approvalCheckpointRecord.findMany({
           where: {
             status: "pending",
-            workflow: {
-              organizationId,
-            },
+            workflow: { organizationId },
           },
           orderBy: { createdAt: "asc" },
         });
-
-        return rows.map((row) => ({
-          id: row.id,
-          workflowId: row.workflowId,
-          stepIndex: row.stepIndex,
-          actionId: row.actionId,
-          reason: row.reason,
-          options: row.options as Array<"approve" | "reject" | "modify">,
-          modifiableFields: row.modifiableFields,
-          alternatives: row.alternatives as unknown as ApprovalAlternative[],
-          notifyChannels: row.notifyChannels as Array<"telegram" | "whatsapp" | "dashboard">,
-          status: row.status as ApprovalCheckpointStatus,
-          resolution: row.resolution as unknown as ApprovalResolution | null,
-          createdAt: row.createdAt,
-          expiresAt: row.expiresAt,
-        }));
+        return rows.map(mapRowToCheckpoint);
       },
     };
   }

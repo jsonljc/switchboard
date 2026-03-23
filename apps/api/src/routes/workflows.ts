@@ -4,6 +4,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { resolveCheckpoint } from "@switchboard/core";
+import { WorkflowStatusSchema } from "@switchboard/schemas";
 
 export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   const workflowDeps = fastify.workflowDeps;
@@ -15,37 +16,71 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   const { workflowEngine, store } = workflowDeps;
 
   // GET /:id — get a single workflow
-  fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
-    const workflow = await workflowEngine.getWorkflow(request.params.id);
-    if (!workflow) {
-      return reply.status(404).send({ error: "Workflow not found" });
-    }
-    return reply.send(workflow);
-  });
+  fastify.get<{ Params: { id: string }; Querystring: { organizationId?: string } }>(
+    "/:id",
+    async (request, reply) => {
+      const workflow = await workflowEngine.getWorkflow(request.params.id);
+      if (!workflow) {
+        return reply.status(404).send({ error: "Workflow not found" });
+      }
+      // Verify org scoping if provided
+      if (
+        request.query.organizationId &&
+        workflow.organizationId !== request.query.organizationId
+      ) {
+        return reply.status(404).send({ error: "Workflow not found" });
+      }
+      return reply.send(workflow);
+    },
+  );
 
   // GET / — list workflows with optional filters
   fastify.get<{
     Querystring: { organizationId?: string; status?: string; limit?: string };
   }>("/", async (request, reply) => {
     const { organizationId, status, limit } = request.query;
+    if (!organizationId) {
+      return reply.status(400).send({ error: "organizationId required" });
+    }
+
+    // Validate status if provided
+    let validatedStatus: string | undefined;
+    if (status) {
+      const parsed = WorkflowStatusSchema.safeParse(status);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: `Invalid status: ${status}` });
+      }
+      validatedStatus = parsed.data;
+    }
+
     const workflows = await store.workflows.list({
       organizationId,
-      status: status as never,
+      status: validatedStatus as undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
     return reply.send(workflows);
   });
 
   // POST /:id/cancel — cancel a workflow
-  fastify.post<{ Params: { id: string } }>("/:id/cancel", async (request, reply) => {
-    try {
-      await workflowEngine.cancelWorkflow(request.params.id);
-      return reply.send({ success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return reply.status(400).send({ error: message });
-    }
-  });
+  fastify.post<{ Params: { id: string }; Querystring: { organizationId?: string } }>(
+    "/:id/cancel",
+    async (request, reply) => {
+      try {
+        // Verify the workflow belongs to the caller's org
+        if (request.query.organizationId) {
+          const workflow = await workflowEngine.getWorkflow(request.params.id);
+          if (!workflow || workflow.organizationId !== request.query.organizationId) {
+            return reply.status(404).send({ error: "Workflow not found" });
+          }
+        }
+        await workflowEngine.cancelWorkflow(request.params.id);
+        return reply.send({ success: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    },
+  );
 
   // GET /actions/pending — list pending actions for an org
   fastify.get<{
@@ -91,6 +126,9 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.send({ success: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("not found")) {
+        return reply.status(404).send({ error: message });
+      }
       return reply.status(400).send({ error: message });
     }
   });
