@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Target, BellRing, TrendingUp, Zap } from "lucide-react";
+import { getPreviewMessage } from "@/components/team/agent-preview-templates";
 
 interface StepAgentStyleProps {
   selectedAgents: string[];
@@ -48,20 +49,6 @@ const TONES = [
   { id: "casual-conversational", short: "Casual", label: "Casual & Conversational" },
   { id: "direct-efficient", short: "Direct", label: "Direct & Efficient" },
 ];
-
-function getPreviewGreeting(toneId: string, businessName: string): string {
-  const name = businessName || "your business";
-  switch (toneId) {
-    case "warm-professional":
-      return `"Hi there! Welcome to ${name}. I'd love to help you find the perfect service. What are you looking for today?"`;
-    case "casual-conversational":
-      return `"Hey! Thanks for reaching out to ${name}. What can I help you with?"`;
-    case "direct-efficient":
-      return `"Hello. How can I assist you with ${name}'s services today?"`;
-    default:
-      return "";
-  }
-}
 
 export function StepAgentStyle({
   selectedAgents,
@@ -123,7 +110,7 @@ export function StepAgentStyle({
                   <div className="rounded-md bg-muted/50 p-3 border border-border/50">
                     <p className="text-[12px] text-muted-foreground mb-1">Preview</p>
                     <p className="text-[13px] text-foreground italic">
-                      {getPreviewGreeting(selectedTone, businessName)}
+                      {getPreviewMessage(agentId, selectedTone, {}, businessName)}
                     </p>
                   </div>
                 )}

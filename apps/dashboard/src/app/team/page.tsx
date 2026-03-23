@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { useAgentRoster, useAgentState, useInitializeRoster } from "@/hooks/use-agents";
-import { AgentDetailSheet } from "@/components/team/agent-detail-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AGENT_ICONS, AGENT_ROLE_LABELS } from "@/components/team/agent-icons";
 import { Lock } from "lucide-react";
@@ -138,7 +137,7 @@ export default function TeamPage() {
   const { data: rosterData, isLoading } = useAgentRoster();
   useAgentState(); // prefetch — populates agentState on roster entries
   const initializeRoster = useInitializeRoster();
-  const [selectedAgent, setSelectedAgent] = useState<AgentRosterEntry | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && rosterData && rosterData.roster.length === 0 && !initializeRoster.isPending) {
@@ -180,7 +179,10 @@ export default function TeamPage() {
       {/* Primary operator */}
       {primaryOperator && (
         <section>
-          <PrimaryCard agent={primaryOperator} onClick={() => setSelectedAgent(primaryOperator)} />
+          <PrimaryCard
+            agent={primaryOperator}
+            onClick={() => router.push(`/team/${primaryOperator.id}`)}
+          />
         </section>
       )}
 
@@ -190,7 +192,11 @@ export default function TeamPage() {
           <h2 className="section-label">Specialists</h2>
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {activeSpecialists.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} onClick={() => setSelectedAgent(agent)} />
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onClick={() => router.push(`/team/${agent.id}`)}
+              />
             ))}
           </div>
         </section>
@@ -210,12 +216,6 @@ export default function TeamPage() {
           </p>
         </section>
       )}
-
-      <AgentDetailSheet
-        agent={selectedAgent}
-        open={!!selectedAgent}
-        onOpenChange={(open) => !open && setSelectedAgent(null)}
-      />
     </div>
   );
 }
