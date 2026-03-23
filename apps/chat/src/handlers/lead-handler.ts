@@ -30,6 +30,7 @@ import type {
   LLMConversationContext,
   BusinessProfile,
 } from "../conversation/llm-conversation-engine.js";
+import { isOperatorMessage, delegateOperatorCommand } from "./operator-handler.js";
 
 export interface EventLoopDelegateConfig {
   apiUrl: string;
@@ -108,6 +109,27 @@ export async function handleLeadMessage(
   dialogueMiddleware?: DialogueMiddleware | null,
   deps?: LeadHandlerDeps,
 ): Promise<void> {
+  // Check if this is an operator message — route to operator handler instead
+  const principalRoles = (message.metadata?.roles ?? []) as string[];
+  if (isOperatorMessage(principalRoles)) {
+    const apiUrl = process.env.SWITCHBOARD_API_URL;
+    if (apiUrl) {
+      await delegateOperatorCommand(
+        { apiUrl },
+        {
+          rawInput: message.text,
+          channel: (message.channel === "telegram" ? "telegram" : "whatsapp") as
+            | "telegram"
+            | "whatsapp",
+          operatorId: message.principalId,
+          organizationId: message.organizationId ?? "default",
+          sendReply: (text: string) => ctx.sendFilteredReply(threadId, text),
+        },
+      );
+      return;
+    }
+  }
+
   const inbound: InboundMessage = {
     channelId: threadId,
     channelType: (message.channel === "telegram"
