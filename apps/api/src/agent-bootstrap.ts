@@ -83,6 +83,7 @@ export interface AgentSystem {
   stateTracker: AgentStateTracker;
   scheduledRunner: ScheduledRunner;
   actionExecutor: ActionExecutor;
+  policyBridge: PolicyBridge;
   conversationRouter?: ConversationRouter;
   threadStore?: ConversationThreadStore;
 }
@@ -292,6 +293,7 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
     stateTracker,
     scheduledRunner,
     actionExecutor,
+    policyBridge,
     conversationRouter,
     threadStore: options.threadStore,
   };
