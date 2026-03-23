@@ -1,5 +1,5 @@
-import type { Job } from "bullmq";
 import type { TriggerStore } from "@switchboard/core";
+import type { PendingAction } from "@switchboard/schemas";
 import type { SchedulerJobData } from "../queue/scheduler-queue.js";
 
 // Use structural typing for WorkflowEngine to avoid tight coupling
@@ -9,7 +9,7 @@ export interface TriggerWorkflowEngine {
     triggerType: "schedule";
     triggerRef: string;
     sourceAgent: string;
-    actions: unknown[];
+    actions: PendingAction[];
     strategy: "sequential";
     safetyEnvelope: {
       maxSteps: number;
@@ -30,7 +30,7 @@ export interface TriggerHandlerDeps {
 export function createTriggerHandler(deps: TriggerHandlerDeps) {
   const { store, workflowEngine } = deps;
 
-  return async function handleTriggerFired(job: Job<SchedulerJobData>): Promise<void> {
+  return async function handleTriggerFired(job: { data: SchedulerJobData }): Promise<void> {
     const { triggerId, organizationId, action } = job.data;
 
     const trigger = await store.findById(triggerId);

@@ -63,7 +63,6 @@ declare module "fastify" {
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
     ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null;
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
-    roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
@@ -305,49 +304,16 @@ export async function buildServer() {
   });
   app.decorate("agentSystem", agentSystem);
   app.decorate("ingestionPipeline", ingestionPipeline);
-  app.log.info(
-    `Agent orchestration system bootstrapped (delivery store: ${deliveryStore ? "prisma" : "in-memory"})`,
-  );
+  app.log.info(`Agent system bootstrapped (delivery: ${deliveryStore ? "prisma" : "in-memory"})`);
 
   // --- Session runtime bootstrap (optional — requires DATABASE_URL + SESSION_TOKEN_SECRET) ---
   let sessionManager: import("@switchboard/core/sessions").SessionManager | null = null;
-  const roleManifests = new Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>();
-  const maxConcurrentSessionsEnv = parseInt(process.env["MAX_CONCURRENT_SESSIONS"] ?? "10", 10);
-
-  if (prismaClient && process.env["SESSION_TOKEN_SECRET"]) {
-    const { SessionManager } = await import("@switchboard/core/sessions");
-    const {
-      PrismaSessionStore,
-      PrismaRunStore,
-      PrismaPauseStore,
-      PrismaToolEventStore,
-      PrismaRoleOverrideStore,
-    } = await import("@switchboard/db");
-    const { loadRoleManifests } = await import("./bootstrap/role-manifests.js");
-
-    const loadedManifests = await loadRoleManifests({ logger: app.log });
-    for (const [id, loaded] of loadedManifests) {
-      roleManifests.set(id, loaded);
-    }
-
-    const getRoleCheckpointValidator = (roleId: string) =>
-      roleManifests.get(roleId)?.checkpointValidate;
-
-    sessionManager = new SessionManager({
-      sessions: new PrismaSessionStore(prismaClient),
-      runs: new PrismaRunStore(prismaClient),
-      pauses: new PrismaPauseStore(prismaClient),
-      toolEvents: new PrismaToolEventStore(prismaClient),
-      roleOverrides: new PrismaRoleOverrideStore(prismaClient),
-      maxConcurrentSessions: maxConcurrentSessionsEnv,
-      getRoleCheckpointValidator,
-    });
-
-    app.log.info(`Session runtime enabled with ${loadedManifests.size} role manifest(s)`);
+  if (prismaClient) {
+    const { bootstrapSessionRuntime } = await import("./bootstrap/session-bootstrap.js");
+    const sessionResult = await bootstrapSessionRuntime(prismaClient, app.log);
+    sessionManager = sessionResult?.sessionManager ?? null;
   }
-
   app.decorate("sessionManager", sessionManager);
-  app.decorate("roleManifests", roleManifests);
 
   // --- Workflow engine bootstrap (optional — requires DATABASE_URL) ---
   let workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null = null;

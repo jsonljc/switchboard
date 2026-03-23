@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import Fastify from "fastify";
 import { schedulerRoutes } from "../scheduler.js";
 
+import type { ScheduledTrigger } from "@switchboard/schemas";
+
 function createMockSchedulerService() {
   return {
     registerTrigger: vi.fn(async () => "trig-1"),
     cancelTrigger: vi.fn(async () => undefined),
-    listPendingTriggers: vi.fn(async () => []),
-    matchEvent: vi.fn(async () => []),
+    listPendingTriggers: vi.fn(async (): Promise<ScheduledTrigger[]> => []),
+    matchEvent: vi.fn(async (): Promise<ScheduledTrigger[]> => []),
   };
 }
 
@@ -21,7 +23,7 @@ describe("scheduler routes", () => {
     app.decorate("schedulerService", scheduler);
 
     // Simulate auth middleware setting organizationIdFromAuth from header
-    app.addHook("onRequest", async (request) => {
+    app.addHook("onRequest", async (request: import("fastify").FastifyRequest) => {
       const orgId = request.headers["x-org-id"] as string | undefined;
       if (orgId) {
         request.organizationIdFromAuth = orgId;
@@ -114,7 +116,19 @@ describe("scheduler routes", () => {
 
     it("cancels a trigger belonging to the org", async () => {
       scheduler.listPendingTriggers.mockResolvedValue([
-        { id: "trig-1", organizationId: "org-1", status: "active" },
+        {
+          id: "trig-1",
+          organizationId: "org-1",
+          type: "timer" as const,
+          status: "active" as const,
+          action: { type: "spawn_workflow" as const, payload: {} },
+          fireAt: new Date(),
+          cronExpression: null,
+          eventPattern: null,
+          sourceWorkflowId: null,
+          createdAt: new Date(),
+          expiresAt: null,
+        },
       ]);
 
       const response = await app.inject({
@@ -155,9 +169,9 @@ describe("scheduler routes", () => {
         {
           id: "trig-1",
           organizationId: "org-1",
-          type: "timer",
-          status: "active",
-          action: { type: "spawn_workflow", payload: {} },
+          type: "timer" as const,
+          status: "active" as const,
+          action: { type: "spawn_workflow" as const, payload: {} },
           fireAt: new Date(),
           cronExpression: null,
           eventPattern: null,
