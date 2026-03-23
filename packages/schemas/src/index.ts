@@ -75,3 +75,6 @@ export * from "./workflow.js";
 
 // Scheduler trigger types
 export * from "./scheduler.js";
+
+// Operator command types
+export * from "./operator-command.js";
