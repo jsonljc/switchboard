@@ -7,7 +7,7 @@ import {
   getRoleDescription,
   type BehaviorOption,
   type BehaviorChoice,
-} from "./agent-behavior-options.js";
+} from "./agent-behavior-options";
 
 interface AgentConfigBehaviorProps {
   agentRole: string;

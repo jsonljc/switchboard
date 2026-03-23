@@ -42,6 +42,13 @@ export default function AgentConfigPage() {
     }
   }, [agent]);
 
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const debouncedSave = useCallback(
     (updates: { displayName?: string; config?: Record<string, unknown> }) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -62,9 +69,9 @@ export default function AgentConfigPage() {
   const handleDisplayNameChange = useCallback(
     (name: string) => {
       setDisplayName(name);
-      debouncedSave({ displayName: name });
+      debouncedSave({ displayName: name, config: behaviorConfig });
     },
-    [debouncedSave],
+    [debouncedSave, behaviorConfig],
   );
 
   const handleToneChange = useCallback(
@@ -72,18 +79,18 @@ export default function AgentConfigPage() {
       setTonePreset(tone);
       const newConfig = { ...behaviorConfig, tonePreset: tone };
       setBehaviorConfig(newConfig);
-      debouncedSave({ config: newConfig });
+      debouncedSave({ displayName, config: newConfig });
     },
-    [behaviorConfig, debouncedSave],
+    [behaviorConfig, displayName, debouncedSave],
   );
 
   const handleBehaviorChange = useCallback(
     (key: string, value: unknown) => {
       const newConfig = { ...behaviorConfig, [key]: value };
       setBehaviorConfig(newConfig);
-      debouncedSave({ config: newConfig });
+      debouncedSave({ displayName, config: newConfig });
     },
-    [behaviorConfig, debouncedSave],
+    [behaviorConfig, displayName, debouncedSave],
   );
 
   if (status === "unauthenticated") redirect("/login");

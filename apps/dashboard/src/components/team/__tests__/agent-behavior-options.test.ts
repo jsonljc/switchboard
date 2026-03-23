@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getBehaviorOptions, getRoleDescription } from "../agent-behavior-options.js";
+import { getBehaviorOptions, getRoleDescription } from "../agent-behavior-options";
 
 describe("getBehaviorOptions", () => {
   it("returns qualification threshold options for responder", () => {

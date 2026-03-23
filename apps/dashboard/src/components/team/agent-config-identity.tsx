@@ -1,7 +1,7 @@
 "use client";
 
-import { AGENT_ICONS, AGENT_ROLE_LABELS } from "./agent-icons.js";
-import { cn } from "@/lib/utils.js";
+import { AGENT_ICONS, AGENT_ROLE_LABELS } from "./agent-icons";
+import { cn } from "@/lib/utils";
 
 interface AgentConfigIdentityProps {
   agentRole: string;

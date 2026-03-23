@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Target, BellRing, TrendingUp, Zap } from "lucide-react";
-import { getPreviewMessage } from "@/components/team/agent-preview-templates.js";
+import { getPreviewMessage } from "@/components/team/agent-preview-templates";
 
 interface StepAgentStyleProps {
   selectedAgents: string[];
