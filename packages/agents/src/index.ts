@@ -238,3 +238,6 @@ export { extractConversationContext, parseContextResponse } from "./context-extr
 
 // Summary refresh (LLM-based conversation summarization)
 export { refreshSummary, shouldRefreshSummary } from "./summary-refresher.js";
+
+// Operator Chat (command interpretation and routing)
+export * from "./operator/index.js";

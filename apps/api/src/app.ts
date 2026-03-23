@@ -64,6 +64,7 @@ declare module "fastify" {
     roleManifests: Map<string, import("./bootstrap/role-manifests.js").LoadedManifest>;
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
+    operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
