@@ -8,11 +8,12 @@ const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/team", label: "AI Team" },
-  { href: "/activity", label: "Activity" },
-  { href: "/approvals", label: "Approvals" },
+  { href: "/settings/team", label: "AI Team" },
+  { href: "/crm", label: "CRM" },
+  { href: "/decide", label: "Decide" },
+  { href: "/performance", label: "Performance" },
   { href: "/settings", label: "Settings" },
-  { href: "/setup", label: "Setup Wizard" },
+  { href: "/onboarding", label: "Onboarding" },
   { href: "/login", label: "Login" },
 ];
 
