@@ -63,7 +63,7 @@ export function AgentStatusStrip() {
   }
 
   return (
-    <Link href="/team">
+    <Link href="/settings/team">
       <div className="flex gap-2 overflow-x-auto pb-2 cursor-pointer">
         {workingAgents.map((agent) => {
           const Icon = ROLE_ICONS[agent.agentRole] ?? Sparkles;

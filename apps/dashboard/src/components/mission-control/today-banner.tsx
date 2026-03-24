@@ -63,7 +63,7 @@ export function TodayBanner({ operatorName }: TodayBannerProps) {
       {pendingCount > 0 && (
         <div>
           <Link
-            href="/approvals"
+            href="/decide"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-operator/10 text-operator hover:bg-operator/15 transition-colors duration-fast text-[13px] font-medium"
           >
             {pendingCount === 1

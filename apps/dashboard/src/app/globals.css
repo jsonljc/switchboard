@@ -111,6 +111,66 @@
     --char-growth-body: hsl(152 28% 36%);
     --char-growth-aura: hsl(152 28% 52%);
   }
+
+  .dark {
+    /* Surfaces */
+    --background: 30 8% 8%;
+    --foreground: 40 15% 90%;
+    --surface: 30 6% 12%;
+    --surface-foreground: 40 15% 90%;
+    --surface-raised: 30 6% 15%;
+
+    /* Text */
+    --muted: 30 5% 20%;
+    --muted-foreground: 30 6% 55%;
+    --tertiary-foreground: 30 5% 48%;
+
+    /* Interactive */
+    --primary: 40 15% 90%;
+    --primary-foreground: 30 8% 8%;
+    --secondary: 30 5% 20%;
+    --secondary-foreground: 40 15% 90%;
+    --accent: 30 8% 18%;
+    --accent-foreground: 40 15% 90%;
+
+    /* Borders */
+    --border: 30 5% 18%;
+    --border-subtle: 30 5% 14%;
+    --input: 30 5% 18%;
+    --ring: 40 15% 90%;
+
+    /* Semantic */
+    --destructive: 0 38% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --positive: 152 24% 38%;
+    --positive-foreground: 0 0% 98%;
+    --positive-subtle: 152 18% 16%;
+    --caution: 38 36% 42%;
+    --caution-foreground: 0 0% 98%;
+    --caution-subtle: 38 28% 16%;
+    --negative: 0 32% 45%;
+    --negative-foreground: 0 0% 98%;
+
+    /* Operator amber */
+    --operator: 30 50% 52%;
+    --operator-foreground: 0 0% 98%;
+    --operator-subtle: 32 40% 16%;
+
+    /* Cards */
+    --card: 30 6% 12%;
+    --card-foreground: 40 15% 90%;
+
+    /* Agent status */
+    --agent-active: 152 26% 42%;
+    --agent-idle: 30 5% 45%;
+    --agent-attention: 38 38% 48%;
+    --agent-locked: 30 5% 32%;
+
+    /* Character */
+    --char-body: hsl(30 8% 58%);
+    --char-aura: hsl(30 8% 42%);
+    --char-accent: hsl(30 50% 52%);
+  }
 }
 
 @layer base {
