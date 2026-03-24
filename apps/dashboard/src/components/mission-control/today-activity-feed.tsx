@@ -5,16 +5,7 @@ import { useAudit } from "@/hooks/use-audit";
 import { translateEvent } from "@/components/activity/event-translator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-
-function formatRelative(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
+import { formatRelative } from "@/lib/format";
 
 export function TodayActivityFeed() {
   const { data, isLoading } = useAudit({ limit: 6 });
@@ -87,7 +78,7 @@ export function TodayActivityFeed() {
       })}
 
       <Link
-        href="/activity"
+        href="/"
         className="inline-block mt-5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
       >
         See all activity →

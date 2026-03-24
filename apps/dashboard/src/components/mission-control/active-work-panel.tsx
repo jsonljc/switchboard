@@ -27,13 +27,14 @@ export function ActiveWorkPanel() {
           </>
         ) : approvals.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">
-            Nothing needs your input right now. When your assistant needs a decision, it’ll show up here.
+            Nothing needs your input right now. When your assistant needs a decision, it’ll show up
+            here.
           </p>
         ) : (
           approvals.map((approval) => (
             <Link
               key={approval.id}
-              href={`/approvals/${approval.id}`}
+              href={`/decide/${approval.id}`}
               className="flex items-start justify-between gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
             >
               <div className="flex-1 min-w-0">
@@ -53,7 +54,7 @@ export function ActiveWorkPanel() {
         )}
         {approvals.length > 0 && (
           <Link
-            href="/approvals"
+            href="/decide"
             className="text-xs text-primary hover:underline block text-center pt-1"
           >
             View all
