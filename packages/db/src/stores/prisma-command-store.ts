@@ -8,9 +8,7 @@ import type {
 } from "@switchboard/schemas";
 import type { OperatorCommandStore } from "@switchboard/core";
 
-type CommandRow = Awaited<
-  ReturnType<PrismaClient["operatorCommandRecord"]["findUniqueOrThrow"]>
->;
+type CommandRow = Awaited<ReturnType<PrismaClient["operatorCommandRecord"]["findUniqueOrThrow"]>>;
 
 export class PrismaOperatorCommandStore implements OperatorCommandStore {
   constructor(private readonly prisma: PrismaClient) {}
