@@ -15,6 +15,7 @@ import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
 import { CONSEQUENCE } from "@/lib/approval-constants";
 import { STATUS_DOT_ANIMATED, STATUS_LABEL } from "@/lib/agent-status";
+import { useToast } from "@/components/ui/use-toast";
 
 export function StaffDashboard() {
   const { data: session } = useSession();
@@ -24,6 +25,7 @@ export function StaffDashboard() {
   const { data: rosterData, isLoading: rosterLoading } = useAgentRoster();
 
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const respondMutation = useMutation({
     mutationFn: async ({
@@ -47,6 +49,22 @@ export function StaffDashboard() {
       });
       if (!res.ok) throw new Error("Failed to respond");
       return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: variables.action === "approve" ? "Approved" : "Declined",
+        description:
+          variables.action === "approve"
+            ? "The action will proceed."
+            : "The action has been blocked.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Something went wrong",
+        description: "Try again or check your connection.",
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       setRespondingId(null);
@@ -125,7 +143,9 @@ export function StaffDashboard() {
                       disabled={respondingId === approval.id && respondMutation.isPending}
                       className="px-4 py-2 rounded-lg text-[13px] font-medium bg-positive text-positive-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
-                      Approve
+                      {respondingId === approval.id && respondMutation.isPending
+                        ? "Approving..."
+                        : "Approve"}
                     </button>
                     <button
                       onClick={() => {
@@ -139,7 +159,9 @@ export function StaffDashboard() {
                       disabled={respondingId === approval.id && respondMutation.isPending}
                       className="px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                     >
-                      Not now
+                      {respondingId === approval.id && respondMutation.isPending
+                        ? "Declining..."
+                        : "Not now"}
                     </button>
                     <Link
                       href="/decide"

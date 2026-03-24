@@ -12,7 +12,6 @@ import { useViewPreference } from "@/hooks/use-view-preference";
 const MENU_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/crm", label: "CRM" },
-  { href: "/campaigns", label: "Campaigns" },
   { href: "/performance", label: "Performance" },
   { href: "/decide", label: "Decide" },
 ] as const;
@@ -36,9 +35,7 @@ export function StaffMobileMenu() {
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <span className="text-[14px] font-medium text-foreground tracking-tight">
-          Switchboard
-        </span>
+        <span className="text-[14px] font-medium text-foreground tracking-tight">Switchboard</span>
         <div className="w-9" />
       </header>
 

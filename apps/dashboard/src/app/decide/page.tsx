@@ -12,6 +12,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/format";
 import { CONSEQUENCE } from "@/lib/approval-constants";
+import { useToast } from "@/components/ui/use-toast";
 
 const APPROVAL_EVENT_TYPES = ["action.approved", "action.rejected", "action.expired"];
 
@@ -90,6 +91,7 @@ export default function DecidePage() {
   const { data: historyData } = useAudit({ limit: 50 });
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"pending" | "history">("pending");
+  const { toast } = useToast();
 
   const [dialog, setDialog] = useState<{
     open: boolean;
@@ -120,10 +122,24 @@ export default function DecidePage() {
       if (!res.ok) throw new Error("Failed to respond");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      toast({
+        title: variables.action === "approve" ? "Approved" : "Declined",
+        description:
+          variables.action === "approve"
+            ? "The action will proceed."
+            : "The action has been blocked.",
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
       setDialog(null);
+    },
+    onError: () => {
+      toast({
+        title: "Something went wrong",
+        description: "Try again or check your connection.",
+        variant: "destructive",
+      });
     },
   });
 

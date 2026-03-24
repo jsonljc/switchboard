@@ -23,11 +23,10 @@ vi.mock("@/hooks/use-view-preference", () => ({
 }));
 
 describe("StaffNav", () => {
-  it("renders 5 nav items plus settings", () => {
+  it("renders 4 nav items plus settings", () => {
     render(<StaffNav />);
     expect(screen.getByText("Dashboard")).toBeDefined();
     expect(screen.getByText("CRM")).toBeDefined();
-    expect(screen.getByText("Campaigns")).toBeDefined();
     expect(screen.getByText("Performance")).toBeDefined();
     expect(screen.getByText("Decide")).toBeDefined();
   });
