@@ -131,7 +131,9 @@ describe("operatorRoutes", () => {
   it("POST /command — returns 401 without org context", async () => {
     // Override the hook to not set orgId
     const app2 = Fastify();
-    (app2 as unknown as Record<string, unknown>).operatorDeps = (app as unknown as Record<string, unknown>).operatorDeps;
+    (app2 as unknown as Record<string, unknown>).operatorDeps = (
+      app as unknown as Record<string, unknown>
+    ).operatorDeps;
     app2.decorateRequest("organizationIdFromAuth", undefined);
     await app2.register(operatorRoutes, { prefix: "/api/operator" });
     await app2.ready();
