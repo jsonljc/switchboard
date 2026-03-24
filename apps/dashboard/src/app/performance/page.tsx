@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ResultsContent } from "@/components/performance/results-content.js";
-import { GrowthContent } from "@/components/performance/growth-content.js";
+import { ResultsContent } from "@/components/performance/results-content";
+import { GrowthContent } from "@/components/performance/growth-content";
 
 type PerfTab = "results" | "growth";
 

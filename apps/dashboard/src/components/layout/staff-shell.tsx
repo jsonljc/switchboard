@@ -1,7 +1,7 @@
 "use client";
 
-import { StaffNav } from "./staff-nav.js";
-import { StaffMobileMenu } from "./staff-mobile-menu.js";
+import { StaffNav } from "@/components/layout/staff-nav";
+import { StaffMobileMenu } from "@/components/layout/staff-mobile-menu";
 
 export function StaffShell({ children }: { children: React.ReactNode }) {
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { OwnerTabs } from "./owner-tabs.js";
+import { OwnerTabs } from "@/components/layout/owner-tabs";
 
 export function OwnerShell({ children }: { children: React.ReactNode }) {
   return (

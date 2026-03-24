@@ -5,8 +5,8 @@ import { useEffect } from "react";
 import { DevPanel } from "../dev/dev-panel";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { useViewPreference } from "@/hooks/use-view-preference";
-import { OwnerShell } from "./owner-shell.js";
-import { StaffShell } from "./staff-shell.js";
+import { OwnerShell } from "@/components/layout/owner-shell";
+import { StaffShell } from "@/components/layout/staff-shell";
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
 

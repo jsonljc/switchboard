@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { queryKeys } from "@/lib/query-keys";
-import { StatCards } from "./stat-cards.js";
+import { StatCards } from "@/components/dashboard/stat-cards";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
 import { useLeads } from "@/hooks/use-leads";
 

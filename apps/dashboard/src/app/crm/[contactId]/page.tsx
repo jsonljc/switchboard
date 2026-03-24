@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { ContactDetail } from "@/components/crm/contact-detail.js";
+import { ContactDetail } from "@/components/crm/contact-detail";
 
 export default function ContactDetailPage() {
   const { status } = useSession();

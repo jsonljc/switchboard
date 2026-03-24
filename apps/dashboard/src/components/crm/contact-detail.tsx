@@ -1,7 +1,7 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useConversationDetail } from "@/hooks/use-conversations.js";
+import { useConversationDetail } from "@/hooks/use-conversations";
 import { cn } from "@/lib/utils";
 
 function formatRelative(timestamp: string): string {

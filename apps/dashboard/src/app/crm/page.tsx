@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CrmTabs, type CrmTab } from "@/components/crm/crm-tabs.js";
-import { ContactList, type ContactListItem } from "@/components/crm/contact-list.js";
-import { ContactDetail } from "@/components/crm/contact-detail.js";
-import { useLeads } from "@/hooks/use-leads.js";
-import { useConversations } from "@/hooks/use-conversations.js";
-import { useViewPreference } from "@/hooks/use-view-preference.js";
+import { CrmTabs, type CrmTab } from "@/components/crm/crm-tabs";
+import { ContactList, type ContactListItem } from "@/components/crm/contact-list";
+import { ContactDetail } from "@/components/crm/contact-detail";
+import { useLeads } from "@/hooks/use-leads";
+import { useConversations } from "@/hooks/use-conversations";
+import { useViewPreference } from "@/hooks/use-view-preference";
 
 export default function CrmPage() {
   const { status } = useSession();
