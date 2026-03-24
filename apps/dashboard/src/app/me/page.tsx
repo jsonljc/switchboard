@@ -8,6 +8,7 @@ import { useViewPreference } from "@/hooks/use-view-preference";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AGENT_ICONS, AGENT_ROLE_LABELS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 
 const STATUS_DOT: Record<string, string> = {
   idle: "bg-agent-idle",
@@ -29,6 +30,7 @@ export default function MePage() {
   const { status } = useSession();
   const { data: rosterData, isLoading } = useAgentRoster();
   const { setView } = useViewPreference();
+  const { theme, setTheme } = useTheme();
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -102,6 +104,13 @@ export default function MePage() {
           <span className="block text-[12px] text-muted-foreground mt-0.5">
             Full dashboard access
           </span>
+        </button>
+
+        <button
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="w-full text-left px-4 py-3.5 rounded-lg text-[15px] text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+        >
+          {theme === "dark" ? "Light mode" : "Dark mode"}
         </button>
 
         <button

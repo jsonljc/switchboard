@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { useTheme } from "@/hooks/use-theme";
+import { cn } from "@/lib/utils";
 
 export default function SettingsAccountPage() {
   const { status } = useSession();
@@ -34,6 +36,7 @@ export default function SettingsAccountPage() {
   const [businessName, setBusinessName] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [nameInitialized, setNameInitialized] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -152,6 +155,26 @@ export default function SettingsAccountPage() {
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Theme</Label>
+                <div className="flex gap-2">
+                  {(["light", "dark", "system"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTheme(t)}
+                      className={cn(
+                        "px-4 py-2 rounded-lg text-[13px] font-medium border transition-all duration-default",
+                        theme === t
+                          ? "bg-surface border-foreground/70 text-foreground shadow-sm"
+                          : "bg-surface-raised border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <Button onClick={handleSaveGeneral} size="sm">
