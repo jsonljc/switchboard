@@ -2,6 +2,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { useAgentRoster } from "@/hooks/use-agents";
 import { useViewPreference } from "@/hooks/use-view-preference";
@@ -102,6 +103,28 @@ export default function MePage() {
         >
           Sign out
         </button>
+      </section>
+
+      {/* Settings */}
+      <section>
+        <h2 className="section-label mb-3">Settings</h2>
+        <div className="space-y-2">
+          {[
+            { href: "/settings/channels", label: "Channels" },
+            { href: "/settings/knowledge", label: "Knowledge" },
+            { href: "/settings/identity", label: "Identity" },
+            { href: "/settings/team", label: "Team" },
+            { href: "/settings/account", label: "Account" },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block px-4 py-3.5 rounded-lg text-[15px] text-foreground hover:bg-surface border border-border/40 transition-colors"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </section>
     </div>
   );
