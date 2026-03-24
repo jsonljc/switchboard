@@ -11,6 +11,7 @@ import { StatCards } from "@/components/dashboard/stat-cards";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
 import { useLeads } from "@/hooks/use-leads";
 import { CONSEQUENCE } from "@/lib/approval-constants";
+import { useToast } from "@/components/ui/use-toast";
 
 function isTodayLead(createdAt: string): boolean {
   const midnight = new Date();
@@ -25,6 +26,7 @@ export function OwnerToday() {
   const { data: leads = [] } = useLeads();
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const operatorName =
     rosterData?.roster?.find((a) => a.agentRole === "primary_operator")?.displayName ??
@@ -57,6 +59,22 @@ export function OwnerToday() {
       });
       if (!res.ok) throw new Error("Failed to respond");
       return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: variables.action === "approve" ? "Approved" : "Declined",
+        description:
+          variables.action === "approve"
+            ? "The action will proceed."
+            : "The action has been blocked.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Something went wrong",
+        description: "Try again or check your connection.",
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       setRespondingId(null);
@@ -100,7 +118,9 @@ export function OwnerToday() {
                 disabled={respondingId === topApproval.id}
                 className="px-4 py-2 rounded-lg text-[13px] font-medium bg-positive text-positive-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                Approve
+                {respondingId === topApproval.id && respondMutation.isPending
+                  ? "Approving..."
+                  : "Approve"}
               </button>
               <button
                 onClick={() => {
@@ -114,7 +134,9 @@ export function OwnerToday() {
                 disabled={respondingId === topApproval.id}
                 className="px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
-                Not now
+                {respondingId === topApproval.id && respondMutation.isPending
+                  ? "Declining..."
+                  : "Not now"}
               </button>
               {remainingApprovals > 0 && (
                 <Link
