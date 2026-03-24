@@ -10,19 +10,13 @@ import { queryKeys } from "@/lib/query-keys";
 import { StatCards } from "@/components/dashboard/stat-cards";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
 import { useLeads } from "@/hooks/use-leads";
+import { CONSEQUENCE } from "@/lib/approval-constants";
 
 function isTodayLead(createdAt: string): boolean {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
   return new Date(createdAt).getTime() >= midnight.getTime();
 }
-
-const CONSEQUENCE: Record<string, string> = {
-  low: "Routine — asked as a precaution.",
-  medium: "Affects a customer or involves money.",
-  high: "Significant — take a moment to review.",
-  critical: "Significant — take a moment to review.",
-};
 
 export function OwnerToday() {
   const { data: session } = useSession();

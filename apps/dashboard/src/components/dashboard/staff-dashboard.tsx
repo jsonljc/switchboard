@@ -13,29 +13,8 @@ import { TodayActivityFeed } from "@/components/mission-control/today-activity-f
 import { MonthlyScorecard } from "@/components/mission-control/monthly-scorecard";
 import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
-
-const CONSEQUENCE: Record<string, string> = {
-  low: "Routine — asked as a precaution.",
-  medium: "Affects a customer or involves money.",
-  high: "Significant — take a moment to review.",
-  critical: "Significant — take a moment to review.",
-};
-
-const STATUS_DOT: Record<string, string> = {
-  idle: "bg-agent-idle",
-  working: "bg-agent-active animate-pulse",
-  analyzing: "bg-agent-active animate-pulse",
-  waiting_approval: "bg-agent-attention animate-pulse",
-  error: "bg-destructive animate-pulse",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  idle: "Ready",
-  working: "Working",
-  analyzing: "Analyzing",
-  waiting_approval: "Waiting",
-  error: "Error",
-};
+import { CONSEQUENCE } from "@/lib/approval-constants";
+import { STATUS_DOT_ANIMATED, STATUS_LABEL } from "@/lib/agent-status";
 
 export function StaffDashboard() {
   const { data: session } = useSession();
@@ -127,7 +106,9 @@ export function StaffDashboard() {
                   key={approval.id}
                   className="rounded-xl border border-border bg-surface p-5 space-y-3"
                 >
-                  <p className="text-[14.5px] text-foreground leading-relaxed">{approval.summary}</p>
+                  <p className="text-[14.5px] text-foreground leading-relaxed">
+                    {approval.summary}
+                  </p>
                   <p className="text-[12.5px] text-muted-foreground italic leading-snug">
                     {CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
                   </p>
@@ -191,7 +172,7 @@ export function StaffDashboard() {
             {activeAgents.map((agent) => {
               const Icon = AGENT_ICONS[agent.agentRole] ?? AGENT_ICONS.primary_operator;
               const activityStatus = (agent.agentState?.activityStatus as string) ?? "idle";
-              const dot = STATUS_DOT[activityStatus] ?? STATUS_DOT.idle;
+              const dot = STATUS_DOT_ANIMATED[activityStatus] ?? STATUS_DOT_ANIMATED.idle;
               const label = STATUS_LABEL[activityStatus] ?? "Ready";
 
               return (

@@ -3,17 +3,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConversationDetail } from "@/hooks/use-conversations";
 import { cn } from "@/lib/utils";
-
-function formatRelative(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? "Yesterday" : `${d}d ago`;
-}
+import { formatRelative } from "@/lib/format";
 
 interface ContactInfo {
   displayName: string;
@@ -35,9 +25,7 @@ export function ContactDetail({
   contactInfo,
   conversationId,
 }: ContactDetailProps) {
-  const { data: convData, isLoading: convLoading } = useConversationDetail(
-    conversationId ?? null,
-  );
+  const { data: convData, isLoading: convLoading } = useConversationDetail(conversationId ?? null);
 
   return (
     <div className="space-y-6">

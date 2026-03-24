@@ -10,26 +10,10 @@ import { useApprovals } from "@/hooks/use-approvals";
 import { useAudit } from "@/hooks/use-audit";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { formatRelative } from "@/lib/format";
+import { CONSEQUENCE } from "@/lib/approval-constants";
 
 const APPROVAL_EVENT_TYPES = ["action.approved", "action.rejected", "action.expired"];
-
-function formatRelative(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-/* ─── Consequence copy by risk level ─── */
-const CONSEQUENCE: Record<string, string> = {
-  low: "Routine — your assistant asked as a precaution.",
-  medium: "This affects a customer or involves money.",
-  high: "This is significant — take a moment to review.",
-  critical: "This is significant — take a moment to review.",
-};
 
 /* ─── Approval card ─── */
 function ApprovalCard({

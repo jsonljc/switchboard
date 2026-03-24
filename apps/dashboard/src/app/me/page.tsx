@@ -6,25 +6,10 @@ import { redirect } from "next/navigation";
 import { useAgentRoster } from "@/hooks/use-agents";
 import { useViewPreference } from "@/hooks/use-view-preference";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AGENT_ICONS, AGENT_ROLE_LABELS } from "@/components/team/agent-icons";
+import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
-
-const STATUS_DOT: Record<string, string> = {
-  idle: "bg-agent-idle",
-  working: "bg-agent-active",
-  analyzing: "bg-agent-active",
-  waiting_approval: "bg-agent-attention",
-  error: "bg-destructive",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  idle: "Ready",
-  working: "Working",
-  analyzing: "Analyzing",
-  waiting_approval: "Waiting",
-  error: "Error",
-};
+import { STATUS_DOT, STATUS_LABEL } from "@/lib/agent-status";
 
 export default function MePage() {
   const { status } = useSession();
@@ -46,7 +31,9 @@ export default function MePage() {
 
   const roster = rosterData?.roster ?? [];
   const primaryOperator = roster.find((a) => a.agentRole === "primary_operator");
-  const specialists = roster.filter((a) => a.agentRole !== "primary_operator" && a.status !== "locked");
+  const specialists = roster.filter(
+    (a) => a.agentRole !== "primary_operator" && a.status !== "locked",
+  );
 
   return (
     <div className="space-y-8">
@@ -56,9 +43,7 @@ export default function MePage() {
       {primaryOperator && (
         <section className="rounded-xl border border-border/60 bg-surface p-5 space-y-3">
           <h2 className="section-label">Your assistant</h2>
-          <p className="text-[17px] font-semibold text-foreground">
-            {primaryOperator.displayName}
-          </p>
+          <p className="text-[17px] font-semibold text-foreground">{primaryOperator.displayName}</p>
           <p className="text-[13px] text-muted-foreground">Primary operator</p>
         </section>
       )}
@@ -80,9 +65,7 @@ export default function MePage() {
                   className="flex items-center gap-3 px-4 py-3 rounded-lg bg-surface border border-border/40"
                 >
                   <Icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-[13.5px] text-foreground flex-1">
-                    {agent.displayName}
-                  </span>
+                  <span className="text-[13.5px] text-foreground flex-1">{agent.displayName}</span>
                   <div className="flex items-center gap-1.5">
                     <div className={cn("h-[6px] w-[6px] rounded-full", dot)} />
                     <span className="text-[11px] text-muted-foreground">{label}</span>
