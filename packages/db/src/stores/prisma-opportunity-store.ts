@@ -24,7 +24,7 @@ interface OpportunityStore {
     orgId: string,
     id: string,
     stage: OpportunityStage,
-    closedAt?: Date,
+    closedAt?: Date | null,
   ): Promise<Opportunity>;
   updateRevenueTotal(orgId: string, id: string): Promise<void>;
   countByStage(
@@ -105,16 +105,23 @@ export class PrismaOpportunityStore implements OpportunityStore {
   }
 
   async updateStage(
-    _orgId: string,
+    orgId: string,
     id: string,
     stage: OpportunityStage,
-    closedAt?: Date,
+    closedAt?: Date | null,
   ): Promise<Opportunity> {
+    const existing = await this.prisma.opportunity.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Opportunity not found or does not belong to organization: ${id}`);
+    }
+
     const updated = await this.prisma.opportunity.update({
       where: { id },
       data: {
         stage,
-        closedAt: closedAt ?? undefined,
+        closedAt: closedAt === undefined ? undefined : closedAt,
         updatedAt: new Date(),
       },
     });

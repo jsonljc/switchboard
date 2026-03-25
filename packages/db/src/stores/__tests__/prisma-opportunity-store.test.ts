@@ -209,11 +209,16 @@ describe("PrismaOpportunityStore", () => {
 
   describe("updateStage", () => {
     it("updates opportunity stage without closedAt", async () => {
+      const existing = makeOpportunity();
+      prisma.opportunity.findFirst.mockResolvedValue(existing);
       const updated = makeOpportunity({ stage: "qualified" });
       prisma.opportunity.update.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "opp-1", "qualified");
 
+      expect(prisma.opportunity.findFirst).toHaveBeenCalledWith({
+        where: { id: "opp-1", organizationId: "org-1" },
+      });
       expect(prisma.opportunity.update).toHaveBeenCalledWith({
         where: { id: "opp-1" },
         data: {
@@ -226,12 +231,17 @@ describe("PrismaOpportunityStore", () => {
     });
 
     it("updates opportunity stage with closedAt", async () => {
+      const existing = makeOpportunity();
+      prisma.opportunity.findFirst.mockResolvedValue(existing);
       const closedDate = new Date("2026-03-25T15:00:00Z");
       const updated = makeOpportunity({ stage: "won", closedAt: closedDate });
       prisma.opportunity.update.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "opp-1", "won", closedDate);
 
+      expect(prisma.opportunity.findFirst).toHaveBeenCalledWith({
+        where: { id: "opp-1", organizationId: "org-1" },
+      });
       expect(prisma.opportunity.update).toHaveBeenCalledWith({
         where: { id: "opp-1" },
         data: {
@@ -242,6 +252,14 @@ describe("PrismaOpportunityStore", () => {
       });
       expect(result.stage).toBe("won");
       expect(result.closedAt).toEqual(closedDate);
+    });
+
+    it("throws when opportunity not found or wrong org", async () => {
+      prisma.opportunity.findFirst.mockResolvedValue(null);
+
+      await expect(store.updateStage("org-1", "opp-999", "qualified")).rejects.toThrow(
+        /not found or does not belong/,
+      );
     });
   });
 

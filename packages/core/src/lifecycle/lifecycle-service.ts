@@ -92,7 +92,7 @@ export class ContactLifecycleService {
       throw new Error(result.reason);
     }
 
-    const closedAt = toStage === "won" ? new Date() : undefined;
+    const closedAt = toStage === "won" || toStage === "lost" ? new Date() : undefined;
     const updated = await this.opportunityStore.updateStage(
       orgId,
       opportunityId,
@@ -107,8 +107,8 @@ export class ContactLifecycleService {
       advancementData: {
         contactId: opportunity.contactId,
         opportunityId,
-        fromStage: opportunity.stage as OpportunityStage,
-        toStage,
+        previousStage: opportunity.stage as OpportunityStage,
+        newStage: toStage,
         serviceName: opportunity.serviceName,
         advancedBy,
       },
@@ -140,7 +140,7 @@ export class ContactLifecycleService {
     const result = validateTransition("lost", toStage);
     if (!result.valid) throw new Error(result.reason);
 
-    const updated = await this.opportunityStore.updateStage(orgId, opportunityId, toStage);
+    const updated = await this.opportunityStore.updateStage(orgId, opportunityId, toStage, null);
     await this.refreshContactStage(orgId, opportunity.contactId);
     return updated;
   }

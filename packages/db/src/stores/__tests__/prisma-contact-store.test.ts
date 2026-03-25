@@ -188,11 +188,16 @@ describe("PrismaContactStore", () => {
 
   describe("updateStage", () => {
     it("updates contact stage", async () => {
+      const existing = makeContact();
+      prisma.contact.findFirst.mockResolvedValue(existing);
       const updated = makeContact({ stage: "active" });
       prisma.contact.update.mockResolvedValue(updated);
 
       const result = await store.updateStage("org-1", "contact-1", "active");
 
+      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+        where: { id: "contact-1", organizationId: "org-1" },
+      });
       expect(prisma.contact.update).toHaveBeenCalledWith({
         where: { id: "contact-1" },
         data: {
@@ -202,12 +207,26 @@ describe("PrismaContactStore", () => {
       });
       expect(result.stage).toBe("active");
     });
+
+    it("throws when contact not found or wrong org", async () => {
+      prisma.contact.findFirst.mockResolvedValue(null);
+
+      await expect(store.updateStage("org-1", "contact-999", "active")).rejects.toThrow(
+        /not found or does not belong/,
+      );
+    });
   });
 
   describe("updateLastActivity", () => {
     it("updates lastActivityAt timestamp", async () => {
+      const existing = makeContact();
+      prisma.contact.findFirst.mockResolvedValue(existing);
+
       await store.updateLastActivity("org-1", "contact-1");
 
+      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+        where: { id: "contact-1", organizationId: "org-1" },
+      });
       expect(prisma.contact.update).toHaveBeenCalledWith({
         where: { id: "contact-1" },
         data: {
@@ -215,6 +234,14 @@ describe("PrismaContactStore", () => {
           updatedAt: expect.any(Date),
         },
       });
+    });
+
+    it("throws when contact not found or wrong org", async () => {
+      prisma.contact.findFirst.mockResolvedValue(null);
+
+      await expect(store.updateLastActivity("org-1", "contact-999")).rejects.toThrow(
+        /not found or does not belong/,
+      );
     });
   });
 

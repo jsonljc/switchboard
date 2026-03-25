@@ -7,6 +7,7 @@ function makeMockPrisma() {
   return {
     ownerTask: {
       create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -181,11 +182,16 @@ describe("PrismaOwnerTaskStore", () => {
 
   describe("updateStatus", () => {
     it("updates task status without completedAt", async () => {
+      const existing = makeTask();
+      prisma.ownerTask.findFirst.mockResolvedValue(existing);
       const updated = makeTask({ status: "in_progress" });
       prisma.ownerTask.update.mockResolvedValue(updated);
 
       const result = await store.updateStatus("org-1", "task-1", "in_progress");
 
+      expect(prisma.ownerTask.findFirst).toHaveBeenCalledWith({
+        where: { id: "task-1", organizationId: "org-1" },
+      });
       expect(prisma.ownerTask.update).toHaveBeenCalledWith({
         where: { id: "task-1" },
         data: {
@@ -197,6 +203,8 @@ describe("PrismaOwnerTaskStore", () => {
     });
 
     it("updates task status with completedAt", async () => {
+      const existing = makeTask();
+      prisma.ownerTask.findFirst.mockResolvedValue(existing);
       const completedDate = new Date("2026-03-25T15:00:00Z");
       const updated = makeTask({
         status: "completed",
@@ -206,6 +214,9 @@ describe("PrismaOwnerTaskStore", () => {
 
       const result = await store.updateStatus("org-1", "task-1", "completed", completedDate);
 
+      expect(prisma.ownerTask.findFirst).toHaveBeenCalledWith({
+        where: { id: "task-1", organizationId: "org-1" },
+      });
       expect(prisma.ownerTask.update).toHaveBeenCalledWith({
         where: { id: "task-1" },
         data: {
@@ -218,12 +229,22 @@ describe("PrismaOwnerTaskStore", () => {
     });
 
     it("updates task to dismissed status", async () => {
+      const existing = makeTask();
+      prisma.ownerTask.findFirst.mockResolvedValue(existing);
       const updated = makeTask({ status: "dismissed" });
       prisma.ownerTask.update.mockResolvedValue(updated);
 
       const result = await store.updateStatus("org-1", "task-1", "dismissed");
 
       expect(result.status).toBe("dismissed");
+    });
+
+    it("throws when task not found or wrong org", async () => {
+      prisma.ownerTask.findFirst.mockResolvedValue(null);
+
+      await expect(store.updateStatus("org-1", "task-999", "completed")).rejects.toThrow(
+        /not found or does not belong/,
+      );
     });
   });
 

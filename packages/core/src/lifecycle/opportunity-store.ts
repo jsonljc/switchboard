@@ -18,7 +18,7 @@ export interface OpportunityStore {
     orgId: string,
     id: string,
     stage: OpportunityStage,
-    closedAt?: Date,
+    closedAt?: Date | null,
   ): Promise<Opportunity>;
   updateRevenueTotal(orgId: string, id: string): Promise<void>;
   countByStage(

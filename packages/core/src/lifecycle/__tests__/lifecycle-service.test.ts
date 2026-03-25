@@ -127,14 +127,14 @@ class InMemoryOpportunityStore implements OpportunityStore {
     _orgId: string,
     id: string,
     stage: OpportunityStage,
-    closedAt?: Date,
+    closedAt?: Date | null,
   ): Promise<Opportunity> {
     const opportunity = this.opportunities.get(id);
     if (!opportunity) throw new Error(`Opportunity not found: ${id}`);
     const updated = {
       ...opportunity,
       stage,
-      closedAt: closedAt ?? opportunity.closedAt,
+      closedAt: closedAt === undefined ? opportunity.closedAt : closedAt,
       updatedAt: new Date(),
     };
     this.opportunities.set(id, updated);
@@ -371,8 +371,8 @@ describe("ContactLifecycleService", () => {
     );
 
     expect(result.opportunity.stage).toBe("qualified");
-    expect(result.advancementData.fromStage).toBe("interested");
-    expect(result.advancementData.toStage).toBe("qualified");
+    expect(result.advancementData.previousStage).toBe("interested");
+    expect(result.advancementData.newStage).toBe("qualified");
     expect(result.advancementData.advancedBy).toBe("agent-1");
     expect(result.advancementData.serviceName).toBe("Haircut");
   });
@@ -424,6 +424,32 @@ describe("ContactLifecycleService", () => {
 
     const refreshedContact = await service.getContact("org-1", contact.id);
     expect(refreshedContact?.stage).toBe("customer");
+  });
+
+  it("advanceOpportunityStage() to 'lost': sets closedAt", async () => {
+    const contact = await service.createContact({
+      organizationId: "org-1",
+      name: "Jane Doe",
+      phone: "+6591234567",
+      primaryChannel: "whatsapp",
+    });
+
+    const opportunity = await service.createOpportunity({
+      organizationId: "org-1",
+      contactId: contact.id,
+      serviceId: "service-1",
+      serviceName: "Haircut",
+    });
+
+    const result = await service.advanceOpportunityStage(
+      "org-1",
+      opportunity.id,
+      "lost",
+      "agent-1",
+    );
+
+    expect(result.opportunity.stage).toBe("lost");
+    expect(result.opportunity.closedAt).not.toBeNull();
   });
 
   it("recordRevenue() — creates event, updates opp revenueTotal, auto-advances showed→won", async () => {

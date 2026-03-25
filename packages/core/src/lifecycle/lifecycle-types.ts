@@ -6,8 +6,8 @@ export interface StageAdvancementResult {
   advancementData: {
     contactId: string;
     opportunityId: string;
-    fromStage: OpportunityStage;
-    toStage: OpportunityStage;
+    previousStage: OpportunityStage;
+    newStage: OpportunityStage;
     serviceName: string;
     advancedBy: string;
   };

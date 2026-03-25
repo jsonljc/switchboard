@@ -142,10 +142,16 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       // Wrap advancementData into a RoutedEventEnvelope
       const envelope = createEventEnvelope({
         organizationId: orgId,
-        eventType: "stage.advanced",
+        eventType: "opportunity.stage_advanced",
         source: { type: "system", id: "lifecycle-api" },
         payload: result.advancementData,
       });
+
+      // Dispatch to EventLoop for agent processing
+      const agentSystem = app.agentSystem;
+      if (agentSystem?.eventLoop) {
+        await agentSystem.eventLoop.process(envelope, { organizationId: orgId });
+      }
 
       return reply.send({ opportunity: result.opportunity, event: envelope });
     } catch (err) {
@@ -185,17 +191,25 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
 
       const events: RoutedEventEnvelope[] = [revenueEnvelope];
 
-      // If stage was auto-advanced (showed → won), also emit a stage.advanced event
+      // If stage was auto-advanced (showed → won), also emit an opportunity.stage_advanced event
       if (result.stageAdvancement) {
         const stageEnvelope = createEventEnvelope({
           organizationId: orgId,
-          eventType: "stage.advanced",
+          eventType: "opportunity.stage_advanced",
           source: { type: "system", id: "lifecycle-api" },
           payload: result.stageAdvancement.advancementData,
           causationId: revenueEnvelope.eventId,
           correlationId: revenueEnvelope.correlationId,
         });
         events.push(stageEnvelope);
+      }
+
+      // Dispatch all events to EventLoop for agent processing
+      const agentSystem = app.agentSystem;
+      if (agentSystem?.eventLoop) {
+        for (const evt of events) {
+          await agentSystem.eventLoop.process(evt, { organizationId: orgId });
+        }
       }
 
       return reply.status(201).send({

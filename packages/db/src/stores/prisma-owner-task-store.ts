@@ -98,11 +98,18 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
   }
 
   async updateStatus(
-    _orgId: string,
+    orgId: string,
     id: string,
     status: TaskStatus,
     completedAt?: Date,
   ): Promise<OwnerTask> {
+    const existing = await this.prisma.ownerTask.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Task not found or does not belong to organization: ${id}`);
+    }
+
     const updated = await this.prisma.ownerTask.update({
       where: { id },
       data: {

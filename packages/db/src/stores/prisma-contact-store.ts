@@ -92,7 +92,14 @@ export class PrismaContactStore implements ContactStore {
     return mapRowToContact(row);
   }
 
-  async updateStage(_orgId: string, id: string, stage: ContactStage): Promise<Contact> {
+  async updateStage(orgId: string, id: string, stage: ContactStage): Promise<Contact> {
+    const existing = await this.prisma.contact.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Contact not found or does not belong to organization: ${id}`);
+    }
+
     const updated = await this.prisma.contact.update({
       where: { id },
       data: {
@@ -104,7 +111,14 @@ export class PrismaContactStore implements ContactStore {
     return mapRowToContact(updated);
   }
 
-  async updateLastActivity(_orgId: string, id: string): Promise<void> {
+  async updateLastActivity(orgId: string, id: string): Promise<void> {
+    const existing = await this.prisma.contact.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!existing) {
+      throw new Error(`Contact not found or does not belong to organization: ${id}`);
+    }
+
     await this.prisma.contact.update({
       where: { id },
       data: {
