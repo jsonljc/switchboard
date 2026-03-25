@@ -46,6 +46,7 @@ import { agentConversationRoutes } from "../routes/conversation.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { schedulerRoutes } from "../routes/scheduler.js";
 import { operatorRoutes } from "../routes/operator.js";
+import { lifecycleRoutes } from "../routes/lifecycle.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -92,4 +93,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(workflowRoutes, { prefix: "/api/workflows" });
   await app.register(schedulerRoutes, { prefix: "/api/scheduler" });
   await app.register(operatorRoutes, { prefix: "/api/operator" });
+  await app.register(lifecycleRoutes, { prefix: "/api/lifecycle" });
 }

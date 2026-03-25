@@ -256,10 +256,10 @@ describe("FallbackHandler", () => {
     const result = await handler.handleUnrouted(context);
 
     expect(result.notifications).toHaveLength(1);
-    expect(result.notifications[0].channel).toBe("dashboard");
-    expect(result.notifications[0].recipientId).toBe("org-1");
-    expect(result.notifications[0].message).toContain("John Doe");
-    expect(result.notifications[0].message).toContain("needs attention");
+    expect(result.notifications[0]!.channel).toBe("dashboard");
+    expect(result.notifications[0]!.recipientId).toBe("org-1");
+    expect(result.notifications[0]!.message).toContain("John Doe");
+    expect(result.notifications[0]!.message).toContain("needs attention");
   });
 
   it("handles context with no opportunity (null opportunity)", async () => {
@@ -347,7 +347,7 @@ describe("FallbackHandler", () => {
 
     const result = await handler.handleUnrouted(context);
 
-    expect(result.notifications[0].message).toContain("New lead");
+    expect(result.notifications[0]!.message).toContain("New lead");
     expect(result.task?.title).toContain("Unknown lead");
   });
 });
