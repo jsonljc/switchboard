@@ -13,7 +13,8 @@ function makeMockPrisma() {
   };
 }
 
-function makeThread(overrides: Record<string, unknown> = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeThread(overrides: Record<string, any> = {}) {
   return {
     id: "thread-1",
     contactId: "contact-1",
@@ -22,10 +23,10 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     threadStatus: "open" as const,
     assignedAgent: "lead-responder",
     agentContext: {
-      objectionsEncountered: [],
-      preferencesLearned: {},
-      offersMade: [],
-      topicsDiscussed: [],
+      objectionsEncountered: [] as string[],
+      preferencesLearned: {} as Record<string, string>,
+      offersMade: [] as Array<{ description: string; date: Date }>,
+      topicsDiscussed: [] as string[],
       sentimentTrend: "unknown" as const,
     },
     currentSummary: "",
