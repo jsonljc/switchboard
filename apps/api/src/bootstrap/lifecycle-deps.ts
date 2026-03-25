@@ -18,11 +18,13 @@ import {
 } from "@switchboard/core";
 import type { OwnerTaskStore } from "@switchboard/core";
 import type { PrismaClient } from "@switchboard/db";
+import { ContactResolver } from "./contact-resolver.js";
 
 export interface LifecycleDeps {
   lifecycleService: ContactLifecycleService;
   fallbackHandler: FallbackHandler;
   ownerTaskStore: OwnerTaskStore;
+  contactResolver: ContactResolver;
 }
 
 export function buildLifecycleDeps(prisma: PrismaClient): LifecycleDeps | null {
@@ -44,7 +46,9 @@ export function buildLifecycleDeps(prisma: PrismaClient): LifecycleDeps | null {
       stageHandlerMap: DEFAULT_STAGE_HANDLER_MAP,
     });
 
-    return { lifecycleService, fallbackHandler, ownerTaskStore };
+    const contactResolver = new ContactResolver(lifecycleService);
+
+    return { lifecycleService, fallbackHandler, ownerTaskStore, contactResolver };
   } catch (err) {
     console.error("[lifecycle-deps] Failed to build lifecycle dependencies:", err);
     return null;

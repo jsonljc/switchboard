@@ -35,7 +35,12 @@ import {
   type AdOptimizerDeps,
   type RevenueTrackerDeps,
 } from "@switchboard/agents";
-import type { ConversionBus, ConversationThreadStore } from "@switchboard/core";
+import {
+  DEFAULT_STAGE_HANDLER_MAP,
+  type ConversionBus,
+  type ConversationThreadStore,
+  type StageHandlerMap,
+} from "@switchboard/core";
 
 export interface AgentLogger {
   warn(msg: string): void;
@@ -74,6 +79,8 @@ export interface AgentSystemOptions {
   };
   /** Thread store for per-contact conversation state. */
   threadStore?: ConversationThreadStore;
+  /** Stage handler map for opportunity-based routing. */
+  stageHandlerMap?: StageHandlerMap;
 }
 
 export interface AgentSystem {
@@ -157,9 +164,17 @@ export function bootstrapAgentSystem(options: AgentSystemOptions = {}): AgentSys
   // Wire ConversationRouter if store provided
   let conversationRouter: ConversationRouter | undefined;
   if (options.conversationStore) {
+    const stageHandlerMap = options.stageHandlerMap ?? DEFAULT_STAGE_HANDLER_MAP;
     conversationRouter = new ConversationRouter({
       getStage: options.conversationStore.getStage,
       threadStore: options.threadStore,
+      stageHandlerMap,
+      agentRegistry: {
+        get: (orgId: string, agentId: string) => {
+          const entry = registry.get(orgId, agentId);
+          return entry ? { status: entry.status } : undefined;
+        },
+      },
     });
   }
 
