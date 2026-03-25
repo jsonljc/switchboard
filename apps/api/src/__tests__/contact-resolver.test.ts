@@ -166,3 +166,86 @@ describe("ContactResolver", () => {
     });
   });
 });
+
+describe("ContactResolver edge cases", () => {
+  let service: ReturnType<typeof makeMockLifecycleService>;
+  let resolver: ContactResolver;
+
+  beforeEach(() => {
+    service = makeMockLifecycleService();
+    resolver = new ContactResolver(service as never);
+  });
+
+  it("picks most recent non-terminal opportunity when multiple exist", async () => {
+    const existingContact = {
+      id: "contact-1",
+      organizationId: "org-1",
+      phone: "+6591234567",
+      stage: "active",
+    };
+    service.findContactByPhone.mockResolvedValue(existingContact);
+    service.getContactWithOpportunities.mockResolvedValue({
+      contact: existingContact,
+      opportunities: [
+        { id: "opp-won", stage: "won", closedAt: new Date() },
+        { id: "opp-active", stage: "quoted" },
+        { id: "opp-lost", stage: "lost", closedAt: new Date() },
+      ],
+    });
+
+    const result = await resolver.resolveForMessage({
+      channelContactId: "+6591234567",
+      channel: "whatsapp",
+      organizationId: "org-1",
+    });
+
+    expect(result.opportunity.id).toBe("opp-active");
+    expect(service.createOpportunity).not.toHaveBeenCalled();
+  });
+
+  it("treats nurturing stage as active (not terminal)", async () => {
+    const existingContact = {
+      id: "contact-1",
+      organizationId: "org-1",
+      phone: "+6591234567",
+      stage: "active",
+    };
+    service.findContactByPhone.mockResolvedValue(existingContact);
+    service.getContactWithOpportunities.mockResolvedValue({
+      contact: existingContact,
+      opportunities: [{ id: "opp-nurture", stage: "nurturing" }],
+    });
+
+    const result = await resolver.resolveForMessage({
+      channelContactId: "+6591234567",
+      channel: "whatsapp",
+      organizationId: "org-1",
+    });
+
+    expect(result.opportunity.id).toBe("opp-nurture");
+    expect(service.createOpportunity).not.toHaveBeenCalled();
+  });
+
+  it("handles dashboard channel correctly", async () => {
+    await resolver.resolveForMessage({
+      channelContactId: "dashboard-user-1",
+      channel: "dashboard",
+      organizationId: "org-1",
+    });
+
+    expect(service.createContact).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryChannel: "dashboard" }),
+    );
+  });
+
+  it("does not set source when attribution has no utmSource", async () => {
+    await resolver.resolveForMessage({
+      channelContactId: "+6591234567",
+      channel: "whatsapp",
+      organizationId: "org-1",
+      attribution: { fbclid: "abc123" },
+    });
+
+    expect(service.createContact).toHaveBeenCalledWith(expect.objectContaining({ source: null }));
+  });
+});
