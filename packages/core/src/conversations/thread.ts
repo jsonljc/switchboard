@@ -14,6 +14,7 @@ export function createDefaultThread(contactId: string, organizationId: string): 
     contactId,
     organizationId,
     stage: "new",
+    threadStatus: "open",
     assignedAgent: "lead-responder",
     agentContext: {
       objectionsEncountered: [],

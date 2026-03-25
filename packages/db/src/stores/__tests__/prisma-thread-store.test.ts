@@ -19,6 +19,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     contactId: "contact-1",
     organizationId: "org-1",
     stage: "new" as const,
+    threadStatus: "open" as const,
     assignedAgent: "lead-responder",
     agentContext: {
       objectionsEncountered: [],
@@ -105,6 +106,7 @@ describe("PrismaConversationThreadStore", () => {
           contactId: "contact-1",
           organizationId: "org-1",
           stage: "new",
+          threadStatus: "open",
           assignedAgent: "lead-responder",
           agentContext: thread.agentContext,
           currentSummary: "",
@@ -149,6 +151,14 @@ describe("PrismaConversationThreadStore", () => {
       expect(prisma.conversationThread.update).toHaveBeenCalledWith({
         where: { id: "thread-1" },
         data: { assignedAgent: "sales-closer" },
+      });
+    });
+
+    it("updates threadStatus only", async () => {
+      await store.update("thread-1", { threadStatus: "waiting_on_customer" });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { threadStatus: "waiting_on_customer" },
       });
     });
 
