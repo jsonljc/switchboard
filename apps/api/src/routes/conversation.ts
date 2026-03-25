@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 import { createEventEnvelope } from "@switchboard/agents";
 import type { RoutedEventEnvelope } from "@switchboard/agents";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import type { ResolvedContact } from "../bootstrap/contact-resolver.js";
+import type { OpportunityStage } from "@switchboard/schemas";
 
 export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -49,6 +51,33 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
         metadata,
       });
 
+      // --- Resolve lifecycle Contact + Opportunity ---
+      let resolvedContact: ResolvedContact | null = null;
+      const contactResolver = app.lifecycleDeps?.contactResolver;
+      if (contactResolver) {
+        try {
+          resolvedContact = await contactResolver.resolveForMessage({
+            channelContactId: contactId,
+            channel: channel ?? "whatsapp",
+            organizationId: orgId,
+            attribution: (metadata?.attribution as Record<string, unknown>) ?? null,
+          });
+
+          // Inject opportunity stage into metadata for ConversationRouter
+          event = {
+            ...event,
+            metadata: {
+              ...event.metadata,
+              opportunityStage: resolvedContact.opportunity.stage,
+              lifecycleContactId: resolvedContact.contact.id,
+              lifecycleOpportunityId: resolvedContact.opportunity.id,
+            },
+          };
+        } catch (err) {
+          app.log.error({ err, contactId }, "ContactResolver error — continuing without lifecycle");
+        }
+      }
+
       // 2. Run through ConversationRouter to set targetAgentId
       if (agentSystem.conversationRouter) {
         try {
@@ -60,13 +89,11 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
 
       // 3. Check for owner escalation (no agent handles this stage)
       if (event.metadata?.escalateToOwner) {
-        // Attempt fallback handling if lifecycle deps are available
         const fallbackHandler = app.lifecycleDeps?.fallbackHandler;
         if (fallbackHandler) {
           try {
-            const now = new Date();
             const fallbackResult = await fallbackHandler.handleUnrouted({
-              contact: {
+              contact: resolvedContact?.contact ?? {
                 id: contactId,
                 organizationId: orgId,
                 name: null,
@@ -75,12 +102,12 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
                 primaryChannel: (channel as "whatsapp" | "telegram" | "dashboard") ?? "whatsapp",
                 stage: "new",
                 roles: ["lead"],
-                firstContactAt: now,
-                lastActivityAt: now,
-                createdAt: now,
-                updatedAt: now,
+                firstContactAt: new Date(),
+                lastActivityAt: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
               },
-              opportunity: null,
+              opportunity: resolvedContact?.opportunity ?? null,
               recentMessages: [],
               missingCapability: (event.metadata?.missingAgent as string) ?? "agent",
               fallbackReason:
@@ -145,6 +172,39 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
                 } catch (err) {
                   app.log.error({ err, threadId: thread.id }, "Failed to save thread update");
                 }
+              }
+            }
+          }
+        }
+
+        // 6. Apply opportunity stage advancements from agent processing
+        if (resolvedContact && app.lifecycleDeps?.lifecycleService) {
+          const lifecycleService = app.lifecycleDeps.lifecycleService;
+          for (const agent of result.processed) {
+            let targetStage: OpportunityStage | null = null;
+
+            if (agent.outputEvents.includes("lead.qualified")) {
+              targetStage = "qualified";
+            } else if (
+              agent.outputEvents.includes("opportunity.stage_advanced") &&
+              agent.agentId === "sales-closer"
+            ) {
+              targetStage = "booked";
+            }
+
+            if (targetStage) {
+              try {
+                await lifecycleService.advanceOpportunityStage(
+                  orgId,
+                  resolvedContact.opportunity.id,
+                  targetStage,
+                  agent.agentId,
+                );
+              } catch (err) {
+                app.log.warn(
+                  { err, targetStage, opportunityId: resolvedContact.opportunity.id },
+                  "Opportunity stage advancement skipped",
+                );
               }
             }
           }
