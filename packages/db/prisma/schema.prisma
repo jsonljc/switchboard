@@ -1030,18 +1030,22 @@ model ContactLifecycle {
 }
 
 model ConversationThread {
-  id              String    @id @default(uuid())
-  contactId       String
-  organizationId  String
-  stage           String    @default("new") // ThreadStage enum
-  assignedAgent   String    @default("lead-responder")
-  agentContext    Json      @default("{}")  // AgentContextData JSON
-  currentSummary  String    @default("")
-  followUpSchedule Json     @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
-  lastOutcomeAt   DateTime?
-  messageCount    Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  contactId        String
+  organizationId   String
+  stage            String    @default("new") // ThreadStage enum
+  assignedAgent    String    @default("lead-responder")
+  agentContext     Json      @default("{}")  // AgentContextData JSON
+  currentSummary   String    @default("")
+  followUpSchedule Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
+  lastOutcomeAt    DateTime?
+  messageCount     Int       @default(0)
+  threadStatus     String    @default("open")
+  opportunityId    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  lifecycleContact Contact?  @relation(fields: [contactId], references: [id])
 
   @@unique([contactId, organizationId])
   @@index([organizationId])
@@ -1259,4 +1263,113 @@ model OperatorCommandRecord {
   @@index([organizationId])
   @@index([requestId])
   @@index([status])
+}
+
+// ── Lifecycle Management (Revenue Growth Phase 6) ──
+
+model Contact {
+  id                String    @id @default(uuid())
+  organizationId    String
+  name              String?
+  phone             String?
+  email             String?
+  primaryChannel    String    @default("whatsapp")
+  firstTouchChannel String?
+  stage             String    @default("new")
+  source            String?
+  attribution       Json?
+  roles             String[]  @default(["lead"])
+  firstContactAt    DateTime  @default(now())
+  lastActivityAt    DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  opportunities     Opportunity[]
+  revenueEvents     LifecycleRevenueEvent[]
+  ownerTasks        OwnerTask[]
+  threads           ConversationThread[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([organizationId, phone])
+  @@index([organizationId, lastActivityAt])
+}
+
+model Opportunity {
+  id                    String    @id @default(uuid())
+  organizationId        String
+  contactId             String
+  contact               Contact   @relation(fields: [contactId], references: [id])
+  serviceId             String
+  serviceName           String
+  stage                 String    @default("interested")
+  timeline              String?
+  priceReadiness        String?
+  objections            Json      @default("[]")
+  qualificationComplete Boolean   @default(false)
+  estimatedValue        Int?
+  revenueTotal          Int       @default(0)
+  assignedAgent         String?
+  assignedStaff         String?
+  lostReason            String?
+  notes                 String?
+  openedAt              DateTime  @default(now())
+  closedAt              DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  revenueEvents         LifecycleRevenueEvent[]
+  ownerTasks            OwnerTask[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@index([contactId])
+}
+
+model LifecycleRevenueEvent {
+  id                String    @id @default(uuid())
+  organizationId    String
+  contactId         String
+  contact           Contact   @relation(fields: [contactId], references: [id])
+  opportunityId     String
+  opportunity       Opportunity @relation(fields: [opportunityId], references: [id])
+  amount            Int
+  currency          String    @default("SGD")
+  type              String
+  status            String    @default("confirmed")
+  recordedBy        String
+  externalReference String?
+  verified          Boolean   @default(false)
+  sourceCampaignId  String?
+  sourceAdId        String?
+  recordedAt        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+
+  @@index([organizationId])
+  @@index([opportunityId])
+  @@index([organizationId, recordedAt])
+}
+
+model OwnerTask {
+  id              String    @id @default(uuid())
+  organizationId  String
+  contactId       String?
+  contact         Contact?  @relation(fields: [contactId], references: [id])
+  opportunityId   String?
+  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id])
+  type            String
+  title           String
+  description     String
+  suggestedAction String?
+  status          String    @default("pending")
+  priority        String    @default("medium")
+  triggerReason   String
+  sourceAgent     String?
+  fallbackReason  String?
+  dueAt           DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
 }
