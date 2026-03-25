@@ -23,3 +23,11 @@ export type {
 } from "./lifecycle-types.js";
 export { ContactLifecycleService } from "./lifecycle-service.js";
 export type { ContactLifecycleServiceConfig } from "./lifecycle-service.js";
+export { FallbackHandler } from "./fallback-handler.js";
+export type {
+  FallbackContext,
+  FallbackResult,
+  FallbackNotification,
+  FallbackHandlerConfig,
+  FallbackSLAConfig,
+} from "./fallback-handler.js";
