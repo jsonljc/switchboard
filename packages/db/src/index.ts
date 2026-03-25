@@ -76,3 +76,7 @@ export { PrismaConversationThreadStore } from "./stores/prisma-thread-store.js";
 export { PrismaWorkflowStore } from "./stores/prisma-workflow-store.js";
 export { PrismaTriggerStore } from "./stores/prisma-trigger-store.js";
 export { PrismaOperatorCommandStore } from "./stores/prisma-command-store.js";
+export { PrismaContactStore } from "./stores/prisma-contact-store.js";
+export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
+export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
+export { PrismaOwnerTaskStore } from "./stores/prisma-owner-task-store.js";

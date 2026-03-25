@@ -1,0 +1,265 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { PrismaOwnerTaskStore } from "../prisma-owner-task-store.js";
+
+const now = new Date("2026-03-25T12:00:00Z");
+
+function makeMockPrisma() {
+  return {
+    ownerTask: {
+      create: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+  };
+}
+
+function makeTask(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "task-1",
+    organizationId: "org-1",
+    contactId: "contact-1",
+    opportunityId: "opp-1",
+    type: "fallback_handoff",
+    title: "Review lead response",
+    description: "Agent needs approval for next action",
+    suggestedAction: "Send pricing quote",
+    status: "pending",
+    priority: "medium",
+    triggerReason: "Agent confidence below threshold",
+    sourceAgent: "lead-responder",
+    fallbackReason: null,
+    dueAt: null,
+    completedAt: null,
+    createdAt: now,
+    ...overrides,
+  };
+}
+
+describe("PrismaOwnerTaskStore", () => {
+  let prisma: ReturnType<typeof makeMockPrisma>;
+  let store: PrismaOwnerTaskStore;
+
+  beforeEach(() => {
+    prisma = makeMockPrisma();
+    store = new PrismaOwnerTaskStore(prisma as never);
+  });
+
+  describe("create", () => {
+    it("creates a new owner task with all fields", async () => {
+      const input = {
+        organizationId: "org-1",
+        contactId: "contact-1",
+        opportunityId: "opp-1",
+        type: "approval_required" as const,
+        title: "Approve discount",
+        description: "Customer requesting 20% discount",
+        suggestedAction: "Offer 15% instead",
+        priority: "high" as const,
+        triggerReason: "Discount exceeds agent authority",
+        sourceAgent: "sales-closer",
+        fallbackReason: null,
+        dueAt: new Date("2026-03-26T12:00:00Z"),
+      };
+
+      const created = makeTask({
+        type: "approval_required",
+        title: "Approve discount",
+        priority: "high",
+      });
+      prisma.ownerTask.create.mockResolvedValue(created);
+
+      const result = await store.create(input);
+
+      expect(prisma.ownerTask.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          id: expect.any(String),
+          organizationId: "org-1",
+          contactId: "contact-1",
+          opportunityId: "opp-1",
+          type: "approval_required",
+          title: "Approve discount",
+          description: "Customer requesting 20% discount",
+          suggestedAction: "Offer 15% instead",
+          status: "pending",
+          priority: "high",
+          triggerReason: "Discount exceeds agent authority",
+          sourceAgent: "sales-closer",
+          fallbackReason: null,
+          dueAt: new Date("2026-03-26T12:00:00Z"),
+          createdAt: expect.any(Date),
+        }),
+      });
+
+      expect(result.status).toBe("pending");
+    });
+
+    it("creates task with minimal fields", async () => {
+      const input = {
+        organizationId: "org-1",
+        type: "manual_action" as const,
+        title: "Call customer",
+        description: "Customer requested phone call",
+        priority: "low" as const,
+        triggerReason: "Customer preference",
+      };
+
+      const created = makeTask({
+        contactId: null,
+        opportunityId: null,
+        suggestedAction: null,
+      });
+      prisma.ownerTask.create.mockResolvedValue(created);
+
+      await store.create(input);
+
+      expect(prisma.ownerTask.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          contactId: null,
+          opportunityId: null,
+          suggestedAction: null,
+          fallbackReason: null,
+          dueAt: null,
+        }),
+      });
+    });
+  });
+
+  describe("findPending", () => {
+    it("returns pending tasks sorted by priority and created date", async () => {
+      const tasks = [
+        makeTask({ id: "task-1", priority: "urgent", createdAt: new Date("2026-03-25T10:00:00Z") }),
+        makeTask({ id: "task-2", priority: "high", createdAt: new Date("2026-03-25T09:00:00Z") }),
+        makeTask({ id: "task-3", priority: "urgent", createdAt: new Date("2026-03-25T08:00:00Z") }),
+        makeTask({ id: "task-4", priority: "medium", createdAt: new Date("2026-03-25T11:00:00Z") }),
+      ];
+      prisma.ownerTask.findMany.mockResolvedValue(tasks);
+
+      const result = await store.findPending("org-1");
+
+      expect(prisma.ownerTask.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          status: "pending",
+        },
+        orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      });
+
+      // Verify custom priority sorting: urgent > high > medium
+      expect(result).toHaveLength(4);
+      expect(result[0]!.id).toBe("task-3"); // urgent, earliest
+      expect(result[1]!.id).toBe("task-1"); // urgent, later
+      expect(result[2]!.id).toBe("task-2"); // high
+      expect(result[3]!.id).toBe("task-4"); // medium
+    });
+
+    it("returns empty array when no pending tasks", async () => {
+      prisma.ownerTask.findMany.mockResolvedValue([]);
+
+      const result = await store.findPending("org-1");
+
+      expect(result).toEqual([]);
+    });
+
+    it("sorts with correct priority order (urgent > high > medium > low)", async () => {
+      const tasks = [
+        makeTask({ id: "low", priority: "low", createdAt: now }),
+        makeTask({ id: "urgent", priority: "urgent", createdAt: now }),
+        makeTask({ id: "medium", priority: "medium", createdAt: now }),
+        makeTask({ id: "high", priority: "high", createdAt: now }),
+      ];
+      prisma.ownerTask.findMany.mockResolvedValue(tasks);
+
+      const result = await store.findPending("org-1");
+
+      expect(result[0]!.id).toBe("urgent");
+      expect(result[1]!.id).toBe("high");
+      expect(result[2]!.id).toBe("medium");
+      expect(result[3]!.id).toBe("low");
+    });
+  });
+
+  describe("updateStatus", () => {
+    it("updates task status without completedAt", async () => {
+      const updated = makeTask({ status: "in_progress" });
+      prisma.ownerTask.update.mockResolvedValue(updated);
+
+      const result = await store.updateStatus("org-1", "task-1", "in_progress");
+
+      expect(prisma.ownerTask.update).toHaveBeenCalledWith({
+        where: { id: "task-1" },
+        data: {
+          status: "in_progress",
+          completedAt: undefined,
+        },
+      });
+      expect(result.status).toBe("in_progress");
+    });
+
+    it("updates task status with completedAt", async () => {
+      const completedDate = new Date("2026-03-25T15:00:00Z");
+      const updated = makeTask({
+        status: "completed",
+        completedAt: completedDate,
+      });
+      prisma.ownerTask.update.mockResolvedValue(updated);
+
+      const result = await store.updateStatus("org-1", "task-1", "completed", completedDate);
+
+      expect(prisma.ownerTask.update).toHaveBeenCalledWith({
+        where: { id: "task-1" },
+        data: {
+          status: "completed",
+          completedAt: completedDate,
+        },
+      });
+      expect(result.status).toBe("completed");
+      expect(result.completedAt).toEqual(completedDate);
+    });
+
+    it("updates task to dismissed status", async () => {
+      const updated = makeTask({ status: "dismissed" });
+      prisma.ownerTask.update.mockResolvedValue(updated);
+
+      const result = await store.updateStatus("org-1", "task-1", "dismissed");
+
+      expect(result.status).toBe("dismissed");
+    });
+  });
+
+  describe("autoComplete", () => {
+    it("completes all pending tasks for an opportunity", async () => {
+      prisma.ownerTask.updateMany.mockResolvedValue({ count: 3 });
+
+      const count = await store.autoComplete("org-1", "opp-1", "Opportunity won");
+
+      expect(prisma.ownerTask.updateMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          opportunityId: "opp-1",
+          status: "pending",
+        },
+        data: {
+          status: "completed",
+          completedAt: expect.any(Date),
+        },
+      });
+      expect(count).toBe(3);
+    });
+
+    it("returns 0 when no tasks to complete", async () => {
+      prisma.ownerTask.updateMany.mockResolvedValue({ count: 0 });
+
+      const count = await store.autoComplete("org-1", "opp-999", "No tasks");
+
+      expect(count).toBe(0);
+    });
+
+    it("only completes pending tasks, not in_progress or dismissed", async () => {
+      await store.autoComplete("org-1", "opp-1", "Opportunity lost");
+
+      const call = prisma.ownerTask.updateMany.mock.calls[0]?.[0];
+      expect(call?.where.status).toBe("pending");
+    });
+  });
+});
