@@ -16,3 +16,10 @@ export type {
   CampaignRevenueSummary,
 } from "./revenue-store.js";
 export type { OwnerTaskStore, CreateOwnerTaskInput } from "./owner-task-store.js";
+export type {
+  StageAdvancementResult,
+  RevenueRecordedData,
+  ContactDetail,
+} from "./lifecycle-types.js";
+export { ContactLifecycleService } from "./lifecycle-service.js";
+export type { ContactLifecycleServiceConfig } from "./lifecycle-service.js";

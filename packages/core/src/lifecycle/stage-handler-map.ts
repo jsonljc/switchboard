@@ -57,6 +57,10 @@ export function agentForOpportunityStage(
 
   // No active agent found — determine reason from first preferred
   const firstAgent = agents[0];
+  if (!firstAgent) {
+    return { fallback: true, missingAgent: "unknown", reason: "not_configured" };
+  }
+
   const entry = registry.get(orgId, firstAgent);
 
   if (!entry) {

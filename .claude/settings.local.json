@@ -159,7 +159,8 @@
       "Bash(/opt/homebrew/bin/pnpm typecheck:*)",
       "Bash(npx turbo:*)",
       "Bash(/usr/local/bin/pnpm --filter @switchboard/core test -- stage-handler-map)",
-      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/db test -- prisma-contact-store)"
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/db test -- prisma-contact-store)",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/core test -- lifecycle-service)"
     ]
   }
 }
