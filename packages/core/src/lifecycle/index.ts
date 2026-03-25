@@ -4,6 +4,8 @@ export {
 } from "./transition-validator.js";
 export type { TransitionResult as OpportunityTransitionResult } from "./transition-validator.js";
 export { deriveContactStage } from "./contact-stage-deriver.js";
+export { DEFAULT_STAGE_HANDLER_MAP, agentForOpportunityStage } from "./stage-handler-map.js";
+export type { StageHandlerMap } from "./stage-handler-map.js";
 export type { ContactStore, CreateContactInput, ContactFilters } from "./contact-store.js";
 export type { OpportunityStore, CreateOpportunityInput } from "./opportunity-store.js";
 export type {
