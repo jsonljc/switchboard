@@ -219,3 +219,6 @@ export * from "./scheduler/index.js";
 
 // Operator Command Store
 export * from "./operator/index.js";
+
+// Lifecycle (Contact, Opportunity, Revenue, OwnerTask)
+export * from "./lifecycle/index.js";

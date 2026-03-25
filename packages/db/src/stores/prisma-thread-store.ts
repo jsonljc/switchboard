@@ -13,6 +13,8 @@ type ThreadStage =
   | "lost"
   | "nurturing";
 
+type ThreadStatus = "open" | "waiting_on_customer" | "waiting_on_business" | "stale" | "closed";
+
 type SentimentTrend = "positive" | "neutral" | "negative" | "unknown";
 
 interface AgentContextData {
@@ -34,6 +36,7 @@ interface ConversationThread {
   contactId: string;
   organizationId: string;
   stage: ThreadStage;
+  threadStatus: ThreadStatus;
   assignedAgent: string;
   agentContext: AgentContextData;
   currentSummary: string;
@@ -62,6 +65,7 @@ export class PrismaConversationThreadStore {
       contactId: row.contactId,
       organizationId: row.organizationId,
       stage: row.stage as ThreadStage,
+      threadStatus: row.threadStatus as ThreadStatus,
       assignedAgent: row.assignedAgent,
       agentContext: row.agentContext as unknown as AgentContextData,
       currentSummary: row.currentSummary,
@@ -80,6 +84,7 @@ export class PrismaConversationThreadStore {
         contactId: thread.contactId,
         organizationId: thread.organizationId,
         stage: thread.stage,
+        threadStatus: thread.threadStatus,
         assignedAgent: thread.assignedAgent,
         agentContext: thread.agentContext as object,
         currentSummary: thread.currentSummary,
@@ -94,6 +99,7 @@ export class PrismaConversationThreadStore {
     threadId: string,
     updates: {
       stage?: ThreadStage;
+      threadStatus?: ThreadStatus;
       assignedAgent?: string;
       agentContext?: AgentContextData;
       currentSummary?: string;
@@ -105,6 +111,7 @@ export class PrismaConversationThreadStore {
     const data: Record<string, unknown> = {};
 
     if (updates.stage !== undefined) data.stage = updates.stage;
+    if (updates.threadStatus !== undefined) data.threadStatus = updates.threadStatus;
     if (updates.assignedAgent !== undefined) data.assignedAgent = updates.assignedAgent;
     if (updates.agentContext !== undefined) data.agentContext = updates.agentContext as object;
     if (updates.currentSummary !== undefined) data.currentSummary = updates.currentSummary;

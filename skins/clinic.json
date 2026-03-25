@@ -217,6 +217,37 @@
     "completed": 280
   },
 
+  "stageDefinitions": {
+    "interested": {
+      "label": "Enquiry",
+      "criteria": "Initial contact about treatment",
+      "typicalDuration": "1-3 days"
+    },
+    "qualified": {
+      "label": "Consultation Scheduled",
+      "criteria": "Budget/timeline confirmed, consultation booked",
+      "typicalDuration": "3-7 days"
+    },
+    "quoted": {
+      "label": "Treatment Plan Sent",
+      "criteria": "Treatment plan and pricing shared",
+      "typicalDuration": "1-14 days"
+    },
+    "booked": { "label": "Appointment Confirmed", "criteria": "Treatment appointment locked in" },
+    "showed": { "label": "Treatment Done", "criteria": "Patient attended appointment" },
+    "won": { "label": "Paid", "criteria": "Payment received" },
+    "lost": { "label": "Lost", "criteria": "Declined or ghosted" },
+    "nurturing": { "label": "Follow-Up", "criteria": "Re-engagement sequence active" }
+  },
+  "dormancyThresholdDays": 45,
+  "reopenWindowDays": 180,
+  "fallbackSLA": {
+    "urgent": { "dueDurationHours": 2 },
+    "high": { "dueDurationHours": 8 },
+    "medium": { "dueDurationHours": 24 },
+    "low": { "dueDurationHours": 72 }
+  },
+
   "config": {
     "bannedPhrases": ["competitor_name", "guaranteed results", "100% success"],
     "bookingUrl": "https://calendly.com/your-clinic"

@@ -1,4 +1,9 @@
-import type { ConversationThread, ThreadStage, AgentContextData } from "@switchboard/schemas";
+import type {
+  ConversationThread,
+  ThreadStage,
+  ThreadStatus,
+  AgentContextData,
+} from "@switchboard/schemas";
 
 /**
  * Persistence interface for ConversationThread.
@@ -16,6 +21,7 @@ export interface ConversationThreadStore {
     threadId: string,
     updates: {
       stage?: ThreadStage;
+      threadStatus?: ThreadStatus;
       assignedAgent?: string;
       agentContext?: AgentContextData;
       currentSummary?: string;

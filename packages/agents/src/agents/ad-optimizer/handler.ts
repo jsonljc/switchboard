@@ -63,11 +63,17 @@ export class AdOptimizerHandler implements AgentHandler {
       return { events: [], actions: [] };
     }
 
+    // Read attribution from contact data in event metadata for campaign feedback
+    const contactAttribution = event.metadata?.contactAttribution as
+      | Record<string, unknown>
+      | undefined;
+    const attributionPlatform = (contactAttribution?.utmSource as string) ?? "unknown";
+
     // Record ROAS for rolling window tracking
     if (campaignId) {
       addROASRecord(this.roasHistory, {
         campaignId,
-        platform: "unknown",
+        platform: attributionPlatform,
         roas: amount > 0 ? amount / 1 : 0,
         spend: 0,
         revenue: amount,
@@ -83,6 +89,7 @@ export class AdOptimizerHandler implements AgentHandler {
           campaignId,
           amount,
           attributionModel: payload.attributionModel,
+          platform: attributionPlatform,
           timestamp: event.occurredAt,
         },
       },

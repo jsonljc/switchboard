@@ -8,7 +8,12 @@ export const LEAD_RESPONDER_PORT: AgentPort = {
   agentId: "lead-responder",
   version: "0.1.0",
   inboundEvents: ["lead.received", "message.received"],
-  outboundEvents: ["lead.qualified", "lead.disqualified", "conversation.escalated"],
+  outboundEvents: [
+    "lead.qualified",
+    "lead.disqualified",
+    "conversation.escalated",
+    "opportunity.stage_advanced",
+  ],
   tools: [
     {
       name: "qualify_lead",

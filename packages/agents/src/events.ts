@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from "node:crypto";
+import type { AttributionChain } from "@switchboard/schemas";
 
 export const AGENT_EVENT_TYPES = [
   "lead.received",
@@ -10,6 +11,7 @@ export const AGENT_EVENT_TYPES = [
   "lead.disqualified",
   "stage.advanced",
   "stage.reverted",
+  "opportunity.stage_advanced",
   "revenue.recorded",
   "revenue.attributed",
   "ad.optimized",
@@ -26,17 +28,6 @@ export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 export interface EventSource {
   type: "agent" | "connector" | "webhook" | "manual" | "system";
   id: string;
-}
-
-export interface AttributionChain {
-  fbclid: string | null;
-  gclid: string | null;
-  ttclid: string | null;
-  sourceCampaignId: string | null;
-  sourceAdId: string | null;
-  utmSource: string | null;
-  utmMedium: string | null;
-  utmCampaign: string | null;
 }
 
 export interface RoutedEventEnvelope<TPayload = unknown> {

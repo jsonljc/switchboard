@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { RevenueEventSchema } from "@switchboard/schemas";
+import { LegacyRevenueEventSchema } from "@switchboard/schemas";
 
 describe("POST /api/revenue", () => {
   it("validates revenue event schema", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "ct_1",
       amount: 350,
       currency: "MYR",
@@ -14,7 +14,7 @@ describe("POST /api/revenue", () => {
   });
 
   it("rejects missing contactId", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       amount: 350,
       currency: "MYR",
       source: "api",
@@ -24,7 +24,7 @@ describe("POST /api/revenue", () => {
   });
 
   it("rejects zero-length contactId", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "",
       amount: 350,
       currency: "MYR",
@@ -35,7 +35,7 @@ describe("POST /api/revenue", () => {
   });
 
   it("rejects negative amounts", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "ct_1",
       amount: -100,
       currency: "MYR",

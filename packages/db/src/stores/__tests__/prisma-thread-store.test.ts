@@ -13,18 +13,20 @@ function makeMockPrisma() {
   };
 }
 
-function makeThread(overrides: Record<string, unknown> = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeThread(overrides: Record<string, any> = {}) {
   return {
     id: "thread-1",
     contactId: "contact-1",
     organizationId: "org-1",
     stage: "new" as const,
+    threadStatus: "open" as const,
     assignedAgent: "lead-responder",
     agentContext: {
-      objectionsEncountered: [],
-      preferencesLearned: {},
-      offersMade: [],
-      topicsDiscussed: [],
+      objectionsEncountered: [] as string[],
+      preferencesLearned: {} as Record<string, string>,
+      offersMade: [] as Array<{ description: string; date: Date }>,
+      topicsDiscussed: [] as string[],
       sentimentTrend: "unknown" as const,
     },
     currentSummary: "",
@@ -105,6 +107,7 @@ describe("PrismaConversationThreadStore", () => {
           contactId: "contact-1",
           organizationId: "org-1",
           stage: "new",
+          threadStatus: "open",
           assignedAgent: "lead-responder",
           agentContext: thread.agentContext,
           currentSummary: "",
@@ -149,6 +152,14 @@ describe("PrismaConversationThreadStore", () => {
       expect(prisma.conversationThread.update).toHaveBeenCalledWith({
         where: { id: "thread-1" },
         data: { assignedAgent: "sales-closer" },
+      });
+    });
+
+    it("updates threadStatus only", async () => {
+      await store.update("thread-1", { threadStatus: "waiting_on_customer" });
+      expect(prisma.conversationThread.update).toHaveBeenCalledWith({
+        where: { id: "thread-1" },
+        data: { threadStatus: "waiting_on_customer" },
       });
     });
 

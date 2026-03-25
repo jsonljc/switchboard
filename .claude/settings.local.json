@@ -154,7 +154,20 @@
       "Bash(cat ~/.zshrc 2>/dev/null | grep -i pnpm; ls /usr/local/lib/node_modules/pnpm 2>/dev/null; npm list -g --depth=0 2>/dev/null | grep pnpm; corepack enable 2>/dev/null && which pnpm 2>/dev/null; ls ~/switchboard/node_modules/.bin/ 2>/dev/null | head -10)",
       "Bash(sl push:*)",
       "mcp__plugin_browser_browser_tools__browser_launch",
-      "Bash(open http://localhost:3002/team)"
+      "Bash(open http://localhost:3002/team)",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/schemas test -- lifecycle)",
+      "Bash(/opt/homebrew/bin/pnpm typecheck:*)",
+      "Bash(npx turbo:*)",
+      "Bash(/usr/local/bin/pnpm --filter @switchboard/core test -- stage-handler-map)",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/db test -- prisma-contact-store)",
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/core test -- lifecycle-service)",
+      "Bash(node_modules/.bin/pnpm typecheck:*)",
+      "Bash(git stash:)",
+      "Bash(node_modules/.bin/pnpm --filter @switchboard/api typecheck 2>&1 | tail -15)",
+      "Bash(export PATH=\"$HOME/.local/share/pnpm:$HOME/.volta/bin:$HOME/.nvm/versions/node/*/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\" && which pnpm && pnpm --filter @switchboard/agents test 2>&1 | tail -60)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/agents test 2>&1 | tail -60)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/agents test 2>&1 | tail -30)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/api typecheck 2>&1 | tail -30)"
     ]
   }
 }

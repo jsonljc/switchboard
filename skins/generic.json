@@ -99,6 +99,33 @@
     "converted": 50
   },
 
+  "stageDefinitions": {
+    "interested": {
+      "label": "New Lead",
+      "criteria": "Initial contact or inquiry",
+      "typicalDuration": "1-3 days"
+    },
+    "qualified": {
+      "label": "Qualified",
+      "criteria": "Needs confirmed, budget discussed",
+      "typicalDuration": "3-7 days"
+    },
+    "quoted": { "label": "Quoted", "criteria": "Pricing shared", "typicalDuration": "3-14 days" },
+    "booked": { "label": "Booked", "criteria": "Appointment or delivery confirmed" },
+    "showed": { "label": "Completed", "criteria": "Service delivered" },
+    "won": { "label": "Paid", "criteria": "Payment received" },
+    "lost": { "label": "Lost", "criteria": "Declined or unresponsive" },
+    "nurturing": { "label": "Nurturing", "criteria": "Re-engagement sequence" }
+  },
+  "dormancyThresholdDays": 30,
+  "reopenWindowDays": 90,
+  "fallbackSLA": {
+    "urgent": { "dueDurationHours": 4 },
+    "high": { "dueDurationHours": 12 },
+    "medium": { "dueDurationHours": 24 },
+    "low": { "dueDurationHours": 72 }
+  },
+
   "config": {
     "bannedPhrases": []
   }

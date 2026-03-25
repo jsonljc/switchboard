@@ -18,7 +18,7 @@ import { buildSalesCloserPrompt } from "./prompt-builder.js";
 import type { TonePreset } from "../lead-responder/tone-presets.js";
 import type { SupportedLanguage } from "../lead-responder/language-directives.js";
 import type { SalesCloserDeps } from "./types.js";
-import type { ConversationThread } from "@switchboard/schemas";
+import type { ConversationThread, OpportunityStage } from "@switchboard/schemas";
 import { extractConversationContext } from "../../context-extractor.js";
 import { refreshSummary, shouldRefreshSummary } from "../../summary-refresher.js";
 import { SUMMARY_REFRESH_INTERVAL } from "@switchboard/core";
@@ -238,6 +238,9 @@ export class SalesCloserHandler implements AgentHandler {
       (config.bookingUrl as string) ?? (booking.bookingUrl as string | undefined) ?? "";
     const followUpDays = (config.followUpDays as number[]) ?? DEFAULT_FOLLOW_UP_DAYS;
 
+    // Read opportunity stage from event metadata (if available)
+    const opportunityStage = event.metadata?.opportunityStage as OpportunityStage | undefined;
+
     const stageEvent = createEventEnvelope({
       organizationId: context.organizationId,
       eventType: "stage.advanced",
@@ -248,6 +251,23 @@ export class SalesCloserHandler implements AgentHandler {
         conversionAction: bookingUrl ? "booking_link" : "direct_booking",
         score: payload.score,
         tier: payload.tier,
+      },
+      correlationId: event.correlationId,
+      causationId: event.eventId,
+      attribution: event.attribution,
+    });
+
+    // Emit opportunity stage advancement to "booked"
+    const opportunityEvent = createEventEnvelope({
+      organizationId: context.organizationId,
+      eventType: "opportunity.stage_advanced",
+      source: { type: "agent", id: "sales-closer" },
+      payload: {
+        contactId,
+        previousStage: opportunityStage ?? "qualified",
+        newStage: "booked",
+        reason: "booking_initiated",
+        conversionAction: bookingUrl ? "booking_link" : "direct_booking",
       },
       correlationId: event.correlationId,
       causationId: event.eventId,
@@ -283,7 +303,7 @@ export class SalesCloserHandler implements AgentHandler {
     }
 
     return {
-      events: [stageEvent],
+      events: [stageEvent, opportunityEvent],
       actions,
       state: { contactId, stage: "booking_initiated", nurtureActive },
     };

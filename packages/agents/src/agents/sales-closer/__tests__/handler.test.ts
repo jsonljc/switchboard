@@ -43,13 +43,22 @@ describe("SalesCloserHandler", () => {
       },
     );
 
-    expect(response.events).toHaveLength(1);
+    expect(response.events).toHaveLength(2);
     expect(response.events[0]!.eventType).toBe("stage.advanced");
     expect(response.events[0]!.payload).toEqual(
       expect.objectContaining({
         contactId: "c1",
         stage: "booking_initiated",
         conversionAction: "booking_link",
+      }),
+    );
+    expect(response.events[1]!.eventType).toBe("opportunity.stage_advanced");
+    expect(response.events[1]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        previousStage: "qualified",
+        newStage: "booked",
+        reason: "booking_initiated",
       }),
     );
   });

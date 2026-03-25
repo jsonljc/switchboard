@@ -117,6 +117,31 @@ export const SkinManifestSchema = z.object({
   /** Conversion event → dollar value mapping ("dynamic" for ROAS-based). */
   conversionValueMap: z.record(z.string(), z.union([z.number(), z.string()])).optional(),
 
+  /** Vertical-specific stage definitions (keys are opportunity stage names). */
+  stageDefinitions: z
+    .record(
+      z.string(),
+      z.object({
+        label: z.string(),
+        criteria: z.string(),
+        typicalDuration: z.string().optional(),
+      }),
+    )
+    .optional(),
+  /** Days of inactivity before marking contact dormant. */
+  dormancyThresholdDays: z.number().int().positive().optional(),
+  /** Days within which a dormant contact can be re-opened. */
+  reopenWindowDays: z.number().int().positive().optional(),
+  /** Fallback SLA rules (keys are task priority levels). */
+  fallbackSLA: z
+    .record(
+      z.string(),
+      z.object({
+        dueDurationHours: z.number().positive(),
+      }),
+    )
+    .optional(),
+
   /** Arbitrary skin-specific configuration (e.g. bannedPhrases, bookingUrl). */
   config: z.record(z.string(), z.unknown()).optional(),
 });

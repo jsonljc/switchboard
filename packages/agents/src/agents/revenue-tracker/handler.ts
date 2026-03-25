@@ -34,6 +34,10 @@ export class RevenueTrackerHandler implements AgentHandler {
       return this.handleAdOptimized(event, context);
     }
 
+    if (event.eventType === "opportunity.stage_advanced") {
+      return this.handleOpportunityStageAdvanced(event, config, context);
+    }
+
     return { events: [], actions: [] };
   }
 
@@ -202,6 +206,45 @@ export class RevenueTrackerHandler implements AgentHandler {
         },
       ],
       state: { action, campaignId: campaignId ?? null, logged: true },
+    };
+  }
+
+  private handleOpportunityStageAdvanced(
+    event: RoutedEventEnvelope,
+    config: Record<string, unknown>,
+    context: AgentContext,
+  ): AgentResponse {
+    const payload = validatePayload(
+      event.payload,
+      { contactId: "string", newStage: "string", previousStage: "string?" },
+      "revenue-tracker",
+    );
+    const contactId = payload.contactId as string;
+    const newStage = payload.newStage as string;
+    const previousStage = (payload.previousStage as string) ?? "unknown";
+    const profile = context.profile ?? {};
+    const revenue = profile.revenue as Record<string, unknown> | undefined;
+
+    const trackPipeline = (config.trackPipeline ?? revenue?.trackPipeline) !== false;
+    if (!trackPipeline) {
+      return { events: [], actions: [] };
+    }
+
+    // Log opportunity stage transition for pipeline tracking
+    return {
+      events: [],
+      actions: [
+        {
+          actionType: "crm.activity.log",
+          parameters: {
+            contactId,
+            activityType: "opportunity_stage_transition",
+            previousStage,
+            newStage,
+          },
+        },
+      ],
+      state: { contactId, previousStage, newStage, logged: true },
     };
   }
 

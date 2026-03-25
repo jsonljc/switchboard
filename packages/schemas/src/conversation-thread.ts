@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ThreadStatusSchema } from "./lifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Thread Stage — conversation progression (distinct from CRM lifecycle stage)
@@ -62,6 +63,7 @@ export const ConversationThreadSchema = z.object({
   contactId: z.string().min(1),
   organizationId: z.string().min(1),
   stage: ThreadStageSchema,
+  threadStatus: ThreadStatusSchema.default("open"),
   assignedAgent: z.string().min(1),
   agentContext: AgentContextDataSchema,
   currentSummary: z.string(),

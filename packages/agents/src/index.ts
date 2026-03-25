@@ -6,7 +6,6 @@ export {
   AGENT_EVENT_TYPES,
   createEventEnvelope,
   type AgentEventType,
-  type AttributionChain,
   type CreateEnvelopeInput,
   type EventSource,
   type RoutedEventEnvelope,
@@ -176,11 +175,13 @@ export {
   canRequalify,
   agentForStage,
   agentForThreadStage,
+  agentForOpportunityStage,
   type LifecycleStage,
 } from "./lifecycle.js";
 
 export {
   ConversationRouter,
+  type AgentRegistryLike,
   type ConversationRouterConfig,
   type StageResolver,
 } from "./conversation-router.js";

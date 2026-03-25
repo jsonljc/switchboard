@@ -104,6 +104,37 @@
     "purchased": "dynamic"
   },
 
+  "stageDefinitions": {
+    "interested": {
+      "label": "Browsing",
+      "criteria": "Product inquiry or quote request",
+      "typicalDuration": "1-3 days"
+    },
+    "qualified": {
+      "label": "Serious Buyer",
+      "criteria": "Budget confirmed, requirements clear",
+      "typicalDuration": "2-7 days"
+    },
+    "quoted": {
+      "label": "Quote Sent",
+      "criteria": "Formal quote or proposal shared",
+      "typicalDuration": "3-14 days"
+    },
+    "booked": { "label": "Order Placed", "criteria": "Order confirmed, deposit paid" },
+    "showed": { "label": "Delivered", "criteria": "Product/service delivered" },
+    "won": { "label": "Paid in Full", "criteria": "Full payment received" },
+    "lost": { "label": "Lost", "criteria": "Cancelled or abandoned" },
+    "nurturing": { "label": "Nurturing", "criteria": "Re-engagement or upsell sequence" }
+  },
+  "dormancyThresholdDays": 30,
+  "reopenWindowDays": 60,
+  "fallbackSLA": {
+    "urgent": { "dueDurationHours": 4 },
+    "high": { "dueDurationHours": 12 },
+    "medium": { "dueDurationHours": 24 },
+    "low": { "dueDurationHours": 72 }
+  },
+
   "config": {
     "bannedPhrases": []
   }

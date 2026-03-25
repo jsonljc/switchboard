@@ -39,6 +39,7 @@ import { registerSwagger } from "./bootstrap/swagger.js";
 import { loadAndApplySkin, resolveBusinessProfile } from "./bootstrap/skin.js";
 import { buildOperatorDeps } from "./bootstrap/operator-deps.js";
 import { PrismaOperatorCommandStore } from "@switchboard/db";
+import { wireConversionBus } from "./bootstrap/conversion-bus-bootstrap.js";
 import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
@@ -66,6 +67,7 @@ declare module "fastify" {
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
+    lifecycleDeps: import("./bootstrap/lifecycle-deps.js").LifecycleDeps | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -193,50 +195,12 @@ export async function buildServer() {
   // --- ConversionBus wiring (CRM → ads feedback loop) ---
   const { InMemoryConversionBus } = await import("@switchboard/core");
   const conversionBus = new InMemoryConversionBus();
-
-  if (adsWriteProvider && prismaClient) {
-    const { CAPIDispatcher, OutcomeTracker, TikTokDispatcher, GoogleOfflineDispatcher } =
-      await import("@switchboard/digital-ads");
-    const { PrismaCrmProvider } = await import("@switchboard/db");
-
-    const dispatcher = new CAPIDispatcher({
-      adsProvider: adsWriteProvider,
-      crmProvider: new PrismaCrmProvider(prismaClient),
-      pixelId: process.env["META_PIXEL_ID"] ?? "",
-    });
-    dispatcher.register(conversionBus);
-
-    const outcomeTracker = new OutcomeTracker();
-    outcomeTracker.register(conversionBus);
-
-    const registeredDispatchers = ["CAPIDispatcher", "OutcomeTracker"];
-
-    // TikTok Events API dispatcher (gated by TIKTOK_PIXEL_ID)
-    const tiktokPixelId = process.env["TIKTOK_PIXEL_ID"];
-    if (tiktokPixelId) {
-      const tiktokDispatcher = new TikTokDispatcher({
-        sendEvent: async (_pixelId, _event) => ({ success: true }), // stub — real TikTok API client to come
-        crmProvider: new PrismaCrmProvider(prismaClient),
-        pixelId: tiktokPixelId,
-      });
-      tiktokDispatcher.register(conversionBus);
-      registeredDispatchers.push("TikTokDispatcher");
-    }
-
-    // Google Offline Conversions dispatcher (gated by GOOGLE_CONVERSION_ACTION_ID)
-    const googleConversionActionId = process.env["GOOGLE_CONVERSION_ACTION_ID"];
-    if (googleConversionActionId) {
-      const googleDispatcher = new GoogleOfflineDispatcher({
-        uploadConversion: async (_conversion) => ({ success: true }), // stub — real Google Ads client to come
-        crmProvider: new PrismaCrmProvider(prismaClient),
-        conversionActionId: googleConversionActionId,
-      });
-      googleDispatcher.register(conversionBus);
-      registeredDispatchers.push("GoogleOfflineDispatcher");
-    }
-
-    app.log.info(`ConversionBus wired: ${registeredDispatchers.join(" + ")} registered`);
-  }
+  await wireConversionBus({
+    conversionBus,
+    adsWriteProvider,
+    prismaClient,
+    logger: app.log,
+  });
 
   // --- Agent orchestration system ---
   const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
@@ -401,6 +365,17 @@ export async function buildServer() {
     }
   }
   app.decorate("operatorDeps", operatorDeps);
+
+  // --- Lifecycle deps (contact lifecycle + fallback handler) ---
+  let lifecycleDeps: import("./bootstrap/lifecycle-deps.js").LifecycleDeps | null = null;
+  if (prismaClient) {
+    const { buildLifecycleDeps } = await import("./bootstrap/lifecycle-deps.js");
+    lifecycleDeps = buildLifecycleDeps(prismaClient);
+    if (lifecycleDeps) {
+      app.log.info("[boot] Contact lifecycle system wired");
+    }
+  }
+  app.decorate("lifecycleDeps", lifecycleDeps);
 
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];

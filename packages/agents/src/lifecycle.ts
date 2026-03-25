@@ -25,6 +25,9 @@ const STAGE_TO_AGENT: Record<LifecycleStage, string | null> = {
   churned: null, // escalate to owner
 };
 
+/**
+ * @deprecated Use agentForOpportunityStage from @switchboard/core instead
+ */
 export function agentForStage(stage: LifecycleStage | undefined): string | null {
   if (!stage) return "lead-responder";
   return STAGE_TO_AGENT[stage];
@@ -41,7 +44,13 @@ const THREAD_STAGE_TO_AGENT: Record<ThreadStage, string | null> = {
   nurturing: "nurture",
 };
 
+/**
+ * @deprecated Use agentForOpportunityStage from @switchboard/core instead
+ */
 export function agentForThreadStage(stage: ThreadStage | undefined): string | null {
   if (!stage) return "lead-responder";
   return THREAD_STAGE_TO_AGENT[stage];
 }
+
+// Re-export opportunity-based routing from core
+export { agentForOpportunityStage } from "@switchboard/core";
