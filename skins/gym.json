@@ -135,6 +135,37 @@
     "enabled": ["telegram", "whatsapp", "instagram"]
   },
 
+  "stageDefinitions": {
+    "interested": {
+      "label": "Enquiry",
+      "criteria": "Asked about membership or classes",
+      "typicalDuration": "1-2 days"
+    },
+    "qualified": {
+      "label": "Trial Booked",
+      "criteria": "Trial class or tour scheduled",
+      "typicalDuration": "2-5 days"
+    },
+    "quoted": {
+      "label": "Membership Offered",
+      "criteria": "Pricing and plans shared",
+      "typicalDuration": "1-7 days"
+    },
+    "booked": { "label": "Trial Confirmed", "criteria": "Trial date locked in" },
+    "showed": { "label": "Trial Completed", "criteria": "Attended trial class or tour" },
+    "won": { "label": "Signed Up", "criteria": "Membership activated" },
+    "lost": { "label": "Lost", "criteria": "Declined or no response" },
+    "nurturing": { "label": "Re-Engagement", "criteria": "Follow-up sequence active" }
+  },
+  "dormancyThresholdDays": 30,
+  "reopenWindowDays": 90,
+  "fallbackSLA": {
+    "urgent": { "dueDurationHours": 4 },
+    "high": { "dueDurationHours": 12 },
+    "medium": { "dueDurationHours": 24 },
+    "low": { "dueDurationHours": 48 }
+  },
+
   "config": {
     "bannedPhrases": ["guaranteed weight loss", "miracle results"],
     "bookingUrl": "https://calendly.com/your-gym"

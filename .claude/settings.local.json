@@ -160,7 +160,14 @@
       "Bash(npx turbo:*)",
       "Bash(/usr/local/bin/pnpm --filter @switchboard/core test -- stage-handler-map)",
       "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/db test -- prisma-contact-store)",
-      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/core test -- lifecycle-service)"
+      "Bash(/opt/homebrew/bin/pnpm --filter @switchboard/core test -- lifecycle-service)",
+      "Bash(node_modules/.bin/pnpm typecheck:*)",
+      "Bash(git stash:)",
+      "Bash(node_modules/.bin/pnpm --filter @switchboard/api typecheck 2>&1 | tail -15)",
+      "Bash(export PATH=\"$HOME/.local/share/pnpm:$HOME/.volta/bin:$HOME/.nvm/versions/node/*/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\" && which pnpm && pnpm --filter @switchboard/agents test 2>&1 | tail -60)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/agents test 2>&1 | tail -60)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/agents test 2>&1 | tail -30)",
+      "Bash(/Users/jasonljc/switchboard/node_modules/.bin/pnpm --filter @switchboard/api typecheck 2>&1 | tail -30)"
     ]
   }
 }
