@@ -45,3 +45,6 @@ export function agentForThreadStage(stage: ThreadStage | undefined): string | nu
   if (!stage) return "lead-responder";
   return THREAD_STAGE_TO_AGENT[stage];
 }
+
+// Re-export opportunity-based routing from core
+export { agentForOpportunityStage } from "@switchboard/core";

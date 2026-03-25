@@ -2,29 +2,40 @@
 // Conversation Router — pre-processing transform for message.received events
 // ---------------------------------------------------------------------------
 
-import type { ThreadStage } from "@switchboard/schemas";
+import type { ThreadStage, OpportunityStage } from "@switchboard/schemas";
 import type { ConversationThreadStore } from "@switchboard/core";
 import { createDefaultThread } from "@switchboard/core";
+import type { StageHandlerMap } from "@switchboard/core";
 import type { RoutedEventEnvelope } from "./events.js";
-import { agentForStage, agentForThreadStage } from "./lifecycle.js";
+import { agentForStage, agentForThreadStage, agentForOpportunityStage } from "./lifecycle.js";
 import type { LifecycleStage } from "./lifecycle.js";
 
 export interface StageResolver {
   getStage(contactId: string): Promise<LifecycleStage | undefined>;
 }
 
+export interface AgentRegistryLike {
+  get(orgId: string, agentId: string): { status: string } | undefined;
+}
+
 export interface ConversationRouterConfig {
   getStage: (contactId: string) => Promise<LifecycleStage | undefined>;
   threadStore?: ConversationThreadStore;
+  stageHandlerMap?: StageHandlerMap;
+  agentRegistry?: AgentRegistryLike;
 }
 
 export class ConversationRouter {
   private getStage: (contactId: string) => Promise<LifecycleStage | undefined>;
   private threadStore: ConversationThreadStore | undefined;
+  private stageHandlerMap: StageHandlerMap | undefined;
+  private agentRegistry: AgentRegistryLike | undefined;
 
   constructor(config: ConversationRouterConfig) {
     this.getStage = config.getStage;
     this.threadStore = config.threadStore;
+    this.stageHandlerMap = config.stageHandlerMap;
+    this.agentRegistry = config.agentRegistry;
   }
 
   async transform(event: RoutedEventEnvelope): Promise<RoutedEventEnvelope> {
@@ -36,6 +47,12 @@ export class ConversationRouter {
     const contactId = payload.contactId as string | undefined;
     if (!contactId) {
       return event;
+    }
+
+    // Opportunity-based routing takes priority when metadata provides an opportunity stage
+    const opportunityStage = event.metadata?.opportunityStage as OpportunityStage | undefined;
+    if (opportunityStage && this.stageHandlerMap && this.agentRegistry) {
+      return this.transformWithOpportunity(event, opportunityStage);
     }
 
     // If thread store available, use thread-based routing
@@ -57,6 +74,43 @@ export class ConversationRouter {
     return {
       ...event,
       metadata: { ...event.metadata, escalateToOwner: true },
+    };
+  }
+
+  private transformWithOpportunity(
+    event: RoutedEventEnvelope,
+    opportunityStage: OpportunityStage,
+  ): RoutedEventEnvelope {
+    const result = agentForOpportunityStage(
+      opportunityStage,
+      this.stageHandlerMap!,
+      this.agentRegistry!,
+      event.organizationId,
+    );
+
+    if ("suppress" in result) {
+      return {
+        ...event,
+        metadata: { ...event.metadata, suppressed: true, suppressReason: result.reason },
+      };
+    }
+
+    if ("agentId" in result) {
+      return {
+        ...event,
+        metadata: { ...event.metadata, targetAgentId: result.agentId },
+      };
+    }
+
+    // Fallback result — no active agent for this stage
+    return {
+      ...event,
+      metadata: {
+        ...event.metadata,
+        escalateToOwner: true,
+        fallbackReason: result.reason,
+        missingAgent: result.missingAgent,
+      },
     };
   }
 

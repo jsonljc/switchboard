@@ -60,6 +60,45 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
 
       // 3. Check for owner escalation (no agent handles this stage)
       if (event.metadata?.escalateToOwner) {
+        // Attempt fallback handling if lifecycle deps are available
+        const fallbackHandler = app.lifecycleDeps?.fallbackHandler;
+        if (fallbackHandler) {
+          try {
+            const now = new Date();
+            const fallbackResult = await fallbackHandler.handleUnrouted({
+              contact: {
+                id: contactId,
+                organizationId: orgId,
+                name: null,
+                phone: null,
+                email: null,
+                primaryChannel: (channel as "whatsapp" | "telegram" | "dashboard") ?? "whatsapp",
+                stage: "new",
+                roles: ["lead"],
+                firstContactAt: now,
+                lastActivityAt: now,
+                createdAt: now,
+                updatedAt: now,
+              },
+              opportunity: null,
+              recentMessages: [],
+              missingCapability: (event.metadata?.missingAgent as string) ?? "agent",
+              fallbackReason:
+                (event.metadata?.fallbackReason as "not_configured" | "paused" | "errored") ??
+                "not_configured",
+            });
+
+            return reply.code(200).send({
+              escalated: true,
+              reason: "no_agent_for_stage",
+              agentId: null,
+              fallbackTaskId: fallbackResult.task?.id ?? null,
+            });
+          } catch (err) {
+            app.log.error({ err, contactId }, "FallbackHandler error");
+          }
+        }
+
         return reply.code(200).send({
           escalated: true,
           reason: "no_agent_for_stage",

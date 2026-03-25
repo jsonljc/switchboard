@@ -175,11 +175,13 @@ export {
   canRequalify,
   agentForStage,
   agentForThreadStage,
+  agentForOpportunityStage,
   type LifecycleStage,
 } from "./lifecycle.js";
 
 export {
   ConversationRouter,
+  type AgentRegistryLike,
   type ConversationRouterConfig,
   type StageResolver,
 } from "./conversation-router.js";

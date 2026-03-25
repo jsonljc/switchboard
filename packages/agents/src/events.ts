@@ -11,6 +11,7 @@ export const AGENT_EVENT_TYPES = [
   "lead.disqualified",
   "stage.advanced",
   "stage.reverted",
+  "opportunity.stage_advanced",
   "revenue.recorded",
   "revenue.attributed",
   "ad.optimized",
