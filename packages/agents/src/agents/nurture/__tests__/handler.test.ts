@@ -304,12 +304,21 @@ describe("NurtureAgentHandler", () => {
       },
     );
 
-    expect(response.events).toHaveLength(1);
+    expect(response.events).toHaveLength(2);
     expect(response.events[0]!.eventType).toBe("lead.qualified");
     expect(response.events[0]!.payload).toEqual(
       expect.objectContaining({
         contactId: "c1",
         requalifiedFrom: "dormant",
+      }),
+    );
+    expect(response.events[1]!.eventType).toBe("opportunity.stage_advanced");
+    expect(response.events[1]!.payload).toEqual(
+      expect.objectContaining({
+        contactId: "c1",
+        previousStage: "nurturing",
+        newStage: "interested",
+        reason: "requalified_from_dormant",
       }),
     );
     expect(response.actions).toHaveLength(0);
@@ -470,7 +479,7 @@ describe("NurtureAgentHandler", () => {
         },
       );
 
-      expect(response.events).toHaveLength(1);
+      expect(response.events).toHaveLength(2);
       expect(response.events[0]!.eventType).toBe("lead.qualified");
       expect(response.events[0]!.payload).toEqual(
         expect.objectContaining({
@@ -478,6 +487,7 @@ describe("NurtureAgentHandler", () => {
           requalifiedFrom: "dormant",
         }),
       );
+      expect(response.events[1]!.eventType).toBe("opportunity.stage_advanced");
     });
 
     it("allows requalification when no contactData provided", async () => {
@@ -493,8 +503,9 @@ describe("NurtureAgentHandler", () => {
         },
       );
 
-      expect(response.events).toHaveLength(1);
+      expect(response.events).toHaveLength(2);
       expect(response.events[0]!.eventType).toBe("lead.qualified");
+      expect(response.events[1]!.eventType).toBe("opportunity.stage_advanced");
     });
   });
 

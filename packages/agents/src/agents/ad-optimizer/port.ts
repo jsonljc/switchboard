@@ -7,7 +7,12 @@ import type { AgentPort } from "../../ports.js";
 export const AD_OPTIMIZER_PORT: AgentPort = {
   agentId: "ad-optimizer",
   version: "0.3.0",
-  inboundEvents: ["revenue.attributed", "ad.anomaly_detected", "ad.performance_review"],
+  inboundEvents: [
+    "revenue.attributed",
+    "ad.anomaly_detected",
+    "ad.performance_review",
+    "opportunity.stage_advanced",
+  ],
   outboundEvents: ["ad.optimized", "conversation.escalated"],
   tools: [
     {

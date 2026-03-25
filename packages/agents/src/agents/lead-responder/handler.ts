@@ -12,7 +12,7 @@ import { buildConversationPrompt } from "./prompt-builder.js";
 import type { TonePreset } from "./tone-presets.js";
 import type { SupportedLanguage } from "./language-directives.js";
 import type { LeadResponderDeps, ObjectionMatch } from "./types.js";
-import type { ConversationThread } from "@switchboard/schemas";
+import type { ConversationThread, OpportunityStage } from "@switchboard/schemas";
 import { extractConversationContext } from "../../context-extractor.js";
 import { refreshSummary, shouldRefreshSummary } from "../../summary-refresher.js";
 import { SUMMARY_REFRESH_INTERVAL } from "@switchboard/core";
@@ -108,7 +108,10 @@ export class LeadResponderHandler implements AgentHandler {
       agentId: "lead-responder",
     });
 
-    // 4.5. Load thread context from event metadata
+    // 4.5. Read opportunity stage from event metadata (if available)
+    const opportunityStage = event.metadata?.opportunityStage as OpportunityStage | undefined;
+
+    // 4.6. Load thread context from event metadata
     const thread = (event.metadata?.conversationThread as ConversationThread) ?? undefined;
     const existingContext = thread?.agentContext ?? {
       objectionsEncountered: [],
@@ -180,6 +183,25 @@ export class LeadResponderHandler implements AgentHandler {
             score: scoreResult.score,
             tier: scoreResult.tier,
             factors: scoreResult.factors,
+          },
+          correlationId: event.correlationId,
+          causationId: event.eventId,
+          attribution: event.attribution,
+        }),
+      );
+
+      // Emit opportunity stage advancement when qualification completes
+      events.push(
+        createEventEnvelope({
+          organizationId: context.organizationId,
+          eventType: "opportunity.stage_advanced",
+          source: { type: "agent", id: "lead-responder" },
+          payload: {
+            contactId,
+            previousStage: opportunityStage ?? "interested",
+            newStage: "qualified",
+            reason: "qualification_complete",
+            score: scoreResult.score,
           },
           correlationId: event.correlationId,
           causationId: event.eventId,

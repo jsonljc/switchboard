@@ -127,6 +127,21 @@ export class NurtureAgentHandler implements AgentHandler {
             causationId: event.eventId,
             attribution: event.attribution,
           }),
+          // Signal opportunity reopening for the lifecycle pipeline
+          createEventEnvelope({
+            organizationId: context.organizationId,
+            eventType: "opportunity.stage_advanced",
+            source: { type: "agent", id: "nurture" },
+            payload: {
+              contactId,
+              previousStage: "nurturing",
+              newStage: "interested",
+              reason: "requalified_from_dormant",
+            },
+            correlationId: event.correlationId,
+            causationId: event.eventId,
+            attribution: event.attribution,
+          }),
         ],
         actions: [],
         state: { contactId, requalified: true },
