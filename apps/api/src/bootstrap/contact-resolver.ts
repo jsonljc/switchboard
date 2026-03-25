@@ -1,7 +1,10 @@
 import type { ContactLifecycleService } from "@switchboard/core";
-import type { Contact, Opportunity, OpportunityStage } from "@switchboard/schemas";
-
-const TERMINAL_STAGES: OpportunityStage[] = ["won", "lost"];
+import {
+  TERMINAL_OPPORTUNITY_STAGES,
+  type Contact,
+  type Opportunity,
+  type OpportunityStage,
+} from "@switchboard/schemas";
 
 export interface ResolveMessageInput {
   channelContactId: string;
@@ -57,7 +60,7 @@ export class ContactResolver {
 
     if (detail) {
       const activeOpp = detail.opportunities.find(
-        (o) => !TERMINAL_STAGES.includes(o.stage as OpportunityStage),
+        (o) => !TERMINAL_OPPORTUNITY_STAGES.includes(o.stage as OpportunityStage),
       );
       if (activeOpp) return activeOpp;
     }
