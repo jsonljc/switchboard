@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const RevenueEventSourceSchema = z.enum([
+export const LegacyRevenueEventSourceSchema = z.enum([
   "manual",
   "chat",
   "batch",
@@ -10,16 +10,16 @@ export const RevenueEventSourceSchema = z.enum([
   "api",
 ]);
 
-export type RevenueEventSource = z.infer<typeof RevenueEventSourceSchema>;
+export type LegacyRevenueEventSource = z.infer<typeof LegacyRevenueEventSourceSchema>;
 
-export const RevenueEventSchema = z.object({
+export const LegacyRevenueEventSchema = z.object({
   contactId: z.string().min(1),
   amount: z.number().nonnegative(),
   currency: z.string().length(3),
-  source: RevenueEventSourceSchema.default("manual"),
+  source: LegacyRevenueEventSourceSchema.default("manual"),
   reference: z.string().optional(),
   recordedBy: z.string().min(1),
   timestamp: z.string().datetime().optional(),
 });
 
-export type RevenueEvent = z.infer<typeof RevenueEventSchema>;
+export type LegacyRevenueEvent = z.infer<typeof LegacyRevenueEventSchema>;

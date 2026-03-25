@@ -6,13 +6,9 @@
 // ---------------------------------------------------------------------------
 
 import type { ConversionBus, ConversionEvent, ConversionEventType } from "@switchboard/core";
+import type { AttributionChain } from "@switchboard/schemas";
 
-import {
-  createEventEnvelope,
-  type AgentEventType,
-  type AttributionChain,
-  type RoutedEventEnvelope,
-} from "../events.js";
+import { createEventEnvelope, type AgentEventType, type RoutedEventEnvelope } from "../events.js";
 
 /** Maps legacy ConversionEventType to canonical AgentEventType. */
 const CONVERSION_TO_AGENT_EVENT: Record<ConversionEventType, AgentEventType> = {

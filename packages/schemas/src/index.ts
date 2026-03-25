@@ -37,8 +37,8 @@ export * from "./goal-brief.js";
 
 // CRM provider types (shared contract for CRM implementations)
 export * from "./crm-provider.js";
-export { RevenueEventSchema, RevenueEventSourceSchema } from "./revenue-event.js";
-export type { RevenueEvent, RevenueEventSource } from "./revenue-event.js";
+export { LegacyRevenueEventSchema, LegacyRevenueEventSourceSchema } from "./revenue-event.js";
+export type { LegacyRevenueEvent, LegacyRevenueEventSource } from "./revenue-event.js";
 
 // Skin manifests (vertical deployment configuration)
 export * from "./skin.js";
@@ -78,3 +78,6 @@ export * from "./scheduler.js";
 
 // Operator command types
 export * from "./operator-command.js";
+
+// Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
+export * from "./lifecycle.js";

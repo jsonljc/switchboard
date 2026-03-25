@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { RevenueEventSchema } from "../revenue-event.js";
+import { LegacyRevenueEventSchema } from "../revenue-event.js";
 
-describe("RevenueEventSchema", () => {
+describe("LegacyRevenueEventSchema", () => {
   it("validates a complete revenue event", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "ct_1",
       amount: 350,
       currency: "MYR",
@@ -15,7 +15,7 @@ describe("RevenueEventSchema", () => {
   });
 
   it("rejects negative amounts", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "ct_1",
       amount: -50,
       currency: "MYR",
@@ -26,7 +26,7 @@ describe("RevenueEventSchema", () => {
   });
 
   it("defaults source to manual", () => {
-    const result = RevenueEventSchema.safeParse({
+    const result = LegacyRevenueEventSchema.safeParse({
       contactId: "ct_1",
       amount: 200,
       currency: "SGD",
@@ -40,7 +40,7 @@ describe("RevenueEventSchema", () => {
 
   it("accepts all valid sources", () => {
     for (const source of ["manual", "chat", "batch", "pos_sync", "stripe", "crm_sync", "api"]) {
-      const result = RevenueEventSchema.safeParse({
+      const result = LegacyRevenueEventSchema.safeParse({
         contactId: "ct_1",
         amount: 100,
         currency: "SGD",

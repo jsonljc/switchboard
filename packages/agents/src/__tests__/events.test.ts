@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { createEventEnvelope, type AttributionChain, AGENT_EVENT_TYPES } from "../events.js";
+import { createEventEnvelope, AGENT_EVENT_TYPES } from "../events.js";
+import type { AttributionChain } from "@switchboard/schemas";
 
 describe("createEventEnvelope", () => {
   it("creates an envelope with generated eventId and idempotencyKey", () => {

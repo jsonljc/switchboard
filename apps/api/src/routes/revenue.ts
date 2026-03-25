@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { RevenueEventSchema } from "@switchboard/schemas";
+import { LegacyRevenueEventSchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const revenueRoutes: FastifyPluginAsync = async (app) => {
@@ -24,7 +24,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
 
-      const parseResult = RevenueEventSchema.safeParse(request.body);
+      const parseResult = LegacyRevenueEventSchema.safeParse(request.body);
       if (!parseResult.success) {
         return reply.status(400).send({ error: parseResult.error.format() });
       }

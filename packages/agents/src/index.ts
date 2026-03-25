@@ -6,7 +6,6 @@ export {
   AGENT_EVENT_TYPES,
   createEventEnvelope,
   type AgentEventType,
-  type AttributionChain,
   type CreateEnvelopeInput,
   type EventSource,
   type RoutedEventEnvelope,

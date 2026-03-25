@@ -311,9 +311,9 @@ export const inboundWebhooksRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(401).send({ error: "Invalid signature" });
       }
 
-      // Validate payload against RevenueEventSchema
-      const { RevenueEventSchema } = await import("@switchboard/schemas");
-      const parseResult = RevenueEventSchema.safeParse(request.body);
+      // Validate payload against LegacyRevenueEventSchema
+      const { LegacyRevenueEventSchema } = await import("@switchboard/schemas");
+      const parseResult = LegacyRevenueEventSchema.safeParse(request.body);
       if (!parseResult.success) {
         return reply.code(400).send({ error: parseResult.error.format() });
       }
