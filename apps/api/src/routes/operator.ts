@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { OperatorChannelSchema } from "@switchboard/schemas";
-import type { OperatorRequest, OperatorCommand } from "@switchboard/schemas";
+import type { OperatorChannel, OperatorRequest, OperatorCommand } from "@switchboard/schemas";
 import { z } from "zod";
+import type { OperatorDeps } from "../bootstrap/operator-deps.js";
 
 const CommandBodySchema = z.object({
   rawInput: z.string().min(1).max(2000),
@@ -21,10 +22,58 @@ const OPERATOR_COMMAND_RATE_LIMIT = {
   timeWindow: 60_000,
 };
 
+/**
+ * Dispatch a command via the router, format the result, and persist final status.
+ * Wraps dispatch in try/catch so a thrown error sets the command to "failed".
+ */
+async function dispatchAndFinalize(
+  deps: OperatorDeps,
+  command: OperatorCommand,
+  channel: OperatorChannel,
+): Promise<{ status: "completed" | "failed"; message: string; workflowIds: string[] }> {
+  try {
+    const routerResult = await deps.router.dispatch(command);
+
+    const status = routerResult.success ? "completed" : "failed";
+    const completedAt = new Date();
+    const workflowIds = routerResult.workflowIds;
+
+    let resultData: Record<string, unknown> = {};
+    if (routerResult.success && routerResult.resultSummary) {
+      try {
+        resultData = JSON.parse(routerResult.resultSummary) as Record<string, unknown>;
+      } catch {
+        resultData = { summary: routerResult.resultSummary };
+      }
+    }
+
+    const message = routerResult.success
+      ? deps.formatter.formatSuccess(command.intent, resultData, channel)
+      : deps.formatter.formatError(routerResult.error ?? "Unknown error", channel);
+
+    await deps.commandStore.updateCommandStatus(command.id, status, {
+      resultSummary: message,
+      completedAt,
+      workflowIds,
+    });
+
+    return { status, message, workflowIds };
+  } catch (err) {
+    const completedAt = new Date();
+    const errorMessage = err instanceof Error ? err.message : "Unexpected dispatch error";
+    const message = deps.formatter.formatError(errorMessage, channel);
+
+    await deps.commandStore.updateCommandStatus(command.id, "failed", {
+      resultSummary: message,
+      completedAt,
+    });
+
+    return { status: "failed", message, workflowIds: [] };
+  }
+}
+
 export async function operatorRoutes(app: FastifyInstance): Promise<void> {
-  const deps = (app as unknown as Record<string, unknown>).operatorDeps as
-    | import("../bootstrap/operator-deps.js").OperatorDeps
-    | null;
+  const deps = (app as unknown as Record<string, unknown>).operatorDeps as OperatorDeps | null;
 
   if (!deps) {
     app.log.warn("Operator deps not available — operator routes disabled");
@@ -32,8 +81,6 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
   }
 
   // Submit a command
-  // TODO: Add POST /command/:id/confirm and POST /command/:id/cancel endpoints
-  // to complete the confirmation flow for write commands (issue #4).
   app.post(
     "/command",
     { config: { rateLimit: OPERATOR_COMMAND_RATE_LIMIT } },
@@ -125,36 +172,13 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
       command.status = "executing";
       await deps.commandStore.saveCommand(command);
 
-      const routerResult = await deps.router.dispatch(command);
-
-      command.status = routerResult.success ? "completed" : "failed";
-      command.completedAt = new Date();
-      command.workflowIds = routerResult.workflowIds;
-
-      let resultData: Record<string, unknown> = {};
-      if (routerResult.success && routerResult.resultSummary) {
-        try {
-          resultData = JSON.parse(routerResult.resultSummary) as Record<string, unknown>;
-        } catch {
-          resultData = { summary: routerResult.resultSummary };
-        }
-      }
-
-      command.resultSummary = routerResult.success
-        ? deps.formatter.formatSuccess(command.intent, resultData, channel)
-        : deps.formatter.formatError(routerResult.error ?? "Unknown error", channel);
-
-      await deps.commandStore.updateCommandStatus(command.id, command.status, {
-        resultSummary: command.resultSummary,
-        completedAt: command.completedAt,
-        workflowIds: command.workflowIds,
-      });
+      const result = await dispatchAndFinalize(deps, command, channel);
 
       return reply.send({
         commandId: command.id,
-        status: command.status,
-        message: command.resultSummary,
-        workflowIds: command.workflowIds,
+        status: result.status,
+        message: result.message,
+        workflowIds: result.workflowIds,
       });
     },
   );
@@ -178,5 +202,72 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ commands });
+  });
+
+  // Confirm a parsed command
+  app.post("/command/:id/confirm", async (request, reply) => {
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.status(401).send({ error: "Organization context required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const command = await deps.commandStore.getCommandById(id);
+    if (!command) {
+      return reply.status(404).send({ error: "Command not found" });
+    }
+    if (command.organizationId !== orgId) {
+      return reply.status(403).send({ error: "Command belongs to a different organization" });
+    }
+    if (command.status !== "parsed") {
+      return reply.status(409).send({ error: "Command must be in parsed status to confirm" });
+    }
+
+    // Mark as executing
+    await deps.commandStore.updateCommandStatus(id, "executing");
+
+    // Resolve channel from the original request
+    const opRequest = await deps.commandStore.getRequestById(command.requestId);
+    const channel: OperatorChannel = opRequest?.channel ?? "dashboard";
+
+    const result = await dispatchAndFinalize(deps, command, channel);
+
+    return reply.send({
+      commandId: id,
+      status: result.status,
+      message: result.message,
+      workflowIds: result.workflowIds,
+    });
+  });
+
+  // Cancel a parsed command
+  app.post("/command/:id/cancel", async (request, reply) => {
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.status(401).send({ error: "Organization context required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const command = await deps.commandStore.getCommandById(id);
+    if (!command) {
+      return reply.status(404).send({ error: "Command not found" });
+    }
+    if (command.organizationId !== orgId) {
+      return reply.status(403).send({ error: "Command belongs to a different organization" });
+    }
+    if (command.status !== "parsed") {
+      return reply.status(409).send({ error: "Command must be in parsed status to cancel" });
+    }
+
+    await deps.commandStore.updateCommandStatus(id, "rejected", {
+      resultSummary: "Cancelled by operator",
+      completedAt: new Date(),
+    });
+
+    return reply.send({
+      commandId: id,
+      status: "rejected",
+      message: "Command cancelled.",
+    });
   });
 }
