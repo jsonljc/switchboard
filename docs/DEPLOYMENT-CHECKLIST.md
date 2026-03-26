@@ -1,0 +1,202 @@
+# Switchboard — First Customer Deployment Checklist
+
+## Pre-Deployment
+
+### 1. Generate secrets
+
+```bash
+# Generate all required secrets (run once, save securely)
+echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)"
+echo "API_KEY_ENCRYPTION_SECRET=$(openssl rand -base64 32)"
+echo "CREDENTIALS_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+echo "INTERNAL_API_SECRET=$(openssl rand -base64 32)"
+echo "SESSION_TOKEN_SECRET=$(openssl rand -base64 32)"
+echo "SWITCHBOARD_API_KEY=$(openssl rand -hex 24)"
+echo "BOOKING_WEBHOOK_SECRET=$(openssl rand -hex 16)"
+```
+
+### 2. Create `.env` file
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable                     | Required | Where to get it                                                                              |
+| ---------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`          | Yes      | [console.anthropic.com](https://console.anthropic.com)                                       |
+| `VOYAGE_API_KEY`             | Yes\*    | [dash.voyageai.com](https://dash.voyageai.com) — without this, knowledge retrieval is random |
+| `NEXTAUTH_SECRET`            | Yes      | Generated above                                                                              |
+| `NEXTAUTH_URL`               | Yes      | Your dashboard URL (e.g. `https://dashboard.yourdomain.com`)                                 |
+| `API_KEY_ENCRYPTION_SECRET`  | Yes      | Generated above                                                                              |
+| `CREDENTIALS_ENCRYPTION_KEY` | Yes      | Generated above                                                                              |
+| `INTERNAL_API_SECRET`        | Yes      | Generated above — shared between API, chat, dashboard                                        |
+| `SWITCHBOARD_API_KEY`        | Yes      | Generated above — chat + dashboard use this to call API                                      |
+| `SESSION_TOKEN_SECRET`       | Yes      | Generated above                                                                              |
+| `CORS_ORIGIN`                | Yes      | Your dashboard URL                                                                           |
+| `CHAT_PUBLIC_URL`            | Yes      | Public URL for chat webhooks (e.g. `https://chat.yourdomain.com`)                            |
+
+**Channel — pick at least one:**
+
+| Variable                                      | For                           |
+| --------------------------------------------- | ----------------------------- |
+| `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business API         |
+| `TELEGRAM_BOT_TOKEN`                          | Telegram bot (via @BotFather) |
+
+**Optional (enable when needed):**
+
+| Variable                                        | For                                                     |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`                             | Payment collection                                      |
+| `META_ADS_ACCESS_TOKEN` + `META_ADS_ACCOUNT_ID` | Ad optimizer agent                                      |
+| `EMAIL_SERVER_*`                                | Magic link login (credentials login works without SMTP) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                   | Distributed tracing (Jaeger)                            |
+
+### 3. Configure skin + profile
+
+```bash
+# In .env — pick the customer's vertical
+SKIN_ID=clinic        # or: gym, commerce, generic
+PROFILE_ID=clinic-demo  # or create a custom profile in profiles/
+LEAD_BOT_MODE=true
+```
+
+For a custom profile, create `profiles/<customer-name>/config.json` with business-specific info (services, pricing, hours, tone).
+
+---
+
+## Deploy
+
+### Option A: Docker Compose (simplest)
+
+```bash
+# Build and start everything
+docker compose up -d --build
+
+# Verify all services are healthy
+docker compose ps
+
+# Check logs
+docker compose logs -f api chat dashboard
+```
+
+Services start in order: postgres → redis → db-migrate → api → chat + dashboard.
+
+### Option B: Cloud hosting (VPS / DigitalOcean / Railway / Fly.io)
+
+1. Push the repo to your hosting provider
+2. Set all env vars from step 2
+3. Ensure PostgreSQL 16+ with pgvector extension is available
+4. Ensure Redis 7+ is available
+5. Run migrations: `npx prisma migrate deploy --schema packages/db/prisma/schema.prisma`
+6. Start services: `node apps/api/dist/main.js`, `node apps/chat/dist/main.js`, `next start` for dashboard
+
+---
+
+## Post-Deploy Verification
+
+### 4. Health checks
+
+```bash
+# API
+curl https://your-api-url/health
+curl https://your-api-url/api/health/deep  # checks DB + Redis + cartridges
+
+# Dashboard
+curl https://your-dashboard-url
+
+# Chat
+curl https://your-chat-url/health
+```
+
+### 5. Set up WhatsApp webhook (if using WhatsApp)
+
+1. Go to [Meta Developer Console](https://developers.facebook.com)
+2. Set webhook URL: `https://your-chat-url/webhook/managed/<org-id>`
+3. Subscribe to `messages` webhook field
+4. Verify the webhook with your `TELEGRAM_WEBHOOK_SECRET` or WhatsApp verify token
+
+### 6. Set up Telegram webhook (if using Telegram)
+
+```bash
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://your-chat-url/webhook/managed/<org-id>"
+```
+
+### 7. Create first dashboard user
+
+1. Navigate to `https://your-dashboard-url/login`
+2. Register with email + password (credentials login works without SMTP)
+3. Complete the 6-step onboarding wizard:
+   - Business basics (name, vertical, services, pricing)
+   - Agent selection (which agents to activate)
+   - Agent tone/style
+   - Knowledge base + behavioral rules (upload `.txt`/`.md` docs)
+   - Channel setup (connect WhatsApp/Telegram)
+   - Review & launch
+
+### 8. Test the flow
+
+```bash
+# Send a test message via the channel you configured
+# Or use the dashboard's built-in Test Chat widget
+
+# Verify in dashboard:
+# - /decide — approval queue should show "Nothing waiting on you"
+# - /settings/knowledge — uploaded docs should appear with chunk counts
+# - Conversations should appear after test messages
+```
+
+---
+
+## Ongoing Operations
+
+### Monitoring
+
+- **Health**: `/api/health/deep` returns DB, Redis, cartridge, queue status
+- **Logs**: `docker compose logs -f <service>`
+- **Tracing**: Enable Jaeger with `docker compose --profile tracing up -d`
+- **Queue depth**: BullMQ dashboard or `/api/health/deep` reports queue sizes
+
+### Backups
+
+```bash
+# Database backup
+docker compose exec postgres pg_dump -U switchboard switchboard > backup-$(date +%Y%m%d).sql
+
+# Restore
+cat backup-YYYYMMDD.sql | docker compose exec -T postgres psql -U switchboard switchboard
+```
+
+### Updates
+
+```bash
+git pull origin main
+docker compose up -d --build
+# Migrations run automatically via db-migrate service
+```
+
+### Key rotation
+
+```bash
+# 1. Generate new secret
+# 2. Update .env
+# 3. Restart affected service
+docker compose restart api    # for API_KEYS, INTERNAL_API_SECRET
+docker compose restart chat   # for CREDENTIALS_ENCRYPTION_KEY, channel tokens
+docker compose restart dashboard  # for NEXTAUTH_SECRET, API_KEY_ENCRYPTION_SECRET
+```
+
+---
+
+## Architecture (for reference)
+
+```
+Internet
+  |
+  +-- WhatsApp/Telegram --> Chat (port 3001) --> API (port 3000) --> PostgreSQL + Redis
+  |                                                |
+  +-- Browser -----------> Dashboard (port 3002) --+
+```
+
+- **API** (port 3000): Orchestrator, agents, workflows, approvals, knowledge
+- **Chat** (port 3001): Webhook receiver, channel adapters, delegates to API EventLoop
+- **Dashboard** (port 3002): Next.js admin UI, onboarding wizard, operator chat
+- **PostgreSQL**: All data + pgvector for knowledge embeddings
+- **Redis**: Rate limiting, idempotency, BullMQ job queues
