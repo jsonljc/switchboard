@@ -172,6 +172,12 @@ export class LeadResponderHandler implements AgentHandler {
     const scoreResult = this.deps.scoreLead(payload as Record<string, unknown>);
     const qualified = scoreResult.score >= threshold;
 
+    // Lifecycle metadata to propagate to downstream agents
+    const lifecycleMetadata = {
+      lifecycleOpportunityId: event.metadata?.lifecycleOpportunityId,
+      lifecycleContactId: event.metadata?.lifecycleContactId,
+    };
+
     if (qualified) {
       events.push(
         createEventEnvelope({
@@ -187,6 +193,7 @@ export class LeadResponderHandler implements AgentHandler {
           correlationId: event.correlationId,
           causationId: event.eventId,
           attribution: event.attribution,
+          metadata: lifecycleMetadata,
         }),
       );
 
@@ -209,6 +216,20 @@ export class LeadResponderHandler implements AgentHandler {
         }),
       );
 
+      // Advance opportunity stage directly via lifecycle service
+      if (context.lifecycle && event.metadata?.lifecycleOpportunityId) {
+        try {
+          await context.lifecycle.advanceOpportunityStage(
+            context.organizationId,
+            event.metadata.lifecycleOpportunityId as string,
+            "qualified",
+            "lead-responder",
+          );
+        } catch (err) {
+          console.warn("Opportunity stage advancement failed", err);
+        }
+      }
+
       // Transition stage
       await conv.conversationStore.setStage(contactId, "qualified");
     } else {
@@ -227,6 +248,7 @@ export class LeadResponderHandler implements AgentHandler {
           correlationId: event.correlationId,
           causationId: event.eventId,
           attribution: event.attribution,
+          metadata: lifecycleMetadata,
         }),
       );
     }

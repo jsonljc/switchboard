@@ -95,7 +95,10 @@ export class NurtureAgentHandler implements AgentHandler {
     return this.executeCadence(event, context, contactId, "post-treatment-review", nurture);
   }
 
-  private handleDisqualified(event: RoutedEventEnvelope, context: AgentContext): AgentResponse {
+  private async handleDisqualified(
+    event: RoutedEventEnvelope,
+    context: AgentContext,
+  ): Promise<AgentResponse> {
     const payload = validatePayload(
       event.payload,
       { contactId: "string", requalify: "boolean?" },
@@ -114,6 +117,20 @@ export class NurtureAgentHandler implements AgentHandler {
       const lifecycleStage = context.contactData?.lifecycleStage as LifecycleStage | undefined;
       if (!canRequalify(lifecycleStage)) {
         return this.escalate(event, context, contactId, "requalify_blocked_by_lifecycle");
+      }
+
+      // Advance opportunity stage directly via lifecycle service
+      if (context.lifecycle && event.metadata?.lifecycleOpportunityId) {
+        try {
+          await context.lifecycle.advanceOpportunityStage(
+            context.organizationId,
+            event.metadata.lifecycleOpportunityId as string,
+            "interested",
+            "nurture",
+          );
+        } catch (err) {
+          console.warn("Opportunity stage advancement failed", err);
+        }
       }
 
       return {

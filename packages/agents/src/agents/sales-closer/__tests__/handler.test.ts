@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { SalesCloserHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
 import { PayloadValidationError } from "../../../validate-payload.js";
@@ -227,6 +227,81 @@ describe("SalesCloserHandler", () => {
         tier: "hot",
       }),
     );
+  });
+
+  describe("lifecycle integration", () => {
+    it("calls advanceOpportunityStage('booked') after booking", async () => {
+      const mockLifecycle = {
+        advanceOpportunityStage: vi.fn().mockResolvedValue(undefined),
+        reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+      };
+      const handler = new SalesCloserHandler();
+      const event = {
+        ...makeQualifiedEvent(),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { booking: { bookingUrl: "https://cal.com/book" } },
+          lifecycle: mockLifecycle,
+        },
+      );
+
+      expect(mockLifecycle.advanceOpportunityStage).toHaveBeenCalledWith(
+        "org-1",
+        "opp-1",
+        "booked",
+        "sales-closer",
+      );
+    });
+
+    it("does not call lifecycle when context.lifecycle is undefined", async () => {
+      const handler = new SalesCloserHandler();
+      const event = {
+        ...makeQualifiedEvent(),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      const result = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { booking: { bookingUrl: "https://cal.com/book" } },
+        },
+      );
+
+      expect(result.events.some((e) => e.eventType === "stage.advanced")).toBe(true);
+    });
+
+    it("continues processing when lifecycle call fails", async () => {
+      const mockLifecycle = {
+        advanceOpportunityStage: vi.fn().mockRejectedValue(new Error("DB error")),
+        reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+      };
+      const handler = new SalesCloserHandler();
+      const event = {
+        ...makeQualifiedEvent(),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      const result = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { booking: { bookingUrl: "https://cal.com/book" } },
+          lifecycle: mockLifecycle,
+        },
+      );
+
+      expect(result.events.some((e) => e.eventType === "stage.advanced")).toBe(true);
+      expect(result.events.some((e) => e.eventType === "opportunity.stage_advanced")).toBe(true);
+    });
   });
 
   describe("payload validation", () => {

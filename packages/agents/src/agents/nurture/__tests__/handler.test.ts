@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { NurtureAgentHandler } from "../handler.js";
 import { createEventEnvelope } from "../../../events.js";
 import { PayloadValidationError } from "../../../validate-payload.js";
@@ -506,6 +506,105 @@ describe("NurtureAgentHandler", () => {
       expect(response.events).toHaveLength(2);
       expect(response.events[0]!.eventType).toBe("lead.qualified");
       expect(response.events[1]!.eventType).toBe("opportunity.stage_advanced");
+    });
+  });
+
+  describe("lifecycle integration", () => {
+    it("calls advanceOpportunityStage('interested') on requalification", async () => {
+      const mockLifecycle = {
+        advanceOpportunityStage: vi.fn().mockResolvedValue(undefined),
+        reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+      };
+      const handler = new NurtureAgentHandler();
+      const event = {
+        ...makeDisqualifiedEvent({ requalify: true }),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          lifecycle: mockLifecycle,
+        },
+      );
+
+      expect(mockLifecycle.advanceOpportunityStage).toHaveBeenCalledWith(
+        "org-1",
+        "opp-1",
+        "interested",
+        "nurture",
+      );
+    });
+
+    it("does not call lifecycle when context.lifecycle is undefined", async () => {
+      const handler = new NurtureAgentHandler();
+      const event = {
+        ...makeDisqualifiedEvent({ requalify: true }),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      const result = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+        },
+      );
+
+      expect(result.events.some((e) => e.eventType === "lead.qualified")).toBe(true);
+    });
+
+    it("does not call lifecycle when not requalifying", async () => {
+      const mockLifecycle = {
+        advanceOpportunityStage: vi.fn().mockResolvedValue(undefined),
+        reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+      };
+      const handler = new NurtureAgentHandler();
+      const event = {
+        ...makeDisqualifiedEvent(),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          lifecycle: mockLifecycle,
+        },
+      );
+
+      expect(mockLifecycle.advanceOpportunityStage).not.toHaveBeenCalled();
+    });
+
+    it("continues processing when lifecycle call fails", async () => {
+      const mockLifecycle = {
+        advanceOpportunityStage: vi.fn().mockRejectedValue(new Error("DB error")),
+        reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+      };
+      const handler = new NurtureAgentHandler();
+      const event = {
+        ...makeDisqualifiedEvent({ requalify: true }),
+        metadata: { lifecycleOpportunityId: "opp-1" },
+      };
+
+      const result = await handler.handle(
+        event,
+        {},
+        {
+          organizationId: "org-1",
+          profile: { nurture: {} },
+          lifecycle: mockLifecycle,
+        },
+      );
+
+      expect(result.events.some((e) => e.eventType === "lead.qualified")).toBe(true);
+      expect(result.state).toEqual({ contactId: "c1", requalified: true });
     });
   });
 

@@ -220,11 +220,11 @@ export class SalesCloserHandler implements AgentHandler {
     };
   }
 
-  private handleQualified(
+  private async handleQualified(
     event: RoutedEventEnvelope,
     config: Record<string, unknown>,
     context: AgentContext,
-  ): AgentResponse {
+  ): Promise<AgentResponse> {
     const payload = validatePayload(event.payload, { contactId: "string" }, "sales-closer");
     const contactId = payload.contactId as string;
     const profile = context.profile ?? {};
@@ -273,6 +273,20 @@ export class SalesCloserHandler implements AgentHandler {
       causationId: event.eventId,
       attribution: event.attribution,
     });
+
+    // Advance opportunity stage directly via lifecycle service
+    if (context.lifecycle && event.metadata?.lifecycleOpportunityId) {
+      try {
+        await context.lifecycle.advanceOpportunityStage(
+          context.organizationId,
+          event.metadata.lifecycleOpportunityId as string,
+          "booked",
+          "sales-closer",
+        );
+      } catch (err) {
+        console.warn("Opportunity stage advancement failed", err);
+      }
+    }
 
     const actions: ActionRequest[] = [];
 

@@ -387,6 +387,140 @@ describe("LeadResponderHandler — test mode", () => {
   });
 });
 
+describe("lifecycle integration", () => {
+  it("calls advanceOpportunityStage('qualified') when lead qualifies", async () => {
+    const mockLifecycle = {
+      advanceOpportunityStage: vi.fn().mockResolvedValue(undefined),
+      reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+    };
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 80, tier: "hot", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = {
+      ...makeMessageReceivedEvent(),
+      metadata: {
+        lifecycleOpportunityId: "opp-1",
+        lifecycleContactId: "contact-1",
+      },
+    };
+
+    await handler.handle(event, {}, { organizationId: "org-1", lifecycle: mockLifecycle });
+
+    expect(mockLifecycle.advanceOpportunityStage).toHaveBeenCalledWith(
+      "org-1",
+      "opp-1",
+      "qualified",
+      "lead-responder",
+    );
+  });
+
+  it("does not call lifecycle when context.lifecycle is undefined", async () => {
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 80, tier: "hot", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = {
+      ...makeMessageReceivedEvent(),
+      metadata: { lifecycleOpportunityId: "opp-1" },
+    };
+
+    const result = await handler.handle(event, {}, { organizationId: "org-1" });
+    expect(result.events.some((e) => e.eventType === "lead.qualified")).toBe(true);
+  });
+
+  it("does not call lifecycle when lifecycleOpportunityId is missing", async () => {
+    const mockLifecycle = {
+      advanceOpportunityStage: vi.fn().mockResolvedValue(undefined),
+      reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+    };
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 80, tier: "hot", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = makeMessageReceivedEvent();
+    await handler.handle(event, {}, { organizationId: "org-1", lifecycle: mockLifecycle });
+
+    expect(mockLifecycle.advanceOpportunityStage).not.toHaveBeenCalled();
+  });
+
+  it("continues processing when lifecycle call fails", async () => {
+    const mockLifecycle = {
+      advanceOpportunityStage: vi.fn().mockRejectedValue(new Error("DB error")),
+      reopenOpportunity: vi.fn().mockResolvedValue(undefined),
+    };
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 80, tier: "hot", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = {
+      ...makeMessageReceivedEvent(),
+      metadata: { lifecycleOpportunityId: "opp-1" },
+    };
+
+    const result = await handler.handle(
+      event,
+      {},
+      { organizationId: "org-1", lifecycle: mockLifecycle },
+    );
+
+    expect(result.events.some((e) => e.eventType === "lead.qualified")).toBe(true);
+    expect(result.state?.qualified).toBe(true);
+  });
+
+  it("propagates lifecycle metadata to lead.qualified output events", async () => {
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 80, tier: "hot", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = {
+      ...makeMessageReceivedEvent(),
+      metadata: {
+        lifecycleOpportunityId: "opp-1",
+        lifecycleContactId: "contact-1",
+      },
+    };
+
+    const result = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    const qualifiedEvent = result.events.find((e) => e.eventType === "lead.qualified");
+    expect(qualifiedEvent?.metadata?.lifecycleOpportunityId).toBe("opp-1");
+    expect(qualifiedEvent?.metadata?.lifecycleContactId).toBe("contact-1");
+  });
+
+  it("propagates lifecycle metadata to lead.disqualified output events", async () => {
+    const convDeps = makeConversationDeps();
+    const handler = new LeadResponderHandler({
+      scoreLead: vi.fn().mockReturnValue({ score: 10, tier: "cold", factors: [] }),
+      conversation: convDeps,
+    });
+
+    const event = {
+      ...makeMessageReceivedEvent(),
+      metadata: {
+        lifecycleOpportunityId: "opp-1",
+        lifecycleContactId: "contact-1",
+      },
+    };
+
+    const result = await handler.handle(event, {}, { organizationId: "org-1" });
+
+    const disqualifiedEvent = result.events.find((e) => e.eventType === "lead.disqualified");
+    expect(disqualifiedEvent?.metadata?.lifecycleOpportunityId).toBe("opp-1");
+    expect(disqualifiedEvent?.metadata?.lifecycleContactId).toBe("contact-1");
+  });
+});
+
 describe("thread integration", () => {
   it("reads thread context from event metadata and returns threadUpdate", async () => {
     const handler = new LeadResponderHandler({

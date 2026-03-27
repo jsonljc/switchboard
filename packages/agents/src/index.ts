@@ -18,6 +18,7 @@ export {
   type AgentHandler,
   type AgentPort,
   type AgentResponse,
+  type LifecycleAdvancer,
   type PortValidationResult,
   type ThreadUpdate,
   type ToolDeclaration,
