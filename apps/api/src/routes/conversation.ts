@@ -3,7 +3,6 @@ import { createEventEnvelope } from "@switchboard/agents";
 import type { RoutedEventEnvelope } from "@switchboard/agents";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import type { ResolvedContact } from "../bootstrap/contact-resolver.js";
-import type { OpportunityStage } from "@switchboard/schemas";
 
 export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -137,7 +136,10 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
       // Note: replies are delivered by the ActionExecutor directly via the messaging channel,
       // not returned in this response. This endpoint confirms processing status only.
       try {
-        const result = await agentSystem.eventLoop.process(event, { organizationId: orgId });
+        const result = await agentSystem.eventLoop.process(event, {
+          organizationId: orgId,
+          lifecycle: app.lifecycleDeps?.lifecycleService ?? undefined,
+        });
 
         let escalated = false;
         let handedOffTo: string | null = null;
@@ -172,39 +174,6 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
                 } catch (err) {
                   app.log.error({ err, threadId: thread.id }, "Failed to save thread update");
                 }
-              }
-            }
-          }
-        }
-
-        // 6. Apply opportunity stage advancements from agent processing
-        if (resolvedContact && app.lifecycleDeps?.lifecycleService) {
-          const lifecycleService = app.lifecycleDeps.lifecycleService;
-          for (const agent of result.processed) {
-            let targetStage: OpportunityStage | null = null;
-
-            if (agent.outputEvents.includes("lead.qualified")) {
-              targetStage = "qualified";
-            } else if (
-              agent.outputEvents.includes("opportunity.stage_advanced") &&
-              agent.agentId === "sales-closer"
-            ) {
-              targetStage = "booked";
-            }
-
-            if (targetStage) {
-              try {
-                await lifecycleService.advanceOpportunityStage(
-                  orgId,
-                  resolvedContact.opportunity.id,
-                  targetStage,
-                  agent.agentId,
-                );
-              } catch (err) {
-                app.log.warn(
-                  { err, targetStage, opportunityId: resolvedContact.opportunity.id },
-                  "Opportunity stage advancement skipped",
-                );
               }
             }
           }

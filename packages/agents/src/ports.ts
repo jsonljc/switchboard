@@ -2,7 +2,12 @@
 // Agent Port Interface — standard contract for hireable agents
 // ---------------------------------------------------------------------------
 
-import type { ConversationThread, AgentContextData, ThreadStage } from "@switchboard/schemas";
+import type {
+  ConversationThread,
+  AgentContextData,
+  ThreadStage,
+  OpportunityStage,
+} from "@switchboard/schemas";
 
 export interface ToolDeclaration {
   name: string;
@@ -28,6 +33,20 @@ export interface AgentHandler {
   ): Promise<AgentResponse>;
 }
 
+export interface LifecycleAdvancer {
+  advanceOpportunityStage(
+    orgId: string,
+    opportunityId: string,
+    toStage: OpportunityStage,
+    advancedBy: string,
+  ): Promise<unknown>;
+  reopenOpportunity(
+    orgId: string,
+    opportunityId: string,
+    toStage: "interested" | "qualified",
+  ): Promise<unknown>;
+}
+
 export interface AgentContext {
   organizationId: string;
   profile?: Record<string, unknown>;
@@ -35,6 +54,8 @@ export interface AgentContext {
   contactData?: Record<string, unknown>;
   /** Loaded ConversationThread for this contact (if available). */
   thread?: ConversationThread;
+  /** Optional lifecycle service for direct stage advancement. */
+  lifecycle?: LifecycleAdvancer;
 }
 
 export interface ThreadUpdate {
