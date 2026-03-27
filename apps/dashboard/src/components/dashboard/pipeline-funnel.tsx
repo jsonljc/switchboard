@@ -22,6 +22,7 @@ const STAGE_COLORS: Record<string, string> = {
   won: "bg-blue-900/80",
 };
 
+/** Format cents as USD currency string (e.g., 120000 → "$1,200") */
 export function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
