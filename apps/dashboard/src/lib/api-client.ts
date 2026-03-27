@@ -589,4 +589,15 @@ export class SwitchboardClient extends SwitchboardClientBase {
       { method: "POST", body: JSON.stringify({ message }) },
     );
   }
+
+  // Pipeline
+  async getPipeline() {
+    return this.request<{
+      organizationId: string;
+      stages: Array<{ stage: string; count: number; totalValue: number }>;
+      totalContacts: number;
+      totalRevenue: number;
+      generatedAt: string;
+    }>("/api/lifecycle/pipeline");
+  }
 }
