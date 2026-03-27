@@ -12,6 +12,8 @@ import { TodayActivityFeed } from "@/components/mission-control/today-activity-f
 import { useLeads } from "@/hooks/use-leads";
 import { CONSEQUENCE } from "@/lib/approval-constants";
 import { useToast } from "@/components/ui/use-toast";
+import { usePipeline } from "@/hooks/use-pipeline";
+import { PipelineFunnel, formatCurrency } from "@/components/dashboard/pipeline-funnel";
 
 function isTodayLead(createdAt: string): boolean {
   const midnight = new Date();
@@ -27,6 +29,7 @@ export function OwnerToday() {
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { data: pipelineData, isLoading: pipelineLoading, isError: pipelineError } = usePipeline();
 
   const operatorName =
     rosterData?.roster?.find((a) => a.agentRole === "primary_operator")?.displayName ??
@@ -93,9 +96,11 @@ export function OwnerToday() {
         stats={[
           { label: "Leads today", value: todayLeads.length },
           { label: "Booked", value: bookedToday },
-          { label: "Revenue", value: "$0" },
+          { label: "Revenue", value: formatCurrency(pipelineData?.totalRevenue ?? 0) },
         ]}
       />
+
+      <PipelineFunnel data={pipelineData} isLoading={pipelineLoading} isError={pipelineError} />
 
       {topApproval && (
         <section>
