@@ -114,4 +114,8 @@ export const queryKeys = {
   escalations: {
     all: ["escalations"] as const,
   },
+  pipeline: {
+    all: ["pipeline"] as const,
+    snapshot: () => ["pipeline", "snapshot"] as const,
+  },
 };
