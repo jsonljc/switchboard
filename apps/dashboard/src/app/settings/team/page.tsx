@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AGENT_ICONS, AGENT_ROLE_LABELS } from "@/components/team/agent-icons";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AgentRosterEntry } from "@/lib/api-client";
+import type { AgentRosterEntry } from "@/lib/api-client-types";
 
 const STATUS_STYLES: Record<string, { dot: string; label: string }> = {
   idle: { dot: "bg-agent-idle", label: "Ready" },

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { RevGrowthIntervention } from "@/lib/api-client";
+import type { RevGrowthIntervention } from "@/lib/api-client-types";
 import { DeferDialog } from "./defer-dialog";
 
 interface InterventionCardProps {

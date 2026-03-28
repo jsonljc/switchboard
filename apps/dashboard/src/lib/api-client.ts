@@ -17,30 +17,6 @@ import type {
   RevGrowthDigest,
 } from "./api-client-types";
 
-// Re-export all types for backwards compatibility
-export type {
-  AgentRosterEntry,
-  AgentStateEntry,
-  AlertRule,
-  AlertHistoryEntry,
-  CreateAlertInput,
-  ScheduledReportEntry,
-  CreateScheduledReportInput,
-  OperatorSummary,
-  CampaignAttribution,
-  PilotReportData,
-  RevGrowthScorerOutput,
-  RevGrowthConstraint,
-  RevGrowthIntervention,
-  RevGrowthDiagnosticResult,
-  RevGrowthConnectorHealth,
-  RevGrowthDigest,
-  PendingApproval,
-  ApprovalDetail,
-  HealthCheck,
-  SimulateResult,
-} from "./api-client-types";
-
 export class SwitchboardClient extends SwitchboardClientBase {
   // Token Usage
   async getTokenUsage(params?: { period?: string }) {

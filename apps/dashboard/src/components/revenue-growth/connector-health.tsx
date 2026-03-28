@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { RevGrowthConnectorHealth } from "@/lib/api-client";
+import type { RevGrowthConnectorHealth } from "@/lib/api-client-types";
 
 interface ConnectorHealthProps {
   connectors: RevGrowthConnectorHealth[];

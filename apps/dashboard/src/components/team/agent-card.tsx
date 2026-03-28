@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AGENT_ICONS, AGENT_ROLE_LABELS } from "./agent-icons";
 import { Lock } from "lucide-react";
-import type { AgentRosterEntry } from "@/lib/api-client";
+import type { AgentRosterEntry } from "@/lib/api-client-types";
 
 interface AgentCardProps {
   agent: AgentRosterEntry;

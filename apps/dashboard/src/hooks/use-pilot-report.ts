@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import type { PilotReportData } from "@/lib/api-client";
+import type { PilotReportData } from "@/lib/api-client-types";
 
 async function fetchPilotReport(): Promise<PilotReportData | null> {
   const res = await fetch("/api/dashboard/reports/pilot");
