@@ -12,7 +12,7 @@ services:
       - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379
       - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
       - INTERNAL_SETUP_SECRET=${INTERNAL_SETUP_SECRET}
       - API_KEYS=${API_KEYS:-}
@@ -51,7 +51,7 @@ services:
       - HOST=0.0.0.0
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379
       - CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
@@ -74,6 +74,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - internal
 
@@ -94,6 +100,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - internal
 
@@ -139,7 +151,7 @@ services:
       - internal
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-switchboard}
@@ -162,7 +174,7 @@ services:
     volumes:
       - redis_data:/var/lib/redis/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
