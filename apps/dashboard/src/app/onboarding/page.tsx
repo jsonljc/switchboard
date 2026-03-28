@@ -10,16 +10,8 @@ import { StepAgentStyle } from "@/components/onboarding/step-agent-style";
 import { StepKnowledgeRules } from "@/components/onboarding/step-knowledge-rules";
 import { StepChannels } from "@/components/onboarding/step-channels";
 import { StepReviewLaunch } from "@/components/onboarding/step-review-launch";
+import { StepAdPlatform } from "@/components/onboarding/step-ad-platform";
 import { useToast } from "@/components/ui/use-toast";
-
-const STEP_LABELS = [
-  "Your business",
-  "Build your team",
-  "Set their style",
-  "Teach them",
-  "Connect channels",
-  "Meet your team",
-];
 
 export interface BehavioralRule {
   id: string;
@@ -74,8 +66,33 @@ export default function OnboardingPage() {
     customerWhatsAppPhoneNumberId: "",
   });
 
-  // Step 5: Launch
+  // Step 5 (conditional): Ad platform credentials
+  const [adCredentials, setAdCredentials] = useState<Record<string, string>>({});
+
+  // Step 6: Launch
   const [launchStatus, setLaunchStatus] = useState<"idle" | "launching" | "done">("idle");
+
+  const hasAdOptimizer = selectedAgents.includes("ad-optimizer");
+  const stepLabels = hasAdOptimizer
+    ? [
+        "Your business",
+        "Build your team",
+        "Set their style",
+        "Teach them",
+        "Connect channels",
+        "Connect ads",
+        "Meet your team",
+      ]
+    : [
+        "Your business",
+        "Build your team",
+        "Set their style",
+        "Teach them",
+        "Connect channels",
+        "Meet your team",
+      ];
+  const adsStepIndex = hasAdOptimizer ? 5 : -1;
+  const launchStepIndex = stepLabels.length - 1;
 
   if (status === "loading") return null;
   if (status === "unauthenticated") redirect("/login");
@@ -89,13 +106,11 @@ export default function OnboardingPage() {
       case 2:
         return selectedAgents.every((id) => agentTones[id]);
       case 3:
-        return true; // Knowledge and rules are optional
+        return true;
       case 4:
         return channels.founderChannel !== null;
-      case 5:
-        return true;
       default:
-        return false;
+        return true;
     }
   })();
 
@@ -217,6 +232,21 @@ export default function OnboardingPage() {
         await assertOk(provisionRes, "Channel provisioning");
       }
 
+      // 5. Create Meta Ads connection (if credentials provided)
+      if (adCredentials.accessToken && adCredentials.accountId) {
+        const connRes = await fetch("/api/dashboard/connections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serviceId: "meta-ads",
+            serviceName: "Meta Ads",
+            authType: "api_key",
+            credentials: adCredentials,
+          }),
+        });
+        await assertOk(connRes, "Meta Ads connection");
+      }
+
       setLaunchStatus("done");
       toast({
         title: "Your team is ready!",
@@ -242,12 +272,12 @@ export default function OnboardingPage() {
   return (
     <WizardShell
       step={step}
-      stepLabels={STEP_LABELS}
-      onNext={() => setStep((s) => Math.min(s + 1, STEP_LABELS.length - 1))}
+      stepLabels={stepLabels}
+      onNext={() => setStep((s) => Math.min(s + 1, stepLabels.length - 1))}
       onBack={() => setStep((s) => Math.max(s - 1, 0))}
       canProceed={canProceed}
       isSubmitting={isSubmitting}
-      isLastStep={step === STEP_LABELS.length - 1}
+      isLastStep={step === launchStepIndex}
       onComplete={handleComplete}
     >
       {step === 0 && (
@@ -284,7 +314,10 @@ export default function OnboardingPage() {
         />
       )}
       {step === 4 && <StepChannels channels={channels} onChannelsChange={setChannels} />}
-      {step === 5 && (
+      {step === adsStepIndex && (
+        <StepAdPlatform adCredentials={adCredentials} onAdCredentialsChange={setAdCredentials} />
+      )}
+      {step === launchStepIndex && (
         <StepReviewLaunch
           businessName={businessName}
           selectedAgents={selectedAgents}
