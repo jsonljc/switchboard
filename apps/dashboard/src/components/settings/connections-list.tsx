@@ -28,6 +28,7 @@ import {
   useTestConnection,
 } from "@/hooks/use-connections";
 import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { SERVICE_FIELD_CONFIGS } from "@/lib/service-field-configs";
 
 const serviceOptions = [
   { id: "meta-ads", name: "Meta Ads" },
@@ -75,8 +76,7 @@ export function ConnectionsList() {
   const [serviceId, setServiceId] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [authType, setAuthType] = useState("api_key");
-  const [credKey, setCredKey] = useState("");
-  const [credValue, setCredValue] = useState("");
+  const [credFields, setCredFields] = useState<Record<string, string>>({});
 
   const { data: connections, isLoading, isError, error, refetch } = useConnections();
   const createConnection = useCreateConnection();
@@ -85,10 +85,12 @@ export function ConnectionsList() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    const credentials: Record<string, unknown> = {};
-    if (credKey && credValue) {
-      credentials[credKey] = credValue;
-    }
+    const fieldConfig = SERVICE_FIELD_CONFIGS[serviceId];
+    const credentials: Record<string, unknown> = fieldConfig
+      ? { ...credFields }
+      : credFields["_key"] && credFields["_value"]
+        ? { [credFields["_key"]]: credFields["_value"] }
+        : {};
     createConnection.mutate(
       { serviceId, serviceName: serviceName || serviceId, authType, credentials },
       {
@@ -96,8 +98,7 @@ export function ConnectionsList() {
           setFormOpen(false);
           setServiceId("");
           setServiceName("");
-          setCredKey("");
-          setCredValue("");
+          setCredFields({});
         },
       },
     );
@@ -271,6 +272,7 @@ export function ConnectionsList() {
                   setServiceId(v);
                   const svc = serviceOptions.find((s) => s.id === v);
                   if (svc) setServiceName(svc.name);
+                  setCredFields({});
                 }}
               >
                 <SelectTrigger>
@@ -312,33 +314,69 @@ export function ConnectionsList() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cred-key">Credential Key</Label>
-                <Input
-                  id="cred-key"
-                  value={credKey}
-                  onChange={(e) => setCredKey(e.target.value)}
-                  placeholder="e.g. accessToken"
-                />
+            {SERVICE_FIELD_CONFIGS[serviceId] ? (
+              <div className="space-y-3">
+                {SERVICE_FIELD_CONFIGS[serviceId].map((field) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label htmlFor={`cred-${field.key}`}>
+                      {field.label}
+                      {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    <Input
+                      id={`cred-${field.key}`}
+                      type={field.type}
+                      value={credFields[field.key] ?? ""}
+                      onChange={(e) =>
+                        setCredFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                      placeholder={field.placeholder}
+                    />
+                    {field.helpText && (
+                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <Label htmlFor="cred-value">Credential Value</Label>
-                <Input
-                  id="cred-value"
-                  type="password"
-                  value={credValue}
-                  onChange={(e) => setCredValue(e.target.value)}
-                  placeholder="****"
-                />
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="cred-key">Credential Key</Label>
+                  <Input
+                    id="cred-key"
+                    value={credFields["_key"] ?? ""}
+                    onChange={(e) => setCredFields((prev) => ({ ...prev, _key: e.target.value }))}
+                    placeholder="e.g. accessToken"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cred-value">Credential Value</Label>
+                  <Input
+                    id="cred-value"
+                    type="password"
+                    value={credFields["_value"] ?? ""}
+                    onChange={(e) => setCredFields((prev) => ({ ...prev, _value: e.target.value }))}
+                    placeholder="****"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createConnection.isPending || !serviceId}>
+              <Button
+                type="submit"
+                disabled={
+                  createConnection.isPending ||
+                  !serviceId ||
+                  (SERVICE_FIELD_CONFIGS[serviceId]
+                    ? SERVICE_FIELD_CONFIGS[serviceId]
+                        .filter((f) => f.required)
+                        .some((f) => !credFields[f.key]?.trim())
+                    : false)
+                }
+              >
                 {createConnection.isPending ? "Creating..." : "Create Connection"}
               </Button>
             </DialogFooter>
