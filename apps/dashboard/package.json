@@ -30,7 +30,7 @@
     "@radix-ui/react-toast": "^1.2.4",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
-    "@tanstack/react-query": "^5.62.0",
+    "@tanstack/react-query": "^5.95.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
