@@ -1,7 +1,7 @@
 "use client";
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { RevGrowthScorerOutput } from "@/lib/api-client";
+import type { RevGrowthScorerOutput } from "@/lib/api-client-types";
 
 interface CyclePoint {
   cycleIndex: number;

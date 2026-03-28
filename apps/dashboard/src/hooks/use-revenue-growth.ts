@@ -7,7 +7,7 @@ import type {
   RevGrowthConnectorHealth,
   RevGrowthIntervention,
   RevGrowthDigest,
-} from "@/lib/api-client";
+} from "@/lib/api-client-types";
 
 // --- Diagnostic ---
 

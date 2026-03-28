@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { CampaignAttribution } from "@/lib/api-client";
+import type { CampaignAttribution } from "@/lib/api-client-types";
 import { queryKeys } from "@/lib/query-keys";
 
 function formatCurrency(n: number | null): string {

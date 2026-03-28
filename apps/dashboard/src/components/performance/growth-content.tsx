@@ -19,7 +19,7 @@ import { InterventionCard } from "@/components/revenue-growth/intervention-card"
 import { ConnectorHealth } from "@/components/revenue-growth/connector-health";
 import { DigestViewer } from "@/components/revenue-growth/digest-viewer";
 import { cn } from "@/lib/utils";
-import type { RevGrowthScorerOutput } from "@/lib/api-client";
+import type { RevGrowthScorerOutput } from "@/lib/api-client-types";
 
 /* --- Helpers --- */
 

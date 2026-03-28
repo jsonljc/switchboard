@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import type { OperatorSummary } from "@/lib/api-client";
+import type { OperatorSummary } from "@/lib/api-client-types";
 
 export async function fetchOperatorSummary(): Promise<OperatorSummary> {
   const res = await fetch("/api/dashboard/operator-summary");

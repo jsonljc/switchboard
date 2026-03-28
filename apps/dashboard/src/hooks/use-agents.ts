@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client";
+import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 
 async function fetchRoster(): Promise<{ roster: AgentRosterEntry[] }> {
   const res = await fetch("/api/dashboard/agents/roster");

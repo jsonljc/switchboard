@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { RevGrowthDigest } from "@/lib/api-client";
+import type { RevGrowthDigest } from "@/lib/api-client-types";
 
 interface DigestViewerProps {
   digest: RevGrowthDigest | null;

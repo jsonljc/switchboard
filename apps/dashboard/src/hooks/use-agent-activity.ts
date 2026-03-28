@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client";
+import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 import { translateEvent, getEventIcon } from "@/components/activity/event-translator";
 import { getAgentForAction } from "@/components/agents/agent-action-map";
 

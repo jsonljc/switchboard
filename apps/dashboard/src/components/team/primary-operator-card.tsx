@@ -11,7 +11,7 @@ import {
   useUpdateOperatorConfig,
   useAutonomyAssessment,
 } from "@/hooks/use-operator-config";
-import type { AgentRosterEntry } from "@/lib/api-client";
+import type { AgentRosterEntry } from "@/lib/api-client-types";
 
 const AUTOMATION_LEVELS = [
   {
@@ -182,7 +182,9 @@ export function PrimaryOperatorCard({ agent }: PrimaryOperatorCardProps) {
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-muted-foreground">Progress</p>
                     {autonomy.autonomousEligible && (
-                      <span className="text-xs font-medium text-primary">Ready for more autonomy</span>
+                      <span className="text-xs font-medium text-primary">
+                        Ready for more autonomy
+                      </span>
                     )}
                   </div>
                   <div className="space-y-1">
