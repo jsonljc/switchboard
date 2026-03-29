@@ -7,6 +7,7 @@ function makeMockPrisma() {
   return {
     lifecycleRevenueEvent: {
       create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 }, _count: { id: 0 } }),
       groupBy: vi.fn().mockResolvedValue([]),
