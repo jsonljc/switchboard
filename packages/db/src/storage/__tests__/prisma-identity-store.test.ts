@@ -64,6 +64,7 @@ describe("PrismaIdentityStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaIdentityStore(prisma as any);
   });
 
@@ -87,6 +88,7 @@ describe("PrismaIdentityStore", () => {
         updatedAt: NOW,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await store.saveSpec(spec as any);
 
       expect(prisma.identitySpec.upsert).toHaveBeenCalledWith(
@@ -181,6 +183,7 @@ describe("PrismaIdentityStore", () => {
         name: "Test Agent",
         organizationId: "org_1",
         roles: ["operator"],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       } as any);
 
       expect(prisma.principal.upsert).toHaveBeenCalledWith({

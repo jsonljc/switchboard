@@ -9,12 +9,15 @@ import type {
   InboundMessage,
   RouterResponse,
 } from "@switchboard/customer-engagement";
-import { LeadConversationState, getPrimaryMoveForState } from "@switchboard/customer-engagement";
+import {
+  LeadConversationState,
+  getPrimaryMoveForState,
+  type CadenceInstance,
+} from "@switchboard/customer-engagement";
 import { handleProposeResult } from "./proposal-handler.js";
 import { getThread, setThread } from "../conversation/threads.js";
 import { transitionConversation } from "../conversation/state.js";
 import { startCadenceForContact } from "../jobs/cadence-worker.js";
-import type { CadenceInstance } from "@switchboard/customer-engagement";
 import {
   HandoffPackageAssembler,
   HandoffNotifier,
@@ -110,6 +113,81 @@ export async function handleLeadMessage(
   deps?: LeadHandlerDeps,
 ): Promise<void> {
   // Check if this is an operator message — route to operator handler instead
+  if (await tryHandleOperatorMessage(ctx, message, threadId)) {
+    return;
+  }
+
+  const inbound = buildInboundMessage(message, threadId);
+
+  // Pre-interpret: run emotional classification and language detection
+  await handlePreInterpretDialogue(dialogueMiddleware, message, threadId);
+
+  const routerResponse = await getRouterResponse(leadRouter, inbound, ctx, threadId);
+  if (!routerResponse) return;
+
+  const primaryMove: PrimaryMove = routerResponse.machineState
+    ? getPrimaryMoveForState(routerResponse.machineState as LeadConversationState)
+    : "greet";
+
+  // Generate LLM response if engine is available, otherwise use template responses
+  const responsesToSend = await generateResponses(
+    deps,
+    routerResponse,
+    message,
+    threadId,
+    primaryMove,
+  );
+
+  // Send each response message back through the adapter (with post-generation validation)
+  await sendResponses(
+    ctx,
+    responsesToSend,
+    dialogueMiddleware,
+    primaryMove,
+    threadId,
+    deps,
+    inbound,
+    routerResponse,
+  );
+
+  // Detect state transitions for outcome tracking
+  await trackStateTransitions(deps, routerResponse, threadId, inbound);
+
+  // If the router produced an action, propose it through governance
+  await handleRouterAction(ctx, routerResponse, message, threadId);
+
+  // Update lead profile from question answers
+  await updateLeadProfile(routerResponse, threadId);
+
+  // Start cadence when qualification flow completes
+  await handleQualificationComplete(routerResponse, threadId, inbound, deps, message);
+
+  // Escalation: build handoff package, persist it, and notify (C3)
+  await handleEscalation(routerResponse, threadId, inbound, deps, ctx);
+
+  // Persist machine state for transition detection on next message
+  await persistMachineState(routerResponse, threadId);
+}
+
+function buildObjectionContext(response: RouterResponse): string {
+  const vars = response.variables ?? {};
+  const parts: string[] = [];
+  if (vars["lastMessage"]) {
+    parts.push(`They said: "${String(vars["lastMessage"])}"`);
+  }
+  parts.push("Acknowledge their concern genuinely. Don't dismiss or argue.");
+  return parts.join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions to reduce complexity
+// ---------------------------------------------------------------------------
+
+async function tryHandleOperatorMessage(
+  ctx: HandlerContext,
+  message: IncomingMessage,
+  threadId: string,
+): Promise<boolean> {
   const principalRoles = (message.metadata?.roles ?? []) as string[];
   if (isOperatorMessage(principalRoles)) {
     const apiUrl = process.env.SWITCHBOARD_API_URL;
@@ -126,11 +204,14 @@ export async function handleLeadMessage(
           sendReply: (text: string) => ctx.sendFilteredReply(threadId, text),
         },
       );
-      return;
+      return true;
     }
   }
+  return false;
+}
 
-  const inbound: InboundMessage = {
+function buildInboundMessage(message: IncomingMessage, threadId: string): InboundMessage {
+  return {
     channelId: threadId,
     channelType: (message.channel === "telegram"
       ? "telegram"
@@ -141,8 +222,13 @@ export async function handleLeadMessage(
     organizationId: message.organizationId ?? "default",
     metadata: message.metadata,
   };
+}
 
-  // Pre-interpret: run emotional classification and language detection
+async function handlePreInterpretDialogue(
+  dialogueMiddleware: DialogueMiddleware | null | undefined,
+  message: IncomingMessage,
+  threadId: string,
+): Promise<void> {
   if (dialogueMiddleware) {
     const conversation = await getThread(threadId);
     if (conversation) {
@@ -153,22 +239,30 @@ export async function handleLeadMessage(
       }
     }
   }
+}
 
-  let routerResponse: RouterResponse;
+async function getRouterResponse(
+  leadRouter: ConversationRouter,
+  inbound: InboundMessage,
+  ctx: HandlerContext,
+  threadId: string,
+): Promise<RouterResponse | null> {
   try {
-    routerResponse = await leadRouter.handleMessage(inbound);
+    return await leadRouter.handleMessage(inbound);
   } catch (err) {
     console.error("[LeadBot] Router error:", err);
     await ctx.sendFilteredReply(threadId, "Sorry, something went wrong. Please try again.");
-    return;
+    return null;
   }
+}
 
-  // Derive the actual primary move from the state machine state
-  const primaryMove: PrimaryMove = routerResponse.machineState
-    ? getPrimaryMoveForState(routerResponse.machineState as LeadConversationState)
-    : "greet";
-
-  // Generate LLM response if engine is available, otherwise use template responses
+async function generateResponses(
+  deps: LeadHandlerDeps | undefined,
+  routerResponse: RouterResponse,
+  message: IncomingMessage,
+  threadId: string,
+  primaryMove: PrimaryMove,
+): Promise<string[]> {
   let responsesToSend = routerResponse.responses;
   if (deps?.llmEngine && deps.businessProfile && routerResponse.stateGoal) {
     const conversation = await getThread(threadId);
@@ -207,8 +301,19 @@ export async function handleLeadMessage(
       responsesToSend = [llmResult.text];
     }
   }
+  return responsesToSend;
+}
 
-  // Send each response message back through the adapter (with post-generation validation)
+async function sendResponses(
+  ctx: HandlerContext,
+  responsesToSend: string[],
+  dialogueMiddleware: DialogueMiddleware | null | undefined,
+  primaryMove: PrimaryMove,
+  threadId: string,
+  deps: LeadHandlerDeps | undefined,
+  inbound: InboundMessage,
+  routerResponse: RouterResponse,
+): Promise<void> {
   for (const text of responsesToSend) {
     let finalText = text;
     if (dialogueMiddleware) {
@@ -233,8 +338,14 @@ export async function handleLeadMessage(
       }
     }
   }
+}
 
-  // Detect state transitions for outcome tracking
+async function trackStateTransitions(
+  deps: LeadHandlerDeps | undefined,
+  routerResponse: RouterResponse,
+  threadId: string,
+  inbound: InboundMessage,
+): Promise<void> {
   if (deps?.outcomePipeline && routerResponse.machineState) {
     const conversation = await getThread(threadId);
     const prevState = conversation?.machineState;
@@ -265,8 +376,14 @@ export async function handleLeadMessage(
       }
     }
   }
+}
 
-  // If the router produced an action, propose it through governance
+async function handleRouterAction(
+  ctx: HandlerContext,
+  routerResponse: RouterResponse,
+  message: IncomingMessage,
+  threadId: string,
+): Promise<void> {
   if (routerResponse.actionRequired) {
     try {
       const proposeResult = await ctx.orchestrator.resolveAndPropose({
@@ -286,8 +403,9 @@ export async function handleLeadMessage(
       console.error("[LeadBot] Action proposal error:", err);
     }
   }
+}
 
-  // Update lead profile from question answers
+async function updateLeadProfile(routerResponse: RouterResponse, threadId: string): Promise<void> {
   if (routerResponse.leadProfileUpdate) {
     const conversation = await getThread(threadId);
     if (conversation) {
@@ -298,29 +416,23 @@ export async function handleLeadMessage(
       await setThread(updated);
     }
   }
+}
 
-  // Start cadence when qualification flow completes
+async function handleQualificationComplete(
+  routerResponse: RouterResponse,
+  threadId: string,
+  inbound: InboundMessage,
+  deps: LeadHandlerDeps | undefined,
+  message: IncomingMessage,
+): Promise<void> {
   if (routerResponse.completed && routerResponse.variables) {
     const leadScore = Number(routerResponse.variables["leadScore"] ?? 0);
 
     // Emit qualified event to ConversionBus (fires for all completed qualifications)
-    if (deps?.conversionBus) {
-      try {
-        deps.conversionBus.emit({
-          type: "qualified",
-          contactId: threadId,
-          organizationId: inbound.organizationId,
-          value: leadScore,
-          timestamp: new Date(),
-          metadata: { leadScore },
-        });
-      } catch {
-        // Non-critical
-      }
-    }
+    await emitQualifiedEvent(deps, threadId, inbound, leadScore);
 
+    // Start cadence
     const cadenceTemplateId = leadScore >= 50 ? "consultation-reminder" : "dormant-winback";
-
     const instance: CadenceInstance = {
       id: `cadence-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       cadenceDefinitionId: cadenceTemplateId,
@@ -340,65 +452,111 @@ export async function handleLeadMessage(
     };
     startCadenceForContact(instance);
 
-    // Emit "booked" outcome for completed qualification with high score (C2)
-    if (deps?.outcomePipeline && leadScore >= 50) {
-      try {
-        await deps.outcomePipeline.emitOutcome({
-          sessionId: threadId,
-          organizationId: inbound.organizationId,
-          outcomeType: "booked",
-          metadata: { leadScore },
-        });
-      } catch {
-        // Non-critical
-      }
-    }
+    // Emit outcome events
+    await emitQualificationOutcomes(deps, leadScore, threadId, inbound);
 
-    // Emit "lost" outcome for low-score completions (qualification didn't convert)
-    if (deps?.outcomePipeline && leadScore < 50) {
-      try {
-        await deps.outcomePipeline.emitOutcome({
-          sessionId: threadId,
-          organizationId: inbound.organizationId,
-          outcomeType: "lost",
-          metadata: { leadScore, reason: "low_qualification_score" },
-        });
-      } catch {
-        // Non-critical
-      }
-    }
+    // Emit ConversionBus booking event
+    await emitBookingEvent(deps, leadScore, threadId, inbound);
+  }
+}
 
-    // Emit ConversionBus event so CAPIDispatcher sends booking signal to Meta
-    if (deps?.conversionBus && leadScore >= 50) {
-      try {
-        let sourceAdId: string | undefined;
-        let sourceCampaignId: string | undefined;
-        if (deps.crmProvider) {
-          const conversation = await getThread(threadId);
-          if (conversation?.crmContactId) {
-            const contacts = await deps.crmProvider.searchContacts(conversation.crmContactId);
-            const contact = contacts[0];
-            sourceAdId = contact?.sourceAdId ?? undefined;
-            sourceCampaignId = contact?.sourceCampaignId ?? undefined;
-          }
-        }
-        deps.conversionBus.emit({
-          type: "booked",
-          contactId: threadId,
-          organizationId: inbound.organizationId,
-          value: leadScore,
-          sourceAdId,
-          sourceCampaignId,
-          timestamp: new Date(),
-          metadata: { leadScore },
-        });
-      } catch {
-        // Non-critical — don't block the response
-      }
+async function emitQualifiedEvent(
+  deps: LeadHandlerDeps | undefined,
+  threadId: string,
+  inbound: InboundMessage,
+  leadScore: number,
+): Promise<void> {
+  if (deps?.conversionBus) {
+    try {
+      deps.conversionBus.emit({
+        type: "qualified",
+        contactId: threadId,
+        organizationId: inbound.organizationId,
+        value: leadScore,
+        timestamp: new Date(),
+        metadata: { leadScore },
+      });
+    } catch {
+      // Non-critical
+    }
+  }
+}
+
+async function emitQualificationOutcomes(
+  deps: LeadHandlerDeps | undefined,
+  leadScore: number,
+  threadId: string,
+  inbound: InboundMessage,
+): Promise<void> {
+  if (deps?.outcomePipeline && leadScore >= 50) {
+    try {
+      await deps.outcomePipeline.emitOutcome({
+        sessionId: threadId,
+        organizationId: inbound.organizationId,
+        outcomeType: "booked",
+        metadata: { leadScore },
+      });
+    } catch {
+      // Non-critical
     }
   }
 
-  // Escalation: build handoff package, persist it, and notify (C3)
+  if (deps?.outcomePipeline && leadScore < 50) {
+    try {
+      await deps.outcomePipeline.emitOutcome({
+        sessionId: threadId,
+        organizationId: inbound.organizationId,
+        outcomeType: "lost",
+        metadata: { leadScore, reason: "low_qualification_score" },
+      });
+    } catch {
+      // Non-critical
+    }
+  }
+}
+
+async function emitBookingEvent(
+  deps: LeadHandlerDeps | undefined,
+  leadScore: number,
+  threadId: string,
+  inbound: InboundMessage,
+): Promise<void> {
+  if (deps?.conversionBus && leadScore >= 50) {
+    try {
+      let sourceAdId: string | undefined;
+      let sourceCampaignId: string | undefined;
+      if (deps.crmProvider) {
+        const conversation = await getThread(threadId);
+        if (conversation?.crmContactId) {
+          const contacts = await deps.crmProvider.searchContacts(conversation.crmContactId);
+          const contact = contacts[0];
+          sourceAdId = contact?.sourceAdId ?? undefined;
+          sourceCampaignId = contact?.sourceCampaignId ?? undefined;
+        }
+      }
+      deps.conversionBus.emit({
+        type: "booked",
+        contactId: threadId,
+        organizationId: inbound.organizationId,
+        value: leadScore,
+        sourceAdId,
+        sourceCampaignId,
+        timestamp: new Date(),
+        metadata: { leadScore },
+      });
+    } catch {
+      // Non-critical — don't block the response
+    }
+  }
+}
+
+async function handleEscalation(
+  routerResponse: RouterResponse,
+  threadId: string,
+  inbound: InboundMessage,
+  deps: LeadHandlerDeps | undefined,
+  ctx: HandlerContext,
+): Promise<void> {
   if (routerResponse.escalated) {
     const conversation = await getThread(threadId);
     const assembler = new HandoffPackageAssembler();
@@ -456,22 +614,16 @@ export async function handleLeadMessage(
       "Let me get one of our team to help you directly. They'll be with you shortly!",
     );
   }
+}
 
-  // Persist machine state for transition detection on next message
+async function persistMachineState(
+  routerResponse: RouterResponse,
+  threadId: string,
+): Promise<void> {
   if (routerResponse.machineState) {
     const conversation = await getThread(threadId);
     if (conversation && conversation.machineState !== routerResponse.machineState) {
       await setThread({ ...conversation, machineState: routerResponse.machineState });
     }
   }
-}
-
-function buildObjectionContext(response: RouterResponse): string {
-  const vars = response.variables ?? {};
-  const parts: string[] = [];
-  if (vars["lastMessage"]) {
-    parts.push(`They said: "${String(vars["lastMessage"])}"`);
-  }
-  parts.push("Acknowledge their concern genuinely. Don't dismiss or argue.");
-  return parts.join(" ");
 }

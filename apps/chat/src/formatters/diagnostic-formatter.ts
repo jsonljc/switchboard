@@ -171,6 +171,19 @@ function formatFunnelDiagnostic(data: FunnelData): string {
   const platform = data.platform ?? "meta";
   lines.push(`Funnel Diagnostic — ${capitalize(platform)} ${capitalize(vertical)}`);
 
+  formatFunnelPeriods(data, lines);
+  formatPrimaryKPI(data, lines);
+  formatStageAnalysis(data, lines);
+  formatBottleneck(data, lines);
+  formatFindings(data, lines);
+  formatRevenueImpact(data, lines);
+
+  lines.push('Reply "pause [campaign]" or "adjust budget" to take action.');
+
+  return lines.join("\n");
+}
+
+function formatFunnelPeriods(data: FunnelData, lines: string[]): void {
   if (data.periods?.current && data.periods?.previous) {
     const cur = data.periods.current;
     const prev = data.periods.previous;
@@ -178,10 +191,10 @@ function formatFunnelDiagnostic(data: FunnelData): string {
       `Period: ${formatDate(cur.since)} – ${formatDate(cur.until)} vs ${formatDate(prev.since)} – ${formatDate(prev.until)}`,
     );
   }
-
   lines.push("");
+}
 
-  // Primary KPI
+function formatPrimaryKPI(data: FunnelData, lines: string[]): void {
   if (data.primaryKPI) {
     const kpi = data.primaryKPI;
     lines.push(`Primary KPI: ${kpi.name ?? "unknown"}`);
@@ -190,8 +203,9 @@ function formatFunnelDiagnostic(data: FunnelData): string {
     );
     lines.push("");
   }
+}
 
-  // Stage analysis
+function formatStageAnalysis(data: FunnelData, lines: string[]): void {
   if (data.stageAnalysis && data.stageAnalysis.length > 0) {
     lines.push("Stage Analysis:");
     for (const stage of data.stageAnalysis) {
@@ -202,16 +216,18 @@ function formatFunnelDiagnostic(data: FunnelData): string {
     }
     lines.push("");
   }
+}
 
-  // Bottleneck
+function formatBottleneck(data: FunnelData, lines: string[]): void {
   if (data.bottleneck) {
     lines.push(
       `Bottleneck: ${data.bottleneck.stageName ?? "?"} (${pct(data.bottleneck.deltaPercent)})`,
     );
     lines.push("");
   }
+}
 
-  // Findings
+function formatFindings(data: FunnelData, lines: string[]): void {
   if (data.findings && data.findings.length > 0) {
     lines.push("Key Findings:");
     for (const f of data.findings) {
@@ -223,16 +239,13 @@ function formatFunnelDiagnostic(data: FunnelData): string {
     }
     lines.push("");
   }
+}
 
-  // Estimated revenue impact
+function formatRevenueImpact(data: FunnelData, lines: string[]): void {
   if (data.elasticity?.totalEstimatedRevenueLoss !== undefined) {
     lines.push(`Estimated Revenue Impact: ${dollars(data.elasticity.totalEstimatedRevenueLoss)}`);
     lines.push("");
   }
-
-  lines.push('Reply "pause [campaign]" or "adjust budget" to take action.');
-
-  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +264,16 @@ function formatPortfolioDiagnostic(data: PortfolioData): string {
     lines.push("");
   }
 
-  // Per-platform summaries
+  formatPlatformSummaries(data, lines);
+  formatCrossPlatformFindings(data, lines);
+  formatBudgetRecommendations(data, lines);
+
+  lines.push('Reply "adjust budget" or "pause [campaign]" to take action.');
+
+  return lines.join("\n");
+}
+
+function formatPlatformSummaries(data: PortfolioData, lines: string[]): void {
   if (data.platforms && data.platforms.length > 0) {
     lines.push("Platform Summaries:");
     for (const p of data.platforms) {
@@ -269,8 +291,9 @@ function formatPortfolioDiagnostic(data: PortfolioData): string {
     }
     lines.push("");
   }
+}
 
-  // Cross-platform findings
+function formatCrossPlatformFindings(data: PortfolioData, lines: string[]): void {
   if (data.crossPlatformFindings && data.crossPlatformFindings.length > 0) {
     lines.push("Cross-Platform Findings:");
     for (const f of data.crossPlatformFindings) {
@@ -282,8 +305,9 @@ function formatPortfolioDiagnostic(data: PortfolioData): string {
     }
     lines.push("");
   }
+}
 
-  // Budget recommendations
+function formatBudgetRecommendations(data: PortfolioData, lines: string[]): void {
   if (data.budgetRecommendations && data.budgetRecommendations.length > 0) {
     lines.push("Budget Recommendations:");
     for (const br of data.budgetRecommendations) {
@@ -294,10 +318,6 @@ function formatPortfolioDiagnostic(data: PortfolioData): string {
     }
     lines.push("");
   }
-
-  lines.push('Reply "adjust budget" or "pause [campaign]" to take action.');
-
-  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -309,20 +329,27 @@ function formatSnapshot(data: SnapshotData): string {
 
   lines.push("Metrics Snapshot");
 
+  formatSnapshotHeader(data, lines);
+  formatTopLevelMetrics(data, lines);
+  formatStageMetrics(data, lines);
+
+  return lines.join("\n");
+}
+
+function formatSnapshotHeader(data: SnapshotData, lines: string[]): void {
   if (data.entityId) {
     lines.push(`Entity: ${data.entityId} (${data.entityLevel ?? "account"})`);
   }
   if (data.periodStart || data.periodEnd) {
     lines.push(`Period: ${formatDate(data.periodStart)} – ${formatDate(data.periodEnd)}`);
   }
-
   lines.push("");
-
   if (data.spend !== undefined) {
     lines.push(`Spend: ${dollars(data.spend)}`);
   }
+}
 
-  // Top-level metrics
+function formatTopLevelMetrics(data: SnapshotData, lines: string[]): void {
   if (data.topLevel && Object.keys(data.topLevel).length > 0) {
     lines.push("");
     lines.push("Top-Level Metrics:");
@@ -340,8 +367,9 @@ function formatSnapshot(data: SnapshotData): string {
       lines.push(`  ${label} ${formatted}`);
     }
   }
+}
 
-  // Stage metrics
+function formatStageMetrics(data: SnapshotData, lines: string[]): void {
   if (data.stages && Object.keys(data.stages).length > 0) {
     lines.push("");
     lines.push("Funnel Stages:");
@@ -354,8 +382,6 @@ function formatSnapshot(data: SnapshotData): string {
       lines.push(`  ${stage.padEnd(16)} ${count}${cost}`);
     }
   }
-
-  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -368,7 +394,17 @@ function formatStructureAnalysis(data: StructureData): string {
   lines.push("Campaign Structure Analysis");
   lines.push("");
 
-  // Sub-entity breakdown
+  formatSubEntities(data, lines);
+  formatStructuralFindings(data, lines);
+
+  if (!data.subEntities?.length && !data.findings?.length) {
+    lines.push("No structural issues detected.");
+  }
+
+  return lines.join("\n");
+}
+
+function formatSubEntities(data: StructureData, lines: string[]): void {
   if (data.subEntities && data.subEntities.length > 0) {
     lines.push("Sub-Entities:");
     for (const e of data.subEntities) {
@@ -386,8 +422,9 @@ function formatStructureAnalysis(data: StructureData): string {
     }
     lines.push("");
   }
+}
 
-  // Findings
+function formatStructuralFindings(data: StructureData, lines: string[]): void {
   if (data.findings && data.findings.length > 0) {
     lines.push("Structural Findings:");
     for (const f of data.findings) {
@@ -399,12 +436,6 @@ function formatStructureAnalysis(data: StructureData): string {
     }
     lines.push("");
   }
-
-  if (!data.subEntities?.length && !data.findings?.length) {
-    lines.push("No structural issues detected.");
-  }
-
-  return lines.join("\n");
 }
 
 function capitalize(s: string): string {

@@ -62,6 +62,7 @@ describe("PrismaCompetenceStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaCompetenceStore(prisma as any);
   });
 
@@ -106,6 +107,7 @@ describe("PrismaCompetenceStore", () => {
         createdAt: NOW,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await store.saveRecord(record as any);
 
       expect(prisma.competenceRecord.upsert).toHaveBeenCalledWith(
@@ -214,6 +216,7 @@ describe("PrismaCompetenceStore", () => {
         createdAt: NOW,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await store.savePolicy(policy as any);
 
       expect(prisma.competencePolicy.upsert).toHaveBeenCalledWith(

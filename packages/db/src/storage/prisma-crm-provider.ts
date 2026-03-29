@@ -9,6 +9,86 @@ import type {
   ConnectionHealth,
 } from "@switchboard/schemas";
 
+function buildCreateContactData(
+  data: {
+    externalId?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    company?: string;
+    phone?: string;
+    channel?: string;
+    assignedStaffId?: string;
+    sourceAdId?: string;
+    sourceCampaignId?: string;
+    fbclid?: string;
+    ttclid?: string;
+    utmSource?: string;
+    properties?: Record<string, unknown>;
+  },
+  organizationId?: string,
+) {
+  const simpleFields = [
+    "externalId",
+    "email",
+    "firstName",
+    "lastName",
+    "company",
+    "phone",
+    "channel",
+    "assignedStaffId",
+    "sourceAdId",
+    "sourceCampaignId",
+    "fbclid",
+    "ttclid",
+    "utmSource",
+  ] as const;
+
+  const result: Record<string, unknown> = {
+    normalizedPhone: data.phone ? normalizePhone(data.phone) : null,
+    normalizedEmail: data.email ? normalizeEmail(data.email) : null,
+    organizationId: organizationId ?? null,
+    properties: (data.properties as object) ?? {},
+    status: "active",
+    tags: [],
+  };
+
+  for (const field of simpleFields) {
+    result[field] = data[field] ?? null;
+  }
+
+  return result;
+}
+
+function buildUpdateContactData(data: Record<string, unknown>): Record<string, unknown> {
+  const allowedFields = [
+    "email",
+    "firstName",
+    "lastName",
+    "company",
+    "phone",
+    "tags",
+    "status",
+    "assignedStaffId",
+    "sourceAdId",
+    "sourceCampaignId",
+    "fbclid",
+    "ttclid",
+    "normalizedPhone",
+    "normalizedEmail",
+    "utmSource",
+    "properties",
+  ];
+
+  const updateData: Record<string, unknown> = {};
+  for (const field of allowedFields) {
+    if (data[field] !== undefined) {
+      updateData[field] = field === "properties" ? (data[field] as object) : data[field];
+    }
+  }
+  return updateData;
+}
+
 export class PrismaCrmProvider implements CrmProvider {
   constructor(
     private prisma: PrismaClient,
@@ -140,27 +220,7 @@ export class PrismaCrmProvider implements CrmProvider {
     properties?: Record<string, unknown>;
   }): Promise<CrmContact> {
     const row = await this.prisma.crmContact.create({
-      data: {
-        externalId: data.externalId ?? null,
-        email: data.email ?? null,
-        firstName: data.firstName ?? null,
-        lastName: data.lastName ?? null,
-        company: data.company ?? null,
-        phone: data.phone ?? null,
-        channel: data.channel ?? null,
-        assignedStaffId: data.assignedStaffId ?? null,
-        sourceAdId: data.sourceAdId ?? null,
-        sourceCampaignId: data.sourceCampaignId ?? null,
-        fbclid: data.fbclid ?? null,
-        ttclid: data.ttclid ?? null,
-        normalizedPhone: data.phone ? normalizePhone(data.phone) : null,
-        normalizedEmail: data.email ? normalizeEmail(data.email) : null,
-        utmSource: data.utmSource ?? null,
-        organizationId: this.organizationId ?? null,
-        properties: (data.properties as object) ?? {},
-        status: "active",
-        tags: [],
-      },
+      data: buildCreateContactData(data, this.organizationId),
     });
     return toContact(row);
   }
@@ -175,28 +235,7 @@ export class PrismaCrmProvider implements CrmProvider {
       throw new Error(`Contact ${contactId} not found`);
     }
 
-    const updateData: Record<string, unknown> = {};
-    if (data["email"] !== undefined) updateData["email"] = data["email"];
-    if (data["firstName"] !== undefined) updateData["firstName"] = data["firstName"];
-    if (data["lastName"] !== undefined) updateData["lastName"] = data["lastName"];
-    if (data["company"] !== undefined) updateData["company"] = data["company"];
-    if (data["phone"] !== undefined) updateData["phone"] = data["phone"];
-    if (data["tags"] !== undefined) updateData["tags"] = data["tags"];
-    if (data["status"] !== undefined) updateData["status"] = data["status"];
-    if (data["assignedStaffId"] !== undefined)
-      updateData["assignedStaffId"] = data["assignedStaffId"];
-    if (data["sourceAdId"] !== undefined) updateData["sourceAdId"] = data["sourceAdId"];
-    if (data["sourceCampaignId"] !== undefined)
-      updateData["sourceCampaignId"] = data["sourceCampaignId"];
-    if (data["fbclid"] !== undefined) updateData["fbclid"] = data["fbclid"];
-    if (data["ttclid"] !== undefined) updateData["ttclid"] = data["ttclid"];
-    if (data["normalizedPhone"] !== undefined)
-      updateData["normalizedPhone"] = data["normalizedPhone"];
-    if (data["normalizedEmail"] !== undefined)
-      updateData["normalizedEmail"] = data["normalizedEmail"];
-    if (data["utmSource"] !== undefined) updateData["utmSource"] = data["utmSource"];
-    if (data["properties"] !== undefined) updateData["properties"] = data["properties"] as object;
-
+    const updateData = buildUpdateContactData(data);
     const row = await this.prisma.crmContact.update({
       where: { id: contactId },
       data: updateData,

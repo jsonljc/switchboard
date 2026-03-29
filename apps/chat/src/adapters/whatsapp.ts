@@ -129,13 +129,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     // WhatsApp Cloud API webhook structure:
     // { object: "whatsapp_business_account", entry: [{ changes: [{ value: { messages: [...] } }] }] }
-    const entry = (payload["entry"] as Array<Record<string, unknown>>)?.[0];
-    if (!entry) return null;
-
-    const changes = (entry["changes"] as Array<Record<string, unknown>>)?.[0];
-    if (!changes) return null;
-
-    const value = changes["value"] as Record<string, unknown> | undefined;
+    const value = extractWhatsAppValue(payload);
     if (!value) return null;
 
     const messages = value["messages"] as Array<Record<string, unknown>> | undefined;
@@ -146,121 +140,15 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     // Handle interactive message types (button replies, list replies)
     if (msgType === "interactive") {
-      const interactive = msg["interactive"] as Record<string, unknown> | undefined;
-      if (interactive) {
-        const interactiveType = interactive["type"] as string;
-        let text: string | undefined;
-
-        if (interactiveType === "button_reply") {
-          const buttonReply = interactive["button_reply"] as Record<string, unknown> | undefined;
-          text = buttonReply?.["id"] as string | undefined;
-        } else if (interactiveType === "list_reply") {
-          const listReply = interactive["list_reply"] as Record<string, unknown> | undefined;
-          text = listReply?.["id"] as string | undefined;
-        }
-
-        if (!text) return null;
-
-        const from = msg["from"] as string;
-        const msgId = msg["id"] as string;
-        const timestamp = msg["timestamp"] as string;
-
-        const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
-        const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
-          | string
-          | undefined;
-
-        const metadata: Record<string, unknown> = { interactiveType };
-        if (contactName) metadata["contactName"] = contactName;
-
-        // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
-        const referral = msg["referral"] as Record<string, unknown> | undefined;
-        if (referral) {
-          if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
-          if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
-          if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
-          if (referral["body"]) metadata["adBody"] = referral["body"];
-        }
-
-        return {
-          id: msgId ?? `wa_${Date.now()}`,
-          channel: "whatsapp",
-          channelMessageId: msgId ?? `wa_${Date.now()}`,
-          principalId: from ?? "unknown",
-          text,
-          threadId: from,
-          timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
-          metadata,
-          attachments: [],
-          organizationId: null,
-        };
-      }
+      return parseInteractiveMessage(msg, value);
     }
 
     // Capture non-text messages as leads instead of silently dropping
     if (msgType !== "text") {
-      const from = msg["from"] as string;
-      const msgId = msg["id"] as string;
-      const timestamp = msg["timestamp"] as string;
-      const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
-      const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
-        | string
-        | undefined;
-      const metadata: Record<string, unknown> = { unsupported: true, originalType: msgType };
-      if (contactName) metadata["contactName"] = contactName;
-
-      return {
-        id: msgId ?? `wa_${Date.now()}`,
-        channel: "whatsapp",
-        channelMessageId: msgId ?? `wa_${Date.now()}`,
-        principalId: from ?? "unknown",
-        text: "",
-        threadId: from,
-        timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
-        metadata,
-        attachments: [],
-        organizationId: null,
-      };
+      return parseUnsupportedMessage(msg, value, msgType);
     }
 
-    const textObj = msg["text"] as Record<string, unknown>;
-    const text = textObj?.["body"] as string;
-    if (!text) return null;
-
-    const from = msg["from"] as string;
-    const msgId = msg["id"] as string;
-    const timestamp = msg["timestamp"] as string;
-
-    // Extract contact name if available
-    const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
-    const contactName = (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as
-      | string
-      | undefined;
-
-    const metadata: Record<string, unknown> = {};
-    if (contactName) metadata["contactName"] = contactName;
-
-    // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
-    const referral = msg["referral"] as Record<string, unknown> | undefined;
-    if (referral) {
-      if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
-      if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
-      if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
-      if (referral["body"]) metadata["adBody"] = referral["body"];
-    }
-
-    return {
-      id: msgId ?? `wa_${Date.now()}`,
-      channel: "whatsapp",
-      channelMessageId: msgId ?? `wa_${Date.now()}`,
-      principalId: from ?? "unknown",
-      text,
-      threadId: from, // In WhatsApp, thread is keyed by phone number
-      timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
-      metadata,
-      attachments: [],
-      organizationId: null,
-    };
+    return parseTextMessage(msg, value);
   }
 
   async sendTextReply(threadId: string, text: string): Promise<void> {
@@ -394,4 +282,143 @@ export class WhatsAppAdapter implements ChannelAdapter {
       },
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions for parseIncomingMessage complexity reduction
+// ---------------------------------------------------------------------------
+
+function extractWhatsAppValue(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const entry = (payload["entry"] as Array<Record<string, unknown>>)?.[0];
+  if (!entry) return null;
+
+  const changes = (entry["changes"] as Array<Record<string, unknown>>)?.[0];
+  if (!changes) return null;
+
+  const value = changes["value"] as Record<string, unknown> | undefined;
+  return value ?? null;
+}
+
+function extractContactName(value: Record<string, unknown>): string | undefined {
+  const contacts = value["contacts"] as Array<Record<string, unknown>> | undefined;
+  return (contacts?.[0]?.["profile"] as Record<string, unknown>)?.["name"] as string | undefined;
+}
+
+function extractReferralData(msg: Record<string, unknown>): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
+  const referral = msg["referral"] as Record<string, unknown> | undefined;
+  if (referral) {
+    if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
+    if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
+    if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
+    if (referral["body"]) metadata["adBody"] = referral["body"];
+  }
+  return metadata;
+}
+
+function parseInteractiveMessage(
+  msg: Record<string, unknown>,
+  value: Record<string, unknown>,
+): IncomingMessage | null {
+  const interactive = msg["interactive"] as Record<string, unknown> | undefined;
+  if (!interactive) return null;
+
+  const interactiveType = interactive["type"] as string;
+  let text: string | undefined;
+
+  if (interactiveType === "button_reply") {
+    const buttonReply = interactive["button_reply"] as Record<string, unknown> | undefined;
+    text = buttonReply?.["id"] as string | undefined;
+  } else if (interactiveType === "list_reply") {
+    const listReply = interactive["list_reply"] as Record<string, unknown> | undefined;
+    text = listReply?.["id"] as string | undefined;
+  }
+
+  if (!text) return null;
+
+  const from = msg["from"] as string;
+  const msgId = msg["id"] as string;
+  const timestamp = msg["timestamp"] as string;
+  const contactName = extractContactName(value);
+
+  const metadata: Record<string, unknown> = { interactiveType };
+  if (contactName) metadata["contactName"] = contactName;
+
+  // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
+  const referralData = extractReferralData(msg);
+  Object.assign(metadata, referralData);
+
+  return {
+    id: msgId ?? `wa_${Date.now()}`,
+    channel: "whatsapp",
+    channelMessageId: msgId ?? `wa_${Date.now()}`,
+    principalId: from ?? "unknown",
+    text,
+    threadId: from,
+    timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+    metadata,
+    attachments: [],
+    organizationId: null,
+  };
+}
+
+function parseUnsupportedMessage(
+  msg: Record<string, unknown>,
+  value: Record<string, unknown>,
+  msgType: string,
+): IncomingMessage {
+  const from = msg["from"] as string;
+  const msgId = msg["id"] as string;
+  const timestamp = msg["timestamp"] as string;
+  const contactName = extractContactName(value);
+
+  const metadata: Record<string, unknown> = { unsupported: true, originalType: msgType };
+  if (contactName) metadata["contactName"] = contactName;
+
+  return {
+    id: msgId ?? `wa_${Date.now()}`,
+    channel: "whatsapp",
+    channelMessageId: msgId ?? `wa_${Date.now()}`,
+    principalId: from ?? "unknown",
+    text: "",
+    threadId: from,
+    timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+    metadata,
+    attachments: [],
+    organizationId: null,
+  };
+}
+
+function parseTextMessage(
+  msg: Record<string, unknown>,
+  value: Record<string, unknown>,
+): IncomingMessage | null {
+  const textObj = msg["text"] as Record<string, unknown>;
+  const text = textObj?.["body"] as string;
+  if (!text) return null;
+
+  const from = msg["from"] as string;
+  const msgId = msg["id"] as string;
+  const timestamp = msg["timestamp"] as string;
+  const contactName = extractContactName(value);
+
+  const metadata: Record<string, unknown> = {};
+  if (contactName) metadata["contactName"] = contactName;
+
+  // Extract referral data from Meta Lead Ads (click-to-WhatsApp)
+  const referralData = extractReferralData(msg);
+  Object.assign(metadata, referralData);
+
+  return {
+    id: msgId ?? `wa_${Date.now()}`,
+    channel: "whatsapp",
+    channelMessageId: msgId ?? `wa_${Date.now()}`,
+    principalId: from ?? "unknown",
+    text,
+    threadId: from, // In WhatsApp, thread is keyed by phone number
+    timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+    metadata,
+    attachments: [],
+    organizationId: null,
+  };
 }

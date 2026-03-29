@@ -65,6 +65,7 @@ describe("PrismaCrmProvider", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     provider = new PrismaCrmProvider(prisma as any, "org_1");
   });
 

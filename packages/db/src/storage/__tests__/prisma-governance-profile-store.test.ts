@@ -16,6 +16,7 @@ describe("PrismaGovernanceProfileStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaGovernanceProfileStore(prisma as any);
   });
 

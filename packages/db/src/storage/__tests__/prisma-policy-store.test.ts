@@ -63,6 +63,7 @@ describe("PrismaPolicyStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaPolicyStore(prisma as any);
   });
 
@@ -70,6 +71,7 @@ describe("PrismaPolicyStore", () => {
     it("upserts a policy", async () => {
       prisma.policy.upsert.mockResolvedValue({});
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await store.save(TEST_POLICY as any);
 
       expect(prisma.policy.upsert).toHaveBeenCalledWith(
@@ -224,10 +226,15 @@ describe("PrismaPolicyStore", () => {
 
     beforeEach(() => {
       redis = createMockRedis();
-      cachedStore = new PrismaPolicyStore(prisma as any, {
-        redis: redis as any,
-        cacheTtlSeconds: 120,
-      });
+      cachedStore = new PrismaPolicyStore(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
+        prisma as any,
+        {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Redis client for testing
+          redis: redis as any,
+          cacheTtlSeconds: 120,
+        },
+      );
     });
 
     it("returns cached results on cache hit", async () => {
@@ -275,6 +282,7 @@ describe("PrismaPolicyStore", () => {
       prisma.policy.upsert.mockResolvedValue({});
       redis.del.mockResolvedValue(1);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await cachedStore.save(TEST_POLICY as any);
 
       expect(redis.del).toHaveBeenCalledWith(expect.stringContaining("switchboard:policies:"));

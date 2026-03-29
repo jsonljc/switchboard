@@ -41,6 +41,7 @@ describe("PrismaConnectionStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaConnectionStore(prisma as any);
   });
 

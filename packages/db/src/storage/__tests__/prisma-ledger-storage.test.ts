@@ -48,6 +48,7 @@ describe("PrismaLedgerStorage", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     storage = new PrismaLedgerStorage(prisma as any);
   });
 
@@ -55,6 +56,7 @@ describe("PrismaLedgerStorage", () => {
     it("creates audit entry", async () => {
       prisma.auditEntry.create.mockResolvedValue({});
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
       await storage.append(TEST_ENTRY as any);
 
       expect(prisma.auditEntry.create).toHaveBeenCalledWith({
@@ -191,6 +193,7 @@ describe("PrismaLedgerStorage", () => {
         },
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock transaction callback
       prisma.$transaction.mockImplementation(async (fn: (tx: any) => Promise<any>) => {
         return fn(mockTx);
       });
@@ -218,6 +221,7 @@ describe("PrismaLedgerStorage", () => {
         },
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock transaction callback
       prisma.$transaction.mockImplementation(async (fn: (tx: any) => Promise<any>) => {
         return fn(mockTx);
       });

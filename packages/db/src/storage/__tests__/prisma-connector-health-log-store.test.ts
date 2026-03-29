@@ -12,6 +12,7 @@ describe("PrismaConnectorHealthLogStore", () => {
       findFirst: mockFindFirst,
       findMany: mockFindMany,
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
   } as any;
 
   let store: PrismaConnectorHealthLogStore;

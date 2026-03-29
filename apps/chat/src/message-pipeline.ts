@@ -216,148 +216,38 @@ export async function interpretAndProcess(
   const ctx = deps.buildHandlerContext();
 
   // Include recent messages for conversation continuity
-  const recentMessages = conversation.messages
-    .slice(-deps.maxContextMessages)
-    .map((m) => ({ role: m.role, text: m.text }));
-  const conversationContext: Record<string, unknown> = {
-    conversation,
-    recentMessages,
-  };
+  const conversationContext = buildConversationContext(conversation, deps.maxContextMessages);
 
-  let rawResult;
-  if (deps.interpreterRegistry) {
-    rawResult = await deps.interpreterRegistry.interpret(
-      message.text,
-      conversationContext,
-      deps.availableActions,
-      message.organizationId,
-    );
-  } else {
-    rawResult = await deps.interpreter.interpret(
-      message.text,
-      conversationContext,
-      deps.availableActions,
-    );
-  }
+  const rawResult = await interpretMessage(deps, message, conversationContext);
 
   // Schema-guard interpreter output before trusting it
   const guard = guardInterpreterOutput(rawResult);
   if (!guard.valid || !guard.data) {
-    console.error("Interpreter output failed schema guard:", guard.errors);
-    const uncertainResponse = await deps.composeResponse(
-      {
-        type: "uncertain",
-        userMessage: message.text,
-        availableActions: deps.availableActions,
-      },
-      message.organizationId ?? undefined,
-    );
-    await deps.adapter.sendTextReply(threadId, uncertainResponse.text);
-    await deps.recordAssistantMessage(threadId, uncertainResponse.text);
+    await handleInvalidInterpretation(deps, message, threadId, guard.errors);
     return;
   }
   const result = guard.data;
 
   // Handle read intents (no governance pipeline needed)
-  if (result.readIntent && result.proposals.length === 0) {
-    if (!deps.readAdapter) {
-      await deps.sendFilteredReply(threadId, "Read operations are not configured.");
-      return;
-    }
-    try {
-      const readResult = await handleReadIntent(
-        result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
-        {
-          readAdapter: deps.readAdapter,
-          cartridgeId: "digital-ads",
-          actorId: message.principalId,
-          organizationId: message.organizationId,
-        },
-      );
-      await deps.sendFilteredReply(threadId, readResult.text);
-    } catch (err) {
-      console.error("Read intent error:", err);
-      await deps.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
-    }
-    return;
-  }
+  if (await tryHandleReadIntent(deps, result, message, threadId)) return;
 
   // If clarification needed
-  if (result.needsClarification || result.confidence < 0.5) {
-    if (isNewConversation && result.confidence === 0) {
-      return;
-    }
-    const clarifyResponse = await deps.composeResponse(
-      {
-        type: "clarification",
-        clarificationQuestion: result.clarificationQuestion ?? undefined,
-        userMessage: message.text,
-        availableActions: deps.availableActions,
-      },
-      message.organizationId ?? undefined,
-    );
-    const updated = transitionConversation(conversation, {
-      type: "set_clarifying",
-      question: clarifyResponse.text,
-    });
-    await setThread(updated);
-    await deps.adapter.sendTextReply(threadId, clarifyResponse.text);
+  if (
+    await tryHandleClarification(deps, result, message, threadId, conversation, isNewConversation)
+  )
     return;
-  }
 
   // If no proposals, uncertain
-  if (result.proposals.length === 0) {
-    if (isNewConversation) return;
-    const noProposalResponse = await deps.composeResponse(
-      {
-        type: "uncertain",
-        userMessage: message.text,
-        availableActions: deps.availableActions,
-      },
-      message.organizationId ?? undefined,
-    );
-    await deps.adapter.sendTextReply(threadId, noProposalResponse.text);
-    return;
-  }
+  if (await tryHandleNoProposals(deps, result, message, threadId, isNewConversation)) return;
 
   // If a goalBrief is present and decomposable, try to build and execute a plan
-  if (result.goalBrief?.decomposable && deps.planGraphBuilder && deps.capabilityRegistry) {
-    try {
-      const capabilities = deps.capabilityRegistry.enrichAvailableActions(deps.availableActions);
-      const plan = deps.planGraphBuilder.buildPlan(result.goalBrief, capabilities, {
-        principalId: message.principalId,
-        organizationId: message.organizationId ?? undefined,
-        cartridgeId: "digital-ads",
-      });
-
-      if (plan && plan.steps.length > 0 && deps.dataFlowExecutor) {
-        const planResult = await deps.dataFlowExecutor.execute(plan, {
-          principalId: message.principalId,
-          organizationId: message.organizationId ?? undefined,
-        });
-
-        await handlePlanResult(ctx, threadId, planResult, message.principalId);
-        return;
-      }
-    } catch (err) {
-      console.warn(
-        "[Runtime] Plan building/execution failed, falling through to proposal flow:",
-        err,
-      );
-    }
-  }
+  if (await tryExecutePlan(deps, result, message, ctx, threadId)) return;
 
   // Handle undo command
-  if (result.proposals[0]?.actionType === "system.undo") {
-    await handleUndo(ctx, threadId, message.principalId);
-    return;
-  }
+  if (await tryHandleUndo(ctx, result, message, threadId)) return;
 
   // Handle kill switch (emergency pause all)
-  if (result.proposals[0]?.actionType === "system.kill_switch") {
-    await handleKillSwitch(ctx, threadId, message.principalId, message.organizationId);
-    return;
-  }
+  if (await tryHandleKillSwitch(ctx, result, message, threadId)) return;
 
   // Rate limit proposals per principal
   if (!deps.checkProposalRateLimit(message.principalId)) {
@@ -369,20 +259,7 @@ export async function interpretAndProcess(
   }
 
   // Skin tool filter enforcement
-  if (deps.resolvedSkin) {
-    const { include, exclude } = deps.resolvedSkin.toolFilter;
-    for (const proposal of result.proposals) {
-      const included = matchesAny(proposal.actionType, include);
-      const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
-      if (!included || excluded) {
-        await deps.sendFilteredReply(
-          threadId,
-          `Action "${proposal.actionType}" is not available in the current configuration.`,
-        );
-        return;
-      }
-    }
-  }
+  if (await tryEnforceSkinFilter(deps, result, threadId)) return;
 
   // Set proposals on conversation
   const withProposals = transitionConversation(conversation, {
@@ -392,63 +269,7 @@ export async function interpretAndProcess(
   await setThread(withProposals);
 
   // Process each proposal through the orchestrator
-  for (const proposal of result.proposals) {
-    const entityRefs: Array<{ inputRef: string; entityType: string }> = [];
-    if (proposal.parameters["campaignRef"]) {
-      entityRefs.push({
-        inputRef: proposal.parameters["campaignRef"] as string,
-        entityType: "campaign",
-      });
-    }
-
-    const cartridgeId =
-      inferCartridgeId(proposal.actionType, deps.storage?.cartridges ?? undefined) ?? "digital-ads";
-
-    try {
-      const idempotencyKey = createHash("sha256")
-        .update(message.principalId)
-        .update(message.id)
-        .update(proposal.actionType)
-        .digest("hex");
-
-      const proposeResult = await deps.orchestrator.resolveAndPropose({
-        actionType: proposal.actionType,
-        parameters: proposal.parameters,
-        principalId: message.principalId,
-        cartridgeId,
-        entityRefs,
-        message: message.text,
-        organizationId: message.organizationId,
-        idempotencyKey,
-      });
-
-      if ("needsClarification" in proposeResult) {
-        const clarified = transitionConversation(withProposals, {
-          type: "set_clarifying",
-          question: proposeResult.question,
-        });
-        await setThread(clarified);
-        await deps.sendFilteredReply(threadId, proposeResult.question);
-      } else if ("notFound" in proposeResult) {
-        await deps.sendFilteredReply(threadId, proposeResult.explanation);
-      } else {
-        await handleProposeResult(ctx, threadId, proposeResult, message.principalId);
-      }
-    } catch (err) {
-      console.error("Proposal processing error:", err);
-      deps.failedMessageStore
-        ?.record({
-          channel: message.channel,
-          organizationId: message.organizationId ?? undefined,
-          rawPayload: rawPayload as Record<string, unknown>,
-          stage: "propose",
-          errorMessage: safeErrorMessage(err),
-          errorStack: err instanceof Error ? err.stack : undefined,
-        })
-        .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
-      await deps.sendFilteredReply(threadId, `Error processing request: ${safeErrorMessage(err)}`);
-    }
-  }
+  await processProposals(deps, result, message, threadId, withProposals, ctx, rawPayload);
 }
 
 /**
@@ -526,4 +347,299 @@ export async function handleCommands(
   }
 
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions to reduce interpretAndProcess complexity
+// ---------------------------------------------------------------------------
+
+function buildConversationContext(
+  conversation: ReturnType<typeof createConversation>,
+  maxContextMessages: number,
+): Record<string, unknown> {
+  const recentMessages = conversation.messages
+    .slice(-maxContextMessages)
+    .map((m) => ({ role: m.role, text: m.text }));
+  return {
+    conversation,
+    recentMessages,
+  };
+}
+
+async function interpretMessage(
+  deps: PipelineDeps,
+  message: ParsedMessage,
+  conversationContext: Record<string, unknown>,
+): Promise<unknown> {
+  if (deps.interpreterRegistry) {
+    return await deps.interpreterRegistry.interpret(
+      message.text,
+      conversationContext,
+      deps.availableActions,
+      message.organizationId,
+    );
+  }
+  return await deps.interpreter.interpret(message.text, conversationContext, deps.availableActions);
+}
+
+async function handleInvalidInterpretation(
+  deps: PipelineDeps,
+  message: ParsedMessage,
+  threadId: string,
+  errors: unknown,
+): Promise<void> {
+  console.error("Interpreter output failed schema guard:", errors);
+  const uncertainResponse = await deps.composeResponse(
+    {
+      type: "uncertain",
+      userMessage: message.text,
+      availableActions: deps.availableActions,
+    },
+    message.organizationId ?? undefined,
+  );
+  await deps.adapter.sendTextReply(threadId, uncertainResponse.text);
+  await deps.recordAssistantMessage(threadId, uncertainResponse.text);
+}
+
+async function tryHandleReadIntent(
+  deps: PipelineDeps,
+  result: { readIntent?: unknown; proposals: unknown[] },
+  message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
+  if (result.readIntent && result.proposals.length === 0) {
+    if (!deps.readAdapter) {
+      await deps.sendFilteredReply(threadId, "Read operations are not configured.");
+      return true;
+    }
+    try {
+      const readResult = await handleReadIntent(
+        result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
+        {
+          readAdapter: deps.readAdapter,
+          cartridgeId: "digital-ads",
+          actorId: message.principalId,
+          organizationId: message.organizationId,
+        },
+      );
+      await deps.sendFilteredReply(threadId, readResult.text);
+    } catch (err) {
+      console.error("Read intent error:", err);
+      await deps.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
+    }
+    return true;
+  }
+  return false;
+}
+
+async function tryHandleClarification(
+  deps: PipelineDeps,
+  result: {
+    needsClarification?: boolean;
+    confidence: number;
+    clarificationQuestion?: string | null;
+  },
+  message: ParsedMessage,
+  threadId: string,
+  conversation: ReturnType<typeof createConversation>,
+  isNewConversation: boolean,
+): Promise<boolean> {
+  if (result.needsClarification || result.confidence < 0.5) {
+    if (isNewConversation && result.confidence === 0) {
+      return true;
+    }
+    const clarifyResponse = await deps.composeResponse(
+      {
+        type: "clarification",
+        clarificationQuestion: result.clarificationQuestion ?? undefined,
+        userMessage: message.text,
+        availableActions: deps.availableActions,
+      },
+      message.organizationId ?? undefined,
+    );
+    const updated = transitionConversation(conversation, {
+      type: "set_clarifying",
+      question: clarifyResponse.text,
+    });
+    await setThread(updated);
+    await deps.adapter.sendTextReply(threadId, clarifyResponse.text);
+    return true;
+  }
+  return false;
+}
+
+async function tryHandleNoProposals(
+  deps: PipelineDeps,
+  result: { proposals: unknown[] },
+  message: ParsedMessage,
+  threadId: string,
+  isNewConversation: boolean,
+): Promise<boolean> {
+  if (result.proposals.length === 0) {
+    if (isNewConversation) return true;
+    const noProposalResponse = await deps.composeResponse(
+      {
+        type: "uncertain",
+        userMessage: message.text,
+        availableActions: deps.availableActions,
+      },
+      message.organizationId ?? undefined,
+    );
+    await deps.adapter.sendTextReply(threadId, noProposalResponse.text);
+    return true;
+  }
+  return false;
+}
+
+async function tryExecutePlan(
+  deps: PipelineDeps,
+  result: { goalBrief?: import("@switchboard/schemas").GoalBrief | null },
+  message: ParsedMessage,
+  ctx: HandlerContext,
+  threadId: string,
+): Promise<boolean> {
+  if (result.goalBrief?.decomposable && deps.planGraphBuilder && deps.capabilityRegistry) {
+    try {
+      const capabilities = deps.capabilityRegistry.enrichAvailableActions(deps.availableActions);
+      const plan = deps.planGraphBuilder.buildPlan(result.goalBrief, capabilities, {
+        principalId: message.principalId,
+        organizationId: message.organizationId ?? undefined,
+        cartridgeId: "digital-ads",
+      });
+
+      if (plan && plan.steps.length > 0 && deps.dataFlowExecutor) {
+        const planResult = await deps.dataFlowExecutor.execute(plan, {
+          principalId: message.principalId,
+          organizationId: message.organizationId ?? undefined,
+        });
+
+        await handlePlanResult(ctx, threadId, planResult, message.principalId);
+        return true;
+      }
+    } catch (err) {
+      console.warn(
+        "[Runtime] Plan building/execution failed, falling through to proposal flow:",
+        err,
+      );
+    }
+  }
+  return false;
+}
+
+async function tryHandleUndo(
+  ctx: HandlerContext,
+  result: { proposals: Array<{ actionType: string }> },
+  message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
+  if (result.proposals[0]?.actionType === "system.undo") {
+    await handleUndo(ctx, threadId, message.principalId);
+    return true;
+  }
+  return false;
+}
+
+async function tryHandleKillSwitch(
+  ctx: HandlerContext,
+  result: { proposals: Array<{ actionType: string }> },
+  message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
+  if (result.proposals[0]?.actionType === "system.kill_switch") {
+    await handleKillSwitch(ctx, threadId, message.principalId, message.organizationId);
+    return true;
+  }
+  return false;
+}
+
+async function tryEnforceSkinFilter(
+  deps: PipelineDeps,
+  result: { proposals: Array<{ actionType: string }> },
+  threadId: string,
+): Promise<boolean> {
+  if (deps.resolvedSkin) {
+    const { include, exclude } = deps.resolvedSkin.toolFilter;
+    for (const proposal of result.proposals) {
+      const included = matchesAny(proposal.actionType, include);
+      const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
+      if (!included || excluded) {
+        await deps.sendFilteredReply(
+          threadId,
+          `Action "${proposal.actionType}" is not available in the current configuration.`,
+        );
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function processProposals(
+  deps: PipelineDeps,
+  result: {
+    proposals: Array<{ id: string; actionType: string; parameters: Record<string, unknown> }>;
+  },
+  message: ParsedMessage,
+  threadId: string,
+  withProposals: ReturnType<typeof transitionConversation>,
+  ctx: HandlerContext,
+  rawPayload: unknown,
+): Promise<void> {
+  for (const proposal of result.proposals) {
+    const entityRefs: Array<{ inputRef: string; entityType: string }> = [];
+    if (proposal.parameters["campaignRef"]) {
+      entityRefs.push({
+        inputRef: proposal.parameters["campaignRef"] as string,
+        entityType: "campaign",
+      });
+    }
+
+    const cartridgeId =
+      inferCartridgeId(proposal.actionType, deps.storage?.cartridges ?? undefined) ?? "digital-ads";
+
+    try {
+      const idempotencyKey = createHash("sha256")
+        .update(message.principalId)
+        .update(message.id)
+        .update(proposal.actionType)
+        .digest("hex");
+
+      const proposeResult = await deps.orchestrator.resolveAndPropose({
+        actionType: proposal.actionType,
+        parameters: proposal.parameters,
+        principalId: message.principalId,
+        cartridgeId,
+        entityRefs,
+        message: message.text,
+        organizationId: message.organizationId,
+        idempotencyKey,
+      });
+
+      if ("needsClarification" in proposeResult) {
+        const clarified = transitionConversation(withProposals, {
+          type: "set_clarifying",
+          question: proposeResult.question,
+        });
+        await setThread(clarified);
+        await deps.sendFilteredReply(threadId, proposeResult.question);
+      } else if ("notFound" in proposeResult) {
+        await deps.sendFilteredReply(threadId, proposeResult.explanation);
+      } else {
+        await handleProposeResult(ctx, threadId, proposeResult, message.principalId);
+      }
+    } catch (err) {
+      console.error("Proposal processing error:", err);
+      deps.failedMessageStore
+        ?.record({
+          channel: message.channel,
+          organizationId: message.organizationId ?? undefined,
+          rawPayload: rawPayload as Record<string, unknown>,
+          stage: "propose",
+          errorMessage: safeErrorMessage(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+        })
+        .catch((dlqErr) => console.error("DLQ record error:", dlqErr));
+      await deps.sendFilteredReply(threadId, `Error processing request: ${safeErrorMessage(err)}`);
+    }
+  }
 }
