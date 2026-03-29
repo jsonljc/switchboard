@@ -36,7 +36,7 @@ describe("digital-ads.platform.connect", () => {
     expect(result.summary).toContain("Connected to meta");
     expect(result.summary).toContain("act_123");
     expect(result.data).toBeDefined();
-    expect((result.data as any).status).toBe("connected");
+    expect((result.data as { status: string }).status).toBe("connected");
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(result.rollbackAvailable).toBe(false);
     expect(result.undoRecipe).toBeNull();

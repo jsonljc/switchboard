@@ -46,8 +46,8 @@ describe("Inbound Webhooks API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
-    app.decorate("orchestrator", {} as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+    app.decorate("orchestrator", {} as unknown as never);
 
     await app.register(inboundWebhooksRoutes, { prefix: "/api/inbound" });
   });

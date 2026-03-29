@@ -30,7 +30,7 @@ describe("Token Refresh Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -74,7 +74,7 @@ describe("Token Refresh Job", () => {
     });
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -121,7 +121,7 @@ describe("Token Refresh Job", () => {
     });
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -172,7 +172,7 @@ describe("Token Refresh Job", () => {
     });
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -216,7 +216,7 @@ describe("Token Refresh Job", () => {
     });
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -238,7 +238,7 @@ describe("Token Refresh Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTokenRefreshJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 5_000,
     });

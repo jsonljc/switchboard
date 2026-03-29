@@ -6,6 +6,28 @@ import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
 import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 
+interface ScheduledReportRow {
+  id: string;
+  name: string;
+  reportType: string;
+  platform?: string;
+  vertical?: string;
+  organizationId: string;
+  deliveryChannels: string[];
+  deliveryTargets: string[];
+  cronExpression: string;
+  timezone: string;
+  nextRunAt?: Date;
+  enabled: boolean;
+}
+
+interface PrismaWithScheduledReport {
+  scheduledReport: {
+    findMany: (args: unknown) => Promise<ScheduledReportRow[]>;
+    update: (args: unknown) => Promise<unknown>;
+  };
+}
+
 export interface ScheduledReportJobConfig {
   prisma: PrismaClient;
   storageContext: StorageContext;
@@ -30,7 +52,9 @@ export async function runScheduledReportScanOnce(config: ScheduledReportJobConfi
     const now = new Date();
 
     // Find due reports
-    const dueReports = await (prisma as any).scheduledReport.findMany({
+    const dueReports = await (
+      prisma as unknown as PrismaWithScheduledReport
+    ).scheduledReport.findMany({
       where: {
         enabled: true,
         nextRunAt: { lte: now },
@@ -106,7 +130,9 @@ export async function runScheduledReportScanOnce(config: ScheduledReportJobConfi
         if (execResult?.data) {
           try {
             const { formatDiagnostic } = await import("@switchboard/digital-ads");
-            body = formatDiagnostic(execResult.data as any);
+            body = formatDiagnostic(
+              execResult.data as unknown as Parameters<typeof formatDiagnostic>[0],
+            );
           } catch {
             body = JSON.stringify(execResult.data, null, 2).slice(0, 2000);
           }
@@ -122,7 +148,7 @@ export async function runScheduledReportScanOnce(config: ScheduledReportJobConfi
             recipients: report.deliveryTargets,
           },
           channelCredentials,
-          logger as any,
+          logger,
         );
 
         // Compute next run
@@ -140,7 +166,7 @@ export async function runScheduledReportScanOnce(config: ScheduledReportJobConfi
         }
 
         // Update report
-        await (prisma as any).scheduledReport.update({
+        await (prisma as unknown as PrismaWithScheduledReport).scheduledReport.update({
           where: { id: report.id },
           data: {
             lastRunAt: now,
@@ -150,11 +176,14 @@ export async function runScheduledReportScanOnce(config: ScheduledReportJobConfi
 
         logger.info({ reportId: report.id, reportName: report.name }, "Scheduled report delivered");
       } catch (err) {
-        logger.error({ err, reportId: report.id } as any, "Failed to run scheduled report");
+        logger.error(
+          { err, reportId: report.id } as Record<string, unknown>,
+          "Failed to run scheduled report",
+        );
       }
     }
   } catch (err) {
-    logger.error({ err } as any, "Error in scheduled report job");
+    logger.error({ err } as Record<string, unknown>, "Error in scheduled report job");
   }
 }
 

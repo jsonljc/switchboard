@@ -46,8 +46,8 @@ describe("digital-ads.structure.analyze", () => {
     expect(result.data).toBeDefined();
 
     const data = result.data as {
-      subEntities: any[];
-      findings: any[];
+      subEntities: unknown[];
+      findings: unknown[];
     };
     expect(data.subEntities.length).toBeGreaterThan(0);
     expect(Array.isArray(data.findings)).toBe(true);

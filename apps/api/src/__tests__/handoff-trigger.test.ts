@@ -50,20 +50,20 @@ function buildApp() {
 
   // Decorate with required Fastify properties
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  app.decorate("prisma", {} as any);
+  app.decorate("prisma", {} as unknown as never);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("orchestrator", {
     resolveAndPropose: vi.fn(),
     executeApproved: vi.fn(),
-  } as any);
+  } as unknown as never);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  app.decorate("storageContext", {} as any);
+  app.decorate("storageContext", {} as unknown as never);
   app.decorate("resolvedSkin", null);
   app.decorate("resolvedProfile", null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("agentNotifier", {
     sendProactive: vi.fn().mockResolvedValue(undefined),
-  } as any);
+  } as unknown as never);
 
   app.register(organizationsRoutes, { prefix: "/api/organizations" });
 
@@ -115,9 +115,9 @@ describe("POST /api/organizations/:orgId/handoff", () => {
     const app = Fastify({ logger: false });
     app.decorate("prisma", null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    app.decorate("orchestrator", {} as any);
+    app.decorate("orchestrator", {} as unknown as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    app.decorate("storageContext", {} as any);
+    app.decorate("storageContext", {} as unknown as never);
     app.decorate("resolvedSkin", null);
     app.decorate("resolvedProfile", null);
     app.decorate("agentNotifier", null);

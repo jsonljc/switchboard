@@ -40,8 +40,8 @@ describe("Approval Expiry Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });
@@ -73,8 +73,8 @@ describe("Approval Expiry Job", () => {
     mockIsExpired.mockReturnValue(false);
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });
@@ -114,11 +114,11 @@ describe("Approval Expiry Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     mockIsExpired.mockReturnValue(true);
-    mockTransition.mockReturnValue(expiredState as any);
+    mockTransition.mockReturnValue(expiredState as unknown as never);
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });
@@ -155,11 +155,11 @@ describe("Approval Expiry Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     mockIsExpired.mockReturnValue(true);
-    mockTransition.mockReturnValue({ version: 2, status: "expired" } as any);
+    mockTransition.mockReturnValue({ version: 2, status: "expired" } as unknown as never);
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });
@@ -184,8 +184,8 @@ describe("Approval Expiry Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });
@@ -209,8 +209,8 @@ describe("Approval Expiry Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startApprovalExpiryJob({
-      storage: storage as any,
-      ledger: ledger as any,
+      storage: storage as unknown as never,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 1000,
     });

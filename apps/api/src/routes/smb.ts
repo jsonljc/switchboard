@@ -1,5 +1,47 @@
 import type { FastifyPluginAsync } from "fastify";
 
+/**
+ * Merge existing SMB config with request body, handling null/undefined values correctly.
+ */
+function mergeSmbConfig(
+  existing: {
+    governanceProfile?: string;
+    allowedActionTypes?: string[];
+    blockedActionTypes?: string[];
+    perActionSpendLimit?: number | null;
+    dailySpendLimit?: number | null;
+    ownerId?: string;
+  } | null,
+  body: {
+    governanceProfile?: string;
+    allowedActionTypes?: string[];
+    blockedActionTypes?: string[];
+    perActionSpendLimit?: number | null;
+    dailySpendLimit?: number | null;
+    ownerId?: string;
+  },
+) {
+  return {
+    tier: "smb" as const,
+    governanceProfile: (body.governanceProfile ?? existing?.governanceProfile ?? "guarded") as
+      | "observe"
+      | "guarded"
+      | "strict"
+      | "locked",
+    allowedActionTypes: body.allowedActionTypes ?? existing?.allowedActionTypes,
+    blockedActionTypes: body.blockedActionTypes ?? existing?.blockedActionTypes,
+    perActionSpendLimit:
+      body.perActionSpendLimit !== undefined
+        ? body.perActionSpendLimit
+        : (existing?.perActionSpendLimit ?? null),
+    dailySpendLimit:
+      body.dailySpendLimit !== undefined
+        ? body.dailySpendLimit
+        : (existing?.dailySpendLimit ?? null),
+    ownerId: body.ownerId ?? existing?.ownerId ?? "",
+  };
+}
+
 export const smbRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/smb/:orgId/activity-log — query SMB activity log
   app.get(
@@ -41,7 +83,7 @@ export const smbRoutes: FastifyPluginAsync = async (app) => {
         organizationId: orgId,
         actorId: query.actorId,
         actionType: query.actionType,
-        result: query.result as any,
+        result: query.result as "allowed" | "pending_approval" | "denied" | undefined,
         after: query.after ? new Date(query.after) : undefined,
         before: query.before ? new Date(query.before) : undefined,
         limit: query.limit ? parseInt(query.limit, 10) : 50,
@@ -116,23 +158,7 @@ export const smbRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const config = {
-        tier: "smb" as const,
-        governanceProfile: (body.governanceProfile ??
-          existing?.governanceProfile ??
-          "guarded") as any,
-        allowedActionTypes: body.allowedActionTypes ?? existing?.allowedActionTypes,
-        blockedActionTypes: body.blockedActionTypes ?? existing?.blockedActionTypes,
-        perActionSpendLimit:
-          body.perActionSpendLimit !== undefined
-            ? body.perActionSpendLimit
-            : (existing?.perActionSpendLimit ?? null),
-        dailySpendLimit:
-          body.dailySpendLimit !== undefined
-            ? body.dailySpendLimit
-            : (existing?.dailySpendLimit ?? null),
-        ownerId: body.ownerId ?? existing?.ownerId ?? "",
-      };
+      const config = mergeSmbConfig(existing, body);
 
       await app.tierStore.setSmbConfig(orgId, config);
 

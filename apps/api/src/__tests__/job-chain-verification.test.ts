@@ -19,7 +19,7 @@ describe("Chain Verification Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startChainVerificationJob({
-      ledger: ledger as any,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 60_000,
     });
@@ -52,7 +52,7 @@ describe("Chain Verification Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startChainVerificationJob({
-      ledger: ledger as any,
+      ledger: ledger as unknown as never,
       logger,
       onBrokenChain,
       intervalMs: 60_000,
@@ -74,7 +74,7 @@ describe("Chain Verification Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startChainVerificationJob({
-      ledger: ledger as any,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 60_000,
     });
@@ -97,7 +97,7 @@ describe("Chain Verification Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startChainVerificationJob({
-      ledger: ledger as any,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -121,7 +121,7 @@ describe("Chain Verification Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startChainVerificationJob({
-      ledger: ledger as any,
+      ledger: ledger as unknown as never,
       logger,
       intervalMs: 10_000,
     });

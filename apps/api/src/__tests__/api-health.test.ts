@@ -23,8 +23,8 @@ describe("Health API", () => {
     app.decorate("redis", null);
     app.decorate("executionQueue", null);
     app.decorate("executionWorker", null);
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
-    app.decorate("auditLedger", mockAuditLedger as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+    app.decorate("auditLedger", mockAuditLedger as unknown as never);
 
     await app.register(healthRoutes, { prefix: "/api/health" });
   });
@@ -66,11 +66,11 @@ describe("Health API", () => {
       await app.close();
 
       app = Fastify({ logger: false });
-      app.decorate("redis", { ping: vi.fn().mockResolvedValue("PONG") } as any);
+      app.decorate("redis", { ping: vi.fn().mockResolvedValue("PONG") } as unknown as never);
       app.decorate("executionQueue", null);
       app.decorate("executionWorker", null);
-      app.decorate("storageContext", { cartridges: mockCartridges } as any);
-      app.decorate("auditLedger", mockAuditLedger as any);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      app.decorate("auditLedger", mockAuditLedger as unknown as never);
       await app.register(healthRoutes, { prefix: "/api/health" });
 
       mockCartridges.list.mockReturnValue([]);
@@ -96,10 +96,10 @@ describe("Health API", () => {
 
       app = Fastify({ logger: false });
       app.decorate("redis", null);
-      app.decorate("executionQueue", mockQueue as any);
+      app.decorate("executionQueue", mockQueue as unknown as never);
       app.decorate("executionWorker", null);
-      app.decorate("storageContext", { cartridges: mockCartridges } as any);
-      app.decorate("auditLedger", mockAuditLedger as any);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      app.decorate("auditLedger", mockAuditLedger as unknown as never);
       await app.register(healthRoutes, { prefix: "/api/health" });
 
       mockCartridges.list.mockReturnValue([]);
@@ -126,9 +126,9 @@ describe("Health API", () => {
       app = Fastify({ logger: false });
       app.decorate("redis", null);
       app.decorate("executionQueue", null);
-      app.decorate("executionWorker", mockWorker as any);
-      app.decorate("storageContext", { cartridges: mockCartridges } as any);
-      app.decorate("auditLedger", mockAuditLedger as any);
+      app.decorate("executionWorker", mockWorker as unknown as never);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      app.decorate("auditLedger", mockAuditLedger as unknown as never);
       await app.register(healthRoutes, { prefix: "/api/health" });
 
       mockCartridges.list.mockReturnValue([]);

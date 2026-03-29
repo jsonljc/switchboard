@@ -2,9 +2,18 @@ import type { StorageContext } from "@switchboard/core";
 import type { LifecycleOrchestrator } from "@switchboard/core";
 import type { PrismaClient } from "@switchboard/db";
 import { handleTriggeredAlert } from "../alerts/handler.js";
+import type { AlertRuleRecord } from "../alerts/handler.js";
 import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
 import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
+
+interface PrismaWithAlertRule {
+  alertRule: {
+    findMany: (
+      args: unknown,
+    ) => Promise<(AlertRuleRecord & { vertical?: string; platform?: string })[]>;
+  };
+}
 
 export interface DiagnosticScannerConfig {
   prisma: PrismaClient;
@@ -30,7 +39,7 @@ export async function runDiagnosticScanOnce(config: DiagnosticScannerConfig): Pr
     const now = new Date();
 
     // Find all enabled, non-snoozed alert rules
-    const rules = await (prisma as any).alertRule.findMany({
+    const rules = await (prisma as unknown as PrismaWithAlertRule).alertRule.findMany({
       where: {
         enabled: true,
         OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }],
@@ -126,14 +135,20 @@ export async function runDiagnosticScanOnce(config: DiagnosticScannerConfig): Pr
               execResult.data as Record<string, unknown>,
               prisma,
               channelCredentials,
-              logger as any,
+              logger,
             );
           } catch (err) {
-            logger.error({ err, alertRuleId: rule.id } as any, "Failed to handle alert rule");
+            logger.error(
+              { err, alertRuleId: rule.id } as Record<string, unknown>,
+              "Failed to handle alert rule",
+            );
           }
         }
       } catch (err) {
-        logger.error({ err, orgId } as any, "Failed to run diagnostic scan for org");
+        logger.error(
+          { err, orgId } as Record<string, unknown>,
+          "Failed to run diagnostic scan for org",
+        );
       }
     }
 
@@ -142,7 +157,7 @@ export async function runDiagnosticScanOnce(config: DiagnosticScannerConfig): Pr
       "Diagnostic scan complete",
     );
   } catch (err) {
-    logger.error({ err } as any, "Error in diagnostic scanner");
+    logger.error({ err } as Record<string, unknown>, "Error in diagnostic scanner");
   }
 }
 

@@ -15,7 +15,7 @@ describe("Campaigns API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {

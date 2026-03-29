@@ -43,11 +43,11 @@ function buildApp() {
 
   // Simulate Prisma being available
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  app.decorate("prisma", {} as any);
+  app.decorate("prisma", {} as unknown as never);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.decorate("storageContext", {
     identity: { getPrincipal: mockGetPrincipal },
-  } as any);
+  } as unknown as never);
   app.decorateRequest("organizationIdFromAuth", undefined);
   app.decorateRequest("principalIdFromAuth", undefined);
   app.register(operatorConfigRoutes, { prefix: "/api/operator-config" });

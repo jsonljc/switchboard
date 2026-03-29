@@ -240,7 +240,9 @@ describe("Profile-Driven Behavior", () => {
           steps: [],
         },
       ];
-      const result = resolveCadenceTemplates(customTemplates as any);
+      const result = resolveCadenceTemplates(
+        customTemplates as unknown as typeof DEFAULT_CADENCE_TEMPLATES,
+      );
       expect(result.length).toBe(1);
       expect(result[0]!.id).toBe("custom");
     });
@@ -284,7 +286,7 @@ describe("Profile-Driven Behavior", () => {
     it("sets profile on cartridge instance", async () => {
       const { cartridge } = await bootstrapCustomerEngagementCartridge({}, clinicProfile);
       // The cartridge should have the profile set (via getProfile if available)
-      const ceCartridge = cartridge as any;
+      const ceCartridge = cartridge as unknown as { getProfile?: () => BusinessProfile };
       expect(ceCartridge.getProfile?.()).toEqual(clinicProfile);
     });
 

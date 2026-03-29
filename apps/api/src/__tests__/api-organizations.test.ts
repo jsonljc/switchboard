@@ -42,8 +42,10 @@ describe("Organizations API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", mockPrisma as any);
-    app.decorate("storageContext", { cartridges: { get: vi.fn(), list: vi.fn() } } as any);
+    app.decorate("prisma", mockPrisma as unknown as never);
+    app.decorate("storageContext", {
+      cartridges: { get: vi.fn(), list: vi.fn() },
+    } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -99,7 +101,7 @@ describe("Organizations API", () => {
 
       app = Fastify({ logger: false });
       app.decorate("prisma", null);
-      app.decorate("storageContext", { cartridges: { get: vi.fn() } } as any);
+      app.decorate("storageContext", { cartridges: { get: vi.fn() } } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       await app.register(organizationsRoutes, { prefix: "/api/organizations" });
 

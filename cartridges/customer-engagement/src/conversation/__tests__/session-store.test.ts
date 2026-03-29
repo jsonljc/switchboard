@@ -169,7 +169,9 @@ describe("RedisSessionStore", () => {
 
   it("creates and retrieves a session via Redis", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     const session = makeSession();
     await store.create(session);
     const fetched = await store.getById("sess-1");
@@ -180,7 +182,9 @@ describe("RedisSessionStore", () => {
 
   it("retrieves a session by channel ID", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     await store.create(makeSession());
     const fetched = await store.getByChannelId("ch-1");
     expect(fetched?.id).toBe("sess-1");
@@ -188,19 +192,25 @@ describe("RedisSessionStore", () => {
 
   it("returns null when channel key not found", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     expect(await store.getByChannelId("unknown")).toBeNull();
   });
 
   it("returns null when session key not found", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     expect(await store.getById("unknown")).toBeNull();
   });
 
   it("updates a session in Redis", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     await store.create(makeSession());
     await store.update("sess-1", { escalated: true });
     const fetched = await store.getById("sess-1");
@@ -209,14 +219,18 @@ describe("RedisSessionStore", () => {
 
   it("update is no-op for unknown session", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     await store.update("unknown", { escalated: true });
     // No error thrown
   });
 
   it("deletes a session from Redis", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     await store.create(makeSession());
     await store.delete("sess-1");
     expect(await store.getById("sess-1")).toBeNull();
@@ -224,14 +238,18 @@ describe("RedisSessionStore", () => {
 
   it("delete is no-op for unknown session", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     await store.delete("unknown");
     // No error thrown
   });
 
   it("listActive returns empty array (unimplemented)", async () => {
     const { client } = makeRedisClient();
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     const result = await store.listActive("org-1");
     expect(result).toEqual([]);
   });
@@ -239,7 +257,9 @@ describe("RedisSessionStore", () => {
   it("handles Redis get errors gracefully (fail-open)", async () => {
     const { client } = makeRedisClient();
     client.get.mockRejectedValueOnce(new Error("connection lost"));
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     const result = await store.getByChannelId("ch-1");
     expect(result).toBeNull();
   });
@@ -247,7 +267,9 @@ describe("RedisSessionStore", () => {
   it("handles Redis get errors in getById gracefully", async () => {
     const { client } = makeRedisClient();
     client.get.mockRejectedValueOnce(new Error("connection lost"));
-    const store = new RedisSessionStore(client as any);
+    const store = new RedisSessionStore(
+      client as unknown as Parameters<typeof RedisSessionStore>[0],
+    );
     const result = await store.getById("sess-1");
     expect(result).toBeNull();
   });

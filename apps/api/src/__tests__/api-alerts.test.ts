@@ -28,10 +28,10 @@ describe("Alerts API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", mockPrisma as any);
+    app.decorate("prisma", mockPrisma as unknown as never);
     app.decorate("storageContext", {
       cartridges: { get: vi.fn(), list: vi.fn() },
-    } as any);
+    } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -72,7 +72,7 @@ describe("Alerts API", () => {
 
       app = Fastify({ logger: false });
       app.decorate("prisma", null);
-      app.decorate("storageContext", { cartridges: { get: vi.fn() } } as any);
+      app.decorate("storageContext", { cartridges: { get: vi.fn() } } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       await app.register(alertsRoutes, { prefix: "/api/alerts" });
 
@@ -220,7 +220,7 @@ describe("Alerts API", () => {
   describe("POST /api/alerts/:id/snooze", () => {
     it("snoozes an alert rule", async () => {
       mockAlertRule.findFirst.mockResolvedValue({ id: "rule_1", organizationId: "org_test" });
-      mockAlertRule.update.mockImplementation(({ data }: any) => ({
+      mockAlertRule.update.mockImplementation(({ data }: { data: { snoozedUntil: string } }) => ({
         id: "rule_1",
         snoozedUntil: data.snoozedUntil,
       }));

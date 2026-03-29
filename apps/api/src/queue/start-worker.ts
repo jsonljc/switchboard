@@ -55,6 +55,7 @@ async function main() {
   });
   storage.cartridges.register(
     "digital-ads",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     new GuardedCartridge(adsCartridge as any, interceptors),
   );
   await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);

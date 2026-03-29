@@ -23,8 +23,8 @@ describe("Revenue Growth API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
-    app.decorate("orchestrator", mockOrchestrator as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+    app.decorate("orchestrator", mockOrchestrator as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -44,8 +44,8 @@ describe("Revenue Growth API", () => {
     it("returns 403 when no org scope", async () => {
       // Override the hook to not set org ID
       const noAuthApp = Fastify({ logger: false });
-      noAuthApp.decorate("storageContext", { cartridges: mockCartridges } as any);
-      noAuthApp.decorate("orchestrator", mockOrchestrator as any);
+      noAuthApp.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      noAuthApp.decorate("orchestrator", mockOrchestrator as unknown as never);
       noAuthApp.decorateRequest("organizationIdFromAuth", undefined);
       await noAuthApp.register(revenueGrowthRoutes, { prefix: "/api/revenue-growth" });
 

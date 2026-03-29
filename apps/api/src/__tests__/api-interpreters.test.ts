@@ -19,8 +19,8 @@ describe("Interpreters API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { identity: mockIdentity } as any);
-    app.decorate("auditLedger", mockAuditLedger as any);
+    app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
+    app.decorate("auditLedger", mockAuditLedger as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);

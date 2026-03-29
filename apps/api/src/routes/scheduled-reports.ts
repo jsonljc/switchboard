@@ -37,7 +37,15 @@ function computeNextRunAt(cronExpression: string, timezone: string): Date | null
 }
 
 export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
-  const prisma = app.prisma as any;
+  const prisma = app.prisma as unknown as {
+    scheduledReport: {
+      findMany: (args: unknown) => Promise<unknown[]>;
+      findFirst: (args: unknown) => Promise<unknown | null>;
+      create: (args: unknown) => Promise<unknown>;
+      update: (args: unknown) => Promise<unknown>;
+      delete: (args: unknown) => Promise<unknown>;
+    };
+  };
 
   // GET /api/scheduled-reports — list reports for org
   app.get("/", async (request, reply) => {
@@ -79,10 +87,12 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
     }
 
-    const existing = await prisma.scheduledReport.findFirst({
+    const rawExisting = await prisma.scheduledReport.findFirst({
       where: { id, organizationId: orgId },
     });
-    if (!existing) return reply.code(404).send({ error: "Scheduled report not found" });
+    if (!rawExisting) return reply.code(404).send({ error: "Scheduled report not found" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existing = rawExisting as any;
 
     const data: Record<string, unknown> = { ...parsed.data };
 
@@ -117,8 +127,12 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string };
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
-    const report = await prisma.scheduledReport.findFirst({ where: { id, organizationId: orgId } });
-    if (!report) return reply.code(404).send({ error: "Scheduled report not found" });
+    const rawReport = await prisma.scheduledReport.findFirst({
+      where: { id, organizationId: orgId },
+    });
+    if (!rawReport) return reply.code(404).send({ error: "Scheduled report not found" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const report = rawReport as any;
 
     try {
       const vertical = report.vertical ?? "commerce";

@@ -15,7 +15,7 @@ describe("Cartridges API", () => {
     vi.clearAllMocks();
 
     app = Fastify({ logger: false });
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
     await app.register(cartridgesRoutes, { prefix: "/api/cartridges" });
   });
 

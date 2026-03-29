@@ -230,7 +230,9 @@ describe("buildDiagnosticContext", () => {
     ];
 
     const client = makeMockClient([]);
-    (client as any).fetchSubEntityBreakdowns = vi.fn().mockResolvedValue(mockBreakdowns);
+    (
+      client as unknown as PlatformClient & { fetchSubEntityBreakdowns: ReturnType<typeof vi.fn> }
+    ).fetchSubEntityBreakdowns = vi.fn().mockResolvedValue(mockBreakdowns);
 
     const context = await buildDiagnosticContext({
       client,
@@ -243,6 +245,9 @@ describe("buildDiagnosticContext", () => {
     });
 
     expect(context.subEntities).toHaveLength(2);
-    expect((client as any).fetchSubEntityBreakdowns).toHaveBeenCalledTimes(1);
+    expect(
+      (client as unknown as PlatformClient & { fetchSubEntityBreakdowns: ReturnType<typeof vi.fn> })
+        .fetchSubEntityBreakdowns,
+    ).toHaveBeenCalledTimes(1);
   });
 });

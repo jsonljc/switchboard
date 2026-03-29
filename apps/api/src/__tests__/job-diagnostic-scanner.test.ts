@@ -41,9 +41,9 @@ describe("Diagnostic Scanner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });
@@ -70,9 +70,9 @@ describe("Diagnostic Scanner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });
@@ -117,9 +117,9 @@ describe("Diagnostic Scanner Job", () => {
     mockHandleTriggeredAlert.mockResolvedValue(undefined);
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });
@@ -169,9 +169,9 @@ describe("Diagnostic Scanner Job", () => {
       });
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });
@@ -204,9 +204,9 @@ describe("Diagnostic Scanner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });
@@ -234,9 +234,9 @@ describe("Diagnostic Scanner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startDiagnosticScanner({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 120_000,
     });

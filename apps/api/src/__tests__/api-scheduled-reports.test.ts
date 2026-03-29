@@ -35,9 +35,9 @@ describe("Scheduled Reports API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", mockPrisma as any);
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
-    app.decorate("orchestrator", {} as any);
+    app.decorate("prisma", mockPrisma as unknown as never);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+    app.decorate("orchestrator", {} as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -70,7 +70,7 @@ describe("Scheduled Reports API", () => {
 
       app = Fastify({ logger: false });
       app.decorate("prisma", null);
-      app.decorate("storageContext", { cartridges: mockCartridges } as any);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       await app.register(scheduledReportsRoutes, { prefix: "/api/scheduled-reports" });
 

@@ -28,7 +28,7 @@ describe("Cadence Runner Job", () => {
   });
 
   it("registerCadenceDefinition stores a definition", () => {
-    registerCadenceDefinition({ id: "cad_def_1", name: "Test", steps: [] } as any);
+    registerCadenceDefinition({ id: "cad_def_1", name: "Test", steps: [] } as unknown as never);
     // Verify via startCadenceInstance + runner that uses the definitions
     expect(true).toBe(true);
   });
@@ -40,7 +40,7 @@ describe("Cadence Runner Job", () => {
       contactId: "pat_1",
       status: "active",
     };
-    startCadenceInstance(instance as any);
+    startCadenceInstance(instance as unknown as never);
     expect(await getCadenceInstance("inst_1")).toEqual(instance);
   });
 
@@ -50,13 +50,13 @@ describe("Cadence Runner Job", () => {
       cadenceDefinitionId: "cad_1",
       contactId: "pat_1",
       status: "active",
-    } as any);
+    } as unknown as never);
     startCadenceInstance({
       id: "inst_b",
       cadenceDefinitionId: "cad_1",
       contactId: "pat_2",
       status: "completed",
-    } as any);
+    } as unknown as never);
 
     const active = await getActiveCadenceInstances();
     expect(active.some((i: { id: string }) => i.id === "inst_a")).toBe(true);
@@ -71,7 +71,7 @@ describe("Cadence Runner Job", () => {
 
     // mockEvaluate won't be called because there are no instances
     const cleanup = startCadenceRunner({
-      storageContext: storageContext as any,
+      storageContext: storageContext as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -91,7 +91,7 @@ describe("Cadence Runner Job", () => {
       contactId: "pat_exec",
       status: "active",
       currentStepIndex: 0,
-    } as any);
+    } as unknown as never);
 
     mockEvaluate.mockReturnValue([
       {
@@ -104,7 +104,7 @@ describe("Cadence Runner Job", () => {
           skipped: false,
         },
       },
-    ] as any);
+    ] as unknown as never);
 
     mockApply.mockImplementation((instance) => instance);
 
@@ -118,7 +118,7 @@ describe("Cadence Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startCadenceRunner({
-      storageContext: storageContext as any,
+      storageContext: storageContext as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -141,7 +141,7 @@ describe("Cadence Runner Job", () => {
       contactId: "pat_err",
       status: "active",
       currentStepIndex: 0,
-    } as any);
+    } as unknown as never);
 
     mockEvaluate.mockReturnValue([
       {
@@ -154,7 +154,7 @@ describe("Cadence Runner Job", () => {
           skipped: false,
         },
       },
-    ] as any);
+    ] as unknown as never);
     mockApply.mockImplementation((instance) => instance);
 
     const mockCartridge = {
@@ -166,7 +166,7 @@ describe("Cadence Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startCadenceRunner({
-      storageContext: storageContext as any,
+      storageContext: storageContext as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -188,7 +188,7 @@ describe("Cadence Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startCadenceRunner({
-      storageContext: storageContext as any,
+      storageContext: storageContext as unknown as never,
       logger,
       intervalMs: 5_000,
     });

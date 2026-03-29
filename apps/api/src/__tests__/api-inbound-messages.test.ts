@@ -49,7 +49,7 @@ describe("Inbound Messages API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
     app.decorate("redis", null);
 
     app.decorateRequest("organizationIdFromAuth", undefined);

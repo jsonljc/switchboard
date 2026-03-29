@@ -4,6 +4,106 @@ import { requireOrganizationScope } from "../utils/require-org.js";
 
 const COST_PRECISION = 1_000_000;
 
+/**
+ * Parse token usage from Redis pipeline results.
+ */
+function parseTokenResults(
+  results: Array<[Error | null, unknown]> | null,
+  tokenKeys: string[],
+): { promptTokens: number; completionTokens: number } {
+  let promptTokens = 0;
+  let completionTokens = 0;
+
+  if (!results) return { promptTokens, completionTokens };
+
+  for (let i = 0; i < tokenKeys.length; i++) {
+    const [err, data] = results[i] ?? [null, null];
+    if (err || !data) continue;
+    const hash = data as Record<string, string>;
+    promptTokens += parseInt(hash["prompt"] ?? "0", 10) || 0;
+    completionTokens += parseInt(hash["completion"] ?? "0", 10) || 0;
+  }
+
+  return { promptTokens, completionTokens };
+}
+
+/**
+ * Parse cost data from Redis pipeline results.
+ */
+function parseCostResults(
+  results: Array<[Error | null, unknown]> | null,
+  costKeys: string[],
+  offset: number,
+): number {
+  let totalMicroDollars = 0;
+
+  if (!results) return totalMicroDollars;
+
+  for (let i = offset; i < offset + costKeys.length; i++) {
+    const [err, data] = results[i] ?? [null, null];
+    if (err || !data) continue;
+    totalMicroDollars += parseInt(data as string, 10) || 0;
+  }
+
+  return totalMicroDollars;
+}
+
+/**
+ * Parse daily trend data from Redis pipeline results.
+ */
+function parseDailyTrend(
+  results: Array<[Error | null, unknown]> | null,
+  dates: string[],
+): Array<{
+  date: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUSD: number;
+}> {
+  const trend: Array<{
+    date: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    estimatedCostUSD: number;
+  }> = [];
+
+  for (let i = 0; i < dates.length; i++) {
+    const [tokenErr, tokenData] = results?.[i] ?? [null, null];
+    const [costErr, costData] = results?.[i + dates.length] ?? [null, null];
+
+    let prompt = 0;
+    let completion = 0;
+    let microDollars = 0;
+
+    if (!tokenErr && tokenData) {
+      const hash = tokenData as Record<string, string>;
+      prompt = parseInt(hash["prompt"] ?? "0", 10) || 0;
+      completion = parseInt(hash["completion"] ?? "0", 10) || 0;
+    }
+
+    if (!costErr && costData) {
+      microDollars = parseInt(costData as string, 10) || 0;
+    }
+
+    const estimatedCostUSD =
+      microDollars > 0
+        ? microDollars / COST_PRECISION
+        : computeTokenCostUSD(prompt, completion).totalCost;
+
+    trend.push({
+      date: dates[i]!,
+      promptTokens: prompt,
+      completionTokens: completion,
+      totalTokens: prompt + completion,
+      estimatedCostUSD: Math.round(estimatedCostUSD * 1_000_000) / 1_000_000,
+    });
+  }
+
+  return trend;
+}
+
 export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/token-usage?period=daily|weekly|monthly
   app.get(
@@ -41,10 +141,6 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
         const tokenKeys = buildDayKeys(orgId, days);
         const costKeys = buildCostDayKeys(orgId, days);
 
-        let promptTokens = 0;
-        let completionTokens = 0;
-        let totalMicroDollars = 0;
-
         const pipeline = redis.pipeline();
         for (const key of tokenKeys) {
           pipeline.hgetall(key);
@@ -54,20 +150,8 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
         }
         const results = await pipeline.exec();
 
-        if (results) {
-          for (let i = 0; i < tokenKeys.length; i++) {
-            const [err, data] = results[i] ?? [null, null];
-            if (err || !data) continue;
-            const hash = data as Record<string, string>;
-            promptTokens += parseInt(hash["prompt"] ?? "0", 10) || 0;
-            completionTokens += parseInt(hash["completion"] ?? "0", 10) || 0;
-          }
-          for (let i = tokenKeys.length; i < tokenKeys.length + costKeys.length; i++) {
-            const [err, data] = results[i] ?? [null, null];
-            if (err || !data) continue;
-            totalMicroDollars += parseInt(data as string, 10) || 0;
-          }
-        }
+        const { promptTokens, completionTokens } = parseTokenResults(results, tokenKeys);
+        const totalMicroDollars = parseCostResults(results, costKeys, tokenKeys.length);
 
         // If no cost data in Redis yet, estimate from tokens using default model
         const estimatedCostUSD =
@@ -126,13 +210,6 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const trend: Array<{
-          date: string;
-          promptTokens: number;
-          completionTokens: number;
-          totalTokens: number;
-          estimatedCostUSD: number;
-        }> = [];
         const now = new Date();
         const tokenKeys: string[] = [];
         const costKeys: string[] = [];
@@ -156,37 +233,7 @@ export const tokenUsageRoutes: FastifyPluginAsync = async (app) => {
         }
         const results = await pipeline.exec();
 
-        for (let i = 0; i < dates.length; i++) {
-          const [tokenErr, tokenData] = results?.[i] ?? [null, null];
-          const [costErr, costData] = results?.[i + dates.length] ?? [null, null];
-
-          let prompt = 0;
-          let completion = 0;
-          let microDollars = 0;
-
-          if (!tokenErr && tokenData) {
-            const hash = tokenData as Record<string, string>;
-            prompt = parseInt(hash["prompt"] ?? "0", 10) || 0;
-            completion = parseInt(hash["completion"] ?? "0", 10) || 0;
-          }
-
-          if (!costErr && costData) {
-            microDollars = parseInt(costData as string, 10) || 0;
-          }
-
-          const estimatedCostUSD =
-            microDollars > 0
-              ? microDollars / COST_PRECISION
-              : computeTokenCostUSD(prompt, completion).totalCost;
-
-          trend.push({
-            date: dates[i]!,
-            promptTokens: prompt,
-            completionTokens: completion,
-            totalTokens: prompt + completion,
-            estimatedCostUSD: Math.round(estimatedCostUSD * 1_000_000) / 1_000_000,
-          });
-        }
+        const trend = parseDailyTrend(results, dates);
 
         return reply.code(200).send({ trend, orgId });
       } catch (err) {

@@ -24,7 +24,7 @@ describe("CRM API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", { _mock: true } as any);
+    app.decorate("prisma", { _mock: true } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -188,7 +188,7 @@ describe("CRM API", () => {
       await app.close();
 
       app = Fastify({ logger: false });
-      app.decorate("prisma", { _mock: true } as any);
+      app.decorate("prisma", { _mock: true } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       await app.register(crmRoutes, { prefix: "/api/crm" });
 

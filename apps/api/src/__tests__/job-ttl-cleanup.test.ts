@@ -25,7 +25,7 @@ describe("TTL Cleanup Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTtlCleanupJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -57,7 +57,7 @@ describe("TTL Cleanup Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTtlCleanupJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -80,7 +80,7 @@ describe("TTL Cleanup Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTtlCleanupJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -104,7 +104,7 @@ describe("TTL Cleanup Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTtlCleanupJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });
@@ -129,7 +129,7 @@ describe("TTL Cleanup Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startTtlCleanupJob({
-      prisma: prisma as any,
+      prisma: prisma as unknown as never,
       logger,
       intervalMs: 10_000,
     });

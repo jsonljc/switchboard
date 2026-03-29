@@ -15,6 +15,7 @@ vi.mock("../services/system-governed-actions.js", () => ({
 import { startScheduledReportJob } from "../jobs/scheduled-reports.js";
 
 describe("Scheduled Reports Runner Job", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let notifySpy: any;
 
   beforeEach(() => {
@@ -27,7 +28,7 @@ describe("Scheduled Reports Runner Job", () => {
     });
     notifySpy = vi
       .spyOn(notifier, "sendProactiveNotification")
-      .mockResolvedValue([{ channel: "test", success: true }] as any);
+      .mockResolvedValue([{ channel: "test", success: true }] as unknown as never);
   });
 
   afterEach(() => {
@@ -49,9 +50,9 @@ describe("Scheduled Reports Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });
@@ -92,9 +93,9 @@ describe("Scheduled Reports Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });
@@ -153,9 +154,9 @@ describe("Scheduled Reports Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });
@@ -203,9 +204,9 @@ describe("Scheduled Reports Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });
@@ -213,7 +214,7 @@ describe("Scheduled Reports Runner Job", () => {
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(notifySpy).toHaveBeenCalled();
-    const notification = notifySpy.mock.calls[0][0] as { body: string };
+    const notification = notifySpy.mock.calls[0]![0] as { body: string };
     expect(notification.body).toContain("42");
 
     cleanup();
@@ -267,9 +268,9 @@ describe("Scheduled Reports Runner Job", () => {
       });
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });
@@ -300,9 +301,9 @@ describe("Scheduled Reports Runner Job", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const cleanup = startScheduledReportJob({
-      prisma: prisma as any,
-      storageContext: storageContext as any,
-      orchestrator: orchestrator as any,
+      prisma: prisma as unknown as never,
+      storageContext: storageContext as unknown as never,
+      orchestrator: orchestrator as unknown as never,
       logger,
       intervalMs: 5_000,
     });

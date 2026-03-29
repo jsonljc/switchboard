@@ -4,7 +4,7 @@ import { sendProactiveNotification } from "./notifier.js";
 import type { ProactiveNotification, SendResult } from "./notifier.js";
 import type { Logger } from "../logger.js";
 
-interface AlertRuleRecord {
+export interface AlertRuleRecord {
   id: string;
   organizationId: string;
   name: string;
@@ -66,6 +66,7 @@ export async function handleTriggeredAlert(
   let body = evaluation.description;
   try {
     const { formatDiagnostic } = await import("@switchboard/digital-ads");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     body = formatDiagnostic(diagnosticResult as any);
   } catch {
     // Fall back to evaluation description
@@ -89,7 +90,11 @@ export async function handleTriggeredAlert(
 
   // Record alert history
   try {
-    await (prisma as any).alertHistory.create({
+    await (
+      prisma as unknown as PrismaClient & {
+        alertHistory: { create: (args: unknown) => Promise<unknown> };
+      }
+    ).alertHistory.create({
       data: {
         alertRuleId: alert.id,
         organizationId: alert.organizationId,
@@ -105,7 +110,11 @@ export async function handleTriggeredAlert(
 
   // Update lastTriggeredAt
   try {
-    await (prisma as any).alertRule.update({
+    await (
+      prisma as unknown as PrismaClient & {
+        alertRule: { update: (args: unknown) => Promise<unknown> };
+      }
+    ).alertRule.update({
       where: { id: alert.id },
       data: { lastTriggeredAt: now },
     });
