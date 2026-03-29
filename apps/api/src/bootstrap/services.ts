@@ -288,6 +288,12 @@ export async function bootstrapServices(
         ? approvalNotifiers[0]
         : undefined;
 
+  if (!approvalNotifier) {
+    logger.warn(
+      "[boot] No approval notifiers configured — operators will not be notified of pending approvals. Set TELEGRAM_BOT_TOKEN, SLACK_BOT_TOKEN, or WHATSAPP_TOKEN to enable.",
+    );
+  }
+
   // --- Build orchestrator ---
   const orchestrator = new LifecycleOrchestrator({
     storage,

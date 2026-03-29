@@ -52,6 +52,17 @@ export class PrismaRevenueStore implements RevenueStore {
   constructor(private prisma: PrismaDbClient) {}
 
   async record(input: RecordRevenueInput): Promise<LifecycleRevenueEvent> {
+    // Idempotency: if externalReference is provided, return existing record instead of duplicating
+    if (input.externalReference) {
+      const existing = await this.prisma.lifecycleRevenueEvent.findFirst({
+        where: {
+          opportunityId: input.opportunityId,
+          externalReference: input.externalReference,
+        },
+      });
+      if (existing) return mapRowToRevenueEvent(existing);
+    }
+
     const id = randomUUID();
     const now = new Date();
 

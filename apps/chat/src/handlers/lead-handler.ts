@@ -71,16 +71,13 @@ export async function delegateToEventLoop(
       return;
     }
 
+    // The EventLoop sends replies directly via the messaging adapter (ActionExecutor),
+    // not in this HTTP response. We only read escalation status here.
     const body = (await res.json()) as {
-      replies: string[];
       escalated: boolean;
       handedOffTo?: string | null;
+      agentId?: string | null;
     };
-
-    for (const reply of body.replies) {
-      await ctx.sendFilteredReply(threadId, reply);
-      await ctx.recordAssistantMessage(threadId, reply);
-    }
 
     if (body.escalated) {
       await ctx.sendFilteredReply(

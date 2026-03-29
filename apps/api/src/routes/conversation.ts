@@ -150,7 +150,7 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
               escalated = true;
             }
             if (evtType === "lead.qualified") {
-              handedOffTo = "sales-closer";
+              handedOffTo = (event.metadata?.targetAgentId as string) ?? null;
             }
           }
 
