@@ -10,6 +10,19 @@ import type {
 import type { PlatformType } from "../types.js";
 import { AbstractPlatformClient } from "../base-client.js";
 
+interface TikTokAggregates {
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalPageBrowse: number;
+  totalAddToCart: number;
+  totalPurchase: number;
+  totalPurchaseValue: number;
+  totalConversion: number;
+  totalFormSubmit: number;
+  totalOnsiteForm: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -283,6 +296,22 @@ export class TikTokAdsClient extends AbstractPlatformClient {
     timeRange: TimeRange,
     funnel: FunnelSchema,
   ): MetricSnapshot {
+    const aggregates = this.aggregateTikTokMetrics(rows);
+    const stages = this.buildTikTokStages(funnel, aggregates);
+    const topLevel = this.buildTikTokTopLevel(aggregates);
+
+    return {
+      entityId,
+      entityLevel,
+      periodStart: timeRange.since,
+      periodEnd: timeRange.until,
+      spend: aggregates.totalSpend,
+      stages,
+      topLevel,
+    };
+  }
+
+  private aggregateTikTokMetrics(rows: TikTokReportRow[]): TikTokAggregates {
     let totalSpend = 0;
     let totalImpressions = 0;
     let totalClicks = 0;
@@ -308,73 +337,94 @@ export class TikTokAdsClient extends AbstractPlatformClient {
       totalOnsiteForm += parseInt(m.onsite_form ?? "0", 10);
     }
 
-    // Map TikTok metrics to stage metric keys
+    return {
+      totalSpend,
+      totalImpressions,
+      totalClicks,
+      totalPageBrowse,
+      totalAddToCart,
+      totalPurchase,
+      totalPurchaseValue,
+      totalConversion,
+      totalFormSubmit,
+      totalOnsiteForm,
+    };
+  }
+
+  private buildTikTokStages(
+    funnel: FunnelSchema,
+    aggregates: TikTokAggregates,
+  ): Record<string, StageMetrics> {
     const metricMap: Record<string, number> = {
-      impressions: totalImpressions,
-      clicks: totalClicks,
-      page_browse: totalPageBrowse,
-      onsite_add_to_cart: totalAddToCart,
-      complete_payment: totalPurchase,
-      conversion: totalConversion,
-      form_submit: totalFormSubmit,
-      onsite_form: totalOnsiteForm,
+      impressions: aggregates.totalImpressions,
+      clicks: aggregates.totalClicks,
+      page_browse: aggregates.totalPageBrowse,
+      onsite_add_to_cart: aggregates.totalAddToCart,
+      complete_payment: aggregates.totalPurchase,
+      conversion: aggregates.totalConversion,
+      form_submit: aggregates.totalFormSubmit,
+      onsite_form: aggregates.totalOnsiteForm,
     };
 
-    // Build stage metrics from the funnel schema
     const stages: Record<string, StageMetrics> = {};
 
     for (const stage of funnel.stages) {
       const count = metricMap[stage.metric] ?? 0;
-
-      let cost: number | null = null;
-      if (stage.costMetric === "cpm" && totalImpressions > 0) {
-        cost = (totalSpend / totalImpressions) * 1000;
-      } else if (stage.costMetric === "cpc" && totalClicks > 0) {
-        cost = totalSpend / totalClicks;
-      } else if (stage.costMetric && count > 0) {
-        // Generic cost-per-action
-        cost = totalSpend / count;
-      }
-
+      const cost = this.getTikTokStageCost(stage.costMetric, aggregates, count);
       stages[stage.metric] = { count, cost };
     }
 
-    // Top-level fields
+    return stages;
+  }
+
+  private getTikTokStageCost(
+    costMetric: string | null | undefined,
+    aggregates: TikTokAggregates,
+    count: number,
+  ): number | null {
+    if (!costMetric) return null;
+
+    if (costMetric === "cpm" && aggregates.totalImpressions > 0) {
+      return (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+    }
+    if (costMetric === "cpc" && aggregates.totalClicks > 0) {
+      return aggregates.totalSpend / aggregates.totalClicks;
+    }
+    if (count > 0) {
+      return aggregates.totalSpend / count;
+    }
+
+    return null;
+  }
+
+  private buildTikTokTopLevel(aggregates: TikTokAggregates): Record<string, number> {
     const topLevel: Record<string, number> = {
-      impressions: totalImpressions,
-      clicks: totalClicks,
-      spend: totalSpend,
-      page_browse: totalPageBrowse,
-      onsite_add_to_cart: totalAddToCart,
-      complete_payment: totalPurchase,
-      complete_payment_value: totalPurchaseValue,
-      conversion: totalConversion,
-      form_submit: totalFormSubmit,
+      impressions: aggregates.totalImpressions,
+      clicks: aggregates.totalClicks,
+      spend: aggregates.totalSpend,
+      page_browse: aggregates.totalPageBrowse,
+      onsite_add_to_cart: aggregates.totalAddToCart,
+      complete_payment: aggregates.totalPurchase,
+      complete_payment_value: aggregates.totalPurchaseValue,
+      conversion: aggregates.totalConversion,
+      form_submit: aggregates.totalFormSubmit,
     };
 
-    if (totalImpressions > 0) {
-      topLevel.cpm = (totalSpend / totalImpressions) * 1000;
-      topLevel.ctr = (totalClicks / totalImpressions) * 100;
+    if (aggregates.totalImpressions > 0) {
+      topLevel.cpm = (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+      topLevel.ctr = (aggregates.totalClicks / aggregates.totalImpressions) * 100;
     }
-    if (totalClicks > 0) {
-      topLevel.cpc = totalSpend / totalClicks;
+    if (aggregates.totalClicks > 0) {
+      topLevel.cpc = aggregates.totalSpend / aggregates.totalClicks;
     }
-    if (totalPurchase > 0) {
-      topLevel.cost_per_complete_payment = totalSpend / totalPurchase;
+    if (aggregates.totalPurchase > 0) {
+      topLevel.cost_per_complete_payment = aggregates.totalSpend / aggregates.totalPurchase;
     }
-    if (totalSpend > 0 && totalPurchaseValue > 0) {
-      topLevel.roas = totalPurchaseValue / totalSpend;
+    if (aggregates.totalSpend > 0 && aggregates.totalPurchaseValue > 0) {
+      topLevel.roas = aggregates.totalPurchaseValue / aggregates.totalSpend;
     }
 
-    return {
-      entityId,
-      entityLevel,
-      periodStart: timeRange.since,
-      periodEnd: timeRange.until,
-      spend: totalSpend,
-      stages,
-      topLevel,
-    };
+    return topLevel;
   }
 
   private emptySnapshot(

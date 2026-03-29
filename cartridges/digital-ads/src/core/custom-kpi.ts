@@ -104,56 +104,37 @@ function tokenize(expression: string): Token[] {
   while (i < expression.length) {
     const ch = expression[i]!;
 
-    // Skip whitespace
-    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+    if (isWhitespace(ch)) {
       i++;
       continue;
     }
 
-    // Numbers (integer or decimal)
-    if (ch >= "0" && ch <= "9") {
-      let num = "";
-      while (
-        i < expression.length &&
-        ((expression[i]! >= "0" && expression[i]! <= "9") || expression[i] === ".")
-      ) {
-        num += expression[i]!;
-        i++;
-      }
-      tokens.push({ type: "number", value: num });
+    if (isDigit(ch)) {
+      const { token, newIndex } = parseNumber(expression, i);
+      tokens.push(token);
+      i = newIndex;
       continue;
     }
 
-    // Identifiers (metric names: letters, digits, underscores)
-    if ((ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch === "_") {
-      let ident = "";
-      while (
-        i < expression.length &&
-        ((expression[i]! >= "a" && expression[i]! <= "z") ||
-          (expression[i]! >= "A" && expression[i]! <= "Z") ||
-          (expression[i]! >= "0" && expression[i]! <= "9") ||
-          expression[i] === "_")
-      ) {
-        ident += expression[i]!;
-        i++;
-      }
-      tokens.push({ type: "identifier", value: ident });
+    if (isIdentifierStart(ch)) {
+      const { token, newIndex } = parseIdentifier(expression, i);
+      tokens.push(token);
+      i = newIndex;
       continue;
     }
 
-    // Operators
-    if (ch === "+" || ch === "-" || ch === "*" || ch === "/") {
+    if (isOperator(ch)) {
       tokens.push({ type: "operator", value: ch });
       i++;
       continue;
     }
 
-    // Parentheses
     if (ch === "(") {
       tokens.push({ type: "lparen", value: "(" });
       i++;
       continue;
     }
+
     if (ch === ")") {
       tokens.push({ type: "rparen", value: ")" });
       i++;
@@ -164,6 +145,46 @@ function tokenize(expression: string): Token[] {
   }
   tokens.push({ type: "eof", value: "" });
   return tokens;
+}
+
+function isWhitespace(ch: string): boolean {
+  return ch === " " || ch === "\t" || ch === "\n" || ch === "\r";
+}
+
+function isDigit(ch: string): boolean {
+  return ch >= "0" && ch <= "9";
+}
+
+function isIdentifierStart(ch: string): boolean {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch === "_";
+}
+
+function isIdentifierChar(ch: string): boolean {
+  return isIdentifierStart(ch) || isDigit(ch);
+}
+
+function isOperator(ch: string): boolean {
+  return ch === "+" || ch === "-" || ch === "*" || ch === "/";
+}
+
+function parseNumber(expression: string, start: number): { token: Token; newIndex: number } {
+  let num = "";
+  let i = start;
+  while (i < expression.length && (isDigit(expression[i]!) || expression[i] === ".")) {
+    num += expression[i]!;
+    i++;
+  }
+  return { token: { type: "number", value: num }, newIndex: i };
+}
+
+function parseIdentifier(expression: string, start: number): { token: Token; newIndex: number } {
+  let ident = "";
+  let i = start;
+  while (i < expression.length && isIdentifierChar(expression[i]!)) {
+    ident += expression[i]!;
+    i++;
+  }
+  return { token: { type: "identifier", value: ident }, newIndex: i };
 }
 
 /**
@@ -456,6 +477,12 @@ export class CustomKPIEngine {
   // -------------------------------------------------------------------------
 
   private validateDefinition(definition: Omit<CustomKPIDefinition, "id">): void {
+    this.validateBasicFields(definition);
+    this.validateDefinitionType(definition);
+    this.validateThresholds(definition);
+  }
+
+  private validateBasicFields(definition: Omit<CustomKPIDefinition, "id">): void {
     if (!definition.name || definition.name.trim().length === 0) {
       throw new Error("KPI name is required");
     }
@@ -476,62 +503,74 @@ export class CustomKPIEngine {
         `Invalid format: ${definition.format}. Must be one of: ${validFormats.join(", ")}`,
       );
     }
+  }
 
+  private validateDefinitionType(definition: Omit<CustomKPIDefinition, "id">): void {
     switch (definition.type) {
       case "ratio":
-        if (!definition.numerator) {
-          throw new Error("Ratio KPI requires a numerator metric");
-        }
-        if (!definition.denominator) {
-          throw new Error("Ratio KPI requires a denominator metric");
-        }
-        this.validateMetricRef(definition.numerator);
-        this.validateMetricRef(definition.denominator);
+        this.validateRatioType(definition);
         break;
-
       case "sum":
       case "average":
-        if (!definition.metrics || definition.metrics.length === 0) {
-          throw new Error(
-            `${definition.type} KPI requires a metrics array with at least one metric`,
-          );
-        }
-        for (const m of definition.metrics) {
-          this.validateMetricRef(m);
-        }
+        this.validateAggregationType(definition);
         break;
-
       case "weighted_average":
-        if (!definition.metrics || definition.metrics.length === 0) {
-          throw new Error("weighted_average KPI requires a metrics array with at least one metric");
-        }
-        if (!definition.weightMetric) {
-          throw new Error("weighted_average KPI requires a weightMetric");
-        }
-        for (const m of definition.metrics) {
-          this.validateMetricRef(m);
-        }
-        this.validateMetricRef(definition.weightMetric);
+        this.validateWeightedAverageType(definition);
         break;
-
       case "custom":
-        if (!definition.expression || definition.expression.trim().length === 0) {
-          throw new Error("Custom KPI requires an expression");
-        }
-        // Validate expression by extracting identifiers and checking them
-        try {
-          const refs = extractMetricRefs(definition.expression);
-          for (const ref of refs) {
-            this.validateMetricRef(ref);
-          }
-        } catch (err) {
-          throw new Error(
-            `Invalid expression: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
+        this.validateCustomType(definition);
         break;
     }
+  }
 
+  private validateRatioType(definition: Omit<CustomKPIDefinition, "id">): void {
+    if (!definition.numerator) {
+      throw new Error("Ratio KPI requires a numerator metric");
+    }
+    if (!definition.denominator) {
+      throw new Error("Ratio KPI requires a denominator metric");
+    }
+    this.validateMetricRef(definition.numerator);
+    this.validateMetricRef(definition.denominator);
+  }
+
+  private validateAggregationType(definition: Omit<CustomKPIDefinition, "id">): void {
+    if (!definition.metrics || definition.metrics.length === 0) {
+      throw new Error(`${definition.type} KPI requires a metrics array with at least one metric`);
+    }
+    for (const m of definition.metrics) {
+      this.validateMetricRef(m);
+    }
+  }
+
+  private validateWeightedAverageType(definition: Omit<CustomKPIDefinition, "id">): void {
+    if (!definition.metrics || definition.metrics.length === 0) {
+      throw new Error("weighted_average KPI requires a metrics array with at least one metric");
+    }
+    if (!definition.weightMetric) {
+      throw new Error("weighted_average KPI requires a weightMetric");
+    }
+    for (const m of definition.metrics) {
+      this.validateMetricRef(m);
+    }
+    this.validateMetricRef(definition.weightMetric);
+  }
+
+  private validateCustomType(definition: Omit<CustomKPIDefinition, "id">): void {
+    if (!definition.expression || definition.expression.trim().length === 0) {
+      throw new Error("Custom KPI requires an expression");
+    }
+    try {
+      const refs = extractMetricRefs(definition.expression);
+      for (const ref of refs) {
+        this.validateMetricRef(ref);
+      }
+    } catch (err) {
+      throw new Error(`Invalid expression: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private validateThresholds(definition: Omit<CustomKPIDefinition, "id">): void {
     // Validate threshold ordering
     if (definition.warningThreshold !== undefined && definition.criticalThreshold !== undefined) {
       if (definition.higherIsBetter) {
@@ -558,68 +597,8 @@ export class CustomKPIEngine {
   }
 
   private compute(kpi: CustomKPIDefinition, metrics: Record<string, number>): KPIComputationResult {
-    let value: number;
+    let value = this.computeRawValue(kpi, metrics);
 
-    switch (kpi.type) {
-      case "sum": {
-        value = 0;
-        for (const m of kpi.metrics ?? []) {
-          value += metrics[m] ?? 0;
-        }
-        break;
-      }
-
-      case "average": {
-        const metricList = kpi.metrics ?? [];
-        if (metricList.length === 0) {
-          value = 0;
-          break;
-        }
-        let sum = 0;
-        for (const m of metricList) {
-          sum += metrics[m] ?? 0;
-        }
-        value = sum / metricList.length;
-        break;
-      }
-
-      case "weighted_average": {
-        const metricList = kpi.metrics ?? [];
-        const weightKey = kpi.weightMetric ?? "";
-        const totalWeight = metrics[weightKey] ?? 0;
-        if (totalWeight === 0 || metricList.length === 0) {
-          value = 0;
-          break;
-        }
-        let weightedSum = 0;
-        for (const m of metricList) {
-          weightedSum += (metrics[m] ?? 0) * totalWeight;
-        }
-        value = weightedSum / (totalWeight * metricList.length);
-        break;
-      }
-
-      case "ratio": {
-        const num = metrics[kpi.numerator ?? ""] ?? 0;
-        const den = metrics[kpi.denominator ?? ""] ?? 0;
-        value = den !== 0 ? num / den : 0;
-        break;
-      }
-
-      case "custom": {
-        try {
-          value = evaluateExpression(kpi.expression ?? "", metrics);
-        } catch {
-          value = 0;
-        }
-        break;
-      }
-
-      default:
-        value = 0;
-    }
-
-    // Handle NaN / Infinity
     if (!isFinite(value)) {
       value = 0;
     }
@@ -639,6 +618,70 @@ export class CustomKPIEngine {
       target: kpi.target,
       percentOfTarget,
     };
+  }
+
+  private computeRawValue(kpi: CustomKPIDefinition, metrics: Record<string, number>): number {
+    switch (kpi.type) {
+      case "sum":
+        return this.computeSum(kpi, metrics);
+      case "average":
+        return this.computeAverage(kpi, metrics);
+      case "weighted_average":
+        return this.computeWeightedAverage(kpi, metrics);
+      case "ratio":
+        return this.computeRatio(kpi, metrics);
+      case "custom":
+        return this.computeCustom(kpi, metrics);
+      default:
+        return 0;
+    }
+  }
+
+  private computeSum(kpi: CustomKPIDefinition, metrics: Record<string, number>): number {
+    let value = 0;
+    for (const m of kpi.metrics ?? []) {
+      value += metrics[m] ?? 0;
+    }
+    return value;
+  }
+
+  private computeAverage(kpi: CustomKPIDefinition, metrics: Record<string, number>): number {
+    const metricList = kpi.metrics ?? [];
+    if (metricList.length === 0) return 0;
+    let sum = 0;
+    for (const m of metricList) {
+      sum += metrics[m] ?? 0;
+    }
+    return sum / metricList.length;
+  }
+
+  private computeWeightedAverage(
+    kpi: CustomKPIDefinition,
+    metrics: Record<string, number>,
+  ): number {
+    const metricList = kpi.metrics ?? [];
+    const weightKey = kpi.weightMetric ?? "";
+    const totalWeight = metrics[weightKey] ?? 0;
+    if (totalWeight === 0 || metricList.length === 0) return 0;
+    let weightedSum = 0;
+    for (const m of metricList) {
+      weightedSum += (metrics[m] ?? 0) * totalWeight;
+    }
+    return weightedSum / (totalWeight * metricList.length);
+  }
+
+  private computeRatio(kpi: CustomKPIDefinition, metrics: Record<string, number>): number {
+    const num = metrics[kpi.numerator ?? ""] ?? 0;
+    const den = metrics[kpi.denominator ?? ""] ?? 0;
+    return den !== 0 ? num / den : 0;
+  }
+
+  private computeCustom(kpi: CustomKPIDefinition, metrics: Record<string, number>): number {
+    try {
+      return evaluateExpression(kpi.expression ?? "", metrics);
+    } catch {
+      return 0;
+    }
   }
 
   private formatValue(value: number, format: CustomKPIDefinition["format"]): string {

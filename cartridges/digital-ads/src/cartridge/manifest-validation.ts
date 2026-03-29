@@ -18,6 +18,18 @@ export function validateManifest(
 ): ManifestValidationError[] {
   const errors: ManifestValidationError[] = [];
 
+  errors.push(...validateMetadata(manifest));
+  errors.push(...validateArrayFields(manifest));
+  errors.push(...validateActions(manifest));
+
+  return errors;
+}
+
+function validateMetadata(
+  manifest: import("@switchboard/schemas").CartridgeManifest,
+): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+
   if (!manifest.id || typeof manifest.id !== "string") {
     errors.push({ field: "id", message: "id is required and must be a string" });
   } else if (!MANIFEST_ID_REGEX.test(manifest.id)) {
@@ -43,6 +55,15 @@ export function validateManifest(
   if (!manifest.description || typeof manifest.description !== "string") {
     errors.push({ field: "description", message: "description is required and must be a string" });
   }
+
+  return errors;
+}
+
+function validateArrayFields(
+  manifest: import("@switchboard/schemas").CartridgeManifest,
+): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+
   if (!Array.isArray(manifest.requiredConnections)) {
     errors.push({ field: "requiredConnections", message: "requiredConnections must be an array" });
   } else if (manifest.requiredConnections.length === 0) {
@@ -52,83 +73,134 @@ export function validateManifest(
       severity: "warning",
     });
   }
+
   if (!Array.isArray(manifest.defaultPolicies)) {
     errors.push({ field: "defaultPolicies", message: "defaultPolicies must be an array" });
   }
+
+  return errors;
+}
+
+function validateActions(
+  manifest: import("@switchboard/schemas").CartridgeManifest,
+): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+
   if (!Array.isArray(manifest.actions) || manifest.actions.length === 0) {
     errors.push({ field: "actions", message: "actions must be a non-empty array" });
+    return errors;
+  }
+
+  const actionTypes = new Set<string>();
+  for (const action of manifest.actions) {
+    errors.push(...validateAction(action, manifest.id, actionTypes));
+  }
+
+  return errors;
+}
+
+function validateAction(
+  action: {
+    actionType?: string;
+    name?: string;
+    description?: string;
+    baseRiskCategory: string;
+    reversible?: boolean;
+    parametersSchema?: Record<string, unknown>;
+  },
+  manifestId: string,
+  actionTypes: Set<string>,
+): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+
+  if (!action.actionType) {
+    errors.push({ field: "actions", message: "each action must have an actionType" });
+    return errors;
+  }
+
+  errors.push(...validateActionType(action.actionType, manifestId, actionTypes));
+  errors.push(...validateActionFields(action));
+
+  return errors;
+}
+
+function validateActionType(
+  actionType: string,
+  manifestId: string,
+  actionTypes: Set<string>,
+): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+
+  if (actionTypes.has(actionType)) {
+    errors.push({ field: "actions", message: `duplicate action type: ${actionType}` });
   } else {
-    const actionTypes = new Set<string>();
-    for (const action of manifest.actions) {
-      if (!action.actionType) {
-        errors.push({ field: "actions", message: "each action must have an actionType" });
-      } else {
-        if (actionTypes.has(action.actionType)) {
-          errors.push({ field: "actions", message: `duplicate action type: ${action.actionType}` });
-        } else {
-          actionTypes.add(action.actionType);
-        }
+    actionTypes.add(actionType);
+  }
 
-        if (!ACTION_TYPE_REGEX.test(action.actionType)) {
-          errors.push({
-            field: `actions[${action.actionType}].actionType`,
-            message: `actionType must match pattern ${ACTION_TYPE_REGEX} (got "${action.actionType}")`,
-            severity: "warning",
-          });
-        }
+  if (!ACTION_TYPE_REGEX.test(actionType)) {
+    errors.push({
+      field: `actions[${actionType}].actionType`,
+      message: `actionType must match pattern ${ACTION_TYPE_REGEX} (got "${actionType}")`,
+      severity: "warning",
+    });
+  }
 
-        // Warn if action type prefix doesn't match manifest id
-        const prefix = action.actionType.split(".")[0];
-        if (prefix !== manifest.id) {
-          errors.push({
-            field: `actions[${action.actionType}].actionType`,
-            message: `action type prefix "${prefix}" does not match manifest id "${manifest.id}"`,
-            severity: "warning",
-          });
-        }
-      }
+  const prefix = actionType.split(".")[0];
+  if (prefix !== manifestId) {
+    errors.push({
+      field: `actions[${actionType}].actionType`,
+      message: `action type prefix "${prefix}" does not match manifest id "${manifestId}"`,
+      severity: "warning",
+    });
+  }
 
-      if (!action.name || typeof action.name !== "string") {
-        errors.push({
-          field: `actions[${action.actionType ?? "?"}].name`,
-          message: "action must have a name",
-        });
-      }
+  return errors;
+}
 
-      if (!action.description) {
-        errors.push({
-          field: `actions[${action.actionType ?? "?"}]`,
-          message: "action must have a description",
-        });
-      }
+function validateActionFields(action: {
+  actionType?: string;
+  name?: string;
+  description?: string;
+  baseRiskCategory: string;
+  reversible?: boolean;
+  parametersSchema?: Record<string, unknown>;
+}): ManifestValidationError[] {
+  const errors: ManifestValidationError[] = [];
+  const actionType = action.actionType ?? "?";
 
-      const validRisks = ["none", "low", "medium", "high", "critical"];
-      if (!validRisks.includes(action.baseRiskCategory)) {
-        errors.push({
-          field: `actions[${action.actionType ?? "?"}].baseRiskCategory`,
-          message: `invalid baseRiskCategory: ${action.baseRiskCategory}`,
-        });
-      }
+  if (!action.name || typeof action.name !== "string") {
+    errors.push({ field: `actions[${actionType}].name`, message: "action must have a name" });
+  }
 
-      if (typeof action.reversible !== "boolean") {
-        errors.push({
-          field: `actions[${action.actionType ?? "?"}].reversible`,
-          message: "reversible must be a boolean",
-        });
-      }
+  if (!action.description) {
+    errors.push({ field: `actions[${actionType}]`, message: "action must have a description" });
+  }
 
-      if (
-        action.parametersSchema &&
-        typeof action.parametersSchema === "object" &&
-        Object.keys(action.parametersSchema).length === 0
-      ) {
-        errors.push({
-          field: `actions[${action.actionType ?? "?"}].parametersSchema`,
-          message: "parametersSchema is empty",
-          severity: "warning",
-        });
-      }
-    }
+  const validRisks = ["none", "low", "medium", "high", "critical"];
+  if (!validRisks.includes(action.baseRiskCategory)) {
+    errors.push({
+      field: `actions[${actionType}].baseRiskCategory`,
+      message: `invalid baseRiskCategory: ${action.baseRiskCategory}`,
+    });
+  }
+
+  if (typeof action.reversible !== "boolean") {
+    errors.push({
+      field: `actions[${actionType}].reversible`,
+      message: "reversible must be a boolean",
+    });
+  }
+
+  if (
+    action.parametersSchema &&
+    typeof action.parametersSchema === "object" &&
+    Object.keys(action.parametersSchema).length === 0
+  ) {
+    errors.push({
+      field: `actions[${actionType}].parametersSchema`,
+      message: "parametersSchema is empty",
+      severity: "warning",
+    });
   }
 
   return errors;

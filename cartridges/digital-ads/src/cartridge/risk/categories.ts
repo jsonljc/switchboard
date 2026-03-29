@@ -12,17 +12,64 @@ export function computeRiskInput(
   parameters: Record<string, unknown>,
   context?: Record<string, unknown>,
 ): RiskInput {
+  // Delegate to category-specific handlers
+  if (actionType.startsWith("digital-ads.report.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.signal.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.audience.")) {
+    return handleAudienceActions(actionType);
+  }
+  if (actionType.startsWith("digital-ads.creative.")) {
+    return handleCreativeActions(actionType, parameters);
+  }
+  if (actionType.startsWith("digital-ads.experiment.")) {
+    return handleExperimentActions(actionType, parameters);
+  }
+  if (actionType.startsWith("digital-ads.compliance.")) {
+    return handleComplianceActions(actionType);
+  }
+  if (actionType.startsWith("digital-ads.measurement.")) {
+    return handleMeasurementActions(actionType, parameters);
+  }
+  if (actionType.startsWith("digital-ads.alert.")) return handleAlertActions(actionType);
+  if (actionType.startsWith("digital-ads.pacing."))
+    return handlePacingActions(actionType, parameters);
+  if (actionType.startsWith("digital-ads.kpi.")) return handleKpiActions(actionType);
+  if (actionType.startsWith("digital-ads.deduplication.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.geo_experiment.")) {
+    return handleGeoExperimentActions(actionType, parameters);
+  }
+  if (actionType.startsWith("digital-ads.attribution.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.ltv.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.seasonal.")) return handleSeasonalActions(actionType);
+  if (actionType.startsWith("digital-ads.memory.")) return handleMemoryActions(actionType);
+  if (actionType.startsWith("digital-ads.campaign.")) {
+    return handleCampaignActions(actionType, parameters, context);
+  }
+  if (actionType.startsWith("digital-ads.adset.")) {
+    return handleAdSetActions(actionType, parameters, context);
+  }
+  if (actionType.startsWith("digital-ads.rule.")) return handleRuleActions(actionType);
+  if (actionType.startsWith("digital-ads.budget.")) {
+    return handleBudgetActions(actionType, parameters, context);
+  }
+  if (actionType.startsWith("digital-ads.optimization.")) {
+    return handleOptimizationActions(actionType, parameters);
+  }
+  if (actionType.startsWith("digital-ads.strategy.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.account.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.forecast.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.plan.")) return readRisk("low");
+  if (actionType.startsWith("digital-ads.catalog.")) return readRisk("low");
+
+  // Handle special cases
   switch (actionType) {
-    // ── Read actions ──────────────────────────────────────────────────
     case "digital-ads.platform.connect":
     case "digital-ads.health.check":
       return readRisk("none");
-
     case "digital-ads.funnel.diagnose":
     case "digital-ads.snapshot.fetch":
     case "digital-ads.structure.analyze":
       return readRisk("low");
-
     case "digital-ads.portfolio.diagnose": {
       const platforms = parameters.platforms;
       const platformCount = Array.isArray(platforms) ? platforms.length : 0;
@@ -33,86 +80,15 @@ export function computeRiskInput(
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
     }
-
-    // ── Write actions ─────────────────────────────────────────────────
-    case "digital-ads.campaign.pause":
-    case "digital-ads.adset.pause":
-      return computePauseRiskInput(context);
-
-    case "digital-ads.campaign.resume":
-    case "digital-ads.adset.resume":
-      return computePauseRiskInput(context);
-
-    case "digital-ads.campaign.adjust_budget":
-    case "digital-ads.adset.adjust_budget":
-      return computeBudgetRiskInput(parameters, context);
-
     case "digital-ads.targeting.modify":
       return computeTargetingRiskInput(parameters, context);
-
-    // ── Phase 1-2: Read-only actions ────────────────────────────
-    case "digital-ads.report.performance":
-    case "digital-ads.report.creative":
-    case "digital-ads.report.audience":
-    case "digital-ads.report.placement":
-    case "digital-ads.report.comparison":
-    case "digital-ads.auction.insights":
-    case "digital-ads.signal.pixel.diagnose":
-    case "digital-ads.signal.capi.diagnose":
-    case "digital-ads.signal.emq.check":
-    case "digital-ads.account.learning_phase":
-    case "digital-ads.account.delivery.diagnose":
-    case "digital-ads.audience.list":
-    case "digital-ads.audience.insights":
-    case "digital-ads.budget.recommend":
-    case "digital-ads.creative.list":
-    case "digital-ads.creative.analyze":
-    case "digital-ads.creative.generate":
-    case "digital-ads.creative.score_assets":
-    case "digital-ads.creative.generate_brief":
-    case "digital-ads.experiment.check":
-    case "digital-ads.experiment.list":
-    case "digital-ads.optimization.review":
-    case "digital-ads.rule.list":
-    case "digital-ads.strategy.recommend":
-    case "digital-ads.strategy.mediaplan":
-    case "digital-ads.reach.estimate":
-      return readRisk("low");
-
-    // ── Phase 3: Audience writes ────────────────────────────────
-    case "digital-ads.audience.custom.create":
-    case "digital-ads.audience.lookalike.create":
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    case "digital-ads.audience.delete":
-      return {
-        baseRisk: "critical",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "none",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 4: Bid & Budget writes ────────────────────────────
     case "digital-ads.bid.update_strategy":
       return {
         baseRisk: "high",
         exposure: { dollarsAtRisk: Number(context?.currentBudget ?? 0), blastRadius: 1 },
         reversibility: "full",
-        sensitivity: {
-          entityVolatile: false,
-          learningPhase: true,
-          recentlyModified: false,
-        },
+        sensitivity: { entityVolatile: false, learningPhase: true, recentlyModified: false },
       };
-
-    case "digital-ads.budget.reallocate":
-      return computeBudgetRiskInput(parameters, context);
-
     case "digital-ads.schedule.set":
       return {
         baseRisk: "medium",
@@ -120,7 +96,24 @@ export function computeRiskInput(
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
+    case "digital-ads.reach.estimate":
+      return readRisk("low");
+    default:
+      return readRisk("low");
+  }
+}
 
+function handleCampaignActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+  context?: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.campaign.pause":
+    case "digital-ads.campaign.resume":
+      return computePauseRiskInput(context);
+    case "digital-ads.campaign.adjust_budget":
+      return computeBudgetRiskInput(parameters, context);
     case "digital-ads.campaign.update_objective":
       return {
         baseRisk: "critical",
@@ -131,44 +124,79 @@ export function computeRiskInput(
         reversibility: "none",
         sensitivity: { entityVolatile: true, learningPhase: true, recentlyModified: false },
       };
+    case "digital-ads.campaign.setup_guided":
+      return {
+        baseRisk: "high",
+        exposure: { dollarsAtRisk: Number(parameters.dailyBudget ?? 0) * 30, blastRadius: 3 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    default:
+      return readRisk("low");
+  }
+}
 
-    // ── Phase 5: Creative writes ────────────────────────────────
-    case "digital-ads.creative.upload":
+function handleAdSetActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+  context?: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.adset.pause":
+    case "digital-ads.adset.resume":
+      return computePauseRiskInput(context);
+    case "digital-ads.adset.adjust_budget":
+      return computeBudgetRiskInput(parameters, context);
+    default:
+      return readRisk("low");
+  }
+}
+
+function handleRuleActions(actionType: string): RiskInput {
+  switch (actionType) {
+    case "digital-ads.rule.list":
+      return readRisk("low");
+    case "digital-ads.rule.create":
       return {
         baseRisk: "medium",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    case "digital-ads.creative.rotate": {
-      const adCount = Number(parameters.adCount ?? 1);
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: 0, blastRadius: adCount },
-        reversibility: "partial",
-        sensitivity: { entityVolatile: false, learningPhase: true, recentlyModified: false },
-      };
-    }
-
-    // ── Phase 6: Experiment writes ──────────────────────────────
-    case "digital-ads.experiment.create":
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: Number(parameters.budget ?? 0), blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    case "digital-ads.experiment.conclude":
+    case "digital-ads.rule.delete":
       return {
         baseRisk: "medium",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "partial",
+        reversibility: "none",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
+    default:
+      return readRisk("low");
+  }
+}
 
-    // ── Phase 7: Optimization & Rule writes ─────────────────────
+function handleBudgetActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+  context?: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.budget.recommend":
+      return readRisk("low");
+    case "digital-ads.budget.reallocate":
+      return computeBudgetRiskInput(parameters, context);
+    default:
+      return readRisk("low");
+  }
+}
+
+function handleOptimizationActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.optimization.review":
+      return readRisk("low");
     case "digital-ads.optimization.apply":
       return {
         baseRisk: "high",
@@ -179,121 +207,63 @@ export function computeRiskInput(
         reversibility: "partial",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
+    default:
+      return readRisk("low");
+  }
+}
 
-    case "digital-ads.rule.create":
+function handleAudienceActions(actionType: string): RiskInput {
+  switch (actionType) {
+    case "digital-ads.audience.list":
+    case "digital-ads.audience.insights":
+      return readRisk("low");
+    case "digital-ads.audience.custom.create":
+    case "digital-ads.audience.lookalike.create":
       return {
-        baseRisk: "medium",
+        baseRisk: "high",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    case "digital-ads.rule.delete":
+    case "digital-ads.audience.delete":
       return {
-        baseRisk: "medium",
+        baseRisk: "critical",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "none",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    // ── Phase 8: Strategy writes ────────────────────────────────
-    case "digital-ads.campaign.setup_guided":
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: Number(parameters.dailyBudget ?? 0) * 30, blastRadius: 3 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 9: Compliance & Brand Safety ────────────────────────
-    case "digital-ads.compliance.review_status":
-    case "digital-ads.compliance.audit":
+    default:
       return readRisk("low");
+  }
+}
 
-    case "digital-ads.compliance.publisher_blocklist":
-      return {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    case "digital-ads.compliance.content_exclusions":
-      return {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 9: Measurement & Attribution ────────────────────────
-    case "digital-ads.measurement.lift_study.check":
-    case "digital-ads.measurement.attribution.compare":
-    case "digital-ads.measurement.mmm_export":
-      return readRisk("low");
-
-    case "digital-ads.measurement.lift_study.create":
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: Number(parameters.budget ?? 0), blastRadius: 1 },
-        reversibility: "none",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 10-13: Read-only actions ────────────────────────────
-    case "digital-ads.pacing.check":
-    case "digital-ads.alert.anomaly_scan":
-    case "digital-ads.alert.budget_forecast":
-    case "digital-ads.alert.policy_scan":
-    case "digital-ads.alert.send_notifications":
-    case "digital-ads.forecast.budget_scenario":
-    case "digital-ads.forecast.diminishing_returns":
-    case "digital-ads.plan.annual":
-    case "digital-ads.plan.quarterly":
-    case "digital-ads.catalog.health":
-      return readRisk("low");
-
-    // ── Phase 14: Notification writes ──────────────────────────────
-    case "digital-ads.alert.configure_notifications":
-      return {
-        baseRisk: "low",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 10: Pacing writes ────────────────────────────────────
-    case "digital-ads.pacing.create_flight":
-      return {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    case "digital-ads.pacing.auto_adjust":
-      return {
-        baseRisk: "high",
-        exposure: { dollarsAtRisk: Number(parameters.totalBudget ?? 0), blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 13: Catalog writes ──────────────────────────────────
-    case "digital-ads.catalog.product_sets":
-      return {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-    // ── Phase 15: Creative Testing Queue ────────────────────────────
+function handleCreativeActions(actionType: string, parameters: Record<string, unknown>): RiskInput {
+  switch (actionType) {
+    case "digital-ads.creative.list":
+    case "digital-ads.creative.analyze":
+    case "digital-ads.creative.generate":
+    case "digital-ads.creative.score_assets":
+    case "digital-ads.creative.generate_brief":
     case "digital-ads.creative.test_queue":
     case "digital-ads.creative.test_evaluate":
     case "digital-ads.creative.power_calculate":
       return readRisk("low");
-
+    case "digital-ads.creative.upload":
+      return {
+        baseRisk: "medium",
+        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    case "digital-ads.creative.rotate": {
+      const adCount = Number(parameters.adCount ?? 1);
+      return {
+        baseRisk: "high",
+        exposure: { dollarsAtRisk: 0, blastRadius: adCount },
+        reversibility: "partial",
+        sensitivity: { entityVolatile: false, learningPhase: true, recentlyModified: false },
+      };
+    }
     case "digital-ads.creative.test_create":
       return {
         baseRisk: "medium",
@@ -305,7 +275,6 @@ export function computeRiskInput(
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
     case "digital-ads.creative.test_conclude":
       return {
         baseRisk: "medium",
@@ -313,49 +282,133 @@ export function computeRiskInput(
         reversibility: "partial",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    // ── Custom KPI ───────────────────────────────────────────────────
-    case "digital-ads.kpi.list":
-    case "digital-ads.kpi.compute":
+    default:
       return readRisk("low");
+  }
+}
 
-    case "digital-ads.kpi.register":
-    case "digital-ads.kpi.remove":
+function handleExperimentActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.experiment.check":
+    case "digital-ads.experiment.list":
+      return readRisk("low");
+    case "digital-ads.experiment.create":
       return {
-        baseRisk: "low",
+        baseRisk: "high",
+        exposure: { dollarsAtRisk: Number(parameters.budget ?? 0), blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    case "digital-ads.experiment.conclude":
+      return {
+        baseRisk: "medium",
+        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+        reversibility: "partial",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    default:
+      return readRisk("low");
+  }
+}
+
+function handleComplianceActions(actionType: string): RiskInput {
+  switch (actionType) {
+    case "digital-ads.compliance.review_status":
+    case "digital-ads.compliance.audit":
+      return readRisk("low");
+    case "digital-ads.compliance.publisher_blocklist":
+    case "digital-ads.compliance.content_exclusions":
+      return {
+        baseRisk: "medium",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    // ── Cross-Platform Deduplication ────────────────────────────────
-    case "digital-ads.deduplication.analyze":
-    case "digital-ads.deduplication.estimate_overlap":
+    default:
       return readRisk("low");
+  }
+}
 
-    // ── Phase 16: Account Memory ─────────────────────────────────
-    case "digital-ads.memory.insights":
-    case "digital-ads.memory.list":
-    case "digital-ads.memory.recommend":
-    case "digital-ads.memory.export":
-      return readRisk("none");
-
-    case "digital-ads.memory.record":
-    case "digital-ads.memory.record_outcome":
-    case "digital-ads.memory.import":
+function handleMeasurementActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
+    case "digital-ads.measurement.lift_study.check":
+    case "digital-ads.measurement.attribution.compare":
+    case "digital-ads.measurement.mmm_export":
+      return readRisk("low");
+    case "digital-ads.measurement.lift_study.create":
       return {
-        baseRisk: "low",
+        baseRisk: "high",
+        exposure: { dollarsAtRisk: Number(parameters.budget ?? 0), blastRadius: 1 },
+        reversibility: "none",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    default:
+      return readRisk("low");
+  }
+}
+
+function handleAlertActions(actionType: string): RiskInput {
+  if (actionType === "digital-ads.alert.configure_notifications") {
+    return {
+      baseRisk: "low",
+      exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+      reversibility: "full",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+    };
+  }
+  return readRisk("low");
+}
+
+function handlePacingActions(actionType: string, parameters: Record<string, unknown>): RiskInput {
+  switch (actionType) {
+    case "digital-ads.pacing.check":
+      return readRisk("low");
+    case "digital-ads.pacing.create_flight":
+      return {
+        baseRisk: "medium",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
+    case "digital-ads.pacing.auto_adjust":
+      return {
+        baseRisk: "high",
+        exposure: { dollarsAtRisk: Number(parameters.totalBudget ?? 0), blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+      };
+    default:
+      return readRisk("low");
+  }
+}
 
-    // ── Geo-Holdout Experiments ────────────────────────────────────
+function handleKpiActions(actionType: string): RiskInput {
+  if (actionType === "digital-ads.kpi.list" || actionType === "digital-ads.kpi.compute") {
+    return readRisk("low");
+  }
+  return {
+    baseRisk: "low",
+    exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+    reversibility: "full",
+    sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+  };
+}
+
+function handleGeoExperimentActions(
+  actionType: string,
+  parameters: Record<string, unknown>,
+): RiskInput {
+  switch (actionType) {
     case "digital-ads.geo_experiment.design":
     case "digital-ads.geo_experiment.analyze":
     case "digital-ads.geo_experiment.power":
       return readRisk("low");
-
     case "digital-ads.geo_experiment.create": {
       const budgetPerDay = Number(parameters.treatmentBudgetPerDay ?? 0);
       const testDays = Number(parameters.testDays ?? 0);
@@ -366,7 +419,6 @@ export function computeRiskInput(
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
     }
-
     case "digital-ads.geo_experiment.conclude":
       return {
         baseRisk: "medium",
@@ -374,34 +426,41 @@ export function computeRiskInput(
         reversibility: "partial",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
-    // ── Multi-Touch Attribution ──────────────────────────────────────
-    case "digital-ads.attribution.multi_touch":
-    case "digital-ads.attribution.compare_models":
-    case "digital-ads.attribution.channel_roles":
+    default:
       return readRisk("low");
+  }
+}
 
-    // ── LTV Optimization ─────────────────────────────────────────────
-    case "digital-ads.ltv.project":
-    case "digital-ads.ltv.optimize":
-    case "digital-ads.ltv.allocate":
-      return readRisk("low");
+function handleSeasonalActions(actionType: string): RiskInput {
+  if (actionType === "digital-ads.seasonal.add_event") {
+    return {
+      baseRisk: "low",
+      exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+      reversibility: "full",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+    };
+  }
+  return readRisk("low");
+}
 
-    // ── Seasonality ────────────────────────────────────────────────────
-    case "digital-ads.seasonal.calendar":
-    case "digital-ads.seasonal.events":
-      return readRisk("low");
-
-    case "digital-ads.seasonal.add_event":
+function handleMemoryActions(actionType: string): RiskInput {
+  switch (actionType) {
+    case "digital-ads.memory.insights":
+    case "digital-ads.memory.list":
+    case "digital-ads.memory.recommend":
+    case "digital-ads.memory.export":
+      return readRisk("none");
+    case "digital-ads.memory.record":
+    case "digital-ads.memory.record_outcome":
+    case "digital-ads.memory.import":
       return {
         baseRisk: "low",
         exposure: { dollarsAtRisk: 0, blastRadius: 1 },
         reversibility: "full",
         sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
       };
-
     default:
-      return readRisk("low");
+      return readRisk("none");
   }
 }
 

@@ -2,6 +2,7 @@ import type { MetaApiConfig, MetaInsightsRow } from "./types.js";
 import type {
   EntityLevel,
   FunnelSchema,
+  FunnelStage,
   MetricSnapshot,
   StageMetrics,
   SubEntityBreakdown,
@@ -10,6 +11,18 @@ import type {
 import type { PlatformType } from "../types.js";
 import { AbstractPlatformClient } from "../base-client.js";
 import { MetaGraphClient } from "./graph-client.js";
+
+interface RawAggregates {
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalInlineClicks: number;
+  weightedFrequency: number;
+  actionTotals: Record<string, number>;
+  costTotals: Record<string, { total: number; count: number }>;
+  actionValueTotals: Record<string, number>;
+  roasTotals: Record<string, { total: number; count: number }>;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,7 +198,22 @@ export class MetaApiClient extends AbstractPlatformClient {
     timeRange: TimeRange,
     funnel: FunnelSchema,
   ): MetricSnapshot {
-    // Aggregate across rows
+    const aggregates = this.aggregateRawMetrics(rows);
+    const stages = this.buildStageMetrics(funnel, aggregates);
+    const topLevel = this.buildTopLevelMetrics(aggregates);
+
+    return {
+      entityId,
+      entityLevel,
+      periodStart: timeRange.since,
+      periodEnd: timeRange.until,
+      spend: aggregates.totalSpend,
+      stages,
+      topLevel,
+    };
+  }
+
+  private aggregateRawMetrics(rows: MetaInsightsRow[]): RawAggregates {
     let totalSpend = 0;
     const actionTotals: Record<string, number> = {};
     const costTotals: Record<string, { total: number; count: number }> = {};
@@ -193,6 +221,8 @@ export class MetaApiClient extends AbstractPlatformClient {
     let totalClicks = 0;
     let totalInlineClicks = 0;
     let weightedFrequency = 0;
+    const actionValueTotals: Record<string, number> = {};
+    const roasTotals: Record<string, { total: number; count: number }> = {};
 
     for (const row of rows) {
       totalSpend += parseFloat(row.spend || "0");
@@ -200,7 +230,6 @@ export class MetaApiClient extends AbstractPlatformClient {
       totalClicks += parseInt(row.clicks || "0", 10);
       totalInlineClicks += parseInt(row.inline_link_clicks || "0", 10);
 
-      // Frequency is impression-weighted across rows
       const rowImpressions = parseInt(row.impressions || "0", 10);
       const rowFrequency = parseFloat(row.frequency || "0");
       weightedFrequency += rowFrequency * rowImpressions;
@@ -211,57 +240,17 @@ export class MetaApiClient extends AbstractPlatformClient {
       }
 
       for (const costAction of row.cost_per_action_type ?? []) {
-        const entry = costTotals[costAction.action_type] ?? {
-          total: 0,
-          count: 0,
-        };
+        const entry = costTotals[costAction.action_type] ?? { total: 0, count: 0 };
         entry.total += parseFloat(costAction.value);
         entry.count += 1;
         costTotals[costAction.action_type] = entry;
       }
-    }
 
-    // Build stage metrics from the funnel schema
-    const stages: Record<string, StageMetrics> = {};
-
-    for (const stage of funnel.stages) {
-      let count: number;
-      if (stage.metricSource === "top_level") {
-        if (stage.metric === "impressions") count = totalImpressions;
-        else if (stage.metric === "inline_link_clicks") count = totalInlineClicks;
-        else if (stage.metric === "clicks") count = totalClicks;
-        else count = 0;
-      } else {
-        count = actionTotals[stage.metric] ?? 0;
-      }
-
-      let cost: number | null = null;
-      if (stage.costMetric && stage.costMetricSource === "top_level") {
-        // For top-level cost metrics, compute from aggregates
-        if (stage.costMetric === "cpm" && totalImpressions > 0) {
-          cost = (totalSpend / totalImpressions) * 1000;
-        } else if (stage.costMetric === "cpc" && totalInlineClicks > 0) {
-          cost = totalSpend / totalInlineClicks;
-        }
-      } else if (stage.costMetric && stage.costMetricSource === "cost_per_action_type") {
-        // Compute cost per action from spend / action count
-        if (count > 0) {
-          cost = totalSpend / count;
-        }
-      }
-
-      stages[stage.metric] = { count, cost };
-    }
-
-    // Aggregate action_values (revenue data) and ROAS
-    const actionValueTotals: Record<string, number> = {};
-    const roasTotals: Record<string, { total: number; count: number }> = {};
-
-    for (const row of rows) {
       for (const av of row.action_values ?? []) {
         actionValueTotals[av.action_type] =
           (actionValueTotals[av.action_type] ?? 0) + parseFloat(av.value);
       }
+
       for (const roas of row.website_purchase_roas ?? []) {
         const entry = roasTotals[roas.action_type] ?? { total: 0, count: 0 };
         entry.total += parseFloat(roas.value);
@@ -270,28 +259,98 @@ export class MetaApiClient extends AbstractPlatformClient {
       }
     }
 
-    // Top-level fields
+    return {
+      totalSpend,
+      totalImpressions,
+      totalClicks,
+      totalInlineClicks,
+      weightedFrequency,
+      actionTotals,
+      costTotals,
+      actionValueTotals,
+      roasTotals,
+    };
+  }
+
+  private buildStageMetrics(
+    funnel: FunnelSchema,
+    aggregates: RawAggregates,
+  ): Record<string, StageMetrics> {
+    const stages: Record<string, StageMetrics> = {};
+
+    for (const stage of funnel.stages) {
+      const count = this.getStageCount(stage, aggregates);
+      const cost = this.getStageCost(stage, aggregates, count);
+      stages[stage.metric] = { count, cost };
+    }
+
+    return stages;
+  }
+
+  private getStageCount(stage: FunnelStage, aggregates: RawAggregates): number {
+    if (stage.metricSource === "top_level") {
+      if (stage.metric === "impressions") return aggregates.totalImpressions;
+      if (stage.metric === "inline_link_clicks") return aggregates.totalInlineClicks;
+      if (stage.metric === "clicks") return aggregates.totalClicks;
+      return 0;
+    }
+    return aggregates.actionTotals[stage.metric] ?? 0;
+  }
+
+  private getStageCost(
+    stage: FunnelStage,
+    aggregates: RawAggregates,
+    count: number,
+  ): number | null {
+    if (!stage.costMetric) return null;
+
+    if (stage.costMetricSource === "top_level") {
+      if (stage.costMetric === "cpm" && aggregates.totalImpressions > 0) {
+        return (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+      }
+      if (stage.costMetric === "cpc" && aggregates.totalInlineClicks > 0) {
+        return aggregates.totalSpend / aggregates.totalInlineClicks;
+      }
+      return null;
+    }
+
+    if (stage.costMetricSource === "cost_per_action_type" && count > 0) {
+      return aggregates.totalSpend / count;
+    }
+
+    return null;
+  }
+
+  private buildTopLevelMetrics(aggregates: RawAggregates): Record<string, number> {
     const topLevel: Record<string, number> = {
-      impressions: totalImpressions,
-      clicks: totalClicks,
-      inline_link_clicks: totalInlineClicks,
-      spend: totalSpend,
+      impressions: aggregates.totalImpressions,
+      clicks: aggregates.totalClicks,
+      inline_link_clicks: aggregates.totalInlineClicks,
+      spend: aggregates.totalSpend,
     };
 
-    if (totalImpressions > 0) {
-      topLevel.cpm = (totalSpend / totalImpressions) * 1000;
-      topLevel.ctr = (totalInlineClicks / totalImpressions) * 100;
+    if (aggregates.totalImpressions > 0) {
+      topLevel.cpm = (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+      topLevel.ctr = (aggregates.totalInlineClicks / aggregates.totalImpressions) * 100;
     }
-    if (totalInlineClicks > 0) {
-      topLevel.cpc = totalSpend / totalInlineClicks;
+    if (aggregates.totalInlineClicks > 0) {
+      topLevel.cpc = aggregates.totalSpend / aggregates.totalInlineClicks;
     }
-    if (totalImpressions > 0 && weightedFrequency > 0) {
-      topLevel.frequency = weightedFrequency / totalImpressions;
+    if (aggregates.totalImpressions > 0 && aggregates.weightedFrequency > 0) {
+      topLevel.frequency = aggregates.weightedFrequency / aggregates.totalImpressions;
     }
 
-    // Revenue-related fields from action_values
+    this.addRevenueMetrics(topLevel, aggregates.actionValueTotals);
+    this.addRoasMetrics(topLevel, aggregates.roasTotals);
+
+    return topLevel;
+  }
+
+  private addRevenueMetrics(
+    topLevel: Record<string, number>,
+    actionValueTotals: Record<string, number>,
+  ): void {
     for (const [actionType, value] of Object.entries(actionValueTotals)) {
-      // Map common action_value types to recognizable topLevel keys
       if (actionType === "offsite_conversion.fb_pixel_purchase") {
         topLevel.purchase_value = value;
         topLevel.conversions_value = (topLevel.conversions_value ?? 0) + value;
@@ -302,25 +361,18 @@ export class MetaApiClient extends AbstractPlatformClient {
         topLevel.complete_payment_value = value;
         topLevel.conversions_value = (topLevel.conversions_value ?? 0) + value;
       } else {
-        // Store all action_values for downstream use
         topLevel[`action_value_${actionType}`] = value;
       }
     }
+  }
 
-    // ROAS data
+  private addRoasMetrics(
+    topLevel: Record<string, number>,
+    roasTotals: Record<string, { total: number; count: number }>,
+  ): void {
     for (const [actionType, { total, count }] of Object.entries(roasTotals)) {
       topLevel[`roas_${actionType}`] = total / count;
     }
-
-    return {
-      entityId,
-      entityLevel,
-      periodStart: timeRange.since,
-      periodEnd: timeRange.until,
-      spend: totalSpend,
-      stages,
-      topLevel,
-    };
   }
 
   private emptySnapshot(

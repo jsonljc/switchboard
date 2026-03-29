@@ -16,6 +16,17 @@ import type {
 import type { PlatformType } from "../types.js";
 import { AbstractPlatformClient } from "../base-client.js";
 
+interface GoogleAggregates {
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalConversions: number;
+  totalConversionsValue: number;
+  totalAllConversions: number;
+  channelSpend: Record<string, number>;
+  channelConversions: Record<string, number>;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -296,14 +307,28 @@ export class GoogleAdsClient extends AbstractPlatformClient {
     timeRange: TimeRange,
     funnel: FunnelSchema,
   ): MetricSnapshot {
+    const aggregates = this.aggregateGoogleMetrics(rows);
+    const stages = this.buildGoogleStages(funnel, aggregates);
+    const topLevel = this.buildGoogleTopLevel(aggregates);
+
+    return {
+      entityId,
+      entityLevel,
+      periodStart: timeRange.since,
+      periodEnd: timeRange.until,
+      spend: aggregates.totalSpend,
+      stages,
+      topLevel,
+    };
+  }
+
+  private aggregateGoogleMetrics(rows: GoogleAdsRow[]): GoogleAggregates {
     let totalSpend = 0;
     let totalImpressions = 0;
     let totalClicks = 0;
     let totalConversions = 0;
     let totalConversionsValue = 0;
     let totalAllConversions = 0;
-
-    // Channel aggregation
     const channelSpend: Record<string, number> = {};
     const channelConversions: Record<string, number> = {};
 
@@ -311,7 +336,6 @@ export class GoogleAdsClient extends AbstractPlatformClient {
       const m = row.metrics;
       totalImpressions += parseInt(m.impressions ?? "0", 10);
       totalClicks += parseInt(m.clicks ?? "0", 10);
-      // Google reports cost in micros (1/1,000,000 of currency unit)
       const rowSpend = parseInt(m.costMicros ?? "0", 10) / 1_000_000;
       totalSpend += rowSpend;
       totalConversions += m.conversions ?? 0;
@@ -326,72 +350,89 @@ export class GoogleAdsClient extends AbstractPlatformClient {
       }
     }
 
-    // Build stage metrics from the funnel schema
+    return {
+      totalSpend,
+      totalImpressions,
+      totalClicks,
+      totalConversions,
+      totalConversionsValue,
+      totalAllConversions,
+      channelSpend,
+      channelConversions,
+    };
+  }
+
+  private buildGoogleStages(
+    funnel: FunnelSchema,
+    aggregates: GoogleAggregates,
+  ): Record<string, StageMetrics> {
     const stages: Record<string, StageMetrics> = {};
 
     for (const stage of funnel.stages) {
-      let count: number;
-      if (stage.metric === "impressions") {
-        count = totalImpressions;
-      } else if (stage.metric === "clicks") {
-        count = totalClicks;
-      } else if (stage.metric === "conversions") {
-        count = totalConversions;
-      } else if (stage.metric === "all_conversions") {
-        count = totalAllConversions;
-      } else {
-        count = 0;
-      }
-
-      let cost: number | null = null;
-      if (stage.costMetric === "cpm" && totalImpressions > 0) {
-        cost = (totalSpend / totalImpressions) * 1000;
-      } else if (stage.costMetric === "cpc" && totalClicks > 0) {
-        cost = totalSpend / totalClicks;
-      } else if (stage.costMetric === "cost_per_conversion" && totalConversions > 0) {
-        cost = totalSpend / totalConversions;
-      }
-
+      const count = this.getGoogleStageCount(stage.metric, aggregates);
+      const cost = this.getGoogleStageCost(stage.costMetric, aggregates);
       stages[stage.metric] = { count, cost };
     }
 
-    // Top-level fields
+    return stages;
+  }
+
+  private getGoogleStageCount(metric: string, aggregates: GoogleAggregates): number {
+    if (metric === "impressions") return aggregates.totalImpressions;
+    if (metric === "clicks") return aggregates.totalClicks;
+    if (metric === "conversions") return aggregates.totalConversions;
+    if (metric === "all_conversions") return aggregates.totalAllConversions;
+    return 0;
+  }
+
+  private getGoogleStageCost(
+    costMetric: string | null | undefined,
+    aggregates: GoogleAggregates,
+  ): number | null {
+    if (!costMetric) return null;
+
+    if (costMetric === "cpm" && aggregates.totalImpressions > 0) {
+      return (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+    }
+    if (costMetric === "cpc" && aggregates.totalClicks > 0) {
+      return aggregates.totalSpend / aggregates.totalClicks;
+    }
+    if (costMetric === "cost_per_conversion" && aggregates.totalConversions > 0) {
+      return aggregates.totalSpend / aggregates.totalConversions;
+    }
+
+    return null;
+  }
+
+  private buildGoogleTopLevel(aggregates: GoogleAggregates): Record<string, number> {
     const topLevel: Record<string, number> = {
-      impressions: totalImpressions,
-      clicks: totalClicks,
-      spend: totalSpend,
-      conversions: totalConversions,
-      conversions_value: totalConversionsValue,
+      impressions: aggregates.totalImpressions,
+      clicks: aggregates.totalClicks,
+      spend: aggregates.totalSpend,
+      conversions: aggregates.totalConversions,
+      conversions_value: aggregates.totalConversionsValue,
     };
 
-    if (totalImpressions > 0) {
-      topLevel.cpm = (totalSpend / totalImpressions) * 1000;
-      topLevel.ctr = (totalClicks / totalImpressions) * 100;
+    if (aggregates.totalImpressions > 0) {
+      topLevel.cpm = (aggregates.totalSpend / aggregates.totalImpressions) * 1000;
+      topLevel.ctr = (aggregates.totalClicks / aggregates.totalImpressions) * 100;
     }
-    if (totalClicks > 0) {
-      topLevel.cpc = totalSpend / totalClicks;
+    if (aggregates.totalClicks > 0) {
+      topLevel.cpc = aggregates.totalSpend / aggregates.totalClicks;
     }
-    if (totalConversions > 0) {
-      topLevel.cost_per_conversion = totalSpend / totalConversions;
+    if (aggregates.totalConversions > 0) {
+      topLevel.cost_per_conversion = aggregates.totalSpend / aggregates.totalConversions;
     }
-    if (totalSpend > 0 && totalConversionsValue > 0) {
-      topLevel.roas = totalConversionsValue / totalSpend;
+    if (aggregates.totalSpend > 0 && aggregates.totalConversionsValue > 0) {
+      topLevel.roas = aggregates.totalConversionsValue / aggregates.totalSpend;
     }
 
-    for (const [channel, spend] of Object.entries(channelSpend)) {
+    for (const [channel, spend] of Object.entries(aggregates.channelSpend)) {
       topLevel[`channel_spend_${channel}`] = spend;
-      topLevel[`channel_conversions_${channel}`] = channelConversions[channel] ?? 0;
+      topLevel[`channel_conversions_${channel}`] = aggregates.channelConversions[channel] ?? 0;
     }
 
-    return {
-      entityId,
-      entityLevel,
-      periodStart: timeRange.since,
-      periodEnd: timeRange.until,
-      spend: totalSpend,
-      stages,
-      topLevel,
-    };
+    return topLevel;
   }
 
   private emptySnapshot(
