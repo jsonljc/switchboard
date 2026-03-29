@@ -30,73 +30,93 @@ function evaluateCondition(
 ): ConditionResult {
   const actual = getNestedValue(context as unknown as Record<string, unknown>, condition.field);
   const expected = condition.value;
-  let matched = false;
-
-  switch (condition.operator) {
-    case "eq":
-      matched = actual === expected;
-      break;
-    case "neq":
-      matched = actual !== expected;
-      break;
-    case "gt":
-      matched = typeof actual === "number" && typeof expected === "number" && actual > expected;
-      break;
-    case "gte":
-      matched = typeof actual === "number" && typeof expected === "number" && actual >= expected;
-      break;
-    case "lt":
-      matched = typeof actual === "number" && typeof expected === "number" && actual < expected;
-      break;
-    case "lte":
-      matched = typeof actual === "number" && typeof expected === "number" && actual <= expected;
-      break;
-    case "in":
-      matched = Array.isArray(expected) && expected.includes(actual);
-      break;
-    case "not_in":
-      matched = Array.isArray(expected) && !expected.includes(actual);
-      break;
-    case "contains":
-      matched =
-        typeof actual === "string" && typeof expected === "string" && actual.includes(expected);
-      break;
-    case "not_contains":
-      matched =
-        typeof actual === "string" && typeof expected === "string" && !actual.includes(expected);
-      break;
-    case "matches":
-      if (typeof actual === "string" && typeof expected === "string") {
-        // ReDoS protection: reject overly long patterns or inputs
-        if (expected.length > 256 || actual.length > 10_000) {
-          matched = false;
-          // Reject patterns with nested quantifiers, repeated wildcards, or adjacent unbounded groups
-        } else if (
-          /(\+|\*|\{)\s*\)(\+|\*|\?)/.test(expected) ||
-          /(\+|\*)\+/.test(expected) ||
-          /\.\*.*\.\*/.test(expected) ||
-          /\.\+.*\.\+/.test(expected)
-        ) {
-          // Potentially dangerous pattern — reject rather than risk catastrophic backtracking
-          matched = false;
-        } else {
-          try {
-            matched = new RegExp(expected).test(actual);
-          } catch {
-            matched = false;
-          }
-        }
-      }
-      break;
-    case "exists":
-      matched = actual !== undefined && actual !== null;
-      break;
-    case "not_exists":
-      matched = actual === undefined || actual === null;
-      break;
-  }
+  const matched = evaluateOperator(condition.operator, actual, expected);
 
   return { field: condition.field, operator: condition.operator, expected, actual, matched };
+}
+
+function evaluateOperator(
+  operator: PolicyConditionOperator,
+  actual: unknown,
+  expected: unknown,
+): boolean {
+  switch (operator) {
+    case "eq":
+      return actual === expected;
+    case "neq":
+      return actual !== expected;
+    case "gt":
+      return evaluateNumericComparison(actual, expected, (a, e) => a > e);
+    case "gte":
+      return evaluateNumericComparison(actual, expected, (a, e) => a >= e);
+    case "lt":
+      return evaluateNumericComparison(actual, expected, (a, e) => a < e);
+    case "lte":
+      return evaluateNumericComparison(actual, expected, (a, e) => a <= e);
+    case "in":
+      return Array.isArray(expected) && expected.includes(actual);
+    case "not_in":
+      return Array.isArray(expected) && !expected.includes(actual);
+    case "contains":
+      return evaluateStringContains(actual, expected, true);
+    case "not_contains":
+      return evaluateStringContains(actual, expected, false);
+    case "matches":
+      return evaluateRegexMatch(actual, expected);
+    case "exists":
+      return actual !== undefined && actual !== null;
+    case "not_exists":
+      return actual === undefined || actual === null;
+    default:
+      return false;
+  }
+}
+
+function evaluateNumericComparison(
+  actual: unknown,
+  expected: unknown,
+  compare: (a: number, e: number) => boolean,
+): boolean {
+  return typeof actual === "number" && typeof expected === "number" && compare(actual, expected);
+}
+
+function evaluateStringContains(
+  actual: unknown,
+  expected: unknown,
+  shouldContain: boolean,
+): boolean {
+  if (typeof actual !== "string" || typeof expected !== "string") {
+    return false;
+  }
+  const contains = actual.includes(expected);
+  return shouldContain ? contains : !contains;
+}
+
+function evaluateRegexMatch(actual: unknown, expected: unknown): boolean {
+  if (typeof actual !== "string" || typeof expected !== "string") {
+    return false;
+  }
+
+  // ReDoS protection: reject overly long patterns or inputs
+  if (expected.length > 256 || actual.length > 10_000) {
+    return false;
+  }
+
+  // Reject patterns with nested quantifiers, repeated wildcards, or adjacent unbounded groups
+  if (
+    /(\+|\*|\{)\s*\)(\+|\*|\?)/.test(expected) ||
+    /(\+|\*)\+/.test(expected) ||
+    /\.\*.*\.\*/.test(expected) ||
+    /\.\+.*\.\+/.test(expected)
+  ) {
+    return false;
+  }
+
+  try {
+    return new RegExp(expected).test(actual);
+  } catch {
+    return false;
+  }
 }
 
 export function evaluateRule(rule: PolicyRule, context: EvaluationContext): RuleResult {

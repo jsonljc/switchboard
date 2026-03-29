@@ -59,20 +59,13 @@ export function createGuardrailState(): GuardrailState {
   };
 }
 
-export function evaluate(
+function checkForbiddenBehavior(
   proposal: ActionProposal,
-  evalContext: EvaluationContext,
+  resolvedIdentity: ResolvedIdentity,
+  builder: ReturnType<typeof createTraceBuilder>,
   engineContext: PolicyEngineContext,
   config?: PolicyEngineConfig,
-): DecisionTrace {
-  const { resolvedIdentity, guardrails, guardrailState, policies } = engineContext;
-  const now = engineContext.now ?? new Date();
-  const builder = createTraceBuilder(
-    (evalContext.metadata["envelopeId"] ?? "unknown") as string,
-    proposal.id,
-  );
-
-  // Step 1: Forbidden behaviors
+): boolean {
   const isForbidden = resolvedIdentity.effectiveForbiddenBehaviors.includes(proposal.actionType);
   addCheck(
     builder,
@@ -93,10 +86,17 @@ export function evaluate(
     builder.computedRiskScore = riskScore;
     builder.finalDecision = "deny";
     builder.approvalRequired = "none";
-    return buildTrace(builder);
+    return true;
   }
+  return false;
+}
 
-  // Step 2: Trust behaviors (fast path)
+function checkTrustBehavior(
+  proposal: ActionProposal,
+  resolvedIdentity: ResolvedIdentity,
+  engineContext: PolicyEngineContext,
+  builder: ReturnType<typeof createTraceBuilder>,
+): boolean {
   const isTrusted = resolvedIdentity.effectiveTrustBehaviors.includes(proposal.actionType);
   addCheck(
     builder,
@@ -112,7 +112,7 @@ export function evaluate(
     isTrusted ? "allow" : "skip",
   );
 
-  // Step 2b: Competence trust (informational trace)
+  // Competence trust (informational trace)
   if (engineContext.competenceAdjustments && engineContext.competenceAdjustments.length > 0) {
     for (const adj of engineContext.competenceAdjustments) {
       addCheck(
@@ -140,28 +140,209 @@ export function evaluate(
     }
   }
 
-  // Step 3: Rate guardrails
-  if (guardrails) {
-    for (const rl of guardrails.rateLimits) {
-      const scope = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
-      const current = guardrailState.actionCounts.get(scope);
-      const windowStart = current?.windowStart ?? now.getTime();
-      const count = current?.count ?? 0;
-      const inWindow = now.getTime() - windowStart < rl.windowMs;
-      const exceeded = inWindow && count >= rl.maxActions;
+  return isTrusted;
+}
+
+function checkGuardrails(
+  proposal: ActionProposal,
+  engineContext: PolicyEngineContext,
+  now: Date,
+  builder: ReturnType<typeof createTraceBuilder>,
+  config?: PolicyEngineConfig,
+): boolean {
+  const { guardrails, guardrailState } = engineContext;
+  if (!guardrails) return false;
+
+  // Rate limits
+  for (const rl of guardrails.rateLimits) {
+    const scope = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
+    const current = guardrailState.actionCounts.get(scope);
+    const windowStart = current?.windowStart ?? now.getTime();
+    const count = current?.count ?? 0;
+    const inWindow = now.getTime() - windowStart < rl.windowMs;
+    const exceeded = inWindow && count >= rl.maxActions;
+
+    addCheck(
+      builder,
+      "RATE_LIMIT",
+      {
+        scope: rl.scope,
+        maxActions: rl.maxActions,
+        windowMs: rl.windowMs,
+        currentCount: count,
+      },
+      exceeded
+        ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
+        : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
+      exceeded,
+      exceeded ? "deny" : "skip",
+    );
+
+    if (exceeded) {
+      const riskScoreResult = riskInput(engineContext, config);
+      builder.computedRiskScore = riskScoreResult;
+      builder.finalDecision = "deny";
+      builder.approvalRequired = "none";
+      return true;
+    }
+  }
+
+  // Cooldowns
+  for (const cd of guardrails.cooldowns) {
+    if (cd.actionType === proposal.actionType || cd.actionType === "*") {
+      const entityKey = `${cd.scope}:${proposal.parameters["entityId"] ?? "unknown"}`;
+      const lastTime = guardrailState.lastActionTimes.get(entityKey);
+      const inCooldown = lastTime !== undefined && now.getTime() - lastTime < cd.cooldownMs;
+
+      const elapsedMs = now.getTime() - (lastTime ?? 0);
+      const remainingMs = cd.cooldownMs - elapsedMs;
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      const cooldownExpiresAt = lastTime !== undefined ? new Date(lastTime + cd.cooldownMs) : null;
 
       addCheck(
         builder,
-        "RATE_LIMIT",
+        "COOLDOWN",
         {
-          scope: rl.scope,
-          maxActions: rl.maxActions,
-          windowMs: rl.windowMs,
-          currentCount: count,
+          actionType: cd.actionType,
+          scope: cd.scope,
+          cooldownMs: cd.cooldownMs,
+          lastActionTime: lastTime ?? null,
+          entityKey,
+          cooldownExpiresAt: cooldownExpiresAt?.toISOString() ?? null,
+        },
+        inCooldown
+          ? `Cooldown active: entity was modified ${Math.round(elapsedMs / 60000)} minutes ago. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}.`
+          : `No cooldown active for this entity.`,
+        inCooldown,
+        inCooldown ? "deny" : "skip",
+      );
+
+      if (inCooldown) {
+        const riskScoreResult = riskInput(engineContext, config);
+        builder.computedRiskScore = riskScoreResult;
+        builder.finalDecision = "deny";
+        builder.approvalRequired = "none";
+        return true;
+      }
+    }
+  }
+
+  // Protected entities
+  for (const pe of guardrails.protectedEntities) {
+    const entityId = proposal.parameters["entityId"] as string | undefined;
+    const isProtected = entityId === pe.entityId;
+
+    if (isProtected) {
+      addCheck(
+        builder,
+        "PROTECTED_ENTITY",
+        {
+          entityType: pe.entityType,
+          entityId: pe.entityId,
+          reason: pe.reason,
+        },
+        `Protected entity: ${pe.reason}`,
+        true,
+        "deny",
+      );
+
+      const riskScoreResult = riskInput(engineContext, config);
+      builder.computedRiskScore = riskScoreResult;
+      builder.finalDecision = "deny";
+      builder.approvalRequired = "none";
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function extractSpendAmount(proposal: ActionProposal): number | null {
+  return typeof proposal.parameters["amount"] === "number"
+    ? proposal.parameters["amount"]
+    : typeof proposal.parameters["budgetChange"] === "number"
+      ? proposal.parameters["budgetChange"]
+      : null;
+}
+
+function checkSpendLimits(
+  spendAmount: number | null,
+  resolvedIdentity: ResolvedIdentity,
+  engineContext: PolicyEngineContext,
+  builder: ReturnType<typeof createTraceBuilder>,
+  config?: PolicyEngineConfig,
+): boolean {
+  if (spendAmount === null) return false;
+
+  const limits = resolvedIdentity.effectiveSpendLimits;
+  const perActionLimit = limits.perAction;
+
+  if (perActionLimit !== null && Math.abs(spendAmount) > perActionLimit) {
+    addCheck(
+      builder,
+      "SPEND_LIMIT",
+      {
+        field: "perAction",
+        actualValue: Math.abs(spendAmount),
+        threshold: perActionLimit,
+      },
+      `Spend limit exceeded: $${Math.abs(spendAmount)} exceeds per-action limit of $${perActionLimit}.`,
+      true,
+      "deny",
+    );
+
+    const riskScoreResult = riskInput(engineContext, config);
+    builder.computedRiskScore = riskScoreResult;
+    builder.finalDecision = "deny";
+    builder.approvalRequired = "none";
+    return true;
+  }
+
+  if (perActionLimit !== null) {
+    addCheck(
+      builder,
+      "SPEND_LIMIT",
+      {
+        field: "perAction",
+        actualValue: Math.abs(spendAmount),
+        threshold: perActionLimit,
+      },
+      `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
+      false,
+      "skip",
+    );
+  }
+
+  // Time-windowed spend limits
+  if (engineContext.spendLookup) {
+    const lookup = engineContext.spendLookup;
+    const absSpend = Math.abs(spendAmount);
+
+    const windowChecks: Array<{ field: string; cumulative: number; limit: number | null }> = [
+      { field: "daily", cumulative: lookup.dailySpend, limit: limits.daily },
+      { field: "weekly", cumulative: lookup.weeklySpend, limit: limits.weekly },
+      { field: "monthly", cumulative: lookup.monthlySpend, limit: limits.monthly },
+    ];
+
+    for (const wc of windowChecks) {
+      if (wc.limit === null) continue;
+
+      const projected = wc.cumulative + absSpend;
+      const exceeded = projected > wc.limit;
+
+      addCheck(
+        builder,
+        "SPEND_LIMIT",
+        {
+          field: wc.field,
+          currentCumulative: wc.cumulative,
+          proposedSpend: absSpend,
+          projectedTotal: projected,
+          threshold: wc.limit,
         },
         exceeded
-          ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
-          : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
+          ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
+          : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
         exceeded,
         exceeded ? "deny" : "skip",
       );
@@ -171,173 +352,27 @@ export function evaluate(
         builder.computedRiskScore = riskScoreResult;
         builder.finalDecision = "deny";
         builder.approvalRequired = "none";
-        return buildTrace(builder);
-      }
-    }
-
-    // Step 4: Cooldown check
-    for (const cd of guardrails.cooldowns) {
-      if (cd.actionType === proposal.actionType || cd.actionType === "*") {
-        const entityKey = `${cd.scope}:${proposal.parameters["entityId"] ?? "unknown"}`;
-        const lastTime = guardrailState.lastActionTimes.get(entityKey);
-        const inCooldown = lastTime !== undefined && now.getTime() - lastTime < cd.cooldownMs;
-
-        const elapsedMs = now.getTime() - (lastTime ?? 0);
-        const remainingMs = cd.cooldownMs - elapsedMs;
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        const cooldownExpiresAt =
-          lastTime !== undefined ? new Date(lastTime + cd.cooldownMs) : null;
-
-        addCheck(
-          builder,
-          "COOLDOWN",
-          {
-            actionType: cd.actionType,
-            scope: cd.scope,
-            cooldownMs: cd.cooldownMs,
-            lastActionTime: lastTime ?? null,
-            entityKey,
-            cooldownExpiresAt: cooldownExpiresAt?.toISOString() ?? null,
-          },
-          inCooldown
-            ? `Cooldown active: entity was modified ${Math.round(elapsedMs / 60000)} minutes ago. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}.`
-            : `No cooldown active for this entity.`,
-          inCooldown,
-          inCooldown ? "deny" : "skip",
-        );
-
-        if (inCooldown) {
-          const riskScoreResult = riskInput(engineContext, config);
-          builder.computedRiskScore = riskScoreResult;
-          builder.finalDecision = "deny";
-          builder.approvalRequired = "none";
-          return buildTrace(builder);
-        }
-      }
-    }
-
-    // Step 5: Protected entities
-    for (const pe of guardrails.protectedEntities) {
-      const entityId = proposal.parameters["entityId"] as string | undefined;
-      const isProtected = entityId === pe.entityId;
-
-      if (isProtected) {
-        addCheck(
-          builder,
-          "PROTECTED_ENTITY",
-          {
-            entityType: pe.entityType,
-            entityId: pe.entityId,
-            reason: pe.reason,
-          },
-          `Protected entity: ${pe.reason}`,
-          true,
-          "deny",
-        );
-
-        const riskScoreResult = riskInput(engineContext, config);
-        builder.computedRiskScore = riskScoreResult;
-        builder.finalDecision = "deny";
-        builder.approvalRequired = "none";
-        return buildTrace(builder);
+        return true;
       }
     }
   }
 
-  // Step 6: Spend limits
-  const spendAmount =
-    typeof proposal.parameters["amount"] === "number"
-      ? proposal.parameters["amount"]
-      : typeof proposal.parameters["budgetChange"] === "number"
-        ? proposal.parameters["budgetChange"]
-        : null;
+  return false;
+}
 
-  if (spendAmount !== null) {
-    const limits = resolvedIdentity.effectiveSpendLimits;
-    const perActionLimit = limits.perAction;
-
-    if (perActionLimit !== null && Math.abs(spendAmount) > perActionLimit) {
-      addCheck(
-        builder,
-        "SPEND_LIMIT",
-        {
-          field: "perAction",
-          actualValue: Math.abs(spendAmount),
-          threshold: perActionLimit,
-        },
-        `Spend limit exceeded: $${Math.abs(spendAmount)} exceeds per-action limit of $${perActionLimit}.`,
-        true,
-        "deny",
-      );
-
-      const riskScoreResult = riskInput(engineContext, config);
-      builder.computedRiskScore = riskScoreResult;
-      builder.finalDecision = "deny";
-      builder.approvalRequired = "none";
-      return buildTrace(builder);
-    }
-
-    if (perActionLimit !== null) {
-      addCheck(
-        builder,
-        "SPEND_LIMIT",
-        {
-          field: "perAction",
-          actualValue: Math.abs(spendAmount),
-          threshold: perActionLimit,
-        },
-        `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
-        false,
-        "skip",
-      );
-    }
-
-    // Step 6b: Time-windowed spend limits (daily/weekly/monthly)
-    if (engineContext.spendLookup) {
-      const lookup = engineContext.spendLookup;
-      const absSpend = Math.abs(spendAmount);
-
-      const windowChecks: Array<{ field: string; cumulative: number; limit: number | null }> = [
-        { field: "daily", cumulative: lookup.dailySpend, limit: limits.daily },
-        { field: "weekly", cumulative: lookup.weeklySpend, limit: limits.weekly },
-        { field: "monthly", cumulative: lookup.monthlySpend, limit: limits.monthly },
-      ];
-
-      for (const wc of windowChecks) {
-        if (wc.limit === null) continue;
-
-        const projected = wc.cumulative + absSpend;
-        const exceeded = projected > wc.limit;
-
-        addCheck(
-          builder,
-          "SPEND_LIMIT",
-          {
-            field: wc.field,
-            currentCumulative: wc.cumulative,
-            proposedSpend: absSpend,
-            projectedTotal: projected,
-            threshold: wc.limit,
-          },
-          exceeded
-            ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
-            : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
-          exceeded,
-          exceeded ? "deny" : "skip",
-        );
-
-        if (exceeded) {
-          const riskScoreResult = riskInput(engineContext, config);
-          builder.computedRiskScore = riskScoreResult;
-          builder.finalDecision = "deny";
-          builder.approvalRequired = "none";
-          return buildTrace(builder);
-        }
-      }
-    }
-  }
-
-  // Step 7: Policy rules (sorted by priority)
+function evaluatePolicyRules(
+  _proposal: ActionProposal,
+  evalContext: EvaluationContext,
+  policies: Policy[],
+  builder: ReturnType<typeof createTraceBuilder>,
+  config: PolicyEngineConfig | undefined,
+  engineContext: PolicyEngineContext,
+): {
+  denied: boolean;
+  policyDecision: "allow" | "deny" | "modify" | null;
+  policyApprovalOverride: ApprovalRequirement | null;
+  policyRiskOverride: RiskCategory | null;
+} {
   const sortedPolicies = [...policies]
     .filter((p) => p.active)
     .sort((a, b) => a.priority - b.priority);
@@ -347,7 +382,6 @@ export function evaluate(
   let policyRiskOverride: RiskCategory | null = null;
 
   for (const policy of sortedPolicies) {
-    // Check cartridge filter
     if (policy.cartridgeId && policy.cartridgeId !== evalContext.cartridgeId) {
       continue;
     }
@@ -388,7 +422,7 @@ export function evaluate(
       if (policy.effect === "require_approval" && policy.approvalRequirement) {
         policyApprovalOverride = policy.approvalRequirement;
         if (policyDecision === null) {
-          policyDecision = "allow"; // require_approval implies allow-with-conditions
+          policyDecision = "allow";
         }
       }
       if (policy.riskCategoryOverride) {
@@ -402,10 +436,18 @@ export function evaluate(
     builder.computedRiskScore = riskScoreResult;
     builder.finalDecision = "deny";
     builder.approvalRequired = "none";
-    return buildTrace(builder);
+    return { denied: true, policyDecision, policyApprovalOverride, policyRiskOverride };
   }
 
-  // Step 8: Compute risk score
+  return { denied: false, policyDecision, policyApprovalOverride, policyRiskOverride };
+}
+
+function computeFinalRisk(
+  engineContext: PolicyEngineContext,
+  config: PolicyEngineConfig | undefined,
+  policyRiskOverride: RiskCategory | null,
+  builder: ReturnType<typeof createTraceBuilder>,
+): { finalRiskCategory: RiskCategory; riskScoreResult: ReturnType<typeof computeRiskScore> } {
   const riskScoreResult = riskInput(engineContext, config);
   builder.computedRiskScore = riskScoreResult;
 
@@ -425,7 +467,7 @@ export function evaluate(
     "skip",
   );
 
-  // Step 8b: Composite risk adjustment
+  // Composite risk adjustment
   let finalRiskCategory = effectiveRiskCategory;
   if (engineContext.compositeContext) {
     const { adjustedScore, compositeFactors } = computeCompositeRiskAdjustment(
@@ -460,12 +502,20 @@ export function evaluate(
     }
   }
 
-  // Step 9: Determine approval requirement
+  return { finalRiskCategory, riskScoreResult };
+}
+
+function determineApprovalRequirement(
+  policyApprovalOverride: ApprovalRequirement | null,
+  resolvedIdentity: ResolvedIdentity,
+  finalRiskCategory: RiskCategory,
+  systemRiskPosture: SystemRiskPosture | undefined,
+  builder: ReturnType<typeof createTraceBuilder>,
+): ApprovalRequirement {
   let approvalReq: ApprovalRequirement =
     policyApprovalOverride ?? resolvedIdentity.effectiveRiskTolerance[finalRiskCategory];
 
-  // Step 9b: System-wide risk posture override
-  const posture = engineContext.systemRiskPosture ?? "normal";
+  const posture = systemRiskPosture ?? "normal";
   if (posture === "critical") {
     approvalReq = "mandatory";
     addCheck(
@@ -494,6 +544,71 @@ export function evaluate(
     );
   }
 
+  return approvalReq;
+}
+
+export function evaluate(
+  proposal: ActionProposal,
+  evalContext: EvaluationContext,
+  engineContext: PolicyEngineContext,
+  config?: PolicyEngineConfig,
+): DecisionTrace {
+  const { resolvedIdentity } = engineContext;
+  const now = engineContext.now ?? new Date();
+  const builder = createTraceBuilder(
+    (evalContext.metadata["envelopeId"] ?? "unknown") as string,
+    proposal.id,
+  );
+
+  // Step 1: Forbidden behaviors
+  if (checkForbiddenBehavior(proposal, resolvedIdentity, builder, engineContext, config)) {
+    return buildTrace(builder);
+  }
+
+  // Step 2: Trust behaviors (fast path)
+  const isTrusted = checkTrustBehavior(proposal, resolvedIdentity, engineContext, builder);
+
+  // Step 3-5: Guardrail checks
+  if (checkGuardrails(proposal, engineContext, now, builder, config)) {
+    return buildTrace(builder);
+  }
+
+  // Step 6: Spend limits
+  const spendAmount = extractSpendAmount(proposal);
+  if (checkSpendLimits(spendAmount, resolvedIdentity, engineContext, builder, config)) {
+    return buildTrace(builder);
+  }
+
+  // Step 7: Policy rules
+  const policyResult = evaluatePolicyRules(
+    proposal,
+    evalContext,
+    engineContext.policies,
+    builder,
+    config,
+    engineContext,
+  );
+  if (policyResult.denied) {
+    return buildTrace(builder);
+  }
+
+  // Step 8: Compute risk score
+  const { finalRiskCategory } = computeFinalRisk(
+    engineContext,
+    config,
+    policyResult.policyRiskOverride,
+    builder,
+  );
+
+  // Step 9: Determine approval requirement
+  const approvalReq = determineApprovalRequirement(
+    policyResult.policyApprovalOverride,
+    resolvedIdentity,
+    finalRiskCategory,
+    engineContext.systemRiskPosture,
+    builder,
+  );
+
   builder.approvalRequired = approvalReq;
 
   // If trusted, allow without approval regardless
@@ -504,7 +619,7 @@ export function evaluate(
   }
 
   // Step 10: Final decision — default deny if no policy matched
-  builder.finalDecision = policyDecision ?? "deny";
+  builder.finalDecision = policyResult.policyDecision ?? "deny";
 
   return buildTrace(builder);
 }

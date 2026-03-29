@@ -4,6 +4,7 @@ import type {
   ActionProposal,
   ApprovalRequest,
   GuardrailConfig,
+  DecisionTrace,
 } from "@switchboard/schemas";
 import type { SmbOrgConfig } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
@@ -27,48 +28,18 @@ export interface SmbPipelineContext {
   approvalNotifier?: ApprovalNotifier | null;
 }
 
-/**
- * SMB propose pipeline — called from the orchestrator when tier === "smb".
- *
- * Simplified 10-step pipeline:
- * 1. Look up cartridge
- * 2. Enrich context
- * 3. Get guardrails
- * 4. Compute daily spend
- * 5. Evaluate (simplified SMB evaluator)
- * 6. Create envelope
- * 7. Handle decision (auto-approve / deny / route to single approver)
- * 8. Save envelope
- * 9. Record activity log
- * 10. Return ProposeResult
- */
-export async function smbPropose(
+async function smbEnrichAndPrepare(
+  cartridge: import("@switchboard/cartridge-sdk").Cartridge,
   params: {
     actionType: string;
     parameters: Record<string, unknown>;
     principalId: string;
     organizationId?: string | null;
-    cartridgeId: string;
-    message?: string;
-    parentEnvelopeId?: string | null;
-    traceId?: string;
-    emergencyOverride?: boolean;
   },
   ctx: SmbPipelineContext,
-): Promise<ProposeResult> {
-  const { storage, activityLog, orgConfig } = ctx;
-  const envelopeId = `env_${randomUUID()}`;
-  const proposalId = `prop_${randomUUID()}`;
-  const traceId = params.traceId ?? `trace_${randomUUID()}`;
-  const now = new Date();
-
-  // 1. Look up cartridge
-  const cartridge = await storage.cartridges.get(params.cartridgeId);
-  if (!cartridge) {
-    throw new Error(`Cartridge not found: ${params.cartridgeId}`);
-  }
-
-  // 2. Enrich context (same as enterprise, with try/catch fallback)
+  _now: Date,
+): Promise<{ enrichedParams: Record<string, unknown>; guardrails: GuardrailConfig | null }> {
+  // 2. Enrich context
   let enrichedParams = { ...params.parameters };
   try {
     const enriched = await cartridge.enrichContext(params.actionType, params.parameters, {
@@ -126,7 +97,14 @@ export async function smbPropose(
     }
   }
 
-  // 4. Compute daily spend — query today's executed envelopes
+  return { enrichedParams, guardrails };
+}
+
+async function smbComputeDailySpend(
+  storage: StorageContext,
+  params: { organizationId?: string | null; parameters: Record<string, unknown> },
+  now: Date,
+): Promise<number> {
   let dailySpend = 0;
   try {
     const envelopes = await storage.envelopes.list({
@@ -150,54 +128,31 @@ export async function smbPropose(
   } catch {
     // Spend lookup failure is non-fatal, defaults to 0
   }
+  return dailySpend;
+}
 
-  // Create proposal
-  const proposal: ActionProposal = {
-    id: proposalId,
-    actionType: params.actionType,
-    parameters: enrichedParams,
-    evidence: params.message ?? `Proposed ${params.actionType}`,
-    confidence: 1.0,
-    originatingMessageId: "",
-  };
-
-  // 5. Evaluate
-  const decisionTrace = smbEvaluate(proposal, {
-    orgConfig,
-    guardrails,
-    guardrailState: ctx.guardrailState,
-    dailySpend,
-    envelopeId,
-    now,
-  });
-
-  // 6. Create envelope
-  const envelope: ActionEnvelope = {
-    id: envelopeId,
-    version: 1,
-    incomingMessage: params.message ?? null,
-    conversationId: null,
-    proposals: [proposal],
-    resolvedEntities: [],
-    plan: null,
-    decisions: [decisionTrace],
-    approvalRequests: [],
-    executionResults: [],
-    auditEntryIds: [],
-    status: "proposed",
-    createdAt: now,
-    updatedAt: now,
-    parentEnvelopeId: params.parentEnvelopeId ?? null,
-    traceId,
-  };
-
-  // 7. Handle decision outcome
+async function smbHandleDecision(
+  params: {
+    principalId: string;
+    actionType: string;
+    parameters: Record<string, unknown>;
+    organizationId?: string | null;
+    emergencyOverride?: boolean;
+  },
+  orgConfig: SmbOrgConfig,
+  decisionTrace: DecisionTrace,
+  envelope: ActionEnvelope,
+  proposal: ActionProposal,
+  enrichedParams: Record<string, unknown>,
+  storage: StorageContext,
+  ctx: SmbPipelineContext,
+): Promise<{ approvalRequest: ApprovalRequest | null; governanceNote: string | undefined }> {
   let approvalRequest: ApprovalRequest | null = null;
   let governanceNote: string | undefined;
 
   const isObserveMode = orgConfig.governanceProfile === "observe";
 
-  // Emergency override — allows org owner to bypass approval
+  // Emergency override
   if (params.emergencyOverride) {
     if (params.principalId === orgConfig.ownerId) {
       envelope.status = "approved";
@@ -253,10 +208,20 @@ export async function smbPropose(
     envelope.status = "approved";
   }
 
-  // 8. Save envelope
-  await storage.envelopes.save(envelope);
+  return { approvalRequest, governanceNote };
+}
 
-  // Extract spend amount for activity log
+async function smbRecordActivity(
+  params: {
+    principalId: string;
+    actionType: string;
+    parameters: Record<string, unknown>;
+    organizationId?: string | null;
+  },
+  envelope: ActionEnvelope,
+  decisionTrace: DecisionTrace,
+  activityLog: SmbActivityLog,
+): Promise<void> {
   const spendAmount =
     typeof params.parameters["amount"] === "number"
       ? params.parameters["amount"]
@@ -264,7 +229,6 @@ export async function smbPropose(
         ? params.parameters["budgetChange"]
         : null;
 
-  // 9. Record activity log
   const activityResult =
     envelope.status === "denied"
       ? ("denied" as const)
@@ -288,6 +252,112 @@ export async function smbPropose(
     envelopeId: envelope.id,
     organizationId: params.organizationId ?? "",
   });
+}
+
+/**
+ * SMB propose pipeline — called from the orchestrator when tier === "smb".
+ *
+ * Simplified 10-step pipeline:
+ * 1. Look up cartridge
+ * 2. Enrich context
+ * 3. Get guardrails
+ * 4. Compute daily spend
+ * 5. Evaluate (simplified SMB evaluator)
+ * 6. Create envelope
+ * 7. Handle decision (auto-approve / deny / route to single approver)
+ * 8. Save envelope
+ * 9. Record activity log
+ * 10. Return ProposeResult
+ */
+export async function smbPropose(
+  params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId?: string | null;
+    cartridgeId: string;
+    message?: string;
+    parentEnvelopeId?: string | null;
+    traceId?: string;
+    emergencyOverride?: boolean;
+  },
+  ctx: SmbPipelineContext,
+): Promise<ProposeResult> {
+  const { storage, activityLog, orgConfig } = ctx;
+  const envelopeId = `env_${randomUUID()}`;
+  const proposalId = `prop_${randomUUID()}`;
+  const traceId = params.traceId ?? `trace_${randomUUID()}`;
+  const now = new Date();
+
+  // 1. Look up cartridge
+  const cartridge = await storage.cartridges.get(params.cartridgeId);
+  if (!cartridge) {
+    throw new Error(`Cartridge not found: ${params.cartridgeId}`);
+  }
+
+  // 2-3. Enrich context + get guardrails
+  const { enrichedParams, guardrails } = await smbEnrichAndPrepare(cartridge, params, ctx, now);
+
+  // 4. Compute daily spend
+  const dailySpend = await smbComputeDailySpend(storage, params, now);
+
+  // Create proposal
+  const proposal: ActionProposal = {
+    id: proposalId,
+    actionType: params.actionType,
+    parameters: enrichedParams,
+    evidence: params.message ?? `Proposed ${params.actionType}`,
+    confidence: 1.0,
+    originatingMessageId: "",
+  };
+
+  // 5. Evaluate
+  const decisionTrace = smbEvaluate(proposal, {
+    orgConfig,
+    guardrails,
+    guardrailState: ctx.guardrailState,
+    dailySpend,
+    envelopeId,
+    now,
+  });
+
+  // 6. Create envelope
+  const envelope: ActionEnvelope = {
+    id: envelopeId,
+    version: 1,
+    incomingMessage: params.message ?? null,
+    conversationId: null,
+    proposals: [proposal],
+    resolvedEntities: [],
+    plan: null,
+    decisions: [decisionTrace],
+    approvalRequests: [],
+    executionResults: [],
+    auditEntryIds: [],
+    status: "proposed",
+    createdAt: now,
+    updatedAt: now,
+    parentEnvelopeId: params.parentEnvelopeId ?? null,
+    traceId,
+  };
+
+  // 7. Handle decision outcome
+  const { approvalRequest, governanceNote } = await smbHandleDecision(
+    params,
+    orgConfig,
+    decisionTrace,
+    envelope,
+    proposal,
+    enrichedParams,
+    storage,
+    ctx,
+  );
+
+  // 8. Save envelope
+  await storage.envelopes.save(envelope);
+
+  // 9. Record activity log
+  await smbRecordActivity(params, envelope, decisionTrace, activityLog);
 
   // 10. Return ProposeResult
   return {

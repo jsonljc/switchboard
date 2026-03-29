@@ -55,22 +55,11 @@ export function smbApprovalRequired(risk: RiskCategory, profile: GovernanceProfi
   }
 }
 
-/**
- * Simplified SMB policy evaluation — replaces the 10-step enterprise evaluate().
- *
- * 5-step pipeline:
- * 1. Action type filter (allowlist/blocklist)
- * 2. Guardrail checks (rate limits, cooldowns, protected entities)
- * 3. Spend cap (perActionSpendLimit + dailySpendLimit)
- * 4. Risk categorization (3 buckets)
- * 5. Approval determination (map risk + governance profile)
- */
-export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext): DecisionTrace {
-  const { orgConfig, guardrails, guardrailState } = ctx;
-  const now = ctx.now ?? new Date();
-  const builder = createTraceBuilder(ctx.envelopeId, proposal.id);
-
-  // Step 1: Action type filter
+function smbCheckActionTypeFilter(
+  proposal: ActionProposal,
+  orgConfig: SmbOrgConfig,
+  builder: ReturnType<typeof createTraceBuilder>,
+): boolean {
   if (orgConfig.allowedActionTypes && orgConfig.allowedActionTypes.length > 0) {
     const allowed = orgConfig.allowedActionTypes.includes(proposal.actionType);
     addCheck(
@@ -91,7 +80,7 @@ export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext)
       builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
       builder.finalDecision = "deny";
       builder.approvalRequired = "none";
-      return buildTrace(builder);
+      return true;
     }
   } else if (orgConfig.blockedActionTypes && orgConfig.blockedActionTypes.length > 0) {
     const blocked = orgConfig.blockedActionTypes.includes(proposal.actionType);
@@ -113,125 +102,98 @@ export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext)
       builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
       builder.finalDecision = "deny";
       builder.approvalRequired = "none";
-      return buildTrace(builder);
+      return true;
+    }
+  }
+  return false;
+}
+
+function smbCheckGuardrails(
+  proposal: ActionProposal,
+  guardrails: GuardrailConfig,
+  guardrailState: GuardrailState,
+  now: Date,
+  builder: ReturnType<typeof createTraceBuilder>,
+): boolean {
+  // Rate limits
+  for (const rl of guardrails.rateLimits) {
+    const scope = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
+    const current = guardrailState.actionCounts.get(scope);
+    const windowStart = current?.windowStart ?? now.getTime();
+    const count = current?.count ?? 0;
+    const inWindow = now.getTime() - windowStart < rl.windowMs;
+    const exceeded = inWindow && count >= rl.maxActions;
+
+    addCheck(
+      builder,
+      "RATE_LIMIT",
+      {
+        scope: rl.scope,
+        maxActions: rl.maxActions,
+        windowMs: rl.windowMs,
+        currentCount: count,
+      },
+      exceeded
+        ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
+        : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
+      exceeded,
+      exceeded ? "deny" : "skip",
+    );
+
+    if (exceeded) {
+      builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
+      builder.finalDecision = "deny";
+      builder.approvalRequired = "none";
+      return true;
     }
   }
 
-  // Step 2: Guardrail checks
-  if (guardrails) {
-    // Rate limits
-    for (const rl of guardrails.rateLimits) {
-      const scope = rl.scope === "global" ? "global" : `${rl.scope}:${proposal.actionType}`;
-      const current = guardrailState.actionCounts.get(scope);
-      const windowStart = current?.windowStart ?? now.getTime();
-      const count = current?.count ?? 0;
-      const inWindow = now.getTime() - windowStart < rl.windowMs;
-      const exceeded = inWindow && count >= rl.maxActions;
+  // Cooldowns
+  for (const cd of guardrails.cooldowns) {
+    if (cd.actionType === proposal.actionType || cd.actionType === "*") {
+      const entityKey = `${cd.scope}:${proposal.parameters["entityId"] ?? "unknown"}`;
+      const lastTime = guardrailState.lastActionTimes.get(entityKey);
+      const inCooldown = lastTime !== undefined && now.getTime() - lastTime < cd.cooldownMs;
 
       addCheck(
         builder,
-        "RATE_LIMIT",
+        "COOLDOWN",
         {
-          scope: rl.scope,
-          maxActions: rl.maxActions,
-          windowMs: rl.windowMs,
-          currentCount: count,
+          actionType: cd.actionType,
+          scope: cd.scope,
+          cooldownMs: cd.cooldownMs,
+          lastActionTime: lastTime ?? null,
+          entityKey,
         },
-        exceeded
-          ? `Rate limit exceeded: ${count}/${rl.maxActions} actions in window.`
-          : `Rate limit OK: ${count}/${rl.maxActions} actions in window.`,
-        exceeded,
-        exceeded ? "deny" : "skip",
+        inCooldown ? `Cooldown active for this entity.` : `No cooldown active for this entity.`,
+        inCooldown,
+        inCooldown ? "deny" : "skip",
       );
 
-      if (exceeded) {
+      if (inCooldown) {
         builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
         builder.finalDecision = "deny";
         builder.approvalRequired = "none";
-        return buildTrace(builder);
-      }
-    }
-
-    // Cooldowns
-    for (const cd of guardrails.cooldowns) {
-      if (cd.actionType === proposal.actionType || cd.actionType === "*") {
-        const entityKey = `${cd.scope}:${proposal.parameters["entityId"] ?? "unknown"}`;
-        const lastTime = guardrailState.lastActionTimes.get(entityKey);
-        const inCooldown = lastTime !== undefined && now.getTime() - lastTime < cd.cooldownMs;
-
-        addCheck(
-          builder,
-          "COOLDOWN",
-          {
-            actionType: cd.actionType,
-            scope: cd.scope,
-            cooldownMs: cd.cooldownMs,
-            lastActionTime: lastTime ?? null,
-            entityKey,
-          },
-          inCooldown ? `Cooldown active for this entity.` : `No cooldown active for this entity.`,
-          inCooldown,
-          inCooldown ? "deny" : "skip",
-        );
-
-        if (inCooldown) {
-          builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
-          builder.finalDecision = "deny";
-          builder.approvalRequired = "none";
-          return buildTrace(builder);
-        }
-      }
-    }
-
-    // Protected entities
-    for (const pe of guardrails.protectedEntities) {
-      const entityId = proposal.parameters["entityId"] as string | undefined;
-      const isProtected = entityId === pe.entityId;
-
-      if (isProtected) {
-        addCheck(
-          builder,
-          "PROTECTED_ENTITY",
-          {
-            entityType: pe.entityType,
-            entityId: pe.entityId,
-            reason: pe.reason,
-          },
-          `Protected entity: ${pe.reason}`,
-          true,
-          "deny",
-        );
-
-        builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
-        builder.finalDecision = "deny";
-        builder.approvalRequired = "none";
-        return buildTrace(builder);
+        return true;
       }
     }
   }
 
-  // Step 3: Spend cap
-  const spendAmount =
-    typeof proposal.parameters["amount"] === "number"
-      ? proposal.parameters["amount"]
-      : typeof proposal.parameters["budgetChange"] === "number"
-        ? proposal.parameters["budgetChange"]
-        : null;
+  // Protected entities
+  for (const pe of guardrails.protectedEntities) {
+    const entityId = proposal.parameters["entityId"] as string | undefined;
+    const isProtected = entityId === pe.entityId;
 
-  if (spendAmount !== null) {
-    const absSpend = Math.abs(spendAmount);
-
-    // Per-action spend limit
-    if (orgConfig.perActionSpendLimit !== null && absSpend > orgConfig.perActionSpendLimit) {
+    if (isProtected) {
       addCheck(
         builder,
-        "SPEND_LIMIT",
+        "PROTECTED_ENTITY",
         {
-          field: "perAction",
-          actualValue: absSpend,
-          threshold: orgConfig.perActionSpendLimit,
+          entityType: pe.entityType,
+          entityId: pe.entityId,
+          reason: pe.reason,
         },
-        `Spend limit exceeded: $${absSpend} exceeds per-action limit of $${orgConfig.perActionSpendLimit}.`,
+        `Protected entity: ${pe.reason}`,
         true,
         "deny",
       );
@@ -239,53 +201,129 @@ export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext)
       builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
       builder.finalDecision = "deny";
       builder.approvalRequired = "none";
-      return buildTrace(builder);
+      return true;
     }
+  }
 
-    if (orgConfig.perActionSpendLimit !== null) {
-      addCheck(
-        builder,
-        "SPEND_LIMIT",
-        {
-          field: "perAction",
-          actualValue: absSpend,
-          threshold: orgConfig.perActionSpendLimit,
-        },
-        `Spend limit OK: $${absSpend} within per-action limit of $${orgConfig.perActionSpendLimit}.`,
-        false,
-        "skip",
-      );
+  return false;
+}
+
+function smbExtractSpendAmount(proposal: ActionProposal): number | null {
+  return typeof proposal.parameters["amount"] === "number"
+    ? proposal.parameters["amount"]
+    : typeof proposal.parameters["budgetChange"] === "number"
+      ? proposal.parameters["budgetChange"]
+      : null;
+}
+
+function smbCheckSpendLimits(
+  spendAmount: number | null,
+  orgConfig: SmbOrgConfig,
+  dailySpend: number,
+  builder: ReturnType<typeof createTraceBuilder>,
+): boolean {
+  if (spendAmount === null) return false;
+
+  const absSpend = Math.abs(spendAmount);
+
+  // Per-action spend limit
+  if (orgConfig.perActionSpendLimit !== null && absSpend > orgConfig.perActionSpendLimit) {
+    addCheck(
+      builder,
+      "SPEND_LIMIT",
+      {
+        field: "perAction",
+        actualValue: absSpend,
+        threshold: orgConfig.perActionSpendLimit,
+      },
+      `Spend limit exceeded: $${absSpend} exceeds per-action limit of $${orgConfig.perActionSpendLimit}.`,
+      true,
+      "deny",
+    );
+
+    builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
+    builder.finalDecision = "deny";
+    builder.approvalRequired = "none";
+    return true;
+  }
+
+  if (orgConfig.perActionSpendLimit !== null) {
+    addCheck(
+      builder,
+      "SPEND_LIMIT",
+      {
+        field: "perAction",
+        actualValue: absSpend,
+        threshold: orgConfig.perActionSpendLimit,
+      },
+      `Spend limit OK: $${absSpend} within per-action limit of $${orgConfig.perActionSpendLimit}.`,
+      false,
+      "skip",
+    );
+  }
+
+  // Daily spend limit
+  if (orgConfig.dailySpendLimit !== null) {
+    const projected = dailySpend + absSpend;
+    const exceeded = projected > orgConfig.dailySpendLimit;
+
+    addCheck(
+      builder,
+      "SPEND_LIMIT",
+      {
+        field: "daily",
+        currentCumulative: dailySpend,
+        proposedSpend: absSpend,
+        projectedTotal: projected,
+        threshold: orgConfig.dailySpendLimit,
+      },
+      exceeded
+        ? `Daily spend limit exceeded: $${dailySpend} + $${absSpend} = $${projected} exceeds $${orgConfig.dailySpendLimit} limit.`
+        : `Daily spend limit OK: $${dailySpend} + $${absSpend} = $${projected} within $${orgConfig.dailySpendLimit} limit.`,
+      exceeded,
+      exceeded ? "deny" : "skip",
+    );
+
+    if (exceeded) {
+      builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
+      builder.finalDecision = "deny";
+      builder.approvalRequired = "none";
+      return true;
     }
+  }
 
-    // Daily spend limit
-    if (orgConfig.dailySpendLimit !== null) {
-      const projected = ctx.dailySpend + absSpend;
-      const exceeded = projected > orgConfig.dailySpendLimit;
+  return false;
+}
 
-      addCheck(
-        builder,
-        "SPEND_LIMIT",
-        {
-          field: "daily",
-          currentCumulative: ctx.dailySpend,
-          proposedSpend: absSpend,
-          projectedTotal: projected,
-          threshold: orgConfig.dailySpendLimit,
-        },
-        exceeded
-          ? `Daily spend limit exceeded: $${ctx.dailySpend} + $${absSpend} = $${projected} exceeds $${orgConfig.dailySpendLimit} limit.`
-          : `Daily spend limit OK: $${ctx.dailySpend} + $${absSpend} = $${projected} within $${orgConfig.dailySpendLimit} limit.`,
-        exceeded,
-        exceeded ? "deny" : "skip",
-      );
+/**
+ * Simplified SMB policy evaluation — replaces the 10-step enterprise evaluate().
+ *
+ * 5-step pipeline:
+ * 1. Action type filter (allowlist/blocklist)
+ * 2. Guardrail checks (rate limits, cooldowns, protected entities)
+ * 3. Spend cap (perActionSpendLimit + dailySpendLimit)
+ * 4. Risk categorization (3 buckets)
+ * 5. Approval determination (map risk + governance profile)
+ */
+export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext): DecisionTrace {
+  const { orgConfig, guardrails, guardrailState } = ctx;
+  const now = ctx.now ?? new Date();
+  const builder = createTraceBuilder(ctx.envelopeId, proposal.id);
 
-      if (exceeded) {
-        builder.computedRiskScore = { rawScore: 0, category: "none", factors: [] };
-        builder.finalDecision = "deny";
-        builder.approvalRequired = "none";
-        return buildTrace(builder);
-      }
-    }
+  // Step 1: Action type filter
+  if (smbCheckActionTypeFilter(proposal, orgConfig, builder)) {
+    return buildTrace(builder);
+  }
+
+  // Step 2: Guardrail checks
+  if (guardrails && smbCheckGuardrails(proposal, guardrails, guardrailState, now, builder)) {
+    return buildTrace(builder);
+  }
+
+  // Step 3: Spend cap
+  const spendAmount = smbExtractSpendAmount(proposal);
+  if (smbCheckSpendLimits(spendAmount, orgConfig, ctx.dailySpend, builder)) {
+    return buildTrace(builder);
   }
 
   // Step 4: Risk categorization
@@ -326,11 +364,7 @@ export function smbEvaluate(proposal: ActionProposal, ctx: SmbEvaluationContext)
 
   builder.approvalRequired = approvalReq;
 
-  // Default decision for SMB orgs. SMB uses default-allow by design because the
-  // action allowlist/blocklist at the org config level (Step 1) serves as the policy
-  // gate — any action that reaches this point has already passed the allowlist check.
-  // However, for "strict" and "locked" profiles, use deny-by-default to match
-  // enterprise semantics where unpolicied actions should not auto-approve.
+  // Default decision for SMB orgs
   if (orgConfig.governanceProfile === "strict" || orgConfig.governanceProfile === "locked") {
     builder.finalDecision = needsApproval ? "allow" : "deny";
   } else {
