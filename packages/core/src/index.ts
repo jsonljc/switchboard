@@ -94,17 +94,8 @@ export type { IdempotencyStore } from "./idempotency/guard.js";
 export { NoOpCredentialResolver } from "./credentials/resolver.js";
 export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
 
-// Skin Loader & Resolver
-export * from "./skin/index.js";
-
-// Business Profile Loader & Resolver
-export * from "./profile/index.js";
-
 // Tool Registry
 export * from "./tool-registry/index.js";
-
-// Agents (autonomous ads operator layer)
-export * from "./agents/index.js";
 
 // Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";

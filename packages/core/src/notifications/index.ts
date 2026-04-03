@@ -6,4 +6,8 @@ export { SlackApprovalNotifier } from "./slack-notifier.js";
 export { WhatsAppApprovalNotifier } from "./whatsapp-notifier.js";
 export type { WhatsAppNotifierConfig } from "./whatsapp-notifier.js";
 export { ProactiveSender } from "./proactive-sender.js";
-export type { ChannelCredentials, ProactiveSenderConfig } from "./proactive-sender.js";
+export type {
+  AgentNotifier,
+  ChannelCredentials,
+  ProactiveSenderConfig,
+} from "./proactive-sender.js";

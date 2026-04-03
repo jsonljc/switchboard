@@ -6,7 +6,10 @@
 // Rate-limited to prevent spam.
 // ---------------------------------------------------------------------------
 
-import type { AgentNotifier } from "../agents/types.js";
+/** Interface for sending proactive messages to business owners. */
+export interface AgentNotifier {
+  sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
+}
 
 export interface ChannelCredentials {
   telegram?: { botToken: string };
