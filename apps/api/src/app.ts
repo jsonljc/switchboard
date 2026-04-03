@@ -49,7 +49,6 @@ declare module "fastify" {
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
-    lifecycleDeps: null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -286,9 +285,6 @@ export async function buildServer() {
 
   // --- Operator deps (stubbed — domain code removed) ---
   app.decorate("operatorDeps", null as import("./bootstrap/operator-deps.js").OperatorDeps | null);
-
-  // --- Lifecycle deps (stubbed — domain code removed) ---
-  app.decorate("lifecycleDeps", null);
 
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
