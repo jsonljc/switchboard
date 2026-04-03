@@ -476,6 +476,25 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
 
+  employees/creative:
+    dependencies:
+      '@switchboard/employee-sdk':
+        specifier: workspace:*
+        version: link:../../packages/employee-sdk
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
+
   packages/agents:
     dependencies:
       '@switchboard/core':
@@ -564,6 +583,38 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
+
+  packages/employee-sdk:
+    dependencies:
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
+  packages/memory:
+    dependencies:
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../core
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
