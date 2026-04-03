@@ -23,11 +23,11 @@ describe("VariationPool", () => {
   it("should record and track used phrases", () => {
     const pool = new VariationPool();
     pool.recordUsed("session1", ["Hello there"]);
-    pool.recordUsed("session1", ["Welcome to our clinic"]);
+    pool.recordUsed("session1", ["Welcome to our business"]);
 
     const control = pool.getVariationControl("session1", "greet");
     expect(control.recentlyUsedPhrases).toContain("Hello there");
-    expect(control.recentlyUsedPhrases).toContain("Welcome to our clinic");
+    expect(control.recentlyUsedPhrases).toContain("Welcome to our business");
   });
 
   it("should clear session data", () => {

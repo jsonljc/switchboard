@@ -33,7 +33,7 @@ describe("EscalationService", () => {
       orgId: "org-1",
       contactId: "c-1",
       reason: "low_confidence",
-      sourceAgent: "lead-responder",
+      sourceAgent: "employee-a",
       priority: "medium",
     });
 
@@ -50,7 +50,7 @@ describe("EscalationService", () => {
         orgId: "org-1",
         contactId: "c-1",
         reason: "unhappy_lead",
-        sourceAgent: "sales-closer",
+        sourceAgent: "employee-b",
         priority: "high",
       }),
     ).resolves.not.toThrow();
@@ -66,7 +66,7 @@ describe("EscalationService", () => {
       orgId: "org-1",
       contactId: "c-1",
       reason: "low_confidence",
-      sourceAgent: "lead-responder",
+      sourceAgent: "employee-a",
       priority: "medium",
     });
 

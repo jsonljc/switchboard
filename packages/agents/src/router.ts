@@ -32,14 +32,11 @@ export class AgentRouter {
     // 1. Find active agents that accept this event
     const agents = this.registry.findByInboundEvent(event.organizationId, event.eventType);
     for (const agent of agents) {
-      const isBlockingDestination =
-        agent.agentId === "revenue-tracker" && event.eventType === "stage.advanced";
-
       destinations.push({
         type: "agent",
         id: agent.agentId,
         criticality: "required",
-        sequencing: isBlockingDestination ? "blocking" : "parallel",
+        sequencing: "parallel",
       });
     }
 

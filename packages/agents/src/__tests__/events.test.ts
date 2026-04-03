@@ -24,7 +24,7 @@ describe("createEventEnvelope", () => {
     const envelope = createEventEnvelope({
       organizationId: "org-1",
       eventType: "lead.qualified",
-      source: { type: "agent", id: "lead-responder" },
+      source: { type: "agent", id: "employee-a" },
       correlationId: "corr-abc",
       causationId: "event-xyz",
       payload: { contactId: "c1", score: 85 },

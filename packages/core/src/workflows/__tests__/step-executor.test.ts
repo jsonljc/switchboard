@@ -387,7 +387,7 @@ describe("StepExecutor", () => {
     it("should preserve action metadata through execution lifecycle", async () => {
       const action = makeAction({
         intent: "test_action",
-        sourceAgent: "sales-closer",
+        sourceAgent: "employee-b",
         workflowId: "workflow-123",
         stepIndex: 2,
       });
@@ -403,7 +403,7 @@ describe("StepExecutor", () => {
       await executor.execute(action, mockContext);
 
       const updatedAction = await actionStore.getById(action.id);
-      expect(updatedAction?.sourceAgent).toBe("sales-closer");
+      expect(updatedAction?.sourceAgent).toBe("employee-b");
       expect(updatedAction?.workflowId).toBe("workflow-123");
       expect(updatedAction?.stepIndex).toBe(2);
     });

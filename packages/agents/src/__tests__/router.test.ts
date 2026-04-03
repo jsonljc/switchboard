@@ -8,7 +8,7 @@ describe("AgentRouter", () => {
   function buildRegistry(): AgentRegistry {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -20,7 +20,7 @@ describe("AgentRouter", () => {
       },
     });
     registry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -48,7 +48,7 @@ describe("AgentRouter", () => {
     const plan = router.resolve(event);
     expect(plan.destinations).toHaveLength(1);
     expect(plan.destinations[0]!.type).toBe("agent");
-    expect(plan.destinations[0]!.id).toBe("lead-responder");
+    expect(plan.destinations[0]!.id).toBe("employee-a");
     expect(plan.destinations[0]!.criticality).toBe("required");
   });
 
@@ -220,7 +220,7 @@ describe("AgentRouter", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "lead.qualified",
-      source: { type: "agent", id: "lead-responder" },
+      source: { type: "agent", id: "employee-a" },
       payload: {},
     });
 
@@ -229,11 +229,11 @@ describe("AgentRouter", () => {
     expect(connIds).toEqual(["org1-connector"]);
   });
 
-  describe("blocking destinations", () => {
-    it("assigns blocking sequencing to revenue-tracker for stage.advanced", () => {
+  describe("agent sequencing", () => {
+    it("assigns parallel sequencing to all agent destinations", () => {
       const registry = new AgentRegistry();
       registry.register("org-1", {
-        agentId: "revenue-tracker",
+        agentId: "employee-c",
         version: "0.1.0",
         installed: true,
         status: "active",
@@ -245,7 +245,7 @@ describe("AgentRouter", () => {
         },
       });
       registry.register("org-1", {
-        agentId: "nurture",
+        agentId: "employee-d",
         version: "0.1.0",
         installed: true,
         status: "active",
@@ -261,47 +261,14 @@ describe("AgentRouter", () => {
       const event = createEventEnvelope({
         organizationId: "org-1",
         eventType: "stage.advanced",
-        source: { type: "agent", id: "sales-closer" },
+        source: { type: "agent", id: "employee-b" },
         payload: {},
       });
 
       const plan = router.resolve(event);
-      const revDest = plan.destinations.find((d) => d.id === "revenue-tracker");
-      const nurtureDest = plan.destinations.find((d) => d.id === "nurture");
-
-      expect(revDest).toBeDefined();
-      expect(revDest!.sequencing).toBe("blocking");
-      expect(nurtureDest).toBeDefined();
-      expect(nurtureDest!.sequencing).toBe("parallel");
-    });
-
-    it("keeps revenue-tracker parallel for non-stage.advanced events", () => {
-      const registry = new AgentRegistry();
-      registry.register("org-1", {
-        agentId: "revenue-tracker",
-        version: "0.1.0",
-        installed: true,
-        status: "active",
-        config: {},
-        capabilities: {
-          accepts: ["revenue.recorded", "stage.advanced", "ad.optimized"],
-          emits: ["revenue.updated"],
-          tools: ["log_revenue"],
-        },
-      });
-
-      const router = new AgentRouter(registry);
-      const event = createEventEnvelope({
-        organizationId: "org-1",
-        eventType: "revenue.recorded",
-        source: { type: "system", id: "test" },
-        payload: {},
-      });
-
-      const plan = router.resolve(event);
-      const revDest = plan.destinations.find((d) => d.id === "revenue-tracker");
-      expect(revDest).toBeDefined();
-      expect(revDest!.sequencing).toBe("parallel");
+      for (const dest of plan.destinations) {
+        expect(dest.sequencing).toBe("parallel");
+      }
     });
   });
 
@@ -322,7 +289,7 @@ describe("AgentRouter", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "lead.qualified",
-      source: { type: "agent", id: "lead-responder" },
+      source: { type: "agent", id: "employee-a" },
       payload: {},
     });
 

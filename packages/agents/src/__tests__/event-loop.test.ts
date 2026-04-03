@@ -23,7 +23,7 @@ function makeHandler(fn: (event: RoutedEventEnvelope) => AgentResponse): AgentHa
 function setupRegistry(): AgentRegistry {
   const registry = new AgentRegistry();
   registry.register("org-1", {
-    agentId: "lead-responder",
+    agentId: "employee-a",
     version: "0.1.0",
     installed: true,
     status: "active",
@@ -35,7 +35,7 @@ function setupRegistry(): AgentRegistry {
     },
   });
   registry.register("org-1", {
-    agentId: "sales-closer",
+    agentId: "employee-b",
     version: "0.1.0",
     installed: true,
     status: "active",
@@ -50,18 +50,18 @@ function setupRegistry(): AgentRegistry {
 }
 
 describe("EventLoop", () => {
-  it("chains lead.received → lead-responder → lead.qualified → sales-closer", async () => {
+  it("chains lead.received → employee-a → lead.qualified → employee-b", async () => {
     const agentRegistry = setupRegistry();
     const handlerRegistry = new HandlerRegistry();
 
     handlerRegistry.register(
-      "lead-responder",
+      "employee-a",
       makeHandler((event) => ({
         events: [
           createEventEnvelope({
             organizationId: event.organizationId,
             eventType: "lead.qualified",
-            source: { type: "agent", id: "lead-responder" },
+            source: { type: "agent", id: "employee-a" },
             payload: { contactId: "c1", score: 80 },
             correlationId: event.correlationId,
             causationId: event.eventId,
@@ -72,7 +72,7 @@ describe("EventLoop", () => {
     );
 
     handlerRegistry.register(
-      "sales-closer",
+      "employee-b",
       makeHandler((_event) => ({
         events: [],
         actions: [
@@ -107,9 +107,9 @@ describe("EventLoop", () => {
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(2);
-    expect(result.processed[0]!.agentId).toBe("lead-responder");
+    expect(result.processed[0]!.agentId).toBe("employee-a");
     expect(result.processed[0]!.outputEvents).toEqual(["lead.qualified"]);
-    expect(result.processed[1]!.agentId).toBe("sales-closer");
+    expect(result.processed[1]!.agentId).toBe("employee-b");
     expect(result.processed[1]!.actionsExecuted).toEqual(["customer-engagement.appointment.book"]);
 
     expect(bookHandler).toHaveBeenCalledWith({ contactId: "c1" }, { organizationId: "org-1" });
@@ -173,7 +173,7 @@ describe("EventLoop", () => {
   it("skips hybrid agents for top-level non-urgent events", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "ad-optimizer",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -188,7 +188,7 @@ describe("EventLoop", () => {
 
     const handlerRegistry = new HandlerRegistry();
     const handler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("ad-optimizer", handler);
+    handlerRegistry.register("employee-c", handler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -202,7 +202,7 @@ describe("EventLoop", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "revenue.attributed",
-      source: { type: "agent", id: "revenue-tracker" },
+      source: { type: "agent", id: "employee-d" },
       payload: {},
     });
 
@@ -215,7 +215,7 @@ describe("EventLoop", () => {
   it("processes hybrid agents for chained events (depth > 0)", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "revenue-tracker",
+      agentId: "employee-d",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -227,7 +227,7 @@ describe("EventLoop", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "ad-optimizer",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -242,13 +242,13 @@ describe("EventLoop", () => {
 
     const handlerRegistry = new HandlerRegistry();
     handlerRegistry.register(
-      "revenue-tracker",
+      "employee-d",
       makeHandler((event) => ({
         events: [
           createEventEnvelope({
             organizationId: event.organizationId,
             eventType: "revenue.attributed",
-            source: { type: "agent", id: "revenue-tracker" },
+            source: { type: "agent", id: "employee-d" },
             payload: { campaignId: "camp-1", amount: 100 },
             correlationId: event.correlationId,
             causationId: event.eventId,
@@ -259,7 +259,7 @@ describe("EventLoop", () => {
     );
 
     const adOptHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("ad-optimizer", adOptHandler);
+    handlerRegistry.register("employee-c", adOptHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -280,8 +280,8 @@ describe("EventLoop", () => {
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(2);
-    expect(result.processed[0]!.agentId).toBe("revenue-tracker");
-    expect(result.processed[1]!.agentId).toBe("ad-optimizer");
+    expect(result.processed[0]!.agentId).toBe("employee-d");
+    expect(result.processed[1]!.agentId).toBe("employee-c");
     expect(adOptHandler.handle).toHaveBeenCalledTimes(1);
     expect(result.depth).toBe(1);
   });
@@ -338,7 +338,7 @@ describe("EventLoop", () => {
   it("routes urgent events to hybrid agents", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "ad-optimizer",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -353,7 +353,7 @@ describe("EventLoop", () => {
 
     const handlerRegistry = new HandlerRegistry();
     const handler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("ad-optimizer", handler);
+    handlerRegistry.register("employee-c", handler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -367,20 +367,20 @@ describe("EventLoop", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "ad.anomaly_detected",
-      source: { type: "agent", id: "revenue-tracker" },
+      source: { type: "agent", id: "employee-d" },
       payload: { reason: "spend_spike" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(1);
-    expect(result.processed[0]!.agentId).toBe("ad-optimizer");
+    expect(result.processed[0]!.agentId).toBe("employee-c");
   });
 
   it("updates state tracker during processing", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -390,7 +390,7 @@ describe("EventLoop", () => {
 
     const handlerRegistry = new HandlerRegistry();
     handlerRegistry.register(
-      "lead-responder",
+      "employee-a",
       makeHandler(() => ({ events: [], actions: [] })),
     );
 
@@ -421,12 +421,12 @@ describe("EventLoop", () => {
 
     expect(stateTracker.startProcessing).toHaveBeenCalledWith(
       "org-1",
-      "lead-responder",
+      "employee-a",
       expect.any(String),
     );
     expect(stateTracker.completeProcessing).toHaveBeenCalledWith(
       "org-1",
-      "lead-responder",
+      "employee-a",
       expect.any(String),
     );
   });
