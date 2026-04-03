@@ -13,11 +13,6 @@ COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
 COPY packages/agents/package.json packages/agents/
 COPY packages/create-switchboard-cartridge/package.json packages/create-switchboard-cartridge/
-COPY cartridges/digital-ads/package.json cartridges/digital-ads/
-COPY cartridges/crm/package.json cartridges/crm/
-COPY cartridges/payments/package.json cartridges/payments/
-COPY cartridges/customer-engagement/package.json cartridges/customer-engagement/
-COPY cartridges/revenue-growth/package.json cartridges/revenue-growth/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
@@ -54,21 +49,6 @@ COPY --from=build /app/packages/db/prisma/ packages/db/prisma/
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
 
-COPY --from=build /app/cartridges/digital-ads/package.json cartridges/digital-ads/package.json
-COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
-
-COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
-COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
-
-COPY --from=build /app/cartridges/payments/package.json cartridges/payments/package.json
-COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
-
-COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
-COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
-
-COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
-COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
-
 COPY --from=build /app/packages/agents/package.json packages/agents/package.json
 COPY --from=build /app/packages/agents/dist/ packages/agents/dist/
 
@@ -104,21 +84,6 @@ COPY --from=build /app/packages/db/prisma/ packages/db/prisma/
 
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
-
-COPY --from=build /app/cartridges/digital-ads/package.json cartridges/digital-ads/package.json
-COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
-
-COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
-COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
-
-COPY --from=build /app/cartridges/payments/package.json cartridges/payments/package.json
-COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
-
-COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
-COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
-
-COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
-COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
 COPY --from=build /app/apps/chat/package.json apps/chat/package.json
 COPY --from=build /app/apps/chat/dist/ apps/chat/dist/
@@ -164,21 +129,6 @@ COPY --from=build /app/packages/core/dist/ packages/core/dist/
 
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
-
-COPY --from=build /app/cartridges/digital-ads/package.json cartridges/digital-ads/package.json
-COPY --from=build /app/cartridges/digital-ads/dist/ cartridges/digital-ads/dist/
-
-COPY --from=build /app/cartridges/crm/package.json cartridges/crm/package.json
-COPY --from=build /app/cartridges/crm/dist/ cartridges/crm/dist/
-
-COPY --from=build /app/cartridges/payments/package.json cartridges/payments/package.json
-COPY --from=build /app/cartridges/payments/dist/ cartridges/payments/dist/
-
-COPY --from=build /app/cartridges/customer-engagement/package.json cartridges/customer-engagement/package.json
-COPY --from=build /app/cartridges/customer-engagement/dist/ cartridges/customer-engagement/dist/
-
-COPY --from=build /app/cartridges/revenue-growth/package.json cartridges/revenue-growth/package.json
-COPY --from=build /app/cartridges/revenue-growth/dist/ cartridges/revenue-growth/dist/
 
 COPY --from=build /app/apps/mcp-server/package.json apps/mcp-server/package.json
 COPY --from=build /app/apps/mcp-server/dist/ apps/mcp-server/dist/

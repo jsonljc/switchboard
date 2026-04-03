@@ -8,8 +8,14 @@ import type { AgentRouter } from "./router.js";
 import type { AgentRegistry } from "./registry.js";
 import type { PolicyBridge } from "./policy-bridge.js";
 import type { DeliveryStore } from "./delivery-store.js";
-import type { AgentStateTracker } from "./agent-state.js";
 import type { HandlerRegistry } from "./handler-registry.js";
+
+/** Minimal state tracker interface for agent activity monitoring. */
+interface AgentStateTracker {
+  startProcessing(orgId: string, agentId: string, detail: string): void;
+  completeProcessing(orgId: string, agentId: string, detail: string): void;
+  setError(orgId: string, agentId: string, error: string): void;
+}
 import type { ActionExecutor } from "./action-executor.js";
 import type { SchedulerService } from "@switchboard/core";
 import type { ScheduledTrigger } from "@switchboard/schemas";

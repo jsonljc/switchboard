@@ -234,27 +234,6 @@ describe("BusinessProfileSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("validates the clinic-demo.json fixture", async () => {
-    const { readFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
-    const raw = await readFile(
-      join(import.meta.dirname, "../../../../profiles/clinic-demo.json"),
-      "utf-8",
-    );
-    const parsed = JSON.parse(raw);
-    const result = BusinessProfileSchema.safeParse(parsed);
-    expect(result.success).toBe(true);
-  });
-
-  it("validates the gym-demo.json fixture", async () => {
-    const { readFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
-    const raw = await readFile(
-      join(import.meta.dirname, "../../../../profiles/gym-demo.json"),
-      "utf-8",
-    );
-    const parsed = JSON.parse(raw);
-    const result = BusinessProfileSchema.safeParse(parsed);
-    expect(result.success).toBe(true);
-  });
+  // Fixture tests removed — profiles/clinic-demo.json and gym-demo.json
+  // were deleted as part of the AI Workforce Platform pivot.
 });

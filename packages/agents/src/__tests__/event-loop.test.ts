@@ -7,7 +7,6 @@ import { PolicyBridge } from "../policy-bridge.js";
 import { InMemoryDeliveryStore } from "../delivery-store.js";
 import { HandlerRegistry } from "../handler-registry.js";
 import { ActionExecutor } from "../action-executor.js";
-import { AgentStateTracker } from "../agent-state.js";
 import { createEventEnvelope } from "../events.js";
 import type { AgentHandler, AgentContext, AgentResponse } from "../ports.js";
 import type { RoutedEventEnvelope } from "../events.js";
@@ -395,7 +394,11 @@ describe("EventLoop", () => {
       makeHandler(() => ({ events: [], actions: [] })),
     );
 
-    const stateTracker = new AgentStateTracker();
+    const stateTracker = {
+      startProcessing: vi.fn(),
+      completeProcessing: vi.fn(),
+      setError: vi.fn(),
+    };
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -416,9 +419,16 @@ describe("EventLoop", () => {
 
     await loop.process(event, { organizationId: "org-1" });
 
-    const state = stateTracker.get("org-1", "lead-responder")!;
-    expect(state.activityStatus).toBe("idle");
-    expect(state.eventsProcessed).toBe(1);
+    expect(stateTracker.startProcessing).toHaveBeenCalledWith(
+      "org-1",
+      "lead-responder",
+      expect.any(String),
+    );
+    expect(stateTracker.completeProcessing).toHaveBeenCalledWith(
+      "org-1",
+      "lead-responder",
+      expect.any(String),
+    );
   });
 
   it("deduplicates events by idempotencyKey", async () => {
@@ -617,7 +627,11 @@ describe("EventLoop", () => {
       handle: vi.fn().mockRejectedValue(new Error("handler crashed")),
     });
 
-    const stateTracker = new AgentStateTracker();
+    const stateTracker = {
+      startProcessing: vi.fn(),
+      completeProcessing: vi.fn(),
+      setError: vi.fn(),
+    };
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -642,8 +656,7 @@ describe("EventLoop", () => {
     expect(result.processed[0]!.success).toBe(false);
     expect(result.processed[0]!.error).toBe("handler crashed");
 
-    const state = stateTracker.get("org-1", "broken-agent")!;
-    expect(state.activityStatus).toBe("error");
+    expect(stateTracker.setError).toHaveBeenCalledWith("org-1", "broken-agent", "handler crashed");
   });
 
   it("setScheduler wires scheduler after construction", async () => {

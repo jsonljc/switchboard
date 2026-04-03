@@ -6,25 +6,11 @@ import {
   AuditLedger,
   createGuardrailState,
   DEFAULT_REDACTION_CONFIG,
-  GuardedCartridge,
   InMemoryPolicyCache,
   InMemoryGovernanceProfileStore,
   ExecutionService,
   CartridgeReadAdapter,
-  SkinLoader,
-  SkinResolver,
-  ToolRegistry,
 } from "@switchboard/core";
-import {
-  bootstrapDigitalAdsCartridge,
-  DEFAULT_DIGITAL_ADS_POLICIES,
-} from "@switchboard/digital-ads";
-import { bootstrapPaymentsCartridge, DEFAULT_PAYMENTS_POLICIES } from "@switchboard/payments";
-import { bootstrapCrmCartridge, DEFAULT_CRM_POLICIES } from "@switchboard/crm";
-import {
-  bootstrapCustomerEngagementCartridge,
-  DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES,
-} from "@switchboard/customer-engagement";
 import { SwitchboardMcpServer } from "./server.js";
 import { McpApiClient } from "./api-client.js";
 import { ApiReadAdapter } from "./adapters/api-read-adapter.js";
@@ -40,7 +26,7 @@ async function main() {
   const apiKey = process.env["SWITCHBOARD_API_KEY"];
 
   if (apiUrl) {
-    // ── API mode: delegate all operations to the Switchboard API ─────
+    // -- API mode: delegate all operations to the Switchboard API --
     console.error(`[mcp-server] API mode: delegating to ${apiUrl}`);
 
     const client = new McpApiClient({ baseUrl: apiUrl, apiKey });
@@ -51,7 +37,7 @@ async function main() {
     const governanceProfileStore = createApiGovernanceProfileStore(client);
     const readAdapter = new ApiReadAdapter(client);
 
-    // ExecutionService is used by side-effect tools — create a proxy
+    // ExecutionService is used by side-effect tools -- create a proxy
     // that delegates to the API via POST /api/execute.
     const executionService = {
       async execute(params: {
@@ -110,7 +96,7 @@ async function main() {
     return;
   }
 
-  // ── In-memory mode (dev/testing) ──────────────────────────────────
+  // -- In-memory mode (dev/testing) --
   console.error("[mcp-server] In-memory mode (set SWITCHBOARD_API_URL for API delegation)");
 
   const storage = createInMemoryStorage();
@@ -120,67 +106,10 @@ async function main() {
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
-  // ── Cartridge registration ───────────────────────────────────────────
-  const adsAccessToken = process.env["META_ADS_ACCESS_TOKEN"];
-  const adsAccountId = process.env["META_ADS_ACCOUNT_ID"];
-  const { cartridge: adsCartridge, interceptors } = await bootstrapDigitalAdsCartridge({
-    accessToken: adsAccessToken ?? "mock-token-dev-only",
-    adAccountId: adsAccountId ?? "act_mock_dev_only",
-    requireCredentials: process.env.NODE_ENV === "production",
-  });
-  storage.cartridges.register(
-    "digital-ads",
-    new GuardedCartridge(adsCartridge as any, interceptors),
-  );
-  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
+  // Seed default governance policies (no cartridges registered in employee mode)
+  await seedDefaultStorage(storage);
 
-  // Register payments cartridge
-  const { cartridge: paymentsCartridge } = await bootstrapPaymentsCartridge({
-    secretKey: process.env["STRIPE_SECRET_KEY"] ?? "mock-key-dev-only",
-    requireCredentials: process.env.NODE_ENV === "production",
-  });
-  storage.cartridges.register("payments", new GuardedCartridge(paymentsCartridge));
-  await seedDefaultStorage(storage, DEFAULT_PAYMENTS_POLICIES);
-
-  // Register CRM cartridge (built-in, no external credentials needed)
-  const { cartridge: crmCartridge } = await bootstrapCrmCartridge();
-  storage.cartridges.register("crm", new GuardedCartridge(crmCartridge));
-  await seedDefaultStorage(storage, DEFAULT_CRM_POLICIES);
-
-  // Register customer-engagement cartridge (mock providers for dev)
-  const { cartridge: peCartridge, interceptors: peInterceptors } =
-    await bootstrapCustomerEngagementCartridge();
-  storage.cartridges.register(
-    "customer-engagement",
-    new GuardedCartridge(peCartridge, peInterceptors),
-  );
-  await seedDefaultStorage(storage, DEFAULT_CUSTOMER_ENGAGEMENT_POLICIES);
-
-  // --- Skin loading (optional, controlled by SKIN_ID env var) ---
-  let skinToolFilter: import("@switchboard/core").ToolFilter | undefined;
-  const skinId = process.env["SKIN_ID"];
-  if (skinId) {
-    const skinsDir = new URL("../../../skins", import.meta.url).pathname;
-    const skinLoader = new SkinLoader(skinsDir);
-    const skinResolver = new SkinResolver();
-    const toolRegistry = new ToolRegistry();
-
-    for (const cartridgeId of storage.cartridges.list()) {
-      const cartridge = storage.cartridges.get(cartridgeId);
-      if (cartridge) {
-        toolRegistry.registerCartridge(cartridgeId, cartridge.manifest);
-      }
-    }
-
-    const skin = await skinLoader.load(skinId);
-    const resolvedSkin = skinResolver.resolve(skin, toolRegistry);
-    skinToolFilter = resolvedSkin.toolFilter;
-    console.error(
-      `[mcp-server] Skin "${skinId}" loaded: ${resolvedSkin.tools.length} tools, profile=${resolvedSkin.governance.profile}`,
-    );
-  }
-
-  // ── Orchestrator + services ──────────────────────────────────────────
+  // -- Orchestrator + services --
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -192,7 +121,7 @@ async function main() {
   const executionService = new ExecutionService(orchestrator, storage);
   const readAdapter = new CartridgeReadAdapter(storage, ledger);
 
-  // ── MCP Server ───────────────────────────────────────────────────────
+  // -- MCP Server --
   const server = new SwitchboardMcpServer({
     executionService,
     readAdapter,
@@ -201,7 +130,6 @@ async function main() {
     ledger,
     governanceProfileStore,
     cartridgeRegistry: storage.cartridges,
-    toolFilter: skinToolFilter,
   });
 
   // Graceful shutdown

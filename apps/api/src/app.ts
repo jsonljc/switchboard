@@ -4,13 +4,17 @@ import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import { setMetrics, ExecutionService, LifecycleOrchestrator } from "@switchboard/core";
+import {
+  LifecycleOrchestrator,
+  ExecutionService,
+  CompositeNotifier,
+  setMetrics,
+} from "@switchboard/core";
 import type {
   StorageContext,
   PolicyCache,
+  ApprovalNotifier,
   TierStore,
-  ResolvedSkin,
-  ResolvedProfile,
   AgentNotifier,
 } from "@switchboard/core";
 import { SmbActivityLog, AuditLedger } from "@switchboard/core";
@@ -21,17 +25,8 @@ import apiVersionPlugin from "./versioning.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
-import {
-  resolveCartridgeCredentials,
-  registerCartridges,
-  wireEscalationNotifier,
-} from "./bootstrap/cartridges.js";
-import { startBackgroundJobs } from "./bootstrap/jobs.js";
 import { registerRoutes } from "./bootstrap/routes.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
-import { loadAndApplySkin, resolveBusinessProfile } from "./bootstrap/skin.js";
-import { bootstrapServices } from "./bootstrap/services.js";
-import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
 declare module "fastify" {
@@ -44,12 +39,8 @@ declare module "fastify" {
     tierStore: TierStore;
     smbActivityLog: SmbActivityLog;
     redis: Redis | null;
-    executionQueue: Queue | null;
-    executionWorker: Worker | null;
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
-    resolvedSkin: ResolvedSkin | null;
-    resolvedProfile: ResolvedProfile | null;
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
@@ -58,7 +49,7 @@ declare module "fastify" {
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
-    lifecycleDeps: import("./bootstrap/lifecycle-deps.js").LifecycleDeps | null;
+    lifecycleDeps: null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -162,68 +153,193 @@ export async function buildServer() {
     await ensureSystemIdentity(prismaClient);
   }
 
-  // --- Resolve credentials and register cartridges ---
-  const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
-  const { adsWriteProvider, businessProfile } = await registerCartridges(
-    storage,
-    credentials,
-    redis,
-    app.log,
-  );
-  await wireEscalationNotifier();
+  // --- ConversionBus wiring ---
+  const { InMemoryConversionBus } = await import("@switchboard/core");
+  const conversionBus = new InMemoryConversionBus();
 
-  // --- Resolve business profile (optional, loaded from PROFILE_ID in cartridge bootstrap) ---
-  const resolvedProfile: ResolvedProfile | null = businessProfile
-    ? resolveBusinessProfile(businessProfile, app.log)
-    : null;
+  // --- Agent orchestration system ---
+  const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
 
-  // --- Skin loading (optional, controlled by SKIN_ID env var) ---
-  const skinId = process.env["SKIN_ID"];
-  const resolvedSkin: ResolvedSkin | null = skinId
-    ? await loadAndApplySkin(skinId, storage, governanceProfileStore, app.log)
-    : null;
+  let deliveryStore: import("@switchboard/agents").DeliveryStore | undefined;
+  if (prismaClient) {
+    const { PrismaDeliveryStore } = await import("@switchboard/db");
+    deliveryStore = new PrismaDeliveryStore(prismaClient);
+  }
 
-  // --- Bootstrap all services (agents, orchestrator, queues, etc.) ---
-  const {
-    orchestrator,
-    executionService,
-    agentSystem,
+  // --- Thread store for per-contact derived state ---
+  let threadStore: import("@switchboard/core").ConversationThreadStore | undefined;
+  if (prismaClient) {
+    const { PrismaConversationThreadStore } = await import("@switchboard/db");
+    threadStore = new PrismaConversationThreadStore(prismaClient);
+  }
+
+  // --- Conversation deps (LLM + knowledge for agent handlers) ---
+  let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
+  let knowledgeStore: import("@switchboard/core").KnowledgeStore | null = null;
+  if (prismaClient && process.env["ANTHROPIC_API_KEY"]) {
+    const { buildConversationDeps } = await import("./bootstrap/conversation-deps.js");
+    const { PrismaConversationStore, PrismaKnowledgeStore } = await import("@switchboard/db");
+    knowledgeStore = new PrismaKnowledgeStore(prismaClient);
+    conversationDeps = buildConversationDeps({
+      anthropicApiKey: process.env["ANTHROPIC_API_KEY"],
+      voyageApiKey: process.env["VOYAGE_API_KEY"],
+      conversationStore: new PrismaConversationStore(prismaClient, "default"),
+      knowledgeStore,
+    });
+    if (conversationDeps) {
+      app.log.info("Conversation deps wired (LLM + knowledge retriever)");
+    }
+  }
+
+  // Build ingestion pipeline — reuses embedding adapter and knowledge store from conversation deps
+  let ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null = null;
+  if (conversationDeps && knowledgeStore) {
+    const { IngestionPipeline } = await import("@switchboard/agents");
+
+    ingestionPipeline = new IngestionPipeline({
+      store: knowledgeStore,
+      embedding: conversationDeps.embeddingAdapter,
+    });
+  }
+
+  const agentSystem = bootstrapAgentSystem({
     conversionBus,
-    sessionManager,
-    workflowDeps,
-    schedulerDeps,
-    operatorDeps,
-    lifecycleDeps,
-    ingestionPipeline,
-    queue,
-    worker,
-  } = await bootstrapServices({
+    deliveryStore,
+    threadStore,
+    logger: {
+      warn: (msg: string) => app.log.warn(msg),
+      error: (msg: string, err?: unknown) => app.log.error({ err }, msg),
+      info: (msg: string) => app.log.info(msg),
+    },
+  });
+  app.decorate("agentSystem", agentSystem);
+  app.decorate("ingestionPipeline", ingestionPipeline);
+  app.log.info(`Agent system bootstrapped (delivery: ${deliveryStore ? "prisma" : "in-memory"})`);
+
+  // --- Session runtime bootstrap (optional — requires DATABASE_URL + SESSION_TOKEN_SECRET) ---
+  let sessionManager: import("@switchboard/core/sessions").SessionManager | null = null;
+  if (prismaClient) {
+    const { bootstrapSessionRuntime } = await import("./bootstrap/session-bootstrap.js");
+    const sessionResult = await bootstrapSessionRuntime(prismaClient, app.log);
+    sessionManager = sessionResult?.sessionManager ?? null;
+  }
+  app.decorate("sessionManager", sessionManager);
+
+  // --- Workflow engine bootstrap (optional — requires DATABASE_URL) ---
+  let workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null = null;
+  if (prismaClient) {
+    const { buildWorkflowDeps } = await import("./bootstrap/workflow-deps.js");
+    const stepPolicyBridge: import("@switchboard/core").StepExecutorPolicyBridge = {
+      evaluate: async (intent: {
+        eventId: string;
+        destinationType: string;
+        destinationId: string;
+        action: string;
+        payload: unknown;
+        criticality: string;
+      }) => {
+        // Cast to DeliveryIntent — StepExecutorPolicyBridge uses loose types for structural typing
+        const deliveryIntent: import("@switchboard/agents").DeliveryIntent = {
+          ...intent,
+          destinationType: intent.destinationType as never,
+          criticality: intent.criticality as never,
+        };
+        const result = await agentSystem.policyBridge.evaluate(deliveryIntent);
+        return {
+          approved: result.approved,
+          requiresApproval: result.requiresApproval ?? false,
+          reason: result.reason,
+        };
+      },
+    };
+    workflowDeps = buildWorkflowDeps(prismaClient, agentSystem.actionExecutor, stepPolicyBridge);
+    if (workflowDeps) {
+      app.log.info("Workflow engine bootstrapped");
+    }
+  }
+  app.decorate("workflowDeps", workflowDeps);
+
+  // --- Scheduler service bootstrap (optional — requires DATABASE_URL + REDIS_URL + workflow engine) ---
+  const redisUrl = process.env["REDIS_URL"];
+  let schedulerDeps: import("./bootstrap/scheduler-deps.js").SchedulerDeps | null = null;
+  if (prismaClient && redisUrl && workflowDeps) {
+    const { buildSchedulerDeps } = await import("./bootstrap/scheduler-deps.js");
+    schedulerDeps = buildSchedulerDeps(prismaClient, redisUrl, workflowDeps.workflowEngine);
+    if (schedulerDeps) {
+      app.log.info("Scheduler service bootstrapped");
+    }
+  }
+  app.decorate("schedulerService", schedulerDeps?.service ?? null);
+
+  // Wire scheduler into EventLoop (EventLoop is created before schedulerDeps)
+  if (schedulerDeps) {
+    agentSystem.eventLoop.setScheduler(schedulerDeps.service, async (trigger) => {
+      await schedulerDeps!.triggerHandler({
+        data: {
+          triggerId: trigger.id,
+          organizationId: trigger.organizationId,
+          action: trigger.action,
+        },
+      });
+    });
+  }
+
+  // --- Operator deps (stubbed — domain code removed) ---
+  app.decorate("operatorDeps", null as import("./bootstrap/operator-deps.js").OperatorDeps | null);
+
+  // --- Lifecycle deps (stubbed — domain code removed) ---
+  app.decorate("lifecycleDeps", null);
+
+  // --- Approval notifier wiring ---
+  const approvalNotifiers: ApprovalNotifier[] = [];
+  if (process.env["TELEGRAM_BOT_TOKEN"]) {
+    const { TelegramApprovalNotifier } = await import("./notifications/telegram-notifier.js");
+    approvalNotifiers.push(new TelegramApprovalNotifier(process.env["TELEGRAM_BOT_TOKEN"]));
+  }
+  if (process.env["SLACK_BOT_TOKEN"]) {
+    const { SlackApprovalNotifier } = await import("./notifications/slack-notifier.js");
+    approvalNotifiers.push(new SlackApprovalNotifier(process.env["SLACK_BOT_TOKEN"]));
+  }
+  if (process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]) {
+    const { WhatsAppApprovalNotifier } = await import("./notifications/whatsapp-notifier.js");
+    approvalNotifiers.push(
+      new WhatsAppApprovalNotifier({
+        token: process.env["WHATSAPP_TOKEN"],
+        phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
+      }),
+    );
+  }
+  const approvalNotifier: ApprovalNotifier | undefined =
+    approvalNotifiers.length > 1
+      ? new CompositeNotifier(approvalNotifiers)
+      : approvalNotifiers.length === 1
+        ? approvalNotifiers[0]
+        : undefined;
+
+  // --- Build orchestrator ---
+  const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
+  const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
     guardrailState,
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
+    executionMode,
+    approvalNotifier,
     tierStore,
     smbActivityLog,
-    prismaClient,
-    logger: app.log,
-    adsWriteProvider,
-  });
-
-  // --- Start background jobs ---
-  const { stop: stopAllJobs, agentNotifier } = await startBackgroundJobs({
-    storage,
-    ledger,
-    orchestrator,
-    prismaClient,
-    redis,
-    resolvedSkin,
-    resolvedProfile,
-    logger: app.log,
+    credentialResolver: prismaClient
+      ? await (async () => {
+          const { PrismaCredentialResolver, PrismaConnectionStore } =
+            await import("@switchboard/db");
+          return new PrismaCredentialResolver(new PrismaConnectionStore(prismaClient));
+        })()
+      : undefined,
   });
 
   // --- Decorate Fastify with shared instances ---
+  const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);
@@ -232,38 +348,19 @@ export async function buildServer() {
   app.decorate("tierStore", tierStore);
   app.decorate("smbActivityLog", smbActivityLog);
   app.decorate("redis", redis);
-  app.decorate("executionQueue", queue);
-  app.decorate("executionWorker", worker);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
-  app.decorate("resolvedSkin", resolvedSkin);
-  app.decorate("resolvedProfile", resolvedProfile);
-  app.decorate("agentNotifier", agentNotifier);
+  app.decorate("agentNotifier", null as AgentNotifier | null);
   app.decorate("conversionBus", conversionBus);
-  app.decorate("agentSystem", agentSystem);
-  app.decorate("ingestionPipeline", ingestionPipeline);
-  app.decorate("sessionManager", sessionManager);
-  app.decorate("workflowDeps", workflowDeps);
-  app.decorate("schedulerService", schedulerDeps?.service ?? null);
-  app.decorate("operatorDeps", operatorDeps);
-  app.decorate("lifecycleDeps", lifecycleDeps);
 
-  // Resource cleanup on close — order: agents → jobs → worker → queue → Redis → Prisma
+  // Resource cleanup on close — order: agents → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
     agentSystem.scheduledRunner.stop();
-
-    await stopAllJobs();
 
     if (schedulerDeps) {
       await schedulerDeps.cleanup();
     }
 
-    if (worker) {
-      await worker.close();
-    }
-    if (queue) {
-      await queue.close();
-    }
     if (redis) {
       await redis.quit();
     }
@@ -326,28 +423,6 @@ export async function buildServer() {
 
   // Prometheus metrics endpoint (excluded from auth like /health)
   app.get("/metrics", metricsRoute);
-
-  // --- Per-org LLM concurrency limiter ---
-  const { OrgConcurrencyLimiter } = await import("./middleware/rate-limiter.js");
-  const llmLimiter = new OrgConcurrencyLimiter({ maxConcurrent: 5, queueTimeoutMs: 30_000 });
-
-  app.addHook("preHandler", async (request, reply) => {
-    const path = request.url;
-    if (!path.startsWith("/api/test-chat") && !path.startsWith("/api/knowledge")) {
-      return;
-    }
-    const orgId = request.organizationIdFromAuth ?? "default";
-    try {
-      const release = await llmLimiter.acquire(orgId);
-      request.raw.on("close", release);
-    } catch {
-      return reply.code(503).send({
-        error: "Too many concurrent requests. Please retry.",
-        statusCode: 503,
-        retryAfter: 5,
-      });
-    }
-  });
 
   // --- Register all API routes ---
   await registerRoutes(app);

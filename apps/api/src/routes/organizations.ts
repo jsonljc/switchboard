@@ -1,10 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { orgConfigRoutes } from "./org-config.js";
-import { orgChannelsRoutes } from "./org-channels.js";
-import { orgHandoffRoutes } from "./org-handoff.js";
 
-export const organizationsRoutes: FastifyPluginAsync = async (app) => {
-  await app.register(orgConfigRoutes);
-  await app.register(orgChannelsRoutes);
-  await app.register(orgHandoffRoutes);
+export const organizationsRoutes: FastifyPluginAsync = async (_app) => {
+  // Domain-specific org sub-routes (config, channels, handoff) removed
+  // in AI Workforce Platform pivot. Employee-level config is in /api/employees.
 };

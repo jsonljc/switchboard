@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// @switchboard/agents — Agent infrastructure for the closed-loop funnel
+// @switchboard/agents — Agent infrastructure for the AI workforce platform
 // ---------------------------------------------------------------------------
 
 export {
@@ -61,78 +61,6 @@ export {
 
 export { AgentRouter, type AgentRouterConfig } from "./router.js";
 
-export { createWebhookHandler, type WebhookHandlerConfig } from "./dispatch/webhook-handler.js";
-
-export {
-  InMemoryWebhookConfigProvider,
-  type WebhookConfigEntry,
-} from "./providers/webhook-config-provider.js";
-
-export {
-  ConversionBusBridge,
-  type ConversionBusBridgeOptions,
-} from "./bridges/conversion-bus-bridge.js";
-
-export {
-  validateConnectorConfig,
-  type ConnectorAdapter,
-  type ConnectorConfigValidation,
-  type ConnectorPort,
-} from "./connectors/connector-port.js";
-
-export {
-  createConnectorHandler,
-  type ConnectorHandlerConfig,
-} from "./dispatch/connector-handler.js";
-
-export { InMemoryConnectorConfigProvider } from "./providers/connector-config-provider.js";
-
-export { HubSpotConnectorAdapter } from "./connectors/hubspot-adapter.js";
-
-export {
-  LEAD_RESPONDER_PORT,
-  LeadResponderHandler,
-  type LeadResponderDeps,
-  type LeadResponderConversationDeps,
-  type FAQMatch,
-  type LeadScore,
-  type ObjectionMatch,
-  type TonePreset,
-  type SupportedLanguage,
-} from "./agents/lead-responder/index.js";
-
-export {
-  SALES_CLOSER_PORT,
-  SalesCloserHandler,
-  type SalesCloserDeps,
-  type SalesCloserConversationDeps,
-} from "./agents/sales-closer/index.js";
-
-export {
-  AgentStateTracker,
-  type ActivityStatus,
-  type AgentActivityState,
-  type StateChangeListener,
-} from "./agent-state.js";
-
-export {
-  NURTURE_AGENT_PORT,
-  NurtureAgentHandler,
-  type NurtureDeps,
-} from "./agents/nurture/index.js";
-
-export {
-  AD_OPTIMIZER_PORT,
-  AdOptimizerHandler,
-  type AdOptimizerDeps,
-} from "./agents/ad-optimizer/index.js";
-
-export {
-  REVENUE_TRACKER_PORT,
-  RevenueTrackerHandler,
-  type RevenueTrackerDeps,
-} from "./agents/revenue-tracker/index.js";
-
 export { HandlerRegistry } from "./handler-registry.js";
 
 export { ActionExecutor, type ActionHandler, type ActionResult } from "./action-executor.js";
@@ -171,21 +99,6 @@ export {
   type DeadLetterAlerterConfig,
   type SweepResult,
 } from "./dead-letter-alerter.js";
-
-export {
-  canRequalify,
-  agentForStage,
-  agentForThreadStage,
-  agentForOpportunityStage,
-  type LifecycleStage,
-} from "./lifecycle.js";
-
-export {
-  ConversationRouter,
-  type AgentRegistryLike,
-  type ConversationRouterConfig,
-  type StageResolver,
-} from "./conversation-router.js";
 
 // Concurrency & Safety
 export {
@@ -234,12 +147,3 @@ export {
   type RetrieveOptions,
   type ConfidenceInput,
 } from "./knowledge/index.js";
-
-// Context extraction (LLM-based conversation signal analysis)
-export { extractConversationContext, parseContextResponse } from "./context-extractor.js";
-
-// Summary refresh (LLM-based conversation summarization)
-export { refreshSummary, shouldRefreshSummary } from "./summary-refresher.js";
-
-// Operator Chat (command interpretation and routing)
-export * from "./operator/index.js";

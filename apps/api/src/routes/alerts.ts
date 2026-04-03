@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from "fastify";
-import { executeGovernedSystemAction } from "../services/system-governed-actions.js";
 import { z } from "zod";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -97,61 +96,9 @@ export const alertsRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ id, deleted: true });
   });
 
-  // POST /api/alerts/:id/test — dry-run evaluation
-  app.post("/:id/test", async (request, reply) => {
-    if (!app.prisma) return reply.code(503).send({ error: "Database unavailable" });
-    const prisma = app.prisma;
-    const { id } = request.params as { id: string };
-    const orgId = requireOrganizationScope(request, reply);
-    if (!orgId) return;
-    const rule = await prisma.alertRule.findFirst({ where: { id, organizationId: orgId } });
-    if (!rule) return reply.code(404).send({ error: "Alert rule not found" });
-
-    try {
-      const { evaluateAlertRule } = await import("../alerts/evaluator.js");
-      const cartridge = app.storageContext.cartridges.get("digital-ads");
-      if (!cartridge)
-        return reply.code(400).send({ error: "digital-ads cartridge not registered" });
-
-      const governedAction = await executeGovernedSystemAction({
-        orchestrator: app.orchestrator,
-        actionType: "digital-ads.funnel.diagnose",
-        cartridgeId: "digital-ads",
-        organizationId: orgId,
-        parameters: {
-          platform: rule.platform ?? "meta",
-          vertical: rule.vertical,
-          entityId: "act_default",
-        },
-        message: `Test alert rule ${rule.id}`,
-        idempotencyKey: `alert-test:${rule.id}`,
-      });
-
-      if (governedAction.outcome !== "executed") {
-        return reply.code(409).send({
-          error: "Alert test was not executed",
-          detail: governedAction.explanation,
-          outcome: governedAction.outcome,
-        });
-      }
-
-      const result = governedAction.executionResult;
-
-      if (!result?.data) {
-        return reply.send({ triggered: false, error: "No diagnostic data returned" });
-      }
-
-      const evaluation = evaluateAlertRule(
-        { metricPath: rule.metricPath, operator: rule.operator, threshold: rule.threshold },
-        result.data as Record<string, unknown>,
-      );
-      return reply.send({ evaluation, rule: { id: rule.id, name: rule.name } });
-    } catch (err: unknown) {
-      app.log.error({ err, alertRuleId: id }, "Alert test failed");
-      return reply
-        .code(500)
-        .send({ error: "Test failed", detail: err instanceof Error ? err.message : String(err) });
-    }
+  // POST /api/alerts/:id/test — dry-run evaluation (disabled — domain code removed)
+  app.post("/:id/test", async (_request, reply) => {
+    return reply.code(501).send({ error: "Alert test not available — domain code removed" });
   });
 
   // GET /api/alerts/:id/history — list alert history
