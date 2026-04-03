@@ -2,28 +2,24 @@
 // Agent Port Interface — standard contract for hireable agents
 // ---------------------------------------------------------------------------
 
-import type {
-  ConversationThread,
-  AgentContextData,
-  ThreadStage,
-  OpportunityStage,
+// Re-export shared types from schemas (Layer 1)
+export type {
+  ToolDeclaration,
+  AgentPort,
+  LifecycleAdvancer,
+  AgentContext,
+  ThreadUpdate,
+  ActionRequest,
+  PortValidationResult,
 } from "@switchboard/schemas";
 
-export interface ToolDeclaration {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-}
-
-export interface AgentPort {
-  agentId: string;
-  version: string;
-  inboundEvents: string[];
-  outboundEvents: string[];
-  tools: ToolDeclaration[];
-  configSchema: Record<string, unknown>;
-  conversionActionTypes?: string[];
-}
+import type {
+  ActionRequest,
+  AgentContext,
+  PortValidationResult,
+  AgentPort,
+  ThreadUpdate,
+} from "@switchboard/schemas";
 
 export interface AgentHandler {
   handle(
@@ -33,55 +29,12 @@ export interface AgentHandler {
   ): Promise<AgentResponse>;
 }
 
-export interface LifecycleAdvancer {
-  advanceOpportunityStage(
-    orgId: string,
-    opportunityId: string,
-    toStage: OpportunityStage,
-    advancedBy: string,
-  ): Promise<unknown>;
-  reopenOpportunity(
-    orgId: string,
-    opportunityId: string,
-    toStage: "interested" | "qualified",
-  ): Promise<unknown>;
-}
-
-export interface AgentContext {
-  organizationId: string;
-  profile?: Record<string, unknown>;
-  conversationHistory?: Array<{ role: string; content: string }>;
-  contactData?: Record<string, unknown>;
-  /** Loaded ConversationThread for this contact (if available). */
-  thread?: ConversationThread;
-  /** Optional lifecycle service for direct stage advancement. */
-  lifecycle?: LifecycleAdvancer;
-}
-
-export interface ThreadUpdate {
-  stage?: ThreadStage;
-  assignedAgent?: string;
-  agentContext?: AgentContextData;
-  currentSummary?: string;
-  messageCount?: number;
-}
-
 export interface AgentResponse {
   events: import("./events.js").RoutedEventEnvelope[];
   actions: ActionRequest[];
   state?: Record<string, unknown>;
   /** Thread updates to persist after processing. */
   threadUpdate?: ThreadUpdate;
-}
-
-export interface ActionRequest {
-  actionType: string;
-  parameters: Record<string, unknown>;
-}
-
-export interface PortValidationResult {
-  valid: boolean;
-  errors: string[];
 }
 
 export function validateAgentPort(port: AgentPort): PortValidationResult {
