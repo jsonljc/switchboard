@@ -62,7 +62,7 @@ export class PrismaPerformanceStore implements PerformanceStore {
   async getTop(
     orgId: string,
     employeeId: string,
-    channel: string,
+    _channel: string,
     limit: number,
   ): Promise<Array<{ contentId: string; metrics: Record<string, number> }>> {
     // Join through ContentDraft to filter by channel and get approved content

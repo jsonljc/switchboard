@@ -80,3 +80,7 @@ export { PrismaContactStore } from "./stores/prisma-contact-store.js";
 export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
 export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
 export { PrismaOwnerTaskStore } from "./stores/prisma-owner-task-store.js";
+export { PrismaEmployeeStore } from "./stores/prisma-employee-store.js";
+export { PrismaSkillStore } from "./stores/prisma-skill-store.js";
+export { PrismaPerformanceStore } from "./stores/prisma-performance-store.js";
+export { PrismaContentStore } from "./stores/prisma-content-store.js";
