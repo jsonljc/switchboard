@@ -37,31 +37,8 @@ export * from "./capability.js";
 // Goal brief (structured goal decomposition)
 export * from "./goal-brief.js";
 
-// CRM provider types (shared contract for CRM implementations)
-export * from "./crm-provider.js";
 export { LegacyRevenueEventSchema, LegacyRevenueEventSourceSchema } from "./revenue-event.js";
 export type { LegacyRevenueEvent, LegacyRevenueEventSource } from "./revenue-event.js";
-
-// Skin manifests (vertical deployment configuration)
-export * from "./skin.js";
-
-// Business profiles (per-business instance knowledge)
-export * from "./business-profile.js";
-
-// Lead profile (per-lead intelligence accumulated over conversation turns)
-export * from "./lead-profile.js";
-
-// Campaign plan (strategist agent output)
-export * from "./campaign-plan.js";
-
-// Ads operator config (per-business agent configuration)
-export * from "./ads-operator.js";
-
-// Revenue growth cartridge types
-export * from "./revenue-growth.js";
-
-// Conversation flow definitions (Zod-validated)
-export * from "./conversation-flow.js";
 
 // Outcome event tracking
 export * from "./outcome-event.js";
