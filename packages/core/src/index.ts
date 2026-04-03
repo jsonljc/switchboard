@@ -157,22 +157,11 @@ export type {
   ConversationSummary,
 } from "./handoff/types.js";
 
-// Flow Builder
-export { FlowBuilder } from "./flow-builder/builder.js";
-export { validateFlowDefinition } from "./flow-builder/validator.js";
-export type {
-  ValidationIssue,
-  ValidationResult as FlowValidationResult,
-} from "./flow-builder/validator.js";
-
 // Outcome Pipeline
 export { OutcomePipeline } from "./outcome/pipeline.js";
 export { OutcomeAggregator } from "./outcome/aggregator.js";
 export { runOptimisationCycle } from "./outcome/optimiser.js";
 export type { OutcomeStore, OptimisationProposal } from "./outcome/types.js";
-
-// Deployment Readiness
-export { DeploymentReadinessChecker } from "./deployment/readiness-checker.js";
 
 // Embedding Adapter
 export type { EmbeddingAdapter } from "./embedding-adapter.js";

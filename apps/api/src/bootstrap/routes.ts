@@ -19,7 +19,6 @@ import { webhooksRoutes } from "../routes/webhooks.js";
 import { governanceRoutes } from "../routes/governance.js";
 import { conversationsRoutes } from "../routes/conversations.js";
 import { agentsRoutes } from "../routes/agents.js";
-import { deploymentRoutes } from "../routes/deployment.js";
 import { setupRoutes } from "../routes/setup.js";
 import { knowledgeRoutes } from "../routes/knowledge.js";
 import { escalationsRoutes } from "../routes/escalations.js";
@@ -50,7 +49,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(governanceRoutes, { prefix: "/api/governance" });
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });
-  await app.register(deploymentRoutes, { prefix: "/api/deployment" });
   await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
