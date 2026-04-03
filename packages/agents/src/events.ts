@@ -1,10 +1,13 @@
 // ---------------------------------------------------------------------------
 // Canonical Agent Events & RoutedEventEnvelope
+// Re-exports from @switchboard/schemas for backwards compatibility
 // ---------------------------------------------------------------------------
 
-import { randomUUID } from "node:crypto";
-import type { AttributionChain } from "@switchboard/schemas";
+// Re-export event infrastructure from schemas (Layer 1)
+export { createEventEnvelope } from "@switchboard/schemas";
+export type { RoutedEventEnvelope, EventSource, CreateEnvelopeInput } from "@switchboard/schemas";
 
+// Agent-specific event types stay here (domain knowledge, not shared infra)
 export const AGENT_EVENT_TYPES = [
   "lead.received",
   "lead.qualified",
@@ -24,53 +27,3 @@ export const AGENT_EVENT_TYPES = [
 ] as const;
 
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
-
-export interface EventSource {
-  type: "agent" | "connector" | "webhook" | "manual" | "system";
-  id: string;
-}
-
-export interface RoutedEventEnvelope<TPayload = unknown> {
-  eventId: string;
-  organizationId: string;
-  eventType: string;
-  occurredAt: string;
-  source: EventSource;
-  correlationId: string;
-  causationId?: string;
-  idempotencyKey: string;
-  attribution?: AttributionChain;
-  payload: TPayload;
-  metadata?: Record<string, unknown>;
-}
-
-export interface CreateEnvelopeInput<TPayload = unknown> {
-  organizationId: string;
-  eventType: string;
-  source: EventSource;
-  payload: TPayload;
-  correlationId?: string;
-  causationId?: string;
-  idempotencyKey?: string;
-  attribution?: AttributionChain;
-  metadata?: Record<string, unknown>;
-}
-
-export function createEventEnvelope<TPayload = unknown>(
-  input: CreateEnvelopeInput<TPayload>,
-): RoutedEventEnvelope<TPayload> {
-  const eventId = randomUUID();
-  return {
-    eventId,
-    organizationId: input.organizationId,
-    eventType: input.eventType,
-    occurredAt: new Date().toISOString(),
-    source: input.source,
-    correlationId: input.correlationId ?? randomUUID(),
-    causationId: input.causationId,
-    idempotencyKey: input.idempotencyKey ?? eventId,
-    attribution: input.attribution,
-    payload: input.payload,
-    metadata: input.metadata,
-  };
-}

@@ -83,3 +83,9 @@ export * from "./operator-command.js";
 
 // Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle.js";
+
+// Event types (RoutedEventEnvelope, createEventEnvelope)
+export * from "./event-types.js";
+
+// Employee event constants
+export * from "./employee-events.js";

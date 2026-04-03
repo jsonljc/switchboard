@@ -125,6 +125,14 @@
     "./revenue-growth": {
       "types": "./dist/revenue-growth.d.ts",
       "import": "./dist/revenue-growth.js"
+    },
+    "./event-types": {
+      "types": "./dist/event-types.d.ts",
+      "import": "./dist/event-types.js"
+    },
+    "./employee-events": {
+      "types": "./dist/employee-events.d.ts",
+      "import": "./dist/employee-events.js"
     }
   },
   "scripts": {
