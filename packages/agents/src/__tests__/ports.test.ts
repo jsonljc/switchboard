@@ -4,7 +4,7 @@ import { validateAgentPort, type AgentPort } from "../ports.js";
 describe("validateAgentPort", () => {
   it("validates a well-formed agent port", () => {
     const port: AgentPort = {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       inboundEvents: ["lead.received"],
       outboundEvents: ["lead.qualified", "lead.disqualified", "conversation.escalated"],

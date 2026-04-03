@@ -32,7 +32,7 @@ function makeOpportunity(overrides: Record<string, unknown> = {}) {
     qualificationComplete: false,
     estimatedValue: 2000,
     revenueTotal: 0,
-    assignedAgent: "sales-closer",
+    assignedAgent: "employee-b",
     assignedStaff: null,
     lostReason: null,
     notes: null,
@@ -61,7 +61,7 @@ describe("PrismaOpportunityStore", () => {
         serviceId: "service-1",
         serviceName: "Botox Treatment",
         estimatedValue: 1500,
-        assignedAgent: "lead-responder",
+        assignedAgent: "employee-a",
       };
 
       const created = makeOpportunity({
@@ -81,7 +81,7 @@ describe("PrismaOpportunityStore", () => {
           serviceName: "Botox Treatment",
           stage: "interested",
           estimatedValue: 1500,
-          assignedAgent: "lead-responder",
+          assignedAgent: "employee-a",
           objections: [],
           qualificationComplete: false,
           revenueTotal: 0,

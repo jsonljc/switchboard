@@ -21,14 +21,14 @@ describe("Agent types", () => {
 
   it("AgentPort is structurally valid", () => {
     const port: AgentPort = {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "1.0.0",
       inboundEvents: ["lead.received"],
       outboundEvents: ["lead.qualified"],
       tools: [],
       configSchema: {},
     };
-    expect(port.agentId).toBe("lead-responder");
+    expect(port.agentId).toBe("employee-a");
     expect(port.conversionActionTypes).toBeUndefined();
   });
 
@@ -44,7 +44,7 @@ describe("Agent types", () => {
   it("ThreadUpdate is structurally valid", () => {
     const update: ThreadUpdate = {
       stage: "responding",
-      assignedAgent: "lead-responder",
+      assignedAgent: "employee-a",
       messageCount: 5,
     };
     expect(update.stage).toBe("responding");

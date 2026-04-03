@@ -80,11 +80,11 @@ describe("validatePayload", () => {
     const payload = { score: 85 };
 
     try {
-      validatePayload(payload, { contactId: "string", score: "number" }, "lead-responder");
+      validatePayload(payload, { contactId: "string", score: "number" }, "employee-a");
     } catch (err) {
       const e = err as PayloadValidationError;
-      expect(e.agentId).toBe("lead-responder");
-      expect(e.message).toContain("[lead-responder]");
+      expect(e.agentId).toBe("employee-a");
+      expect(e.message).toContain("[employee-a]");
       expect(e.message).toContain("Invalid event payload");
     }
   });

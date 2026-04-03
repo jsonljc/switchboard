@@ -57,7 +57,7 @@ describe("ScheduledTrigger schemas", () => {
     it("accepts spawn_workflow action", () => {
       const result = TriggerActionSchema.parse({
         type: "spawn_workflow",
-        payload: { sourceAgent: "ad-optimizer", intent: "recheck_roas" },
+        payload: { sourceAgent: "employee-c", intent: "recheck_roas" },
       });
       expect(result.type).toBe("spawn_workflow");
     });

@@ -7,7 +7,7 @@ function mockPrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       upsert: vi.fn().mockResolvedValue({
         orgId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         status: "active",
         executionMode: "realtime",
         config: {},
@@ -29,7 +29,7 @@ describe("PrismaAgentRegistryStore", () => {
 
   it("persistRegistration upserts agent data to DB", async () => {
     await store.persistRegistration("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       status: "active",
       executionMode: "realtime",
       config: { threshold: 40 },
@@ -38,7 +38,7 @@ describe("PrismaAgentRegistryStore", () => {
 
     expect(prisma.agentRegistration.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orgId_agentId: { orgId: "org-1", agentId: "lead-responder" } },
+        where: { orgId_agentId: { orgId: "org-1", agentId: "employee-a" } },
       }),
     );
   });
@@ -47,7 +47,7 @@ describe("PrismaAgentRegistryStore", () => {
     prisma.agentRegistration.findMany.mockResolvedValue([
       {
         orgId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         status: "active",
         executionMode: "realtime",
         config: { threshold: 40 },
@@ -58,7 +58,7 @@ describe("PrismaAgentRegistryStore", () => {
 
     const entries = await store.loadAll("org-1");
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.agentId).toBe("lead-responder");
+    expect(entries[0]!.agentId).toBe("employee-a");
     expect(entries[0]!.configVersion).toBe(2);
   });
 });

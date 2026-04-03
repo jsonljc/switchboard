@@ -31,13 +31,13 @@ const OPTIMIZER_TEMPLATES: Record<TonePreset, (threshold: number) => string> = {
     `"Campaign 'Summer Sale' underperforming. Auto-adjusting spend up to $${t}. Larger changes require your approval."`,
 };
 
-// Map onboarding agent IDs (e.g. "lead-responder") to roster roles (e.g. "responder")
+// Map onboarding agent IDs (e.g. "employee-a") to roster roles (e.g. "responder")
 const ONBOARDING_TO_ROLE: Record<string, string> = {
-  "lead-responder": "responder",
-  "sales-closer": "strategist",
-  "ad-optimizer": "optimizer",
-  "revenue-tracker": "monitor",
-  nurture: "booker",
+  "employee-a": "responder",
+  "employee-b": "strategist",
+  "employee-c": "optimizer",
+  "employee-d": "monitor",
+  "employee-e": "booker",
 };
 
 function normalizeRole(agentRole: string): string {

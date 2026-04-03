@@ -37,7 +37,7 @@ describe("KnowledgeStore interface", () => {
     const chunk: KnowledgeChunk = {
       id: "chunk-1",
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "employee-a",
       documentId: "doc-1",
       content: "We offer Botox and fillers.",
       sourceType: "document",
@@ -49,7 +49,7 @@ describe("KnowledgeStore interface", () => {
     await store.store(chunk);
     const results = await store.search(new Array(1024).fill(0), {
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "employee-a",
     });
 
     expect(results).toHaveLength(1);
@@ -63,7 +63,7 @@ describe("KnowledgeStore interface", () => {
     await store.store({
       id: "chunk-1",
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "employee-a",
       documentId: "doc-1",
       content: "Org 1 content",
       sourceType: "document",
@@ -74,7 +74,7 @@ describe("KnowledgeStore interface", () => {
 
     const results = await store.search(new Array(1024).fill(0), {
       organizationId: "org-2",
-      agentId: "lead-responder",
+      agentId: "employee-a",
     });
 
     expect(results).toHaveLength(0);
@@ -87,7 +87,7 @@ describe("KnowledgeStore interface", () => {
       {
         id: "c1",
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         documentId: "doc-1",
         content: "chunk 1",
         sourceType: "document",
@@ -98,7 +98,7 @@ describe("KnowledgeStore interface", () => {
       {
         id: "c2",
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         documentId: "doc-1",
         content: "chunk 2",
         sourceType: "document",
@@ -119,7 +119,7 @@ describe("KnowledgeStore interface", () => {
       await store.store({
         id: `c-${i}`,
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         documentId: "doc-1",
         content: `chunk ${i}`,
         sourceType: "document",
@@ -131,7 +131,7 @@ describe("KnowledgeStore interface", () => {
 
     const results = await store.search(new Array(1024).fill(0), {
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "employee-a",
       topK: 3,
     });
 

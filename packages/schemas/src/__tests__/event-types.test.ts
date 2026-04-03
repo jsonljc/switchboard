@@ -36,7 +36,7 @@ describe("Event types", () => {
 
   it("EventSource type is structurally valid", () => {
     const sources: EventSource[] = [
-      { type: "agent", id: "lead-responder" },
+      { type: "agent", id: "employee-a" },
       { type: "connector", id: "hubspot" },
       { type: "webhook", id: "stripe" },
       { type: "manual", id: "user-1" },

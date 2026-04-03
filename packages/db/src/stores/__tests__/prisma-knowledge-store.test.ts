@@ -29,7 +29,7 @@ describe("PrismaKnowledgeStore", () => {
       await store.store({
         id: "chunk-1",
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         documentId: "doc-1",
         content: "Botox treatment info",
         sourceType: "document",
@@ -50,7 +50,7 @@ describe("PrismaKnowledgeStore", () => {
         {
           id: "c1",
           organizationId: "org-1",
-          agentId: "lead-responder",
+          agentId: "employee-a",
           documentId: "doc-1",
           content: "chunk 1",
           sourceType: "document",
@@ -61,7 +61,7 @@ describe("PrismaKnowledgeStore", () => {
         {
           id: "c2",
           organizationId: "org-1",
-          agentId: "lead-responder",
+          agentId: "employee-a",
           documentId: "doc-1",
           content: "chunk 2",
           sourceType: "document",
@@ -81,7 +81,7 @@ describe("PrismaKnowledgeStore", () => {
         {
           id: "chunk-1",
           organizationId: "org-1",
-          agentId: "lead-responder",
+          agentId: "employee-a",
           documentId: "doc-1",
           content: "Botox treatment info",
           sourceType: "document",
@@ -93,7 +93,7 @@ describe("PrismaKnowledgeStore", () => {
 
       const results = await store.search([0.1, 0.2, 0.3], {
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
         topK: 5,
       });
 
@@ -108,7 +108,7 @@ describe("PrismaKnowledgeStore", () => {
 
       await store.search([0.1], {
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "employee-a",
       });
 
       // Verify the query was called (topK default is internal)

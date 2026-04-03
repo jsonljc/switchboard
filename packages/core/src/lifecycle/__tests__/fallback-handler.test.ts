@@ -111,7 +111,7 @@ describe("FallbackHandler", () => {
         createMessage("inbound", "Hi, interested in laser hair removal"),
         createMessage("outbound", "Great! Let me help you with that."),
       ],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "paused",
     };
 
@@ -121,7 +121,7 @@ describe("FallbackHandler", () => {
     expect(result.task?.type).toBe("fallback_handoff");
     expect(result.task?.title).toContain("John Doe");
     expect(result.task?.title).toContain("Laser Hair Removal");
-    expect(result.task?.title).toContain("no lead-responder");
+    expect(result.task?.title).toContain("no employee-a");
     expect(result.task?.description).toContain("Contact: John Doe");
     expect(result.task?.description).toContain("Service: Laser Hair Removal");
     expect(result.task?.description).toContain("Stage: interested");
@@ -149,7 +149,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity({ stage: "showed" }),
       recentMessages: [],
-      missingCapability: "revenue-tracker",
+      missingCapability: "employee-d",
       fallbackReason: "errored",
     };
 
@@ -163,7 +163,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity({ stage: "qualified", estimatedValue: 150_000 }),
       recentMessages: [],
-      missingCapability: "sales-closer",
+      missingCapability: "employee-b",
       fallbackReason: "paused",
     };
 
@@ -177,7 +177,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity({ stage: "qualified", estimatedValue: 50_000 }),
       recentMessages: [],
-      missingCapability: "sales-closer",
+      missingCapability: "employee-b",
       fallbackReason: "paused",
     };
 
@@ -191,7 +191,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity({ stage: "interested" }),
       recentMessages: [],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "not_configured",
     };
 
@@ -207,7 +207,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity({ stage: "showed" }),
       recentMessages: [],
-      missingCapability: "revenue-tracker",
+      missingCapability: "employee-d",
       fallbackReason: "errored",
     };
 
@@ -233,7 +233,7 @@ describe("FallbackHandler", () => {
         contact: createContact(),
         opportunity: createOpportunity(),
         recentMessages: [],
-        missingCapability: "lead-responder",
+        missingCapability: "employee-a",
         fallbackReason: reason,
       };
 
@@ -249,7 +249,7 @@ describe("FallbackHandler", () => {
       contact: createContact(),
       opportunity: createOpportunity(),
       recentMessages: [],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "paused",
     };
 
@@ -267,7 +267,7 @@ describe("FallbackHandler", () => {
       contact: createContact({ name: "Jane Smith" }),
       opportunity: null,
       recentMessages: [createMessage("inbound", "Hello, I have a question")],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "not_configured",
     };
 
@@ -293,7 +293,7 @@ describe("FallbackHandler", () => {
         createMessage("outbound", "Message 4"),
         createMessage("inbound", "Message 5"),
       ],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "paused",
     };
 
@@ -326,7 +326,7 @@ describe("FallbackHandler", () => {
         contact: createContact(),
         opportunity: createOpportunity({ stage: testCase.stage }),
         recentMessages: [],
-        missingCapability: "lead-responder",
+        missingCapability: "employee-a",
         fallbackReason: "paused",
       };
 
@@ -341,7 +341,7 @@ describe("FallbackHandler", () => {
       contact: createContact({ name: null }),
       opportunity: createOpportunity(),
       recentMessages: [],
-      missingCapability: "lead-responder",
+      missingCapability: "employee-a",
       fallbackReason: "paused",
     };
 

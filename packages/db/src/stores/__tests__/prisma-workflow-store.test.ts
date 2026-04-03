@@ -41,7 +41,7 @@ describe("PrismaWorkflowStore", () => {
         organizationId: "org-1",
         triggerType: "agent_initiated" as const,
         triggerRef: null,
-        sourceAgent: "sales-closer",
+        sourceAgent: "employee-b",
         status: "pending" as const,
         plan: {
           steps: [],
@@ -97,7 +97,7 @@ describe("PrismaWorkflowStore", () => {
         organizationId: "org-1",
         triggerType: "agent_initiated",
         triggerRef: null,
-        sourceAgent: "sales-closer",
+        sourceAgent: "employee-b",
         status: "running",
         plan: {
           steps: [],
@@ -186,7 +186,7 @@ describe("PrismaWorkflowStore", () => {
         dryRunSupported: true,
         approvalRequired: "auto" as const,
         fallback: null,
-        sourceAgent: "sales-closer",
+        sourceAgent: "employee-b",
         sourceWorkflow: "wf-1",
         organizationId: "org-1",
         createdAt: now,

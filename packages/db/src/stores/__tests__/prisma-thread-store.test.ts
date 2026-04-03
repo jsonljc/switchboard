@@ -21,7 +21,7 @@ function makeThread(overrides: Record<string, any> = {}) {
     organizationId: "org-1",
     stage: "new" as const,
     threadStatus: "open" as const,
-    assignedAgent: "lead-responder",
+    assignedAgent: "employee-a",
     agentContext: {
       objectionsEncountered: [] as string[],
       preferencesLearned: {} as Record<string, string>,
@@ -82,7 +82,7 @@ describe("PrismaConversationThreadStore", () => {
       expect(result!.contactId).toBe("contact-1");
       expect(result!.organizationId).toBe("org-1");
       expect(result!.stage).toBe("responding");
-      expect(result!.assignedAgent).toBe("lead-responder");
+      expect(result!.assignedAgent).toBe("employee-a");
       expect(result!.currentSummary).toBe("Interested lead");
       expect(result!.messageCount).toBe(5);
       expect(result!.lastOutcomeAt).toEqual(now);
@@ -108,7 +108,7 @@ describe("PrismaConversationThreadStore", () => {
           organizationId: "org-1",
           stage: "new",
           threadStatus: "open",
-          assignedAgent: "lead-responder",
+          assignedAgent: "employee-a",
           agentContext: thread.agentContext,
           currentSummary: "",
           followUpSchedule: thread.followUpSchedule,
@@ -148,10 +148,10 @@ describe("PrismaConversationThreadStore", () => {
     });
 
     it("updates assignedAgent only", async () => {
-      await store.update("thread-1", { assignedAgent: "sales-closer" });
+      await store.update("thread-1", { assignedAgent: "employee-b" });
       expect(prisma.conversationThread.update).toHaveBeenCalledWith({
         where: { id: "thread-1" },
-        data: { assignedAgent: "sales-closer" },
+        data: { assignedAgent: "employee-b" },
       });
     });
 
@@ -214,7 +214,7 @@ describe("PrismaConversationThreadStore", () => {
     it("updates multiple fields at once", async () => {
       await store.update("thread-1", {
         stage: "qualified",
-        assignedAgent: "sales-closer",
+        assignedAgent: "employee-b",
         messageCount: 10,
         currentSummary: "Hot lead, ready to close",
       });
@@ -222,7 +222,7 @@ describe("PrismaConversationThreadStore", () => {
         where: { id: "thread-1" },
         data: {
           stage: "qualified",
-          assignedAgent: "sales-closer",
+          assignedAgent: "employee-b",
           messageCount: 10,
           currentSummary: "Hot lead, ready to close",
         },
