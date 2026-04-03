@@ -21,7 +21,7 @@ export default function SettingsKnowledgePage() {
         </p>
       </section>
 
-      <UploadPanel agentId="lead-responder" />
+      <UploadPanel agentId="creative" />
 
       <div className="flex justify-end pt-4">
         <Button onClick={() => router.push("/settings/test-chat")}>Test your agent →</Button>

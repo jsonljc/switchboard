@@ -29,23 +29,23 @@ function buildWizardKnowledgeContent(data: WizardData): string {
 describe("Wizard Data Processing", () => {
   it("builds knowledge content from wizard data", () => {
     const data: WizardData = {
-      businessName: "Glow Med Spa",
-      vertical: "clinic",
-      services: ["Botox", "Fillers", "Facials"],
-      targetCustomer: "Women 25-45",
-      pricingRange: "$200-$800",
+      businessName: "Acme Inc",
+      vertical: "generic",
+      services: ["Content Creation", "Social Media", "Design"],
+      targetCustomer: "Series A/B SaaS companies",
+      pricingRange: "$3000-$8000/mo",
       bookingPlatform: "calendly",
-      bookingUrl: "https://calendly.com/glow-spa",
-      purchasedAgents: ["lead-responder", "sales-closer"],
+      bookingUrl: "https://calendly.com/acme",
+      purchasedAgents: ["creative"],
       tonePreset: "warm-professional",
       language: "en",
     };
 
     const content = buildWizardKnowledgeContent(data);
-    expect(content).toContain("Glow Med Spa");
-    expect(content).toContain("clinic");
-    expect(content).toContain("Botox, Fillers, Facials");
-    expect(content).toContain("calendly.com/glow-spa");
+    expect(content).toContain("Acme Inc");
+    expect(content).toContain("generic");
+    expect(content).toContain("Content Creation, Social Media, Design");
+    expect(content).toContain("calendly.com/acme");
   });
 
   it("handles empty services array", () => {
@@ -57,7 +57,7 @@ describe("Wizard Data Processing", () => {
       pricingRange: "",
       bookingPlatform: "custom",
       bookingUrl: "https://example.com",
-      purchasedAgents: ["lead-responder"],
+      purchasedAgents: ["creative"],
       tonePreset: "direct-efficient",
       language: "en",
     };

@@ -17,7 +17,7 @@ export default function SettingsTestChatPage() {
   if (status === "unauthenticated") redirect("/login");
 
   const handleGoLive = () => {
-    goLive.mutate("lead-responder", {
+    goLive.mutate("creative", {
       onSuccess: () => {
         toast({ title: "Agent is now live!" });
         router.push("/");
@@ -39,7 +39,7 @@ export default function SettingsTestChatPage() {
         </p>
       </section>
 
-      <TestChatWidget agentId="lead-responder" />
+      <TestChatWidget agentId="creative" />
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={() => router.push("/settings/knowledge")}>

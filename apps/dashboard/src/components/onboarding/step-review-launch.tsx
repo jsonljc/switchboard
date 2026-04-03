@@ -1,17 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  MessageSquare,
-  Target,
-  BellRing,
-  TrendingUp,
-  Zap,
-  MessageCircle,
-  Phone,
-  Loader2,
-  PartyPopper,
-} from "lucide-react";
+import { MessageSquare, MessageCircle, Phone, Loader2, PartyPopper } from "lucide-react";
 import type { ChannelConfig } from "@/app/onboarding/page";
 
 interface StepReviewLaunchProps {
@@ -23,19 +13,11 @@ interface StepReviewLaunchProps {
 }
 
 const AGENT_ICONS: Record<string, typeof MessageSquare> = {
-  "lead-responder": MessageSquare,
-  "sales-closer": Target,
-  nurture: BellRing,
-  "revenue-tracker": TrendingUp,
-  "ad-optimizer": Zap,
+  creative: MessageSquare,
 };
 
 const AGENT_LABELS: Record<string, string> = {
-  "lead-responder": "Lead Responder",
-  "sales-closer": "Sales Closer",
-  nurture: "Nurture",
-  "revenue-tracker": "Revenue Tracker",
-  "ad-optimizer": "Ad Optimizer",
+  creative: "AI Creative",
 };
 
 const TONE_LABELS: Record<string, string> = {

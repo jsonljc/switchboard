@@ -398,8 +398,7 @@ async function tryHandleReadIntent(
   threadId: string,
 ): Promise<boolean> {
   if (result.readIntent && result.proposals.length === 0) {
-    // Read intent handling was removed with clinic interpreter cleanup.
-    // Return a user-friendly message instead.
+    // Read operations are not currently supported.
     await deps.sendFilteredReply(threadId, "Read operations are not currently available.");
     return true;
   }

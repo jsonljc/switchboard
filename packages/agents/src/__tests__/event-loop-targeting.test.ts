@@ -20,10 +20,10 @@ function makeHandler(fn: (event: RoutedEventEnvelope) => AgentResponse): AgentHa
 }
 
 describe("EventLoop targetAgentId Filtering", () => {
-  it("routes message.received with targetAgentId: 'lead-responder' to only Lead Responder", async () => {
+  it("routes message.received with targetAgentId: 'employee-a' to only Employee A", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -35,7 +35,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -50,8 +50,8 @@ describe("EventLoop targetAgentId Filtering", () => {
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
     const salesHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
-    handlerRegistry.register("sales-closer", salesHandler);
+    handlerRegistry.register("employee-a", leadHandler);
+    handlerRegistry.register("employee-b", salesHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -67,21 +67,21 @@ describe("EventLoop targetAgentId Filtering", () => {
       eventType: "message.received",
       source: { type: "webhook", id: "whatsapp" },
       payload: { text: "hello" },
-      metadata: { targetAgentId: "lead-responder" },
+      metadata: { targetAgentId: "employee-a" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(1);
-    expect(result.processed[0]!.agentId).toBe("lead-responder");
+    expect(result.processed[0]!.agentId).toBe("employee-a");
     expect(leadHandler.handle).toHaveBeenCalledTimes(1);
     expect(salesHandler.handle).not.toHaveBeenCalled();
   });
 
-  it("routes message.received with targetAgentId: 'sales-closer' to only Sales Closer", async () => {
+  it("routes message.received with targetAgentId: 'employee-b' to only Employee B", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -93,7 +93,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -108,8 +108,8 @@ describe("EventLoop targetAgentId Filtering", () => {
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
     const salesHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
-    handlerRegistry.register("sales-closer", salesHandler);
+    handlerRegistry.register("employee-a", leadHandler);
+    handlerRegistry.register("employee-b", salesHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -125,13 +125,13 @@ describe("EventLoop targetAgentId Filtering", () => {
       eventType: "message.received",
       source: { type: "webhook", id: "whatsapp" },
       payload: { text: "hello" },
-      metadata: { targetAgentId: "sales-closer" },
+      metadata: { targetAgentId: "employee-b" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(1);
-    expect(result.processed[0]!.agentId).toBe("sales-closer");
+    expect(result.processed[0]!.agentId).toBe("employee-b");
     expect(salesHandler.handle).toHaveBeenCalledTimes(1);
     expect(leadHandler.handle).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe("EventLoop targetAgentId Filtering", () => {
   it("routes lead.received with NO targetAgentId to all matching agents", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -151,7 +151,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -166,8 +166,8 @@ describe("EventLoop targetAgentId Filtering", () => {
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
     const salesHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
-    handlerRegistry.register("sales-closer", salesHandler);
+    handlerRegistry.register("employee-a", leadHandler);
+    handlerRegistry.register("employee-b", salesHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -189,8 +189,8 @@ describe("EventLoop targetAgentId Filtering", () => {
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(2);
-    expect(result.processed[0]!.agentId).toBe("lead-responder");
-    expect(result.processed[1]!.agentId).toBe("sales-closer");
+    expect(result.processed[0]!.agentId).toBe("employee-a");
+    expect(result.processed[1]!.agentId).toBe("employee-b");
     expect(leadHandler.handle).toHaveBeenCalledTimes(1);
     expect(salesHandler.handle).toHaveBeenCalledTimes(1);
   });
@@ -198,7 +198,7 @@ describe("EventLoop targetAgentId Filtering", () => {
   it("routes message.received with targetAgentId: 'nonexistent-agent' to manual_queue", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -210,7 +210,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -225,8 +225,8 @@ describe("EventLoop targetAgentId Filtering", () => {
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
     const salesHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
-    handlerRegistry.register("sales-closer", salesHandler);
+    handlerRegistry.register("employee-a", leadHandler);
+    handlerRegistry.register("employee-b", salesHandler);
 
     const deliveryStore = new InMemoryDeliveryStore();
     const loop = new EventLoop({
@@ -259,7 +259,7 @@ describe("EventLoop targetAgentId Filtering", () => {
   it("routes message.received with targetAgentId to disabled agent to manual_queue", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "disabled",
@@ -273,7 +273,7 @@ describe("EventLoop targetAgentId Filtering", () => {
 
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
+    handlerRegistry.register("employee-a", leadHandler);
 
     const deliveryStore = new InMemoryDeliveryStore();
     const loop = new EventLoop({
@@ -290,7 +290,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       eventType: "message.received",
       source: { type: "webhook", id: "whatsapp" },
       payload: { text: "hello" },
-      metadata: { targetAgentId: "lead-responder" },
+      metadata: { targetAgentId: "employee-a" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
@@ -305,7 +305,7 @@ describe("EventLoop targetAgentId Filtering", () => {
   it("recursive output events from targeted handler do NOT inherit targetAgentId", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -317,7 +317,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -331,13 +331,13 @@ describe("EventLoop targetAgentId Filtering", () => {
 
     const handlerRegistry = new HandlerRegistry();
     handlerRegistry.register(
-      "lead-responder",
+      "employee-a",
       makeHandler((event) => ({
         events: [
           createEventEnvelope({
             organizationId: event.organizationId,
             eventType: "lead.qualified",
-            source: { type: "agent", id: "lead-responder" },
+            source: { type: "agent", id: "employee-a" },
             payload: { contactId: "c1" },
             correlationId: event.correlationId,
             causationId: event.eventId,
@@ -348,7 +348,7 @@ describe("EventLoop targetAgentId Filtering", () => {
       })),
     );
     const salesHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("sales-closer", salesHandler);
+    handlerRegistry.register("employee-b", salesHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -364,17 +364,17 @@ describe("EventLoop targetAgentId Filtering", () => {
       eventType: "message.received",
       source: { type: "webhook", id: "whatsapp" },
       payload: { text: "hello" },
-      metadata: { targetAgentId: "lead-responder" },
+      metadata: { targetAgentId: "employee-a" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
 
-    // Lead Responder processes the targeted message.received
-    // Sales Closer processes the output lead.qualified (routes normally, no targeting)
+    // Employee A processes the targeted message.received
+    // Employee B processes the output lead.qualified (routes normally, no targeting)
     expect(result.processed).toHaveLength(2);
-    expect(result.processed[0]!.agentId).toBe("lead-responder");
+    expect(result.processed[0]!.agentId).toBe("employee-a");
     expect(result.processed[0]!.outputEvents).toEqual(["lead.qualified"]);
-    expect(result.processed[1]!.agentId).toBe("sales-closer");
+    expect(result.processed[1]!.agentId).toBe("employee-b");
     expect(salesHandler.handle).toHaveBeenCalledTimes(1);
   });
 });

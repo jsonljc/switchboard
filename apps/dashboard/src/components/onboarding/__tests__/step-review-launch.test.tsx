@@ -5,11 +5,10 @@ import type { ChannelConfig } from "@/app/onboarding/page";
 
 describe("StepReviewLaunch", () => {
   const defaultProps = {
-    businessName: "Radiance Spa",
-    selectedAgents: ["lead-responder", "sales-closer"],
+    businessName: "Acme Inc",
+    selectedAgents: ["creative"],
     agentTones: {
-      "lead-responder": "warm-professional",
-      "sales-closer": "direct-efficient",
+      creative: "warm-professional",
     },
     channels: {
       founderChannel: "telegram" as const,
@@ -24,15 +23,13 @@ describe("StepReviewLaunch", () => {
 
   it("shows business name", () => {
     render(<StepReviewLaunch {...defaultProps} />);
-    expect(screen.getByText(/Radiance Spa/)).toBeTruthy();
+    expect(screen.getByText(/Acme Inc/)).toBeTruthy();
   });
 
   it("lists all selected agents with tones", () => {
     render(<StepReviewLaunch {...defaultProps} />);
-    expect(screen.getByText("Lead Responder")).toBeTruthy();
-    expect(screen.getByText("Sales Closer")).toBeTruthy();
+    expect(screen.getByText("AI Creative")).toBeTruthy();
     expect(screen.getByText(/Warm/)).toBeTruthy();
-    expect(screen.getByText(/Direct/)).toBeTruthy();
   });
 
   it("shows channel summary", () => {

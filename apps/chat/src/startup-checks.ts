@@ -25,16 +25,6 @@ export function runStartupChecks(): CheckResult {
     warnings.push("REDIS_URL is not set — dedup and session store will use in-memory fallbacks");
   }
 
-  // Lead bot mode requires profile + skin
-  if (process.env["LEAD_BOT_MODE"] === "true") {
-    if (!process.env["PROFILE_ID"]) {
-      errors.push("LEAD_BOT_MODE=true requires PROFILE_ID to be set (e.g. PROFILE_ID=clinic-demo)");
-    }
-    if (!process.env["SKIN_ID"]) {
-      errors.push("LEAD_BOT_MODE=true requires SKIN_ID to be set (e.g. SKIN_ID=clinic)");
-    }
-  }
-
   // Require at least one channel token
   const hasTelegram = !!process.env["TELEGRAM_BOT_TOKEN"];
   const hasWhatsApp = !!process.env["WHATSAPP_TOKEN"] && !!process.env["WHATSAPP_PHONE_NUMBER_ID"];

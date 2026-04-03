@@ -5,7 +5,7 @@ import type { DeliveryIntent } from "../policy-bridge.js";
 const makeIntent = (overrides: Partial<DeliveryIntent> = {}): DeliveryIntent => ({
   eventId: "evt-1",
   destinationType: "agent",
-  destinationId: "lead-responder",
+  destinationId: "creative",
   action: "lead.received",
   payload: { contactId: "c1" },
   criticality: "required",

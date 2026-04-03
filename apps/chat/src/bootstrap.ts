@@ -250,7 +250,7 @@ export async function createChatRuntime(
   });
 
   const cleanup = () => {
-    // No background workers to clean up after clinic/cadence removal
+    // No background workers to clean up
   };
 
   return { runtime, cleanup, failedMessageStore, agentNotifier };
