@@ -5,7 +5,7 @@ import type { NaturalnessPacket } from "../types.js";
 function makePacket(overrides?: Partial<NaturalnessPacket>): NaturalnessPacket {
   return {
     primaryMove: "greet",
-    approvedContent: "Welcome to our clinic!",
+    approvedContent: "Welcome to our business!",
     voice: {
       naturalness: "semi_formal",
       market: "SG",
@@ -59,7 +59,7 @@ describe("buildLocalisedSystemPrompt", () => {
 
   it("should include approved content", () => {
     const prompt = buildLocalisedSystemPrompt(makePacket());
-    expect(prompt).toContain("Welcome to our clinic!");
+    expect(prompt).toContain("Welcome to our business!");
   });
 
   it("should include lead context", () => {
@@ -75,8 +75,8 @@ describe("buildLocalisedSystemPrompt", () => {
   });
 
   it("should include business context when provided", () => {
-    const prompt = buildLocalisedSystemPrompt(makePacket(), "Business: Bright Smile Dental");
-    expect(prompt).toContain("Bright Smile Dental");
+    const prompt = buildLocalisedSystemPrompt(makePacket(), "Business: Acme Inc");
+    expect(prompt).toContain("Acme Inc");
   });
 
   it("should handle different moves", () => {

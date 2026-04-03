@@ -5,7 +5,7 @@ describe("AgentRegistry", () => {
   it("registers an agent with draft status", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "draft",
@@ -17,7 +17,7 @@ describe("AgentRegistry", () => {
       },
     });
 
-    const entry = registry.get("org-1", "lead-responder");
+    const entry = registry.get("org-1", "employee-a");
     expect(entry).toBeDefined();
     expect(entry!.status).toBe("draft");
     expect(entry!.installed).toBe(true);
@@ -26,7 +26,7 @@ describe("AgentRegistry", () => {
   it("activates a draft agent", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "draft",
@@ -38,15 +38,15 @@ describe("AgentRegistry", () => {
       },
     });
 
-    registry.updateStatus("org-1", "lead-responder", "active");
-    const entry = registry.get("org-1", "lead-responder");
+    registry.updateStatus("org-1", "employee-a", "active");
+    const entry = registry.get("org-1", "employee-a");
     expect(entry!.status).toBe("active");
   });
 
   it("lists only active agents for an org", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -54,7 +54,7 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
     });
     registry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "draft",
@@ -62,7 +62,7 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.qualified"], emits: [], tools: [] },
     });
     registry.register("org-1", {
-      agentId: "nurture",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "paused",
@@ -72,13 +72,13 @@ describe("AgentRegistry", () => {
 
     const active = registry.listActive("org-1");
     expect(active).toHaveLength(1);
-    expect(active[0]!.agentId).toBe("lead-responder");
+    expect(active[0]!.agentId).toBe("employee-a");
   });
 
   it("finds agents that accept a given event type", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -86,7 +86,7 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
     });
     registry.register("org-1", {
-      agentId: "sales-closer",
+      agentId: "employee-b",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -96,7 +96,7 @@ describe("AgentRegistry", () => {
 
     const responders = registry.findByInboundEvent("org-1", "lead.received");
     expect(responders).toHaveLength(1);
-    expect(responders[0]!.agentId).toBe("lead-responder");
+    expect(responders[0]!.agentId).toBe("employee-a");
   });
 
   it("returns empty array for unknown org", () => {
@@ -108,7 +108,7 @@ describe("AgentRegistry", () => {
   it("stores executionMode on registration", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "ad-optimizer",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -117,14 +117,14 @@ describe("AgentRegistry", () => {
       executionMode: "hybrid",
     });
 
-    const entry = registry.get("org-1", "ad-optimizer");
+    const entry = registry.get("org-1", "employee-c");
     expect(entry!.executionMode).toBe("hybrid");
   });
 
   it("defaults executionMode to realtime when not specified", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -132,14 +132,14 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
     });
 
-    const entry = registry.get("org-1", "lead-responder");
+    const entry = registry.get("org-1", "employee-a");
     expect(entry!.executionMode).toBe("realtime");
   });
 
   it("lists all registered organizations", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -147,7 +147,7 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
     });
     registry.register("org-2", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -162,7 +162,7 @@ describe("AgentRegistry", () => {
   it("updates runtime info", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -170,14 +170,14 @@ describe("AgentRegistry", () => {
       capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
     });
 
-    registry.updateRuntime("org-1", "lead-responder", {
+    registry.updateRuntime("org-1", "employee-a", {
       provider: "switchboard",
       sessionId: "sess-123",
       health: "healthy",
       lastHeartbeatAt: "2026-03-18T10:00:00Z",
     });
 
-    const entry = registry.get("org-1", "lead-responder");
+    const entry = registry.get("org-1", "employee-a");
     expect(entry!.runtime?.sessionId).toBe("sess-123");
     expect(entry!.runtime?.health).toBe("healthy");
   });
@@ -185,7 +185,7 @@ describe("AgentRegistry", () => {
   it("throws when re-registering the same agent without forceOverwrite", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -195,20 +195,20 @@ describe("AgentRegistry", () => {
 
     expect(() => {
       registry.register("org-1", {
-        agentId: "lead-responder",
+        agentId: "employee-a",
         version: "0.2.0",
         installed: true,
         status: "active",
         config: {},
         capabilities: { accepts: ["lead.received"], emits: [], tools: [] },
       });
-    }).toThrow('Agent "lead-responder" already registered for organization "org-1"');
+    }).toThrow('Agent "employee-a" already registered for organization "org-1"');
   });
 
   it("allows overwrite with forceOverwrite: true", () => {
     const registry = new AgentRegistry();
     registry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -221,7 +221,7 @@ describe("AgentRegistry", () => {
       registry.register(
         "org-1",
         {
-          agentId: "lead-responder",
+          agentId: "employee-a",
           version: "0.2.0",
           installed: true,
           status: "active",
@@ -232,7 +232,7 @@ describe("AgentRegistry", () => {
       );
     }).not.toThrow();
 
-    const entry = registry.get("org-1", "lead-responder");
+    const entry = registry.get("org-1", "employee-a");
     expect(entry!.version).toBe("0.2.0");
     expect(entry!.config).toEqual({ feature: "new" });
   });
