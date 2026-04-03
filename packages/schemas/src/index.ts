@@ -8,6 +8,7 @@ export * from "./role-overlay.js";
 export * from "./policy.js";
 export * from "./action.js";
 export * from "./cartridge.js";
+export * from "./cartridge-types.js";
 export * from "./audit.js";
 
 // Chat types

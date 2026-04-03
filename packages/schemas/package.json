@@ -42,6 +42,10 @@
       "types": "./dist/cartridge.d.ts",
       "import": "./dist/cartridge.js"
     },
+    "./cartridge-types": {
+      "types": "./dist/cartridge-types.d.ts",
+      "import": "./dist/cartridge-types.js"
+    },
     "./audit": {
       "types": "./dist/audit.d.ts",
       "import": "./dist/audit.js"

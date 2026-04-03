@@ -1,13 +1,6 @@
-import type { ConnectionHealth } from "@switchboard/schemas";
+import type { ConnectionHealth, ConnectionContract } from "@switchboard/schemas";
 
-export interface ConnectionContract {
-  serviceId: string;
-  serviceName: string;
-  authType: "oauth2" | "api_key" | "service_account";
-  requiredScopes: string[];
-  refreshStrategy: "auto" | "manual" | "none";
-  healthCheck(): Promise<ConnectionHealth>;
-}
+export type { ConnectionContract } from "@switchboard/schemas";
 
 export function createConnectionContract(
   config: Omit<ConnectionContract, "healthCheck">,
