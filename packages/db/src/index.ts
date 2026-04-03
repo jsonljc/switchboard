@@ -42,24 +42,13 @@ export {
   PrismaCredentialResolver,
 } from "./storage/index.js";
 export type { ConnectionRecord } from "./storage/index.js";
-export { PrismaCrmProvider } from "./storage/prisma-crm-provider.js";
-export { PrismaCadenceStore } from "./storage/prisma-cadence-store.js";
-export type { CadenceStore, CadenceInstanceRecord } from "./storage/prisma-cadence-store.js";
 export { PrismaTierStore } from "./prisma-tier-store.js";
 export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";
-export { PrismaInterventionStore } from "./storage/prisma-intervention-store.js";
-export { PrismaDiagnosticCycleStore } from "./storage/prisma-diagnostic-cycle-store.js";
-export { PrismaRevenueAccountStore } from "./storage/prisma-revenue-account-store.js";
-export { PrismaWeeklyDigestStore } from "./storage/prisma-weekly-digest-store.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
 export { deriveAgentStates } from "./storage/agent-state-deriver.js";
 export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
-export { PrismaAdsOperatorConfigStore } from "./ads-operator-config/store.js";
-export { PrismaConnectorHealthLogStore } from "./storage/prisma-connector-health-log-store.js";
-export { PrismaBusinessConfigStore } from "./storage/prisma-business-config-store.js";
-export type { ConfigVersionRecord } from "./storage/prisma-business-config-store.js";
 export { PrismaOutcomeStore } from "./storage/prisma-outcome-store.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
