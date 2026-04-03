@@ -7,21 +7,18 @@ import { createConversation, transitionConversation } from "./conversation/state
 import { setThread } from "./conversation/threads.js";
 import { composeHelpMessage } from "./composer/reply.js";
 import type { ResponseContext, GeneratedResponse } from "./composer/response-generator.js";
-import { handleReadIntent } from "./clinic/read-handler.js";
 import type {
   RuntimeOrchestrator,
   StorageContext,
   CartridgeReadAdapter as CartridgeReadAdapterType,
   CapabilityRegistry,
   PlanGraphBuilder,
-  ResolvedSkin,
   DataFlowExecutor,
 } from "@switchboard/core";
-import { inferCartridgeId, matchesAny } from "@switchboard/core";
+import { inferCartridgeId } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
-import type { ConversationRouter } from "@switchboard/customer-engagement";
 import type { ConversionBus } from "@switchboard/core";
 import type { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
@@ -63,11 +60,9 @@ export interface PipelineDeps {
   maxContextMessages: number;
   capabilityRegistry: CapabilityRegistry | null;
   planGraphBuilder: PlanGraphBuilder | null;
-  resolvedSkin: ResolvedSkin | null;
   crmProvider: CrmProvider | null;
   dataFlowExecutor: DataFlowExecutor | null;
   isLeadBot: boolean;
-  leadRouter: ConversationRouter | null;
   conversionBus: ConversionBus | null;
   dialogueMiddleware: DialogueMiddleware | null;
 
@@ -286,12 +281,7 @@ export async function handleCommands(
 
   // Handle help command
   if (/^help$/i.test(message.text.trim())) {
-    const helpText = composeHelpMessage(
-      deps.availableActions,
-      (deps.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
-        | Record<string, string>
-        | undefined,
-    );
+    const helpText = composeHelpMessage(deps.availableActions);
     await deps.sendFilteredReply(threadId, helpText);
     await deps.recordAssistantMessage(threadId, helpText);
     return true;
@@ -404,29 +394,13 @@ async function handleInvalidInterpretation(
 async function tryHandleReadIntent(
   deps: PipelineDeps,
   result: { readIntent?: unknown; proposals: unknown[] },
-  message: ParsedMessage,
+  _message: ParsedMessage,
   threadId: string,
 ): Promise<boolean> {
   if (result.readIntent && result.proposals.length === 0) {
-    if (!deps.readAdapter) {
-      await deps.sendFilteredReply(threadId, "Read operations are not configured.");
-      return true;
-    }
-    try {
-      const readResult = await handleReadIntent(
-        result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
-        {
-          readAdapter: deps.readAdapter,
-          cartridgeId: "digital-ads",
-          actorId: message.principalId,
-          organizationId: message.organizationId,
-        },
-      );
-      await deps.sendFilteredReply(threadId, readResult.text);
-    } catch (err) {
-      console.error("Read intent error:", err);
-      await deps.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
-    }
+    // Read intent handling was removed with clinic interpreter cleanup.
+    // Return a user-friendly message instead.
+    await deps.sendFilteredReply(threadId, "Read operations are not currently available.");
     return true;
   }
   return false;
@@ -553,24 +527,11 @@ async function tryHandleKillSwitch(
 }
 
 async function tryEnforceSkinFilter(
-  deps: PipelineDeps,
-  result: { proposals: Array<{ actionType: string }> },
-  threadId: string,
+  _deps: PipelineDeps,
+  _result: { proposals: Array<{ actionType: string }> },
+  _threadId: string,
 ): Promise<boolean> {
-  if (deps.resolvedSkin) {
-    const { include, exclude } = deps.resolvedSkin.toolFilter;
-    for (const proposal of result.proposals) {
-      const included = matchesAny(proposal.actionType, include);
-      const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
-      if (!included || excluded) {
-        await deps.sendFilteredReply(
-          threadId,
-          `Action "${proposal.actionType}" is not available in the current configuration.`,
-        );
-        return true;
-      }
-    }
-  }
+  // Skin-based tool filtering was removed with the skin/profile system cleanup.
   return false;
 }
 

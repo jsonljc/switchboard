@@ -1,8 +1,18 @@
-import type { ResolvedProfile, ResolvedSkin } from "@switchboard/core";
-import type { ModelRouter } from "../clinic/model-router-types.js";
+/** Budget-aware model router for LLM usage tracking. */
+export interface ModelRouter {
+  shouldUseLLM(orgId?: string): Promise<boolean>;
+  recordUsage(
+    promptTokens: number,
+    completionTokens: number,
+    orgId?: string,
+    modelId?: string,
+  ): Promise<void>;
+  getTodayUsage(orgId?: string): Promise<number>;
+  getRemainingBudget(orgId?: string): Promise<number>;
+  readonly clinicId: string;
+}
 import { detectPromptInjectionInOutput } from "../interpreter/injection-detector.js";
 import { composeWelcomeMessage, composeUncertainReply } from "./reply.js";
-import { generateReport } from "./report-generator.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,9 +38,9 @@ export interface ResponseContext {
   clarificationQuestion?: string;
   data?: string;
   /** Structured diagnostic result for report generation */
-  diagnosticResult?: import("@switchboard/digital-ads").DiagnosticResult;
+  diagnosticResult?: Record<string, unknown>;
   /** Recommendations from the recommendation engine */
-  recommendations?: import("@switchboard/digital-ads").RecommendationResult;
+  recommendations?: Record<string, unknown>;
   conversationHistory?: Array<{ role: string; text: string }>;
   userMessage?: string;
   availableActions?: string[];
@@ -45,6 +55,35 @@ export interface GeneratedResponse {
   usage?: { promptTokens: number; completionTokens: number };
 }
 
+/** Minimal resolved profile shape used by ResponseGenerator. */
+export interface ResponseGeneratorProfile {
+  llmContext: {
+    persona?: string;
+    tone?: string;
+    systemPromptExtension?: string;
+    bannedTopics: string[];
+  };
+  systemPromptFragment?: string;
+  objectionTrees?: Array<{
+    keywords: string[];
+    response: string;
+    followUp?: string;
+  }>;
+  profile?: {
+    business?: { name?: string };
+  };
+}
+
+/** Minimal resolved skin shape used by ResponseGenerator. */
+export interface ResponseGeneratorSkin {
+  language?: {
+    replyTemplates?: Record<string, string>;
+    welcomeMessage?: string;
+  };
+  manifest?: { name?: string };
+  config?: Record<string, unknown>;
+}
+
 export interface ResponseGeneratorConfig {
   llmConfig: {
     apiKey: string;
@@ -53,8 +92,8 @@ export interface ResponseGeneratorConfig {
     temperature?: number;
     baseUrl?: string;
   };
-  resolvedProfile: ResolvedProfile | null;
-  resolvedSkin: ResolvedSkin | null;
+  resolvedProfile: ResponseGeneratorProfile | null;
+  resolvedSkin: ResponseGeneratorSkin | null;
   modelRouter: ModelRouter | null;
 }
 
@@ -429,16 +468,7 @@ export class ResponseGenerator {
         break;
 
       case "diagnostic":
-        if (context.diagnosticResult) {
-          const report = generateReport(context.diagnosticResult, {
-            format: "markdown",
-            recommendations: context.recommendations,
-            businessName: context.businessName,
-          });
-          text = report.content;
-        } else {
-          text = context.data ?? "No diagnostic data available.";
-        }
+        text = context.data ?? "No diagnostic data available.";
         break;
 
       case "read_data":

@@ -2,7 +2,7 @@
 // LLM Conversation Engine — generates natural responses using Claude Haiku
 // ---------------------------------------------------------------------------
 
-import type { ModelRouter } from "../clinic/model-router-types.js";
+import type { ModelRouter } from "../composer/response-generator.js";
 import { detectPromptInjectionInOutput } from "../interpreter/injection-detector.js";
 
 export interface BusinessProfile {

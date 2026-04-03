@@ -4,7 +4,30 @@ import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
 import { ChatRuntime } from "./runtime.js";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
-import { DEFAULT_CHAT_AVAILABLE_ACTIONS } from "./cartridge-registrar.js";
+/** Default actions available in managed chat mode. */
+const DEFAULT_CHAT_AVAILABLE_ACTIONS = [
+  "digital-ads.campaign.pause",
+  "digital-ads.campaign.resume",
+  "digital-ads.campaign.adjust_budget",
+  "digital-ads.funnel.diagnose",
+  "digital-ads.portfolio.diagnose",
+  "digital-ads.snapshot.fetch",
+  "digital-ads.structure.analyze",
+  "payments.refund.create",
+  "payments.charge.create",
+  "payments.invoice.create",
+  "payments.subscription.cancel",
+  "payments.credit.apply",
+  "payments.link.create",
+  "crm.contact.search",
+  "crm.contact.create",
+  "crm.contact.update",
+  "crm.deal.list",
+  "crm.deal.create",
+  "crm.activity.list",
+  "crm.activity.log",
+  "crm.pipeline.status",
+];
 
 /**
  * Create a lightweight managed runtime for provisioned channels.
