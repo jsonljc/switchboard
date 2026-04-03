@@ -9,8 +9,8 @@ import {
   RevenueTypeSchema,
   RecordedBySchema,
 } from "@switchboard/schemas";
-import { createEventEnvelope } from "@switchboard/agents";
-import type { RoutedEventEnvelope } from "@switchboard/agents";
+import { createEventEnvelope } from "@switchboard/schemas";
+import type { RoutedEventEnvelope } from "@switchboard/schemas";
 import { z } from "zod";
 
 const CreateContactBodySchema = z.object({

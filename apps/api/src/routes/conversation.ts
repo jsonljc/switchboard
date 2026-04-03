@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createEventEnvelope } from "@switchboard/agents";
-import type { RoutedEventEnvelope } from "@switchboard/agents";
+import { createEventEnvelope } from "@switchboard/schemas";
+import type { RoutedEventEnvelope } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
