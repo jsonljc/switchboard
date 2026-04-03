@@ -21,18 +21,10 @@ export const queryKeys = {
     all: ["health"] as const,
     deep: () => ["health", "deep"] as const,
   },
-  spend: {
-    all: ["spend"] as const,
-    summary: () => ["spend", "summary"] as const,
-  },
   tokenUsage: {
     all: ["tokenUsage"] as const,
     summary: (period?: string) => ["tokenUsage", "summary", period] as const,
     trend: (days?: number) => ["tokenUsage", "trend", days] as const,
-  },
-  cartridges: {
-    all: ["cartridges"] as const,
-    list: () => ["cartridges", "list"] as const,
   },
   connections: {
     all: ["connections"] as const,
@@ -45,15 +37,6 @@ export const queryKeys = {
   orgConfig: {
     all: ["orgConfig"] as const,
     current: () => ["orgConfig", "current"] as const,
-  },
-  alerts: {
-    all: ["alerts"] as const,
-    list: () => ["alerts", "list"] as const,
-    history: (id: string) => ["alerts", "history", id] as const,
-  },
-  scheduledReports: {
-    all: ["scheduledReports"] as const,
-    list: () => ["scheduledReports", "list"] as const,
   },
   competence: {
     all: ["competence"] as const,
@@ -71,19 +54,6 @@ export const queryKeys = {
       ["conversations", "list", filters] as const,
     detail: (id: string) => ["conversations", "detail", id] as const,
   },
-  reports: {
-    all: ["reports"] as const,
-    pilot: () => ["reports", "pilot"] as const,
-  },
-  campaigns: {
-    all: ["campaigns"] as const,
-    attribution: () => ["campaigns", "attribution"] as const,
-  },
-  crm: {
-    all: ["crm"] as const,
-    contacts: () => ["crm", "contacts"] as const,
-    deals: () => ["crm", "deals"] as const,
-  },
   agents: {
     all: ["agents"] as const,
     roster: () => ["agents", "roster"] as const,
@@ -100,22 +70,11 @@ export const queryKeys = {
     current: () => ["operatorConfig", "current"] as const,
     autonomy: () => ["operatorConfig", "autonomy"] as const,
   },
-  revenueGrowth: {
-    all: ["revenueGrowth"] as const,
-    diagnostic: (accountId: string) => ["revenueGrowth", "diagnostic", accountId] as const,
-    connectors: (accountId: string) => ["revenueGrowth", "connectors", accountId] as const,
-    interventions: (accountId: string) => ["revenueGrowth", "interventions", accountId] as const,
-    digest: (accountId: string) => ["revenueGrowth", "digest", accountId] as const,
-  },
   knowledge: {
     all: ["knowledge"] as const,
     documents: (agentId?: string) => ["knowledge", "documents", agentId] as const,
   },
   escalations: {
     all: ["escalations"] as const,
-  },
-  pipeline: {
-    all: ["pipeline"] as const,
-    snapshot: () => ["pipeline", "snapshot"] as const,
   },
 };

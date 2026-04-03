@@ -4,13 +4,9 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { redirect, useRouter } from "next/navigation";
 import { WizardShell } from "@/components/onboarding/wizard-shell";
-import { StepBusinessBasics } from "@/components/onboarding/step-business-basics";
-import { StepAgentSelection } from "@/components/onboarding/step-agent-selection";
-import { StepAgentStyle } from "@/components/onboarding/step-agent-style";
 import { StepKnowledgeRules } from "@/components/onboarding/step-knowledge-rules";
 import { StepChannels } from "@/components/onboarding/step-channels";
 import { StepReviewLaunch } from "@/components/onboarding/step-review-launch";
-import { StepAdPlatform } from "@/components/onboarding/step-ad-platform";
 import { useToast } from "@/components/ui/use-toast";
 
 export interface BehavioralRule {
@@ -36,27 +32,11 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Step 0: Business basics
-  const [vertical, setVertical] = useState("clinic");
-  const [businessName, setBusinessName] = useState("");
-  const [services, setServices] = useState("");
-  const [targetCustomer, setTargetCustomer] = useState("");
-  const [pricingRange, setPricingRange] = useState("");
-
-  // Step 1: Agent selection
-  const [selectedAgents, setSelectedAgents] = useState<string[]>([
-    "lead-responder",
-    "sales-closer",
-  ]);
-
-  // Step 2: Per-agent tone
-  const [agentTones, setAgentTones] = useState<Record<string, string>>({});
-
-  // Step 3: Knowledge + rules
+  // Step 0: Knowledge + rules
   const [knowledgeText, setKnowledgeText] = useState("");
   const [rules, setRules] = useState<BehavioralRule[]>([]);
 
-  // Step 4: Channels
+  // Step 1: Channels
   const [channels, setChannels] = useState<ChannelConfig>({
     founderChannel: null,
     founderTelegramToken: "",
@@ -66,32 +46,10 @@ export default function OnboardingPage() {
     customerWhatsAppPhoneNumberId: "",
   });
 
-  // Step 5 (conditional): Ad platform credentials
-  const [adCredentials, setAdCredentials] = useState<Record<string, string>>({});
-
-  // Step 6: Launch
+  // Step 2: Launch
   const [launchStatus, setLaunchStatus] = useState<"idle" | "launching" | "done">("idle");
 
-  const hasAdOptimizer = selectedAgents.includes("ad-optimizer");
-  const stepLabels = hasAdOptimizer
-    ? [
-        "Your business",
-        "Build your team",
-        "Set their style",
-        "Teach them",
-        "Connect channels",
-        "Connect ads",
-        "Meet your team",
-      ]
-    : [
-        "Your business",
-        "Build your team",
-        "Set their style",
-        "Teach them",
-        "Connect channels",
-        "Meet your team",
-      ];
-  const adsStepIndex = hasAdOptimizer ? 5 : -1;
+  const stepLabels = ["Teach your employee", "Connect channels", "Review & launch"];
   const launchStepIndex = stepLabels.length - 1;
 
   if (status === "loading") return null;
@@ -100,14 +58,8 @@ export default function OnboardingPage() {
   const canProceed = (() => {
     switch (step) {
       case 0:
-        return businessName.trim() !== "" && services.trim() !== "";
-      case 1:
-        return selectedAgents.length > 0;
-      case 2:
-        return selectedAgents.every((id) => agentTones[id]);
-      case 3:
         return true;
-      case 4:
+      case 1:
         return channels.founderChannel !== null;
       default:
         return true;
@@ -127,28 +79,7 @@ export default function OnboardingPage() {
         }
       };
 
-      // 1. Persist business config + activate agents
-      const wizardRes = await fetch("/api/dashboard/agents/wizard-complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vertical,
-          businessName,
-          services: services
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-          targetCustomer,
-          pricingRange,
-          purchasedAgents: selectedAgents,
-          agentTones,
-          tonePreset: agentTones[selectedAgents[0] ?? ""] ?? "warm-professional",
-          language: "en",
-        }),
-      });
-      await assertOk(wizardRes, "Agent setup");
-
-      // 2. Upload knowledge (if provided)
+      // 1. Upload knowledge (if provided)
       if (knowledgeText.trim()) {
         const knowledgeRes = await fetch("/api/dashboard/knowledge/upload", {
           method: "POST",
@@ -163,7 +94,7 @@ export default function OnboardingPage() {
         await assertOk(knowledgeRes, "Knowledge upload");
       }
 
-      // 3. Upload behavioral rules as knowledge chunks
+      // 2. Upload behavioral rules as knowledge chunks
       const ruleTexts = rules
         .filter((r) => r.value.trim())
         .map((r) => {
@@ -193,7 +124,7 @@ export default function OnboardingPage() {
         await assertOk(rulesRes, "Rules upload");
       }
 
-      // 4. Provision channels
+      // 3. Provision channels
       const channelsToProvision: Array<Record<string, string | undefined>> = [];
 
       if (channels.founderChannel === "telegram" && channels.founderTelegramToken) {
@@ -211,9 +142,7 @@ export default function OnboardingPage() {
         });
       }
 
-      // Customer WhatsApp (separate from founder channel)
       if (channels.customerWhatsAppToken && channels.customerWhatsAppPhoneNumberId) {
-        // Only add if not already covered by founder WhatsApp
         if (channels.founderChannel !== "whatsapp") {
           channelsToProvision.push({
             channel: "whatsapp",
@@ -232,24 +161,9 @@ export default function OnboardingPage() {
         await assertOk(provisionRes, "Channel provisioning");
       }
 
-      // 5. Create Meta Ads connection (if credentials provided)
-      if (adCredentials.accessToken && adCredentials.accountId) {
-        const connRes = await fetch("/api/dashboard/connections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            serviceId: "meta-ads",
-            serviceName: "Meta Ads",
-            authType: "api_key",
-            credentials: adCredentials,
-          }),
-        });
-        await assertOk(connRes, "Meta Ads connection");
-      }
-
       setLaunchStatus("done");
       toast({
-        title: "Your team is ready!",
+        title: "Your employee is ready!",
         description: "Redirecting to your dashboard...",
       });
 
@@ -281,31 +195,6 @@ export default function OnboardingPage() {
       onComplete={handleComplete}
     >
       {step === 0 && (
-        <StepBusinessBasics
-          vertical={vertical}
-          onVerticalChange={setVertical}
-          businessName={businessName}
-          onNameChange={setBusinessName}
-          services={services}
-          onServicesChange={setServices}
-          targetCustomer={targetCustomer}
-          onTargetCustomerChange={setTargetCustomer}
-          pricingRange={pricingRange}
-          onPricingRangeChange={setPricingRange}
-        />
-      )}
-      {step === 1 && (
-        <StepAgentSelection selected={selectedAgents} onSelectionChange={setSelectedAgents} />
-      )}
-      {step === 2 && (
-        <StepAgentStyle
-          selectedAgents={selectedAgents}
-          agentTones={agentTones}
-          onTonesChange={setAgentTones}
-          businessName={businessName}
-        />
-      )}
-      {step === 3 && (
         <StepKnowledgeRules
           knowledgeText={knowledgeText}
           onKnowledgeChange={setKnowledgeText}
@@ -313,15 +202,12 @@ export default function OnboardingPage() {
           onRulesChange={setRules}
         />
       )}
-      {step === 4 && <StepChannels channels={channels} onChannelsChange={setChannels} />}
-      {step === adsStepIndex && (
-        <StepAdPlatform adCredentials={adCredentials} onAdCredentialsChange={setAdCredentials} />
-      )}
-      {step === launchStepIndex && (
+      {step === 1 && <StepChannels channels={channels} onChannelsChange={setChannels} />}
+      {step === 2 && (
         <StepReviewLaunch
-          businessName={businessName}
-          selectedAgents={selectedAgents}
-          agentTones={agentTones}
+          businessName="Your business"
+          selectedAgents={[]}
+          agentTones={{}}
           channels={channels}
           launchStatus={launchStatus}
         />

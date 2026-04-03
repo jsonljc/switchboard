@@ -9,34 +9,21 @@ import { useState } from "react";
 import { queryKeys } from "@/lib/query-keys";
 import { StatCards } from "@/components/dashboard/stat-cards";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
-import { useLeads } from "@/hooks/use-leads";
 import { CONSEQUENCE } from "@/lib/approval-constants";
 import { useToast } from "@/components/ui/use-toast";
-import { usePipeline } from "@/hooks/use-pipeline";
-import { PipelineFunnel, formatCurrency } from "@/components/dashboard/pipeline-funnel";
-
-function isTodayLead(createdAt: string): boolean {
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  return new Date(createdAt).getTime() >= midnight.getTime();
-}
 
 export function OwnerToday() {
   const { data: session } = useSession();
   const { data: rosterData } = useAgentRoster();
   const { data: approvalsData } = useApprovals();
-  const { data: leads = [] } = useLeads();
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
-  const { data: pipelineData, isLoading: pipelineLoading, isError: pipelineError } = usePipeline();
 
   const operatorName =
     rosterData?.roster?.find((a) => a.agentRole === "primary_operator")?.displayName ??
     "Your assistant";
 
-  const todayLeads = leads.filter((l) => isTodayLead(l.contact.createdAt));
-  const bookedToday = todayLeads.filter((l) => l.stage === "BOOKED").length;
   const topApproval = approvalsData?.approvals?.[0];
   const remainingApprovals = (approvalsData?.approvals?.length ?? 0) - 1;
 
@@ -93,14 +80,8 @@ export function OwnerToday() {
       <p className="text-[20px] font-semibold text-foreground">{greeting}.</p>
 
       <StatCards
-        stats={[
-          { label: "Leads today", value: todayLeads.length },
-          { label: "Booked", value: bookedToday },
-          { label: "Revenue", value: formatCurrency(pipelineData?.totalRevenue ?? 0) },
-        ]}
+        stats={[{ label: "Pending approvals", value: approvalsData?.approvals?.length ?? 0 }]}
       />
-
-      <PipelineFunnel data={pipelineData} isLoading={pipelineLoading} isError={pipelineError} />
 
       {topApproval && (
         <section>

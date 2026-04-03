@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type { AgentRosterEntry, AgentStateEntry } from "@/lib/api-client-types";
 import { translateEvent, getEventIcon } from "@/components/activity/event-translator";
-import { getAgentForAction } from "@/components/agents/agent-action-map";
 
 export interface AuditEntryRaw {
   id: string;
@@ -42,9 +41,7 @@ interface ActivityResponse {
 function translateEntries(entries: AuditEntryRaw[]): TranslatedAction[] {
   return entries
     .map((entry) => {
-      const actionType =
-        (entry.snapshot.actionType as string | undefined) ?? entry.entityType ?? "";
-      const agentRole = getAgentForAction(actionType) ?? "unknown";
+      const agentRole = (entry.snapshot.agentRole as string | undefined) ?? "unknown";
 
       return {
         id: entry.id,
