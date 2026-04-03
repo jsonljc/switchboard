@@ -1373,3 +1373,82 @@ model OwnerTask {
   @@index([organizationId, status])
   @@index([organizationId, priority])
 }
+
+// ---------------------------------------------------------------------------
+// AI Workforce Platform — Employee & Memory models
+// ---------------------------------------------------------------------------
+
+model EmployeeRegistration {
+  id             String   @id @default(uuid())
+  employeeId     String
+  organizationId String
+  status         String   @default("active") // active, paused, disabled
+  config         Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([employeeId, organizationId])
+}
+
+model EmployeeSkill {
+  id               String                    @id @default(uuid())
+  employeeId       String
+  organizationId   String
+  type             String // "performance_pattern", "rejection", "style_preference"
+  pattern          String
+  evidence         String[]
+  channel          String?
+  version          Int                       @default(1)
+  performanceScore Float                     @default(0)
+  embedding        Unsupported("vector(1024)")?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@index([employeeId, organizationId])
+}
+
+model EmployeePerformanceEvent {
+  id             String   @id @default(uuid())
+  employeeId     String
+  organizationId String
+  contentId      String
+  outcome        String // "approved", "rejected", "published"
+  feedback       String?
+  metrics        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([employeeId, organizationId])
+  @@index([contentId])
+}
+
+model ContentDraft {
+  id             String   @id @default(uuid())
+  employeeId     String
+  organizationId String
+  channel        String
+  format         String
+  content        String
+  status         String   @default("draft") // draft, pending_review, approved, rejected, published
+  feedback       String?
+  revision       Int      @default(1)
+  parentDraftId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([employeeId, organizationId, status])
+}
+
+model ContentCalendarEntry {
+  id             String   @id @default(uuid())
+  employeeId     String
+  organizationId String
+  channel        String
+  topic          String
+  scheduledFor   DateTime
+  draftId        String?
+  status         String   @default("planned") // planned, drafted, approved, published
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, scheduledFor])
+}
