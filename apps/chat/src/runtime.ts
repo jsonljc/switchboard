@@ -43,7 +43,7 @@ export interface ChatRuntimeConfig {
   orchestrator: RuntimeOrchestrator;
   availableActions: string[];
   storage?: StorageContext;
-  /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
+  /** CartridgeReadAdapter for handling read-only intents. */
   readAdapter?: CartridgeReadAdapterType;
   /** Optional DLQ store for recording failed messages. */
   failedMessageStore?: FailedMessageStore;

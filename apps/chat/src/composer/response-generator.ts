@@ -9,7 +9,7 @@ export interface ModelRouter {
   ): Promise<void>;
   getTodayUsage(orgId?: string): Promise<number>;
   getRemainingBudget(orgId?: string): Promise<number>;
-  readonly clinicId: string;
+  readonly organizationId: string;
 }
 import { detectPromptInjectionInOutput } from "../interpreter/injection-detector.js";
 import { composeWelcomeMessage, composeUncertainReply } from "./reply.js";

@@ -22,7 +22,7 @@ describe("LLMConversationEngine", () => {
           services: "Botox ($300), Fillers ($500)",
           hours: "Mon-Fri 9am-5pm",
           address: "123 Main St",
-          bookingMethod: "Online at glowclinic.com/book",
+          bookingMethod: "Online at example.com/book",
           faqs: "Q: Does it hurt? A: Most patients feel minimal discomfort.",
         },
         conversationHistory: [],
@@ -199,7 +199,7 @@ describe("LLMConversationEngine", () => {
         getTodayUsage: vi.fn(),
         getRemainingBudget: vi.fn(),
         getUsageSummary: vi.fn(),
-        clinicId: "test",
+        organizationId: "test",
       };
 
       const budgetEngine = new LLMConversationEngine(
@@ -226,7 +226,7 @@ describe("LLMConversationEngine", () => {
         getTodayUsage: vi.fn(),
         getRemainingBudget: vi.fn(),
         getUsageSummary: vi.fn(),
-        clinicId: "test",
+        organizationId: "test",
       };
 
       vi.stubGlobal("fetch", async () => ({
