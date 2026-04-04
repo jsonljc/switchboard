@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ShieldCheck, User } from "lucide-react";
+import { Home, ShieldCheck, Store, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 
 const TABS = [
   { href: "/", label: "Today", icon: Home },
+  { href: "/marketplace", label: "Hire", icon: Store },
   { href: "/decide", label: "Decide", icon: ShieldCheck },
   { href: "/me", label: "Me", icon: User },
 ] as const;
@@ -30,7 +31,7 @@ export function OwnerTabs() {
               key={tab.href}
               href={tab.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 w-1/4 min-h-[44px] text-[10px] tracking-wide transition-colors duration-fast",
+                "flex flex-col items-center justify-center gap-0.5 w-1/5 min-h-[44px] text-[10px] tracking-wide transition-colors duration-fast",
                 active ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >

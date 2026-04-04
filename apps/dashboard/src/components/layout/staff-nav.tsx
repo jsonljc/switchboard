@@ -10,6 +10,8 @@ import { useOrgConfig } from "@/hooks/use-org-config";
 
 const NAV = [
   { href: "/", label: "Dashboard", exact: true },
+  { href: "/marketplace", label: "Marketplace" },
+  { href: "/tasks", label: "Tasks" },
   { href: "/decide", label: "Decide" },
 ] as const;
 
