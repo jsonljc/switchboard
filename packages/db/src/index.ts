@@ -42,8 +42,6 @@ export {
   PrismaCredentialResolver,
 } from "./storage/index.js";
 export type { ConnectionRecord } from "./storage/index.js";
-export { PrismaTierStore } from "./prisma-tier-store.js";
-export { PrismaSmbActivityLogStorage } from "./prisma-smb-activity-log.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";

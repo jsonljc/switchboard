@@ -14,10 +14,9 @@ import type {
   StorageContext,
   PolicyCache,
   ApprovalNotifier,
-  TierStore,
   AgentNotifier,
 } from "@switchboard/core";
-import { SmbActivityLog, AuditLedger } from "@switchboard/core";
+import { AuditLedger } from "@switchboard/core";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -36,8 +35,6 @@ declare module "fastify" {
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
     executionService: ExecutionService;
-    tierStore: TierStore;
-    smbActivityLog: SmbActivityLog;
     redis: Redis | null;
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
@@ -142,8 +139,6 @@ export async function buildServer() {
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
-    tierStore,
-    smbActivityLog,
     prismaClient,
     redis,
   } = await bootstrapStorage(app.log);
@@ -323,8 +318,6 @@ export async function buildServer() {
     governanceProfileStore,
     executionMode,
     approvalNotifier,
-    tierStore,
-    smbActivityLog,
     credentialResolver: prismaClient
       ? await (async () => {
           const { PrismaCredentialResolver, PrismaConnectionStore } =
@@ -341,8 +334,6 @@ export async function buildServer() {
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
   app.decorate("executionService", executionService);
-  app.decorate("tierStore", tierStore);
-  app.decorate("smbActivityLog", smbActivityLog);
   app.decorate("redis", redis);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);

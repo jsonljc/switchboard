@@ -20,8 +20,6 @@ import type {
   GuardrailStateStore,
   PolicyCache,
   GovernanceProfileStore,
-  TierStore,
-  SmbActivityLog,
   ApprovalNotifier,
   ConversionBus,
 } from "@switchboard/core";
@@ -45,8 +43,6 @@ export interface ServicesBootstrapInput {
   guardrailStateStore: GuardrailStateStore;
   policyCache: PolicyCache;
   governanceProfileStore: GovernanceProfileStore;
-  tierStore: TierStore;
-  smbActivityLog: SmbActivityLog;
   prismaClient: PrismaClient | null;
   logger: FastifyBaseLogger;
   adsWriteProvider: MetaAdsWriteProvider | null;
@@ -78,8 +74,6 @@ export async function bootstrapServices(
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
-    tierStore,
-    smbActivityLog,
     prismaClient,
     logger,
     adsWriteProvider,
@@ -305,8 +299,6 @@ export async function bootstrapServices(
     executionMode,
     onEnqueue,
     approvalNotifier,
-    tierStore,
-    smbActivityLog,
     credentialResolver: prismaClient
       ? await (async () => {
           const { PrismaCredentialResolver, PrismaConnectionStore } =
