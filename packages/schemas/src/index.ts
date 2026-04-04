@@ -57,3 +57,6 @@ export * from "./lifecycle.js";
 
 // Event types (RoutedEventEnvelope, createEventEnvelope)
 export * from "./event-types.js";
+
+// Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
+export * from "./marketplace.js";
