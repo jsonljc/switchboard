@@ -103,6 +103,7 @@ export default function DeployPage() {
       {/* Breadcrumb */}
       <button
         onClick={() => router.push(`/marketplace/${id}`)}
+        aria-label="Back to agent detail"
         className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors duration-fast"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
