@@ -80,8 +80,6 @@ export function makeSharedContext(overrides?: Partial<SharedContext>): SharedCon
     approvalRateLimit: null,
     crossCartridgeEnricher: null,
     dataFlowExecutor: null,
-    tierStore: null,
-    smbActivityLog: null,
     credentialResolver: null,
     circuitBreaker: null,
     idempotencyGuard: null,

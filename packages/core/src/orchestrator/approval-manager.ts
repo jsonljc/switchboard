@@ -10,7 +10,7 @@ import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import { resolveIdentity } from "../identity/spec.js";
 
 import type { SharedContext } from "./shared-context.js";
-import { buildCartridgeContext, isSmbOrg } from "./shared-context.js";
+import { buildCartridgeContext } from "./shared-context.js";
 import type { ApprovalResponse } from "./lifecycle.js";
 import { respondToPlanApproval } from "./plan-approval-manager.js";
 
@@ -160,15 +160,7 @@ export class ApprovalManager {
     params: { respondedBy: string },
     approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
   ): Promise<void> {
-    const isSmbOrgForAuth = await isSmbOrg(this.ctx, approval.organizationId);
-    if (isSmbOrgForAuth) {
-      const smbConfig = this.ctx.tierStore
-        ? await this.ctx.tierStore.getSmbConfig(approval.organizationId ?? "")
-        : null;
-      if (smbConfig && params.respondedBy !== smbConfig.ownerId) {
-        throw new Error(`Principal ${params.respondedBy} is not the organization owner`);
-      }
-    } else if (approval.request.approvers.length > 0) {
+    if (approval.request.approvers.length > 0) {
       const principal = await this.ctx.storage.identity.getPrincipal(params.respondedBy);
       if (!principal) {
         throw new Error(`Principal not found: ${params.respondedBy}`);
@@ -259,38 +251,23 @@ export class ApprovalManager {
       envelope.status = "approved";
       await this.ctx.storage.envelopes.update(envelope.id, { status: "approved" });
 
-      const isSmbForAudit = await isSmbOrg(this.ctx, approval.organizationId);
-      if (isSmbForAudit && this.ctx.smbActivityLog) {
-        await this.ctx.smbActivityLog.record({
-          actorId: params.respondedBy,
-          actorType: "user",
-          actionType: "approval.approved",
-          result: "approved",
-          amount: null,
-          summary: `Action approved by ${params.respondedBy}`,
-          snapshot: { approvalId: params.approvalId },
-          envelopeId: envelope.id,
-          organizationId: approval.organizationId ?? "",
-        });
-      } else {
-        await this.ctx.ledger.record({
-          eventType: "action.approved",
-          actorType: "user",
-          actorId: params.respondedBy,
-          entityType: "action",
-          entityId: approval.request.actionId,
-          riskCategory: approval.request.riskCategory as RiskCategory,
-          summary: newState.quorum
-            ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
-            : `Action approved by ${params.respondedBy}`,
-          snapshot: {
-            approvalId: params.approvalId,
-            quorum: newState.quorum ?? null,
-          },
-          envelopeId: envelope.id,
-          traceId: envelope.traceId,
-        });
-      }
+      await this.ctx.ledger.record({
+        eventType: "action.approved",
+        actorType: "user",
+        actorId: params.respondedBy,
+        entityType: "action",
+        entityId: approval.request.actionId,
+        riskCategory: approval.request.riskCategory as RiskCategory,
+        summary: newState.quorum
+          ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
+          : `Action approved by ${params.respondedBy}`,
+        snapshot: {
+          approvalId: params.approvalId,
+          quorum: newState.quorum ?? null,
+        },
+        envelopeId: envelope.id,
+        traceId: envelope.traceId,
+      });
 
       if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
         await this.ctx.onEnqueue(envelope.id);

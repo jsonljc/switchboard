@@ -77,9 +77,6 @@ export * from "./enrichment/index.js";
 // Data-Flow Plan Execution
 export * from "./data-flow/index.js";
 
-// SMB Governance
-export * from "./smb/index.js";
-
 // Capability Registry
 export * from "./capability/index.js";
 

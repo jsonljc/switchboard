@@ -22,9 +22,6 @@ import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 
-import type { TierStore } from "../smb/tier-resolver.js";
-import type { SmbActivityLog } from "../smb/activity-log.js";
-
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import type { SharedContext } from "./shared-context.js";
 import { ProposePipeline } from "./propose-pipeline.js";
@@ -59,10 +56,6 @@ export interface OrchestratorConfig {
   crossCartridgeEnricher?: CrossCartridgeEnricher;
   /** Data-flow executor for multi-step plans with binding resolution. */
   dataFlowExecutor?: DataFlowExecutor;
-  /** Tier store for SMB vs Enterprise routing. When set, enables SMB governance pipeline. */
-  tierStore?: TierStore;
-  /** SMB activity log — used instead of AuditLedger for SMB orgs. */
-  smbActivityLog?: SmbActivityLog;
   /** Credential resolver for org-scoped connection credentials at execution time. */
   credentialResolver?: import("../credentials/resolver.js").ConnectionCredentialResolver;
   /** Circuit breaker wrapper for cartridge execute calls. When set, wraps each cartridge.execute() in a per-cartridge circuit breaker. */
@@ -117,8 +110,6 @@ export class LifecycleOrchestrator {
       approvalRateLimit: config.approvalRateLimit ?? null,
       crossCartridgeEnricher: config.crossCartridgeEnricher ?? null,
       dataFlowExecutor: config.dataFlowExecutor ?? null,
-      tierStore: config.tierStore ?? null,
-      smbActivityLog: config.smbActivityLog ?? null,
       credentialResolver: config.credentialResolver ?? null,
       circuitBreaker: config.circuitBreaker ?? null,
       idempotencyGuard: config.idempotencyGuard ?? null,
