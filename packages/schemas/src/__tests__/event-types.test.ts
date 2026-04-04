@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createEventEnvelope } from "../event-types.js";
 import type { RoutedEventEnvelope, EventSource } from "../event-types.js";
-import { CREATIVE_EVENTS } from "../employee-events.js";
-import type { CreativeEventType } from "../employee-events.js";
 
 describe("Event types", () => {
   it("creates an event envelope with defaults", () => {
@@ -58,21 +56,5 @@ describe("Event types", () => {
       metadata: { retryCount: 3 },
     };
     expect(envelope.metadata).toEqual({ retryCount: 3 });
-  });
-});
-
-describe("Employee events", () => {
-  it("CREATIVE_EVENTS has expected event types", () => {
-    expect(CREATIVE_EVENTS.CONTENT_REQUESTED).toBe("content.requested");
-    expect(CREATIVE_EVENTS.CONTENT_DRAFT_READY).toBe("content.draft_ready");
-    expect(CREATIVE_EVENTS.CONTENT_APPROVED).toBe("content.approved");
-    expect(CREATIVE_EVENTS.CONTENT_REJECTED).toBe("content.rejected");
-    expect(CREATIVE_EVENTS.CONTENT_PUBLISHED).toBe("content.published");
-    expect(CREATIVE_EVENTS.EMPLOYEE_ONBOARDED).toBe("employee.onboarded");
-  });
-
-  it("CreativeEventType is a union of event values", () => {
-    const eventType: CreativeEventType = "content.requested";
-    expect(eventType).toBe("content.requested");
   });
 });

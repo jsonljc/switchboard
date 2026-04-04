@@ -25,9 +25,6 @@ export * from "./competence.js";
 // MCP tool schemas
 export * from "./mcp.js";
 
-// Organization tier (SMB vs Enterprise)
-export * from "./organization-tier.js";
-
 // Cross-cartridge integration
 export * from "./data-flow.js";
 
@@ -39,9 +36,6 @@ export * from "./goal-brief.js";
 
 export { LegacyRevenueEventSchema, LegacyRevenueEventSourceSchema } from "./revenue-event.js";
 export type { LegacyRevenueEvent, LegacyRevenueEventSource } from "./revenue-event.js";
-
-// Outcome event tracking
-export * from "./outcome-event.js";
 
 // Session runtime types
 export * from "./session.js";
@@ -63,6 +57,3 @@ export * from "./lifecycle.js";
 
 // Event types (RoutedEventEnvelope, createEventEnvelope)
 export * from "./event-types.js";
-
-// Employee event constants
-export * from "./employee-events.js";
