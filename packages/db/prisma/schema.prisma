@@ -378,25 +378,6 @@ model AgentState {
   @@index([organizationId])
 }
 
-model SmbActivityLogEntry {
-  id              String   @id @default(uuid())
-  timestamp       DateTime @default(now())
-  actorId         String
-  actorType       String   // user, agent, system
-  actionType      String
-  result          String   // allowed, denied, pending_approval, approved, rejected, executed, failed
-  amount          Float?
-  summary         String
-  snapshot        Json     @default("{}")
-  envelopeId      String?
-  organizationId  String
-  redactionApplied Boolean @default(false)
-  redactedFields  String[] @default([])
-
-  @@index([organizationId, timestamp])
-  @@index([actorId])
-  @@index([envelopeId])
-}
 
 model ManagedChannel {
   id                String    @id @default(uuid())
@@ -491,52 +472,6 @@ model ConfigVersion {
 
 // ── AI Agent System: Outcome Tracking ──
 
-model OutcomeEvent {
-  id             String   @id @default(uuid())
-  sessionId      String
-  organizationId String
-  leadId         String?
-  outcomeType    String   // booked, escalated_resolved, escalated_unresolved, unresponsive, lost, reactivated
-  metadata       Json     @default("{}")
-  timestamp      DateTime @default(now())
-
-  @@index([organizationId, timestamp])
-  @@index([sessionId])
-  @@index([outcomeType])
-}
-
-model ResponseVariantLog {
-  id                String    @id @default(uuid())
-  sessionId         String
-  organizationId    String
-  primaryMove       String
-  templateId        String?
-  responseText      String
-  leadReplyReceived Boolean   @default(false)
-  leadReplyPositive Boolean   @default(false)
-  conversationState String?
-  timestamp         DateTime  @default(now())
-
-  @@index([organizationId, primaryMove])
-  @@index([sessionId])
-  @@index([timestamp])
-}
-
-model OptimisationProposal {
-  id             String   @id @default(uuid())
-  organizationId String
-  type           String   // timing, content, ordering, template
-  description    String
-  currentValue   String
-  proposedValue  String
-  confidence     Float
-  sampleSize     Int
-  status         String   @default("pending") // pending, approved, rejected, auto_applied
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([organizationId, status])
-}
 
 // ── AI Agent System: Human Handoff ──
 
@@ -758,29 +693,6 @@ model AgentRegistration {
   @@index([status])
 }
 
-model RoasSnapshot {
-  id                String   @id @default(uuid())
-  orgId             String
-  entityType        String   @default("campaign") // campaign, adset, account
-  entityId          String
-  platform          String   // meta, google, tiktok
-  adAccountId       String?
-  roas              Float
-  spend             Float
-  revenue           Float
-  currency          String   @default("USD") @db.VarChar(3)
-  campaignStatus    String?
-  attributionWindow String?
-  dataFreshnessAt   DateTime?
-  snapshotDate      DateTime @db.Date
-  optimizerRunId    String?
-  createdAt         DateTime @default(now())
-
-  @@unique([orgId, entityType, entityId, snapshotDate])
-  @@index([orgId, platform])
-  @@index([snapshotDate])
-  @@index([optimizerRunId])
-}
 
 model LlmUsageLog {
   id           String   @id @default(uuid())
@@ -1062,81 +974,3 @@ model OwnerTask {
   @@index([organizationId, priority])
 }
 
-// ---------------------------------------------------------------------------
-// AI Workforce Platform — Employee & Memory models
-// ---------------------------------------------------------------------------
-
-model EmployeeRegistration {
-  id             String   @id @default(uuid())
-  employeeId     String
-  organizationId String
-  status         String   @default("active") // active, paused, disabled
-  config         Json     @default("{}")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@unique([employeeId, organizationId])
-}
-
-model EmployeeSkill {
-  id               String                    @id @default(uuid())
-  employeeId       String
-  organizationId   String
-  type             String // "performance_pattern", "rejection", "style_preference"
-  pattern          String
-  evidence         String[]
-  channel          String?
-  version          Int                       @default(1)
-  performanceScore Float                     @default(0)
-  embedding        Unsupported("vector(1024)")?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
-
-  @@index([employeeId, organizationId])
-}
-
-model EmployeePerformanceEvent {
-  id             String   @id @default(uuid())
-  employeeId     String
-  organizationId String
-  contentId      String
-  outcome        String // "approved", "rejected", "published"
-  feedback       String?
-  metrics        Json?
-  createdAt      DateTime @default(now())
-
-  @@index([employeeId, organizationId])
-  @@index([contentId])
-}
-
-model ContentDraft {
-  id             String   @id @default(uuid())
-  employeeId     String
-  organizationId String
-  channel        String
-  format         String
-  content        String
-  status         String   @default("draft") // draft, pending_review, approved, rejected, published
-  feedback       String?
-  revision       Int      @default(1)
-  parentDraftId  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([employeeId, organizationId, status])
-}
-
-model ContentCalendarEntry {
-  id             String   @id @default(uuid())
-  employeeId     String
-  organizationId String
-  channel        String
-  topic          String
-  scheduledFor   DateTime
-  draftId        String?
-  status         String   @default("planned") // planned, drafted, approved, published
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([organizationId, scheduledFor])
-}
