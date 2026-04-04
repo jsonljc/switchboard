@@ -11,6 +11,46 @@ import {
 } from "@switchboard/db";
 import { TrustScoreEngine } from "@switchboard/core";
 import type { AgentListingStatus, AgentType, AgentTaskStatus } from "@switchboard/schemas";
+import { z } from "zod";
+import { AgentType as AgentTypeEnum } from "@switchboard/schemas";
+
+// ── Input Validation Schemas ──
+
+const CreateListingInput = z.object({
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  description: z.string().min(1),
+  type: AgentTypeEnum,
+  taskCategories: z.array(z.string()),
+  webhookUrl: z.string().url().nullable().optional(),
+  webhookSecret: z.string().nullable().optional(),
+  sourceUrl: z.string().url().nullable().optional(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+});
+
+const DeployInput = z.object({
+  inputConfig: z.record(z.unknown()).optional(),
+  governanceSettings: z.record(z.unknown()).optional(),
+  outputDestination: z.record(z.unknown()).optional(),
+  connectionIds: z.array(z.string()).optional(),
+});
+
+const CreateTaskInput = z.object({
+  deploymentId: z.string().min(1),
+  listingId: z.string().min(1),
+  category: z.string().min(1),
+  input: z.record(z.unknown()).default({}),
+  acceptanceCriteria: z.string().optional(),
+});
+
+const SubmitTaskOutput = z.object({
+  output: z.record(z.unknown()),
+});
+
+const ReviewTaskInput = z.object({
+  result: z.enum(["approved", "rejected"]),
+  reviewResult: z.string().optional(),
+});
 
 export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
   // ── Agent Listings ──
@@ -55,19 +95,19 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available" });
     }
 
+    // Fix 5: Require auth for listing creation
+    if (!request.organizationIdFromAuth) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    // Fix 3: Input validation
+    const parsed = CreateListingInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
     const store = new PrismaListingStore(app.prisma);
-    const body = request.body as {
-      name: string;
-      slug: string;
-      description: string;
-      type: AgentType;
-      taskCategories: string[];
-      webhookUrl?: string | null;
-      webhookSecret?: string | null;
-      sourceUrl?: string | null;
-      metadata?: Record<string, unknown> | null;
-    };
-    const listing = await store.create(body);
+    const listing = await store.create(parsed.data);
     return reply.code(201).send({ listing });
   });
 
@@ -103,15 +143,19 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Organization required" });
     }
 
-    const body = request.body as {
-      inputConfig?: Record<string, unknown>;
-      governanceSettings?: Record<string, unknown>;
-    };
+    // Fix 3: Input validation
+    const parsed = DeployInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
     const deployment = await store.create({
       organizationId: orgId,
       listingId: id,
-      inputConfig: body.inputConfig,
-      governanceSettings: body.governanceSettings,
+      inputConfig: parsed.data.inputConfig,
+      governanceSettings: parsed.data.governanceSettings,
+      outputDestination: parsed.data.outputDestination,
+      connectionIds: parsed.data.connectionIds,
     });
 
     return reply.code(201).send({ deployment });
@@ -140,16 +184,23 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available" });
     }
 
+    // Fix 1: Use organizationIdFromAuth instead of accepting from body
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    // Fix 3: Input validation
+    const parsed = CreateTaskInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
     const store = new PrismaAgentTaskStore(app.prisma);
-    const body = request.body as {
-      deploymentId: string;
-      organizationId: string;
-      listingId: string;
-      category: string;
-      input: Record<string, unknown>;
-      acceptanceCriteria?: string;
-    };
-    const task = await store.create(body);
+    const task = await store.create({
+      ...parsed.data,
+      organizationId: orgId,
+    });
     return reply.code(201).send({ task });
   });
 
@@ -181,10 +232,21 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
     const store = new PrismaAgentTaskStore(app.prisma);
     const { id } = request.params as { id: string };
-    const { output } = request.body as { output: Record<string, unknown> };
 
-    const task = await store.submitOutput(id, output);
-    return reply.send({ task });
+    // Fix 2: Add 404 check before submitting
+    const task = await store.findById(id);
+    if (!task) {
+      return reply.code(404).send({ error: "Task not found" });
+    }
+
+    // Fix 3: Input validation
+    const parsed = SubmitTaskOutput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
+    const updated = await store.submitOutput(id, parsed.data.output);
+    return reply.send({ task: updated });
   });
 
   app.post("/tasks/:id/review", async (request, reply) => {
@@ -197,10 +259,13 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const engine = new TrustScoreEngine(trustStore);
 
     const { id } = request.params as { id: string };
-    const { result, reviewResult } = request.body as {
-      result: "approved" | "rejected";
-      reviewResult?: string;
-    };
+
+    // Fix 3: Input validation
+    const parsed = ReviewTaskInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
     const reviewedBy = request.principalIdFromAuth ?? "unknown";
 
     const task = await taskStore.findById(id);
@@ -208,13 +273,23 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Task not found" });
     }
 
-    const updated = await taskStore.review(id, result, reviewedBy, reviewResult);
+    const updated = await taskStore.review(
+      id,
+      parsed.data.result,
+      reviewedBy,
+      parsed.data.reviewResult,
+    );
 
-    // Update trust score based on review outcome
-    if (result === "approved") {
-      await engine.recordApproval(task.listingId, task.category);
-    } else {
-      await engine.recordRejection(task.listingId, task.category);
+    // Fix 4: Wrap trust score update in try/catch
+    try {
+      if (parsed.data.result === "approved") {
+        await engine.recordApproval(task.listingId, task.category);
+      } else {
+        await engine.recordRejection(task.listingId, task.category);
+      }
+    } catch (error) {
+      console.warn("Failed to update trust score:", error);
+      // Task review succeeded, continue despite trust score failure
     }
 
     return reply.send({ task: updated });
