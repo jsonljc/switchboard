@@ -326,14 +326,6 @@ model OrganizationConfig {
   runtimeType          String   @default("http") // mcp, http, managed
   runtimeConfig        Json     @default("{}")
   governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
-  tier                 String   @default("smb") // smb, enterprise
-  smbOwnerId           String?
-  smbPerActionLimit    Float?
-  smbDailyLimit        Float?
-  smbAllowedActions    String[] @default([])
-  smbBlockedActions    String[] @default([])
-  selectedCartridgeId  String?
-  skinId               String?
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
@@ -691,6 +683,106 @@ model AgentRegistration {
   @@unique([orgId, agentId])
   @@index([orgId])
   @@index([status])
+}
+
+// ── Marketplace: Agent Listings (global catalog) ──
+
+model AgentListing {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String
+  type            String   @default("switchboard_native") // open_source, third_party, switchboard_native
+  status          String   @default("pending_review") // pending_review, listed, suspended, deprecated
+  taskCategories  String[] @default([])
+  trustScore      Float    @default(50)
+  autonomyLevel   String   @default("supervised") // supervised, guided, autonomous
+  priceTier       String   @default("free") // free, basic, pro, elite
+  priceMonthly    Float    @default(0)
+  webhookUrl      String?
+  webhookSecret   String?
+  vettingNotes    String?
+  sourceUrl       String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  deployments      AgentDeployment[]
+  tasks            AgentTask[]
+  trustScoreRecords TrustScoreRecord[]
+
+  @@index([status])
+  @@index([type])
+}
+
+// ── Marketplace: Agent Deployments (founder's instance) ──
+
+model AgentDeployment {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  listingId           String
+  status              String   @default("provisioning") // provisioning, active, paused, deactivated
+  inputConfig         Json     @default("{}")
+  governanceSettings  Json     @default("{}")
+  outputDestination   Json?
+  connectionIds       String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  listing AgentListing @relation(fields: [listingId], references: [id])
+  tasks   AgentTask[]
+
+  @@unique([organizationId, listingId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ── Marketplace: Agent Tasks (units of work) ──
+
+model AgentTask {
+  id                 String    @id @default(cuid())
+  deploymentId       String
+  organizationId     String
+  listingId          String
+  category           String
+  status             String    @default("pending") // pending, running, completed, awaiting_review, approved, rejected, failed, cancelled
+  input              Json      @default("{}")
+  output             Json?
+  acceptanceCriteria String?
+  reviewResult       String?
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+  listing    AgentListing    @relation(fields: [listingId], references: [id])
+
+  @@index([deploymentId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([listingId, category])
+}
+
+// ── Marketplace: Trust Score Records (per-listing per-category) ──
+
+model TrustScoreRecord {
+  id                    String   @id @default(cuid())
+  listingId             String
+  taskCategory          String
+  score                 Float    @default(50)
+  totalApprovals        Int      @default(0)
+  totalRejections       Int      @default(0)
+  consecutiveApprovals  Int      @default(0)
+  lastActivityAt        DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  listing AgentListing @relation(fields: [listingId], references: [id])
+
+  @@unique([listingId, taskCategory])
+  @@index([listingId])
 }
 
 

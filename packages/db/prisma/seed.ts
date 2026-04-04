@@ -64,7 +64,6 @@ async function main() {
       name: "Dev Organization",
       runtimeType: "http",
       governanceProfile: "guarded",
-      tier: "smb",
       onboardingComplete: true,
       provisioningStatus: "active",
     },
