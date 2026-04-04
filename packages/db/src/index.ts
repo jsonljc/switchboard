@@ -66,3 +66,7 @@ export { PrismaContactStore } from "./stores/prisma-contact-store.js";
 export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
 export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
 export { PrismaOwnerTaskStore } from "./stores/prisma-owner-task-store.js";
+export { PrismaListingStore } from "./stores/prisma-listing-store.js";
+export { PrismaDeploymentStore } from "./stores/prisma-deployment-store.js";
+export { PrismaAgentTaskStore } from "./stores/prisma-agent-task-store.js";
+export { PrismaTrustScoreStore } from "./stores/prisma-trust-score-store.js";
