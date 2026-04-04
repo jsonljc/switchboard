@@ -1,6 +1,71 @@
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
 
+// Marketplace types
+export interface MarketplaceListing {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  type: string;
+  status: string;
+  taskCategories: string[];
+  trustScore: number;
+  autonomyLevel: string;
+  priceTier: string;
+  priceMonthly: number;
+  webhookUrl: string | null;
+  sourceUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketplaceDeployment {
+  id: string;
+  organizationId: string;
+  listingId: string;
+  status: string;
+  inputConfig: Record<string, unknown>;
+  governanceSettings: Record<string, unknown>;
+  outputDestination: Record<string, unknown> | null;
+  connectionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketplaceTask {
+  id: string;
+  deploymentId: string;
+  organizationId: string;
+  listingId: string;
+  category: string;
+  status: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | null;
+  acceptanceCriteria: string | null;
+  reviewResult: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrustScoreBreakdown {
+  listingId: string;
+  priceTier: string;
+  breakdown: Array<{
+    taskCategory: string;
+    score: number;
+    autonomyLevel: string;
+    totalApprovals: number;
+    totalRejections: number;
+    consecutiveApprovals: number;
+    lastActivityAt: string;
+  }>;
+}
+
 export class SwitchboardClient extends SwitchboardClientBase {
   // Token Usage
   async getTokenUsage(params?: { period?: string }) {
@@ -266,5 +331,87 @@ export class SwitchboardClient extends SwitchboardClientBase {
       `/api/escalations/${id}/reply`,
       { method: "POST", body: JSON.stringify({ message }) },
     );
+  }
+
+  // ── Marketplace ──
+
+  async listMarketplaceListings(filters?: {
+    status?: string;
+    type?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    if (filters?.offset) params.set("offset", String(filters.offset));
+    const qs = params.toString();
+    return this.request<{ listings: MarketplaceListing[] }>(
+      `/api/marketplace/listings${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  async getMarketplaceListing(id: string) {
+    return this.request<{ listing: MarketplaceListing }>(`/api/marketplace/listings/${id}`);
+  }
+
+  async getListingTrustScore(id: string) {
+    return this.request<TrustScoreBreakdown>(`/api/marketplace/listings/${id}/trust`);
+  }
+
+  async deployListing(
+    id: string,
+    config: {
+      inputConfig?: Record<string, unknown>;
+      governanceSettings?: Record<string, unknown>;
+      outputDestination?: Record<string, unknown>;
+      connectionIds?: string[];
+    },
+  ) {
+    return this.request<{ deployment: MarketplaceDeployment }>(
+      `/api/marketplace/listings/${id}/deploy`,
+      { method: "POST", body: JSON.stringify(config) },
+    );
+  }
+
+  async listDeployments() {
+    return this.request<{ deployments: MarketplaceDeployment[] }>(`/api/marketplace/deployments`);
+  }
+
+  async createTask(data: {
+    deploymentId: string;
+    listingId: string;
+    category: string;
+    input?: Record<string, unknown>;
+    acceptanceCriteria?: string;
+  }) {
+    return this.request<{ task: MarketplaceTask }>(`/api/marketplace/tasks`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listTasks(filters?: { status?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set("status", filters.status);
+    const qs = params.toString();
+    return this.request<{ tasks: MarketplaceTask[] }>(
+      `/api/marketplace/tasks${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  async submitTaskOutput(taskId: string, output: Record<string, unknown>) {
+    return this.request<{ task: MarketplaceTask }>(`/api/marketplace/tasks/${taskId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ output }),
+    });
+  }
+
+  async reviewTask(taskId: string, result: "approved" | "rejected", reviewResult?: string) {
+    return this.request<{ task: MarketplaceTask }>(`/api/marketplace/tasks/${taskId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ result, reviewResult }),
+    });
   }
 }

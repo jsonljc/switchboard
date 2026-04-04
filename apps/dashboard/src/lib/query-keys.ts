@@ -77,4 +77,16 @@ export const queryKeys = {
   escalations: {
     all: ["escalations"] as const,
   },
+  marketplace: {
+    all: ["marketplace"] as const,
+    listings: (filters?: Record<string, string | undefined>) =>
+      ["marketplace", "listings", filters] as const,
+    listing: (id: string) => ["marketplace", "listing", id] as const,
+    trust: (id: string) => ["marketplace", "trust", id] as const,
+    deployments: () => ["marketplace", "deployments"] as const,
+  },
+  tasks: {
+    all: ["tasks"] as const,
+    list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,
+  },
 };
