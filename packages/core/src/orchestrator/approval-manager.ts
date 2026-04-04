@@ -269,6 +269,23 @@ export class ApprovalManager {
         traceId: envelope.traceId,
       });
 
+      // Update marketplace trust score
+      if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
+        const proposal = envelope.proposals[0];
+        if (proposal) {
+          const principalId = proposal.parameters["_principalId"] as string | undefined;
+          if (principalId) {
+            try {
+              await this.ctx.trustAdapter.recordApproval(principalId, proposal.actionType);
+            } catch (err) {
+              console.warn(
+                `[approval] trust score update failed on approval: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          }
+        }
+      }
+
       if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
         await this.ctx.onEnqueue(envelope.id);
         return null;
@@ -315,6 +332,23 @@ export class ApprovalManager {
       envelopeId: envelope.id,
       traceId: envelope.traceId,
     });
+
+    // Update marketplace trust score
+    if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
+      const proposal = envelope.proposals[0];
+      if (proposal) {
+        const principalId = proposal.parameters["_principalId"] as string | undefined;
+        if (principalId) {
+          try {
+            await this.ctx.trustAdapter.recordRejection(principalId, proposal.actionType);
+          } catch (err) {
+            console.warn(
+              `[approval] trust score update failed on rejection: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+      }
+    }
   }
 
   private async handlePatch(

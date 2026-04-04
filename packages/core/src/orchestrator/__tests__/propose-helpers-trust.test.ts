@@ -102,14 +102,12 @@ describe("resolveEffectiveIdentity with trustAdapter", () => {
     } as unknown as TrustScoreAdapter;
 
     const mockTracker = {
-      getAdjustment: vi
-        .fn()
-        .mockResolvedValue({
-          actionType: "send_email",
-          score: 85,
-          shouldTrust: true,
-          shouldEscalate: false,
-        }),
+      getAdjustment: vi.fn().mockResolvedValue({
+        actionType: "send_email",
+        score: 85,
+        shouldTrust: true,
+        shouldEscalate: false,
+      }),
     };
 
     const ctx = makeMinimalContext({
@@ -122,7 +120,8 @@ describe("resolveEffectiveIdentity with trustAdapter", () => {
     // Trust adapter should receive the ALREADY competence-adjusted identity
     const adjustIdentityCall = (mockAdapter.adjustIdentity as ReturnType<typeof vi.fn>).mock
       .calls[0];
-    const identityPassedToAdapter = adjustIdentityCall[2] as ResolvedIdentity;
+    expect(adjustIdentityCall).toBeDefined();
+    const identityPassedToAdapter = adjustIdentityCall?.[2] as ResolvedIdentity;
     expect(identityPassedToAdapter.effectiveTrustBehaviors).toContain("send_email");
   });
 
