@@ -71,7 +71,9 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     };
 
     const listings = await store.list(filters);
-    return reply.send({ listings });
+    // Strip sensitive fields from public listing responses
+    const sanitized = listings.map(({ webhookSecret: _ws, vettingNotes: _vn, ...rest }) => rest);
+    return reply.send({ listings: sanitized });
   });
 
   app.get("/listings/:id", async (request, reply) => {
@@ -87,7 +89,9 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Listing not found" });
     }
 
-    return reply.send({ listing });
+    // Strip sensitive fields from public listing response
+    const { webhookSecret: _ws, vettingNotes: _vn, ...sanitized } = listing;
+    return reply.send({ listing: sanitized });
   });
 
   app.post("/listings", async (request, reply) => {
@@ -233,13 +237,17 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const store = new PrismaAgentTaskStore(app.prisma);
     const { id } = request.params as { id: string };
 
-    // Fix 2: Add 404 check before submitting
     const task = await store.findById(id);
     if (!task) {
       return reply.code(404).send({ error: "Task not found" });
     }
 
-    // Fix 3: Input validation
+    // Verify org ownership
+    const orgId = request.organizationIdFromAuth;
+    if (orgId && task.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
     const parsed = SubmitTaskOutput.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid input", details: parsed.error });
@@ -273,6 +281,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Task not found" });
     }
 
+    // Verify org ownership
+    const orgId = request.organizationIdFromAuth;
+    if (orgId && task.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
     const updated = await taskStore.review(
       id,
       parsed.data.result,
@@ -288,7 +302,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
         await engine.recordRejection(task.listingId, task.category);
       }
     } catch (error) {
-      console.warn("Failed to update trust score:", error);
+      request.log.warn({ err: error }, "Failed to update trust score");
       // Task review succeeded, continue despite trust score failure
     }
 

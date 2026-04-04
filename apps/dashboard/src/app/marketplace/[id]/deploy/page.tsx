@@ -122,7 +122,7 @@ export default function DeployPage() {
       <DeployWizardShell
         steps={STEPS}
         currentStep={step}
-        canProceed={true}
+        canProceed={step === 0 ? inputConfig.taskDescription.trim().length > 0 : true}
         isSubmitting={deployMutation.isPending}
         onBack={() => setStep((s) => Math.max(0, s - 1))}
         onNext={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}

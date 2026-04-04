@@ -31,7 +31,7 @@ export function OwnerTabs() {
               key={tab.href}
               href={tab.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 w-1/5 min-h-[44px] text-[10px] tracking-wide transition-colors duration-fast",
+                "flex flex-col items-center justify-center gap-0.5 w-1/4 min-h-[44px] text-[10px] tracking-wide transition-colors duration-fast",
                 active ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >
