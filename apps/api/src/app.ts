@@ -317,11 +317,12 @@ export async function buildServer() {
       const trustEngine = new TrustScoreEngine(trustStore);
       const resolver: import("@switchboard/core").PrincipalListingResolver = async (
         principalId,
+        actionType,
       ) => {
         // Convention: marketplace agent principalIds start with "listing:"
         if (!principalId.startsWith("listing:")) return null;
         const listingId = principalId.slice("listing:".length);
-        return { listingId, taskCategory: "default" };
+        return { listingId, taskCategory: actionType ?? "default" };
       };
       trustAdapter = new TrustScoreAdapter(trustEngine, resolver);
     } catch (err) {

@@ -269,7 +269,7 @@ export class ApprovalManager {
         traceId: envelope.traceId,
       });
 
-      // Update marketplace trust score
+      // Update marketplace trust score (principalId stored in _principalId by propose pipeline)
       if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
         const proposal = envelope.proposals[0];
         if (proposal) {
@@ -333,7 +333,7 @@ export class ApprovalManager {
       traceId: envelope.traceId,
     });
 
-    // Update marketplace trust score
+    // Update marketplace trust score (principalId stored in _principalId by propose pipeline)
     if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
       const proposal = envelope.proposals[0];
       if (proposal) {
