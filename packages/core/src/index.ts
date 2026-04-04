@@ -154,12 +154,6 @@ export type {
   ConversationSummary,
 } from "./handoff/types.js";
 
-// Outcome Pipeline
-export { OutcomePipeline } from "./outcome/pipeline.js";
-export { OutcomeAggregator } from "./outcome/aggregator.js";
-export { runOptimisationCycle } from "./outcome/optimiser.js";
-export type { OutcomeStore, OptimisationProposal } from "./outcome/types.js";
-
 // Embedding Adapter
 export type { EmbeddingAdapter } from "./embedding-adapter.js";
 
