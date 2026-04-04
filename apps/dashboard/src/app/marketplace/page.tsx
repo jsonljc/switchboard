@@ -15,7 +15,7 @@ export default function MarketplacePage() {
 
   if (status === "unauthenticated") redirect("/login");
 
-  const listings = data?.listings ?? [];
+  const listings = data ?? [];
 
   const allCategories = useMemo(() => {
     const cats = new Set<string>();

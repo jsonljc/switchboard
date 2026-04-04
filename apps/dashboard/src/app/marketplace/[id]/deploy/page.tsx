@@ -54,7 +54,7 @@ export default function DeployPage() {
     );
   }
 
-  const listing = listingData?.listing;
+  const listing = listingData;
   if (!listing) {
     return (
       <div className="py-16 text-center">
