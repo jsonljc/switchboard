@@ -139,15 +139,6 @@ export default function SettingsAccountPage() {
                 />
               </div>
 
-              {orgConfig?.skinId && (
-                <div className="space-y-2">
-                  <Label>Business Type</Label>
-                  <p className="text-sm text-muted-foreground capitalize">
-                    {orgConfig.skinId === "generic" ? "Other Business" : orgConfig.skinId}
-                  </p>
-                </div>
-              )}
-
               <div className="space-y-2">
                 <Label htmlFor="settings-operator-name">AI Operator Name</Label>
                 <Input

@@ -25,7 +25,6 @@ export async function provisionDashboardUser(
         name: displayName,
         runtimeType: "managed",
         governanceProfile: "guarded",
-        tier: "smb",
         onboardingComplete: false,
         provisioningStatus: "pending",
       },
