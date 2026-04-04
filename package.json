@@ -11,7 +11,7 @@
     "test:integration": "turbo test:integration",
     "clean": "turbo clean",
     "typecheck": "turbo typecheck",
-    "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"cartridges/*/src/**/*.ts\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\"",
     "db:generate": "pnpm --filter @switchboard/db generate",
     "db:migrate": "pnpm --filter @switchboard/db migrate",
     "db:seed": "pnpm --filter @switchboard/db seed",
