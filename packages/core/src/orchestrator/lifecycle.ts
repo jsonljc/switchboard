@@ -21,6 +21,7 @@ import type { ApprovalNotifier } from "../notifications/notifier.js";
 import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
+import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import type { SharedContext } from "./shared-context.js";
@@ -40,6 +41,7 @@ export interface OrchestratorConfig {
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker?: CompetenceTracker;
+  trustAdapter?: TrustScoreAdapter | null;
   riskPostureStore?: RiskPostureStore;
   /** When set, per-org governance profile overrides system risk posture for propose. */
   governanceProfileStore?: GovernanceProfileStore;
@@ -100,6 +102,7 @@ export class LifecycleOrchestrator {
       routingConfig: config.routingConfig ?? DEFAULT_ROUTING_CONFIG,
       riskScoringConfig: config.riskScoringConfig,
       competenceTracker: config.competenceTracker ?? null,
+      trustAdapter: config.trustAdapter ?? null,
       riskPostureStore: config.riskPostureStore ?? null,
       governanceProfileStore: config.governanceProfileStore ?? null,
       policyCache: config.policyCache ?? null,
