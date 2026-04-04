@@ -310,17 +310,25 @@ export async function buildServer() {
   // --- Marketplace trust adapter (optional — requires DATABASE_URL) ---
   let trustAdapter: import("@switchboard/core").TrustScoreAdapter | null = null;
   if (prismaClient) {
-    const { PrismaTrustScoreStore } = await import("@switchboard/db");
-    const { TrustScoreEngine, TrustScoreAdapter } = await import("@switchboard/core");
-    const trustStore = new PrismaTrustScoreStore(prismaClient);
-    const trustEngine = new TrustScoreEngine(trustStore);
-    const resolver: import("@switchboard/core").PrincipalListingResolver = async (principalId) => {
-      // Convention: marketplace agent principalIds start with "listing:"
-      if (!principalId.startsWith("listing:")) return null;
-      const listingId = principalId.slice("listing:".length);
-      return { listingId, taskCategory: "default" };
-    };
-    trustAdapter = new TrustScoreAdapter(trustEngine, resolver);
+    try {
+      const { PrismaTrustScoreStore } = await import("@switchboard/db");
+      const { TrustScoreEngine, TrustScoreAdapter } = await import("@switchboard/core");
+      const trustStore = new PrismaTrustScoreStore(prismaClient);
+      const trustEngine = new TrustScoreEngine(trustStore);
+      const resolver: import("@switchboard/core").PrincipalListingResolver = async (
+        principalId,
+      ) => {
+        // Convention: marketplace agent principalIds start with "listing:"
+        if (!principalId.startsWith("listing:")) return null;
+        const listingId = principalId.slice("listing:".length);
+        return { listingId, taskCategory: "default" };
+      };
+      trustAdapter = new TrustScoreAdapter(trustEngine, resolver);
+    } catch (err) {
+      app.log.warn(
+        `Failed to initialize trust adapter: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // --- Build orchestrator ---
