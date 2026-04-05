@@ -78,7 +78,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
       },
     });
     agentIds.push(listing.id);
-    console.log(`  Seeded listing: ${agent.name} (${listing.id})`);
+    console.warn(`  Seeded listing: ${agent.name} (${listing.id})`);
   }
 
   const bundle = await prisma.agentListing.upsert({
@@ -95,7 +95,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
       metadata: { bundleListingIds: agentIds },
     },
   });
-  console.log(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
+  console.warn(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
 
   for (const family of FUTURE_FAMILIES) {
     const listing = await prisma.agentListing.upsert({
@@ -112,6 +112,6 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
         priceMonthly: 0,
       },
     });
-    console.log(`  Seeded placeholder: ${family.name} (${listing.id})`);
+    console.warn(`  Seeded placeholder: ${family.name} (${listing.id})`);
   }
 }

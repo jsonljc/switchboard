@@ -4,6 +4,21 @@
 
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaAgentPersonaStore } from "@switchboard/db";
+import { z } from "zod";
+import { PersonaTone } from "@switchboard/schemas";
+
+const PersonaInput = z.object({
+  businessName: z.string().min(1),
+  businessType: z.string().min(1),
+  productService: z.string().min(1),
+  valueProposition: z.string().min(1),
+  tone: PersonaTone.default("professional"),
+  qualificationCriteria: z.record(z.unknown()).default({}),
+  disqualificationCriteria: z.record(z.unknown()).default({}),
+  escalationRules: z.record(z.unknown()).default({}),
+  bookingLink: z.string().url().nullable().optional(),
+  customInstructions: z.string().nullable().optional(),
+});
 
 export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
   // GET /persona — get org's persona
@@ -29,9 +44,13 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Authentication required" });
     }
 
+    const parsed = PersonaInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+    }
+
     const store = new PrismaAgentPersonaStore(app.prisma);
-    const body = request.body as Record<string, unknown>;
-    const persona = await store.upsert(request.organizationIdFromAuth, body as never);
+    const persona = await store.upsert(request.organizationIdFromAuth, parsed.data as never);
     return reply.send({ persona });
   });
 
@@ -44,13 +63,17 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Authentication required" });
     }
 
+    const parsed = PersonaInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+    }
+
     const orgId = request.organizationIdFromAuth;
-    const body = request.body as Record<string, unknown>;
     const prisma = app.prisma;
 
     // 1. Upsert persona
     const store = new PrismaAgentPersonaStore(prisma);
-    const persona = await store.upsert(orgId, body as never);
+    const persona = await store.upsert(orgId, parsed.data as never);
 
     // 2. Find the 3 Sales Pipeline listings
     const listings = await prisma.agentListing.findMany({

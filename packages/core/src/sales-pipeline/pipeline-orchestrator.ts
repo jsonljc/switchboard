@@ -1,6 +1,5 @@
 import type { OpportunityStage } from "@switchboard/schemas";
-
-export type SalesPipelineAgentRole = "speed-to-lead" | "sales-closer" | "nurture-specialist";
+import type { SalesPipelineAgentRole } from "./role-prompts.js";
 
 export interface PipelineState {
   opportunityStage: OpportunityStage;
