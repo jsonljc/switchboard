@@ -46,27 +46,14 @@ export class PrismaGovernanceProfileStore {
       where: { id: organizationId },
       select: {
         governanceProfile: true,
-        smbAllowedActions: true,
-        smbBlockedActions: true,
       },
     });
 
     if (!config) return null;
 
     const profile = (config.governanceProfile as GovernanceProfile) ?? DEFAULT_PROFILE;
-    const allowed = config.smbAllowedActions ?? [];
-    const blocked = config.smbBlockedActions ?? [];
 
-    // Only return config if there are action type restrictions
-    if (allowed.length === 0 && blocked.length === 0) {
-      return { profile };
-    }
-
-    return {
-      profile,
-      ...(allowed.length > 0 && { allowedActionTypes: allowed }),
-      ...(blocked.length > 0 && { blockedActionTypes: blocked }),
-    };
+    return { profile };
   }
 
   async setConfig(organizationId: string | null, config: GovernanceProfileConfig): Promise<void> {
@@ -78,13 +65,9 @@ export class PrismaGovernanceProfileStore {
         id: organizationId,
         name: "",
         governanceProfile: config.profile,
-        smbAllowedActions: config.allowedActionTypes ?? [],
-        smbBlockedActions: config.blockedActionTypes ?? [],
       },
       update: {
         governanceProfile: config.profile,
-        smbAllowedActions: config.allowedActionTypes ?? [],
-        smbBlockedActions: config.blockedActionTypes ?? [],
       },
     });
   }

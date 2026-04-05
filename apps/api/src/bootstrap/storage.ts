@@ -10,9 +10,6 @@ import {
   DEFAULT_REDACTION_CONFIG,
   InMemoryPolicyCache,
   InMemoryGovernanceProfileStore,
-  InMemoryTierStore,
-  SmbActivityLog,
-  InMemorySmbActivityLogStorage,
 } from "@switchboard/core";
 import type {
   StorageContext,
@@ -20,7 +17,6 @@ import type {
   PolicyCache,
   GuardrailState,
   GovernanceProfileStore,
-  TierStore,
   GuardrailStateStore,
 } from "@switchboard/core";
 import { createGuardrailStateStore } from "../guardrail-state/index.js";
@@ -33,8 +29,6 @@ export interface StorageBootstrapResult {
   guardrailStateStore: GuardrailStateStore;
   policyCache: PolicyCache;
   governanceProfileStore: GovernanceProfileStore;
-  tierStore: TierStore;
-  smbActivityLog: SmbActivityLog;
   prismaClient: import("@switchboard/db").PrismaClient | null;
   redis: Redis | null;
 }
@@ -101,19 +95,6 @@ export async function bootstrapStorage(logger: {
     governanceProfileStore = new InMemoryGovernanceProfileStore();
   }
 
-  // SMB tier store and activity log
-  let tierStore: TierStore;
-  let smbActivityLog: SmbActivityLog;
-  if (prismaClient) {
-    const { PrismaTierStore } = await import("@switchboard/db");
-    const { PrismaSmbActivityLogStorage } = await import("@switchboard/db");
-    tierStore = new PrismaTierStore(prismaClient);
-    smbActivityLog = new SmbActivityLog(new PrismaSmbActivityLogStorage(prismaClient));
-  } else {
-    tierStore = new InMemoryTierStore();
-    smbActivityLog = new SmbActivityLog(new InMemorySmbActivityLogStorage());
-  }
-
   return {
     storage,
     ledger,
@@ -121,8 +102,6 @@ export async function bootstrapStorage(logger: {
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
-    tierStore,
-    smbActivityLog,
     prismaClient,
     redis,
   };

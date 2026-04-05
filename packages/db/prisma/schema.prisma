@@ -326,14 +326,6 @@ model OrganizationConfig {
   runtimeType          String   @default("http") // mcp, http, managed
   runtimeConfig        Json     @default("{}")
   governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
-  tier                 String   @default("smb") // smb, enterprise
-  smbOwnerId           String?
-  smbPerActionLimit    Float?
-  smbDailyLimit        Float?
-  smbAllowedActions    String[] @default([])
-  smbBlockedActions    String[] @default([])
-  selectedCartridgeId  String?
-  skinId               String?
   onboardingComplete   Boolean  @default(false)
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
@@ -378,25 +370,6 @@ model AgentState {
   @@index([organizationId])
 }
 
-model SmbActivityLogEntry {
-  id              String   @id @default(uuid())
-  timestamp       DateTime @default(now())
-  actorId         String
-  actorType       String   // user, agent, system
-  actionType      String
-  result          String   // allowed, denied, pending_approval, approved, rejected, executed, failed
-  amount          Float?
-  summary         String
-  snapshot        Json     @default("{}")
-  envelopeId      String?
-  organizationId  String
-  redactionApplied Boolean @default(false)
-  redactedFields  String[] @default([])
-
-  @@index([organizationId, timestamp])
-  @@index([actorId])
-  @@index([envelopeId])
-}
 
 model ManagedChannel {
   id                String    @id @default(uuid())
@@ -457,318 +430,6 @@ model AgentDeliveryAttempt {
   @@index([createdAt])
 }
 
-// ── CRM models (built-in unified inbox) ──
-
-model CrmContact {
-  id              String    @id @default(uuid())
-  externalId      String?   // e.g., Telegram user ID
-  channel         String?   // telegram, email, web
-  email           String?
-  firstName       String?
-  lastName        String?
-  company         String?
-  phone           String?
-  tags            String[]  @default([])
-  status          String    @default("active") // active, archived
-  organizationId  String?
-  assignedStaffId String?
-  sourceAdId      String?
-  sourceCampaignId String?
-  gclid            String?   // Google Click ID for offline conversion attribution
-  fbclid           String?   // Facebook Click ID
-  ttclid           String?   // TikTok Click ID
-  normalizedPhone  String?   // E.164 normalized phone for identity resolution
-  normalizedEmail  String?   // Lowercased email for identity resolution
-  utmSource       String?
-  properties      Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  deals          CrmDeal[]
-  activities     CrmActivity[]
-  aliases        ContactAlias[]
-
-  @@index([organizationId])
-  @@index([email])
-  @@index([externalId])
-  @@index([status])
-  @@index([sourceAdId])
-  @@index([normalizedPhone])
-  @@index([normalizedEmail])
-}
-
-model ContactAlias {
-  id         String   @id @default(uuid())
-  contactId  String
-  channel    String   // whatsapp, instagram, telegram, sms, facebook, web, email
-  externalId String
-  createdAt  DateTime @default(now())
-
-  contact CrmContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-
-  @@unique([channel, externalId])
-  @@index([contactId])
-}
-
-model RevenueEvent {
-  id              String   @id @default(uuid())
-  contactId       String
-  organizationId  String
-  amount          Float
-  currency        String   @db.VarChar(3)
-  source          String   @default("manual") // manual, chat, batch, pos_sync, stripe, crm_sync, api
-  reference       String?
-  recordedBy      String
-  timestamp       DateTime @default(now())
-  createdAt       DateTime @default(now())
-
-  @@index([contactId])
-  @@index([organizationId])
-  @@index([timestamp])
-}
-
-model CrmDeal {
-  id              String    @id @default(uuid())
-  name            String
-  stage           String    @default("lead")
-  pipeline        String    @default("default")
-  amount          Float?
-  closeDate       DateTime?
-  contactId       String?
-  organizationId  String?
-  assignedStaffId String?
-  properties      Json      @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  contact        CrmContact? @relation(fields: [contactId], references: [id])
-  activities     CrmActivity[]
-
-  @@index([organizationId])
-  @@index([contactId])
-  @@index([pipeline, stage])
-}
-
-model CrmActivity {
-  id             String    @id @default(uuid())
-  type           String    // note, email, call, meeting, task, message
-  subject        String?
-  body           String?
-  contactId      String?
-  dealId         String?
-  organizationId String?
-  createdAt      DateTime  @default(now())
-
-  contact        CrmContact? @relation(fields: [contactId], references: [id])
-  deal           CrmDeal?    @relation(fields: [dealId], references: [id])
-
-  @@index([contactId])
-  @@index([dealId])
-  @@index([organizationId])
-  @@index([type])
-  @@index([createdAt])
-}
-
-// ── Proactive alerts + scheduled reports ──
-
-model AlertRule {
-  id               String    @id @default(uuid())
-  organizationId   String
-  name             String
-  enabled          Boolean   @default(true)
-  metricPath       String    // "primaryKPI.current", "spend.current", "findings.critical.count"
-  operator         String    // gt, gte, lt, lte, eq, pctChange_gt, pctChange_lt
-  threshold        Float
-  platform         String?   // null = all, or "meta"|"google"|"tiktok"
-  vertical         String    @default("commerce")
-  notifyChannels   String[]  // ["slack","telegram","whatsapp"]
-  notifyRecipients String[]  // user/channel IDs
-  cooldownMinutes  Int       @default(60)
-  lastTriggeredAt  DateTime?
-  snoozedUntil     DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@index([organizationId, enabled])
-}
-
-model ScheduledReport {
-  id               String    @id @default(uuid())
-  organizationId   String
-  name             String
-  enabled          Boolean   @default(true)
-  cronExpression   String    // "0 9 * * 1" = Mon 9am
-  timezone         String    @default("UTC")
-  reportType       String    // "funnel" | "portfolio"
-  platform         String?
-  vertical         String    @default("commerce")
-  deliveryChannels String[]
-  deliveryTargets  String[]
-  lastRunAt        DateTime?
-  nextRunAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@index([enabled, nextRunAt])
-  @@index([organizationId])
-}
-
-model AlertHistory {
-  id                String   @id @default(uuid())
-  alertRuleId       String
-  organizationId    String
-  triggeredAt       DateTime @default(now())
-  metricValue       Float
-  threshold         Float
-  findingsSummary   String
-  notificationsSent Json     // [{ channel, recipient, success }]
-
-  @@index([alertRuleId])
-  @@index([organizationId, triggeredAt])
-}
-
-// ── Ads Operator Config (per-org agent configuration) ──
-
-model AdsOperatorConfig {
-  id                  String   @id @default(uuid())
-  organizationId      String
-  adAccountIds        String[]
-  platforms           String[]   // "meta", "google", "tiktok"
-  automationLevel     String     // "copilot", "supervised", "autonomous"
-  targets             Json       // { cpa?, roas?, dailyBudgetCap? }
-  schedule            Json       // { optimizerCronHour, reportCronHour, strategistCronDay?, timezone }
-  notificationChannel Json       // { type, chatId }
-  principalId         String
-  active              Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  @@index([organizationId])
-  @@index([active])
-}
-
-// ── Cadence persistence (runtime state) ──
-
-model CadenceInstance {
-  id                  String    @id @default(uuid())
-  cadenceDefinitionId String
-  patientId           String
-  organizationId      String?
-  status              String    @default("active") // active, paused, completed, cancelled
-  currentStepIndex    Int       @default(0)
-  stepStates          Json      @default("[]")
-  startedAt           DateTime  @default(now())
-  lastEvaluatedAt     DateTime?
-  nextEvaluationAt    DateTime?
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  @@index([status])
-  @@index([organizationId])
-  @@index([patientId])
-  @@index([nextEvaluationAt])
-}
-
-// ── Revenue Growth Cartridge ──
-
-model RevenueAccount {
-  id              String    @id @default(uuid())
-  organizationId  String
-  accountId       String    // external ad account ID
-  platforms       String[]  // "meta", "google", "tiktok"
-  vertical        String    @default("commerce")
-  active          Boolean   @default(true)
-  cadenceMinutes  Int       @default(60)
-  lastCycleAt     DateTime?
-  nextCycleAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  diagnosticCycles RevGrowthDiagnosticCycle[]
-  interventions    RevGrowthIntervention[]
-
-  @@unique([organizationId, accountId])
-  @@index([organizationId])
-  @@index([active, nextCycleAt])
-}
-
-model RevGrowthDiagnosticCycle {
-  id                        String    @id @default(uuid())
-  revenueAccountId          String
-  organizationId            String
-  dataTier                  String    // FULL, PARTIAL, SPARSE
-  scorerOutputs             Json      // ScorerOutput[]
-  constraints               Json      // Constraint[]
-  primaryConstraint         String?   // ConstraintType enum value
-  previousPrimaryConstraint String?   // ConstraintType from prior cycle
-  constraintTransition      Boolean   @default(false)
-  startedAt                 DateTime  @default(now())
-  completedAt               DateTime?
-  createdAt                 DateTime  @default(now())
-
-  revenueAccount RevenueAccount          @relation(fields: [revenueAccountId], references: [id], onDelete: Cascade)
-  interventions  RevGrowthIntervention[]
-
-  @@index([revenueAccountId])
-  @@index([organizationId])
-  @@index([completedAt])
-}
-
-model RevGrowthIntervention {
-  id                    String    @id @default(uuid())
-  cycleId               String
-  revenueAccountId      String
-  constraintType        String    // ConstraintType enum value
-  actionType            String    // RevGrowthActionType enum value
-  status                String    @default("PROPOSED") // GovernanceStatus
-  priority              Int       @default(1)
-  estimatedImpact       String    @default("MEDIUM") // ImpactTier
-  reasoning             String
-  artifacts             Json      @default("[]") // ActionArtifact[]
-  outcomeStatus         String    @default("PENDING") // OutcomeStatus
-  measurementWindowDays Int?
-  measurementStartedAt  DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  cycle          RevGrowthDiagnosticCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  revenueAccount RevenueAccount          @relation(fields: [revenueAccountId], references: [id], onDelete: Cascade)
-
-  @@index([cycleId])
-  @@index([revenueAccountId])
-  @@index([status])
-  @@index([outcomeStatus])
-}
-
-model RevGrowthWeeklyDigest {
-  id                    String   @id @default(uuid())
-  revenueAccountId      String
-  organizationId        String
-  weekStartDate         String   // YYYY-MM-DD
-  headline              String
-  summary               String
-  constraintHistory     String[] // ConstraintType values
-  interventionOutcomes  Json     // [{ interventionId, actionType, outcome }]
-  createdAt             DateTime @default(now())
-
-  @@index([revenueAccountId])
-  @@index([organizationId, weekStartDate])
-}
-
-model ConnectorHealthLog {
-  id            String   @id @default(uuid())
-  organizationId String
-  connectorId   String
-  connectorName String
-  status        String   // connected, degraded, disconnected
-  matchRate     Float?
-  errorMessage  String?
-  checkedAt     DateTime @default(now())
-
-  @@index([organizationId, connectorId])
-  @@index([checkedAt])
-}
 
 // ── AI Agent System: Business Config Persistence ──
 
@@ -803,52 +464,6 @@ model ConfigVersion {
 
 // ── AI Agent System: Outcome Tracking ──
 
-model OutcomeEvent {
-  id             String   @id @default(uuid())
-  sessionId      String
-  organizationId String
-  leadId         String?
-  outcomeType    String   // booked, escalated_resolved, escalated_unresolved, unresponsive, lost, reactivated
-  metadata       Json     @default("{}")
-  timestamp      DateTime @default(now())
-
-  @@index([organizationId, timestamp])
-  @@index([sessionId])
-  @@index([outcomeType])
-}
-
-model ResponseVariantLog {
-  id                String    @id @default(uuid())
-  sessionId         String
-  organizationId    String
-  primaryMove       String
-  templateId        String?
-  responseText      String
-  leadReplyReceived Boolean   @default(false)
-  leadReplyPositive Boolean   @default(false)
-  conversationState String?
-  timestamp         DateTime  @default(now())
-
-  @@index([organizationId, primaryMove])
-  @@index([sessionId])
-  @@index([timestamp])
-}
-
-model OptimisationProposal {
-  id             String   @id @default(uuid())
-  organizationId String
-  type           String   // timing, content, ordering, template
-  description    String
-  currentValue   String
-  proposedValue  String
-  confidence     Float
-  sampleSize     Int
-  status         String   @default("pending") // pending, approved, rejected, auto_applied
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([organizationId, status])
-}
 
 // ── AI Agent System: Human Handoff ──
 
@@ -1020,7 +635,7 @@ model ContactLifecycle {
   id        String   @id @default(uuid())
   contactId String
   orgId     String
-  stage     String   @default("lead") // lead, qualified, booked, treated, churned
+  stage     String   @default("lead") // lead, qualified, booked, churned
   optedOut  Boolean  @default(false)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
@@ -1034,7 +649,7 @@ model ConversationThread {
   contactId        String
   organizationId   String
   stage            String    @default("new") // ThreadStage enum
-  assignedAgent    String    @default("lead-responder")
+  assignedAgent    String    @default("")
   agentContext     Json      @default("{}")  // AgentContextData JSON
   currentSummary   String    @default("")
   followUpSchedule Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
@@ -1070,29 +685,106 @@ model AgentRegistration {
   @@index([status])
 }
 
-model RoasSnapshot {
-  id                String   @id @default(uuid())
-  orgId             String
-  entityType        String   @default("campaign") // campaign, adset, account
-  entityId          String
-  platform          String   // meta, google, tiktok
-  adAccountId       String?
-  roas              Float
-  spend             Float
-  revenue           Float
-  currency          String   @default("USD") @db.VarChar(3)
-  campaignStatus    String?
-  attributionWindow String?
-  dataFreshnessAt   DateTime?
-  snapshotDate      DateTime @db.Date
-  optimizerRunId    String?
-  createdAt         DateTime @default(now())
+// ── Marketplace: Agent Listings (global catalog) ──
 
-  @@unique([orgId, entityType, entityId, snapshotDate])
-  @@index([orgId, platform])
-  @@index([snapshotDate])
-  @@index([optimizerRunId])
+model AgentListing {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String
+  type            String   @default("switchboard_native") // open_source, third_party, switchboard_native
+  status          String   @default("pending_review") // pending_review, listed, suspended, deprecated
+  taskCategories  String[] @default([])
+  trustScore      Float    @default(50)
+  autonomyLevel   String   @default("supervised") // supervised, guided, autonomous
+  priceTier       String   @default("free") // free, basic, pro, elite
+  priceMonthly    Float    @default(0)
+  webhookUrl      String?
+  webhookSecret   String?
+  vettingNotes    String?
+  sourceUrl       String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  deployments      AgentDeployment[]
+  tasks            AgentTask[]
+  trustScoreRecords TrustScoreRecord[]
+
+  @@index([status])
+  @@index([type])
 }
+
+// ── Marketplace: Agent Deployments (founder's instance) ──
+
+model AgentDeployment {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  listingId           String
+  status              String   @default("provisioning") // provisioning, active, paused, deactivated
+  inputConfig         Json     @default("{}")
+  governanceSettings  Json     @default("{}")
+  outputDestination   Json?
+  connectionIds       String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  listing AgentListing @relation(fields: [listingId], references: [id])
+  tasks   AgentTask[]
+
+  @@unique([organizationId, listingId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ── Marketplace: Agent Tasks (units of work) ──
+
+model AgentTask {
+  id                 String    @id @default(cuid())
+  deploymentId       String
+  organizationId     String
+  listingId          String
+  category           String
+  status             String    @default("pending") // pending, running, completed, awaiting_review, approved, rejected, failed, cancelled
+  input              Json      @default("{}")
+  output             Json?
+  acceptanceCriteria String?
+  reviewResult       String?
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+  listing    AgentListing    @relation(fields: [listingId], references: [id])
+
+  @@index([deploymentId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([listingId, category])
+}
+
+// ── Marketplace: Trust Score Records (per-listing per-category) ──
+
+model TrustScoreRecord {
+  id                    String   @id @default(cuid())
+  listingId             String
+  taskCategory          String
+  score                 Float    @default(50)
+  totalApprovals        Int      @default(0)
+  totalRejections       Int      @default(0)
+  consecutiveApprovals  Int      @default(0)
+  lastActivityAt        DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  listing AgentListing @relation(fields: [listingId], references: [id])
+
+  @@unique([listingId, taskCategory])
+  @@index([listingId])
+}
+
 
 model LlmUsageLog {
   id           String   @id @default(uuid())
@@ -1373,3 +1065,4 @@ model OwnerTask {
   @@index([organizationId, status])
   @@index([organizationId, priority])
 }
+

@@ -15,30 +15,17 @@ import type {
   CartridgeReadAdapter as CartridgeReadAdapterType,
   CapabilityRegistry,
   PlanGraphBuilder,
-  ResolvedSkin,
-  ResolvedProfile,
   DataFlowExecutor,
   ConversionBus,
-  HandoffStore,
-  OutcomeStore,
 } from "@switchboard/core";
-import { OutcomePipeline, HandoffNotifier } from "@switchboard/core";
-import type { ApprovalNotifier } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
-import type {
-  LLMConversationEngine,
-  BusinessProfile as LLMBusinessProfile,
-} from "./conversation/llm-conversation-engine.js";
-import { createBannedPhraseFilter, type BannedPhraseConfig } from "./filters/banned-phrases.js";
-import type { ConversationRouter } from "@switchboard/customer-engagement";
-import { findMedicalClaims } from "@switchboard/customer-engagement";
+
 import { isWithinWhatsAppWindow } from "./adapters/whatsapp.js";
 import { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
 // Extracted modules
 import type { HandlerContext, OperatorState } from "./handlers/handler-context.js";
-import { handleLeadMessage, delegateToEventLoop } from "./handlers/lead-handler.js";
 import { templateFallback } from "./runtime-helpers.js";
 import {
   linkCrmContact,
@@ -47,7 +34,7 @@ import {
   interpretAndProcess,
 } from "./message-pipeline.js";
 
-export { createChatRuntime, type ClinicConfig, type ChatBootstrapResult } from "./bootstrap.js";
+export { createChatRuntime, type ChatBootstrapResult } from "./bootstrap.js";
 
 export interface ChatRuntimeConfig {
   adapter: ChannelAdapter;
@@ -56,7 +43,7 @@ export interface ChatRuntimeConfig {
   orchestrator: RuntimeOrchestrator;
   availableActions: string[];
   storage?: StorageContext;
-  /** CartridgeReadAdapter for handling read-only intents (clinic mode). */
+  /** CartridgeReadAdapter for handling read-only intents. */
   readAdapter?: CartridgeReadAdapterType;
   /** Optional DLQ store for recording failed messages. */
   failedMessageStore?: FailedMessageStore;
@@ -66,10 +53,10 @@ export interface ChatRuntimeConfig {
   capabilityRegistry?: CapabilityRegistry;
   /** Plan graph builder for converting goals to multi-step plans. */
   planGraphBuilder?: PlanGraphBuilder;
-  /** Resolved skin for tool filter enforcement and config. */
-  resolvedSkin?: ResolvedSkin | null;
-  /** Resolved business profile for personalization (e.g. welcome message). */
-  resolvedProfile?: ResolvedProfile | null;
+  /** Resolved skin for config (deprecated — skin system removed). */
+  resolvedSkin?: Record<string, unknown> | null;
+  /** Resolved business profile for personalization (deprecated — profile system removed). */
+  resolvedProfile?: Record<string, unknown> | null;
   /** Optional CRM provider for auto-linking conversations to contacts. */
   crmProvider?: CrmProvider | null;
   /** Optional LLM-powered response generator for natural language replies. */
@@ -78,26 +65,10 @@ export interface ChatRuntimeConfig {
   dataFlowExecutor?: DataFlowExecutor | null;
   /** Whether this runtime operates as a lead-facing bot (vs. owner/operator bot). */
   isLeadBot?: boolean;
-  /** ConversationRouter for lead bot message handling (required when isLeadBot = true). */
-  leadRouter?: ConversationRouter | null;
   /** Optional ConversionBus for emitting conversion events (CRM → ads feedback loop). */
   conversionBus?: ConversionBus | null;
-  /** Optional HandoffStore for persisting escalation packages. */
-  handoffStore?: HandoffStore | null;
-  /** Optional ApprovalNotifier for sending handoff alerts. */
-  approvalNotifier?: ApprovalNotifier | null;
-  /** Optional OutcomeStore for recording conversation outcomes and response variants. */
-  outcomeStore?: OutcomeStore | null;
-  /** Optional LLM conversation engine for natural lead bot responses. */
-  llmConversationEngine?: LLMConversationEngine | null;
-  /** Business profile for LLM conversation context. */
-  llmBusinessProfile?: LLMBusinessProfile | null;
   /** Minimum delay in ms before sending a response (typing simulation). Default: 0. */
   typingDelayMs?: number;
-  /** When set, delegate lead messages to the Switchboard API EventLoop instead of local router. */
-  eventLoopApiUrl?: string;
-  /** API key for authenticating with the EventLoop API. */
-  eventLoopApiKey?: string;
 }
 
 export class ChatRuntime {
@@ -112,22 +83,14 @@ export class ChatRuntime {
   private maxContextMessages: number;
   private capabilityRegistry: CapabilityRegistry | null;
   private planGraphBuilder: PlanGraphBuilder | null;
-  private resolvedSkin: ResolvedSkin | null;
-  private resolvedProfile: ResolvedProfile | null;
+  private resolvedSkin: Record<string, unknown> | null;
+  private resolvedProfile: Record<string, unknown> | null;
   private crmProvider: CrmProvider | null;
   private responseGenerator: ResponseGenerator | null;
   private dataFlowExecutor: DataFlowExecutor | null;
   private isLeadBot: boolean;
-  private leadRouter: ConversationRouter | null;
   private conversionBus: ConversionBus | null;
-  private handoffStore: HandoffStore | null;
-  private handoffNotifier: HandoffNotifier | null;
-  private outcomePipeline: OutcomePipeline | null;
-  private llmConversationEngine: LLMConversationEngine | null;
-  private llmBusinessProfile: LLMBusinessProfile | null;
   private typingDelayMs: number;
-  private eventLoopApiUrl: string | null;
-  private eventLoopApiKey: string | null;
   private dialogueMiddleware: DialogueMiddleware;
   private filterOutgoing: (text: string) => string;
   private humanizer: ResponseHumanizer;
@@ -158,42 +121,15 @@ export class ChatRuntime {
     this.responseGenerator = config.responseGenerator ?? null;
     this.dataFlowExecutor = config.dataFlowExecutor ?? null;
     this.isLeadBot = config.isLeadBot ?? false;
-    this.leadRouter = config.leadRouter ?? null;
     this.conversionBus = config.conversionBus ?? null;
-    this.handoffStore = config.handoffStore ?? null;
-    this.handoffNotifier = config.approvalNotifier
-      ? new HandoffNotifier(config.approvalNotifier)
-      : null;
-    this.outcomePipeline = config.outcomeStore ? new OutcomePipeline(config.outcomeStore) : null;
-    this.llmConversationEngine = config.llmConversationEngine ?? null;
-    this.llmBusinessProfile = config.llmBusinessProfile ?? null;
     this.typingDelayMs = config.typingDelayMs ?? 0;
-    this.eventLoopApiUrl = config.eventLoopApiUrl ?? null;
-    this.eventLoopApiKey = config.eventLoopApiKey ?? null;
     this.dialogueMiddleware = new DialogueMiddleware({
-      resolvedProfile: config.resolvedProfile ?? null,
+      resolvedProfile: null,
     });
 
-    // Initialize banned phrase filter from skin config
-    const bannedConfig = this.resolvedSkin?.config?.bannedPhrases as
-      | BannedPhraseConfig
-      | string[]
-      | undefined;
-    if (bannedConfig) {
-      const normalizedConfig: BannedPhraseConfig = Array.isArray(bannedConfig)
-        ? { phrases: bannedConfig }
-        : bannedConfig;
-      this.filterOutgoing = createBannedPhraseFilter(normalizedConfig);
-    } else {
-      this.filterOutgoing = (text: string) => text;
-    }
-
-    // Initialize response humanizer from skin terminology
-    this.humanizer = new ResponseHumanizer(
-      (this.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
-        | Record<string, string>
-        | undefined,
-    );
+    // Skin-based banned phrase filtering and terminology have been removed.
+    this.filterOutgoing = (text: string) => text;
+    this.humanizer = new ResponseHumanizer();
   }
 
   getAdapter(): ChannelAdapter {
@@ -211,18 +147,7 @@ export class ChatRuntime {
       await new Promise((resolve) => setTimeout(resolve, this.typingDelayMs));
     }
 
-    let filtered = this.filterOutgoing(text);
-
-    // Post-generation medical claim validation
-    const violations = findMedicalClaims([filtered]);
-    if (violations.length > 0) {
-      console.warn(
-        `[MedicalClaimFilter] Blocked outbound message with violations: ${violations.join(", ")}`,
-      );
-      filtered =
-        "I'd be happy to help with that question. For specific details about procedures and outcomes, " +
-        "I'd recommend speaking directly with our team who can provide accurate, personalized information.";
-    }
+    const filtered = this.filterOutgoing(text);
 
     // WhatsApp 24h window enforcement: send template if outside window
     if (this.adapter.channel === "whatsapp") {
@@ -423,32 +348,6 @@ export class ChatRuntime {
     );
     if (consentHandled) return;
 
-    // Lead bot mode — delegate to EventLoop API when configured, otherwise use local router
-    if (this.isLeadBot && this.eventLoopApiUrl) {
-      const ctx = this.buildHandlerContext();
-      await delegateToEventLoop(
-        ctx,
-        { apiUrl: this.eventLoopApiUrl, apiKey: this.eventLoopApiKey ?? undefined },
-        message,
-        threadId,
-      );
-      return;
-    }
-
-    if (this.isLeadBot && this.leadRouter) {
-      const ctx = this.buildHandlerContext();
-      await handleLeadMessage(ctx, this.leadRouter, message, threadId, this.dialogueMiddleware, {
-        handoffStore: this.handoffStore,
-        handoffNotifier: this.handoffNotifier,
-        outcomePipeline: this.outcomePipeline,
-        conversionBus: this.conversionBus,
-        crmProvider: this.crmProvider,
-        llmEngine: this.llmConversationEngine,
-        businessProfile: this.llmBusinessProfile,
-      });
-      return;
-    }
-
     // Record the incoming user message for conversation memory
     conversation = transitionConversation(conversation, {
       type: "add_message",
@@ -494,11 +393,9 @@ export class ChatRuntime {
       maxContextMessages: this.maxContextMessages,
       capabilityRegistry: this.capabilityRegistry,
       planGraphBuilder: this.planGraphBuilder,
-      resolvedSkin: this.resolvedSkin,
       crmProvider: this.crmProvider,
       dataFlowExecutor: this.dataFlowExecutor,
       isLeadBot: this.isLeadBot,
-      leadRouter: this.leadRouter,
       conversionBus: this.conversionBus,
       dialogueMiddleware: this.dialogueMiddleware,
       composeResponse: (ctx: ResponseContext, orgId?: string) => this.composeResponse(ctx, orgId),

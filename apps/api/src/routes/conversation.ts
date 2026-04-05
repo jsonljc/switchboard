@@ -1,8 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createEventEnvelope } from "@switchboard/agents";
-import type { RoutedEventEnvelope } from "@switchboard/agents";
+import { createEventEnvelope } from "@switchboard/schemas";
+import type { RoutedEventEnvelope } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
-import type { ResolvedContact } from "../bootstrap/contact-resolver.js";
 
 export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -42,7 +41,7 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // 1. Create message.received event (orgId from auth scope, not request body)
-      let event: RoutedEventEnvelope = createEventEnvelope({
+      const event: RoutedEventEnvelope = createEventEnvelope({
         organizationId: orgId,
         eventType: "message.received",
         source: { type: "webhook", id: channel ?? "whatsapp" },
@@ -50,95 +49,10 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
         metadata,
       });
 
-      // --- Resolve lifecycle Contact + Opportunity ---
-      let resolvedContact: ResolvedContact | null = null;
-      const contactResolver = app.lifecycleDeps?.contactResolver;
-      if (contactResolver) {
-        try {
-          resolvedContact = await contactResolver.resolveForMessage({
-            channelContactId: contactId,
-            channel: channel ?? "whatsapp",
-            organizationId: orgId,
-            attribution: (metadata?.attribution as Record<string, unknown>) ?? null,
-          });
-
-          // Inject opportunity stage into metadata for ConversationRouter
-          event = {
-            ...event,
-            metadata: {
-              ...event.metadata,
-              opportunityStage: resolvedContact.opportunity.stage,
-              lifecycleContactId: resolvedContact.contact.id,
-              lifecycleOpportunityId: resolvedContact.opportunity.id,
-            },
-          };
-        } catch (err) {
-          app.log.error({ err, contactId }, "ContactResolver error — continuing without lifecycle");
-        }
-      }
-
-      // 2. Run through ConversationRouter to set targetAgentId
-      if (agentSystem.conversationRouter) {
-        try {
-          event = await agentSystem.conversationRouter.transform(event);
-        } catch (err) {
-          app.log.error({ err, contactId }, "ConversationRouter error");
-        }
-      }
-
-      // 3. Check for owner escalation (no agent handles this stage)
-      if (event.metadata?.escalateToOwner) {
-        const fallbackHandler = app.lifecycleDeps?.fallbackHandler;
-        if (fallbackHandler) {
-          try {
-            const fallbackResult = await fallbackHandler.handleUnrouted({
-              contact: resolvedContact?.contact ?? {
-                id: contactId,
-                organizationId: orgId,
-                name: null,
-                phone: null,
-                email: null,
-                primaryChannel: (channel as "whatsapp" | "telegram" | "dashboard") ?? "whatsapp",
-                stage: "new",
-                roles: ["lead"],
-                firstContactAt: new Date(),
-                lastActivityAt: new Date(),
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              opportunity: resolvedContact?.opportunity ?? null,
-              recentMessages: [],
-              missingCapability: (event.metadata?.missingAgent as string) ?? "agent",
-              fallbackReason:
-                (event.metadata?.fallbackReason as "not_configured" | "paused" | "errored") ??
-                "not_configured",
-            });
-
-            return reply.code(200).send({
-              escalated: true,
-              reason: "no_agent_for_stage",
-              agentId: null,
-              fallbackTaskId: fallbackResult.task?.id ?? null,
-            });
-          } catch (err) {
-            app.log.error({ err, contactId }, "FallbackHandler error");
-          }
-        }
-
-        return reply.code(200).send({
-          escalated: true,
-          reason: "no_agent_for_stage",
-          agentId: null,
-        });
-      }
-
-      // 4. Process through EventLoop
-      // Note: replies are delivered by the ActionExecutor directly via the messaging channel,
-      // not returned in this response. This endpoint confirms processing status only.
+      // 2. Process through EventLoop
       try {
         const result = await agentSystem.eventLoop.process(event, {
           organizationId: orgId,
-          lifecycle: app.lifecycleDeps?.lifecycleService ?? undefined,
         });
 
         let escalated = false;
@@ -150,7 +64,7 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
               escalated = true;
             }
             if (evtType === "lead.qualified") {
-              handedOffTo = "sales-closer";
+              handedOffTo = (event.metadata?.targetAgentId as string) ?? null;
             }
           }
 
@@ -163,7 +77,7 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
           escalated = true;
         }
 
-        // 5. Save thread updates from agent processing
+        // 3. Save thread updates from agent processing
         if (result.processed.length > 0) {
           const thread = event.metadata?.conversationThread as { id: string } | undefined;
           if (thread && agentSystem.threadStore) {
@@ -182,7 +96,7 @@ export const agentConversationRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(200).send({
           escalated,
           handedOffTo,
-          agentId: (event.metadata?.targetAgentId as string) ?? "lead-responder",
+          agentId: (event.metadata?.targetAgentId as string) ?? null,
         });
       } catch (err) {
         app.log.error({ err, contactId }, "EventLoop processing error");

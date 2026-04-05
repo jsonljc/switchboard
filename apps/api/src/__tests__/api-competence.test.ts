@@ -27,8 +27,8 @@ describe("Competence API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", mockPrisma as any);
-    app.decorate("storageContext", { competence: mockCompetence } as any);
+    app.decorate("prisma", mockPrisma as unknown as never);
+    app.decorate("storageContext", { competence: mockCompetence } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -120,7 +120,7 @@ describe("Competence API", () => {
 
       app = Fastify({ logger: false });
       app.decorate("prisma", null);
-      app.decorate("storageContext", { competence: mockCompetence } as any);
+      app.decorate("storageContext", { competence: mockCompetence } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       await app.register(competenceRoutes, { prefix: "/api/competence" });
 

@@ -1,6 +1,20 @@
 import type { ResponseContext, GeneratedResponse } from "./composer/response-generator.js";
 import { composeUncertainReply, composeWelcomeMessage } from "./composer/reply.js";
-import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
+
+/** Minimal skin shape for template fallback. */
+interface SkinLike {
+  language?: {
+    welcomeMessage?: string;
+  };
+  manifest?: { name?: string };
+}
+
+/** Minimal profile shape for template fallback. */
+interface ProfileLike {
+  profile?: {
+    business?: { name?: string };
+  };
+}
 
 /**
  * Template-based fallback for response generation, used when no LLM ResponseGenerator
@@ -8,8 +22,8 @@ import type { ResolvedSkin, ResolvedProfile } from "@switchboard/core";
  */
 export function templateFallback(
   context: ResponseContext,
-  resolvedSkin: ResolvedSkin | null,
-  resolvedProfile: ResolvedProfile | null,
+  resolvedSkin: SkinLike | null,
+  resolvedProfile: ProfileLike | null,
 ): GeneratedResponse {
   let text: string;
 

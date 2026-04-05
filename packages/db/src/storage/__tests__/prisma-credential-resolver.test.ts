@@ -14,6 +14,7 @@ describe("PrismaCredentialResolver", () => {
 
   beforeEach(() => {
     connectionStore = createMockConnectionStore();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock connection store for testing
     resolver = new PrismaCredentialResolver(connectionStore as any);
   });
 

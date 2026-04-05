@@ -35,7 +35,7 @@ describe("Token Usage API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("redis", mockRedis as any);
+    app.decorate("redis", mockRedis as unknown as never);
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
       request.organizationIdFromAuth = "org_test";

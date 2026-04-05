@@ -10,7 +10,7 @@ import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import { resolveIdentity } from "../identity/spec.js";
 
 import type { SharedContext } from "./shared-context.js";
-import { buildCartridgeContext, isSmbOrg } from "./shared-context.js";
+import { buildCartridgeContext } from "./shared-context.js";
 import type { ApprovalResponse } from "./lifecycle.js";
 import { respondToPlanApproval } from "./plan-approval-manager.js";
 
@@ -37,37 +37,114 @@ export class ApprovalManager {
     }
 
     // 2. Check expired
-    if (isExpired(approval.state)) {
-      const expiredState = transitionApproval(approval.state, "expire");
-      await this.ctx.storage.approvals.updateState(
-        params.approvalId,
-        expiredState,
-        approval.state.version,
-      );
-
-      const envelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
-      if (envelope) {
-        await this.ctx.storage.envelopes.update(envelope.id, { status: "expired" });
-        envelope.status = "expired";
-
-        await this.ctx.ledger.record({
-          eventType: "action.expired",
-          actorType: "system",
-          actorId: "orchestrator",
-          entityType: "approval",
-          entityId: params.approvalId,
-          riskCategory: approval.request.riskCategory as RiskCategory,
-          summary: `Approval expired for envelope ${approval.envelopeId}`,
-          snapshot: { approvalId: params.approvalId, envelopeId: approval.envelopeId },
-          envelopeId: approval.envelopeId,
-        });
-
-        return { envelope, approvalState: expiredState, executionResult: null };
-      }
-      throw new Error(`Envelope not found for expired approval`);
+    const expiredResult = await this.handleExpiredApproval(approval, params.approvalId);
+    if (expiredResult) {
+      return expiredResult;
     }
 
-    // 3. Validate binding hash for approve/patch (timing-safe for all orgs)
+    // 3. Validate binding hash
+    this.validateBindingHash(params, approval);
+
+    // 4. Authorization checks
+    await this.authorizeApprovalResponse(params, approval);
+
+    // 4b. Self-approval prevention
+    const envelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
+    if (!envelope) {
+      throw new Error(`Envelope not found: ${approval.envelopeId}`);
+    }
+    this.preventSelfApproval(params, envelope);
+
+    // 4c. Approval rate limiting
+    this.checkRateLimit(params);
+
+    // 5. Transition approval state
+    const versionBeforeTransition = approval.state.version;
+    const newState = transitionApproval(
+      approval.state,
+      params.action,
+      params.respondedBy,
+      params.patchValue,
+      params.approvalHash,
+    );
+    await this.ctx.storage.approvals.updateState(
+      params.approvalId,
+      newState,
+      versionBeforeTransition,
+    );
+
+    // 6. Handle action-specific logic
+    let executionResult: ExecuteResult | null = null;
+
+    if (params.action === "approve") {
+      executionResult = await this.handleApprove(
+        params,
+        approval,
+        envelope,
+        newState,
+        executeApproved,
+      );
+    } else if (params.action === "reject") {
+      await this.handleReject(params, approval, envelope);
+    } else if (params.action === "patch") {
+      executionResult = await this.handlePatch(
+        params,
+        approval,
+        envelope,
+        newState,
+        executeApproved,
+      );
+    }
+
+    const updatedEnvelope = await this.ctx.storage.envelopes.getById(envelope.id);
+
+    return {
+      envelope: updatedEnvelope ?? envelope,
+      approvalState: newState,
+      executionResult,
+    };
+  }
+
+  private async handleExpiredApproval(
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+    approvalId: string,
+  ): Promise<ApprovalResponse | null> {
+    if (!isExpired(approval.state)) {
+      return null;
+    }
+
+    const expiredState = transitionApproval(approval.state, "expire");
+    await this.ctx.storage.approvals.updateState(approvalId, expiredState, approval.state.version);
+
+    const envelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
+    if (envelope) {
+      await this.ctx.storage.envelopes.update(envelope.id, { status: "expired" });
+      envelope.status = "expired";
+
+      await this.ctx.ledger.record({
+        eventType: "action.expired",
+        actorType: "system",
+        actorId: "orchestrator",
+        entityType: "approval",
+        entityId: approvalId,
+        riskCategory: approval.request.riskCategory as RiskCategory,
+        summary: `Approval expired for envelope ${approval.envelopeId}`,
+        snapshot: { approvalId, envelopeId: approval.envelopeId },
+        envelopeId: approval.envelopeId,
+      });
+
+      return { envelope, approvalState: expiredState, executionResult: null };
+    }
+    throw new Error(`Envelope not found for expired approval`);
+  }
+
+  private validateBindingHash(
+    params: {
+      action: "approve" | "reject" | "patch";
+      bindingHash: string;
+    },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+  ): void {
     if (params.action === "approve" || params.action === "patch") {
       const a = Buffer.from(params.bindingHash);
       const b = Buffer.from(approval.request.bindingHash);
@@ -77,17 +154,13 @@ export class ApprovalManager {
         );
       }
     }
+  }
 
-    // 4. Authorization check
-    const isSmbOrgForAuth = await isSmbOrg(this.ctx, approval.organizationId);
-    if (isSmbOrgForAuth) {
-      const smbConfig = this.ctx.tierStore
-        ? await this.ctx.tierStore.getSmbConfig(approval.organizationId ?? "")
-        : null;
-      if (smbConfig && params.respondedBy !== smbConfig.ownerId) {
-        throw new Error(`Principal ${params.respondedBy} is not the organization owner`);
-      }
-    } else if (approval.request.approvers.length > 0) {
+  private async authorizeApprovalResponse(
+    params: { respondedBy: string },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+  ): Promise<void> {
+    if (approval.request.approvers.length > 0) {
       const principal = await this.ctx.storage.identity.getPrincipal(params.respondedBy);
       if (!principal) {
         throw new Error(`Principal not found: ${params.respondedBy}`);
@@ -108,7 +181,7 @@ export class ApprovalManager {
           actorType: "system",
           actorId: "orchestrator",
           entityType: "approval",
-          entityId: params.approvalId,
+          entityId: (approval as { approvalId?: string }).approvalId ?? "",
           riskCategory: approval.request.riskCategory as RiskCategory,
           summary: `Delegation chain resolved: ${chainResult.chain.join(" → ")} (depth ${chainResult.depth})`,
           snapshot: {
@@ -120,13 +193,12 @@ export class ApprovalManager {
         });
       }
     }
+  }
 
-    // 4b. Self-approval prevention
-    const envelope = await this.ctx.storage.envelopes.getById(approval.envelopeId);
-    if (!envelope) {
-      throw new Error(`Envelope not found: ${approval.envelopeId}`);
-    }
-
+  private preventSelfApproval(
+    params: { action: "approve" | "reject" | "patch"; respondedBy: string },
+    envelope: ActionEnvelope,
+  ): void {
     if (
       (params.action === "approve" || params.action === "patch") &&
       !this.ctx.selfApprovalAllowed
@@ -138,8 +210,12 @@ export class ApprovalManager {
         throw new Error("Self-approval is not permitted");
       }
     }
+  }
 
-    // 4c. Approval rate limiting
+  private checkRateLimit(params: {
+    action: "approve" | "reject" | "patch";
+    respondedBy: string;
+  }): void {
     if (this.ctx.approvalRateLimit && (params.action === "approve" || params.action === "patch")) {
       const now = Date.now();
       const windowMs = this.ctx.approvalRateLimit.windowMs;
@@ -162,237 +238,274 @@ export class ApprovalManager {
         }
       }
     }
+  }
 
-    // 5. Transition approval state
-    const versionBeforeTransition = approval.state.version;
-    const newState = transitionApproval(
-      approval.state,
-      params.action,
-      params.respondedBy,
-      params.patchValue,
-      params.approvalHash,
-    );
-    await this.ctx.storage.approvals.updateState(
-      params.approvalId,
-      newState,
-      versionBeforeTransition,
-    );
-
-    let executionResult: ExecuteResult | null = null;
-
-    if (params.action === "approve") {
-      if (newState.status === "approved") {
-        envelope.status = "approved";
-        await this.ctx.storage.envelopes.update(envelope.id, { status: "approved" });
-
-        const isSmbForAudit = await isSmbOrg(this.ctx, approval.organizationId);
-        if (isSmbForAudit && this.ctx.smbActivityLog) {
-          await this.ctx.smbActivityLog.record({
-            actorId: params.respondedBy,
-            actorType: "user",
-            actionType: "approval.approved",
-            result: "approved",
-            amount: null,
-            summary: `Action approved by ${params.respondedBy}`,
-            snapshot: { approvalId: params.approvalId },
-            envelopeId: envelope.id,
-            organizationId: approval.organizationId ?? "",
-          });
-        } else {
-          await this.ctx.ledger.record({
-            eventType: "action.approved",
-            actorType: "user",
-            actorId: params.respondedBy,
-            entityType: "action",
-            entityId: approval.request.actionId,
-            riskCategory: approval.request.riskCategory as RiskCategory,
-            summary: newState.quorum
-              ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
-              : `Action approved by ${params.respondedBy}`,
-            snapshot: {
-              approvalId: params.approvalId,
-              quorum: newState.quorum ?? null,
-            },
-            envelopeId: envelope.id,
-            traceId: envelope.traceId,
-          });
-        }
-
-        if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
-          await this.ctx.onEnqueue(envelope.id);
-        } else {
-          executionResult = await executeApproved(envelope.id);
-        }
-      } else {
-        await this.ctx.ledger.record({
-          eventType: "action.partially_approved",
-          actorType: "user",
-          actorId: params.respondedBy,
-          entityType: "action",
-          entityId: approval.request.actionId,
-          riskCategory: approval.request.riskCategory as RiskCategory,
-          summary: `Approval ${newState.quorum?.approvalHashes.length ?? 0}/${newState.quorum?.required ?? 1} received from ${params.respondedBy}`,
-          snapshot: {
-            approvalId: params.approvalId,
-            quorum: newState.quorum ?? null,
-          },
-          envelopeId: envelope.id,
-          traceId: envelope.traceId,
-        });
-      }
-    } else if (params.action === "reject") {
-      envelope.status = "denied";
-      await this.ctx.storage.envelopes.update(envelope.id, { status: "denied" });
+  private async handleApprove(
+    params: { approvalId: string; respondedBy: string },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+    envelope: ActionEnvelope,
+    newState: ReturnType<typeof transitionApproval>,
+    executeApproved: (envelopeId: string) => Promise<ExecuteResult>,
+  ): Promise<ExecuteResult | null> {
+    if (newState.status === "approved") {
+      envelope.status = "approved";
+      await this.ctx.storage.envelopes.update(envelope.id, { status: "approved" });
 
       await this.ctx.ledger.record({
-        eventType: "action.rejected",
+        eventType: "action.approved",
         actorType: "user",
         actorId: params.respondedBy,
         entityType: "action",
         entityId: approval.request.actionId,
         riskCategory: approval.request.riskCategory as RiskCategory,
-        summary: `Action rejected by ${params.respondedBy}`,
-        snapshot: { approvalId: params.approvalId },
+        summary: newState.quorum
+          ? `Action approved (quorum ${newState.quorum.approvalHashes.length}/${newState.quorum.required} met) by ${params.respondedBy}`
+          : `Action approved by ${params.respondedBy}`,
+        snapshot: {
+          approvalId: params.approvalId,
+          quorum: newState.quorum ?? null,
+        },
         envelopeId: envelope.id,
         traceId: envelope.traceId,
       });
-    } else if (params.action === "patch") {
-      const originalProposal = envelope.proposals[0];
-      if (originalProposal && params.patchValue) {
-        const patchedParams = applyPatch(originalProposal.parameters, params.patchValue);
-        originalProposal.parameters = patchedParams;
 
-        const principalId = (originalProposal.parameters["_principalId"] as string) ?? "";
-        const cartridgeId = (originalProposal.parameters["_cartridgeId"] as string) ?? "";
-        const patchOrgId = (originalProposal.parameters["_organizationId"] as string) ?? null;
-        const identitySpec = await this.ctx.storage.identity.getSpecByPrincipalId(principalId);
-        if (identitySpec) {
-          const overlays = await this.ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
-          const reEvalIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
-          const cartridge = this.ctx.storage.cartridges.get(cartridgeId);
-          if (cartridge) {
-            let enriched: Record<string, unknown> = {};
+      // Update marketplace trust score (principalId stored in _principalId by propose pipeline)
+      if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
+        const proposal = envelope.proposals[0];
+        if (proposal) {
+          const principalId = proposal.parameters["_principalId"] as string | undefined;
+          if (principalId) {
             try {
-              enriched = await cartridge.enrichContext(
-                originalProposal.actionType,
-                patchedParams,
-                await buildCartridgeContext(this.ctx, cartridgeId, principalId, patchOrgId),
-              );
+              await this.ctx.trustAdapter.recordApproval(principalId, proposal.actionType);
             } catch (err) {
               console.warn(
-                `[orchestrator] enrichContext failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+                `[approval] trust score update failed on approval: ${err instanceof Error ? err.message : String(err)}`,
               );
-            }
-
-            let riskInput: import("@switchboard/schemas").RiskInput;
-            try {
-              riskInput = await cartridge.getRiskInput(originalProposal.actionType, patchedParams, {
-                principalId,
-                ...enriched,
-              });
-            } catch (err) {
-              console.warn(
-                `[orchestrator] getRiskInput failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
-              );
-              riskInput = {
-                baseRisk: "medium",
-                exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-                reversibility: "full",
-                sensitivity: {
-                  entityVolatile: false,
-                  learningPhase: false,
-                  recentlyModified: false,
-                },
-              };
-            }
-            const guardrails = cartridge.getGuardrails();
-            const policies = await this.ctx.storage.policies.listActive({ cartridgeId });
-
-            const reEvalProposal = { ...originalProposal, parameters: patchedParams };
-            const reEvalContext: EvaluationContext = {
-              actionType: originalProposal.actionType,
-              parameters: patchedParams,
-              cartridgeId,
-              principalId,
-              organizationId: patchOrgId,
-              riskCategory: riskInput.baseRisk,
-              metadata: { ...enriched, envelopeId: envelope.id },
-            };
-            const reEngineContext: PolicyEngineContext = {
-              policies,
-              guardrails,
-              guardrailState: this.ctx.guardrailState,
-              resolvedIdentity: reEvalIdentity,
-              riskInput,
-            };
-
-            const reEvalTrace = evaluate(reEvalProposal, reEvalContext, reEngineContext);
-            if (reEvalTrace.finalDecision === "deny") {
-              envelope.status = "denied";
-              await this.ctx.storage.envelopes.update(envelope.id, {
-                status: "denied",
-                proposals: envelope.proposals,
-              });
-              await this.ctx.ledger.record({
-                eventType: "action.denied",
-                actorType: "system",
-                actorId: "orchestrator",
-                entityType: "action",
-                entityId: approval.request.actionId,
-                riskCategory: reEvalTrace.computedRiskScore.category,
-                summary: `Patched parameters denied by policy re-evaluation`,
-                snapshot: {
-                  approvalId: params.approvalId,
-                  patchValue: params.patchValue,
-                  reason: reEvalTrace.explanation,
-                },
-                envelopeId: envelope.id,
-              });
-
-              const updatedEnvelope = await this.ctx.storage.envelopes.getById(envelope.id);
-              return {
-                envelope: updatedEnvelope ?? envelope,
-                approvalState: newState,
-                executionResult: null,
-              };
             }
           }
         }
       }
 
-      envelope.status = "approved";
-      await this.ctx.storage.envelopes.update(envelope.id, {
-        status: "approved",
-        proposals: envelope.proposals,
-      });
-
+      if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
+        await this.ctx.onEnqueue(envelope.id);
+        return null;
+      } else {
+        return await executeApproved(envelope.id);
+      }
+    } else {
       await this.ctx.ledger.record({
-        eventType: "action.patched",
+        eventType: "action.partially_approved",
         actorType: "user",
         actorId: params.respondedBy,
         entityType: "action",
         entityId: approval.request.actionId,
         riskCategory: approval.request.riskCategory as RiskCategory,
-        summary: `Action patched and approved by ${params.respondedBy}`,
-        snapshot: { approvalId: params.approvalId, patchValue: params.patchValue },
+        summary: `Approval ${newState.quorum?.approvalHashes.length ?? 0}/${newState.quorum?.required ?? 1} received from ${params.respondedBy}`,
+        snapshot: {
+          approvalId: params.approvalId,
+          quorum: newState.quorum ?? null,
+        },
         envelopeId: envelope.id,
         traceId: envelope.traceId,
       });
+      return null;
+    }
+  }
 
-      if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
-        await this.ctx.onEnqueue(envelope.id);
-      } else {
-        executionResult = await executeApproved(envelope.id);
+  private async handleReject(
+    params: { approvalId: string; respondedBy: string },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+    envelope: ActionEnvelope,
+  ): Promise<void> {
+    envelope.status = "denied";
+    await this.ctx.storage.envelopes.update(envelope.id, { status: "denied" });
+
+    await this.ctx.ledger.record({
+      eventType: "action.rejected",
+      actorType: "user",
+      actorId: params.respondedBy,
+      entityType: "action",
+      entityId: approval.request.actionId,
+      riskCategory: approval.request.riskCategory as RiskCategory,
+      summary: `Action rejected by ${params.respondedBy}`,
+      snapshot: { approvalId: params.approvalId },
+      envelopeId: envelope.id,
+      traceId: envelope.traceId,
+    });
+
+    // Update marketplace trust score (principalId stored in _principalId by propose pipeline)
+    if (this.ctx.trustAdapter && envelope.proposals.length > 0) {
+      const proposal = envelope.proposals[0];
+      if (proposal) {
+        const principalId = proposal.parameters["_principalId"] as string | undefined;
+        if (principalId) {
+          try {
+            await this.ctx.trustAdapter.recordRejection(principalId, proposal.actionType);
+          } catch (err) {
+            console.warn(
+              `[approval] trust score update failed on rejection: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  private async handlePatch(
+    params: {
+      approvalId: string;
+      respondedBy: string;
+      patchValue?: Record<string, unknown>;
+    },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+    envelope: ActionEnvelope,
+    _newState: ReturnType<typeof transitionApproval>,
+    executeApproved: (envelopeId: string) => Promise<ExecuteResult>,
+  ): Promise<ExecuteResult | null> {
+    const originalProposal = envelope.proposals[0];
+    if (originalProposal && params.patchValue) {
+      const patchedParams = applyPatch(originalProposal.parameters, params.patchValue);
+      originalProposal.parameters = patchedParams;
+
+      const reEvalDenied = await this.reEvaluatePatchedProposal(
+        originalProposal,
+        envelope,
+        params,
+        approval,
+      );
+      if (reEvalDenied) {
+        return null;
       }
     }
 
-    const updatedEnvelope = await this.ctx.storage.envelopes.getById(envelope.id);
+    envelope.status = "approved";
+    await this.ctx.storage.envelopes.update(envelope.id, {
+      status: "approved",
+      proposals: envelope.proposals,
+    });
 
-    return {
-      envelope: updatedEnvelope ?? envelope,
-      approvalState: newState,
-      executionResult,
+    await this.ctx.ledger.record({
+      eventType: "action.patched",
+      actorType: "user",
+      actorId: params.respondedBy,
+      entityType: "action",
+      entityId: approval.request.actionId,
+      riskCategory: approval.request.riskCategory as RiskCategory,
+      summary: `Action patched and approved by ${params.respondedBy}`,
+      snapshot: { approvalId: params.approvalId, patchValue: params.patchValue },
+      envelopeId: envelope.id,
+      traceId: envelope.traceId,
+    });
+
+    if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
+      await this.ctx.onEnqueue(envelope.id);
+      return null;
+    } else {
+      return await executeApproved(envelope.id);
+    }
+  }
+
+  private async reEvaluatePatchedProposal(
+    originalProposal: import("@switchboard/schemas").ActionProposal,
+    envelope: ActionEnvelope,
+    params: { approvalId: string; patchValue?: Record<string, unknown> },
+    approval: Awaited<ReturnType<SharedContext["storage"]["approvals"]["getById"]>> & object,
+  ): Promise<boolean> {
+    const principalId = (originalProposal.parameters["_principalId"] as string) ?? "";
+    const cartridgeId = (originalProposal.parameters["_cartridgeId"] as string) ?? "";
+    const patchOrgId = (originalProposal.parameters["_organizationId"] as string) ?? null;
+    const identitySpec = await this.ctx.storage.identity.getSpecByPrincipalId(principalId);
+    if (!identitySpec) return false;
+
+    const overlays = await this.ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
+    const reEvalIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
+    const cartridge = this.ctx.storage.cartridges.get(cartridgeId);
+    if (!cartridge) return false;
+
+    let enriched: Record<string, unknown> = {};
+    try {
+      enriched = await cartridge.enrichContext(
+        originalProposal.actionType,
+        originalProposal.parameters,
+        await buildCartridgeContext(this.ctx, cartridgeId, principalId, patchOrgId),
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] enrichContext failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    let riskInput: import("@switchboard/schemas").RiskInput;
+    try {
+      riskInput = await cartridge.getRiskInput(
+        originalProposal.actionType,
+        originalProposal.parameters,
+        {
+          principalId,
+          ...enriched,
+        },
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] getRiskInput failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      riskInput = {
+        baseRisk: "medium",
+        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+        reversibility: "full",
+        sensitivity: {
+          entityVolatile: false,
+          learningPhase: false,
+          recentlyModified: false,
+        },
+      };
+    }
+    const guardrails = cartridge.getGuardrails();
+    const policies = await this.ctx.storage.policies.listActive({ cartridgeId });
+
+    const reEvalProposal = { ...originalProposal, parameters: originalProposal.parameters };
+    const reEvalContext: EvaluationContext = {
+      actionType: originalProposal.actionType,
+      parameters: originalProposal.parameters,
+      cartridgeId,
+      principalId,
+      organizationId: patchOrgId,
+      riskCategory: riskInput.baseRisk,
+      metadata: { ...enriched, envelopeId: envelope.id },
     };
+    const reEngineContext: PolicyEngineContext = {
+      policies,
+      guardrails,
+      guardrailState: this.ctx.guardrailState,
+      resolvedIdentity: reEvalIdentity,
+      riskInput,
+    };
+
+    const reEvalTrace = evaluate(reEvalProposal, reEvalContext, reEngineContext);
+    if (reEvalTrace.finalDecision === "deny") {
+      envelope.status = "denied";
+      await this.ctx.storage.envelopes.update(envelope.id, {
+        status: "denied",
+        proposals: envelope.proposals,
+      });
+      await this.ctx.ledger.record({
+        eventType: "action.denied",
+        actorType: "system",
+        actorId: "orchestrator",
+        entityType: "action",
+        entityId: approval.request.actionId,
+        riskCategory: reEvalTrace.computedRiskScore.category,
+        summary: `Patched parameters denied by policy re-evaluation`,
+        snapshot: {
+          approvalId: params.approvalId,
+          patchValue: params.patchValue,
+          reason: reEvalTrace.explanation,
+        },
+        envelopeId: envelope.id,
+      });
+      return true;
+    }
+    return false;
   }
 
   async respondToPlanApproval(

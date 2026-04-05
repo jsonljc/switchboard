@@ -58,15 +58,15 @@ describe("getPreviewMessage", () => {
     expect(msg).toContain("your business");
   });
 
-  it("handles onboarding agent IDs (lead-responder -> responder)", () => {
-    const msg = getPreviewMessage("lead-responder", "warm-professional", {}, "Acme");
+  it("handles onboarding agent IDs (employee-a -> responder)", () => {
+    const msg = getPreviewMessage("employee-a", "warm-professional", {}, "Acme");
     expect(msg).toContain("Acme");
     expect(msg).toContain("Welcome");
   });
 
-  it("handles onboarding agent IDs (sales-closer -> strategist)", () => {
+  it("handles onboarding agent IDs (employee-b -> strategist)", () => {
     const msg = getPreviewMessage(
-      "sales-closer",
+      "employee-b",
       "casual-conversational",
       { followUpDays: [1, 3, 7] },
       "Acme",

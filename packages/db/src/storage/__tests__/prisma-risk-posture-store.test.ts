@@ -16,6 +16,7 @@ describe("PrismaRiskPostureStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaRiskPostureStore(prisma as any);
   });
 

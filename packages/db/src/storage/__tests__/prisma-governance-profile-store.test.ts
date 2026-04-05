@@ -16,6 +16,7 @@ describe("PrismaGovernanceProfileStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaGovernanceProfileStore(prisma as any);
   });
 
@@ -85,58 +86,13 @@ describe("PrismaGovernanceProfileStore", () => {
       expect(result).toBeNull();
     });
 
-    it("returns {profile} when no allowed/blocked lists", async () => {
+    it("returns {profile}", async () => {
       prisma.organizationConfig.findUnique.mockResolvedValue({
         governanceProfile: "guarded",
-        smbAllowedActions: [],
-        smbBlockedActions: [],
       });
 
       const result = await store.getConfig("org_1");
       expect(result).toEqual({ profile: "guarded" });
-    });
-
-    it("includes allowedActionTypes when populated", async () => {
-      prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "observe",
-        smbAllowedActions: ["ad.create"],
-        smbBlockedActions: [],
-      });
-
-      const result = await store.getConfig("org_1");
-      expect(result).toEqual({
-        profile: "observe",
-        allowedActionTypes: ["ad.create"],
-      });
-    });
-
-    it("includes blockedActionTypes when populated", async () => {
-      prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "observe",
-        smbAllowedActions: [],
-        smbBlockedActions: ["payment.send"],
-      });
-
-      const result = await store.getConfig("org_1");
-      expect(result).toEqual({
-        profile: "observe",
-        blockedActionTypes: ["payment.send"],
-      });
-    });
-
-    it("includes both lists when both populated", async () => {
-      prisma.organizationConfig.findUnique.mockResolvedValue({
-        governanceProfile: "strict",
-        smbAllowedActions: ["ad.create"],
-        smbBlockedActions: ["payment.send"],
-      });
-
-      const result = await store.getConfig("org_1");
-      expect(result).toEqual({
-        profile: "strict",
-        allowedActionTypes: ["ad.create"],
-        blockedActionTypes: ["payment.send"],
-      });
     });
   });
 
@@ -151,8 +107,6 @@ describe("PrismaGovernanceProfileStore", () => {
 
       await store.setConfig("org_1", {
         profile: "observe",
-        allowedActionTypes: ["ad.create"],
-        blockedActionTypes: ["payment.send"],
       });
 
       expect(prisma.organizationConfig.upsert).toHaveBeenCalledWith({
@@ -161,34 +115,11 @@ describe("PrismaGovernanceProfileStore", () => {
           id: "org_1",
           name: "",
           governanceProfile: "observe",
-          smbAllowedActions: ["ad.create"],
-          smbBlockedActions: ["payment.send"],
         },
         update: {
           governanceProfile: "observe",
-          smbAllowedActions: ["ad.create"],
-          smbBlockedActions: ["payment.send"],
         },
       });
-    });
-
-    it("defaults missing lists to empty arrays", async () => {
-      prisma.organizationConfig.upsert.mockResolvedValue({});
-
-      await store.setConfig("org_1", { profile: "guarded" });
-
-      expect(prisma.organizationConfig.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          create: expect.objectContaining({
-            smbAllowedActions: [],
-            smbBlockedActions: [],
-          }),
-          update: expect.objectContaining({
-            smbAllowedActions: [],
-            smbBlockedActions: [],
-          }),
-        }),
-      );
     });
   });
 });

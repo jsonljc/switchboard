@@ -1,7 +1,13 @@
-import type { ActionProposal, RiskCategory, UndoRecipe } from "@switchboard/schemas";
+import type {
+  ActionProposal,
+  ActionEnvelope,
+  RiskCategory,
+  UndoRecipe,
+} from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import { beginExecution, endExecution, GuardedCartridge } from "../execution-guard.js";
 import { getTracer } from "../telemetry/tracing.js";
+import type { Span } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
 
 import type { SharedContext } from "./shared-context.js";
@@ -24,6 +30,65 @@ export class ExecutionManager {
     const execStart = Date.now();
 
     // 1. Load envelope, verify status
+    const { envelope, proposal } = await this.loadAndValidateEnvelope(envelopeId);
+
+    // 2. Look up cartridge
+    const decision = envelope.decisions[0];
+    const storedCartridgeId = proposal.parameters["_cartridgeId"] as string | undefined;
+    const inferredCartridgeId = this.inferCartridgeId(proposal.actionType);
+    const cartridge = this.ctx.storage.cartridges.get(
+      storedCartridgeId ?? inferredCartridgeId ?? "",
+    );
+    if (!cartridge) {
+      return await this.handleCartridgeNotFound(envelopeId, proposal);
+    }
+
+    // 3. Execute
+    const execCartridgeId = storedCartridgeId ?? inferredCartridgeId ?? "";
+    await this.recordExecutionStart(envelope, proposal, decision, execCartridgeId);
+
+    const preMutationSnapshot = await this.capturePreMutationSnapshot(
+      cartridge,
+      proposal,
+      envelope,
+      decision,
+      execCartridgeId,
+    );
+
+    const executeResult = await this.executeCartridgeAction(
+      cartridge,
+      proposal,
+      envelope,
+      execCartridgeId,
+    );
+
+    // 4. Update envelope
+    await this.updateEnvelopeWithResult(
+      envelopeId,
+      envelope,
+      proposal,
+      executeResult,
+      preMutationSnapshot,
+    );
+
+    // 5. Post-execution processing
+    await this.postExecutionProcessing(
+      proposal,
+      executeResult,
+      execCartridgeId,
+      envelope,
+      decision,
+    );
+
+    // Record metrics
+    this.recordMetrics(execSpan, execStart, proposal, executeResult);
+
+    return executeResult;
+  }
+
+  private async loadAndValidateEnvelope(
+    envelopeId: string,
+  ): Promise<{ envelope: ActionEnvelope; proposal: ActionProposal }> {
     const envelope = await this.ctx.storage.envelopes.getById(envelopeId);
     if (!envelope) {
       throw new Error(`Envelope not found: ${envelopeId}`);
@@ -37,29 +102,33 @@ export class ExecutionManager {
       throw new Error("No proposals in envelope");
     }
 
-    // 2. Look up cartridge
-    const decision = envelope.decisions[0];
-    const storedCartridgeId = proposal.parameters["_cartridgeId"] as string | undefined;
-    const inferredCartridgeId = this.inferCartridgeId(proposal.actionType);
-    const cartridge = this.ctx.storage.cartridges.get(
-      storedCartridgeId ?? inferredCartridgeId ?? "",
-    );
-    if (!cartridge) {
-      const result: ExecuteResult = {
-        success: false,
-        summary: `Cartridge not found for action: ${proposal.actionType}`,
-        externalRefs: {},
-        rollbackAvailable: false,
-        partialFailures: [{ step: "execute", error: "Cartridge not found" }],
-        durationMs: 0,
-        undoRecipe: null,
-      };
-      await this.ctx.storage.envelopes.update(envelopeId, { status: "failed" });
-      return result;
-    }
+    return { envelope, proposal };
+  }
 
-    // 3. Execute
-    await this.ctx.storage.envelopes.update(envelopeId, { status: "executing" });
+  private async handleCartridgeNotFound(
+    envelopeId: string,
+    proposal: ActionProposal,
+  ): Promise<ExecuteResult> {
+    const result: ExecuteResult = {
+      success: false,
+      summary: `Cartridge not found for action: ${proposal.actionType}`,
+      externalRefs: {},
+      rollbackAvailable: false,
+      partialFailures: [{ step: "execute", error: "Cartridge not found" }],
+      durationMs: 0,
+      undoRecipe: null,
+    };
+    await this.ctx.storage.envelopes.update(envelopeId, { status: "failed" });
+    return result;
+  }
+
+  private async recordExecutionStart(
+    envelope: ActionEnvelope,
+    proposal: ActionProposal,
+    decision: import("@switchboard/schemas").DecisionTrace | undefined,
+    execCartridgeId: string,
+  ): Promise<void> {
+    await this.ctx.storage.envelopes.update(envelope.id, { status: "executing" });
 
     await this.ctx.ledger.record({
       eventType: "action.executing",
@@ -74,16 +143,23 @@ export class ExecutionManager {
         parameters: Object.fromEntries(
           Object.entries(proposal.parameters).filter(([k]) => !k.startsWith("_")),
         ),
-        cartridgeId: storedCartridgeId ?? inferredCartridgeId ?? "",
+        cartridgeId: execCartridgeId,
       },
       envelopeId: envelope.id,
     });
+  }
 
-    // Capture pre-mutation snapshot
-    const execPrincipalId = (envelope.proposals[0]?.parameters["_principalId"] as string) ?? "";
-    const execOrgId = (envelope.proposals[0]?.parameters["_organizationId"] as string) ?? null;
-    const execCartridgeId = storedCartridgeId ?? inferredCartridgeId ?? "";
+  private async capturePreMutationSnapshot(
+    cartridge: import("@switchboard/cartridge-sdk").Cartridge,
+    proposal: ActionProposal,
+    envelope: ActionEnvelope,
+    decision: import("@switchboard/schemas").DecisionTrace | undefined,
+    execCartridgeId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const execPrincipalId = (proposal.parameters["_principalId"] as string) ?? "";
+    const execOrgId = (proposal.parameters["_organizationId"] as string) ?? null;
     let preMutationSnapshot: Record<string, unknown> | undefined;
+
     try {
       if (cartridge.captureSnapshot) {
         preMutationSnapshot = await cartridge.captureSnapshot(
@@ -115,11 +191,23 @@ export class ExecutionManager {
       );
     }
 
+    return preMutationSnapshot;
+  }
+
+  private async executeCartridgeAction(
+    cartridge: import("@switchboard/cartridge-sdk").Cartridge,
+    proposal: ActionProposal,
+    envelope: ActionEnvelope,
+    execCartridgeId: string,
+  ): Promise<ExecuteResult> {
+    const execPrincipalId = (proposal.parameters["_principalId"] as string) ?? "";
+    const execOrgId = (proposal.parameters["_organizationId"] as string) ?? null;
     let executeResult: ExecuteResult;
     const execToken = beginExecution();
     if (cartridge instanceof GuardedCartridge) {
       cartridge.bindToken(execToken);
     }
+
     try {
       const execParams = {
         ...proposal.parameters,
@@ -169,7 +257,16 @@ export class ExecutionManager {
       }
     }
 
-    // 4. Update envelope
+    return executeResult;
+  }
+
+  private async updateEnvelopeWithResult(
+    envelopeId: string,
+    envelope: ActionEnvelope,
+    proposal: ActionProposal,
+    executeResult: ExecuteResult,
+    preMutationSnapshot: Record<string, unknown> | undefined,
+  ): Promise<void> {
     const newStatus = executeResult.success ? "executed" : "failed";
     await this.ctx.storage.envelopes.update(envelopeId, {
       status: newStatus,
@@ -190,14 +287,22 @@ export class ExecutionManager {
         },
       ],
     });
+  }
 
-    // 5. Update guardrail state after successful execution
+  private async postExecutionProcessing(
+    proposal: ActionProposal,
+    executeResult: ExecuteResult,
+    execCartridgeId: string,
+    envelope: ActionEnvelope,
+    decision: import("@switchboard/schemas").DecisionTrace | undefined,
+  ): Promise<void> {
+    // Update guardrail state
     if (executeResult.success) {
-      this.updateGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
-      await this.flushGuardrailState(proposal, storedCartridgeId ?? inferredCartridgeId ?? "");
+      this.updateGuardrailState(proposal, execCartridgeId);
+      await this.flushGuardrailState(proposal, execCartridgeId);
     }
 
-    // 5b. Record competence outcome
+    // Record competence outcome
     if (this.ctx.competenceTracker) {
       const principalId = proposal.parameters["_principalId"] as string | undefined;
       if (principalId) {
@@ -209,7 +314,7 @@ export class ExecutionManager {
       }
     }
 
-    // 6. Record audit entry
+    // Record audit entry
     await this.ctx.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
       actorType: "system",
@@ -230,8 +335,14 @@ export class ExecutionManager {
       envelopeId: envelope.id,
       traceId: envelope.traceId,
     });
+  }
 
-    // Record metrics
+  private recordMetrics(
+    execSpan: Span,
+    execStart: number,
+    proposal: ActionProposal,
+    executeResult: ExecuteResult,
+  ): void {
     const execMetrics = getMetrics();
     const execDuration = Date.now() - execStart;
     execMetrics.executionsTotal.inc({ actionType: proposal.actionType });
@@ -245,8 +356,6 @@ export class ExecutionManager {
     execSpan.setAttribute("duration.ms", execDuration);
     execSpan.setStatus(executeResult.success ? "OK" : "ERROR", executeResult.summary);
     execSpan.end();
-
-    return executeResult;
   }
 
   async executePlan(

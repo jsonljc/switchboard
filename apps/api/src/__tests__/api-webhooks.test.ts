@@ -27,7 +27,7 @@ describe("Webhooks API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("storageContext", { identity: mockIdentity } as any);
+    app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -220,7 +220,7 @@ describe("Webhooks API", () => {
       await app.close();
 
       app = Fastify({ logger: false });
-      app.decorate("storageContext", { identity: mockIdentity } as any);
+      app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       app.decorateRequest("principalIdFromAuth", undefined);
       app.addHook("onRequest", async (request) => {

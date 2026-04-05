@@ -1,45 +1,24 @@
 // ---------------------------------------------------------------------------
-// Scheduler Deps Factory — builds SchedulerService with BullMQ queue + worker
+// Scheduler Deps Factory — stubbed after domain code removal
 // ---------------------------------------------------------------------------
-// Used by API to enable scheduler capabilities.
-// Returns SchedulerDeps with service, handler, and cleanup function.
+// The BullMQ scheduler infrastructure was removed with domain-specific code.
+// This stub preserves the interface so app.ts compiles without changes.
 // ---------------------------------------------------------------------------
-
-import type { PrismaClient } from "@switchboard/db";
-import type { SchedulerService } from "@switchboard/core";
-import type { TriggerStore } from "@switchboard/core";
-import { PrismaTriggerStore } from "@switchboard/db";
-import { BullMQSchedulerService } from "../scheduler/bullmq-scheduler-service.js";
-import { createSchedulerQueue, createSchedulerWorker } from "../queue/scheduler-queue.js";
-import { createTriggerHandler } from "../scheduler/trigger-handler.js";
-import type { TriggerWorkflowEngine } from "../scheduler/trigger-handler.js";
-import type { SchedulerJobData } from "../queue/scheduler-queue.js";
 
 export interface SchedulerDeps {
-  service: SchedulerService;
-  triggerHandler: (job: { data: SchedulerJobData }) => Promise<void>;
+  service: import("@switchboard/core").SchedulerService;
+  triggerHandler: (job: { data: Record<string, unknown> }) => Promise<void>;
   cleanup: () => Promise<void>;
 }
 
+/**
+ * Build scheduler deps — currently returns null as the BullMQ scheduler
+ * infrastructure has been removed.
+ */
 export function buildSchedulerDeps(
-  prisma: PrismaClient,
-  redisUrl: string,
-  workflowEngine: TriggerWorkflowEngine,
-): SchedulerDeps {
-  const connection = { url: redisUrl };
-  const store: TriggerStore = new PrismaTriggerStore(prisma);
-  const queue = createSchedulerQueue(connection);
-  const service = new BullMQSchedulerService(store, queue);
-
-  const triggerHandler = createTriggerHandler({ store, workflowEngine });
-  const worker = createSchedulerWorker(connection, triggerHandler);
-
-  return {
-    service,
-    triggerHandler,
-    cleanup: async () => {
-      await worker.close();
-      await queue.close();
-    },
-  };
+  _prisma: unknown,
+  _redisUrl: string,
+  _workflowEngine: unknown,
+): SchedulerDeps | null {
+  return null;
 }

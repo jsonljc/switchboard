@@ -9,16 +9,28 @@ import {
   VariationPool,
   detectLanguage,
 } from "@switchboard/core";
-import type {
-  EmotionalSignal,
-  PrimaryMove,
-  NaturalnessPacket,
-  ResolvedProfile,
-} from "@switchboard/core";
+import type { EmotionalSignal, PrimaryMove, NaturalnessPacket } from "@switchboard/core";
 import type { ConversationStateData } from "../conversation/state.js";
 
+/** Minimal profile shape needed by DialogueMiddleware. */
+interface DialogueProfile {
+  profile?: {
+    llmContext?: { bannedTopics?: string[] };
+  };
+  llmContext: { bannedTopics: string[] };
+  localisation?: {
+    market: string;
+    naturalness: string;
+    emoji: {
+      allowed?: boolean;
+      maxPerMessage?: number;
+      preferredSet?: string[];
+    };
+  };
+}
+
 export interface DialogueMiddlewareConfig {
-  resolvedProfile: ResolvedProfile | null;
+  resolvedProfile: DialogueProfile | null;
 }
 
 export interface BeforeInterpretResult {

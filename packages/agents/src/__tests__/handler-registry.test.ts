@@ -13,9 +13,9 @@ describe("HandlerRegistry", () => {
     const registry = new HandlerRegistry();
     const handler = makeMockHandler();
 
-    registry.register("lead-responder", handler);
+    registry.register("employee-a", handler);
 
-    expect(registry.get("lead-responder")).toBe(handler);
+    expect(registry.get("employee-a")).toBe(handler);
   });
 
   it("returns undefined for unregistered agent", () => {
@@ -27,18 +27,18 @@ describe("HandlerRegistry", () => {
     const registry = new HandlerRegistry();
     const handler = makeMockHandler();
 
-    registry.register("lead-responder", handler);
+    registry.register("employee-a", handler);
 
-    expect(registry.has("lead-responder")).toBe(true);
+    expect(registry.has("employee-a")).toBe(true);
     expect(registry.has("unknown")).toBe(false);
   });
 
   it("lists all registered agent ids", () => {
     const registry = new HandlerRegistry();
-    registry.register("lead-responder", makeMockHandler());
-    registry.register("sales-closer", makeMockHandler());
+    registry.register("employee-a", makeMockHandler());
+    registry.register("employee-b", makeMockHandler());
 
-    expect(registry.listRegistered().sort()).toEqual(["lead-responder", "sales-closer"]);
+    expect(registry.listRegistered().sort()).toEqual(["employee-a", "employee-b"]);
   });
 
   it("overwrites handler on re-register", () => {
@@ -46,22 +46,22 @@ describe("HandlerRegistry", () => {
     const first = makeMockHandler();
     const second = makeMockHandler();
 
-    registry.register("lead-responder", first);
-    registry.register("lead-responder", second);
+    registry.register("employee-a", first);
+    registry.register("employee-a", second);
 
-    expect(registry.get("lead-responder")).toBe(second);
+    expect(registry.get("employee-a")).toBe(second);
   });
 
   it("removes a registered handler", () => {
     const registry = new HandlerRegistry();
     const handler = makeMockHandler();
 
-    registry.register("lead-responder", handler);
-    expect(registry.has("lead-responder")).toBe(true);
+    registry.register("employee-a", handler);
+    expect(registry.has("employee-a")).toBe(true);
 
-    const removed = registry.remove("lead-responder");
+    const removed = registry.remove("employee-a");
     expect(removed).toBe(true);
-    expect(registry.has("lead-responder")).toBe(false);
-    expect(registry.get("lead-responder")).toBeUndefined();
+    expect(registry.has("employee-a")).toBe(false);
+    expect(registry.get("employee-a")).toBeUndefined();
   });
 });

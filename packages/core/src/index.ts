@@ -77,9 +77,6 @@ export * from "./enrichment/index.js";
 // Data-Flow Plan Execution
 export * from "./data-flow/index.js";
 
-// SMB Governance
-export * from "./smb/index.js";
-
 // Capability Registry
 export * from "./capability/index.js";
 
@@ -94,17 +91,8 @@ export type { IdempotencyStore } from "./idempotency/guard.js";
 export { NoOpCredentialResolver } from "./credentials/resolver.js";
 export type { ConnectionCredentialResolver } from "./credentials/resolver.js";
 
-// Skin Loader & Resolver
-export * from "./skin/index.js";
-
-// Business Profile Loader & Resolver
-export * from "./profile/index.js";
-
 // Tool Registry
 export * from "./tool-registry/index.js";
-
-// Agents (autonomous ads operator layer)
-export * from "./agents/index.js";
 
 // Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";
@@ -166,23 +154,6 @@ export type {
   ConversationSummary,
 } from "./handoff/types.js";
 
-// Flow Builder
-export { FlowBuilder } from "./flow-builder/builder.js";
-export { validateFlowDefinition } from "./flow-builder/validator.js";
-export type {
-  ValidationIssue,
-  ValidationResult as FlowValidationResult,
-} from "./flow-builder/validator.js";
-
-// Outcome Pipeline
-export { OutcomePipeline } from "./outcome/pipeline.js";
-export { OutcomeAggregator } from "./outcome/aggregator.js";
-export { runOptimisationCycle } from "./outcome/optimiser.js";
-export type { OutcomeStore, OptimisationProposal } from "./outcome/types.js";
-
-// Deployment Readiness
-export { DeploymentReadinessChecker } from "./deployment/readiness-checker.js";
-
 // Embedding Adapter
 export type { EmbeddingAdapter } from "./embedding-adapter.js";
 
@@ -222,3 +193,6 @@ export * from "./operator/index.js";
 
 // Lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle/index.js";
+
+// Marketplace (Trust Score Engine)
+export * from "./marketplace/index.js";

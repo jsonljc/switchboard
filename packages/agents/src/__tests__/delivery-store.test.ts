@@ -6,7 +6,7 @@ describe("InMemoryDeliveryStore", () => {
     const store = new InMemoryDeliveryStore();
     await store.record({
       eventId: "evt-1",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       status: "dispatched",
       attempts: 1,
       lastAttemptAt: "2026-03-18T10:00:00Z",
@@ -21,13 +21,13 @@ describe("InMemoryDeliveryStore", () => {
     const store = new InMemoryDeliveryStore();
     await store.record({
       eventId: "evt-1",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       status: "dispatched",
       attempts: 1,
       lastAttemptAt: "2026-03-18T10:00:00Z",
     });
 
-    await store.update("evt-1", "lead-responder", {
+    await store.update("evt-1", "employee-a", {
       status: "succeeded",
       attempts: 1,
     });
@@ -40,7 +40,7 @@ describe("InMemoryDeliveryStore", () => {
     const store = new InMemoryDeliveryStore();
     await store.record({
       eventId: "evt-1",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       status: "succeeded",
       attempts: 1,
     });

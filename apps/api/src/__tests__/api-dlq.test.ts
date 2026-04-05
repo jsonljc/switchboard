@@ -14,7 +14,7 @@ function buildDlqTestServer() {
       updateMany: vi.fn(),
     },
   };
-  app.decorate("prisma", mockPrisma as any);
+  app.decorate("prisma", mockPrisma as unknown as never);
   app.register(dlqRoutes, { prefix: "/api/dlq" });
   return { app, mockPrisma };
 }
@@ -280,7 +280,7 @@ describe("DLQ Routes", () => {
           updateMany: vi.fn(),
         },
       };
-      scopedApp.decorate("prisma", scopedMockPrisma as any);
+      scopedApp.decorate("prisma", scopedMockPrisma as unknown as never);
       scopedApp.decorateRequest("organizationIdFromAuth", undefined);
       scopedApp.addHook("onRequest", async (request) => {
         request.organizationIdFromAuth = "org_A";

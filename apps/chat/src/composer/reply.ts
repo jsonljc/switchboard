@@ -1,5 +1,12 @@
 import type { DecisionTrace } from "@switchboard/schemas";
-import type { ResolvedSkin } from "@switchboard/core";
+
+/** Minimal skin shape needed by reply composers. */
+interface SkinLike {
+  language?: {
+    welcomeMessage?: string;
+  };
+  manifest?: { name?: string };
+}
 
 export function composeDenialReply(trace: DecisionTrace): string {
   const deniedCheck = trace.checks.find((c) => c.matched && c.effect === "deny");
@@ -95,7 +102,7 @@ export function composeUncertainReply(availableActions?: string[]): string {
 }
 
 export function composeWelcomeMessage(
-  resolvedSkin: ResolvedSkin | null,
+  resolvedSkin: SkinLike | null,
   businessName?: string,
   availableActions?: string[],
 ): string {

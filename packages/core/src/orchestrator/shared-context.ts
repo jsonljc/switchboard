@@ -11,12 +11,11 @@ import type { PolicyCache } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
 import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
-import type { TierStore } from "../smb/tier-resolver.js";
-import type { SmbActivityLog } from "../smb/activity-log.js";
 import type { ConnectionCredentialResolver } from "../credentials/resolver.js";
 import type { ExecutionMode, EnqueueCallback } from "./lifecycle.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 import type { IdempotencyGuard } from "../idempotency/guard.js";
+import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 
 /**
  * Shared dependencies and configuration passed to ProposePipeline,
@@ -31,6 +30,7 @@ export interface SharedContext {
   routingConfig: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker: CompetenceTracker | null;
+  trustAdapter: TrustScoreAdapter | null;
   riskPostureStore: RiskPostureStore | null;
   governanceProfileStore: GovernanceProfileStore | null;
   policyCache: PolicyCache | null;
@@ -41,8 +41,6 @@ export interface SharedContext {
   approvalRateLimit: { maxApprovals: number; windowMs: number } | null;
   crossCartridgeEnricher: CrossCartridgeEnricher | null;
   dataFlowExecutor: DataFlowExecutor | null;
-  tierStore: TierStore | null;
-  smbActivityLog: SmbActivityLog | null;
   credentialResolver: ConnectionCredentialResolver | null;
   circuitBreaker: CartridgeCircuitBreakerWrapper | null;
   idempotencyGuard: IdempotencyGuard | null;
@@ -74,16 +72,4 @@ export async function buildCartridgeContext(
     }
   }
   return { principalId, organizationId, connectionCredentials };
-}
-
-/**
- * Check if an organization is SMB tier.
- */
-export async function isSmbOrg(
-  ctx: SharedContext,
-  organizationId: string | null | undefined,
-): Promise<boolean> {
-  if (!ctx.tierStore || !organizationId) return false;
-  const tier = await ctx.tierStore.getTier(organizationId);
-  return tier === "smb";
 }

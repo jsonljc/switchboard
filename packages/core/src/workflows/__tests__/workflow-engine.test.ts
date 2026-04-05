@@ -383,7 +383,7 @@ describe("WorkflowEngine", () => {
       const action = createPendingAction({
         intent: "schedule_follow_up",
         organizationId: "org-1",
-        sourceAgent: "nurture",
+        sourceAgent: "employee-e",
         humanSummary: "Schedule follow-up in 2 hours",
         targetEntities: [],
         parameters: {},
@@ -398,7 +398,7 @@ describe("WorkflowEngine", () => {
       const workflow = await engine.createWorkflow({
         organizationId: "org-1",
         triggerType: "operator_command",
-        sourceAgent: "nurture",
+        sourceAgent: "employee-e",
         actions: [action],
         strategy: "sequential",
         safetyEnvelope: {

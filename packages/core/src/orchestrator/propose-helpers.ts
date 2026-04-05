@@ -268,6 +268,21 @@ export async function resolveEffectiveIdentity(
     }
   }
 
+  // Apply marketplace trust score adjustments (after competence)
+  if (ctx.trustAdapter) {
+    try {
+      effectiveIdentity = await ctx.trustAdapter.adjustIdentity(
+        principalId,
+        actionType,
+        effectiveIdentity,
+      );
+    } catch (err) {
+      console.warn(
+        `[orchestrator] trust adapter failed, proceeding without trust adjustments: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   return { resolvedIdentity, effectiveIdentity, competenceAdjustments };
 }
 

@@ -35,8 +35,8 @@ describe("Connections API", () => {
 
     app = Fastify({ logger: false });
 
-    app.decorate("prisma", { _mock: true } as any);
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
+    app.decorate("prisma", { _mock: true } as unknown as never);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.addHook("onRequest", async (request) => {
@@ -127,8 +127,8 @@ describe("Connections API", () => {
       await app.close();
 
       app = Fastify({ logger: false });
-      app.decorate("prisma", { _mock: true } as any);
-      app.decorate("storageContext", { cartridges: mockCartridges } as any);
+      app.decorate("prisma", { _mock: true } as unknown as never);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       // Do NOT add the onRequest hook that sets organizationIdFromAuth
       await app.register(connectionsRoutes, { prefix: "/api/connections" });

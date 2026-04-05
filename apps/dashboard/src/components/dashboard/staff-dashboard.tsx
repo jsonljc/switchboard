@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { queryKeys } from "@/lib/query-keys";
 import { TodayBanner } from "@/components/mission-control/today-banner";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
-import { MonthlyScorecard } from "@/components/mission-control/monthly-scorecard";
+
 import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
 import { CONSEQUENCE } from "@/lib/approval-constants";
@@ -184,8 +184,6 @@ export function StaffDashboard() {
           )}
         </div>
       </section>
-
-      <MonthlyScorecard />
 
       {activeAgents.length > 0 && (
         <section>

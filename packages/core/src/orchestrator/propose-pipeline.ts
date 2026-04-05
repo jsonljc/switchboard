@@ -33,7 +33,6 @@ import { buildApprovalNotification } from "../notifications/notifier.js";
 import { buildActionSummary } from "./summary-builder.js";
 import { getTracer } from "../telemetry/tracing.js";
 import { getMetrics } from "../telemetry/metrics.js";
-import { smbPropose } from "../smb/pipeline.js";
 
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
@@ -127,24 +126,6 @@ export class ProposePipeline {
     span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>,
     proposeStart: number,
   ): Promise<ProposeResult> {
-    // SMB tier branching
-    if (this.ctx.tierStore && params.organizationId) {
-      const tier = await this.ctx.tierStore.getTier(params.organizationId);
-      if (tier === "smb") {
-        const smbConfig = await this.ctx.tierStore.getSmbConfig(params.organizationId);
-        if (smbConfig && this.ctx.smbActivityLog) {
-          return smbPropose(params, {
-            storage: this.ctx.storage,
-            activityLog: this.ctx.smbActivityLog,
-            guardrailState: this.ctx.guardrailState,
-            guardrailStateStore: this.ctx.guardrailStateStore ?? null,
-            orgConfig: smbConfig,
-            approvalNotifier: this.ctx.approvalNotifier,
-          });
-        }
-      }
-    }
-
     // 1-2. Resolve identity + competence adjustments
     const { effectiveIdentity, competenceAdjustments } = await resolveEffectiveIdentity(
       this.ctx,

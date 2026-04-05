@@ -33,7 +33,7 @@ describe("EventLoop Destination Sequencing", () => {
 
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "revenue-tracker",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -45,7 +45,7 @@ describe("EventLoop Destination Sequencing", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "nurture",
+      agentId: "employee-d",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -59,152 +59,36 @@ describe("EventLoop Destination Sequencing", () => {
 
     const handlerRegistry = new HandlerRegistry();
     handlerRegistry.register(
-      "revenue-tracker",
+      "employee-c",
       makeHandler(() => {
-        executionOrder.push("revenue-tracker");
+        executionOrder.push("employee-c");
         return { events: [], actions: [] };
       }),
     );
     handlerRegistry.register(
-      "nurture",
+      "employee-d",
       makeHandler(() => {
-        executionOrder.push("nurture");
+        executionOrder.push("employee-d");
         return { events: [], actions: [] };
       }),
     );
 
-    const loop = new EventLoop({
-      router: new AgentRouter(agentRegistry),
-      registry: agentRegistry,
-      handlers: handlerRegistry,
-      actionExecutor: new ActionExecutor(),
-      policyBridge: new PolicyBridge(null),
-      deliveryStore: new InMemoryDeliveryStore(),
-    });
-
-    const event = createEventEnvelope({
-      organizationId: "org-1",
-      eventType: "stage.advanced",
-      source: { type: "agent", id: "sales-closer" },
-      payload: { contactId: "c1" },
-    });
-
-    await loop.process(event, { organizationId: "org-1" });
-
-    expect(executionOrder).toEqual(["revenue-tracker", "nurture"]);
-  });
-
-  it("skips parallel destinations when required blocking destination fails", async () => {
-    const agentRegistry = new AgentRegistry();
-    agentRegistry.register("org-1", {
-      agentId: "revenue-tracker",
-      version: "0.1.0",
-      installed: true,
-      status: "active",
-      config: {},
-      capabilities: {
-        accepts: ["stage.advanced"],
-        emits: [],
-        tools: [],
-      },
-    });
-    agentRegistry.register("org-1", {
-      agentId: "nurture",
-      version: "0.1.0",
-      installed: true,
-      status: "active",
-      config: {},
-      capabilities: {
-        accepts: ["stage.advanced"],
-        emits: [],
-        tools: [],
-      },
-    });
-
-    const handlerRegistry = new HandlerRegistry();
-    const revenueHandler = makeFailingHandler("CAPI timeout");
-    const nurtureHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("revenue-tracker", revenueHandler);
-    handlerRegistry.register("nurture", nurtureHandler);
-
-    const deliveryStore = new InMemoryDeliveryStore();
-    const loop = new EventLoop({
-      router: new AgentRouter(agentRegistry),
-      registry: agentRegistry,
-      handlers: handlerRegistry,
-      actionExecutor: new ActionExecutor(),
-      policyBridge: new PolicyBridge(null),
-      deliveryStore,
-    });
-
-    const event = createEventEnvelope({
-      organizationId: "org-1",
-      eventType: "stage.advanced",
-      source: { type: "agent", id: "sales-closer" },
-      payload: { contactId: "c1" },
-    });
-
-    const result = await loop.process(event, { organizationId: "org-1" });
-
-    // Revenue tracker processed but failed
-    const revResult = result.processed.find((p) => p.agentId === "revenue-tracker");
-    expect(revResult).toBeDefined();
-    expect(revResult!.success).toBe(false);
-
-    // Nurture handler was NOT called
-    expect(nurtureHandler.handle).not.toHaveBeenCalled();
-  });
-
-  it("skips after_success destinations when dependency did not succeed", async () => {
-    const agentRegistry = new AgentRegistry();
-    agentRegistry.register("org-1", {
-      agentId: "revenue-tracker",
-      version: "0.1.0",
-      installed: true,
-      status: "active",
-      config: {},
-      capabilities: {
-        accepts: ["stage.advanced"],
-        emits: [],
-        tools: [],
-      },
-    });
-    agentRegistry.register("org-1", {
-      agentId: "nurture",
-      version: "0.1.0",
-      installed: true,
-      status: "active",
-      config: {},
-      capabilities: {
-        accepts: ["stage.advanced"],
-        emits: [],
-        tools: [],
-      },
-    });
-
-    const handlerRegistry = new HandlerRegistry();
-    const revenueHandler = makeFailingHandler("CAPI timeout");
-    const nurtureHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("revenue-tracker", revenueHandler);
-    handlerRegistry.register("nurture", nurtureHandler);
-
-    // Custom router that returns after_success for nurture
+    // Custom router that assigns blocking sequencing to employee-c
     const customRouter = {
       resolve: (event: RoutedEventEnvelope) => ({
         event,
         destinations: [
           {
             type: "agent" as const,
-            id: "revenue-tracker",
+            id: "employee-c",
             criticality: "required" as const,
             sequencing: "blocking" as const,
           },
           {
             type: "agent" as const,
-            id: "nurture",
+            id: "employee-d",
             criticality: "required" as const,
-            sequencing: "after_success" as const,
-            afterDestinationId: "revenue-tracker",
+            sequencing: "parallel" as const,
           },
         ],
       }),
@@ -222,22 +106,19 @@ describe("EventLoop Destination Sequencing", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "stage.advanced",
-      source: { type: "agent", id: "sales-closer" },
+      source: { type: "agent", id: "employee-b" },
       payload: { contactId: "c1" },
     });
 
     await loop.process(event, { organizationId: "org-1" });
 
-    // Nurture should NOT be called because revenue-tracker failed
-    expect(nurtureHandler.handle).not.toHaveBeenCalled();
+    expect(executionOrder).toEqual(["employee-c", "employee-d"]);
   });
 
-  it("executes after_success destinations when dependency succeeds", async () => {
-    const executionOrder: string[] = [];
-
+  it("skips parallel destinations when required blocking destination fails", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "revenue-tracker",
+      agentId: "employee-c",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -249,7 +130,167 @@ describe("EventLoop Destination Sequencing", () => {
       },
     });
     agentRegistry.register("org-1", {
-      agentId: "nurture",
+      agentId: "employee-d",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["stage.advanced"],
+        emits: [],
+        tools: [],
+      },
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    const blockingHandler = makeFailingHandler("CAPI timeout");
+    const parallelHandler = makeHandler(() => ({ events: [], actions: [] }));
+    handlerRegistry.register("employee-c", blockingHandler);
+    handlerRegistry.register("employee-d", parallelHandler);
+
+    // Custom router that assigns blocking sequencing to employee-c
+    const customRouter = {
+      resolve: (event: RoutedEventEnvelope) => ({
+        event,
+        destinations: [
+          {
+            type: "agent" as const,
+            id: "employee-c",
+            criticality: "required" as const,
+            sequencing: "blocking" as const,
+          },
+          {
+            type: "agent" as const,
+            id: "employee-d",
+            criticality: "required" as const,
+            sequencing: "parallel" as const,
+          },
+        ],
+      }),
+    };
+
+    const loop = new EventLoop({
+      router: customRouter as AgentRouter,
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "stage.advanced",
+      source: { type: "agent", id: "employee-b" },
+      payload: { contactId: "c1" },
+    });
+
+    const result = await loop.process(event, { organizationId: "org-1" });
+
+    // Blocking agent processed but failed
+    const blockingResult = result.processed.find((p) => p.agentId === "employee-c");
+    expect(blockingResult).toBeDefined();
+    expect(blockingResult!.success).toBe(false);
+
+    // Parallel handler was NOT called
+    expect(parallelHandler.handle).not.toHaveBeenCalled();
+  });
+
+  it("skips after_success destinations when dependency did not succeed", async () => {
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "employee-c",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["stage.advanced"],
+        emits: [],
+        tools: [],
+      },
+    });
+    agentRegistry.register("org-1", {
+      agentId: "employee-d",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["stage.advanced"],
+        emits: [],
+        tools: [],
+      },
+    });
+
+    const handlerRegistry = new HandlerRegistry();
+    const blockingHandler = makeFailingHandler("CAPI timeout");
+    const dependentHandler = makeHandler(() => ({ events: [], actions: [] }));
+    handlerRegistry.register("employee-c", blockingHandler);
+    handlerRegistry.register("employee-d", dependentHandler);
+
+    // Custom router that returns after_success for employee-d
+    const customRouter = {
+      resolve: (event: RoutedEventEnvelope) => ({
+        event,
+        destinations: [
+          {
+            type: "agent" as const,
+            id: "employee-c",
+            criticality: "required" as const,
+            sequencing: "blocking" as const,
+          },
+          {
+            type: "agent" as const,
+            id: "employee-d",
+            criticality: "required" as const,
+            sequencing: "after_success" as const,
+            afterDestinationId: "employee-c",
+          },
+        ],
+      }),
+    };
+
+    const loop = new EventLoop({
+      router: customRouter as AgentRouter,
+      registry: agentRegistry,
+      handlers: handlerRegistry,
+      actionExecutor: new ActionExecutor(),
+      policyBridge: new PolicyBridge(null),
+      deliveryStore: new InMemoryDeliveryStore(),
+    });
+
+    const event = createEventEnvelope({
+      organizationId: "org-1",
+      eventType: "stage.advanced",
+      source: { type: "agent", id: "employee-b" },
+      payload: { contactId: "c1" },
+    });
+
+    await loop.process(event, { organizationId: "org-1" });
+
+    // employee-d should NOT be called because employee-c failed
+    expect(dependentHandler.handle).not.toHaveBeenCalled();
+  });
+
+  it("executes after_success destinations when dependency succeeds", async () => {
+    const executionOrder: string[] = [];
+
+    const agentRegistry = new AgentRegistry();
+    agentRegistry.register("org-1", {
+      agentId: "employee-c",
+      version: "0.1.0",
+      installed: true,
+      status: "active",
+      config: {},
+      capabilities: {
+        accepts: ["stage.advanced"],
+        emits: [],
+        tools: [],
+      },
+    });
+    agentRegistry.register("org-1", {
+      agentId: "employee-d",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -263,16 +304,16 @@ describe("EventLoop Destination Sequencing", () => {
 
     const handlerRegistry = new HandlerRegistry();
     handlerRegistry.register(
-      "revenue-tracker",
+      "employee-c",
       makeHandler(() => {
-        executionOrder.push("revenue-tracker");
+        executionOrder.push("employee-c");
         return { events: [], actions: [] };
       }),
     );
     handlerRegistry.register(
-      "nurture",
+      "employee-d",
       makeHandler(() => {
-        executionOrder.push("nurture");
+        executionOrder.push("employee-d");
         return { events: [], actions: [] };
       }),
     );
@@ -284,16 +325,16 @@ describe("EventLoop Destination Sequencing", () => {
         destinations: [
           {
             type: "agent" as const,
-            id: "revenue-tracker",
+            id: "employee-c",
             criticality: "required" as const,
             sequencing: "blocking" as const,
           },
           {
             type: "agent" as const,
-            id: "nurture",
+            id: "employee-d",
             criticality: "required" as const,
             sequencing: "after_success" as const,
-            afterDestinationId: "revenue-tracker",
+            afterDestinationId: "employee-c",
           },
         ],
       }),
@@ -311,20 +352,20 @@ describe("EventLoop Destination Sequencing", () => {
     const event = createEventEnvelope({
       organizationId: "org-1",
       eventType: "stage.advanced",
-      source: { type: "agent", id: "sales-closer" },
+      source: { type: "agent", id: "employee-b" },
       payload: { contactId: "c1" },
     });
 
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(2);
-    expect(executionOrder).toEqual(["revenue-tracker", "nurture"]);
+    expect(executionOrder).toEqual(["employee-c", "employee-d"]);
   });
 
   it("does not skip parallel destinations when non-stage.advanced events have no blocking dests", async () => {
     const agentRegistry = new AgentRegistry();
     agentRegistry.register("org-1", {
-      agentId: "lead-responder",
+      agentId: "employee-a",
       version: "0.1.0",
       installed: true,
       status: "active",
@@ -338,7 +379,7 @@ describe("EventLoop Destination Sequencing", () => {
 
     const handlerRegistry = new HandlerRegistry();
     const leadHandler = makeHandler(() => ({ events: [], actions: [] }));
-    handlerRegistry.register("lead-responder", leadHandler);
+    handlerRegistry.register("employee-a", leadHandler);
 
     const loop = new EventLoop({
       router: new AgentRouter(agentRegistry),
@@ -359,7 +400,7 @@ describe("EventLoop Destination Sequencing", () => {
     const result = await loop.process(event, { organizationId: "org-1" });
 
     expect(result.processed).toHaveLength(1);
-    expect(result.processed[0]!.agentId).toBe("lead-responder");
+    expect(result.processed[0]!.agentId).toBe("employee-a");
     expect(leadHandler.handle).toHaveBeenCalledTimes(1);
   });
 });

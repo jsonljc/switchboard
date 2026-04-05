@@ -28,8 +28,8 @@ describe("Governance API", () => {
     app = Fastify({ logger: false });
 
     app.decorate("governanceProfileStore", mockGovernanceProfileStore);
-    app.decorate("storageContext", { cartridges: mockCartridges } as any);
-    app.decorate("orchestrator", mockOrchestrator as any);
+    app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+    app.decorate("orchestrator", mockOrchestrator as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -304,8 +304,10 @@ describe("Governance API", () => {
       const scopedMockOrchestrator = { propose: vi.fn(), executeApproved: vi.fn() };
 
       scopedApp.decorate("governanceProfileStore", scopedMockGovernanceProfileStore);
-      scopedApp.decorate("storageContext", { cartridges: scopedMockCartridges } as any);
-      scopedApp.decorate("orchestrator", scopedMockOrchestrator as any);
+      scopedApp.decorate("storageContext", {
+        cartridges: scopedMockCartridges,
+      } as unknown as never);
+      scopedApp.decorate("orchestrator", scopedMockOrchestrator as unknown as never);
 
       scopedApp.decorateRequest("organizationIdFromAuth", undefined);
       scopedApp.decorateRequest("principalIdFromAuth", undefined);
@@ -360,8 +362,11 @@ describe("Governance API", () => {
       };
 
       noOrgApp.decorate("governanceProfileStore", noOrgStore);
-      noOrgApp.decorate("storageContext", { cartridges: { get: vi.fn() } } as any);
-      noOrgApp.decorate("orchestrator", { propose: vi.fn(), executeApproved: vi.fn() } as any);
+      noOrgApp.decorate("storageContext", { cartridges: { get: vi.fn() } } as unknown as never);
+      noOrgApp.decorate("orchestrator", {
+        propose: vi.fn(),
+        executeApproved: vi.fn(),
+      } as unknown as never);
       noOrgApp.decorateRequest("organizationIdFromAuth", undefined);
       noOrgApp.decorateRequest("principalIdFromAuth", undefined);
       await noOrgApp.register(governanceRoutes, { prefix: "/api/governance" });

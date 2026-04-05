@@ -14,13 +14,9 @@ import type {
   StorageContext,
   PolicyCache,
   ApprovalNotifier,
-  TierStore,
-  ResolvedSkin,
-  ResolvedProfile,
   AgentNotifier,
 } from "@switchboard/core";
-import { SmbActivityLog, AuditLedger } from "@switchboard/core";
-import { createExecutionQueue, createExecutionWorker } from "./queue/index.js";
+import { AuditLedger } from "@switchboard/core";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -28,19 +24,8 @@ import apiVersionPlugin from "./versioning.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
-import {
-  resolveCartridgeCredentials,
-  registerCartridges,
-  wireEscalationNotifier,
-} from "./bootstrap/cartridges.js";
-import { startBackgroundJobs } from "./bootstrap/jobs.js";
 import { registerRoutes } from "./bootstrap/routes.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
-import { loadAndApplySkin, resolveBusinessProfile } from "./bootstrap/skin.js";
-import { buildOperatorDeps } from "./bootstrap/operator-deps.js";
-import { PrismaOperatorCommandStore } from "@switchboard/db";
-import { wireConversionBus } from "./bootstrap/conversion-bus-bootstrap.js";
-import type { Queue, Worker } from "bullmq";
 import type Redis from "ioredis";
 
 declare module "fastify" {
@@ -50,15 +35,9 @@ declare module "fastify" {
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
     executionService: ExecutionService;
-    tierStore: TierStore;
-    smbActivityLog: SmbActivityLog;
     redis: Redis | null;
-    executionQueue: Queue | null;
-    executionWorker: Worker | null;
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
-    resolvedSkin: ResolvedSkin | null;
-    resolvedProfile: ResolvedProfile | null;
     agentNotifier: AgentNotifier | null;
     conversionBus: import("@switchboard/core").ConversionBus | null;
     agentSystem: import("./agent-bootstrap.js").AgentSystem;
@@ -67,7 +46,6 @@ declare module "fastify" {
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
-    lifecycleDeps: import("./bootstrap/lifecycle-deps.js").LifecycleDeps | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -161,8 +139,6 @@ export async function buildServer() {
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
-    tierStore,
-    smbActivityLog,
     prismaClient,
     redis,
   } = await bootstrapStorage(app.log);
@@ -171,36 +147,9 @@ export async function buildServer() {
     await ensureSystemIdentity(prismaClient);
   }
 
-  // --- Resolve credentials and register cartridges ---
-  const credentials = await resolveCartridgeCredentials(prismaClient, app.log);
-  const { adsWriteProvider, businessProfile } = await registerCartridges(
-    storage,
-    credentials,
-    redis,
-    app.log,
-  );
-  await wireEscalationNotifier();
-
-  // --- Resolve business profile (optional, loaded from PROFILE_ID in cartridge bootstrap) ---
-  const resolvedProfile: ResolvedProfile | null = businessProfile
-    ? resolveBusinessProfile(businessProfile, app.log)
-    : null;
-
-  // --- Skin loading (optional, controlled by SKIN_ID env var) ---
-  const skinId = process.env["SKIN_ID"];
-  const resolvedSkin: ResolvedSkin | null = skinId
-    ? await loadAndApplySkin(skinId, storage, governanceProfileStore, app.log)
-    : null;
-
-  // --- ConversionBus wiring (CRM → ads feedback loop) ---
+  // --- ConversionBus wiring ---
   const { InMemoryConversionBus } = await import("@switchboard/core");
   const conversionBus = new InMemoryConversionBus();
-  await wireConversionBus({
-    conversionBus,
-    adsWriteProvider,
-    prismaClient,
-    logger: app.log,
-  });
 
   // --- Agent orchestration system ---
   const { bootstrapAgentSystem } = await import("./agent-bootstrap.js");
@@ -250,15 +199,6 @@ export async function buildServer() {
   const agentSystem = bootstrapAgentSystem({
     conversionBus,
     deliveryStore,
-    leadResponderConversationDeps: conversationDeps ?? undefined,
-    salesCloserConversationDeps: conversationDeps ?? undefined,
-    conversationStore: conversationDeps?.conversationStore
-      ? {
-          getStage: conversationDeps.conversationStore.getStage.bind(
-            conversationDeps.conversationStore,
-          ),
-        }
-      : undefined,
     threadStore,
     logger: {
       warn: (msg: string) => app.log.warn(msg),
@@ -313,30 +253,15 @@ export async function buildServer() {
   }
   app.decorate("workflowDeps", workflowDeps);
 
-  // --- Execution queue setup ---
-  let queue: Queue | null = null;
-  let worker: Worker | null = null;
-  let onEnqueue: ((envelopeId: string) => Promise<void>) | undefined;
-  const redisUrl = process.env["REDIS_URL"];
-  const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
-
-  if (redisUrl) {
-    const connection = { url: redisUrl };
-    queue = createExecutionQueue(connection);
-    onEnqueue = async (envelopeId: string) => {
-      await queue!.add(`execute:${envelopeId}`, {
-        envelopeId,
-        enqueuedAt: new Date().toISOString(),
-      });
-    };
-  }
-
   // --- Scheduler service bootstrap (optional — requires DATABASE_URL + REDIS_URL + workflow engine) ---
+  const redisUrl = process.env["REDIS_URL"];
   let schedulerDeps: import("./bootstrap/scheduler-deps.js").SchedulerDeps | null = null;
   if (prismaClient && redisUrl && workflowDeps) {
     const { buildSchedulerDeps } = await import("./bootstrap/scheduler-deps.js");
     schedulerDeps = buildSchedulerDeps(prismaClient, redisUrl, workflowDeps.workflowEngine);
-    app.log.info("Scheduler service bootstrapped");
+    if (schedulerDeps) {
+      app.log.info("Scheduler service bootstrapped");
+    }
   }
   app.decorate("schedulerService", schedulerDeps?.service ?? null);
 
@@ -353,29 +278,8 @@ export async function buildServer() {
     });
   }
 
-  // --- Operator deps — requires Prisma ---
-  let operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null = null;
-  if (prismaClient) {
-    try {
-      const commandStore = new PrismaOperatorCommandStore(prismaClient);
-      operatorDeps = buildOperatorDeps({ commandStore });
-      app.log.info("[boot] Operator command system wired");
-    } catch (err) {
-      app.log.warn({ err }, "[boot] Operator deps unavailable — operator routes disabled");
-    }
-  }
-  app.decorate("operatorDeps", operatorDeps);
-
-  // --- Lifecycle deps (contact lifecycle + fallback handler) ---
-  let lifecycleDeps: import("./bootstrap/lifecycle-deps.js").LifecycleDeps | null = null;
-  if (prismaClient) {
-    const { buildLifecycleDeps } = await import("./bootstrap/lifecycle-deps.js");
-    lifecycleDeps = buildLifecycleDeps(prismaClient);
-    if (lifecycleDeps) {
-      app.log.info("[boot] Contact lifecycle system wired");
-    }
-  }
-  app.decorate("lifecycleDeps", lifecycleDeps);
+  // --- Operator deps (stubbed — domain code removed) ---
+  app.decorate("operatorDeps", null as import("./bootstrap/operator-deps.js").OperatorDeps | null);
 
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
@@ -403,7 +307,33 @@ export async function buildServer() {
         ? approvalNotifiers[0]
         : undefined;
 
+  // --- Marketplace trust adapter (optional — requires DATABASE_URL) ---
+  let trustAdapter: import("@switchboard/core").TrustScoreAdapter | null = null;
+  if (prismaClient) {
+    try {
+      const { PrismaTrustScoreStore } = await import("@switchboard/db");
+      const { TrustScoreEngine, TrustScoreAdapter } = await import("@switchboard/core");
+      const trustStore = new PrismaTrustScoreStore(prismaClient);
+      const trustEngine = new TrustScoreEngine(trustStore);
+      const resolver: import("@switchboard/core").PrincipalListingResolver = async (
+        principalId,
+        actionType,
+      ) => {
+        // Convention: marketplace agent principalIds start with "listing:"
+        if (!principalId.startsWith("listing:")) return null;
+        const listingId = principalId.slice("listing:".length);
+        return { listingId, taskCategory: actionType ?? "default" };
+      };
+      trustAdapter = new TrustScoreAdapter(trustEngine, resolver);
+    } catch (err) {
+      app.log.warn(
+        `Failed to initialize trust adapter: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // --- Build orchestrator ---
+  const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -412,10 +342,8 @@ export async function buildServer() {
     policyCache,
     governanceProfileStore,
     executionMode,
-    onEnqueue,
     approvalNotifier,
-    tierStore,
-    smbActivityLog,
+    trustAdapter,
     credentialResolver: prismaClient
       ? await (async () => {
           const { PrismaCredentialResolver, PrismaConnectionStore } =
@@ -425,28 +353,6 @@ export async function buildServer() {
       : undefined,
   });
 
-  // Start worker in-process when queue mode is active
-  if (redisUrl) {
-    worker = createExecutionWorker({
-      connection: { url: redisUrl },
-      orchestrator,
-      storage,
-      logger: app.log,
-    });
-  }
-
-  // --- Start background jobs ---
-  const { stop: stopAllJobs, agentNotifier } = await startBackgroundJobs({
-    storage,
-    ledger,
-    orchestrator,
-    prismaClient,
-    redis,
-    resolvedSkin,
-    resolvedProfile,
-    logger: app.log,
-  });
-
   // --- Decorate Fastify with shared instances ---
   const executionService = new ExecutionService(orchestrator, storage);
   app.decorate("orchestrator", orchestrator);
@@ -454,34 +360,20 @@ export async function buildServer() {
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
   app.decorate("executionService", executionService);
-  app.decorate("tierStore", tierStore);
-  app.decorate("smbActivityLog", smbActivityLog);
   app.decorate("redis", redis);
-  app.decorate("executionQueue", queue);
-  app.decorate("executionWorker", worker);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
-  app.decorate("resolvedSkin", resolvedSkin);
-  app.decorate("resolvedProfile", resolvedProfile);
-  app.decorate("agentNotifier", agentNotifier);
+  app.decorate("agentNotifier", null as AgentNotifier | null);
   app.decorate("conversionBus", conversionBus);
 
-  // Resource cleanup on close — order: agents → jobs → worker → queue → Redis → Prisma
+  // Resource cleanup on close — order: agents → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
     agentSystem.scheduledRunner.stop();
-
-    await stopAllJobs();
 
     if (schedulerDeps) {
       await schedulerDeps.cleanup();
     }
 
-    if (worker) {
-      await worker.close();
-    }
-    if (queue) {
-      await queue.close();
-    }
     if (redis) {
       await redis.quit();
     }
@@ -544,28 +436,6 @@ export async function buildServer() {
 
   // Prometheus metrics endpoint (excluded from auth like /health)
   app.get("/metrics", metricsRoute);
-
-  // --- Per-org LLM concurrency limiter ---
-  const { OrgConcurrencyLimiter } = await import("./middleware/rate-limiter.js");
-  const llmLimiter = new OrgConcurrencyLimiter({ maxConcurrent: 5, queueTimeoutMs: 30_000 });
-
-  app.addHook("preHandler", async (request, reply) => {
-    const path = request.url;
-    if (!path.startsWith("/api/test-chat") && !path.startsWith("/api/knowledge")) {
-      return;
-    }
-    const orgId = request.organizationIdFromAuth ?? "default";
-    try {
-      const release = await llmLimiter.acquire(orgId);
-      request.raw.on("close", release);
-    } catch {
-      return reply.code(503).send({
-        error: "Too many concurrent requests. Please retry.",
-        statusCode: 503,
-        retryAfter: 5,
-      });
-    }
-  });
 
   // --- Register all API routes ---
   await registerRoutes(app);

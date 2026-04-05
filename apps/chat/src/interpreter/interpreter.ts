@@ -3,7 +3,12 @@ import type { ActionProposal } from "@switchboard/schemas";
 import { ActionProposalSchema } from "@switchboard/schemas";
 import type { GoalBrief } from "@switchboard/schemas";
 import { z } from "zod";
-import type { ReadIntentDescriptor } from "../clinic/types.js";
+/** Lightweight descriptor for read-only intents (performance reports, status checks). */
+export interface ReadIntentDescriptor {
+  intent: string;
+  slots: Record<string, unknown>;
+  confidence: number;
+}
 
 export interface InterpreterResult {
   proposals: ActionProposal[];
@@ -11,7 +16,7 @@ export interface InterpreterResult {
   clarificationQuestion: string | null;
   confidence: number;
   rawResponse: string;
-  /** Set by clinic interpreter for read-only intents (performance reports, status checks). */
+  /** Set by LLM interpreter for read-only intents (performance reports, status checks). */
   readIntent?: ReadIntentDescriptor | null;
   /** Structured goal brief for plan decomposition. */
   goalBrief?: GoalBrief | null;

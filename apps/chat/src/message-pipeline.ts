@@ -7,21 +7,18 @@ import { createConversation, transitionConversation } from "./conversation/state
 import { setThread } from "./conversation/threads.js";
 import { composeHelpMessage } from "./composer/reply.js";
 import type { ResponseContext, GeneratedResponse } from "./composer/response-generator.js";
-import { handleReadIntent } from "./clinic/read-handler.js";
 import type {
   RuntimeOrchestrator,
   StorageContext,
   CartridgeReadAdapter as CartridgeReadAdapterType,
   CapabilityRegistry,
   PlanGraphBuilder,
-  ResolvedSkin,
   DataFlowExecutor,
 } from "@switchboard/core";
-import { inferCartridgeId, matchesAny } from "@switchboard/core";
+import { inferCartridgeId } from "@switchboard/core";
 import type { CrmProvider } from "@switchboard/schemas";
 import { safeErrorMessage } from "./utils/safe-error.js";
 import type { FailedMessageStore } from "./dlq/failed-message-store.js";
-import type { ConversationRouter } from "@switchboard/customer-engagement";
 import type { ConversionBus } from "@switchboard/core";
 import type { DialogueMiddleware } from "./middleware/dialogue-middleware.js";
 
@@ -63,11 +60,9 @@ export interface PipelineDeps {
   maxContextMessages: number;
   capabilityRegistry: CapabilityRegistry | null;
   planGraphBuilder: PlanGraphBuilder | null;
-  resolvedSkin: ResolvedSkin | null;
   crmProvider: CrmProvider | null;
   dataFlowExecutor: DataFlowExecutor | null;
   isLeadBot: boolean;
-  leadRouter: ConversationRouter | null;
   conversionBus: ConversionBus | null;
   dialogueMiddleware: DialogueMiddleware | null;
 
@@ -216,76 +211,215 @@ export async function interpretAndProcess(
   const ctx = deps.buildHandlerContext();
 
   // Include recent messages for conversation continuity
-  const recentMessages = conversation.messages
-    .slice(-deps.maxContextMessages)
-    .map((m) => ({ role: m.role, text: m.text }));
-  const conversationContext: Record<string, unknown> = {
-    conversation,
-    recentMessages,
-  };
+  const conversationContext = buildConversationContext(conversation, deps.maxContextMessages);
 
-  let rawResult;
-  if (deps.interpreterRegistry) {
-    rawResult = await deps.interpreterRegistry.interpret(
-      message.text,
-      conversationContext,
-      deps.availableActions,
-      message.organizationId,
-    );
-  } else {
-    rawResult = await deps.interpreter.interpret(
-      message.text,
-      conversationContext,
-      deps.availableActions,
-    );
-  }
+  const rawResult = await interpretMessage(deps, message, conversationContext);
 
   // Schema-guard interpreter output before trusting it
   const guard = guardInterpreterOutput(rawResult);
   if (!guard.valid || !guard.data) {
-    console.error("Interpreter output failed schema guard:", guard.errors);
-    const uncertainResponse = await deps.composeResponse(
-      {
-        type: "uncertain",
-        userMessage: message.text,
-        availableActions: deps.availableActions,
-      },
-      message.organizationId ?? undefined,
-    );
-    await deps.adapter.sendTextReply(threadId, uncertainResponse.text);
-    await deps.recordAssistantMessage(threadId, uncertainResponse.text);
+    await handleInvalidInterpretation(deps, message, threadId, guard.errors);
     return;
   }
   const result = guard.data;
 
   // Handle read intents (no governance pipeline needed)
-  if (result.readIntent && result.proposals.length === 0) {
-    if (!deps.readAdapter) {
-      await deps.sendFilteredReply(threadId, "Read operations are not configured.");
-      return;
-    }
-    try {
-      const readResult = await handleReadIntent(
-        result.readIntent as import("./clinic/types.js").ReadIntentDescriptor,
-        {
-          readAdapter: deps.readAdapter,
-          cartridgeId: "digital-ads",
-          actorId: message.principalId,
-          organizationId: message.organizationId,
-        },
-      );
-      await deps.sendFilteredReply(threadId, readResult.text);
-    } catch (err) {
-      console.error("Read intent error:", err);
-      await deps.sendFilteredReply(threadId, `Error reading data: ${safeErrorMessage(err)}`);
-    }
+  if (await tryHandleReadIntent(deps, result, message, threadId)) return;
+
+  // If clarification needed
+  if (
+    await tryHandleClarification(deps, result, message, threadId, conversation, isNewConversation)
+  )
+    return;
+
+  // If no proposals, uncertain
+  if (await tryHandleNoProposals(deps, result, message, threadId, isNewConversation)) return;
+
+  // If a goalBrief is present and decomposable, try to build and execute a plan
+  if (await tryExecutePlan(deps, result, message, ctx, threadId)) return;
+
+  // Handle undo command
+  if (await tryHandleUndo(ctx, result, message, threadId)) return;
+
+  // Handle kill switch (emergency pause all)
+  if (await tryHandleKillSwitch(ctx, result, message, threadId)) return;
+
+  // Rate limit proposals per principal
+  if (!deps.checkProposalRateLimit(message.principalId)) {
+    await deps.sendFilteredReply(
+      threadId,
+      "You're sending too many requests. Please wait a moment and try again.",
+    );
     return;
   }
 
-  // If clarification needed
+  // Skin tool filter enforcement
+  if (await tryEnforceSkinFilter(deps, result, threadId)) return;
+
+  // Set proposals on conversation
+  const withProposals = transitionConversation(conversation, {
+    type: "set_proposals",
+    proposalIds: result.proposals.map((p) => p.id),
+  });
+  await setThread(withProposals);
+
+  // Process each proposal through the orchestrator
+  await processProposals(deps, result, message, threadId, withProposals, ctx, rawPayload);
+}
+
+/**
+ * Handle commands that short-circuit message processing (help, cockpit, callbacks).
+ * Returns true if the command was handled (caller should return early).
+ */
+export async function handleCommands(
+  deps: PipelineDeps,
+  message: ParsedMessage,
+  threadId: string,
+  rawPayload: unknown,
+): Promise<boolean> {
+  const ctx = deps.buildHandlerContext();
+
+  // Handle help command
+  if (/^help$/i.test(message.text.trim())) {
+    const helpText = composeHelpMessage(deps.availableActions);
+    await deps.sendFilteredReply(threadId, helpText);
+    await deps.recordAssistantMessage(threadId, helpText);
+    return true;
+  }
+
+  // Handle cockpit commands (agent management)
+  const trimmedText = message.text.trim();
+
+  if (/^\/?status$/i.test(trimmedText)) {
+    await handleStatusCommand(ctx, threadId, message.principalId, message.organizationId);
+    return true;
+  }
+
+  if (/^\/?pause$/i.test(trimmedText)) {
+    await handlePauseCommand(ctx, threadId, message.principalId, message.organizationId);
+    return true;
+  }
+
+  if (/^\/?resume$/i.test(trimmedText)) {
+    await handleResumeCommand(ctx, threadId, message.principalId, message.organizationId);
+    return true;
+  }
+
+  if (/^\/?autonomy[-_]?status$/i.test(trimmedText)) {
+    await handleAutonomyStatusCommand(ctx, threadId, message.principalId, message.organizationId);
+    return true;
+  }
+
+  const autonomyMatch = trimmedText.match(/^\/?autonomy(?:\s+(.+))?$/i);
+  if (autonomyMatch) {
+    await handleAutonomyCommand(
+      ctx,
+      threadId,
+      message.principalId,
+      message.organizationId,
+      autonomyMatch[1],
+    );
+    return true;
+  }
+
+  // Handle callback queries (approval button taps)
+  if (
+    message.text.startsWith("{") &&
+    message.text.includes('"action"') &&
+    message.text.includes('"approvalId"')
+  ) {
+    const cbqId = extractCallbackQueryId(rawPayload);
+    if (cbqId && deps.adapter.answerCallbackQuery) {
+      await deps.adapter.answerCallbackQuery(cbqId);
+    }
+    await handleCallbackQuery(ctx, threadId, message.text, message.principalId);
+    return true;
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions to reduce interpretAndProcess complexity
+// ---------------------------------------------------------------------------
+
+function buildConversationContext(
+  conversation: ReturnType<typeof createConversation>,
+  maxContextMessages: number,
+): Record<string, unknown> {
+  const recentMessages = conversation.messages
+    .slice(-maxContextMessages)
+    .map((m) => ({ role: m.role, text: m.text }));
+  return {
+    conversation,
+    recentMessages,
+  };
+}
+
+async function interpretMessage(
+  deps: PipelineDeps,
+  message: ParsedMessage,
+  conversationContext: Record<string, unknown>,
+): Promise<unknown> {
+  if (deps.interpreterRegistry) {
+    return await deps.interpreterRegistry.interpret(
+      message.text,
+      conversationContext,
+      deps.availableActions,
+      message.organizationId,
+    );
+  }
+  return await deps.interpreter.interpret(message.text, conversationContext, deps.availableActions);
+}
+
+async function handleInvalidInterpretation(
+  deps: PipelineDeps,
+  message: ParsedMessage,
+  threadId: string,
+  errors: unknown,
+): Promise<void> {
+  console.error("Interpreter output failed schema guard:", errors);
+  const uncertainResponse = await deps.composeResponse(
+    {
+      type: "uncertain",
+      userMessage: message.text,
+      availableActions: deps.availableActions,
+    },
+    message.organizationId ?? undefined,
+  );
+  await deps.adapter.sendTextReply(threadId, uncertainResponse.text);
+  await deps.recordAssistantMessage(threadId, uncertainResponse.text);
+}
+
+async function tryHandleReadIntent(
+  deps: PipelineDeps,
+  result: { readIntent?: unknown; proposals: unknown[] },
+  _message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
+  if (result.readIntent && result.proposals.length === 0) {
+    // Read operations are not currently supported.
+    await deps.sendFilteredReply(threadId, "Read operations are not currently available.");
+    return true;
+  }
+  return false;
+}
+
+async function tryHandleClarification(
+  deps: PipelineDeps,
+  result: {
+    needsClarification?: boolean;
+    confidence: number;
+    clarificationQuestion?: string | null;
+  },
+  message: ParsedMessage,
+  threadId: string,
+  conversation: ReturnType<typeof createConversation>,
+  isNewConversation: boolean,
+): Promise<boolean> {
   if (result.needsClarification || result.confidence < 0.5) {
     if (isNewConversation && result.confidence === 0) {
-      return;
+      return true;
     }
     const clarifyResponse = await deps.composeResponse(
       {
@@ -302,12 +436,20 @@ export async function interpretAndProcess(
     });
     await setThread(updated);
     await deps.adapter.sendTextReply(threadId, clarifyResponse.text);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // If no proposals, uncertain
+async function tryHandleNoProposals(
+  deps: PipelineDeps,
+  result: { proposals: unknown[] },
+  message: ParsedMessage,
+  threadId: string,
+  isNewConversation: boolean,
+): Promise<boolean> {
   if (result.proposals.length === 0) {
-    if (isNewConversation) return;
+    if (isNewConversation) return true;
     const noProposalResponse = await deps.composeResponse(
       {
         type: "uncertain",
@@ -317,10 +459,18 @@ export async function interpretAndProcess(
       message.organizationId ?? undefined,
     );
     await deps.adapter.sendTextReply(threadId, noProposalResponse.text);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // If a goalBrief is present and decomposable, try to build and execute a plan
+async function tryExecutePlan(
+  deps: PipelineDeps,
+  result: { goalBrief?: import("@switchboard/schemas").GoalBrief | null },
+  message: ParsedMessage,
+  ctx: HandlerContext,
+  threadId: string,
+): Promise<boolean> {
   if (result.goalBrief?.decomposable && deps.planGraphBuilder && deps.capabilityRegistry) {
     try {
       const capabilities = deps.capabilityRegistry.enrichAvailableActions(deps.availableActions);
@@ -337,7 +487,7 @@ export async function interpretAndProcess(
         });
 
         await handlePlanResult(ctx, threadId, planResult, message.principalId);
-        return;
+        return true;
       }
     } catch (err) {
       console.warn(
@@ -346,52 +496,55 @@ export async function interpretAndProcess(
       );
     }
   }
+  return false;
+}
 
-  // Handle undo command
+async function tryHandleUndo(
+  ctx: HandlerContext,
+  result: { proposals: Array<{ actionType: string }> },
+  message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
   if (result.proposals[0]?.actionType === "system.undo") {
     await handleUndo(ctx, threadId, message.principalId);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // Handle kill switch (emergency pause all)
+async function tryHandleKillSwitch(
+  ctx: HandlerContext,
+  result: { proposals: Array<{ actionType: string }> },
+  message: ParsedMessage,
+  threadId: string,
+): Promise<boolean> {
   if (result.proposals[0]?.actionType === "system.kill_switch") {
     await handleKillSwitch(ctx, threadId, message.principalId, message.organizationId);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // Rate limit proposals per principal
-  if (!deps.checkProposalRateLimit(message.principalId)) {
-    await deps.sendFilteredReply(
-      threadId,
-      "You're sending too many requests. Please wait a moment and try again.",
-    );
-    return;
-  }
+async function tryEnforceSkinFilter(
+  _deps: PipelineDeps,
+  _result: { proposals: Array<{ actionType: string }> },
+  _threadId: string,
+): Promise<boolean> {
+  // Skin-based tool filtering was removed with the skin/profile system cleanup.
+  return false;
+}
 
-  // Skin tool filter enforcement
-  if (deps.resolvedSkin) {
-    const { include, exclude } = deps.resolvedSkin.toolFilter;
-    for (const proposal of result.proposals) {
-      const included = matchesAny(proposal.actionType, include);
-      const excluded = exclude ? matchesAny(proposal.actionType, exclude) : false;
-      if (!included || excluded) {
-        await deps.sendFilteredReply(
-          threadId,
-          `Action "${proposal.actionType}" is not available in the current configuration.`,
-        );
-        return;
-      }
-    }
-  }
-
-  // Set proposals on conversation
-  const withProposals = transitionConversation(conversation, {
-    type: "set_proposals",
-    proposalIds: result.proposals.map((p) => p.id),
-  });
-  await setThread(withProposals);
-
-  // Process each proposal through the orchestrator
+async function processProposals(
+  deps: PipelineDeps,
+  result: {
+    proposals: Array<{ id: string; actionType: string; parameters: Record<string, unknown> }>;
+  },
+  message: ParsedMessage,
+  threadId: string,
+  withProposals: ReturnType<typeof transitionConversation>,
+  ctx: HandlerContext,
+  rawPayload: unknown,
+): Promise<void> {
   for (const proposal of result.proposals) {
     const entityRefs: Array<{ inputRef: string; entityType: string }> = [];
     if (proposal.parameters["campaignRef"]) {
@@ -449,81 +602,4 @@ export async function interpretAndProcess(
       await deps.sendFilteredReply(threadId, `Error processing request: ${safeErrorMessage(err)}`);
     }
   }
-}
-
-/**
- * Handle commands that short-circuit message processing (help, cockpit, callbacks).
- * Returns true if the command was handled (caller should return early).
- */
-export async function handleCommands(
-  deps: PipelineDeps,
-  message: ParsedMessage,
-  threadId: string,
-  rawPayload: unknown,
-): Promise<boolean> {
-  const ctx = deps.buildHandlerContext();
-
-  // Handle help command
-  if (/^help$/i.test(message.text.trim())) {
-    const helpText = composeHelpMessage(
-      deps.availableActions,
-      (deps.resolvedSkin?.language as Record<string, unknown> | undefined)?.["terminology"] as
-        | Record<string, string>
-        | undefined,
-    );
-    await deps.sendFilteredReply(threadId, helpText);
-    await deps.recordAssistantMessage(threadId, helpText);
-    return true;
-  }
-
-  // Handle cockpit commands (agent management)
-  const trimmedText = message.text.trim();
-
-  if (/^\/?status$/i.test(trimmedText)) {
-    await handleStatusCommand(ctx, threadId, message.principalId, message.organizationId);
-    return true;
-  }
-
-  if (/^\/?pause$/i.test(trimmedText)) {
-    await handlePauseCommand(ctx, threadId, message.principalId, message.organizationId);
-    return true;
-  }
-
-  if (/^\/?resume$/i.test(trimmedText)) {
-    await handleResumeCommand(ctx, threadId, message.principalId, message.organizationId);
-    return true;
-  }
-
-  if (/^\/?autonomy[-_]?status$/i.test(trimmedText)) {
-    await handleAutonomyStatusCommand(ctx, threadId, message.principalId, message.organizationId);
-    return true;
-  }
-
-  const autonomyMatch = trimmedText.match(/^\/?autonomy(?:\s+(.+))?$/i);
-  if (autonomyMatch) {
-    await handleAutonomyCommand(
-      ctx,
-      threadId,
-      message.principalId,
-      message.organizationId,
-      autonomyMatch[1],
-    );
-    return true;
-  }
-
-  // Handle callback queries (approval button taps)
-  if (
-    message.text.startsWith("{") &&
-    message.text.includes('"action"') &&
-    message.text.includes('"approvalId"')
-  ) {
-    const cbqId = extractCallbackQueryId(rawPayload);
-    if (cbqId && deps.adapter.answerCallbackQuery) {
-      await deps.adapter.answerCallbackQuery(cbqId);
-    }
-    await handleCallbackQuery(ctx, threadId, message.text, message.principalId);
-    return true;
-  }
-
-  return false;
 }

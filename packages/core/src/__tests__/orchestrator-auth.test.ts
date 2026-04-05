@@ -402,7 +402,7 @@ describe("LifecycleOrchestrator — authorization guards", () => {
       const { InMemoryGovernanceProfileStore } = await import("../governance/profile.js");
       const profileStore = new InMemoryGovernanceProfileStore();
       await profileStore.setConfig("org_restricted", {
-        profile: "enforce" as any,
+        profile: "strict",
         blockedActionTypes: ["digital-ads.campaign.delete"],
       });
 

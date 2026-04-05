@@ -29,8 +29,8 @@ describe("DEFAULT_STAGE_HANDLER_MAP", () => {
 describe("agentForOpportunityStage", () => {
   const mockRegistry: { get(orgId: string, agentId: string): { status: string } | undefined } = {
     get: (_orgId: string, agentId: string) => {
-      if (agentId === "lead-responder") return { status: "active" };
-      if (agentId === "sales-closer") return { status: "paused" };
+      if (agentId === "employee-a") return { status: "active" };
+      if (agentId === "employee-b") return { status: "paused" };
       return undefined;
     },
   };
@@ -42,7 +42,7 @@ describe("agentForOpportunityStage", () => {
       mockRegistry,
       "org-1",
     );
-    expect(result).toEqual({ agentId: "lead-responder" });
+    expect(result).toEqual({ agentId: "employee-a" });
   });
 
   it("returns fallback when preferred agent is paused", () => {
@@ -54,7 +54,7 @@ describe("agentForOpportunityStage", () => {
     );
     expect(result).toEqual({
       fallback: true,
-      missingAgent: "sales-closer",
+      missingAgent: "employee-b",
       reason: "paused",
     });
   });
@@ -68,7 +68,7 @@ describe("agentForOpportunityStage", () => {
     );
     expect(result).toEqual({
       fallback: true,
-      missingAgent: "nurture",
+      missingAgent: "employee-e",
       reason: "not_configured",
     });
   });

@@ -12,9 +12,6 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3002}
       - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
-      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
-      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
       - REDIS_URL=redis://redis:6379
       - CHAT_PUBLIC_URL=${CHAT_PUBLIC_URL:-http://chat:3001}
@@ -46,8 +43,6 @@ services:
       - CHAT_PORT=3001
       - NODE_ENV=production
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
-      - META_ADS_ACCOUNT_ID=${META_ADS_ACCOUNT_ID:-}
       - DATABASE_URL=postgresql://switchboard:switchboard@postgres:5432/switchboard
       - SWITCHBOARD_API_URL=http://api:3000
       - SWITCHBOARD_API_KEY=${SWITCHBOARD_API_KEY:-}

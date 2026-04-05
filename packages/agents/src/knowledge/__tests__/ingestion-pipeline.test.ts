@@ -45,7 +45,7 @@ describe("IngestionPipeline", () => {
   it("ingests text and stores chunks with embeddings", async () => {
     const result = await pipeline.ingest({
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "creative",
       documentId: "doc-1",
       content: "We offer Botox and fillers. Botox costs $200 per unit.",
       sourceType: "document",
@@ -54,7 +54,7 @@ describe("IngestionPipeline", () => {
     expect(result.chunksCreated).toBeGreaterThan(0);
     expect(mockStore.stored.length).toBeGreaterThan(0);
     expect(mockStore.stored[0]!.organizationId).toBe("org-1");
-    expect(mockStore.stored[0]!.agentId).toBe("lead-responder");
+    expect(mockStore.stored[0]!.agentId).toBe("creative");
     expect(mockStore.stored[0]!.sourceType).toBe("document");
     expect(mockStore.stored[0]!.embedding).toHaveLength(1024);
   });
@@ -65,7 +65,7 @@ describe("IngestionPipeline", () => {
 
     await pipeline.ingest({
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "creative",
       documentId: "doc-1",
       content: longText,
       sourceType: "document",
@@ -79,7 +79,7 @@ describe("IngestionPipeline", () => {
 
     await pipeline.ingest({
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "creative",
       documentId: "doc-1",
       content: text,
       sourceType: "document",
@@ -97,7 +97,7 @@ describe("IngestionPipeline", () => {
 
     await pipeline.ingest({
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "creative",
       documentId: "doc-1",
       content: "New content",
       sourceType: "document",
@@ -109,7 +109,7 @@ describe("IngestionPipeline", () => {
   it("handles empty content", async () => {
     const result = await pipeline.ingest({
       organizationId: "org-1",
-      agentId: "lead-responder",
+      agentId: "creative",
       documentId: "doc-1",
       content: "",
       sourceType: "document",
@@ -122,7 +122,7 @@ describe("IngestionPipeline", () => {
     for (const sourceType of ["correction", "wizard", "document"] as const) {
       await pipeline.ingest({
         organizationId: "org-1",
-        agentId: "lead-responder",
+        agentId: "creative",
         documentId: `doc-${sourceType}`,
         content: `Content for ${sourceType}`,
         sourceType,

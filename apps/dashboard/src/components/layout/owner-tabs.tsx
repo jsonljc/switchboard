@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, ShieldCheck, User } from "lucide-react";
+import { Home, ShieldCheck, Store, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 
 const TABS = [
   { href: "/", label: "Today", icon: Home },
-  { href: "/crm", label: "CRM", icon: Users },
+  { href: "/marketplace", label: "Hire", icon: Store },
   { href: "/decide", label: "Decide", icon: ShieldCheck },
   { href: "/me", label: "Me", icon: User },
 ] as const;

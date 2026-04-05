@@ -427,7 +427,7 @@ describe("LifecycleOrchestrator — lifecycle, competence, delegation, risk, spe
       expect(response.approvalState.status).toBe("approved");
       expect(response.executionResult?.success).toBe(true);
 
-      const entries = await ledger.query({ eventType: "delegation.chain_resolved" as any });
+      const entries = await ledger.query({ eventType: "delegation.chain_resolved" as const });
       expect(entries.length).toBeGreaterThanOrEqual(1);
       const chainEntry = entries[0];
       expect(chainEntry?.snapshot["depth"]).toBe(2);

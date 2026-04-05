@@ -21,13 +21,13 @@ describe("pending-action", () => {
         requiredCapabilities: ["email.send"],
         dryRunSupported: true,
         approvalRequired: "auto",
-        sourceAgent: "lead-responder",
+        sourceAgent: "employee-a",
         organizationId: "org123",
       });
 
       expect(action.status).toBe("proposed");
       expect(action.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(action.idempotencyKey).toContain("lead-responder");
+      expect(action.idempotencyKey).toContain("employee-a");
       expect(action.idempotencyKey).toContain("send_email");
     });
 

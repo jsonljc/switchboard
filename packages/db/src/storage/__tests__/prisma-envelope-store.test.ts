@@ -12,7 +12,8 @@ function createMockPrisma() {
   };
 }
 
-function createTestEnvelope(overrides: Record<string, unknown> = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data construction helper
+function createTestEnvelope(overrides: Record<string, any> = {}) {
   return {
     id: "env_test_1",
     version: 1,
@@ -49,6 +50,7 @@ describe("PrismaEnvelopeStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaEnvelopeStore(prisma as any);
   });
 
@@ -56,6 +58,7 @@ describe("PrismaEnvelopeStore", () => {
     const envelope = createTestEnvelope();
     prisma.actionEnvelope.upsert.mockResolvedValue(envelope);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Test data matches interface
     await store.save(envelope as any);
 
     expect(prisma.actionEnvelope.upsert).toHaveBeenCalledWith(

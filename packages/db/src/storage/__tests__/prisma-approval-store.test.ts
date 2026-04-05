@@ -14,7 +14,8 @@ function createMockPrisma() {
   };
 }
 
-const TEST_REQUEST = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Partial test data for approval request
+const TEST_REQUEST: any = {
   id: "apr_1",
   envelopeId: "env_1",
   actionType: "ad.create",
@@ -22,7 +23,7 @@ const TEST_REQUEST = {
   summary: "Create ad campaign",
   requiredApprovers: ["user_1"],
   quorum: null,
-} as any;
+};
 
 const TEST_STATE = {
   status: "pending" as const,
@@ -53,6 +54,7 @@ describe("PrismaApprovalStore", () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mock Prisma client for testing
     store = new PrismaApprovalStore(prisma as any);
   });
 

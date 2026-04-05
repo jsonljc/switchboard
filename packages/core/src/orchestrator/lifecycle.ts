@@ -21,9 +21,7 @@ import type { ApprovalNotifier } from "../notifications/notifier.js";
 import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
-
-import type { TierStore } from "../smb/tier-resolver.js";
-import type { SmbActivityLog } from "../smb/activity-log.js";
+import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import type { SharedContext } from "./shared-context.js";
@@ -43,6 +41,7 @@ export interface OrchestratorConfig {
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
   competenceTracker?: CompetenceTracker;
+  trustAdapter?: TrustScoreAdapter | null;
   riskPostureStore?: RiskPostureStore;
   /** When set, per-org governance profile overrides system risk posture for propose. */
   governanceProfileStore?: GovernanceProfileStore;
@@ -59,10 +58,6 @@ export interface OrchestratorConfig {
   crossCartridgeEnricher?: CrossCartridgeEnricher;
   /** Data-flow executor for multi-step plans with binding resolution. */
   dataFlowExecutor?: DataFlowExecutor;
-  /** Tier store for SMB vs Enterprise routing. When set, enables SMB governance pipeline. */
-  tierStore?: TierStore;
-  /** SMB activity log — used instead of AuditLedger for SMB orgs. */
-  smbActivityLog?: SmbActivityLog;
   /** Credential resolver for org-scoped connection credentials at execution time. */
   credentialResolver?: import("../credentials/resolver.js").ConnectionCredentialResolver;
   /** Circuit breaker wrapper for cartridge execute calls. When set, wraps each cartridge.execute() in a per-cartridge circuit breaker. */
@@ -107,6 +102,7 @@ export class LifecycleOrchestrator {
       routingConfig: config.routingConfig ?? DEFAULT_ROUTING_CONFIG,
       riskScoringConfig: config.riskScoringConfig,
       competenceTracker: config.competenceTracker ?? null,
+      trustAdapter: config.trustAdapter ?? null,
       riskPostureStore: config.riskPostureStore ?? null,
       governanceProfileStore: config.governanceProfileStore ?? null,
       policyCache: config.policyCache ?? null,
@@ -117,8 +113,6 @@ export class LifecycleOrchestrator {
       approvalRateLimit: config.approvalRateLimit ?? null,
       crossCartridgeEnricher: config.crossCartridgeEnricher ?? null,
       dataFlowExecutor: config.dataFlowExecutor ?? null,
-      tierStore: config.tierStore ?? null,
-      smbActivityLog: config.smbActivityLog ?? null,
       credentialResolver: config.credentialResolver ?? null,
       circuitBreaker: config.circuitBreaker ?? null,
       idempotencyGuard: config.idempotencyGuard ?? null,

@@ -13,7 +13,6 @@ import {
 } from "@switchboard/core";
 import type { StorageContext } from "@switchboard/core";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
-import { DEFAULT_DIGITAL_ADS_POLICIES } from "@switchboard/digital-ads";
 import {
   toolDefinitions,
   SIDE_EFFECT_TOOLS,
@@ -117,7 +116,7 @@ async function buildTestContext(): Promise<TestContext> {
   });
 
   storage.cartridges.register("digital-ads", cartridge);
-  await seedDefaultStorage(storage, DEFAULT_DIGITAL_ADS_POLICIES);
+  await seedDefaultStorage(storage);
 
   // Save principal for test actor
   await storage.identity.savePrincipal({

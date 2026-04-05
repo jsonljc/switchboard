@@ -11,7 +11,7 @@ describe("PolicyBridge", () => {
     const intent: DeliveryIntent = {
       eventId: "evt-1",
       destinationType: "agent",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       action: "lead.received",
       payload: { contactId: "c1" },
       criticality: "required",
@@ -50,7 +50,7 @@ describe("PolicyBridge", () => {
     const intent: DeliveryIntent = {
       eventId: "evt-1",
       destinationType: "agent",
-      destinationId: "sales-closer",
+      destinationId: "employee-b",
       action: "appointment.book",
       payload: {},
       criticality: "required",
@@ -70,7 +70,7 @@ describe("PolicyBridge", () => {
     const intent: DeliveryIntent = {
       eventId: "evt-1",
       destinationType: "agent",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       action: "lead.received",
       payload: {},
       criticality: "required",
@@ -87,7 +87,7 @@ describe("PolicyBridge", () => {
     const intent: DeliveryIntent = {
       eventId: "evt-1",
       destinationType: "agent",
-      destinationId: "lead-responder",
+      destinationId: "employee-a",
       action: "lead.received",
       payload: {},
       criticality: "required",

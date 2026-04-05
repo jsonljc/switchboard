@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { isOperatorMessage, delegateOperatorCommand } from "../operator-handler.js";
-import type { EventLoopDelegateConfig } from "../lead-handler.js";
+import {
+  isOperatorMessage,
+  delegateOperatorCommand,
+  type EventLoopDelegateConfig,
+} from "../operator-handler.js";
 
 describe("operator-handler", () => {
   describe("isOperatorMessage", () => {

@@ -1,5 +1,6 @@
 // Core types
 export * from "./principals.js";
+export * from "./agent-types.js";
 export * from "./risk.js";
 export * from "./governance-profile.js";
 export * from "./identity-spec.js";
@@ -7,6 +8,7 @@ export * from "./role-overlay.js";
 export * from "./policy.js";
 export * from "./action.js";
 export * from "./cartridge.js";
+export * from "./cartridge-types.js";
 export * from "./audit.js";
 
 // Chat types
@@ -23,9 +25,6 @@ export * from "./competence.js";
 // MCP tool schemas
 export * from "./mcp.js";
 
-// Organization tier (SMB vs Enterprise)
-export * from "./organization-tier.js";
-
 // Cross-cartridge integration
 export * from "./data-flow.js";
 
@@ -35,34 +34,8 @@ export * from "./capability.js";
 // Goal brief (structured goal decomposition)
 export * from "./goal-brief.js";
 
-// CRM provider types (shared contract for CRM implementations)
-export * from "./crm-provider.js";
 export { LegacyRevenueEventSchema, LegacyRevenueEventSourceSchema } from "./revenue-event.js";
 export type { LegacyRevenueEvent, LegacyRevenueEventSource } from "./revenue-event.js";
-
-// Skin manifests (vertical deployment configuration)
-export * from "./skin.js";
-
-// Business profiles (per-business instance knowledge)
-export * from "./business-profile.js";
-
-// Lead profile (per-lead intelligence accumulated over conversation turns)
-export * from "./lead-profile.js";
-
-// Campaign plan (strategist agent output)
-export * from "./campaign-plan.js";
-
-// Ads operator config (per-business agent configuration)
-export * from "./ads-operator.js";
-
-// Revenue growth cartridge types
-export * from "./revenue-growth.js";
-
-// Conversation flow definitions (Zod-validated)
-export * from "./conversation-flow.js";
-
-// Outcome event tracking
-export * from "./outcome-event.js";
 
 // Session runtime types
 export * from "./session.js";
@@ -81,3 +54,9 @@ export * from "./operator-command.js";
 
 // Unified lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle.js";
+
+// Event types (RoutedEventEnvelope, createEventEnvelope)
+export * from "./event-types.js";
+
+// Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
+export * from "./marketplace.js";

@@ -120,7 +120,7 @@ describe("SchedulerService (in-memory)", () => {
         fireAt: new Date("2026-04-01T10:00:00Z"),
         cronExpression: null,
         eventPattern: null,
-        action: { type: "spawn_workflow", payload: { agent: "nurture" } },
+        action: { type: "spawn_workflow", payload: { agent: "employee-e" } },
         sourceWorkflowId: null,
         expiresAt: null,
       };

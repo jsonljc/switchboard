@@ -1,4 +1,7 @@
-import type { EventLoopDelegateConfig } from "./lead-handler.js";
+export interface EventLoopDelegateConfig {
+  apiUrl: string;
+  apiKey?: string;
+}
 
 export function isOperatorMessage(roles: string[] | undefined): boolean {
   return Array.isArray(roles) && roles.includes("operator");
