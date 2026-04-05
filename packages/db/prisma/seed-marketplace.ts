@@ -8,6 +8,7 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Responds to inbound leads within 60 seconds. Qualifies through natural conversation.",
     taskCategories: ["lead-qualification"],
+    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "leads" },
   },
   {
     name: "Sales Closer",
@@ -15,6 +16,7 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Takes qualified leads and closes them. Handles objections, builds urgency, confirms decisions.",
     taskCategories: ["sales-closing"],
+    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "growth" },
   },
   {
     name: "Nurture Specialist",
@@ -22,6 +24,7 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Re-engages cold leads through scheduled follow-ups. Varies approach across cadence.",
     taskCategories: ["lead-nurturing"],
+    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "care" },
   },
 ];
 
@@ -38,21 +41,19 @@ const FUTURE_FAMILIES = [
     name: "Creative",
     slug: "creative-family",
     description: "Content, social media, ad copy. Coming soon.",
+    metadata: { isBundle: true, family: "creative" },
   },
   {
     name: "Trading",
     slug: "trading-family",
     description: "Market analysis, alerts, execution. Coming soon.",
+    metadata: { isBundle: true, family: "trading" },
   },
   {
     name: "Finance",
     slug: "finance-family",
     description: "Bookkeeping, invoicing, expenses. Coming soon.",
-  },
-  {
-    name: "Legal",
-    slug: "legal-family",
-    description: "Contract review, compliance, drafting. Coming soon.",
+    metadata: { isBundle: true, family: "finance" },
   },
 ];
 
@@ -66,6 +67,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
         name: agent.name,
         description: agent.description,
         taskCategories: agent.taskCategories,
+        metadata: agent.metadata,
       },
       create: {
         ...agent,
@@ -83,7 +85,11 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
 
   const bundle = await prisma.agentListing.upsert({
     where: { slug: SALES_PIPELINE_BUNDLE.slug },
-    update: { name: SALES_PIPELINE_BUNDLE.name, description: SALES_PIPELINE_BUNDLE.description },
+    update: {
+      name: SALES_PIPELINE_BUNDLE.name,
+      description: SALES_PIPELINE_BUNDLE.description,
+      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
+    },
     create: {
       ...SALES_PIPELINE_BUNDLE,
       type: "switchboard_native",
@@ -92,7 +98,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
       autonomyLevel: "supervised",
       priceTier: "free",
       priceMonthly: 0,
-      metadata: { bundleListingIds: agentIds },
+      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
     },
   });
   console.warn(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
@@ -100,7 +106,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   for (const family of FUTURE_FAMILIES) {
     const listing = await prisma.agentListing.upsert({
       where: { slug: family.slug },
-      update: { name: family.name, description: family.description },
+      update: { name: family.name, description: family.description, metadata: family.metadata },
       create: {
         ...family,
         type: "switchboard_native",
