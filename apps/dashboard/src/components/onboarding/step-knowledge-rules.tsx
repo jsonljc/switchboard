@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Percent, AlertTriangle, Ban, PenLine } from "lucide-react";
-import type { BehavioralRule } from "@/app/onboarding/page";
+import type { BehavioralRule } from "@/app/(auth)/onboarding/page";
 
 interface StepKnowledgeRulesProps {
   knowledgeText: string;

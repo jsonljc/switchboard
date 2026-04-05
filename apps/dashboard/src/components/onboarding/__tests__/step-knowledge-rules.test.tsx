@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StepKnowledgeRules } from "../step-knowledge-rules";
-import type { BehavioralRule } from "@/app/onboarding/page";
+import type { BehavioralRule } from "@/app/(auth)/onboarding/page";
 
 describe("StepKnowledgeRules", () => {
   const defaultProps = {

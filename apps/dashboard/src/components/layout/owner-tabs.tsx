@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useApprovalCount } from "@/hooks/use-approvals";
 
 const TABS = [
-  { href: "/", label: "Today", icon: Home },
+  { href: "/dashboard", label: "Today", icon: Home },
   { href: "/marketplace", label: "Hire", icon: Store },
   { href: "/decide", label: "Decide", icon: ShieldCheck },
   { href: "/me", label: "Me", icon: User },
@@ -18,7 +18,9 @@ export function OwnerTabs() {
   const pendingCount = useApprovalCount();
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+    href === "/dashboard"
+      ? pathname === "/dashboard"
+      : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 h-16 border-t border-border/50 bg-background/95 backdrop-blur-sm">

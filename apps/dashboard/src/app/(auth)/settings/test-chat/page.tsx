@@ -20,7 +20,7 @@ export default function SettingsTestChatPage() {
     goLive.mutate("creative", {
       onSuccess: () => {
         toast({ title: "Agent is now live!" });
-        router.push("/");
+        router.push("/dashboard");
       },
       onError: () => {
         toast({ title: "Failed to go live", variant: "destructive" });

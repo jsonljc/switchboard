@@ -95,7 +95,9 @@ export default function DecideDetailPage() {
           </div>
           <p className="text-sm text-muted-foreground">{(error as Error)?.message}</p>
           <Link href="/decide">
-            <Button variant="outline" size="sm" className="mt-4">Back to Decide</Button>
+            <Button variant="outline" size="sm" className="mt-4">
+              Back to Decide
+            </Button>
           </Link>
         </CardContent>
       </Card>
@@ -113,8 +115,8 @@ export default function DecideDetailPage() {
     request.riskCategory === "critical" || request.riskCategory === "high"
       ? ("destructive" as const)
       : request.riskCategory === "medium"
-      ? ("secondary" as const)
-      : ("outline" as const);
+        ? ("secondary" as const)
+        : ("outline" as const);
 
   return (
     <div className="space-y-6">
@@ -136,7 +138,15 @@ export default function DecideDetailPage() {
             <div>
               <span className="text-sm text-muted-foreground">Status</span>
               <div className="mt-1">
-                <Badge variant={isPending ? "secondary" : state.status === "approved" ? "default" : "destructive"}>
+                <Badge
+                  variant={
+                    isPending
+                      ? "secondary"
+                      : state.status === "approved"
+                        ? "default"
+                        : "destructive"
+                  }
+                >
                   {state.status}
                 </Badge>
               </div>
@@ -171,7 +181,9 @@ export default function DecideDetailPage() {
 
           <div>
             <span className="text-sm text-muted-foreground">Binding Hash</span>
-            <p className="text-xs font-mono bg-muted p-2 rounded mt-1 break-all">{request.bindingHash}</p>
+            <p className="text-xs font-mono bg-muted p-2 rounded mt-1 break-all">
+              {request.bindingHash}
+            </p>
           </div>
 
           {request.approvers.length > 0 && (
@@ -179,7 +191,9 @@ export default function DecideDetailPage() {
               <span className="text-sm text-muted-foreground">Approvers</span>
               <div className="flex gap-1 mt-1 flex-wrap">
                 {request.approvers.map((a) => (
-                  <Badge key={a} variant="outline" className="font-mono text-xs">{a}</Badge>
+                  <Badge key={a} variant="outline" className="font-mono text-xs">
+                    {a}
+                  </Badge>
                 ))}
               </div>
             </div>

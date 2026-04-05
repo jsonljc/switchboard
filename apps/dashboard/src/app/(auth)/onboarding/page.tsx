@@ -167,7 +167,7 @@ export default function OnboardingPage() {
         description: "Redirecting to your dashboard...",
       });
 
-      setTimeout(() => router.push("/"), 2000);
+      setTimeout(() => router.push("/dashboard"), 2000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast({ title: "Setup failed", description: message, variant: "destructive" });

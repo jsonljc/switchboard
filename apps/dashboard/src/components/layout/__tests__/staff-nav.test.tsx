@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { StaffNav } from "../staff-nav.js";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => "/dashboard",
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -26,8 +26,8 @@ describe("StaffNav", () => {
   it("renders 4 nav items plus settings", () => {
     render(<StaffNav />);
     expect(screen.getByText("Dashboard")).toBeDefined();
-    expect(screen.getByText("CRM")).toBeDefined();
-    expect(screen.getByText("Performance")).toBeDefined();
+    expect(screen.getByText("Marketplace")).toBeDefined();
+    expect(screen.getByText("Tasks")).toBeDefined();
     expect(screen.getByText("Decide")).toBeDefined();
   });
 

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { OwnerTabs } from "../owner-tabs.js";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => "/dashboard",
 }));
 
 vi.mock("@/hooks/use-approvals", () => ({
@@ -14,7 +14,7 @@ describe("OwnerTabs", () => {
   it("renders 4 tab items", () => {
     render(<OwnerTabs />);
     expect(screen.getByText("Today")).toBeDefined();
-    expect(screen.getByText("CRM")).toBeDefined();
+    expect(screen.getByText("Hire")).toBeDefined();
     expect(screen.getByText("Decide")).toBeDefined();
     expect(screen.getByText("Me")).toBeDefined();
   });

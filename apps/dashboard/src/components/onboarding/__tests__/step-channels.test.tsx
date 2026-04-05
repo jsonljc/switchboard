@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StepChannels } from "../step-channels";
-import type { ChannelConfig } from "@/app/onboarding/page";
+import type { ChannelConfig } from "@/app/(auth)/onboarding/page";
 
 describe("StepChannels", () => {
   const emptyChannels: ChannelConfig = {
