@@ -414,4 +414,49 @@ export class SwitchboardClient extends SwitchboardClientBase {
       body: JSON.stringify({ result, reviewResult }),
     });
   }
+
+  // ── Agent Persona ──
+
+  async getPersona() {
+    return this.request<{ persona: unknown }>("/api/marketplace/persona");
+  }
+
+  async upsertPersona(body: {
+    businessName: string;
+    businessType: string;
+    productService: string;
+    valueProposition: string;
+    tone: string;
+    qualificationCriteria: Record<string, unknown>;
+    disqualificationCriteria: Record<string, unknown>;
+    escalationRules: Record<string, unknown>;
+    bookingLink?: string;
+    customInstructions?: string;
+  }) {
+    return this.request<{ persona: unknown }>("/api/marketplace/persona", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deploySalesPipeline(body: {
+    businessName: string;
+    businessType: string;
+    productService: string;
+    valueProposition: string;
+    tone: string;
+    qualificationCriteria: Record<string, unknown>;
+    disqualificationCriteria: Record<string, unknown>;
+    escalationRules: Record<string, unknown>;
+    bookingLink?: string;
+    customInstructions?: string;
+  }) {
+    return this.request<{ persona: unknown; deployments: unknown[]; count: number }>(
+      "/api/marketplace/persona/deploy",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  }
 }
