@@ -2,18 +2,18 @@ import { describe, it, expect } from "vitest";
 import { TrustScoreEngine, scoreToAutonomyLevel, scoreToPriceTier } from "../trust-score-engine.js";
 
 describe("scoreToAutonomyLevel", () => {
-  it("returns supervised for score < 40", () => {
+  it("returns supervised for score 0-29", () => {
     expect(scoreToAutonomyLevel(0)).toBe("supervised");
-    expect(scoreToAutonomyLevel(39)).toBe("supervised");
+    expect(scoreToAutonomyLevel(29)).toBe("supervised");
   });
 
-  it("returns guided for score 40-69", () => {
-    expect(scoreToAutonomyLevel(40)).toBe("guided");
-    expect(scoreToAutonomyLevel(69)).toBe("guided");
+  it("returns guided for score 30-54", () => {
+    expect(scoreToAutonomyLevel(30)).toBe("guided");
+    expect(scoreToAutonomyLevel(54)).toBe("guided");
   });
 
-  it("returns autonomous for score >= 70", () => {
-    expect(scoreToAutonomyLevel(70)).toBe("autonomous");
+  it("returns autonomous for score >= 55", () => {
+    expect(scoreToAutonomyLevel(55)).toBe("autonomous");
     expect(scoreToAutonomyLevel(100)).toBe("autonomous");
   });
 });
@@ -66,7 +66,7 @@ describe("TrustScoreEngine", () => {
             id: key,
             listingId,
             taskCategory,
-            score: 50,
+            score: 0,
             totalApprovals: 0,
             totalRejections: 0,
             consecutiveApprovals: 0,
@@ -87,7 +87,7 @@ describe("TrustScoreEngine", () => {
         [...records.values()].filter((r) => r.listingId === listingId),
       getAggregateScore: async (listingId: string) => {
         const listing = [...records.values()].filter((r) => r.listingId === listingId);
-        if (listing.length === 0) return 50;
+        if (listing.length === 0) return 0;
         return listing.reduce((sum, r) => sum + r.score, 0) / listing.length;
       },
     };
@@ -100,19 +100,19 @@ describe("TrustScoreEngine", () => {
     await engine.recordApproval("lst_1", "email");
     const record = await store.getOrCreate("lst_1", "email");
 
-    expect(record.score).toBeGreaterThan(50);
+    expect(record.score).toBeGreaterThan(0);
     expect(record.totalApprovals).toBe(1);
     expect(record.consecutiveApprovals).toBe(1);
   });
 
-  it("records a rejection and decrements score", async () => {
+  it("records a rejection and keeps score at floor", async () => {
     const store = createMockStore();
     const engine = new TrustScoreEngine(store);
 
     await engine.recordRejection("lst_1", "email");
     const record = await store.getOrCreate("lst_1", "email");
 
-    expect(record.score).toBeLessThan(50);
+    expect(record.score).toBe(0); // already at floor, can't go lower
     expect(record.totalRejections).toBe(1);
     expect(record.consecutiveApprovals).toBe(0);
   });
@@ -122,7 +122,7 @@ describe("TrustScoreEngine", () => {
     const engine = new TrustScoreEngine(store);
 
     const level = await engine.getAutonomyLevel("lst_1", "email");
-    expect(level).toBe("guided"); // default score 50 → guided
+    expect(level).toBe("supervised"); // default score 0 → supervised
   });
 
   it("gets price tier for a listing", async () => {
@@ -130,7 +130,7 @@ describe("TrustScoreEngine", () => {
     const engine = new TrustScoreEngine(store);
 
     const tier = await engine.getPriceTier("lst_1");
-    expect(tier).toBe("basic"); // default aggregate score 50 → basic
+    expect(tier).toBe("free"); // default aggregate score 0 → free
   });
 
   it("caps score at 100", async () => {

@@ -120,7 +120,7 @@ describe("TrustScoreAdapter", () => {
             id: key,
             listingId,
             taskCategory,
-            score: 50,
+            score: 0,
             totalApprovals: 0,
             totalRejections: 0,
             consecutiveApprovals: 0,
@@ -139,23 +139,37 @@ describe("TrustScoreAdapter", () => {
       },
       listByListing: async (listingId: string) =>
         [...records.values()].filter((r) => r.listingId === listingId),
-      getAggregateScore: async () => 50,
+      getAggregateScore: async () => 0,
     };
   }
 
-  it("adjusts identity when principal maps to a listing", async () => {
+  it("adjusts identity when principal maps to a listing with guided trust", async () => {
     const store = createMockStore();
     const engine = new TrustScoreEngine(store);
+
+    // Build up score to guided range (30-54) via approvals
+    for (let i = 0; i < 10; i++) {
+      await engine.recordApproval("lst_1", "email");
+    }
+
     const resolver = async (_principalId: string) => ({
       listingId: "lst_1",
       taskCategory: "email",
     });
     const adapter = new TrustScoreAdapter(engine, resolver);
 
-    const identity = makeIdentity();
+    const identity = makeIdentity({
+      effectiveRiskTolerance: {
+        none: "none",
+        low: "standard",
+        medium: "standard",
+        high: "elevated",
+        critical: "mandatory",
+      },
+    });
     const result = await adapter.adjustIdentity("agent_1", "send_email", identity);
 
-    // Default score 50 → guided → should relax low risk
+    // Score in guided range → should relax low risk
     expect(result.effectiveRiskTolerance.low).toBe("none");
   });
 
@@ -223,9 +237,9 @@ describe("TrustScoreAdapter", () => {
 
     const identity = makeIdentity();
 
-    // Should map
+    // Should map — score 0 → supervised → no relaxation
     const result1 = await adapter.adjustIdentity("agent_1", "send_email", identity);
-    expect(result1.effectiveRiskTolerance.low).toBe("none");
+    expect(result1.effectiveRiskTolerance).toEqual(identity.effectiveRiskTolerance);
 
     // Should not map
     const result2 = await adapter.adjustIdentity("agent_1", "send_sms", identity);

@@ -38,9 +38,9 @@ export const DEFAULT_TRUST_THRESHOLDS: TrustThresholds = {
   streakBonusCap: 5,
   scoreCeiling: 100,
   scoreFloor: 0,
-  supervisedCeiling: 39,
-  guidedCeiling: 69,
-  autonomousFloor: 70,
+  supervisedCeiling: 29,
+  guidedCeiling: 54,
+  autonomousFloor: 55,
   freeCeiling: 29,
   basicCeiling: 54,
   proCeiling: 79,
@@ -117,9 +117,7 @@ export class TrustScoreEngine {
     return scoreToPriceTier(avgScore, this.thresholds);
   }
 
-  async getScoreBreakdown(
-    listingId: string,
-  ): Promise<
+  async getScoreBreakdown(listingId: string): Promise<
     {
       category: string;
       score: number;

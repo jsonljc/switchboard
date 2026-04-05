@@ -50,7 +50,7 @@ describe("Marketplace schemas", () => {
         updatedAt: new Date(),
       };
       const result = AgentListingSchema.parse(minimal);
-      expect(result.trustScore).toBe(50);
+      expect(result.trustScore).toBe(0);
       expect(result.autonomyLevel).toBe("supervised");
       expect(result.priceTier).toBe("free");
       expect(result.priceMonthly).toBe(0);

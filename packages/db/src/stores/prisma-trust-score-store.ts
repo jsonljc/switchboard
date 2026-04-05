@@ -11,7 +11,7 @@ export class PrismaTrustScoreStore {
     if (existing) return existing as unknown as TrustScoreRecord;
 
     return this.prisma.trustScoreRecord.create({
-      data: { listingId, taskCategory, score: 50 },
+      data: { listingId, taskCategory, score: 0 },
     }) as unknown as TrustScoreRecord;
   }
 
@@ -42,6 +42,6 @@ export class PrismaTrustScoreStore {
       where: { listingId },
       _avg: { score: true },
     });
-    return result._avg.score ?? 50;
+    return result._avg.score ?? 0;
   }
 }

@@ -39,7 +39,7 @@ export const AgentListingSchema = z.object({
   type: AgentType,
   status: AgentListingStatus,
   taskCategories: z.array(z.string()),
-  trustScore: z.number().min(0).max(100).default(50),
+  trustScore: z.number().min(0).max(100).default(0),
   autonomyLevel: AutonomyLevel.default("supervised"),
   priceTier: PriceTier.default("free"),
   priceMonthly: z.number().nonnegative().default(0),
