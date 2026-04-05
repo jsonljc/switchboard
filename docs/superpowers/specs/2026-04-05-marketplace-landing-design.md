@@ -71,7 +71,7 @@ import { PrismaListingStore } from "@switchboard/db";
 import { prisma } from "@switchboard/db";
 
 const store = new PrismaListingStore(prisma);
-const listings = await store.findAll({ status: "listed" });
+const listings = await store.list({ status: "listed" });
 ```
 
 **Slug-based lookups:** The agent profile page at `/agents/[slug]` uses `PrismaListingStore.findBySlug(slug)` which already exists. No new API endpoint needed since it's a server component calling Prisma directly.
@@ -113,7 +113,13 @@ Sales ●       Creative       Trading       Finance
   - One-line description: "Creative agents — content, social media, ad copy."
   - "Coming soon" label in muted text
 
-**Data:** Tab metadata comes from `AgentListing` records filtered by `type: "bundle"`. Each bundle listing's `metadata` JSON field contains `family: "sales" | "creative" | "trading" | "finance"`. Sales Pipeline agents have `status: "listed"`. Future families have `status: "pending_review"`. The tab component queries bundle listings and groups by `metadata.family`. For v1, only these four families are shown — the existing "Legal" family in the seed data is excluded from tabs (filter by the four known families).
+**Data:** Tab metadata comes from `AgentListing` records that have `metadata.isBundle: true` in their JSON metadata field. Each bundle listing's `metadata` also contains `family: "sales" | "creative" | "trading" | "finance"`. Sales Pipeline agents have `status: "listed"`. Future families have `status: "pending_review"`. The tab component queries all listings, filters to those with `metadata.isBundle === true`, and groups by `metadata.family`. For v1, only these four families are shown — the existing "Legal" family in the seed data is excluded from tabs (filter by the four known families).
+
+**Seed script update required:** The existing `seed-marketplace.ts` must be updated to:
+
+- Add `isBundle: true` and `family: "sales"` to the Sales Pipeline Bundle's metadata
+- Add `isBundle: true` and `family: "<name>"` to each future family placeholder listing
+- Add `bundleSlug: "sales-pipeline-bundle"` to each individual Sales agent's metadata (Speed-to-Lead, Sales Closer, Nurture Specialist) so cards can resolve their parent bundle for the "Hire" redirect
 
 **Email capture:** Deferred to post-v1. Coming-soon tabs show the character, description, and a static "Coming soon" label — no email input or waitlist counter. Moved to Future Enhancements.
 
@@ -249,7 +255,7 @@ Auth-required page at `/deploy/[slug]`. Reached by clicking "Hire" on an agent c
 
 **Replaces:** The existing deploy page at `(auth)/marketplace/[id]/deploy/page.tsx` and its components (`DeployWizardShell`, `DeployStepConfig`, `DeployStepConnect`, `DeployStepGovernance`). The new flow uses a simpler, conversational approach. The old deploy page and its components should be removed.
 
-**"Hire" button behavior:** On individual agent cards for Sales Pipeline agents, "Hire" goes to `/deploy/sales-pipeline-bundle` (the bundle deploy), not individual agent deploy. Sales agents work as a team — deploying one individually is not supported in v1. The CTA text on the bundle card is "Deploy this team" while on individual cards it says "Hire" but both link to the same bundle deploy page.
+**"Hire" button behavior:** On individual agent cards for Sales Pipeline agents, "Hire" goes to `/deploy/sales-pipeline-bundle` (the bundle deploy), not individual agent deploy. Sales agents work as a team — deploying one individually is not supported in v1. The CTA text on the bundle card is "Deploy this team" while on individual cards it says "Hire" but both link to the same bundle deploy page. The redirect slug is resolved from the agent's `metadata.bundleSlug` field (set in seed data).
 
 ### Auth Gate
 
@@ -365,7 +371,7 @@ The public marketplace pages query data for `org_demo` only. This is a read-only
 7. **`ConversationTranscript`** — chat-style message layout
 8. **`TrustHistoryChart`** — sparkline of trust score over time
 9. **`DeployWizard`** — website scan + review + brief flow
-10. **`ComingSoonFamily`** — character + description + email capture
+10. **`ComingSoonFamily`** — character + description + "Coming soon" label
 
 ### Reused from Current Implementation
 
