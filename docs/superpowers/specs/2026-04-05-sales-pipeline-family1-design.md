@@ -121,16 +121,17 @@ These map directly to trust score inputs — approvals/rejections from the found
 
 ### New Model: AgentPersona
 
+The persona is shared across all agents in a bundle. It links to `organizationId`, not to a specific deployment. All three agent deployments read from the same persona record.
+
 ```prisma
 model AgentPersona {
   id                       String   @id @default(cuid())
-  deploymentId             String   // links to AgentDeployment
-  organizationId           String
+  organizationId           String   @unique // one persona per org (shared across all agent deployments)
   businessName             String
   businessType             String
   productService           String
   valueProposition         String
-  tone                     String   // "casual" | "professional" | "consultative"
+  tone                     String   // validated as: "casual" | "professional" | "consultative"
   qualificationCriteria    Json     // what makes a lead qualified
   disqualificationCriteria Json     // hard disqualifiers
   bookingLink              String?
@@ -139,7 +140,6 @@ model AgentPersona {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  @@index([deploymentId])
   @@index([organizationId])
 }
 ```
@@ -149,8 +149,9 @@ model AgentPersona {
 ```prisma
 // Add to existing Contact model:
 qualificationData  Json?      // captured during qualification conversations
-nextFollowUpAt     DateTime?  // when Nurture Specialist should follow up
 ```
+
+Note: `nextFollowUpAt` already exists on `ConversationThread.followUpSchedule.nextFollowUpAt`. The existing field is the single source of truth for follow-up scheduling — no duplication on Contact.
 
 ### No Other Schema Changes
 
@@ -347,7 +348,31 @@ Agents can reach different trust levels independently. Speed-to-Lead might reach
 
 ---
 
-## 10. Scope — What's Explicitly Excluded
+## 10. Design Decisions & Edge Cases
+
+**One thread per contact:** `ConversationThread` has a unique constraint on `[contactId, organizationId]`. This means one active pipeline conversation per lead. If the same person inquires about a second product, it flows through the same thread. This is intentional — the agents should know everything about a lead in one place.
+
+**Opportunity auto-creation:** When a lead enters the pipeline, an Opportunity is auto-created. `serviceId` and `serviceName` are populated from `AgentPersona.productService`. If the founder sells multiple products, the agent determines which one during qualification and updates the Opportunity.
+
+**Dormancy scheduling:** The existing scheduler infrastructure (native runtime scheduler) handles dormancy detection and nurture cadence. The `ConversationThread.followUpSchedule.nextFollowUpAt` field is polled by the scheduler. No new scheduling mechanism needed.
+
+**State reconciliation:** `ConversationThread` is the persisted source of truth for agent assignment. The in-memory conversation state (`ConversationStateData`) is reconstructed from the thread on each message. Pipeline handoffs update the thread first, then the in-memory state follows.
+
+**Channel support at launch:** WhatsApp and Telegram only for inbound leads. The `Contact.primaryChannel` enum will be extended to include `"slack"` and `"instagram"` in a future update if those channels are needed for lead ingestion.
+
+**Trust score categories:** Each agent uses a single task category matching its role: `"lead-qualification"` (Speed-to-Lead), `"sales-closing"` (Sales Closer), `"lead-nurturing"` (Nurture Specialist). These are the `taskCategory` values in `TrustScoreRecord`.
+
+**Bundle representation:** The bundle is a fourth `AgentListing` with `type: "switchboard_native"` and `metadata: { bundleListingIds: [...] }`. Deploying the bundle creates three individual `AgentDeployment` records. The bundle listing itself has no deployment — it's a catalog entry only.
+
+**Manual override:** The founder can manually reassign a lead's agent via the dashboard. This updates `ConversationThread.assignedAgent` and creates an audit entry. Available through the existing OwnerTask escalation flow.
+
+**60-second SLA:** If the LLM response takes >10 seconds, a templated acknowledgment is sent immediately ("Hi! Got your message, one moment...") while the personalized response generates.
+
+**WhatsApp rate limits:** Nurture follow-ups respect WhatsApp's 24-hour messaging window. Messages outside the window use approved message templates. Maximum one follow-up per 24 hours per lead.
+
+---
+
+## 11. Scope — What's Explicitly Excluded
 
 | Excluded                               | Reason                                                          |
 | -------------------------------------- | --------------------------------------------------------------- |
@@ -362,7 +387,7 @@ Agents can reach different trust levels independently. Speed-to-Lead might reach
 
 ---
 
-## 11. Implementation Dependencies
+## 12. Implementation Dependencies
 
 Build order (each step depends on the previous):
 
