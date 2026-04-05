@@ -57,6 +57,27 @@ apps/dashboard/src/app/
 
 ---
 
+## Public Data Fetching
+
+The marketplace landing and agent profile pages are public (no auth). All data fetching happens server-side in Next.js Server Components using Prisma directly — no API proxy needed.
+
+**Why Prisma direct:** The `(public)/page.tsx` and `agents/[slug]/page.tsx` are Server Components. They import the Prisma store classes from `@switchboard/db` and query for `org_demo` data at render time. This avoids the need for a public API layer or unauthenticated proxy routes. The data is read-only and scoped to the demo org.
+
+**Pattern:**
+
+```ts
+// (public)/page.tsx — Server Component
+import { PrismaListingStore } from "@switchboard/db";
+import { prisma } from "@switchboard/db";
+
+const store = new PrismaListingStore(prisma);
+const listings = await store.findAll({ status: "listed" });
+```
+
+**Slug-based lookups:** The agent profile page at `/agents/[slug]` uses `PrismaListingStore.findBySlug(slug)` which already exists. No new API endpoint needed since it's a server component calling Prisma directly.
+
+---
+
 ## Section Details
 
 ### 1. Header
@@ -90,10 +111,11 @@ Sales ●       Creative       Trading       Finance
 - Clicking a coming-soon tab transitions the content area below to show:
   - That family's agent character (muted, slow breathing, opacity 0.4)
   - One-line description: "Creative agents — content, social media, ad copy."
-  - Email input: "Get notified when Creative launches"
-  - Social proof counter: "34 people waiting" (increments as emails are collected)
+  - "Coming soon" label in muted text
 
-**Data:** Tab metadata comes from `AgentListing` records. Sales Pipeline agents have `status: "listed"`. Future families have `status: "pending_review"`. The tab component queries listings grouped by family/category.
+**Data:** Tab metadata comes from `AgentListing` records filtered by `type: "bundle"`. Each bundle listing's `metadata` JSON field contains `family: "sales" | "creative" | "trading" | "finance"`. Sales Pipeline agents have `status: "listed"`. Future families have `status: "pending_review"`. The tab component queries bundle listings and groups by `metadata.family`. For v1, only these four families are shown — the existing "Legal" family in the seed data is excluded from tabs (filter by the four known families).
+
+**Email capture:** Deferred to post-v1. Coming-soon tabs show the character, description, and a static "Coming soon" label — no email input or waitlist counter. Moved to Future Enhancements.
 
 ### 4. Featured Team Bundle
 
@@ -204,11 +226,30 @@ All data comes from the demo organization's records:
 - `TrustScoreRecord` for trust history
 - Conversation transcripts stored in task `output` field
 
+**Conversation transcript shape** (stored in `AgentTask.output` as JSON):
+
+```ts
+interface TaskOutput {
+  summary: string; // e.g., "Qualified lead — wedding cakes, $800 budget"
+  messages: Array<{
+    role: "lead" | "agent";
+    text: string;
+    timestamp: string; // ISO 8601
+  }>;
+  outcome: "qualified" | "disqualified" | "booked" | "escalated";
+  handoffTo?: string; // slug of the next agent, if applicable
+}
+```
+
 ---
 
 ## Deploy Flow
 
 Auth-required page at `/deploy/[slug]`. Reached by clicking "Hire" on an agent card or "Deploy this team" on the bundle.
+
+**Replaces:** The existing deploy page at `(auth)/marketplace/[id]/deploy/page.tsx` and its components (`DeployWizardShell`, `DeployStepConfig`, `DeployStepConnect`, `DeployStepGovernance`). The new flow uses a simpler, conversational approach. The old deploy page and its components should be removed.
+
+**"Hire" button behavior:** On individual agent cards for Sales Pipeline agents, "Hire" goes to `/deploy/sales-pipeline-bundle` (the bundle deploy), not individual agent deploy. Sales agents work as a team — deploying one individually is not supported in v1. The CTA text on the bundle card is "Deploy this team" while on individual cards it says "Hire" but both link to the same bundle deploy page.
 
 ### Auth Gate
 
@@ -269,7 +310,7 @@ Got a booking link?
 - All fields below the summary are optional. The agent works with just the website context.
 - CTA speaks in the agent's voice: "Deploy — I'm ready to start →"
 
-**Backend:** On submit, calls the existing `POST /api/marketplace/persona` endpoint to upsert the persona, then `POST /api/marketplace/persona/deploy` to create deployments. Same backend as the current deploy flow, just a better frontend.
+**Backend:** On submit, calls the existing `POST /api/marketplace/persona` endpoint via the dashboard proxy at `/api/dashboard/marketplace/persona`. Then calls `POST /api/marketplace/persona/deploy` — a new dashboard proxy route must be created at `apps/dashboard/src/app/api/dashboard/marketplace/persona/deploy/route.ts` (the Fastify endpoint exists but the Next.js proxy does not). Same backend as the current deploy flow, just a better frontend.
 
 ### Post-Deploy
 
@@ -293,9 +334,9 @@ The marketplace landing page shows data from a demo organization ("Austin Bakery
 
 ### Freshness
 
-Timestamps are stored as relative offsets (e.g., "task completed 180 minutes before current time") and rendered as relative strings ("3 hours ago"). This means the demo always looks active regardless of when the visitor arrives.
+For v1, the seed script sets `AgentTask.createdAt` / `updatedAt` / `completedAt` as absolute `DateTime` values relative to `new Date()` at seed time (e.g., most recent task = 3 minutes ago, oldest = 24 hours ago). The frontend renders these as relative strings ("3 min ago") using a standard `formatDistanceToNow` utility.
 
-A daily cron job (or on-demand script) can regenerate conversations to keep the content varied. Not required for v1 — initial seed is sufficient.
+**Trade-off:** Timestamps go stale if the database isn't re-seeded. This is acceptable for v1 — `pnpm db:seed` refreshes them. A future enhancement could add a daily cron to re-seed demo data, but that's not in scope.
 
 ### Seed Script Location
 
@@ -402,7 +443,19 @@ Same standards as original spec:
 
 ---
 
+## Loading & Error States
+
+**Landing page:** Since it's a Server Component fetching from Prisma directly, the page renders with data. Next.js handles the loading state via `loading.tsx` — show a skeleton with placeholder cards (3 gray rectangles in the card grid area). If no listings are found (missing seed data), show: "No agents available yet. Run `pnpm db:seed` to populate the marketplace."
+
+**Agent profile page:** Same pattern — skeleton via `loading.tsx`. If the slug doesn't match any listing, return `notFound()` (Next.js 404 page).
+
+**Deploy flow:** Client-side loading states for the website scan step (spinner + "Learning your business..." text while the AI extraction runs).
+
+---
+
 ## Meta Tags
+
+Update the `(public)/layout.tsx` metadata to match the new marketplace framing. The page-level metadata in `page.tsx` overrides the title/description, but the layout's OpenGraph defaults should be updated too.
 
 ```ts
 // (public)/page.tsx
@@ -430,6 +483,8 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 - **Reviews/testimonials:** Allow deployers to leave reviews on agent listings.
 - **Third-party agent submissions:** Builder portal for external developers to list agents.
 - **Pricing display:** Show price tiers on cards when monetization is active.
+- **Email capture / waitlists:** Email input on coming-soon category tabs with "X people waiting" counter. Requires a `Waitlist` Prisma model and collection endpoint.
+- **Daily demo data refresh:** Cron job to re-seed demo data so timestamps stay fresh without manual re-seeding.
 
 ---
 
