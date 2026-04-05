@@ -695,7 +695,7 @@ model AgentListing {
   type            String   @default("switchboard_native") // open_source, third_party, switchboard_native
   status          String   @default("pending_review") // pending_review, listed, suspended, deprecated
   taskCategories  String[] @default([])
-  trustScore      Float    @default(50)
+  trustScore      Float    @default(0)
   autonomyLevel   String   @default("supervised") // supervised, guided, autonomous
   priceTier       String   @default("free") // free, basic, pro, elite
   priceMonthly    Float    @default(0)
@@ -771,7 +771,7 @@ model TrustScoreRecord {
   id                    String   @id @default(cuid())
   listingId             String
   taskCategory          String
-  score                 Float    @default(50)
+  score                 Float    @default(0)
   totalApprovals        Int      @default(0)
   totalRejections       Int      @default(0)
   consecutiveApprovals  Int      @default(0)
@@ -785,6 +785,26 @@ model TrustScoreRecord {
   @@index([listingId])
 }
 
+// ── Sales Pipeline: Agent Persona (shared business context) ──
+
+model AgentPersona {
+  id                       String   @id @default(cuid())
+  organizationId           String   @unique
+  businessName             String
+  businessType             String
+  productService           String
+  valueProposition         String
+  tone                     String   @default("professional")
+  qualificationCriteria    Json     @default("{}")
+  disqualificationCriteria Json     @default("{}")
+  bookingLink              String?
+  escalationRules          Json     @default("{}")
+  customInstructions       String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([organizationId])
+}
 
 model LlmUsageLog {
   id           String   @id @default(uuid())
@@ -970,6 +990,7 @@ model Contact {
   stage             String    @default("new")
   source            String?
   attribution       Json?
+  qualificationData Json?
   roles             String[]  @default(["lead"])
   firstContactAt    DateTime  @default(now())
   lastActivityAt    DateTime  @default(now())
