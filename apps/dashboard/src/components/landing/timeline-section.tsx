@@ -54,7 +54,7 @@ export function TimelineSection() {
 
         <div
           ref={ref}
-          className="max-w-2xl mx-auto rounded-xl border border-border bg-surface p-8 lg:p-10"
+          className="max-w-2xl mx-auto rounded-xl border border-border bg-surface p-5 sm:p-8 lg:p-10"
         >
           <div className="relative">
             <div className="absolute left-[3.25rem] top-2 bottom-2 w-px bg-border-subtle" />

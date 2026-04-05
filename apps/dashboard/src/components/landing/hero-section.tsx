@@ -32,7 +32,7 @@ export function HeroSection() {
           They start supervised. They earn your trust.
         </p>
 
-        <div className="mt-12 flex items-end justify-center gap-6 lg:gap-10">
+        <div className="mt-12 flex flex-wrap items-end justify-center gap-4 sm:gap-6 lg:gap-10">
           {AGENT_FAMILIES.map((family, i) => (
             <div
               key={family.name}
