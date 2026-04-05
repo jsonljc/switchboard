@@ -4,13 +4,13 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing/landing-footer";
 
 export const metadata: Metadata = {
-  title: "Switchboard — Hire AI agents that run your business",
+  title: "Switchboard — Meet your team",
   description:
-    "Deploy AI agents for sales, creative, trading, and finance. They start supervised, earn your trust, and work 24/7.",
+    "Browse AI agents for your business. Deploy them in minutes. They earn your trust over time.",
   openGraph: {
-    title: "Switchboard — Hire AI agents that run your business",
+    title: "Switchboard — Meet your team",
     description:
-      "Deploy AI agents for sales, creative, trading, and finance. They start supervised, earn your trust, and work 24/7.",
+      "Browse AI agents for your business. Deploy them in minutes. They earn your trust over time.",
     type: "website",
   },
 };
