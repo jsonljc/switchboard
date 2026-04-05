@@ -60,3 +60,6 @@ export * from "./event-types.js";
 
 // Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
 export * from "./marketplace.js";
+
+// Agent Persona (Sales Pipeline business context)
+export * from "./agent-persona.js";
