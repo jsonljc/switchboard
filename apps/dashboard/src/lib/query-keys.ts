@@ -89,4 +89,8 @@ export const queryKeys = {
     all: ["tasks"] as const,
     list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,
   },
+  persona: {
+    all: ["persona"] as const,
+    mine: () => [...queryKeys.persona.all, "mine"] as const,
+  },
 };
