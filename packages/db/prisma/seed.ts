@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
+import { seedMarketplace } from "./seed-marketplace.js";
 
 const prisma = new PrismaClient();
 
@@ -564,6 +565,10 @@ async function main() {
     });
   }
   console.log("Seeded agent roster (7 agents) for org_dev");
+
+  // ── Marketplace Listings ──
+  console.log("\n--- Marketplace Listings ---");
+  await seedMarketplace(prisma);
 }
 
 main()
