@@ -20,6 +20,8 @@ export class TestChatSession {
   private _state: InMemoryStateStore;
   private _chat: GoverningChatProvider;
   private _files: MockFileProvider;
+  private _browser: MockBrowserProvider;
+  private _llm: MockLLMProvider;
   private _handoffTracker: {
     handoffs: TrackedHandoff[];
     handoff: (slug: string, payload: Omit<HandoffPayload, "fromAgent">) => Promise<void>;
@@ -40,6 +42,8 @@ export class TestChatSession {
     this._state = new InMemoryStateStore();
     this._chat = createGoverningChatProvider(this._trustLevel);
     this._files = new MockFileProvider();
+    this._browser = new MockBrowserProvider();
+    this._llm = new MockLLMProvider();
     this._handoffTracker = createHandoffTracker();
     this._notifyTracker = createNotifyTracker();
   }
@@ -89,8 +93,8 @@ export class TestChatSession {
       state: this._state,
       chat: this._chat,
       files: this._files,
-      browser: new MockBrowserProvider(),
-      llm: new MockLLMProvider(),
+      browser: this._browser,
+      llm: this._llm,
       notify: this._notifyTracker.notify,
       handoff: this._handoffTracker.handoff,
       persona: this.persona,
