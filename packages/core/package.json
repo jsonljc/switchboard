@@ -110,6 +110,7 @@
   "dependencies": {
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
+    "@switchboard/sdk": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
