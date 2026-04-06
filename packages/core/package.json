@@ -97,6 +97,10 @@
     "./sessions": {
       "types": "./dist/sessions/index.d.ts",
       "import": "./dist/sessions/index.js"
+    },
+    "./agent-runtime": {
+      "types": "./dist/agent-runtime/index.d.ts",
+      "import": "./dist/agent-runtime/index.js"
     }
   },
   "scripts": {
