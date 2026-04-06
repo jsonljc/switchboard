@@ -71,3 +71,6 @@ export { PrismaDeploymentStore } from "./stores/prisma-deployment-store.js";
 export { PrismaAgentTaskStore } from "./stores/prisma-agent-task-store.js";
 export { PrismaTrustScoreStore } from "./stores/prisma-trust-score-store.js";
 export { PrismaAgentPersonaStore } from "./stores/prisma-agent-persona-store.js";
+export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.js";
+export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
+export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
