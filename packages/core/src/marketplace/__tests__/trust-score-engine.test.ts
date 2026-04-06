@@ -58,8 +58,10 @@ describe("TrustScoreEngine", () => {
       }
     >();
     return {
-      getOrCreate: async (listingId: string, taskCategory: string) => {
-        const key = `${listingId}:${taskCategory}`;
+      getOrCreate: async (listingId: string, taskCategory: string, deploymentId?: string) => {
+        const key = deploymentId
+          ? `${listingId}:${taskCategory}:${deploymentId}`
+          : `${listingId}:${taskCategory}`;
         if (!records.has(key)) {
           const now = new Date();
           records.set(key, {
@@ -153,5 +155,27 @@ describe("TrustScoreEngine", () => {
     }
     const record = await store.getOrCreate("lst_1", "email");
     expect(record.score).toBeGreaterThanOrEqual(0);
+  });
+
+  describe("deployment-scoped trust", () => {
+    it("records approval with deploymentId", async () => {
+      const store = createMockStore();
+      const engine = new TrustScoreEngine(store);
+
+      await engine.recordApproval("listing_1", "general", "dep_1");
+
+      const record = await store.getOrCreate("listing_1", "general", "dep_1");
+      expect(record.totalApprovals).toBe(1);
+    });
+
+    it("keeps deployment trust separate from global", async () => {
+      const store = createMockStore();
+      const engine = new TrustScoreEngine(store);
+
+      await engine.recordApproval("listing_1", "general", "dep_1");
+
+      const globalRecord = await store.getOrCreate("listing_1", "general");
+      expect(globalRecord.totalApprovals).toBe(0);
+    });
   });
 });

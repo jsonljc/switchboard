@@ -1,7 +1,11 @@
 import type { AutonomyLevel, PriceTier, TrustScoreRecord } from "@switchboard/schemas";
 
 export interface TrustScoreStore {
-  getOrCreate(listingId: string, taskCategory: string): Promise<TrustScoreRecord>;
+  getOrCreate(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord>;
   update(
     id: string,
     data: Partial<
@@ -13,6 +17,7 @@ export interface TrustScoreStore {
   ): Promise<TrustScoreRecord>;
   listByListing(listingId: string): Promise<TrustScoreRecord[]>;
   getAggregateScore(listingId: string): Promise<number>;
+  getDeploymentScore?(deploymentId: string): Promise<number>;
 }
 
 export interface TrustThresholds {
@@ -72,8 +77,12 @@ export class TrustScoreEngine {
     private thresholds: TrustThresholds = DEFAULT_TRUST_THRESHOLDS,
   ) {}
 
-  async recordApproval(listingId: string, taskCategory: string): Promise<TrustScoreRecord> {
-    const record = await this.store.getOrCreate(listingId, taskCategory);
+  async recordApproval(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord> {
+    const record = await this.store.getOrCreate(listingId, taskCategory, deploymentId);
     const streak = record.consecutiveApprovals + 1;
     const bonus = Math.min(
       streak * this.thresholds.streakBonusPerStep,
@@ -92,8 +101,12 @@ export class TrustScoreEngine {
     });
   }
 
-  async recordRejection(listingId: string, taskCategory: string): Promise<TrustScoreRecord> {
-    const record = await this.store.getOrCreate(listingId, taskCategory);
+  async recordRejection(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord> {
+    const record = await this.store.getOrCreate(listingId, taskCategory, deploymentId);
     const newScore = Math.max(
       record.score - this.thresholds.rejectionPoints,
       this.thresholds.scoreFloor,
