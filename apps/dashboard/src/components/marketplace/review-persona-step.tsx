@@ -33,13 +33,13 @@ export function ReviewPersonaStep({ data, onUpdate, onNext }: WizardStepProps) {
   function handleContinue() {
     if (!persona) return; // Type guard for safety
     const updated: PersonaInput = {
-      businessName: persona.businessName,
-      businessType: persona.businessType,
-      productService: persona.productService,
-      valueProposition: persona.valueProposition,
-      tone: persona.tone,
+      businessName: persona.businessName ?? "",
+      businessType: persona.businessType ?? "small_business",
+      productService: persona.productService ?? "",
+      valueProposition: persona.valueProposition ?? "",
+      tone: persona.tone ?? "professional",
       qualificationCriteria: qualificationCriteria ? { description: qualificationCriteria } : {},
-      disqualificationCriteria: persona.disqualificationCriteria,
+      disqualificationCriteria: persona.disqualificationCriteria ?? {},
       escalationRules,
       bookingLink: bookingLink || null,
       customInstructions: neverSay ? `Never say: ${neverSay}` : null,
