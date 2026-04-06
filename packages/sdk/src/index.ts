@@ -1,5 +1,4 @@
 // @switchboard/sdk — Agent SDK types and utilities
-// Exports added as modules are built.
 
 export {
   AgentManifestSchema,
@@ -8,3 +7,21 @@ export {
   ConnectionRequirementSchema,
 } from "./manifest.js";
 export type { AgentManifest, ConnectionRequirement } from "./manifest.js";
+
+export type { AgentHandler } from "./handler.js";
+
+export type {
+  AgentContext,
+  AgentPersona,
+  StateStore,
+  ChatProvider,
+  FileProvider,
+  BrowserProvider,
+  LLMProvider,
+  StructuredNotification,
+} from "./context.js";
+
+export type { HandoffPayload } from "./handoff.js";
+
+export { ActionType, ActionStatus, ActionRequestSchema } from "./action-request.js";
+export type { ActionRequest } from "./action-request.js";
