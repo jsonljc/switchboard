@@ -21,3 +21,5 @@ export type { CloudChatProviderConfig } from "./chat-provider.js";
 export { RuntimeLLMProvider } from "./llm-provider.js";
 
 export { assembleSystemPrompt } from "./system-prompt-assembler.js";
+
+export { DefaultChatHandler } from "./default-chat-handler.js";
