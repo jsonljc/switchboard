@@ -33,6 +33,20 @@ const DeployInput = z.object({
   governanceSettings: z.record(z.unknown()).optional(),
   outputDestination: z.record(z.unknown()).optional(),
   connectionIds: z.array(z.string()).optional(),
+  persona: z
+    .object({
+      businessName: z.string().min(1),
+      businessType: z.string().min(1),
+      productService: z.string().min(1),
+      valueProposition: z.string().min(1),
+      tone: z.string().min(1),
+      qualificationCriteria: z.record(z.unknown()).default({}),
+      disqualificationCriteria: z.record(z.unknown()).default({}),
+      escalationRules: z.record(z.unknown()).default({}),
+      bookingLink: z.string().nullable().default(null),
+      customInstructions: z.string().nullable().default(null),
+    })
+    .optional(),
 });
 
 const CreateTaskInput = z.object({
@@ -156,7 +170,10 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const deployment = await store.create({
       organizationId: orgId,
       listingId: id,
-      inputConfig: parsed.data.inputConfig,
+      inputConfig: {
+        ...parsed.data.inputConfig,
+        ...(parsed.data.persona ? { persona: parsed.data.persona } : {}),
+      },
       governanceSettings: parsed.data.governanceSettings,
       outputDestination: parsed.data.outputDestination,
       connectionIds: parsed.data.connectionIds,
