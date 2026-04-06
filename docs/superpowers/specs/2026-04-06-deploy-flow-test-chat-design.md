@@ -140,10 +140,13 @@ The test chat API route needs an `LLMAdapter` instance. Rather than forcing the 
 export function createAnthropicAdapter(apiKey?: string): LLMAdapter;
 ```
 
-- Wraps `@anthropic-ai/sdk` with the `LLMAdapter.generateReply()` interface
+- Implements `LLMAdapter.generateReply(prompt: ConversationPrompt, modelConfig?: ModelConfig)` — the full interface including `systemPrompt`, `conversationHistory` (as `Message[]` with id/direction/timestamp/channel fields), `retrievedContext`, and `agentInstructions`
+- Translates from the internal `ConversationPrompt` format to Anthropic API calls (system prompt + messages array)
 - Uses `ANTHROPIC_API_KEY` env var if no key provided
 - Default model: `claude-sonnet-4-5-20250514`
 - Reusable by any app that needs a concrete LLM adapter (dashboard, API, CLI in Sub-project E)
+
+Note: The `RuntimeLLMProvider` already translates the simpler `{ system, messages }` shape (used by `ctx.llm.chat()`) into `ConversationPrompt` before calling the adapter. The adapter only needs to handle `ConversationPrompt` → Anthropic API.
 
 This follows the existing pattern — `scanWebsite` in the dashboard already uses `new Anthropic()` directly, but now it's wrapped in the standard adapter interface.
 
@@ -205,6 +208,8 @@ const steps: WizardStep[] = [
 
 Most agents have zero required connections → typical flow is 3 steps: Scan → Review → Test Chat.
 
+The deploy page (`/deploy/[slug]/page.tsx`) fetches the listing and its manifest, then passes the manifest to `DeployWizardShell` which builds the step array. The shell itself doesn't fetch data — it receives everything it needs as props.
+
 ### Step Components
 
 1. **`ScanStep`** — refactored from existing `deploy-wizard.tsx` scan logic. URL input, calls `scanWebsite` server action, stores result in `WizardData.persona`, calls `onNext()`.
@@ -245,6 +250,7 @@ Under the hood:
 1. Constructs a temporary `AgentPersona` from `PersonaInput` + placeholder id/dates
 2. Creates `LLMAdapter` via `createAnthropicAdapter()`
 3. Creates `AgentRuntime` with `DefaultChatHandler`, surface `"test_chat"`, trustLevel `"autonomous"`
+   - Uses **in-memory no-op stubs** for `stateStore` and `actionRequestStore` — these are required by `AgentRuntimeConfig` but the test chat doesn't persist state or queue action requests (sandbox surface auto-executes)
 4. `onChatExecute` callback captures the agent's reply
 5. Calls `runtime.handleMessage()` with conversation
 6. Returns captured reply
@@ -283,6 +289,8 @@ When the user clicks "Deploy" from the test chat step:
 3. **Redirect to `/dashboard`** with success toast: "Your agent is live! It starts in supervised mode — you'll approve its first actions."
 
 The existing `DeployInput` schema accepts `inputConfig`, `governanceSettings`, and `connectionIds`. The persona fields may need to be added to the deploy payload — this is a small API extension.
+
+Note: The old `/api/dashboard/marketplace/persona/deploy` route (used by the current hardcoded wizard) is retired. All deployments go through the generic `/api/dashboard/marketplace/listings/[id]/deploy` route, extended to accept persona fields.
 
 ---
 
