@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getListingBySlug } from "@/lib/demo-data";
-import { DeployWizard } from "@/components/marketplace/deploy-wizard";
+import { DeployWizardClient } from "./deploy-wizard-client";
 import type { RoleFocus } from "@/components/character/operator-character";
 
 const ROLE_MAP: Record<string, RoleFocus> = {
@@ -21,12 +21,19 @@ export default async function DeployPage({ params }: PageProps) {
 
   const displayName = listing.name.replace(" Bundle", "");
 
+  const metadata = listing.metadata as Record<string, unknown> | null;
+  const connections = Array.isArray(metadata?.connections)
+    ? (metadata.connections as Array<{ type: string; reason: string }>)
+    : [];
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <DeployWizard
+      <DeployWizardClient
+        listingId={listing.id}
+        listingSlug={slug}
         agentName={displayName}
-        bundleSlug={slug}
         roleFocus={ROLE_MAP[slug] ?? "default"}
+        connections={connections}
       />
     </div>
   );
