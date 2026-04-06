@@ -1,5 +1,6 @@
 import type { AgentContext, AgentPersona, StructuredNotification } from "@switchboard/sdk";
 import type { HandoffPayload } from "@switchboard/sdk";
+import type { AgentTask } from "@switchboard/schemas";
 import type { LLMAdapter } from "../llm-adapter.js";
 import { ActionRequestPipeline } from "./action-request-pipeline.js";
 import type { ActionRequestStore } from "./action-request-pipeline.js";
@@ -17,12 +18,19 @@ export interface ContextBuilderConfig {
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapter: LLMAdapter;
-  onChatExecute: (message: string) => Promise<void> | void;
+  onChatExecute: (message: string, metadata?: { threadId?: string }) => Promise<void> | void;
 }
 
 interface BuildOptions {
   conversation?: { id: string; messages: Array<{ role: string; content: string }> };
   handoffPayload?: HandoffPayload;
+  task?: AgentTask;
+}
+
+export interface BuildResult {
+  ctx: AgentContext;
+  notifications: Array<string | StructuredNotification>;
+  handoffs: Array<{ to: string; payload: Omit<HandoffPayload, "fromAgent"> }>;
 }
 
 export class ContextBuilder {
@@ -36,11 +44,11 @@ export class ContextBuilder {
     });
   }
 
-  build(options?: BuildOptions): AgentContext {
+  build(options?: BuildOptions): BuildResult {
     const notifications: Array<string | StructuredNotification> = [];
     const handoffs: Array<{ to: string; payload: Omit<HandoffPayload, "fromAgent"> }> = [];
 
-    return {
+    const ctx: AgentContext = {
       state: new StateProvider(this.config.deploymentId, this.config.stateStore),
       chat: new CloudChatProvider({
         deploymentId: this.config.deploymentId,
@@ -79,11 +87,14 @@ export class ContextBuilder {
       },
       persona: this.config.persona,
       conversation: options?.conversation,
+      task: options?.task,
       handoffPayload: options?.handoffPayload,
       trust: {
         score: this.config.trustScore,
         level: this.config.trustLevel,
       },
     };
+
+    return { ctx, notifications, handoffs };
   }
 }

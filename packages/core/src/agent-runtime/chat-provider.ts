@@ -5,7 +5,7 @@ export interface CloudChatProviderConfig {
   deploymentId: string;
   surface: string;
   pipeline: ActionRequestPipeline;
-  onExecute: (message: string) => Promise<void> | void;
+  onExecute: (message: string, metadata?: { threadId?: string }) => Promise<void> | void;
 }
 
 export class CloudChatProvider implements ChatProvider {
@@ -35,7 +35,7 @@ export class CloudChatProvider implements ChatProvider {
     });
 
     if (result.decision === "execute") {
-      await this.config.onExecute(message);
+      await this.config.onExecute(message, { threadId });
     }
   }
 }

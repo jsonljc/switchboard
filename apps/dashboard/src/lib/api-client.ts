@@ -438,25 +438,4 @@ export class SwitchboardClient extends SwitchboardClientBase {
       body: JSON.stringify(body),
     });
   }
-
-  async deploySalesPipeline(body: {
-    businessName: string;
-    businessType: string;
-    productService: string;
-    valueProposition: string;
-    tone: string;
-    qualificationCriteria: Record<string, unknown>;
-    disqualificationCriteria: Record<string, unknown>;
-    escalationRules: Record<string, unknown>;
-    bookingLink?: string;
-    customInstructions?: string;
-  }) {
-    return this.request<{ persona: unknown; deployments: unknown[]; count: number }>(
-      "/api/marketplace/persona/deploy",
-      {
-        method: "POST",
-        body: JSON.stringify(body),
-      },
-    );
-  }
 }

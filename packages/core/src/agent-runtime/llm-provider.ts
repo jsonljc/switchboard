@@ -1,15 +1,14 @@
+import { randomUUID } from "node:crypto";
 import type { LLMProvider } from "@switchboard/sdk";
 import type { LLMAdapter, ConversationPrompt } from "../llm-adapter.js";
 import type { ModelConfig } from "../model-router.js";
 import type { Message } from "../conversation-store.js";
 
-let messageCounter = 0;
-
 function toConversationMessages(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
 ): Message[] {
   return messages.map((msg) => ({
-    id: `sdk-msg-${++messageCounter}`,
+    id: randomUUID(),
     contactId: "sdk-contact",
     direction: msg.role === "user" ? ("inbound" as const) : ("outbound" as const),
     content: msg.content,

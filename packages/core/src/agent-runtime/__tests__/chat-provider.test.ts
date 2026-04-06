@@ -34,6 +34,27 @@ describe("CloudChatProvider", () => {
     expect(onExecute).toHaveBeenCalledWith("Hello");
   });
 
+  it("passes threadId metadata when sending to thread", async () => {
+    const pipeline = createMockPipeline("execute");
+    const onExecute = vi.fn();
+    const provider = new CloudChatProvider({
+      deploymentId: "dep_1",
+      surface: "telegram",
+      pipeline,
+      onExecute,
+    });
+
+    await provider.sendToThread("thread_42", "Reply");
+
+    expect(pipeline.evaluate).toHaveBeenCalledWith({
+      deploymentId: "dep_1",
+      type: "send_message",
+      surface: "telegram",
+      payload: { content: "Reply", threadId: "thread_42" },
+    });
+    expect(onExecute).toHaveBeenCalledWith("Reply", { threadId: "thread_42" });
+  });
+
   it("does not execute when pipeline says queue", async () => {
     const pipeline = createMockPipeline("queue");
     const onExecute = vi.fn();

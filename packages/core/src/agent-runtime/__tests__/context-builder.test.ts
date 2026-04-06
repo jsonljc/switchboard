@@ -46,7 +46,7 @@ describe("ContextBuilder", () => {
   it("builds a valid AgentContext", () => {
     const config = makeConfig();
     const builder = new ContextBuilder(config);
-    const ctx = builder.build();
+    const { ctx, notifications, handoffs } = builder.build();
 
     expect(ctx.persona.businessName).toBe("Test Co");
     expect(ctx.trust.score).toBe(80);
@@ -56,12 +56,14 @@ describe("ContextBuilder", () => {
     expect(ctx.llm).toBeDefined();
     expect(ctx.notify).toBeTypeOf("function");
     expect(ctx.handoff).toBeTypeOf("function");
+    expect(notifications).toEqual([]);
+    expect(handoffs).toEqual([]);
   });
 
   it("includes conversation when provided", () => {
     const config = makeConfig();
     const builder = new ContextBuilder(config);
-    const ctx = builder.build({
+    const { ctx } = builder.build({
       conversation: {
         id: "conv_1",
         messages: [{ role: "user", content: "hi" }],
@@ -75,7 +77,7 @@ describe("ContextBuilder", () => {
   it("includes handoff payload when provided", () => {
     const config = makeConfig();
     const builder = new ContextBuilder(config);
-    const ctx = builder.build({
+    const { ctx } = builder.build({
       handoffPayload: {
         fromAgent: "speed-to-lead",
         reason: "qualified",
@@ -84,5 +86,51 @@ describe("ContextBuilder", () => {
     });
 
     expect(ctx.handoffPayload?.fromAgent).toBe("speed-to-lead");
+  });
+
+  it("accumulates notifications via ctx.notify", async () => {
+    const config = makeConfig();
+    const builder = new ContextBuilder(config);
+    const { ctx, notifications } = builder.build();
+
+    await ctx.notify("Hello");
+    await ctx.notify({ title: "Alert", body: "Something happened" });
+
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0]).toBe("Hello");
+    expect(notifications[1]).toEqual({ title: "Alert", body: "Something happened" });
+  });
+
+  it("accumulates handoffs via ctx.handoff", async () => {
+    const config = makeConfig();
+    const builder = new ContextBuilder(config);
+    const { ctx, handoffs } = builder.build();
+
+    await ctx.handoff("closer-agent", { reason: "qualified", context: { budget: 5000 } });
+
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]).toEqual({
+      to: "closer-agent",
+      payload: { reason: "qualified", context: { budget: 5000 } },
+    });
+  });
+
+  it("includes task when provided", () => {
+    const config = makeConfig();
+    const builder = new ContextBuilder(config);
+    const task = {
+      id: "task_1",
+      deploymentId: "dep_1",
+      organizationId: "org_1",
+      listingId: "listing_1",
+      category: "follow_up",
+      status: "pending" as const,
+      input: { contactId: "c_1" },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const { ctx } = builder.build({ task });
+
+    expect(ctx.task).toEqual(task);
   });
 });

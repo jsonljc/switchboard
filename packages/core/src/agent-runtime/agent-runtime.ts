@@ -1,5 +1,6 @@
 import type { AgentHandler, AgentPersona } from "@switchboard/sdk";
 import type { HandoffPayload } from "@switchboard/sdk";
+import type { AgentTask } from "@switchboard/schemas";
 import type { LLMAdapter } from "../llm-adapter.js";
 import { ContextBuilder } from "./context-builder.js";
 import type { ActionRequestStore } from "./action-request-pipeline.js";
@@ -15,7 +16,7 @@ export interface AgentRuntimeConfig {
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapter: LLMAdapter;
-  onChatExecute: (message: string) => Promise<void> | void;
+  onChatExecute: (message: string, metadata?: { threadId?: string }) => Promise<void> | void;
 }
 
 export interface MessageEvent {
@@ -45,7 +46,7 @@ export class AgentRuntime {
       throw new Error("Agent does not implement onMessage");
     }
 
-    const ctx = this.contextBuilder.build({
+    const { ctx } = this.contextBuilder.build({
       conversation: {
         id: event.conversationId,
         messages: event.messages,
@@ -60,7 +61,7 @@ export class AgentRuntime {
       throw new Error("Agent does not implement onHandoff");
     }
 
-    const ctx = this.contextBuilder.build({
+    const { ctx } = this.contextBuilder.build({
       handoffPayload: {
         fromAgent: payload.fromAgent,
         reason: payload.reason,
@@ -76,17 +77,16 @@ export class AgentRuntime {
       throw new Error("Agent does not implement onSchedule");
     }
 
-    const ctx = this.contextBuilder.build();
+    const { ctx } = this.contextBuilder.build();
     await this.config.handler.onSchedule(ctx);
   }
 
-  async handleTask(task: { type: string; input: Record<string, unknown> }): Promise<void> {
+  async handleTask(task: AgentTask): Promise<void> {
     if (!this.config.handler.onTask) {
       throw new Error("Agent does not implement onTask");
     }
 
-    const ctx = this.contextBuilder.build();
-    (ctx as { task: unknown }).task = task;
+    const { ctx } = this.contextBuilder.build({ task });
     await this.config.handler.onTask(ctx);
   }
 
@@ -95,7 +95,7 @@ export class AgentRuntime {
       throw new Error("Agent does not implement onSetup");
     }
 
-    const ctx = this.contextBuilder.build();
+    const { ctx } = this.contextBuilder.build();
     await this.config.handler.onSetup(ctx);
   }
 }
