@@ -112,6 +112,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",

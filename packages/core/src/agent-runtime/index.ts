@@ -23,3 +23,5 @@ export { RuntimeLLMProvider } from "./llm-provider.js";
 export { assembleSystemPrompt } from "./system-prompt-assembler.js";
 
 export { DefaultChatHandler } from "./default-chat-handler.js";
+
+export { createAnthropicAdapter } from "./anthropic-adapter.js";
