@@ -8,6 +8,12 @@ import {
   AutonomyLevel,
   PriceTier,
   AgentTaskStatus,
+  AgentActionRequestSchema,
+  DeploymentStateSchema,
+  DeploymentConnectionSchema,
+  AgentActionType,
+  AgentActionStatus,
+  ConnectionStatus,
 } from "../marketplace.js";
 
 describe("Marketplace schemas", () => {
@@ -127,6 +133,107 @@ describe("Marketplace schemas", () => {
         "failed",
         "cancelled",
       ]);
+    });
+  });
+
+  describe("AgentActionRequestSchema", () => {
+    it("parses a valid action request", () => {
+      const result = AgentActionRequestSchema.safeParse({
+        id: "ar_1",
+        deploymentId: "dep_1",
+        type: "send_message",
+        surface: "telegram",
+        payload: { content: "Hello" },
+        status: "pending",
+        createdAt: new Date(),
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("defaults status to pending", () => {
+      const result = AgentActionRequestSchema.safeParse({
+        id: "ar_1",
+        deploymentId: "dep_1",
+        type: "send_message",
+        surface: "telegram",
+        payload: {},
+        createdAt: new Date(),
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.status).toBe("pending");
+    });
+  });
+
+  describe("DeploymentStateSchema", () => {
+    it("parses valid state entry", () => {
+      const result = DeploymentStateSchema.safeParse({
+        id: "st_1",
+        deploymentId: "dep_1",
+        key: "leads:count",
+        value: 42,
+        updatedAt: new Date(),
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("DeploymentConnectionSchema", () => {
+    it("parses valid connection", () => {
+      const result = DeploymentConnectionSchema.safeParse({
+        id: "conn_1",
+        deploymentId: "dep_1",
+        type: "telegram",
+        slot: "default",
+        status: "active",
+        credentials: "encrypted-token",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("defaults slot to default", () => {
+      const result = DeploymentConnectionSchema.safeParse({
+        id: "conn_1",
+        deploymentId: "dep_1",
+        type: "telegram",
+        status: "active",
+        credentials: "encrypted-token",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.slot).toBe("default");
+    });
+  });
+
+  describe("AgentActionType enum", () => {
+    it("has expected values", () => {
+      expect(AgentActionType.options).toEqual([
+        "send_message",
+        "browse_url",
+        "read_file",
+        "write_file",
+        "api_call",
+      ]);
+    });
+  });
+
+  describe("AgentActionStatus enum", () => {
+    it("has expected values", () => {
+      expect(AgentActionStatus.options).toEqual([
+        "pending",
+        "approved",
+        "rejected",
+        "executed",
+        "blocked",
+      ]);
+    });
+  });
+
+  describe("ConnectionStatus enum", () => {
+    it("has expected values", () => {
+      expect(ConnectionStatus.options).toEqual(["active", "expired", "revoked"]);
     });
   });
 });

@@ -729,8 +729,11 @@ model AgentDeployment {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  listing AgentListing @relation(fields: [listingId], references: [id])
-  tasks   AgentTask[]
+  listing               AgentListing           @relation(fields: [listingId], references: [id])
+  tasks                 AgentTask[]
+  actionRequests        ActionRequest[]
+  deploymentStates      DeploymentState[]
+  deploymentConnections DeploymentConnection[]
 
   @@unique([organizationId, listingId])
   @@index([organizationId])
@@ -778,11 +781,68 @@ model TrustScoreRecord {
   lastActivityAt        DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  deploymentId          String?
 
   listing AgentListing @relation(fields: [listingId], references: [id])
 
   @@unique([listingId, taskCategory])
   @@index([listingId])
+  @@index([deploymentId])
+}
+
+// ── Marketplace: Action Requests (governance pipeline) ──
+
+model ActionRequest {
+  id               String    @id @default(cuid())
+  deploymentId     String
+  type             String    // send_message, browse_url, write_file, api_call
+  surface          String    // telegram, web_widget, google_drive, browser
+  payload          Json
+  status           String    @default("pending") // pending, approved, rejected, executed, blocked
+  governanceResult Json?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  executedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@index([deploymentId, status])
+  @@index([status, createdAt])
+}
+
+// ── Marketplace: Deployment State (per-deployment key-value store) ──
+
+model DeploymentState {
+  id           String   @id @default(cuid())
+  deploymentId String
+  key          String
+  value        Json
+  updatedAt    DateTime @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@unique([deploymentId, key])
+  @@index([deploymentId])
+}
+
+// ── Marketplace: Deployment Connections ──
+
+model DeploymentConnection {
+  id           String   @id @default(cuid())
+  deploymentId String
+  type         String
+  slot         String   @default("default")
+  status       String   @default("active") // active, expired, revoked
+  credentials  String   // encrypted
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@unique([deploymentId, type, slot])
+  @@index([deploymentId])
 }
 
 // ── Sales Pipeline: Agent Persona (shared business context) ──
