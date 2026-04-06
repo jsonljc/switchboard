@@ -36,7 +36,7 @@ export function DeployWizardClient({
 }: DeployWizardClientProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [_isDeploying, startDeploy] = useTransition();
+  const [isDeploying, startDeploy] = useTransition();
 
   const wizardDataRef = useRef<WizardData>({
     listingId,
@@ -59,6 +59,7 @@ export function DeployWizardClient({
           body: JSON.stringify({
             persona: data.persona,
             governanceSettings: { startingAutonomy: "supervised" },
+            connectionIds: Object.keys(data.connections),
           }),
         });
 
@@ -84,10 +85,10 @@ export function DeployWizardClient({
         id: "test-chat",
         label: "Test your agent",
         component: TestChatStep as unknown as WizardStep["component"],
-        props: { onDeploy: handleDeploy },
+        props: { onDeploy: handleDeploy, isDeploying },
       },
     ],
-    [connections, handleDeploy],
+    [connections, handleDeploy, isDeploying],
   );
 
   const header = (
@@ -100,16 +101,18 @@ export function DeployWizardClient({
           Let&apos;s get {agentName} up to speed.
         </h2>
       </div>
-      {error && <p className="text-sm text-negative">{error}</p>}
     </div>
   );
 
   return (
-    <DeployWizardShell
-      steps={steps}
-      initialData={{ listingId, listingSlug }}
-      header={header}
-      onDataChange={handleDataChange}
-    />
+    <>
+      <DeployWizardShell
+        steps={steps}
+        initialData={{ listingId, listingSlug }}
+        header={header}
+        onDataChange={handleDataChange}
+      />
+      {error && <p className="text-sm text-destructive mt-4 text-center">{error}</p>}
+    </>
   );
 }

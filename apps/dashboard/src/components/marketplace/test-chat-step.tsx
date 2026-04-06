@@ -13,9 +13,10 @@ interface ChatMessage {
 
 interface TestChatStepProps extends WizardStepProps {
   onDeploy: () => void;
+  isDeploying?: boolean;
 }
 
-export function TestChatStep({ data, onDeploy }: TestChatStepProps) {
+export function TestChatStep({ data, onDeploy, isDeploying }: TestChatStepProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -121,9 +122,13 @@ export function TestChatStep({ data, onDeploy }: TestChatStepProps) {
 
       {/* Deploy button */}
       <div className="border-t border-border pt-4">
-        <Button onClick={onDeploy} size="lg" className="w-full">
-          <Rocket className="h-4 w-4 mr-2" />
-          Deploy — I'm happy with this agent
+        <Button onClick={onDeploy} disabled={isDeploying} size="lg" className="w-full">
+          {isDeploying ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Rocket className="h-4 w-4 mr-2" />
+          )}
+          {isDeploying ? "Deploying..." : "Deploy — I'm happy with this agent"}
         </Button>
       </div>
     </div>

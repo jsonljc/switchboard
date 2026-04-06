@@ -5,6 +5,7 @@ import {
   createAnthropicAdapter,
 } from "@switchboard/core/agent-runtime";
 import type { AgentStateStoreInterface, ActionRequestStore } from "@switchboard/core/agent-runtime";
+import { requireSession } from "@/lib/session";
 import { z } from "zod";
 
 const TestChatInput = z.object({
@@ -20,12 +21,14 @@ const TestChatInput = z.object({
     bookingLink: z.string().nullable().default(null),
     customInstructions: z.string().nullable().default(null),
   }),
-  messages: z.array(
-    z.object({
-      role: z.string(),
-      content: z.string(),
-    }),
-  ),
+  messages: z
+    .array(
+      z.object({
+        role: z.string(),
+        content: z.string(),
+      }),
+    )
+    .max(50),
 });
 
 // No-op stores — test chat doesn't persist state or queue actions
@@ -43,6 +46,7 @@ const noopActionRequestStore: ActionRequestStore = {
 
 export async function POST(request: Request) {
   try {
+    await requireSession();
     const body = await request.json();
     const parsed = TestChatInput.safeParse(body);
 
