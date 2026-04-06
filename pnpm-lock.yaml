@@ -218,12 +218,18 @@ importers:
       '@radix-ui/react-toast':
         specifier: ^1.2.4
         version: 1.2.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@switchboard/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@tanstack/react-query':
         specifier: ^5.62.0
         version: 5.90.21(react@19.2.4)
