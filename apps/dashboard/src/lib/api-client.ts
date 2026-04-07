@@ -438,4 +438,41 @@ export class SwitchboardClient extends SwitchboardClientBase {
       body: JSON.stringify(body),
     });
   }
+
+  // ── Deployment Connections ──
+
+  async createWidgetToken(deploymentId: string) {
+    return this.request<{ connection: { id: string; type: string; token: string } }>(
+      `/api/marketplace/deployments/${deploymentId}/connections/widget`,
+      { method: "POST", body: JSON.stringify({ deploymentId }) },
+    );
+  }
+
+  async connectTelegram(deploymentId: string, botToken: string, webhookBaseUrl: string) {
+    return this.request<{
+      connection: { id: string; type: string; botUsername: string };
+      webhookPath: string;
+    }>(`/api/marketplace/deployments/${deploymentId}/connections/telegram`, {
+      method: "POST",
+      body: JSON.stringify({ deploymentId, botToken, webhookBaseUrl }),
+    });
+  }
+
+  async getDeploymentConnections(deploymentId: string) {
+    return this.request<{
+      connections: Array<{
+        id: string;
+        type: string;
+        status: string;
+        metadata?: Record<string, unknown>;
+      }>;
+    }>(`/api/marketplace/deployments/${deploymentId}/connections`);
+  }
+
+  async disconnectChannel(deploymentId: string, connectionId: string) {
+    return this.request<{ ok: boolean }>(
+      `/api/marketplace/deployments/${deploymentId}/connections/${connectionId}`,
+      { method: "DELETE" },
+    );
+  }
 }
