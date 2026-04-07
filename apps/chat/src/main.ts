@@ -6,6 +6,10 @@ import { RuntimeRegistry } from "./managed/runtime-registry.js";
 import { startHealthChecker } from "./managed/health-checker.js";
 import { runStartupChecks } from "./startup-checks.js";
 import { initDedup, checkDedup } from "./dedup/redis-dedup.js";
+import { SseSessionManager } from "./endpoints/widget-sse-manager.js";
+import { registerWidgetMessagesEndpoint } from "./endpoints/widget-messages.js";
+import { registerWidgetEventsEndpoint } from "./endpoints/widget-events.js";
+import { createGatewayBridge } from "./gateway/gateway-bridge.js";
 
 async function main() {
   // Pre-boot validation — fail fast with clear error messages
@@ -84,6 +88,22 @@ async function main() {
       stopHealthChecker = startHealthChecker(prisma);
     } catch (err) {
       app.log.error(err, "Failed to initialize RuntimeRegistry");
+    }
+  }
+
+  // --- Widget endpoints (gateway-based) ---
+  let sseManager: SseSessionManager | null = null;
+  if (process.env["DATABASE_URL"]) {
+    try {
+      const { getDb } = await import("@switchboard/db");
+      const prisma = getDb();
+      const gateway = createGatewayBridge(prisma);
+      sseManager = new SseSessionManager();
+      registerWidgetMessagesEndpoint(app, gateway, sseManager);
+      registerWidgetEventsEndpoint(app, sseManager);
+      app.log.info("Widget endpoints registered");
+    } catch (err) {
+      app.log.error(err, "Failed to initialize widget endpoints");
     }
   }
 
