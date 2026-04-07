@@ -8,7 +8,11 @@ import {
   PrismaDeploymentStore,
   PrismaAgentTaskStore,
   PrismaTrustScoreStore,
+  PrismaDeploymentConnectionStore,
+  encryptCredentials,
+  decryptCredentials,
 } from "@switchboard/db";
+import { randomBytes } from "node:crypto";
 import { TrustScoreEngine } from "@switchboard/core";
 import type { AgentListingStatus, AgentType, AgentTaskStatus } from "@switchboard/schemas";
 import { z } from "zod";
@@ -64,6 +68,11 @@ const SubmitTaskOutput = z.object({
 const ReviewTaskInput = z.object({
   result: z.enum(["approved", "rejected"]),
   reviewResult: z.string().optional(),
+});
+
+const TelegramConnectInput = z.object({
+  botToken: z.string().min(1),
+  webhookBaseUrl: z.string().url(),
 });
 
 export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
@@ -324,5 +333,214 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.send({ task: updated });
+  });
+
+  // ── Deployment Connections ──
+
+  app.post("/deployments/:id/connections/widget", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const deploymentStore = new PrismaDeploymentStore(app.prisma);
+    const deployment = await deploymentStore.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found" });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+    const existing = await connectionStore.listByDeployment(id);
+    const activeWidget = existing.find((c) => c.type === "web_widget" && c.status === "active");
+
+    if (activeWidget) {
+      return reply.code(409).send({ error: "Active web_widget connection already exists" });
+    }
+
+    const token = "sw_" + randomBytes(15).toString("base64url").slice(0, 20);
+    const encrypted = encryptCredentials({ token });
+
+    const connection = await connectionStore.create({
+      deploymentId: id,
+      type: "web_widget",
+      credentials: encrypted,
+    });
+
+    return reply.code(201).send({
+      connection: { id: connection.id, type: "web_widget", token },
+    });
+  });
+
+  app.post("/deployments/:id/connections/telegram", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const deploymentStore = new PrismaDeploymentStore(app.prisma);
+    const deployment = await deploymentStore.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found" });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const parsed = TelegramConnectInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
+    const { botToken, webhookBaseUrl } = parsed.data;
+
+    // Validate bot token with Telegram API
+    let botUsername: string;
+    try {
+      const getMeRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+      const getMeData = (await getMeRes.json()) as {
+        ok: boolean;
+        result?: { username: string };
+      };
+      if (!getMeData.ok || !getMeData.result?.username) {
+        return reply.code(400).send({ error: "Invalid Telegram bot token" });
+      }
+      botUsername = getMeData.result.username;
+    } catch {
+      return reply.code(502).send({ error: "Failed to validate bot token with Telegram" });
+    }
+
+    const webhookSecret = randomBytes(32).toString("hex");
+    const encrypted = encryptCredentials({ botToken, webhookSecret });
+
+    const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+    const connection = await connectionStore.create({
+      deploymentId: id,
+      type: "telegram",
+      credentials: encrypted,
+      metadata: { botUsername },
+    });
+
+    const webhookPath = `/webhook/managed/${connection.id}`;
+
+    // Register webhook with Telegram
+    try {
+      const setWebhookRes = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `${webhookBaseUrl}${webhookPath}`,
+          secret_token: webhookSecret,
+        }),
+      });
+      const setWebhookData = (await setWebhookRes.json()) as { ok: boolean };
+      if (!setWebhookData.ok) {
+        await connectionStore.delete(connection.id);
+        return reply.code(502).send({ error: "Failed to register Telegram webhook" });
+      }
+    } catch {
+      await connectionStore.delete(connection.id);
+      return reply.code(502).send({ error: "Failed to register Telegram webhook" });
+    }
+
+    return reply.code(201).send({
+      connection: { id: connection.id, type: "telegram", botUsername },
+      webhookPath,
+    });
+  });
+
+  app.get("/deployments/:id/connections", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const deploymentStore = new PrismaDeploymentStore(app.prisma);
+    const deployment = await deploymentStore.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found" });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+    const allConnections = await connectionStore.listByDeployment(id);
+
+    const connections = allConnections.map((c) => ({
+      id: c.id,
+      type: c.type,
+      status: c.status,
+      metadata: c.metadata,
+    }));
+
+    return reply.send({ connections });
+  });
+
+  app.delete("/deployments/:id/connections/:connectionId", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
+    const { id, connectionId } = request.params as { id: string; connectionId: string };
+    const deploymentStore = new PrismaDeploymentStore(app.prisma);
+    const deployment = await deploymentStore.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found" });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+    const connections = await connectionStore.listByDeployment(id);
+    const connection = connections.find((c) => c.id === connectionId);
+
+    if (!connection) {
+      return reply.code(404).send({ error: "Connection not found" });
+    }
+
+    // For Telegram connections, clean up the webhook
+    if (connection.type === "telegram") {
+      try {
+        const creds = decryptCredentials(connection.credentials) as {
+          botToken?: string;
+        };
+        if (creds.botToken) {
+          await fetch(`https://api.telegram.org/bot${creds.botToken}/deleteWebhook`);
+        }
+      } catch (error) {
+        request.log.warn({ err: error }, "Failed to delete Telegram webhook during disconnect");
+      }
+    }
+
+    await connectionStore.updateStatus(connectionId, "revoked");
+    return reply.send({ ok: true });
   });
 };
