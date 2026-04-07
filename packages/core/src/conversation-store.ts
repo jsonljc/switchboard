@@ -10,7 +10,7 @@ export interface Message {
   direction: "inbound" | "outbound";
   content: string;
   timestamp: string;
-  channel: "whatsapp" | "telegram" | "dashboard";
+  channel: "whatsapp" | "telegram" | "dashboard" | "web_widget";
   metadata?: Record<string, unknown>;
 }
 
