@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
+import type { ReplySink } from "@switchboard/core";
 import { createChatRuntime } from "./runtime.js";
 import { checkIngressRateLimit } from "./adapters/security.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
@@ -73,37 +74,32 @@ async function main() {
     return reply.code(statusCode).send({ error: message, statusCode });
   });
 
-  // --- Managed runtime registry (multi-tenant) ---
+  // --- Managed runtime registry (multi-tenant) + widget endpoints ---
   let registry: RuntimeRegistry | null = null;
   let stopHealthChecker: (() => void) | null = null;
-
-  if (process.env["DATABASE_URL"]) {
-    try {
-      const { getDb } = await import("@switchboard/db");
-      const prisma = getDb();
-      registry = new RuntimeRegistry();
-      if (failedMessageStore) registry.setFailedMessageStore(failedMessageStore);
-      await registry.loadAll(prisma);
-      app.log.info(`Loaded ${registry.size} managed runtimes from database`);
-      stopHealthChecker = startHealthChecker(prisma);
-    } catch (err) {
-      app.log.error(err, "Failed to initialize RuntimeRegistry");
-    }
-  }
-
-  // --- Widget endpoints (gateway-based) ---
   let sseManager: SseSessionManager | null = null;
+
   if (process.env["DATABASE_URL"]) {
     try {
       const { getDb } = await import("@switchboard/db");
       const prisma = getDb();
       const gateway = createGatewayBridge(prisma);
+
+      // Managed runtime registry
+      registry = new RuntimeRegistry();
+      if (failedMessageStore) registry.setFailedMessageStore(failedMessageStore);
+      await registry.loadAll(prisma);
+      await registry.loadGatewayConnections(prisma, gateway);
+      app.log.info(`Loaded ${registry.size} managed runtimes from database`);
+      stopHealthChecker = startHealthChecker(prisma);
+
+      // Widget endpoints
       sseManager = new SseSessionManager();
       registerWidgetMessagesEndpoint(app, gateway, sseManager);
       registerWidgetEventsEndpoint(app, sseManager);
       app.log.info("Widget endpoints registered");
     } catch (err) {
-      app.log.error(err, "Failed to initialize widget endpoints");
+      app.log.error(err, "Failed to initialize RuntimeRegistry and widget endpoints");
     }
   }
 
@@ -210,6 +206,39 @@ async function main() {
 
     const { webhookId } = request.params as { webhookId: string };
     const webhookPath = `/webhook/managed/${webhookId}`;
+
+    // Check gateway entries first (DeploymentConnection-based routing)
+    const gatewayEntry = registry.getGatewayByWebhookPath(webhookPath);
+    if (gatewayEntry) {
+      if (gatewayEntry.adapter.verifyRequest) {
+        const rawBody = JSON.stringify(request.body);
+        const headers = request.headers as Record<string, string | undefined>;
+        if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
+          return reply.code(401).send({ error: "Invalid signature" });
+        }
+      }
+
+      const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
+      if (!incoming) {
+        return reply.code(200).send({ ok: true });
+      }
+
+      const threadId = incoming.threadId ?? incoming.principalId;
+      const replySink: ReplySink = {
+        send: async (text) => gatewayEntry.adapter.sendTextReply(threadId, text),
+      };
+
+      const channelMessage = {
+        channel: "telegram",
+        token: gatewayEntry.deploymentConnectionId,
+        sessionId: threadId,
+        text: incoming.text,
+      };
+
+      await gatewayEntry.gateway.handleIncoming(channelMessage, replySink);
+      return reply.code(200).send({ ok: true });
+    }
+
     const entry = registry.getByWebhookPath(webhookPath);
 
     if (!entry) {

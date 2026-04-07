@@ -1,16 +1,24 @@
 import type { PrismaClient } from "@switchboard/db";
 import type { ChatRuntime } from "../runtime.js";
 import type { ChannelAdapter } from "../adapters/adapter.js";
+import type { ChannelGateway } from "@switchboard/core";
 import { createManagedRuntime } from "../bootstrap.js";
 import { TelegramAdapter } from "../adapters/telegram.js";
 import { SlackAdapter } from "../adapters/slack.js";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
-import { PrismaConnectionStore } from "@switchboard/db";
+import { PrismaConnectionStore, decryptCredentials } from "@switchboard/db";
 import type { FailedMessageStore } from "../dlq/failed-message-store.js";
 
 interface ManagedRuntimeEntry {
   runtime: ChatRuntime;
   orgId: string;
+  channel: string;
+}
+
+interface GatewayEntry {
+  gateway: ChannelGateway;
+  adapter: ChannelAdapter;
+  deploymentConnectionId: string;
   channel: string;
 }
 
@@ -28,6 +36,7 @@ export interface ManagedChannelRecord {
 
 export class RuntimeRegistry {
   private runtimes = new Map<string, ManagedRuntimeEntry>();
+  private gatewayEntries = new Map<string, GatewayEntry>();
   private failedMessageStore: FailedMessageStore | null = null;
 
   setFailedMessageStore(store: FailedMessageStore): void {
@@ -148,5 +157,72 @@ export class RuntimeRegistry {
 
   get size(): number {
     return this.runtimes.size;
+  }
+
+  async loadGatewayConnections(prisma: PrismaClient, gateway: ChannelGateway): Promise<void> {
+    const connections = await prisma.deploymentConnection.findMany({
+      where: { type: "telegram", status: "active" },
+    });
+
+    for (const conn of connections) {
+      try {
+        const creds = decryptCredentials(conn.credentials);
+        const botToken = creds["botToken"] as string;
+        if (!botToken) {
+          console.error(
+            `[RuntimeRegistry] Gateway connection ${conn.id} missing botToken, skipping`,
+          );
+          continue;
+        }
+        const webhookSecret = creds["webhookSecret"] as string | undefined;
+        const adapter = new TelegramAdapter(
+          botToken,
+          async () => ({ organizationId: "gateway" }),
+          webhookSecret,
+        );
+
+        const webhookPath = `/webhook/managed/${conn.id}`;
+        this.gatewayEntries.set(webhookPath, {
+          gateway,
+          adapter,
+          deploymentConnectionId: conn.id,
+          channel: "telegram",
+        });
+      } catch (err) {
+        console.error(`[RuntimeRegistry] Failed to load gateway connection ${conn.id}:`, err);
+      }
+    }
+
+    console.warn(`[RuntimeRegistry] Loaded ${this.gatewayEntries.size} gateway entries`);
+  }
+
+  getGatewayByWebhookPath(path: string): GatewayEntry | null {
+    return this.gatewayEntries.get(path) ?? null;
+  }
+
+  async provisionGatewayConnection(
+    connection: { id: string; credentials: string },
+    _prisma: PrismaClient,
+    gateway: ChannelGateway,
+  ): Promise<void> {
+    const creds = decryptCredentials(connection.credentials);
+    const botToken = creds["botToken"] as string;
+    if (!botToken) {
+      throw new Error(`Gateway connection ${connection.id} missing botToken`);
+    }
+    const webhookSecret = creds["webhookSecret"] as string | undefined;
+    const adapter = new TelegramAdapter(
+      botToken,
+      async () => ({ organizationId: "gateway" }),
+      webhookSecret,
+    );
+
+    const webhookPath = `/webhook/managed/${connection.id}`;
+    this.gatewayEntries.set(webhookPath, {
+      gateway,
+      adapter,
+      deploymentConnectionId: connection.id,
+      channel: "telegram",
+    });
   }
 }
