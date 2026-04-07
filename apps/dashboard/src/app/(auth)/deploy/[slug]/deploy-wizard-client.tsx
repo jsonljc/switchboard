@@ -64,7 +64,8 @@ export function DeployWizardClient({
         });
 
         if (!res.ok) throw new Error("Deploy failed");
-        router.push("/dashboard");
+        const { deployment } = await res.json();
+        router.push(`/deployments/${deployment.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Deploy failed");
       }
