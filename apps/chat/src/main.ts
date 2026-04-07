@@ -235,8 +235,12 @@ async function main() {
         text: incoming.text,
       };
 
-      await gatewayEntry.gateway.handleIncoming(channelMessage, replySink);
-      return reply.code(200).send({ ok: true });
+      try {
+        await gatewayEntry.gateway.handleIncoming(channelMessage, replySink);
+      } catch (err) {
+        app.log.error(err, "Gateway webhook processing error");
+      }
+      return reply.code(200).send({ ok: true }); // Always 200 to prevent Telegram retries
     }
 
     const entry = registry.getByWebhookPath(webhookPath);
