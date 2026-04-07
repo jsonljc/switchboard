@@ -1,3 +1,4 @@
+export { ChannelGateway } from "./channel-gateway.js";
 export type {
   ChannelGatewayConfig,
   DeploymentLookup,
