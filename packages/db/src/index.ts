@@ -74,3 +74,4 @@ export { PrismaAgentPersonaStore } from "./stores/prisma-agent-persona-store.js"
 export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.js";
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
+export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
