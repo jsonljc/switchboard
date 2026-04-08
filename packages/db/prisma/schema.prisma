@@ -761,6 +761,7 @@ model AgentTask {
 
   deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
   listing    AgentListing    @relation(fields: [listingId], references: [id])
+  creativeJob CreativeJob?
 
   @@index([deploymentId])
   @@index([organizationId])
@@ -862,6 +863,37 @@ model AgentPersona {
   customInstructions       String?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
+
+// ── Creative Pipeline: Creative Jobs (PCD per-job data) ──
+
+model CreativeJob {
+  id              String   @id @default(cuid())
+  taskId          String   @unique
+  organizationId  String
+  deploymentId    String
+
+  // Brief (input)
+  productDescription  String
+  targetAudience      String
+  platforms           String[]
+  brandVoice          String?
+  productImages       String[]   @default([])
+  references          String[]   @default([])
+  pastPerformance     Json?
+
+  // Pipeline state
+  currentStage    String   @default("trends")
+  stageOutputs    Json     @default("{}")
+  stoppedAt       String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  task AgentTask @relation(fields: [taskId], references: [id])
+
+  @@index([organizationId])
+  @@index([deploymentId])
 }
 
 model LlmUsageLog {
