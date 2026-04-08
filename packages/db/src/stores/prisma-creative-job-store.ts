@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { CreativeJob } from "@switchboard/schemas";
 
@@ -36,7 +37,9 @@ export class PrismaCreativeJobStore {
         brandVoice: input.brandVoice,
         productImages: input.productImages,
         references: input.references,
-        pastPerformance: input.pastPerformance ? (input.pastPerformance as object) : null,
+        pastPerformance: input.pastPerformance
+          ? (input.pastPerformance as object)
+          : Prisma.JsonNull,
       },
     }) as unknown as CreativeJob;
   }

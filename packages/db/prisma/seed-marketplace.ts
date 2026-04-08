@@ -39,21 +39,29 @@ const SALES_PIPELINE_BUNDLE = {
 
 const FUTURE_FAMILIES = [
   {
-    name: "Creative",
-    slug: "creative-family",
-    description: "Content, social media, ad copy. Coming soon.",
-    metadata: { isBundle: true, family: "creative" },
+    name: "Performance Creative Director",
+    slug: "performance-creative-director",
+    description:
+      "Full creative pipeline — from trend analysis and hooks to scripts, storyboards, and produced video ads. Stop at any stage.",
+    taskCategories: ["creative_strategy", "hooks", "scripts", "storyboard", "production"],
+    metadata: {
+      isBundle: false,
+      family: "creative",
+      stages: ["trends", "hooks", "scripts", "storyboard", "production"],
+    },
   },
   {
     name: "Trading",
     slug: "trading-family",
     description: "Market analysis, alerts, execution. Coming soon.",
+    taskCategories: [] as string[],
     metadata: { isBundle: true, family: "trading" },
   },
   {
     name: "Finance",
     slug: "finance-family",
     description: "Bookkeeping, invoicing, expenses. Coming soon.",
+    taskCategories: [] as string[],
     metadata: { isBundle: true, family: "finance" },
   },
 ];
@@ -104,6 +112,11 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   });
   console.warn(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
 
+  // Remove old placeholder that was renamed
+  await prisma.agentListing.deleteMany({
+    where: { slug: "creative-family" },
+  });
+
   for (const family of FUTURE_FAMILIES) {
     const listing = await prisma.agentListing.upsert({
       where: { slug: family.slug },
@@ -112,7 +125,6 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
         ...family,
         type: "switchboard_native",
         status: "pending_review",
-        taskCategories: [],
         trustScore: 0,
         autonomyLevel: "supervised",
         priceTier: "free",
