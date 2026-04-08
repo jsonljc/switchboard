@@ -83,6 +83,7 @@ export const queryKeys = {
       ["marketplace", "listings", filters] as const,
     listing: (id: string) => ["marketplace", "listing", id] as const,
     trust: (id: string) => ["marketplace", "trust", id] as const,
+    trustProgression: (id: string) => ["marketplace", "trust-progression", id] as const,
     deployments: () => ["marketplace", "deployments"] as const,
   },
   tasks: {

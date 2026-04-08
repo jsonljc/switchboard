@@ -5,7 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const client = await getApiClient();
     const status = request.nextUrl.searchParams.get("status") ?? undefined;
-    const data = await client.listTasks({ status });
+    const deploymentId = request.nextUrl.searchParams.get("deploymentId") ?? undefined;
+    const data = await client.listTasks({ status, deploymentId });
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Request failed";

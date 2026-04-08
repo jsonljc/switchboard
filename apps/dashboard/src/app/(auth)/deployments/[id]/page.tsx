@@ -15,13 +15,19 @@ export default async function DeploymentDetailPage({ params }: PageProps) {
     const deployment = deployments.find((d) => d.id === id);
     if (!deployment) notFound();
 
-    const { connections } = await client.getDeploymentConnections(id);
+    const [{ connections }, listingResult, trustResult] = await Promise.all([
+      client.getDeploymentConnections(id),
+      client.getMarketplaceListing(deployment.listingId).catch(() => null),
+      client.getListingTrustScore(deployment.listingId).catch(() => null),
+    ]);
 
     return (
-      <div className="max-w-4xl mx-auto p-6 space-y-8">
-        <h1 className="font-display text-2xl text-foreground">{deployment.listingId}</h1>
-        <DeploymentDetailClient deploymentId={id} connections={connections} />
-      </div>
+      <DeploymentDetailClient
+        deploymentId={id}
+        connections={connections}
+        listing={listingResult?.listing ?? null}
+        trustBreakdown={trustResult}
+      />
     );
   } catch {
     notFound();

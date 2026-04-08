@@ -128,6 +128,7 @@ export function DeployPersonaForm({
             <button
               key={opt.value}
               type="button"
+              aria-pressed={tone === opt.value}
               onClick={() => setTone(opt.value)}
               className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                 tone === opt.value

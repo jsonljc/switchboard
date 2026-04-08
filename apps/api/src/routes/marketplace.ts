@@ -13,7 +13,7 @@ import {
   decryptCredentials,
 } from "@switchboard/db";
 import { randomBytes } from "node:crypto";
-import { TrustScoreEngine } from "@switchboard/core";
+import { TrustScoreEngine, computeTrustProgression } from "@switchboard/core";
 import type { AgentListingStatus, AgentType, AgentTaskStatus } from "@switchboard/schemas";
 import { z } from "zod";
 import { AgentType as AgentTypeEnum } from "@switchboard/schemas";
@@ -155,6 +155,48 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ listingId: id, priceTier, breakdown });
   });
 
+  app.get("/listings/:id/trust/progression", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const taskStore = new PrismaAgentTaskStore(app.prisma);
+
+    const tasks = await taskStore.listByOrg(orgId, {
+      listingId: id,
+      limit: 500,
+    });
+
+    const outcomes = tasks
+      .filter(
+        (
+          t,
+        ): t is typeof t & {
+          status: "approved" | "rejected";
+          completedAt: NonNullable<typeof t.completedAt>;
+        } => (t.status === "approved" || t.status === "rejected") && t.completedAt !== null,
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.completedAt as string | Date).getTime() -
+          new Date(b.completedAt as string | Date).getTime(),
+      )
+      .map((t) => ({
+        status: t.status,
+        completedAt:
+          typeof t.completedAt === "string" ? t.completedAt : new Date(t.completedAt).toISOString(),
+      }));
+
+    const progression = computeTrustProgression(outcomes);
+    return reply.send({ listingId: id, progression });
+  });
+
   // ── Deployments ──
 
   app.post("/listings/:id/deploy", async (request, reply) => {
@@ -246,9 +288,10 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Organization required" });
     }
 
-    const { status } = request.query as Record<string, string | undefined>;
+    const { status, deploymentId } = request.query as Record<string, string | undefined>;
     const filters = {
       status: status as AgentTaskStatus | undefined,
+      deploymentId,
     };
 
     const tasks = await store.listByOrg(orgId, filters);

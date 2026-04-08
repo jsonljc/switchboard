@@ -71,6 +71,33 @@ export function scoreToPriceTier(
   return "free";
 }
 
+/**
+ * Compute trust score progression from a sequence of task outcomes.
+ * Uses the same formula as TrustScoreEngine.recordApproval/recordRejection.
+ */
+export function computeTrustProgression(
+  outcomes: Array<{ status: "approved" | "rejected"; completedAt: string }>,
+  thresholds: TrustThresholds = DEFAULT_TRUST_THRESHOLDS,
+): Array<{ timestamp: string; score: number }> {
+  let score = 0;
+  let streak = 0;
+  const progression: Array<{ timestamp: string; score: number }> = [];
+
+  for (const outcome of outcomes) {
+    if (outcome.status === "approved") {
+      streak += 1;
+      const bonus = Math.min(streak * thresholds.streakBonusPerStep, thresholds.streakBonusCap);
+      score = Math.min(score + thresholds.approvalPoints + bonus, thresholds.scoreCeiling);
+    } else {
+      streak = 0;
+      score = Math.max(score - thresholds.rejectionPoints, thresholds.scoreFloor);
+    }
+    progression.push({ timestamp: outcome.completedAt, score });
+  }
+
+  return progression;
+}
+
 export class TrustScoreEngine {
   constructor(
     private store: TrustScoreStore,

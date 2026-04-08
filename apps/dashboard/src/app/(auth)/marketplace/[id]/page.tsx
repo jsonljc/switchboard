@@ -96,7 +96,7 @@ export default function AgentDetailPage() {
               Deployed
             </Badge>
           ) : (
-            <Button onClick={() => router.push(`/marketplace/${id}/deploy`)}>
+            <Button onClick={() => router.push(`/deploy/${listing.slug}`)}>
               <Rocket className="h-4 w-4 mr-1.5" />
               Deploy
             </Button>

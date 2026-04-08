@@ -52,6 +52,19 @@ export function useTrustScore(id: string) {
   });
 }
 
+export function useTrustProgression(listingId: string) {
+  return useQuery({
+    queryKey: queryKeys.marketplace.trustProgression(listingId),
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/marketplace/listings/${listingId}/trust/progression`);
+      if (!res.ok) throw new Error("Failed to fetch trust progression");
+      const data = await res.json();
+      return data.progression as Array<{ timestamp: string; score: number }>;
+    },
+    enabled: !!listingId,
+  });
+}
+
 // ── Deployments ──
 
 export function useDeployments() {
@@ -98,12 +111,13 @@ export function useDeployListing() {
 
 // ── Tasks ──
 
-export function useTasks(filters?: { status?: string }) {
+export function useTasks(filters?: { status?: string; deploymentId?: string }) {
   return useQuery({
     queryKey: queryKeys.tasks.list(filters),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filters?.status) params.set("status", filters.status);
+      if (filters?.deploymentId) params.set("deploymentId", filters.deploymentId);
       const qs = params.toString();
       const res = await fetch(`/api/dashboard/marketplace/tasks${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error("Failed to fetch tasks");
