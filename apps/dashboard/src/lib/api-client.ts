@@ -52,6 +52,25 @@ export interface MarketplaceTask {
   updatedAt: string;
 }
 
+export interface CreativeJobSummary {
+  id: string;
+  taskId: string;
+  organizationId: string;
+  deploymentId: string;
+  productDescription: string;
+  targetAudience: string;
+  platforms: string[];
+  brandVoice: string | null;
+  productImages: string[];
+  references: string[];
+  pastPerformance: Record<string, unknown> | null;
+  currentStage: string;
+  stoppedAt: string | null;
+  stageOutputs: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TrustScoreBreakdown {
   listingId: string;
   priceTier: string;
@@ -360,6 +379,13 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<TrustScoreBreakdown>(`/api/marketplace/listings/${id}/trust`);
   }
 
+  async getListingTrustProgression(id: string) {
+    return this.request<{
+      listingId: string;
+      progression: Array<{ timestamp: string; score: number }>;
+    }>(`/api/marketplace/listings/${id}/trust/progression`);
+  }
+
   async deployListing(
     id: string,
     config: {
@@ -392,9 +418,10 @@ export class SwitchboardClient extends SwitchboardClientBase {
     });
   }
 
-  async listTasks(filters?: { status?: string }) {
+  async listTasks(filters?: { status?: string; deploymentId?: string }) {
     const params = new URLSearchParams();
     if (filters?.status) params.set("status", filters.status);
+    if (filters?.deploymentId) params.set("deploymentId", filters.deploymentId);
     const qs = params.toString();
     return this.request<{ tasks: MarketplaceTask[] }>(
       `/api/marketplace/tasks${qs ? `?${qs}` : ""}`,
@@ -439,6 +466,24 @@ export class SwitchboardClient extends SwitchboardClientBase {
     });
   }
 
+  async deploySalesPipeline(body: {
+    businessName: string;
+    businessType: string;
+    productService: string;
+    valueProposition: string;
+    tone: string;
+    qualificationCriteria: Record<string, unknown>;
+    disqualificationCriteria: Record<string, unknown>;
+    escalationRules: Record<string, unknown>;
+    bookingLink?: string;
+    customInstructions?: string;
+  }) {
+    return this.request<{ persona: unknown; deployments: unknown[]; count: number }>(
+      "/api/marketplace/persona/deploy",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
   // ── Deployment Connections ──
 
   async createWidgetToken(deploymentId: string) {
@@ -473,6 +518,48 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ ok: boolean }>(
       `/api/marketplace/deployments/${deploymentId}/connections/${connectionId}`,
       { method: "DELETE" },
+    );
+  }
+
+  // ── Creative Pipeline ──
+
+  async submitCreativeBrief(body: {
+    deploymentId: string;
+    listingId: string;
+    brief: {
+      productDescription: string;
+      targetAudience: string;
+      platforms: string[];
+      brandVoice?: string | null;
+      productImages?: string[];
+      references?: string[];
+      pastPerformance?: Record<string, unknown> | null;
+    };
+  }) {
+    return this.request<{ task: MarketplaceTask; job: CreativeJobSummary }>(
+      "/api/marketplace/creative-jobs",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  async listCreativeJobs(filters?: { deploymentId?: string; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.deploymentId) params.set("deploymentId", filters.deploymentId);
+    if (filters?.limit) params.set("limit", String(filters.limit));
+    const qs = params.toString();
+    return this.request<{ jobs: CreativeJobSummary[] }>(
+      `/api/marketplace/creative-jobs${qs ? `?${qs}` : ""}`,
+    );
+  }
+
+  async getCreativeJob(id: string) {
+    return this.request<{ job: CreativeJobSummary }>(`/api/marketplace/creative-jobs/${id}`);
+  }
+
+  async approveCreativeJobStage(id: string, action: "continue" | "stop") {
+    return this.request<{ job: CreativeJobSummary; action: string }>(
+      `/api/marketplace/creative-jobs/${id}/approve`,
+      { method: "POST", body: JSON.stringify({ action }) },
     );
   }
 }
