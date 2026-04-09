@@ -83,10 +83,15 @@ export const queryKeys = {
       ["marketplace", "listings", filters] as const,
     listing: (id: string) => ["marketplace", "listing", id] as const,
     trust: (id: string) => ["marketplace", "trust", id] as const,
+    trustProgression: (id: string) => ["marketplace", "trust-progression", id] as const,
     deployments: () => ["marketplace", "deployments"] as const,
   },
   tasks: {
     all: ["tasks"] as const,
     list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,
+  },
+  persona: {
+    all: ["persona"] as const,
+    mine: () => [...queryKeys.persona.all, "mine"] as const,
   },
 };

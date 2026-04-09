@@ -695,7 +695,7 @@ model AgentListing {
   type            String   @default("switchboard_native") // open_source, third_party, switchboard_native
   status          String   @default("pending_review") // pending_review, listed, suspended, deprecated
   taskCategories  String[] @default([])
-  trustScore      Float    @default(50)
+  trustScore      Float    @default(0)
   autonomyLevel   String   @default("supervised") // supervised, guided, autonomous
   priceTier       String   @default("free") // free, basic, pro, elite
   priceMonthly    Float    @default(0)
@@ -729,8 +729,11 @@ model AgentDeployment {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  listing AgentListing @relation(fields: [listingId], references: [id])
-  tasks   AgentTask[]
+  listing               AgentListing           @relation(fields: [listingId], references: [id])
+  tasks                 AgentTask[]
+  actionRequests        ActionRequest[]
+  deploymentStates      DeploymentState[]
+  deploymentConnections DeploymentConnection[]
 
   @@unique([organizationId, listingId])
   @@index([organizationId])
@@ -758,6 +761,7 @@ model AgentTask {
 
   deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
   listing    AgentListing    @relation(fields: [listingId], references: [id])
+  creativeJob CreativeJob?
 
   @@index([deploymentId])
   @@index([organizationId])
@@ -771,20 +775,126 @@ model TrustScoreRecord {
   id                    String   @id @default(cuid())
   listingId             String
   taskCategory          String
-  score                 Float    @default(50)
+  score                 Float    @default(0)
   totalApprovals        Int      @default(0)
   totalRejections       Int      @default(0)
   consecutiveApprovals  Int      @default(0)
   lastActivityAt        DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  deploymentId          String?
 
   listing AgentListing @relation(fields: [listingId], references: [id])
 
   @@unique([listingId, taskCategory])
   @@index([listingId])
+  @@index([deploymentId])
 }
 
+// ── Marketplace: Action Requests (governance pipeline) ──
+
+model ActionRequest {
+  id               String    @id @default(cuid())
+  deploymentId     String
+  type             String    // send_message, browse_url, write_file, api_call
+  surface          String    // telegram, web_widget, google_drive, browser
+  payload          Json
+  status           String    @default("pending") // pending, approved, rejected, executed, blocked
+  governanceResult Json?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  executedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@index([deploymentId, status])
+  @@index([status, createdAt])
+}
+
+// ── Marketplace: Deployment State (per-deployment key-value store) ──
+
+model DeploymentState {
+  id           String   @id @default(cuid())
+  deploymentId String
+  key          String
+  value        Json
+  updatedAt    DateTime @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@unique([deploymentId, key])
+  @@index([deploymentId])
+}
+
+// ── Marketplace: Deployment Connections ──
+
+model DeploymentConnection {
+  id           String   @id @default(cuid())
+  deploymentId String
+  type         String
+  slot         String   @default("default")
+  status       String   @default("active") // active, expired, revoked
+  credentials  String   // encrypted
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
+
+  @@unique([deploymentId, type, slot])
+  @@index([deploymentId])
+}
+
+// ── Sales Pipeline: Agent Persona (shared business context) ──
+
+model AgentPersona {
+  id                       String   @id @default(cuid())
+  organizationId           String   @unique
+  businessName             String
+  businessType             String
+  productService           String
+  valueProposition         String
+  tone                     String   @default("professional")
+  qualificationCriteria    Json     @default("{}")
+  disqualificationCriteria Json     @default("{}")
+  bookingLink              String?
+  escalationRules          Json     @default("{}")
+  customInstructions       String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+// ── Creative Pipeline: Creative Jobs (PCD per-job data) ──
+
+model CreativeJob {
+  id              String   @id @default(cuid())
+  taskId          String   @unique
+  organizationId  String
+  deploymentId    String
+
+  // Brief (input)
+  productDescription  String
+  targetAudience      String
+  platforms           String[]
+  brandVoice          String?
+  productImages       String[]   @default([])
+  references          String[]   @default([])
+  pastPerformance     Json?
+
+  // Pipeline state
+  currentStage    String   @default("trends")
+  stageOutputs    Json     @default("{}")
+  stoppedAt       String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  task AgentTask @relation(fields: [taskId], references: [id])
+
+  @@index([organizationId])
+  @@index([deploymentId])
+}
 
 model LlmUsageLog {
   id           String   @id @default(uuid())
@@ -970,6 +1080,7 @@ model Contact {
   stage             String    @default("new")
   source            String?
   attribution       Json?
+  qualificationData Json?
   roles             String[]  @default(["lead"])
   firstContactAt    DateTime  @default(now())
   lastActivityAt    DateTime  @default(now())

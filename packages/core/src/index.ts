@@ -196,3 +196,6 @@ export * from "./lifecycle/index.js";
 
 // Marketplace (Trust Score Engine)
 export * from "./marketplace/index.js";
+
+// Channel Gateway (channel → AgentRuntime bridge)
+export * from "./channel-gateway/index.js";

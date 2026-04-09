@@ -1,93 +1,131 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { useState, useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft } from "lucide-react";
+
+export interface WizardStepProps {
+  data: WizardData;
+  onUpdate: (patch: Partial<WizardData>) => void;
+  onNext: () => void;
+}
+
+export interface WizardStep {
+  id: string;
+  label: string;
+  component: React.ComponentType<WizardStepProps & Record<string, unknown>>;
+  props?: Record<string, unknown>;
+}
+
+export interface PersonaInput {
+  businessName: string;
+  businessType: string;
+  productService: string;
+  valueProposition: string;
+  tone: string;
+  qualificationCriteria: Record<string, unknown>;
+  disqualificationCriteria: Record<string, unknown>;
+  escalationRules: Record<string, unknown>;
+  bookingLink: string | null;
+  customInstructions: string | null;
+}
+
+export interface ConnectionConfig {
+  type: string;
+  apiKey?: string;
+  config?: Record<string, unknown>;
+}
+
+export interface WizardData {
+  listingId: string;
+  listingSlug: string;
+  url?: string;
+  persona?: PersonaInput;
+  connections: Record<string, ConnectionConfig>;
+  testChatVerified?: boolean;
+}
 
 interface DeployWizardShellProps {
-  steps: string[];
-  currentStep: number;
-  canProceed: boolean;
-  isSubmitting: boolean;
-  onBack: () => void;
-  onNext: () => void;
-  onDeploy: () => void;
-  children: React.ReactNode;
+  steps: WizardStep[];
+  initialData: Pick<WizardData, "listingId" | "listingSlug">;
+  header?: ReactNode;
+  onDataChange?: (data: WizardData) => void;
 }
 
 export function DeployWizardShell({
   steps,
-  currentStep,
-  canProceed,
-  isSubmitting,
-  onBack,
-  onNext,
-  onDeploy,
-  children,
+  initialData,
+  header,
+  onDataChange,
 }: DeployWizardShellProps) {
-  const isLast = currentStep === steps.length - 1;
+  const [currentStep, setCurrentStep] = useState(0);
+  const [data, setData] = useState<WizardData>({
+    ...initialData,
+    connections: {},
+  });
+
+  const handleUpdate = useCallback(
+    (patch: Partial<WizardData>) => {
+      setData((prev) => {
+        const next = { ...prev, ...patch };
+        onDataChange?.(next);
+        return next;
+      });
+    },
+    [onDataChange],
+  );
+
+  const handleNext = useCallback(() => {
+    setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+  }, [steps.length]);
+
+  const handleBack = useCallback(() => {
+    setCurrentStep((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const step = steps[currentStep];
+  if (!step) return null;
+
+  const StepComponent = step.component;
 
   return (
-    <div className="space-y-8">
-      {/* Step indicator */}
-      <div className="flex items-center gap-2">
-        {steps.map((label, i) => (
-          <div key={label} className="flex items-center gap-2">
+    <div className="max-w-xl mx-auto">
+      {header}
+
+      {/* Progress bar */}
+      <div className="mb-8">
+        <p className="text-[13px] text-muted-foreground mb-2">
+          Step {currentStep + 1} of {steps.length}: {step.label}
+        </p>
+        <div className="flex gap-1">
+          {steps.map((_, i) => (
             <div
-              className={cn(
-                "flex items-center gap-2 text-[13px]",
-                i === currentStep
-                  ? "text-foreground font-medium"
-                  : i < currentStep
-                    ? "text-positive"
-                    : "text-muted-foreground",
-              )}
-            >
-              <span
-                className={cn(
-                  "h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-medium",
-                  i === currentStep
-                    ? "bg-foreground text-background"
-                    : i < currentStep
-                      ? "bg-positive/20 text-positive"
-                      : "bg-muted text-muted-foreground",
-                )}
-              >
-                {i < currentStep ? "✓" : i + 1}
-              </span>
-              <span className="hidden sm:inline">{label}</span>
-            </div>
-            {i < steps.length - 1 && (
-              <div
-                className={cn("h-px w-8 sm:w-12", i < currentStep ? "bg-positive/40" : "bg-border")}
-              />
-            )}
-          </div>
-        ))}
+              key={i}
+              className={`h-1 flex-1 rounded-full transition-colors ${
+                i <= currentStep ? "bg-primary" : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Step content */}
-      <div>{children}</div>
+      <StepComponent
+        data={data}
+        onUpdate={handleUpdate}
+        onNext={handleNext}
+        {...(step.props ?? {})}
+      />
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between pt-4 border-t border-border/60">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          disabled={currentStep === 0}
-          className="text-[13px]"
-        >
-          Back
-        </Button>
-        {isLast ? (
-          <Button onClick={onDeploy} disabled={!canProceed || isSubmitting} className="text-[13px]">
-            {isSubmitting ? "Deploying..." : "Deploy Agent"}
+      {/* Back button */}
+      {currentStep > 0 && (
+        <div className="mt-6">
+          <Button variant="ghost" size="sm" onClick={handleBack}>
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back
           </Button>
-        ) : (
-          <Button onClick={onNext} disabled={!canProceed} className="text-[13px]">
-            Continue
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

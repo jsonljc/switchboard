@@ -8,6 +8,7 @@ export const ChannelSchema = z.enum([
   "messenger",
   "email",
   "api",
+  "web_widget",
 ]);
 export type Channel = z.infer<typeof ChannelSchema>;
 

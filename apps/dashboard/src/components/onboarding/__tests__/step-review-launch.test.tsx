@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { StepReviewLaunch } from "../step-review-launch";
-import type { ChannelConfig } from "@/app/onboarding/page";
+import type { ChannelConfig } from "@/app/(auth)/onboarding/page";
 
 describe("StepReviewLaunch", () => {
   const defaultProps = {

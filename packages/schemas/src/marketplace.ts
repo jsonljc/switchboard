@@ -39,7 +39,7 @@ export const AgentListingSchema = z.object({
   type: AgentType,
   status: AgentListingStatus,
   taskCategories: z.array(z.string()),
-  trustScore: z.number().min(0).max(100).default(50),
+  trustScore: z.number().min(0).max(100).default(0),
   autonomyLevel: AutonomyLevel.default("supervised"),
   priceTier: PriceTier.default("free"),
   priceMonthly: z.number().nonnegative().default(0),
@@ -105,3 +105,61 @@ export const TrustScoreRecordSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 export type TrustScoreRecord = z.infer<typeof TrustScoreRecordSchema>;
+
+// --- Agent Action Request ---
+
+export const AgentActionType = z.enum([
+  "send_message",
+  "browse_url",
+  "read_file",
+  "write_file",
+  "api_call",
+]);
+export type AgentActionType = z.infer<typeof AgentActionType>;
+
+export const AgentActionStatus = z.enum(["pending", "approved", "rejected", "executed", "blocked"]);
+export type AgentActionStatus = z.infer<typeof AgentActionStatus>;
+
+export const AgentActionRequestSchema = z.object({
+  id: z.string(),
+  deploymentId: z.string(),
+  type: AgentActionType,
+  surface: z.string(),
+  payload: z.record(z.unknown()),
+  status: AgentActionStatus.default("pending"),
+  governanceResult: z.record(z.unknown()).nullable().optional(),
+  reviewedBy: z.string().nullable().optional(),
+  reviewedAt: z.coerce.date().nullable().optional(),
+  executedAt: z.coerce.date().nullable().optional(),
+  createdAt: z.coerce.date(),
+});
+export type AgentActionRequest = z.infer<typeof AgentActionRequestSchema>;
+
+// --- Deployment State ---
+
+export const DeploymentStateSchema = z.object({
+  id: z.string(),
+  deploymentId: z.string(),
+  key: z.string(),
+  value: z.unknown(),
+  updatedAt: z.coerce.date(),
+});
+export type DeploymentState = z.infer<typeof DeploymentStateSchema>;
+
+// --- Deployment Connection ---
+
+export const ConnectionStatus = z.enum(["active", "expired", "revoked"]);
+export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
+
+export const DeploymentConnectionSchema = z.object({
+  id: z.string(),
+  deploymentId: z.string(),
+  type: z.string(),
+  slot: z.string().default("default"),
+  status: ConnectionStatus,
+  credentials: z.string(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type DeploymentConnection = z.infer<typeof DeploymentConnectionSchema>;

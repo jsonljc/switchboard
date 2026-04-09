@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare, MessageCircle, Phone, Loader2, PartyPopper } from "lucide-react";
-import type { ChannelConfig } from "@/app/onboarding/page";
+import type { ChannelConfig } from "@/app/(auth)/onboarding/page";
 
 interface StepReviewLaunchProps {
   businessName: string;

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MessageCircle, Phone } from "lucide-react";
-import type { ChannelConfig } from "@/app/onboarding/page";
+import type { ChannelConfig } from "@/app/(auth)/onboarding/page";
 
 interface StepChannelsProps {
   channels: ChannelConfig;

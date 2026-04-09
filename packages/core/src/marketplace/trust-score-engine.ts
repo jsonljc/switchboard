@@ -1,7 +1,11 @@
 import type { AutonomyLevel, PriceTier, TrustScoreRecord } from "@switchboard/schemas";
 
 export interface TrustScoreStore {
-  getOrCreate(listingId: string, taskCategory: string): Promise<TrustScoreRecord>;
+  getOrCreate(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord>;
   update(
     id: string,
     data: Partial<
@@ -13,6 +17,7 @@ export interface TrustScoreStore {
   ): Promise<TrustScoreRecord>;
   listByListing(listingId: string): Promise<TrustScoreRecord[]>;
   getAggregateScore(listingId: string): Promise<number>;
+  getDeploymentScore?(deploymentId: string): Promise<number>;
 }
 
 export interface TrustThresholds {
@@ -38,9 +43,9 @@ export const DEFAULT_TRUST_THRESHOLDS: TrustThresholds = {
   streakBonusCap: 5,
   scoreCeiling: 100,
   scoreFloor: 0,
-  supervisedCeiling: 39,
-  guidedCeiling: 69,
-  autonomousFloor: 70,
+  supervisedCeiling: 29,
+  guidedCeiling: 54,
+  autonomousFloor: 55,
   freeCeiling: 29,
   basicCeiling: 54,
   proCeiling: 79,
@@ -66,14 +71,45 @@ export function scoreToPriceTier(
   return "free";
 }
 
+/**
+ * Compute trust score progression from a sequence of task outcomes.
+ * Uses the same formula as TrustScoreEngine.recordApproval/recordRejection.
+ */
+export function computeTrustProgression(
+  outcomes: Array<{ status: "approved" | "rejected"; completedAt: string }>,
+  thresholds: TrustThresholds = DEFAULT_TRUST_THRESHOLDS,
+): Array<{ timestamp: string; score: number }> {
+  let score = 0;
+  let streak = 0;
+  const progression: Array<{ timestamp: string; score: number }> = [];
+
+  for (const outcome of outcomes) {
+    if (outcome.status === "approved") {
+      streak += 1;
+      const bonus = Math.min(streak * thresholds.streakBonusPerStep, thresholds.streakBonusCap);
+      score = Math.min(score + thresholds.approvalPoints + bonus, thresholds.scoreCeiling);
+    } else {
+      streak = 0;
+      score = Math.max(score - thresholds.rejectionPoints, thresholds.scoreFloor);
+    }
+    progression.push({ timestamp: outcome.completedAt, score });
+  }
+
+  return progression;
+}
+
 export class TrustScoreEngine {
   constructor(
     private store: TrustScoreStore,
     private thresholds: TrustThresholds = DEFAULT_TRUST_THRESHOLDS,
   ) {}
 
-  async recordApproval(listingId: string, taskCategory: string): Promise<TrustScoreRecord> {
-    const record = await this.store.getOrCreate(listingId, taskCategory);
+  async recordApproval(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord> {
+    const record = await this.store.getOrCreate(listingId, taskCategory, deploymentId);
     const streak = record.consecutiveApprovals + 1;
     const bonus = Math.min(
       streak * this.thresholds.streakBonusPerStep,
@@ -92,8 +128,12 @@ export class TrustScoreEngine {
     });
   }
 
-  async recordRejection(listingId: string, taskCategory: string): Promise<TrustScoreRecord> {
-    const record = await this.store.getOrCreate(listingId, taskCategory);
+  async recordRejection(
+    listingId: string,
+    taskCategory: string,
+    deploymentId?: string,
+  ): Promise<TrustScoreRecord> {
+    const record = await this.store.getOrCreate(listingId, taskCategory, deploymentId);
     const newScore = Math.max(
       record.score - this.thresholds.rejectionPoints,
       this.thresholds.scoreFloor,
@@ -117,9 +157,7 @@ export class TrustScoreEngine {
     return scoreToPriceTier(avgScore, this.thresholds);
   }
 
-  async getScoreBreakdown(
-    listingId: string,
-  ): Promise<
+  async getScoreBreakdown(listingId: string): Promise<
     {
       category: string;
       score: number;

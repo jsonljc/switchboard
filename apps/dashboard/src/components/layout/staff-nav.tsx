@@ -9,7 +9,7 @@ import { useApprovalCount } from "@/hooks/use-approvals";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
 const NAV = [
-  { href: "/", label: "Dashboard", exact: true },
+  { href: "/dashboard", label: "Dashboard", exact: true },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/tasks", label: "Tasks" },
   { href: "/decide", label: "Decide" },
@@ -27,7 +27,7 @@ export function StaffNav() {
     <header className="hidden md:block fixed top-0 left-0 right-0 z-40 h-14 border-b border-border/50 bg-background/92 backdrop-blur-sm">
       <div className="page-width h-full flex items-center justify-between gap-8">
         <Link
-          href="/"
+          href="/dashboard"
           className="text-[14px] font-medium text-foreground tracking-tight shrink-0 hover:text-muted-foreground transition-colors duration-fast"
         >
           Switchboard

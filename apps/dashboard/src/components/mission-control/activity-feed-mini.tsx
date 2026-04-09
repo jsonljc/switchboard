@@ -20,7 +20,7 @@ export function ActivityFeedMini() {
             <Activity className="h-4 w-4 text-muted-foreground" />
             Recent activity
           </CardTitle>
-          <Link href="/" className="text-xs text-primary hover:underline">
+          <Link href="/dashboard" className="text-xs text-primary hover:underline">
             View all
           </Link>
         </div>

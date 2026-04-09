@@ -78,7 +78,7 @@ export function TodayActivityFeed() {
       })}
 
       <Link
-        href="/"
+        href="/dashboard"
         className="inline-block mt-5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
       >
         See all activity →

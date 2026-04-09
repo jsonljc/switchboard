@@ -1,0 +1,147 @@
+// ---------------------------------------------------------------------------
+// Creative Pipeline routes — CRUD for CreativeJob (PCD)
+// ---------------------------------------------------------------------------
+
+import type { FastifyPluginAsync } from "fastify";
+import { PrismaCreativeJobStore, PrismaAgentTaskStore } from "@switchboard/db";
+import { CreativeBriefInput } from "@switchboard/schemas";
+import { z } from "zod";
+
+const SubmitBriefInput = z.object({
+  deploymentId: z.string().min(1),
+  listingId: z.string().min(1),
+  brief: CreativeBriefInput,
+});
+
+const ApproveStageInput = z.object({
+  action: z.enum(["continue", "stop"]),
+});
+
+export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
+  // POST /creative-jobs — submit a brief, create AgentTask + CreativeJob
+  app.post("/creative-jobs", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const parsed = SubmitBriefInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
+    const { deploymentId, listingId, brief } = parsed.data;
+
+    // Create the AgentTask
+    const taskStore = new PrismaAgentTaskStore(app.prisma);
+    const task = await taskStore.create({
+      deploymentId,
+      organizationId: orgId,
+      listingId,
+      category: "creative_strategy",
+      input: brief as unknown as Record<string, unknown>,
+    });
+
+    // Create the CreativeJob
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.create({
+      taskId: task.id,
+      organizationId: orgId,
+      deploymentId,
+      productDescription: brief.productDescription,
+      targetAudience: brief.targetAudience,
+      platforms: brief.platforms,
+      brandVoice: brief.brandVoice ?? null,
+      productImages: brief.productImages,
+      references: brief.references,
+      pastPerformance: brief.pastPerformance ?? null,
+    });
+
+    return reply.code(201).send({ task, job });
+  });
+
+  // GET /creative-jobs — list jobs for org
+  app.get("/creative-jobs", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const query = request.query as { deploymentId?: string; limit?: string };
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const jobs = await jobStore.listByOrg(orgId, {
+      deploymentId: query.deploymentId,
+      limit: query.limit ? parseInt(query.limit, 10) : undefined,
+    });
+
+    return reply.send({ jobs });
+  });
+
+  // GET /creative-jobs/:id — get single job with stage outputs
+  app.get("/creative-jobs/:id", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.findById(id);
+
+    if (!job || job.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Creative job not found" });
+    }
+
+    return reply.send({ job });
+  });
+
+  // POST /creative-jobs/:id/approve — continue or stop pipeline
+  app.post("/creative-jobs/:id/approve", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const parsed = ApproveStageInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+    }
+
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.findById(id);
+
+    if (!job || job.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Creative job not found" });
+    }
+
+    if (parsed.data.action === "stop") {
+      const stopped = await jobStore.stop(id, job.currentStage);
+      return reply.send({ job: stopped, action: "stopped" });
+    }
+
+    // "continue" — in SP2 this will fire an Inngest event.
+    // For now, just acknowledge the approval.
+    return reply.send({
+      job,
+      action: "approved",
+      note: "Pipeline continuation will be wired in SP2 (Inngest)",
+    });
+  });
+};

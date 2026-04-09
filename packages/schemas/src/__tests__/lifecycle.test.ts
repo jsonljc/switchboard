@@ -82,6 +82,39 @@ describe("ContactSchema", () => {
     const result = ContactSchema.parse(minimal);
     expect(result.stage).toBe("new");
   });
+
+  it("accepts qualificationData on Contact", () => {
+    const validContact = {
+      id: "c-1",
+      organizationId: "org-1",
+      primaryChannel: "whatsapp",
+      roles: ["lead"],
+      firstContactAt: new Date(),
+      lastActivityAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const contact = ContactSchema.parse({
+      ...validContact,
+      qualificationData: { problemFit: true, timeline: "immediate" },
+    });
+    expect(contact.qualificationData).toEqual({ problemFit: true, timeline: "immediate" });
+  });
+
+  it("defaults qualificationData to undefined", () => {
+    const validContact = {
+      id: "c-1",
+      organizationId: "org-1",
+      primaryChannel: "whatsapp",
+      roles: ["lead"],
+      firstContactAt: new Date(),
+      lastActivityAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const contact = ContactSchema.parse(validContact);
+    expect(contact.qualificationData).toBeUndefined();
+  });
 });
 
 describe("OpportunitySchema", () => {

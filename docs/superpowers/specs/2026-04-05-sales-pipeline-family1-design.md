@@ -15,14 +15,14 @@ From the lead's perspective: one continuous conversation with one entity that kn
 ### Marketplace Listing
 
 ```
-Speed-to-Lead Rep      Chat agent    Trust Score: 50 (starts free)
-Sales Closer           Chat agent    Trust Score: 50 (starts free)
-Nurture Specialist     Chat agent    Trust Score: 50 (starts free)
+Speed-to-Lead Rep      Chat agent    Trust Score: 0 (starts free, fully supervised)
+Sales Closer           Chat agent    Trust Score: 0 (starts free, fully supervised)
+Nurture Specialist     Chat agent    Trust Score: 0 (starts free, fully supervised)
 
 Sales Pipeline Bundle  All three together (discounted)
 ```
 
-Pricing follows existing trust-based model: agents start free at score 50, price scales as trust score increases through approvals.
+Pricing follows trust-based model: agents start at score 0 (free, fully supervised). Score climbs through founder approvals.
 
 ### Future Agent Families (Catalog Placeholders)
 
@@ -336,11 +336,12 @@ This populates one `AgentPersona` record. All three agents read from the same pe
 
 Each agent has its own `AgentListing` with its own trust score. Trust follows existing mechanics:
 
-- **Start:** 50 (supervised autonomy, free tier)
+- **Start:** 0 (fully supervised, free tier — blank slate, no implied credibility)
 - **Approval:** +3 pts (streak bonus up to +5)
 - **Rejection:** -10 pts
-- **Autonomy levels:** <40 supervised, 40-69 guided, >=70 autonomous
-- **Price tiers:** <30 free, 30-54 basic, 55-79 pro, >=80 elite
+- **Autonomy levels:** 0-29 supervised, 30-54 guided, 55-79 autonomous, 80-100 autonomous+
+- **Price tiers:** 0-29 free, 30-54 basic, 55-79 pro, 80-100 elite
+- **Cold start UX:** Show "New Agent" badge instead of a numeric score until 20+ reviews
 
 The founder reviews agent actions via the existing task review queue. Each approval/rejection updates the specific agent's trust score through `TrustScoreAdapter`, which already bridges marketplace trust into the governance layer.
 

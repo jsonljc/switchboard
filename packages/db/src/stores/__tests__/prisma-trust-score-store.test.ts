@@ -53,7 +53,7 @@ describe("PrismaTrustScoreStore", () => {
         id: "score_2",
         listingId: "lst-1",
         taskCategory: "ads",
-        score: 50,
+        score: 0,
         totalApprovals: 0,
         totalRejections: 0,
         consecutiveApprovals: 0,
@@ -66,10 +66,10 @@ describe("PrismaTrustScoreStore", () => {
       const result = await store.getOrCreate("lst-1", "ads");
 
       expect(prisma.trustScoreRecord.create).toHaveBeenCalledWith({
-        data: { listingId: "lst-1", taskCategory: "ads", score: 50 },
+        data: { listingId: "lst-1", taskCategory: "ads", score: 0 },
       });
       expect(result.id).toBe("score_2");
-      expect(result.score).toBe(50);
+      expect(result.score).toBe(0);
     });
   });
 
@@ -164,24 +164,24 @@ describe("PrismaTrustScoreStore", () => {
       expect(result).toBe(75.5);
     });
 
-    it("returns 50 when no scores exist", async () => {
+    it("returns 0 when no scores exist", async () => {
       prisma.trustScoreRecord.aggregate.mockResolvedValue({
         _avg: { score: null },
       });
 
       const result = await store.getAggregateScore("lst-999");
 
-      expect(result).toBe(50);
+      expect(result).toBe(0);
     });
 
-    it("returns 50 when average is null", async () => {
+    it("returns 0 when average is null", async () => {
       prisma.trustScoreRecord.aggregate.mockResolvedValue({
         _avg: { score: null },
       });
 
       const result = await store.getAggregateScore("lst-1");
 
-      expect(result).toBe(50);
+      expect(result).toBe(0);
     });
   });
 });

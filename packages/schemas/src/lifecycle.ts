@@ -88,6 +88,7 @@ export const ContactSchema = z.object({
   source: z.string().nullable().optional(),
   attribution: AttributionChainSchema.nullable().optional(),
   roles: z.array(z.string()).default(["lead"]),
+  qualificationData: z.record(z.unknown()).nullable().optional(),
   firstContactAt: z.coerce.date(),
   lastActivityAt: z.coerce.date(),
   createdAt: z.coerce.date(),

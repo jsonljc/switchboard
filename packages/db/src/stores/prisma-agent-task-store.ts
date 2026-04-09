@@ -13,6 +13,8 @@ interface CreateTaskInput {
 interface TaskFilters {
   status?: AgentTaskStatus;
   category?: string;
+  deploymentId?: string;
+  listingId?: string;
   limit?: number;
   offset?: number;
 }
@@ -55,6 +57,8 @@ export class PrismaAgentTaskStore {
       where: {
         organizationId,
         ...(filters?.status ? { status: filters.status } : {}),
+        ...(filters?.deploymentId ? { deploymentId: filters.deploymentId } : {}),
+        ...(filters?.listingId ? { listingId: filters.listingId } : {}),
       },
       take: filters?.limit ?? 50,
       skip: filters?.offset ?? 0,
