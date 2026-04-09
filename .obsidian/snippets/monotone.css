@@ -110,3 +110,99 @@ body {
   max-width: 680px;
   margin: 0 auto;
 }
+
+/* ── 3. CHROME SIMPLIFICATION ────────────────────────────────────────── */
+
+/* Active tab — underline only, no pill */
+.workspace-tab-header.is-active {
+  border-bottom: 1px solid var(--text-normal);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.workspace-tab-header.is-active .workspace-tab-header-inner {
+  background: transparent !important;
+}
+
+/* Tab close — show only on hover */
+.workspace-tab-header .workspace-tab-header-inner-close-button {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.workspace-tab-header:hover .workspace-tab-header-inner-close-button {
+  opacity: 1;
+}
+
+/* Scrollbar — hidden until hover */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; }
+*:hover::-webkit-scrollbar-thumb { background: var(--text-faint); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Toolbar/view-action buttons — dim at rest */
+.view-actions .clickable-icon {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.view-actions .clickable-icon:hover { opacity: 1; }
+
+/* Ribbon — dim at rest */
+.workspace-ribbon .side-dock-ribbon-action {
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+.workspace-ribbon .side-dock-ribbon-action:hover { opacity: 1; }
+
+/* File tree — reduced indent, no chevron */
+.nav-folder-collapse-indicator { display: none; }
+.tree-item-children {
+  padding-left: 16px !important;
+  border-left: 1px solid var(--divider-color);
+  margin-left: 8px;
+}
+
+/* ── 4. COLOR NEUTRALIZATION ─────────────────────────────────────────── */
+
+/* Links — underline only, no color */
+a,
+.cm-hmd-internal-link,
+.internal-link,
+.external-link {
+  color: var(--link-color) !important;
+  text-decoration: underline;
+}
+
+/* Tags — no pill, no color */
+.tag {
+  background: transparent !important;
+  color: var(--tag-color) !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* Callouts — left border only, no background, no icon color */
+.callout {
+  background: transparent !important;
+  border: none !important;
+  border-left: 1px solid var(--divider-color) !important;
+  border-radius: 0 !important;
+  padding-left: 1em;
+}
+.callout-icon { display: none !important; }
+.callout-title { color: var(--text-muted) !important; font-weight: 500; }
+.callout-title-inner { color: var(--text-muted) !important; }
+
+/* Highlights — subtle gray, no yellow */
+mark {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: inherit !important;
+}
+.theme-dark mark {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Folder/file color overrides — strip all */
+.nav-file-title,
+.nav-folder-title {
+  color: var(--text-normal) !important;
+}
