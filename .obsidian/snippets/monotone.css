@@ -53,3 +53,60 @@
   --color-accent-1: #cccccc;
   --color-accent-2: #aaaaaa;
 }
+
+/* ── 2. TYPOGRAPHY ───────────────────────────────────────────────────── */
+
+body {
+  --font-text-theme: -apple-system, "Inter", ui-sans-serif, sans-serif;
+  --font-interface-theme: -apple-system, "Inter", ui-sans-serif, sans-serif;
+  --font-monospace-theme: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+  --font-text-size: 15px;
+  --line-height-normal: 1.65;
+  --editor-line-height: 1.65;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+}
+
+/* Headings — live editor (CM6) */
+.cm-header-1 {
+  font-size: 1.4em !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+.cm-header-2 {
+  font-size: 1.2em !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em;
+}
+.cm-header-3 { font-size: 1.05em !important; font-weight: 400 !important; }
+.cm-header-4 { font-size: 1.0em !important; font-weight: 400 !important; }
+.cm-header-5 { font-size: 0.95em !important; font-weight: 400 !important; }
+.cm-header-6 { font-size: 0.9em !important; font-weight: 400 !important; }
+
+/* Headings — reading view */
+.markdown-reading-view h1 {
+  font-size: 1.4em;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+.markdown-reading-view h2 {
+  font-size: 1.2em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.markdown-reading-view h3 { font-size: 1.05em; font-weight: 400; }
+.markdown-reading-view h4 { font-size: 1.0em; font-weight: 400; }
+.markdown-reading-view h5 { font-size: 0.95em; font-weight: 400; }
+.markdown-reading-view h6 { font-size: 0.9em; font-weight: 400; }
+
+/* Max content width — centered */
+.markdown-source-view.mod-cm6 .cm-contentContainer {
+  max-width: 680px;
+  margin: 0 auto;
+}
+.markdown-reading-view .markdown-preview-section {
+  max-width: 680px;
+  margin: 0 auto;
+}
