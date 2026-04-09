@@ -1,0 +1,55 @@
+/* ─── MONOTONE MINIMAL — switchboard vault ──────────────────────────── */
+
+/* ── 1. COLOR SYSTEM ─────────────────────────────────────────────────── */
+
+.theme-light {
+  --background-primary: #ffffff;
+  --background-secondary: #ffffff;
+  --background-secondary-alt: #f5f5f5;
+  --background-modifier-border: #e0e0e0;
+  --background-modifier-hover: rgba(0, 0, 0, 0.04);
+  --background-modifier-active-hover: rgba(0, 0, 0, 0.06);
+  --text-normal: #000000;
+  --text-muted: #666666;
+  --text-faint: #999999;
+  --text-on-accent: #ffffff;
+  --interactive-accent: #000000;
+  --interactive-accent-hover: #333333;
+  --link-color: #000000;
+  --link-color-hover: #000000;
+  --link-external-color: #000000;
+  --link-external-color-hover: #000000;
+  --tag-color: #666666;
+  --tag-background: transparent;
+  --tag-border-color: #cccccc;
+  --divider-color: #e0e0e0;
+  --color-accent: #000000;
+  --color-accent-1: #333333;
+  --color-accent-2: #555555;
+}
+
+.theme-dark {
+  --background-primary: #0a0a0a;
+  --background-secondary: #0a0a0a;
+  --background-secondary-alt: #141414;
+  --background-modifier-border: #2a2a2a;
+  --background-modifier-hover: rgba(255, 255, 255, 0.04);
+  --background-modifier-active-hover: rgba(255, 255, 255, 0.06);
+  --text-normal: #f0f0f0;
+  --text-muted: #888888;
+  --text-faint: #555555;
+  --text-on-accent: #000000;
+  --interactive-accent: #ffffff;
+  --interactive-accent-hover: #cccccc;
+  --link-color: #f0f0f0;
+  --link-color-hover: #ffffff;
+  --link-external-color: #f0f0f0;
+  --link-external-color-hover: #ffffff;
+  --tag-color: #888888;
+  --tag-background: transparent;
+  --tag-border-color: #333333;
+  --divider-color: #2a2a2a;
+  --color-accent: #ffffff;
+  --color-accent-1: #cccccc;
+  --color-accent-2: #aaaaaa;
+}
