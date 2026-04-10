@@ -44,7 +44,7 @@ describe("ElevenLabsClient", () => {
       voiceId: "custom-voice-123",
     });
 
-    const callUrl = fetchSpy.mock.calls[0][0] as string;
+    const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
     expect(callUrl).toContain("custom-voice-123");
   });
 

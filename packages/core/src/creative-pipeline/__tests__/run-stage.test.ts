@@ -152,8 +152,8 @@ describe("runStage", () => {
 
   it("returns placeholder for production (SP5)", async () => {
     const result = await runStage("production", baseInput);
-    expect(result).toHaveProperty("videos");
-    expect(result).toHaveProperty("staticFallbacks");
+    expect(result).toHaveProperty("tier");
+    expect(result).toHaveProperty("clips");
   });
 
   it("throws for unknown stage", async () => {
