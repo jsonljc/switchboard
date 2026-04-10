@@ -61,16 +61,20 @@ export class KlingClient {
     const taskId = submitData?.data?.task_id;
     if (!taskId) throw new Error("Kling API: no task_id in response");
 
-    // Poll for completion
-    return this.pollForResult(taskId);
+    // Poll for completion — use same endpoint path for polling
+    const mode = request.imageUrl ? "image2video" : "text2video";
+    return this.pollForResult(taskId, mode);
   }
 
-  private async pollForResult(taskId: string): Promise<GenerateVideoResult> {
+  private async pollForResult(
+    taskId: string,
+    mode: "text2video" | "image2video",
+  ): Promise<GenerateVideoResult> {
     const start = Date.now();
     while (Date.now() - start < this.timeoutMs) {
       await sleep(this.pollIntervalMs);
 
-      const res = await this.fetchWithRetry(`${KLING_API_BASE}/videos/text2video/${taskId}`, {
+      const res = await this.fetchWithRetry(`${KLING_API_BASE}/videos/${mode}/${taskId}`, {
         headers: this.headers(),
       });
       const data = await res.json();

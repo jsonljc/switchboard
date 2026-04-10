@@ -10,7 +10,7 @@ const ELEVENLABS_COST_PER_1K_CHARS = 0.3;
 const WHISPER_COST_PER_MINUTE = 0.006;
 const AVG_CHARS_PER_SCRIPT = 500;
 
-interface StoryboardForEstimate {
+export interface StoryboardForEstimate {
   storyboards: Array<{
     scenes: Array<{
       duration: number;
@@ -18,12 +18,12 @@ interface StoryboardForEstimate {
   }>;
 }
 
-interface TierEstimate {
+export interface TierEstimate {
   cost: number;
   description: string;
 }
 
-interface CostEstimates {
+export interface CostEstimates {
   basic: TierEstimate;
   pro: TierEstimate;
 }

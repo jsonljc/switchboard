@@ -95,8 +95,11 @@ export class VideoAssembler {
     const workDir = join(tmpdir(), `switchboard-ffmpeg-${randomUUID()}`);
     mkdirSync(workDir, { recursive: true });
 
-    // Write concat file
-    const concatContent = request.clips.map((c) => `file '${c.videoUrl}'`).join("\n");
+    // Download remote clips to local files for FFmpeg concat
+    const localClips = await this.downloadClips(request.clips, workDir);
+
+    // Write concat file with local paths
+    const concatContent = localClips.map((path) => `file '${path}'`).join("\n");
     writeFileSync(join(workDir, "concat.txt"), concatContent);
 
     // Write captions if provided
@@ -128,6 +131,24 @@ export class VideoAssembler {
       thumbnailUrl: thumbPath,
       duration: totalDuration,
     };
+  }
+
+  private async downloadClips(clips: ClipInput[], workDir: string): Promise<string[]> {
+    const paths: string[] = [];
+    for (let i = 0; i < clips.length; i++) {
+      const clip = clips[i];
+      if (clip.videoUrl.startsWith("http")) {
+        const res = await fetch(clip.videoUrl);
+        if (!res.ok) throw new Error(`Failed to download clip: ${res.status}`);
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const localPath = join(workDir, `clip-${i}.mp4`);
+        writeFileSync(localPath, buffer);
+        paths.push(localPath);
+      } else {
+        paths.push(clip.videoUrl); // Already a local path
+      }
+    }
+    return paths;
   }
 
   private exec(cmd: string, args: string[]): Promise<string> {

@@ -9,8 +9,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (action !== "continue" && action !== "stop") {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
+    const productionTier = body?.productionTier;
     const client = await getApiClient();
-    const data = await client.approveCreativeJobStage(id, action);
+    const data = await client.approveCreativeJobStage(id, action, productionTier);
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Request failed";

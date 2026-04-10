@@ -67,6 +67,7 @@ export interface CreativeJobSummary {
   currentStage: string;
   stoppedAt: string | null;
   stageOutputs: Record<string, unknown>;
+  productionTier: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -565,10 +566,17 @@ export class SwitchboardClient extends SwitchboardClientBase {
     }>(`/api/marketplace/creative-jobs/${jobId}/estimate`);
   }
 
-  async approveCreativeJobStage(id: string, action: "continue" | "stop") {
+  async approveCreativeJobStage(
+    id: string,
+    action: "continue" | "stop",
+    productionTier?: "basic" | "pro",
+  ) {
     return this.request<{ job: CreativeJobSummary; action: string }>(
       `/api/marketplace/creative-jobs/${id}/approve`,
-      { method: "POST", body: JSON.stringify({ action }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
+      },
     );
   }
 }
