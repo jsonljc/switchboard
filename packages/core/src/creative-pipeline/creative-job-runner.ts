@@ -84,6 +84,7 @@ export async function executeCreativePipeline(
         apiKey: llmConfig.apiKey,
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,
+        productionTier: job.productionTier ?? "basic",
       }),
     );
 

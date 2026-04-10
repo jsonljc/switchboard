@@ -275,3 +275,43 @@ function getAspectRatio(platform: string): "16:9" | "9:16" | "1:1" {
       return "9:16";
   }
 }
+
+/**
+ * Creates a prompt optimizer function that uses Claude to translate
+ * storyboard scene descriptions into tool-optimized prompts.
+ */
+export function createPromptOptimizer(_apiKey: string) {
+  return async (scene: SceneInput, context: PromptContext): Promise<OptimizedPrompt> => {
+    // For V1, use a template-based approach. Claude optimization can be added later.
+    const aspectRatio = getAspectRatio(context.platform);
+    const duration: 5 | 10 = scene.duration > 5 ? 10 : 5;
+
+    const prompt = [
+      `Professional advertisement video scene.`,
+      `Product: ${context.productDescription}.`,
+      `Scene: ${scene.description}.`,
+      `Visual style: ${scene.visualDirection}.`,
+      `High quality, commercial production, well-lit, sharp focus.`,
+    ].join(" ");
+
+    return {
+      tool: "kling" as const,
+      prompt,
+      negativePrompt: "blurry, low quality, distorted, watermark, text artifacts",
+      imageUrl: scene.referenceImageUrl ?? undefined,
+      duration,
+      aspectRatio,
+      cameraMotion: extractCameraMotion(scene.visualDirection),
+    };
+  };
+}
+
+function extractCameraMotion(visualDirection: string): string | undefined {
+  const lower = visualDirection.toLowerCase();
+  if (lower.includes("zoom in")) return "zoom_in";
+  if (lower.includes("zoom out")) return "zoom_out";
+  if (lower.includes("pan left")) return "pan_left";
+  if (lower.includes("pan right")) return "pan_right";
+  if (lower.includes("orbit")) return "orbit";
+  return undefined;
+}

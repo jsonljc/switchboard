@@ -1,10 +1,21 @@
 // packages/core/src/creative-pipeline/stages/run-stage.ts
-import { TrendAnalysisOutput, HookGeneratorOutput, ScriptWriterOutput } from "@switchboard/schemas";
-import type { StoryboardOutput, VideoProducerOutput } from "@switchboard/schemas";
+import {
+  TrendAnalysisOutput,
+  HookGeneratorOutput,
+  ScriptWriterOutput,
+  StoryboardOutput,
+} from "@switchboard/schemas";
+import type { VideoProducerOutput } from "@switchboard/schemas";
 import { runTrendAnalyzer } from "./trend-analyzer.js";
 import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
 import { runStoryboardBuilder } from "./storyboard-builder.js";
+import { runVideoProducer, createPromptOptimizer } from "./video-producer.js";
+import type { VideoProducerDeps } from "./video-producer.js";
+import { KlingClient } from "./kling-client.js";
+import { ElevenLabsClient } from "./elevenlabs-client.js";
+import { WhisperClient } from "./whisper-client.js";
+import { VideoAssembler } from "./video-assembler.js";
 import type { ImageGenerator } from "./image-generator.js";
 
 export interface StageInput {
@@ -21,6 +32,7 @@ export interface StageInput {
   apiKey: string;
   generateReferenceImages?: boolean;
   imageGenerator?: ImageGenerator;
+  productionTier?: string;
 }
 
 type StageOutput =
@@ -108,18 +120,43 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
       );
     }
 
-    case "production":
-      return {
-        tier: "basic" as const,
-        clips: [
-          {
-            sceneRef: "0",
-            videoUrl: "https://placeholder.example.com/video.mp4",
-            duration: 30,
-            generatedBy: "kling" as const,
-          },
-        ],
+    case "production": {
+      const rawStoryboard = input.previousOutputs["storyboard"];
+      const rawScripts = input.previousOutputs["scripts"];
+      if (!rawStoryboard || !rawScripts) {
+        throw new Error("production stage requires storyboard and scripts output");
+      }
+      const storyboard = StoryboardOutput.parse(rawStoryboard);
+      const scripts = ScriptWriterOutput.parse(rawScripts);
+      const tier = (input.productionTier ?? "basic") as "basic" | "pro";
+
+      const klingClient = new KlingClient({ apiKey: process.env.KLING_API_KEY ?? "" });
+      const deps: VideoProducerDeps = {
+        klingClient,
+        optimizePrompt: createPromptOptimizer(input.apiKey),
       };
+
+      if (tier === "pro") {
+        deps.elevenLabsClient = new ElevenLabsClient({
+          apiKey: process.env.ELEVENLABS_API_KEY ?? "",
+        });
+        deps.whisperClient = new WhisperClient({
+          apiKey: input.apiKey,
+        });
+        deps.videoAssembler = new VideoAssembler();
+      }
+
+      return runVideoProducer(
+        {
+          storyboard,
+          scripts,
+          tier,
+          platforms: input.brief.platforms,
+          productDescription: input.brief.productDescription,
+        },
+        deps,
+      );
+    }
 
     default:
       throw new Error(`Unknown stage: ${stage}`);

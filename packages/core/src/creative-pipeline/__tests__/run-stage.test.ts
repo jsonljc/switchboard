@@ -150,10 +150,10 @@ describe("runStage", () => {
     await expect(runStage("storyboard", baseInput)).rejects.toThrow("requires scripts output");
   });
 
-  it("returns placeholder for production (SP5)", async () => {
-    const result = await runStage("production", baseInput);
-    expect(result).toHaveProperty("tier");
-    expect(result).toHaveProperty("clips");
+  it("throws if production stage missing required outputs", async () => {
+    await expect(runStage("production", baseInput)).rejects.toThrow(
+      "requires storyboard and scripts output",
+    );
   });
 
   it("throws for unknown stage", async () => {
