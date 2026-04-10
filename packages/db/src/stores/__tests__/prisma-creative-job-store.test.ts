@@ -34,6 +34,7 @@ describe("PrismaCreativeJobStore", () => {
         productImages: [],
         references: [],
         pastPerformance: null,
+        generateReferenceImages: false,
       };
 
       const expected = {

@@ -13,6 +13,7 @@ interface CreateCreativeJobInput {
   productImages: string[];
   references: string[];
   pastPerformance: Record<string, unknown> | null;
+  generateReferenceImages: boolean;
 }
 
 interface CreativeJobFilters {
@@ -40,6 +41,7 @@ export class PrismaCreativeJobStore {
         pastPerformance: input.pastPerformance
           ? (input.pastPerformance as object)
           : Prisma.JsonNull,
+        generateReferenceImages: input.generateReferenceImages,
       },
     }) as unknown as CreativeJob;
   }

@@ -159,6 +159,7 @@ export const CreativeBriefInput = z.object({
   productImages: z.array(z.string()).default([]),
   references: z.array(z.string()).default([]),
   pastPerformance: z.record(z.unknown()).nullable().optional(),
+  generateReferenceImages: z.boolean().default(false),
 });
 export type CreativeBriefInput = z.infer<typeof CreativeBriefInput>;
 
@@ -176,6 +177,7 @@ export const CreativeJobSchema = z.object({
   productImages: z.array(z.string()),
   references: z.array(z.string()),
   pastPerformance: z.record(z.unknown()).nullable(),
+  generateReferenceImages: z.boolean(),
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),

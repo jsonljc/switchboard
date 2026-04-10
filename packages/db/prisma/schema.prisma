@@ -881,6 +881,7 @@ model CreativeJob {
   productImages       String[]   @default([])
   references          String[]   @default([])
   pastPerformance     Json?
+  generateReferenceImages  Boolean  @default(false)
 
   // Pipeline state
   currentStage    String   @default("trends")
