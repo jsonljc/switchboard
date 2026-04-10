@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bot } from "lucide-react";
+import { ArrowLeft, Bot, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ChannelsSection } from "@/components/marketplace/channels-section";
 import { TrustScoreBadge } from "@/components/marketplace/trust-score-badge";
 import { TrustHistoryChart } from "@/components/marketplace/trust-history-chart";
@@ -11,6 +13,7 @@ import { WorkLogList } from "@/components/marketplace/work-log-list";
 import { useTasks, useTrustProgression } from "@/hooks/use-marketplace";
 import { useCreativeJobs } from "@/hooks/use-creative-pipeline";
 import { CreativeJobCard } from "@/components/creative-pipeline/creative-job-card";
+import { BriefSubmissionSheet } from "@/components/creative-pipeline/brief-submission-sheet";
 import type { MarketplaceListing, TrustScoreBreakdown } from "@/lib/api-client";
 
 interface Connection {
@@ -22,6 +25,7 @@ interface Connection {
 
 interface DeploymentDetailClientProps {
   deploymentId: string;
+  listingId: string;
   connections: Connection[];
   listing: MarketplaceListing | null;
   trustBreakdown: TrustScoreBreakdown | null;
@@ -29,6 +33,7 @@ interface DeploymentDetailClientProps {
 
 export function DeploymentDetailClient({
   deploymentId,
+  listingId,
   connections,
   listing,
   trustBreakdown,
@@ -39,6 +44,7 @@ export function DeploymentDetailClient({
     listing?.id ?? "",
   );
   const { data: creativeJobs, isLoading: creativeJobsLoading } = useCreativeJobs(deploymentId);
+  const [briefSheetOpen, setBriefSheetOpen] = useState(false);
 
   const workLogTasks = (tasks ?? []).map((t) => ({
     id: t.id,
@@ -163,7 +169,15 @@ export function DeploymentDetailClient({
 
       {/* Creative Jobs */}
       <section>
-        <h2 className="section-label mb-4">Creative Jobs</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-label">Creative Jobs</h2>
+          {listingId && (
+            <Button variant="outline" size="sm" onClick={() => setBriefSheetOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              New Creative Job
+            </Button>
+          )}
+        </div>
         <div className="rounded-xl border border-border bg-surface p-6">
           {creativeJobsLoading ? (
             <div className="space-y-3">
@@ -181,6 +195,13 @@ export function DeploymentDetailClient({
           )}
         </div>
       </section>
+
+      <BriefSubmissionSheet
+        open={briefSheetOpen}
+        onOpenChange={setBriefSheetOpen}
+        deploymentId={deploymentId}
+        listingId={listingId}
+      />
     </div>
   );
 }
