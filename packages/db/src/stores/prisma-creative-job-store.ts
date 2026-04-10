@@ -91,4 +91,11 @@ export class PrismaCreativeJobStore {
       data: { stoppedAt },
     }) as unknown as CreativeJob;
   }
+
+  async updateProductionTier(id: string, tier: string): Promise<CreativeJob> {
+    return this.prisma.creativeJob.update({
+      where: { id },
+      data: { productionTier: tier },
+    }) as unknown as CreativeJob;
+  }
 }

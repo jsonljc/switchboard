@@ -200,4 +200,19 @@ describe("PrismaCreativeJobStore", () => {
       expect(result.stoppedAt).toBe("hooks");
     });
   });
+
+  describe("updateProductionTier", () => {
+    it("updates the productionTier field", async () => {
+      const mockJob = { id: "cj_1", productionTier: "pro" };
+      prisma.creativeJob.update.mockResolvedValue(mockJob);
+
+      const result = await store.updateProductionTier("cj_1", "pro");
+
+      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
+        where: { id: "cj_1" },
+        data: { productionTier: "pro" },
+      });
+      expect(result).toEqual(mockJob);
+    });
+  });
 });
