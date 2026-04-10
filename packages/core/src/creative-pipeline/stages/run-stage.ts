@@ -41,7 +41,7 @@ export function getNextStage(current: StageName): StageName | "complete" {
 
 /**
  * Dispatch a pipeline stage by name.
- * Stages 1-3 use Claude. Stages 4-5 remain as no-op stubs (SP4-SP5).
+ * Stages 1-4 use Claude. Stage 5 remains as a no-op stub (SP5).
  */
 export async function runStage(stage: string, input: StageInput): Promise<StageOutput> {
   switch (stage) {
