@@ -887,6 +887,7 @@ model CreativeJob {
   currentStage    String   @default("trends")
   stageOutputs    Json     @default("{}")
   stoppedAt       String?
+  productionTier  String?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

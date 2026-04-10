@@ -120,23 +120,50 @@ export const StoryboardOutput = z.object({
 });
 export type StoryboardOutput = z.infer<typeof StoryboardOutput>;
 
+export const ProductionTier = z.enum(["basic", "pro", "premium"]);
+export type ProductionTier = z.infer<typeof ProductionTier>;
+
 export const VideoProducerOutput = z.object({
-  videos: z.array(
+  tier: ProductionTier,
+  clips: z.array(
     z.object({
-      storyboardRef: z.string(),
+      sceneRef: z.string(),
       videoUrl: z.string(),
-      thumbnailUrl: z.string(),
-      format: z.string(),
       duration: z.number(),
-      platform: z.string(),
+      generatedBy: z.enum(["kling", "heygen"]),
     }),
   ),
-  staticFallbacks: z.array(
-    z.object({
-      imageUrl: z.string(),
-      platform: z.string(),
-    }),
-  ),
+  assembledVideos: z
+    .array(
+      z.object({
+        videoUrl: z.string(),
+        thumbnailUrl: z.string(),
+        format: z.string(),
+        duration: z.number(),
+        platform: z.string(),
+        hasVoiceover: z.boolean(),
+        hasCaptions: z.boolean(),
+        hasBackgroundMusic: z.boolean(),
+      }),
+    )
+    .optional(),
+  voiceover: z
+    .object({
+      audioUrl: z.string(),
+      duration: z.number(),
+      captionsUrl: z.string(),
+    })
+    .optional(),
+  errors: z
+    .array(
+      z.object({
+        stage: z.enum(["generation", "assembly", "voiceover", "captions"]),
+        scene: z.string().nullable(),
+        tool: z.string(),
+        message: z.string(),
+      }),
+    )
+    .optional(),
 });
 export type VideoProducerOutput = z.infer<typeof VideoProducerOutput>;
 
@@ -178,6 +205,7 @@ export const CreativeJobSchema = z.object({
   references: z.array(z.string()),
   pastPerformance: z.record(z.unknown()).nullable(),
   generateReferenceImages: z.boolean(),
+  productionTier: ProductionTier.nullable().optional(),
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),
