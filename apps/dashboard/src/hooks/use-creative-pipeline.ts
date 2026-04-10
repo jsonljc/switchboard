@@ -62,3 +62,33 @@ export function useApproveStage() {
     },
   });
 }
+
+export function useSubmitBrief() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: {
+      deploymentId: string;
+      listingId: string;
+      brief: {
+        productDescription: string;
+        targetAudience: string;
+        platforms: string[];
+        brandVoice?: string | null;
+        productImages?: string[];
+        references?: string[];
+        generateReferenceImages?: boolean;
+      };
+    }) => {
+      const res = await fetch("/api/dashboard/marketplace/creative-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed to create creative job");
+      return res.json();
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.creativeJobs.all });
+    },
+  });
+}
