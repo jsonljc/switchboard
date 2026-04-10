@@ -60,6 +60,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       productImages: brief.productImages,
       references: brief.references,
       pastPerformance: brief.pastPerformance ?? null,
+      generateReferenceImages: brief.generateReferenceImages ?? false,
     });
 
     // Fire Inngest event to start the pipeline

@@ -7,3 +7,6 @@ export { callClaude, extractJson } from "./stages/call-claude.js";
 export { runTrendAnalyzer, buildTrendPrompt } from "./stages/trend-analyzer.js";
 export { runHookGenerator, buildHookPrompt } from "./stages/hook-generator.js";
 export { runScriptWriter, buildScriptPrompt } from "./stages/script-writer.js";
+export { runStoryboardBuilder, buildStoryboardPrompt } from "./stages/storyboard-builder.js";
+export { DalleImageGenerator } from "./stages/image-generator.js";
+export type { ImageGenerator } from "./stages/image-generator.js";

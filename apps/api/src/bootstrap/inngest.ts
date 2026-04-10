@@ -17,11 +17,18 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
     );
   }
 
+  const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
+  if (!openaiApiKey) {
+    app.log.warn("Inngest: OPENAI_API_KEY not set — storyboard image generation will be skipped");
+  }
+
   const jobStore = new PrismaCreativeJobStore(app.prisma);
 
   await app.register(inngestFastify, {
     client: inngestClient,
-    functions: [createCreativeJobRunner(jobStore, { apiKey })],
+    functions: [
+      createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
+    ],
   });
 
   app.log.info("Inngest serve handler registered at /api/inngest");
