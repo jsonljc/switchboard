@@ -2,6 +2,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeCreativePipeline } from "../creative-job-runner.js";
 
+// Mock runStage so tests don't import the real stage implementations (which need Anthropic SDK)
+vi.mock("../stages/run-stage.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("../stages/run-stage.js")>("../stages/run-stage.js");
+  return {
+    ...actual,
+    runStage: vi.fn().mockResolvedValue({ placeholder: true }),
+  };
+});
+
 function createMockStep() {
   return {
     run: vi.fn((_name: string, fn: () => unknown) => fn()),
@@ -22,6 +32,7 @@ function createMockJobStore() {
 describe("executeCreativePipeline", () => {
   let step: ReturnType<typeof createMockStep>;
   let jobStore: ReturnType<typeof createMockJobStore>;
+  const llmConfig = { apiKey: "test-key" };
 
   const jobData = {
     jobId: "job_1",
@@ -61,7 +72,7 @@ describe("executeCreativePipeline", () => {
   });
 
   it("runs all 5 stages when buyer approves each", async () => {
-    await executeCreativePipeline(jobData, step as never, jobStore as never);
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
     // 1 load-job + 5 stage runs + 5 save calls = 11 step.run calls
     // + 4 waitForEvent calls (no wait after production)
@@ -75,7 +86,7 @@ describe("executeCreativePipeline", () => {
       .mockResolvedValueOnce({ data: { action: "continue" } })
       .mockResolvedValueOnce({ data: { action: "stop" } });
 
-    await executeCreativePipeline(jobData, step as never, jobStore as never);
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
     // 1 load-job + trends run + save + hooks run + save + stop = 6 step.runs
     expect(step.run).toHaveBeenCalledTimes(6);
@@ -87,7 +98,7 @@ describe("executeCreativePipeline", () => {
     // First wait returns null (timeout)
     step.waitForEvent.mockResolvedValueOnce(null);
 
-    await executeCreativePipeline(jobData, step as never, jobStore as never);
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
     // 1 load-job + trends run + save + stop = 4 step.runs, 1 waitForEvent
     expect(step.run).toHaveBeenCalledTimes(4);
@@ -98,7 +109,7 @@ describe("executeCreativePipeline", () => {
     jobStore.findById.mockResolvedValue(null);
 
     await expect(
-      executeCreativePipeline(jobData, step as never, jobStore as never),
+      executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig),
     ).rejects.toThrow("Creative job not found: job_1");
   });
 });

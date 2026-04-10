@@ -9,6 +9,10 @@ const STAGES: StageName[] = ["trends", "hooks", "scripts", "storyboard", "produc
 // 24-hour timeout for buyer approval between stages
 const APPROVAL_TIMEOUT = "24h";
 
+interface LLMConfig {
+  apiKey: string;
+}
+
 interface JobStore {
   findById(id: string): Promise<CreativeJob | null>;
   updateStage(
@@ -43,6 +47,7 @@ export async function executeCreativePipeline(
   eventData: JobEventData,
   step: StepTools,
   jobStore: JobStore,
+  llmConfig: LLMConfig,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
@@ -61,8 +66,10 @@ export async function executeCreativePipeline(
           productDescription: job.productDescription,
           targetAudience: job.targetAudience,
           platforms: job.platforms,
+          brandVoice: job.brandVoice,
         },
         previousOutputs: stageOutputs,
+        apiKey: llmConfig.apiKey,
       }),
     );
 
@@ -92,9 +99,9 @@ export async function executeCreativePipeline(
 
 /**
  * Inngest function definition. Wired into the serve handler in apps/api.
- * The jobStore dependency is injected at registration time (see inngest.ts bootstrap).
+ * The jobStore and llmConfig dependencies are injected at registration time.
  */
-export function createCreativeJobRunner(jobStore: JobStore) {
+export function createCreativeJobRunner(jobStore: JobStore, llmConfig: LLMConfig) {
   return inngestClient.createFunction(
     {
       id: "creative-job-runner",
@@ -103,7 +110,7 @@ export function createCreativeJobRunner(jobStore: JobStore) {
       triggers: [{ event: "creative-pipeline/job.submitted" }],
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
-      await executeCreativePipeline(event.data, step, jobStore);
+      await executeCreativePipeline(event.data, step, jobStore, llmConfig);
     },
   );
 }

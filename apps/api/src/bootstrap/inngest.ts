@@ -1,23 +1,27 @@
-import inngestFastify from "inngest/fastify";
+// apps/api/src/bootstrap/inngest.ts
 import type { FastifyInstance } from "fastify";
-import { inngestClient, createCreativeJobRunner } from "@switchboard/core/creative-pipeline";
+import inngestFastify from "inngest/fastify";
 import { PrismaCreativeJobStore } from "@switchboard/db";
+import { inngestClient, createCreativeJobRunner } from "@switchboard/core/creative-pipeline";
 
-/**
- * Register Inngest serve handler with Fastify.
- * Creates the /api/inngest endpoint that the Inngest dev server or cloud polls.
- */
 export async function registerInngest(app: FastifyInstance): Promise<void> {
   if (!app.prisma) {
     app.log.warn("Inngest: skipping registration — no database connection");
     return;
   }
 
+  const apiKey = process.env["ANTHROPIC_API_KEY"] ?? "";
+  if (!apiKey) {
+    app.log.warn(
+      "Inngest: ANTHROPIC_API_KEY not set — creative pipeline stages will fail at runtime",
+    );
+  }
+
   const jobStore = new PrismaCreativeJobStore(app.prisma);
 
   await app.register(inngestFastify, {
     client: inngestClient,
-    functions: [createCreativeJobRunner(jobStore)],
+    functions: [createCreativeJobRunner(jobStore, { apiKey })],
   });
 
   app.log.info("Inngest serve handler registered at /api/inngest");
