@@ -47,11 +47,19 @@ export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
 export function useApproveStage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ jobId, action }: { jobId: string; action: "continue" | "stop" }) => {
+    mutationFn: async ({
+      jobId,
+      action,
+      productionTier,
+    }: {
+      jobId: string;
+      action: "continue" | "stop";
+      productionTier?: "basic" | "pro";
+    }) => {
       const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${jobId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
       });
       if (!res.ok) throw new Error("Failed to update pipeline");
       const data = await res.json();
@@ -60,6 +68,22 @@ export function useApproveStage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.creativeJobs.all });
     },
+  });
+}
+
+export function useCostEstimate(jobId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.creativeJobs.estimate(jobId),
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${jobId}/estimate`);
+      if (!res.ok) throw new Error("Failed to fetch cost estimate");
+      const data = await res.json();
+      return data.estimates as {
+        basic: { cost: number; description: string };
+        pro: { cost: number; description: string };
+      } | null;
+    },
+    enabled: enabled && !!jobId,
   });
 }
 

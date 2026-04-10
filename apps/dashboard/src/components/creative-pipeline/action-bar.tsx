@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useApproveStage } from "@/hooks/use-creative-pipeline";
+import { TierSelection } from "./tier-selection";
 
 const STAGES = ["trends", "hooks", "scripts", "storyboard", "production"] as const;
 const STAGE_LABELS: Record<string, string> = {
@@ -34,6 +35,15 @@ export function ActionBar({ jobId, currentStage, stoppedAt }: ActionBarProps) {
 
   // Hide when job is complete or stopped
   if (currentStage === "complete" || stoppedAt) return null;
+
+  // When current stage is storyboard (Stage 4), show tier selection instead of normal buttons
+  if (currentStage === "storyboard") {
+    return (
+      <div className="sticky bottom-0 bg-background border-t border-border p-4">
+        <TierSelection jobId={jobId} />
+      </div>
+    );
+  }
 
   const handleApprove = () => {
     approveMutation.mutate(
