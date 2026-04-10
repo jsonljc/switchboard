@@ -25,6 +25,7 @@ import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import { registerRoutes } from "./bootstrap/routes.js";
+import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import type Redis from "ioredis";
 
@@ -436,6 +437,9 @@ export async function buildServer() {
 
   // Prometheus metrics endpoint (excluded from auth like /health)
   app.get("/metrics", metricsRoute);
+
+  // --- Inngest serve handler (creative pipeline orchestration) ---
+  await registerInngest(app);
 
   // --- Register all API routes ---
   await registerRoutes(app);
