@@ -12,6 +12,12 @@ vi.mock("../stages/run-stage.js", async () => {
   };
 });
 
+vi.mock("../stages/image-generator.js", () => ({
+  DalleImageGenerator: vi.fn(() => ({
+    generate: vi.fn().mockResolvedValue("https://dalle.example.com/mock.png"),
+  })),
+}));
+
 function createMockStep() {
   return {
     run: vi.fn((_name: string, fn: () => unknown) => fn()),
@@ -53,6 +59,7 @@ describe("executeCreativePipeline", () => {
     productImages: [],
     references: [],
     pastPerformance: null,
+    generateReferenceImages: false,
     currentStage: "trends",
     stageOutputs: {},
     stoppedAt: null,
@@ -111,5 +118,53 @@ describe("executeCreativePipeline", () => {
     await expect(
       executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig),
     ).rejects.toThrow("Creative job not found: job_1");
+  });
+
+  it("passes imageConfig through when job has generateReferenceImages", async () => {
+    const jobWithImages = { ...mockJob, generateReferenceImages: true };
+
+    // Reset the mock and set the new return value
+    jobStore.findById.mockReset();
+    jobStore.findById.mockResolvedValue(jobWithImages);
+
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear(); // Clear previous calls
+
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig, {
+      openaiApiKey: "test-openai-key",
+    });
+
+    // Verify that runStage was called with generateReferenceImages and imageGenerator
+    // All stages should receive these fields
+    const firstCall = mockRunStage.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    expect(firstCall?.[1]).toMatchObject({
+      generateReferenceImages: true,
+      imageGenerator: expect.objectContaining({ generate: expect.any(Function) }),
+    });
+  });
+
+  it("does not create imageGenerator when openaiApiKey not set", async () => {
+    const jobWithImages = { ...mockJob, generateReferenceImages: true };
+
+    // Reset the mock and set the new return value
+    jobStore.findById.mockReset();
+    jobStore.findById.mockResolvedValue(jobWithImages);
+
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear(); // Clear previous calls
+
+    await executeCreativePipeline(
+      jobData,
+      step as never,
+      jobStore as never,
+      llmConfig,
+      // no openaiApiKey
+    );
+
+    const firstCall = mockRunStage.mock.calls[0];
+    expect(firstCall?.[1]?.imageGenerator).toBeUndefined();
   });
 });

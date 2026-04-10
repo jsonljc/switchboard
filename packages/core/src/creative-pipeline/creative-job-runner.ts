@@ -2,12 +2,18 @@
 import { inngestClient } from "./inngest-client.js";
 import { runStage, getNextStage, STAGE_ORDER } from "./stages/run-stage.js";
 import type { CreativeJob } from "@switchboard/schemas";
+import { DalleImageGenerator } from "./stages/image-generator.js";
+import type { ImageGenerator } from "./stages/image-generator.js";
 
 // 24-hour timeout for buyer approval between stages
 const APPROVAL_TIMEOUT = "24h";
 
 interface LLMConfig {
   apiKey: string;
+}
+
+interface ImageConfig {
+  openaiApiKey?: string;
 }
 
 interface JobStore {
@@ -45,11 +51,18 @@ export async function executeCreativePipeline(
   step: StepTools,
   jobStore: JobStore,
   llmConfig: LLMConfig,
+  imageConfig?: ImageConfig,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
   if (!job) {
     throw new Error(`Creative job not found: ${eventData.jobId}`);
+  }
+
+  // Create image generator if configured and job requests it
+  let imageGenerator: ImageGenerator | undefined;
+  if (imageConfig?.openaiApiKey && job.generateReferenceImages) {
+    imageGenerator = new DalleImageGenerator(imageConfig.openaiApiKey);
   }
 
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
@@ -65,9 +78,12 @@ export async function executeCreativePipeline(
           platforms: job.platforms,
           brandVoice: job.brandVoice,
           references: job.references,
+          productImages: job.productImages,
         },
         previousOutputs: stageOutputs,
         apiKey: llmConfig.apiKey,
+        generateReferenceImages: job.generateReferenceImages,
+        imageGenerator,
       }),
     );
 
@@ -99,7 +115,11 @@ export async function executeCreativePipeline(
  * Inngest function definition. Wired into the serve handler in apps/api.
  * The jobStore and llmConfig dependencies are injected at registration time.
  */
-export function createCreativeJobRunner(jobStore: JobStore, llmConfig: LLMConfig) {
+export function createCreativeJobRunner(
+  jobStore: JobStore,
+  llmConfig: LLMConfig,
+  imageConfig?: ImageConfig,
+) {
   return inngestClient.createFunction(
     {
       id: "creative-job-runner",
@@ -108,7 +128,7 @@ export function createCreativeJobRunner(jobStore: JobStore, llmConfig: LLMConfig
       triggers: [{ event: "creative-pipeline/job.submitted" }],
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
-      await executeCreativePipeline(event.data, step, jobStore, llmConfig);
+      await executeCreativePipeline(event.data, step, jobStore, llmConfig, imageConfig);
     },
   );
 }
