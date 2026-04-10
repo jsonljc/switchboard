@@ -29,7 +29,7 @@ export class DalleImageGenerator implements ImageGenerator {
       style: "vivid",
     });
 
-    const imageData = response.data[0];
+    const imageData = response.data?.[0];
     if (!imageData) {
       throw new Error("No image data returned from DALL-E");
     }
