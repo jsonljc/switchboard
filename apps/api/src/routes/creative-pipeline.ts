@@ -143,6 +143,10 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Creative job not found" });
     }
 
+    if (job.currentStage === "complete" || job.stoppedAt) {
+      return reply.code(409).send({ error: "Job is not awaiting approval" });
+    }
+
     if (parsed.data.action === "stop") {
       const stopped = await jobStore.stop(id, job.currentStage);
 

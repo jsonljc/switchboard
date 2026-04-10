@@ -7,7 +7,7 @@ import type { CreativeJob } from "@switchboard/schemas";
 const STAGES: StageName[] = ["trends", "hooks", "scripts", "storyboard", "production"];
 
 // 24-hour timeout for buyer approval between stages
-const APPROVAL_TIMEOUT_MS = "24h";
+const APPROVAL_TIMEOUT = "24h";
 
 interface JobStore {
   findById(id: string): Promise<CreativeJob | null>;
@@ -78,13 +78,13 @@ export async function executeCreativePipeline(
     // Wait for buyer approval before proceeding
     const approval = await step.waitForEvent(`wait-approval-${stage}`, {
       event: "creative-pipeline/stage.approved",
-      timeout: APPROVAL_TIMEOUT_MS,
+      timeout: APPROVAL_TIMEOUT,
       match: "data.jobId",
     });
 
     // Timeout or explicit stop → halt pipeline
     if (!approval || approval.data.action === "stop") {
-      await jobStore.stop(job.id, stage);
+      await step.run(`stop-at-${stage}`, () => jobStore.stop(job.id, stage));
       return;
     }
   }

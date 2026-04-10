@@ -77,8 +77,8 @@ describe("executeCreativePipeline", () => {
 
     await executeCreativePipeline(jobData, step as never, jobStore as never);
 
-    // 1 load-job + trends run + save + hooks run + save = 5 step.runs
-    expect(step.run).toHaveBeenCalledTimes(5);
+    // 1 load-job + trends run + save + hooks run + save + stop = 6 step.runs
+    expect(step.run).toHaveBeenCalledTimes(6);
     expect(step.waitForEvent).toHaveBeenCalledTimes(2);
     expect(jobStore.stop).toHaveBeenCalledWith("job_1", "hooks");
   });
@@ -89,8 +89,8 @@ describe("executeCreativePipeline", () => {
 
     await executeCreativePipeline(jobData, step as never, jobStore as never);
 
-    // 1 load-job + trends run + save = 3 step.runs, 1 waitForEvent
-    expect(step.run).toHaveBeenCalledTimes(3);
+    // 1 load-job + trends run + save + stop = 4 step.runs, 1 waitForEvent
+    expect(step.run).toHaveBeenCalledTimes(4);
     expect(jobStore.stop).toHaveBeenCalledWith("job_1", "trends");
   });
 
