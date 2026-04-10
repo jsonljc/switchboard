@@ -121,6 +121,7 @@
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",
     "inngest": "^4.2.0",
+    "openai": "^6.34.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
