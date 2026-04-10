@@ -556,6 +556,15 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ job: CreativeJobSummary }>(`/api/marketplace/creative-jobs/${id}`);
   }
 
+  async getCostEstimate(jobId: string) {
+    return this.request<{
+      estimates: {
+        basic: { cost: number; description: string };
+        pro: { cost: number; description: string };
+      } | null;
+    }>(`/api/marketplace/creative-jobs/${jobId}/estimate`);
+  }
+
   async approveCreativeJobStage(id: string, action: "continue" | "stop") {
     return this.request<{ job: CreativeJobSummary; action: string }>(
       `/api/marketplace/creative-jobs/${id}/approve`,
