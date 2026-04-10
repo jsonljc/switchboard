@@ -110,17 +110,15 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
 
     case "production":
       return {
-        videos: [
+        tier: "basic" as const,
+        clips: [
           {
-            storyboardRef: "0",
+            sceneRef: "0",
             videoUrl: "https://placeholder.example.com/video.mp4",
-            thumbnailUrl: "https://placeholder.example.com/thumb.jpg",
-            format: "9:16",
             duration: 30,
-            platform: "meta",
+            generatedBy: "kling" as const,
           },
         ],
-        staticFallbacks: [],
       };
 
     default:
