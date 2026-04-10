@@ -1,93 +1,120 @@
 // packages/core/src/creative-pipeline/__tests__/run-stage.test.ts
-import { describe, it, expect } from "vitest";
-import { runStage } from "../stages/run-stage.js";
+import { describe, it, expect, vi } from "vitest";
+import { runStage, getNextStage } from "../stages/run-stage.js";
+import type { TrendAnalysisOutput, HookGeneratorOutput } from "@switchboard/schemas";
+
+// Mock callClaude so stages 1-3 don't hit real API
+vi.mock("../stages/call-claude.js", () => ({
+  callClaude: vi.fn(),
+}));
+
+const baseBrief = {
+  productDescription: "AI tool",
+  targetAudience: "SMBs",
+  platforms: ["meta"] as string[],
+  brandVoice: null,
+};
+
+const baseInput = {
+  jobId: "job_1",
+  brief: baseBrief,
+  previousOutputs: {} as Record<string, unknown>,
+  apiKey: "test-key",
+};
+
+const mockTrendsOutput: TrendAnalysisOutput = {
+  angles: [{ theme: "T", motivator: "M", platformFit: "meta", rationale: "R" }],
+  audienceInsights: {
+    awarenessLevel: "problem_aware",
+    topDrivers: ["d"],
+    objections: ["o"],
+  },
+  trendSignals: [{ platform: "meta", trend: "t", relevance: "r" }],
+};
+
+const mockHooksOutput: HookGeneratorOutput = {
+  hooks: [{ angleRef: "0", text: "Hook", type: "question", platformScore: 8, rationale: "R" }],
+  topCombos: [{ angleRef: "0", hookRef: "0", score: 8 }],
+};
 
 describe("runStage", () => {
-  it("returns placeholder output for trends stage", async () => {
-    const result = await runStage("trends", {
-      jobId: "job_1",
-      brief: {
-        productDescription: "AI tool",
-        targetAudience: "SMBs",
-        platforms: ["meta"],
-      },
-      previousOutputs: {},
-    });
+  it("runs trends stage via Claude", async () => {
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue(mockTrendsOutput);
+
+    const result = await runStage("trends", baseInput);
 
     expect(result).toHaveProperty("angles");
     expect(result).toHaveProperty("audienceInsights");
     expect(result).toHaveProperty("trendSignals");
   });
 
-  it("returns placeholder output for hooks stage", async () => {
+  it("runs hooks stage via Claude with trends output", async () => {
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue(mockHooksOutput);
+
     const result = await runStage("hooks", {
-      jobId: "job_1",
-      brief: {
-        productDescription: "AI tool",
-        targetAudience: "SMBs",
-        platforms: ["meta"],
-      },
-      previousOutputs: {},
+      ...baseInput,
+      previousOutputs: { trends: mockTrendsOutput },
     });
 
     expect(result).toHaveProperty("hooks");
     expect(result).toHaveProperty("topCombos");
   });
 
-  it("returns placeholder output for scripts stage", async () => {
+  it("throws if hooks stage missing trends output", async () => {
+    await expect(runStage("hooks", baseInput)).rejects.toThrow("requires trends output");
+  });
+
+  it("runs scripts stage via Claude with trends + hooks output", async () => {
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
+      scripts: [
+        {
+          hookRef: "0",
+          fullScript: "Script",
+          timing: [{ section: "hook", startSec: 0, endSec: 3, content: "Hook" }],
+          format: "feed_video",
+          platform: "meta",
+          productionNotes: "Notes",
+        },
+      ],
+    });
+
     const result = await runStage("scripts", {
-      jobId: "job_1",
-      brief: {
-        productDescription: "AI tool",
-        targetAudience: "SMBs",
-        platforms: ["meta"],
-      },
-      previousOutputs: {},
+      ...baseInput,
+      previousOutputs: { trends: mockTrendsOutput, hooks: mockHooksOutput },
     });
 
     expect(result).toHaveProperty("scripts");
   });
 
-  it("returns placeholder output for storyboard stage", async () => {
-    const result = await runStage("storyboard", {
-      jobId: "job_1",
-      brief: {
-        productDescription: "AI tool",
-        targetAudience: "SMBs",
-        platforms: ["meta"],
-      },
-      previousOutputs: {},
-    });
+  it("throws if scripts stage missing required outputs", async () => {
+    await expect(runStage("scripts", baseInput)).rejects.toThrow(
+      "requires trends and hooks output",
+    );
+  });
 
+  it("returns placeholder for storyboard (SP4)", async () => {
+    const result = await runStage("storyboard", baseInput);
     expect(result).toHaveProperty("storyboards");
   });
 
-  it("returns placeholder output for production stage", async () => {
-    const result = await runStage("production", {
-      jobId: "job_1",
-      brief: {
-        productDescription: "AI tool",
-        targetAudience: "SMBs",
-        platforms: ["meta"],
-      },
-      previousOutputs: {},
-    });
-
+  it("returns placeholder for production (SP5)", async () => {
+    const result = await runStage("production", baseInput);
     expect(result).toHaveProperty("videos");
     expect(result).toHaveProperty("staticFallbacks");
   });
 
   it("throws for unknown stage", async () => {
-    await expect(
-      runStage("unknown" as never, {
-        jobId: "job_1",
-        brief: {
-          productDescription: "AI tool",
-          targetAudience: "SMBs",
-          platforms: ["meta"],
-        },
-        previousOutputs: {},
-      }),
-    ).rejects.toThrow("Unknown stage: unknown");
+    await expect(runStage("unknown" as never, baseInput)).rejects.toThrow("Unknown stage: unknown");
   });
+});
+
+describe("getNextStage", () => {
+  it("returns hooks after trends", () => expect(getNextStage("trends")).toBe("hooks"));
+  it("returns scripts after hooks", () => expect(getNextStage("hooks")).toBe("scripts"));
+  it("returns storyboard after scripts", () => expect(getNextStage("scripts")).toBe("storyboard"));
+  it("returns complete after production", () =>
+    expect(getNextStage("production")).toBe("complete"));
 });

@@ -6,6 +6,9 @@ import type {
   StoryboardOutput,
   VideoProducerOutput,
 } from "@switchboard/schemas";
+import { runTrendAnalyzer } from "./trend-analyzer.js";
+import { runHookGenerator } from "./hook-generator.js";
+import { runScriptWriter } from "./script-writer.js";
 
 export interface StageInput {
   jobId: string;
@@ -13,8 +16,10 @@ export interface StageInput {
     productDescription: string;
     targetAudience: string;
     platforms: string[];
+    brandVoice?: string | null;
   };
   previousOutputs: Record<string, unknown>;
+  apiKey: string;
 }
 
 type StageOutput =
@@ -34,56 +39,51 @@ export function getNextStage(current: StageName): StageName | "complete" {
 }
 
 /**
- * Dispatch a pipeline stage by name. SP2: all stages return placeholder output.
- * SP3+ will replace each case with real Claude/API calls.
+ * Dispatch a pipeline stage by name.
+ * Stages 1-3 use Claude. Stages 4-5 remain as no-op stubs (SP4-SP5).
  */
-export async function runStage(stage: string, _input: StageInput): Promise<StageOutput> {
+export async function runStage(stage: string, input: StageInput): Promise<StageOutput> {
   switch (stage) {
     case "trends":
-      return {
-        angles: [
-          {
-            theme: "[placeholder] Trend theme",
-            motivator: "placeholder",
-            platformFit: "meta",
-            rationale: "SP2 no-op — real analysis in SP3",
-          },
-        ],
-        audienceInsights: {
-          awarenessLevel: "problem_aware" as const,
-          topDrivers: ["placeholder"],
-          objections: ["placeholder"],
+      return runTrendAnalyzer(
+        {
+          productDescription: input.brief.productDescription,
+          targetAudience: input.brief.targetAudience,
+          platforms: input.brief.platforms,
         },
-        trendSignals: [{ platform: "meta", trend: "placeholder", relevance: "SP2 no-op" }],
-      };
+        input.apiKey,
+      );
 
-    case "hooks":
-      return {
-        hooks: [
-          {
-            angleRef: "0",
-            text: "[placeholder] Hook text",
-            type: "pattern_interrupt" as const,
-            platformScore: 0,
-            rationale: "SP2 no-op — real generation in SP3",
-          },
-        ],
-        topCombos: [{ angleRef: "0", hookRef: "0", score: 0 }],
-      };
+    case "hooks": {
+      const trendsOutput = input.previousOutputs["trends"] as TrendAnalysisOutput;
+      if (!trendsOutput) throw new Error("hooks stage requires trends output");
+      return runHookGenerator(
+        {
+          productDescription: input.brief.productDescription,
+          targetAudience: input.brief.targetAudience,
+          platforms: input.brief.platforms,
+        },
+        trendsOutput,
+        input.apiKey,
+      );
+    }
 
-    case "scripts":
-      return {
-        scripts: [
-          {
-            hookRef: "0",
-            fullScript: "[placeholder] Full script content",
-            timing: [{ section: "hook", startSec: 0, endSec: 3, content: "placeholder" }],
-            format: "feed_video",
-            platform: "meta",
-            productionNotes: "SP2 no-op — real script writing in SP3",
-          },
-        ],
-      };
+    case "scripts": {
+      const trends = input.previousOutputs["trends"] as TrendAnalysisOutput;
+      const hooks = input.previousOutputs["hooks"] as HookGeneratorOutput;
+      if (!trends || !hooks) throw new Error("scripts stage requires trends and hooks output");
+      return runScriptWriter(
+        {
+          productDescription: input.brief.productDescription,
+          targetAudience: input.brief.targetAudience,
+          platforms: input.brief.platforms,
+          brandVoice: input.brief.brandVoice ?? null,
+        },
+        trends,
+        hooks,
+        input.apiKey,
+      );
+    }
 
     case "storyboard":
       return {
@@ -93,7 +93,7 @@ export async function runStage(stage: string, _input: StageInput): Promise<Stage
             scenes: [
               {
                 sceneNumber: 1,
-                description: "[placeholder] Scene description",
+                description: "[placeholder] Scene description — SP4",
                 visualDirection: "placeholder",
                 duration: 3,
                 textOverlay: null,
