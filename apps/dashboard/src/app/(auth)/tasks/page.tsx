@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasks, useReviewTask } from "@/hooks/use-marketplace";
 import { TaskCard } from "@/components/tasks/task-card";
+import { CreativeTaskCard } from "@/components/tasks/creative-task-card";
 import { TaskReviewDialog } from "@/components/tasks/task-review-dialog";
 import { cn } from "@/lib/utils";
 import type { MarketplaceTask } from "@/lib/api-client";
@@ -113,14 +114,17 @@ export default function TasksPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {displayed.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onApprove={(t) => setDialog({ open: true, action: "approved", task: t })}
-              onReject={(t) => setDialog({ open: true, action: "rejected", task: t })}
-            />
-          ))}
+          {displayed.map((task) => {
+            const Card = task.category === "creative_strategy" ? CreativeTaskCard : TaskCard;
+            return (
+              <Card
+                key={task.id}
+                task={task}
+                onApprove={(t) => setDialog({ open: true, action: "approved", task: t })}
+                onReject={(t) => setDialog({ open: true, action: "rejected", task: t })}
+              />
+            );
+          })}
         </div>
       )}
 
