@@ -4,6 +4,8 @@ import type { StoryboardOutput, VideoProducerOutput } from "@switchboard/schemas
 import { runTrendAnalyzer } from "./trend-analyzer.js";
 import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
+import { runStoryboardBuilder } from "./storyboard-builder.js";
+import type { ImageGenerator } from "./image-generator.js";
 
 export interface StageInput {
   jobId: string;
@@ -13,9 +15,12 @@ export interface StageInput {
     platforms: string[];
     brandVoice?: string | null;
     references?: string[];
+    productImages?: string[];
   };
   previousOutputs: Record<string, unknown>;
   apiKey: string;
+  generateReferenceImages?: boolean;
+  imageGenerator?: ImageGenerator;
 }
 
 type StageOutput =
@@ -86,24 +91,22 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
       );
     }
 
-    case "storyboard":
-      return {
-        storyboards: [
-          {
-            scriptRef: "0",
-            scenes: [
-              {
-                sceneNumber: 1,
-                description: "[placeholder] Scene description — SP4",
-                visualDirection: "placeholder",
-                duration: 3,
-                textOverlay: null,
-                referenceImageUrl: null,
-              },
-            ],
-          },
-        ],
-      };
+    case "storyboard": {
+      const rawScripts = input.previousOutputs["scripts"];
+      if (!rawScripts) throw new Error("storyboard stage requires scripts output");
+      const scripts = ScriptWriterOutput.parse(rawScripts);
+      return runStoryboardBuilder(
+        {
+          productDescription: input.brief.productDescription,
+          targetAudience: input.brief.targetAudience,
+          platforms: input.brief.platforms,
+          productImages: input.brief.productImages,
+        },
+        scripts,
+        input.apiKey,
+        input.generateReferenceImages ? input.imageGenerator : undefined,
+      );
+    }
 
     case "production":
       return {
