@@ -5,7 +5,9 @@ import { executeCreativePipeline } from "../creative-job-runner.js";
 function createMockStep() {
   return {
     run: vi.fn((_name: string, fn: () => unknown) => fn()),
-    waitForEvent: vi.fn(() => ({ data: { action: "continue" } })),
+    waitForEvent: vi.fn(
+      () => ({ data: { action: "continue" } }) as { data: { action: string } } | null,
+    ),
   };
 }
 

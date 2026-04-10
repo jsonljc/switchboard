@@ -30,7 +30,7 @@ export type StageName = (typeof STAGE_ORDER)[number];
 export function getNextStage(current: StageName): StageName | "complete" {
   const idx = STAGE_ORDER.indexOf(current);
   if (idx === -1 || idx === STAGE_ORDER.length - 1) return "complete";
-  return STAGE_ORDER[idx + 1];
+  return STAGE_ORDER[idx + 1] as StageName;
 }
 
 /**

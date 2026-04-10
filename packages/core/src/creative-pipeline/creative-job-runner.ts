@@ -100,14 +100,10 @@ export function createCreativeJobRunner(jobStore: JobStore) {
       id: "creative-job-runner",
       name: "Creative Pipeline Job Runner",
       retries: 3,
+      triggers: [{ event: "creative-pipeline/job.submitted" }],
     },
-    { event: "creative-pipeline/job.submitted" },
-    async ({ event, step }) => {
-      await executeCreativePipeline(
-        event.data as JobEventData,
-        step as unknown as StepTools,
-        jobStore,
-      );
+    async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
+      await executeCreativePipeline(event.data, step, jobStore);
     },
   );
 }
