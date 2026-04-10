@@ -101,6 +101,10 @@
     "./agent-runtime": {
       "types": "./dist/agent-runtime/index.d.ts",
       "import": "./dist/agent-runtime/index.js"
+    },
+    "./creative-pipeline": {
+      "types": "./dist/creative-pipeline/index.d.ts",
+      "import": "./dist/creative-pipeline/index.js"
     }
   },
   "scripts": {
