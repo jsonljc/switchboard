@@ -116,6 +116,7 @@
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",
+    "inngest": "^4.2.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
