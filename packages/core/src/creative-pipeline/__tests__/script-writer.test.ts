@@ -120,8 +120,8 @@ describe("runScriptWriter", () => {
     );
 
     expect(result.scripts).toHaveLength(1);
-    expect(result.scripts[0].timing).toHaveLength(5);
-    expect(result.scripts[0].format).toBe("feed_video");
+    expect(result.scripts[0]?.timing).toHaveLength(5);
+    expect(result.scripts[0]?.format).toBe("feed_video");
 
     expect(mockCallClaude).toHaveBeenCalledWith(
       expect.objectContaining({

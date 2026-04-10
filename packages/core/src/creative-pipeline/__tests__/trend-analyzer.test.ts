@@ -64,7 +64,7 @@ describe("runTrendAnalyzer", () => {
     );
 
     expect(result.angles).toHaveLength(1);
-    expect(result.angles[0].theme).toBe("Time savings");
+    expect(result.angles[0]?.theme).toBe("Time savings");
     expect(result.audienceInsights.awarenessLevel).toBe("problem_aware");
     expect(result.trendSignals).toHaveLength(1);
 

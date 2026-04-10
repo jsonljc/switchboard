@@ -21,7 +21,7 @@ export interface CallClaudeOptions<T extends z.ZodType> {
 export function extractJson(text: string): string {
   // Try markdown code fence first
   const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) return fenceMatch[1].trim();
+  if (fenceMatch?.[1]) return fenceMatch[1].trim();
 
   // Try raw JSON object (greedy match from first { to last })
   const jsonMatch = text.match(/\{[\s\S]*\}/);

@@ -3,16 +3,14 @@ import { describe, it, expect, vi } from "vitest";
 import { callClaude, extractJson } from "../stages/call-claude.js";
 import { z } from "zod";
 
+const mockCreate = vi.fn();
+
 // Mock the Anthropic SDK
-vi.mock("@anthropic-ai/sdk", () => {
-  const mockCreate = vi.fn();
-  return {
-    default: vi.fn(() => ({
-      messages: { create: mockCreate },
-    })),
-    __mockCreate: mockCreate,
-  };
-});
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: vi.fn(() => ({
+    messages: { create: mockCreate },
+  })),
+}));
 
 describe("extractJson", () => {
   it("extracts JSON from markdown code fence", () => {
@@ -39,8 +37,6 @@ describe("callClaude", () => {
   const TestSchema = z.object({ name: z.string(), score: z.number() });
 
   it("sends prompt and parses valid response", async () => {
-    const { __mockCreate } = await import("@anthropic-ai/sdk");
-    const mockCreate = __mockCreate as ReturnType<typeof vi.fn>;
     mockCreate.mockResolvedValue({
       content: [{ type: "text", text: '{"name": "test", "score": 42}' }],
     });
@@ -66,8 +62,6 @@ describe("callClaude", () => {
   });
 
   it("handles response wrapped in code fence", async () => {
-    const { __mockCreate } = await import("@anthropic-ai/sdk");
-    const mockCreate = __mockCreate as ReturnType<typeof vi.fn>;
     mockCreate.mockResolvedValue({
       content: [{ type: "text", text: '```json\n{"name": "fenced", "score": 1}\n```' }],
     });
@@ -83,8 +77,6 @@ describe("callClaude", () => {
   });
 
   it("throws on schema validation failure", async () => {
-    const { __mockCreate } = await import("@anthropic-ai/sdk");
-    const mockCreate = __mockCreate as ReturnType<typeof vi.fn>;
     mockCreate.mockResolvedValue({
       content: [{ type: "text", text: '{"name": "test"}' }], // missing score
     });
@@ -100,8 +92,6 @@ describe("callClaude", () => {
   });
 
   it("throws on empty response", async () => {
-    const { __mockCreate } = await import("@anthropic-ai/sdk");
-    const mockCreate = __mockCreate as ReturnType<typeof vi.fn>;
     mockCreate.mockResolvedValue({
       content: [],
     });

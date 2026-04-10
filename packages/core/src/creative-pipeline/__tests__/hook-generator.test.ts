@@ -69,7 +69,7 @@ describe("runHookGenerator", () => {
     );
 
     expect(result.hooks).toHaveLength(1);
-    expect(result.hooks[0].type).toBe("question");
+    expect(result.hooks[0]?.type).toBe("question");
     expect(result.topCombos).toHaveLength(1);
 
     expect(mockCallClaude).toHaveBeenCalledWith(
