@@ -6,6 +6,7 @@ interface TrendBrief {
   productDescription: string;
   targetAudience: string;
   platforms: string[];
+  references?: string[];
 }
 
 export function buildTrendPrompt(brief: TrendBrief): {
@@ -26,7 +27,7 @@ Your job is to analyze the provided brief and return a JSON object with exactly 
     }
   ],
   "audienceInsights": {
-    "awarenessLevel": "unaware" | "problem_aware" | "solution_aware" | "product_aware" | "most_aware",
+    "awarenessLevel": "problem_aware",  // one of: unaware, problem_aware, solution_aware, product_aware, most_aware
     "topDrivers": ["Top 3-5 purchase drivers"],
     "objections": ["Top 3-5 objections or hesitations"]
   },
@@ -46,13 +47,17 @@ Guidelines:
 - Be specific and actionable — avoid generic advice
 - Respond ONLY with the JSON object, no surrounding text`;
 
-  const userMessage = `Analyze this brief and produce creative strategy output:
+  let userMessage = `Analyze this brief and produce creative strategy output:
 
 **Product:** ${brief.productDescription}
 
 **Target Audience:** ${brief.targetAudience}
 
 **Platforms:** ${brief.platforms.join(", ")}`;
+
+  if (brief.references && brief.references.length > 0) {
+    userMessage += `\n\n**References (competitor ads, trend links, inspiration):**\n${brief.references.map((r) => `- ${r}`).join("\n")}`;
+  }
 
   return { systemPrompt, userMessage };
 }

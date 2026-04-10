@@ -76,21 +76,6 @@ describe("callClaude", () => {
     expect(result).toEqual({ name: "fenced", score: 1 });
   });
 
-  it("throws on schema validation failure", async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: "text", text: '{"name": "test"}' }], // missing score
-    });
-
-    await expect(
-      callClaude({
-        apiKey: "test-key",
-        systemPrompt: "Test",
-        userMessage: "Test",
-        schema: TestSchema,
-      }),
-    ).rejects.toThrow();
-  });
-
   it("throws on empty response", async () => {
     mockCreate.mockResolvedValue({
       content: [],
@@ -104,5 +89,48 @@ describe("callClaude", () => {
         schema: TestSchema,
       }),
     ).rejects.toThrow("Empty response from Claude");
+  });
+
+  it("throws descriptive error on malformed JSON", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: "{not valid json}" }],
+    });
+
+    await expect(
+      callClaude({
+        apiKey: "test-key",
+        systemPrompt: "Test",
+        userMessage: "Test",
+        schema: TestSchema,
+      }),
+    ).rejects.toThrow("Failed to parse JSON from Claude response");
+  });
+
+  it("throws descriptive error on schema validation failure", async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: "text", text: '{"name": "test"}' }], // missing score
+    });
+
+    await expect(
+      callClaude({
+        apiKey: "test-key",
+        systemPrompt: "Test",
+        userMessage: "Test",
+        schema: TestSchema,
+      }),
+    ).rejects.toThrow("Claude response failed schema validation");
+  });
+
+  it("propagates API errors from Anthropic SDK", async () => {
+    mockCreate.mockRejectedValue(new Error("401 Unauthorized"));
+
+    await expect(
+      callClaude({
+        apiKey: "bad-key",
+        systemPrompt: "Test",
+        userMessage: "Test",
+        schema: TestSchema,
+      }),
+    ).rejects.toThrow("401 Unauthorized");
   });
 });

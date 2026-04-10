@@ -74,6 +74,12 @@ export const HookGeneratorOutput = z.object({
 });
 export type HookGeneratorOutput = z.infer<typeof HookGeneratorOutput>;
 
+export const AdFormat = z.enum(["feed_video", "stories", "skippable", "shorts"]);
+export type AdFormat = z.infer<typeof AdFormat>;
+
+export const ScriptSection = z.enum(["hook", "problem", "solution", "proof", "cta"]);
+export type ScriptSection = z.infer<typeof ScriptSection>;
+
 export const ScriptWriterOutput = z.object({
   scripts: z.array(
     z.object({
@@ -81,13 +87,13 @@ export const ScriptWriterOutput = z.object({
       fullScript: z.string(),
       timing: z.array(
         z.object({
-          section: z.string(),
+          section: ScriptSection,
           startSec: z.number(),
           endSec: z.number(),
           content: z.string(),
         }),
       ),
-      format: z.string(),
+      format: AdFormat,
       platform: z.string(),
       productionNotes: z.string(),
     }),

@@ -1,11 +1,6 @@
 // packages/core/src/creative-pipeline/stages/run-stage.ts
-import type {
-  TrendAnalysisOutput,
-  HookGeneratorOutput,
-  ScriptWriterOutput,
-  StoryboardOutput,
-  VideoProducerOutput,
-} from "@switchboard/schemas";
+import { TrendAnalysisOutput, HookGeneratorOutput, ScriptWriterOutput } from "@switchboard/schemas";
+import type { StoryboardOutput, VideoProducerOutput } from "@switchboard/schemas";
 import { runTrendAnalyzer } from "./trend-analyzer.js";
 import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
@@ -17,6 +12,7 @@ export interface StageInput {
     targetAudience: string;
     platforms: string[];
     brandVoice?: string | null;
+    references?: string[];
   };
   previousOutputs: Record<string, unknown>;
   apiKey: string;
@@ -29,7 +25,7 @@ type StageOutput =
   | StoryboardOutput
   | VideoProducerOutput;
 
-const STAGE_ORDER = ["trends", "hooks", "scripts", "storyboard", "production"] as const;
+export const STAGE_ORDER = ["trends", "hooks", "scripts", "storyboard", "production"] as const;
 export type StageName = (typeof STAGE_ORDER)[number];
 
 export function getNextStage(current: StageName): StageName | "complete" {
@@ -50,13 +46,15 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           productDescription: input.brief.productDescription,
           targetAudience: input.brief.targetAudience,
           platforms: input.brief.platforms,
+          references: input.brief.references,
         },
         input.apiKey,
       );
 
     case "hooks": {
-      const trendsOutput = input.previousOutputs["trends"] as TrendAnalysisOutput;
-      if (!trendsOutput) throw new Error("hooks stage requires trends output");
+      const rawTrends = input.previousOutputs["trends"];
+      if (!rawTrends) throw new Error("hooks stage requires trends output");
+      const trendsOutput = TrendAnalysisOutput.parse(rawTrends);
       return runHookGenerator(
         {
           productDescription: input.brief.productDescription,
@@ -69,9 +67,12 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
     }
 
     case "scripts": {
-      const trends = input.previousOutputs["trends"] as TrendAnalysisOutput;
-      const hooks = input.previousOutputs["hooks"] as HookGeneratorOutput;
-      if (!trends || !hooks) throw new Error("scripts stage requires trends and hooks output");
+      const rawTrends = input.previousOutputs["trends"];
+      const rawHooks = input.previousOutputs["hooks"];
+      if (!rawTrends || !rawHooks)
+        throw new Error("scripts stage requires trends and hooks output");
+      const trends = TrendAnalysisOutput.parse(rawTrends);
+      const hooks = HookGeneratorOutput.parse(rawHooks);
       return runScriptWriter(
         {
           productDescription: input.brief.productDescription,

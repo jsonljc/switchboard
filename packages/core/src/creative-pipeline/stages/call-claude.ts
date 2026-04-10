@@ -52,6 +52,21 @@ export async function callClaude<T extends z.ZodType>(
   }
 
   const jsonStr = extractJson(textBlock.text);
-  const parsed = JSON.parse(jsonStr);
-  return options.schema.parse(parsed);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    const snippet = jsonStr.length > 200 ? jsonStr.slice(0, 200) + "..." : jsonStr;
+    throw new Error(`Failed to parse JSON from Claude response: ${snippet}`);
+  }
+
+  try {
+    return options.schema.parse(parsed);
+  } catch (err) {
+    const snippet = jsonStr.length > 200 ? jsonStr.slice(0, 200) + "..." : jsonStr;
+    throw new Error(
+      `Claude response failed schema validation. Raw JSON: ${snippet}\n${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }

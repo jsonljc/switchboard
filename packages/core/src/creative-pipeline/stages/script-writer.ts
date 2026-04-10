@@ -55,7 +55,7 @@ Return a JSON object with exactly this structure:
         { "section": "proof", "startSec": 18, "endSec": 25, "content": "..." },
         { "section": "cta", "startSec": 25, "endSec": 30, "content": "..." }
       ],
-      "format": "feed_video" | "stories" | "skippable" | "shorts",
+      "format": "feed_video",  // one of: feed_video, stories, skippable, shorts
       "platform": "Platform name",
       "productionNotes": "Visual direction, filming style, or editing notes"
     }

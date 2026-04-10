@@ -40,8 +40,8 @@ Return a JSON object with exactly this structure:
     {
       "angleRef": "Index of the angle from the trend analysis (0-based string)",
       "text": "The hook text (first 1-3 seconds of the ad)",
-      "type": "pattern_interrupt" | "question" | "bold_statement",
-      "platformScore": 1-10,
+      "type": "question",  // one of: pattern_interrupt, question, bold_statement
+      "platformScore": 8,  // integer 1-10
       "rationale": "Why this hook works for the target platform"
     }
   ],
@@ -49,7 +49,7 @@ Return a JSON object with exactly this structure:
     {
       "angleRef": "Index of the angle",
       "hookRef": "Index of the hook in the hooks array (0-based string)",
-      "score": 1-10
+      "score": 8  // integer 1-10
     }
   ]
 }

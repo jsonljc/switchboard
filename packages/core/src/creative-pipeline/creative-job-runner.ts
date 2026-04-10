@@ -1,10 +1,7 @@
 // packages/core/src/creative-pipeline/creative-job-runner.ts
 import { inngestClient } from "./inngest-client.js";
-import { runStage, getNextStage } from "./stages/run-stage.js";
-import type { StageName } from "./stages/run-stage.js";
+import { runStage, getNextStage, STAGE_ORDER } from "./stages/run-stage.js";
 import type { CreativeJob } from "@switchboard/schemas";
-
-const STAGES: StageName[] = ["trends", "hooks", "scripts", "storyboard", "production"];
 
 // 24-hour timeout for buyer approval between stages
 const APPROVAL_TIMEOUT = "24h";
@@ -57,7 +54,7 @@ export async function executeCreativePipeline(
 
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
 
-  for (const stage of STAGES) {
+  for (const stage of STAGE_ORDER) {
     // Run the stage
     const output = await step.run(`stage-${stage}`, () =>
       runStage(stage, {
@@ -67,6 +64,7 @@ export async function executeCreativePipeline(
           targetAudience: job.targetAudience,
           platforms: job.platforms,
           brandVoice: job.brandVoice,
+          references: job.references,
         },
         previousOutputs: stageOutputs,
         apiKey: llmConfig.apiKey,
