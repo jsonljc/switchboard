@@ -9,6 +9,8 @@ import { TrustScoreBadge } from "@/components/marketplace/trust-score-badge";
 import { TrustHistoryChart } from "@/components/marketplace/trust-history-chart";
 import { WorkLogList } from "@/components/marketplace/work-log-list";
 import { useTasks, useTrustProgression } from "@/hooks/use-marketplace";
+import { useCreativeJobs } from "@/hooks/use-creative-pipeline";
+import { CreativeJobCard } from "@/components/creative-pipeline/creative-job-card";
 import type { MarketplaceListing, TrustScoreBreakdown } from "@/lib/api-client";
 
 interface Connection {
@@ -36,6 +38,7 @@ export function DeploymentDetailClient({
   const { data: progression, isLoading: progressionLoading } = useTrustProgression(
     listing?.id ?? "",
   );
+  const { data: creativeJobs, isLoading: creativeJobsLoading } = useCreativeJobs(deploymentId);
 
   const workLogTasks = (tasks ?? []).map((t) => ({
     id: t.id,
@@ -154,6 +157,27 @@ export function DeploymentDetailClient({
             </div>
           ) : (
             <WorkLogList tasks={workLogTasks} />
+          )}
+        </div>
+      </section>
+
+      {/* Creative Jobs */}
+      <section>
+        <h2 className="section-label mb-4">Creative Jobs</h2>
+        <div className="rounded-xl border border-border bg-surface p-6">
+          {creativeJobsLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+            </div>
+          ) : creativeJobs && creativeJobs.length > 0 ? (
+            <div className="space-y-2">
+              {creativeJobs.map((job) => (
+                <CreativeJobCard key={job.id} job={job} deploymentId={deploymentId} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">No creative jobs yet</p>
           )}
         </div>
       </section>
