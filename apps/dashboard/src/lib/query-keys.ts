@@ -90,6 +90,7 @@ export const queryKeys = {
     all: ["creativeJobs"] as const,
     list: (deploymentId: string) => ["creativeJobs", "list", deploymentId] as const,
     detail: (id: string) => ["creativeJobs", "detail", id] as const,
+    estimate: (id: string) => ["creativeJobs", "estimate", id] as const,
   },
   tasks: {
     all: ["tasks"] as const,

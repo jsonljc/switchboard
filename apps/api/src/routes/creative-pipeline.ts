@@ -16,6 +16,7 @@ const SubmitBriefInput = z.object({
 
 const ApproveStageInput = z.object({
   action: z.enum(["continue", "stop"]),
+  productionTier: z.enum(["basic", "pro"]).optional(),
 });
 
 export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
@@ -148,6 +149,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(409).send({ error: "Job is not awaiting approval" });
     }
 
+    // Persist productionTier if this is Stage 4 (storyboard) approval
+    if (parsed.data.action === "continue" && job.currentStage === "storyboard") {
+      const tier = parsed.data.productionTier ?? "basic";
+      await jobStore.updateProductionTier(id, tier);
+    }
+
     if (parsed.data.action === "stop") {
       const stopped = await jobStore.stop(id, job.currentStage);
 
@@ -167,5 +174,42 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return reply.send({ job, action: "approved" });
+  });
+
+  // GET /creative-jobs/:id/estimate — cost estimate per tier
+  app.get("/creative-jobs/:id/estimate", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.findById(id);
+
+    if (!job || job.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Creative job not found" });
+    }
+
+    const stageOutputs = (job.stageOutputs ?? {}) as Record<string, unknown>;
+    const storyboard = stageOutputs["storyboard"];
+    const scripts = stageOutputs["scripts"] as { scripts?: unknown[] } | undefined;
+
+    if (!storyboard) {
+      return reply.send({ estimates: null, reason: "Storyboard not yet complete" });
+    }
+
+    const { estimateCost } = await import("@switchboard/core/creative-pipeline");
+    const scriptCount = scripts?.scripts?.length ?? 1;
+    const estimates = estimateCost(
+      storyboard as { storyboards: Array<{ scenes: Array<{ duration: number }> }> },
+      scriptCount,
+    );
+
+    return reply.send({ estimates });
   });
 };
