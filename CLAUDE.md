@@ -1,6 +1,6 @@
 # Switchboard — Claude Code Instructions
 
-Governance-first AI operations platform (TypeScript monorepo, pnpm + Turborepo). For deep architecture details see `docs/ARCHITECTURE.md`.
+AI Agent Marketplace with trust-based pricing (TypeScript monorepo, pnpm + Turborepo). For deep architecture details see `docs/ARCHITECTURE.md`.
 
 ---
 
@@ -12,19 +12,12 @@ packages/cartridge-sdk/   — Cartridge interface, builders, test harness
 packages/core/            — Orchestrator, policy engine, governance logic
 packages/db/              — Prisma ORM, store implementations, credential encryption
 
-cartridges/customer-engagement/  — Leads, conversations, appointments, cadences
-cartridges/digital-ads/          — Multi-platform ad management (Meta, Google, TikTok)
-cartridges/crm/                  — Contacts, deals, activities, pipeline
-cartridges/payments/             — Stripe-backed payment operations
-cartridges/revenue-growth/       — Autonomous revenue optimization (Theory of Constraints)
-
-apps/api/          — Fastify REST API (port 3000)
+apps/api/          — Fastify REST API — marketplace + governance endpoints (port 3000)
 apps/chat/         — Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
-apps/dashboard/    — Next.js admin dashboard (port 3002)
+apps/dashboard/    — Next.js marketplace UI + task review queue (port 3002)
 apps/mcp-server/   — MCP server for LLM tool use
 
-skins/      — Vertical deployment configs (clinic, gym, generic, commerce)
-profiles/   — Per-business instance configs (clinic-demo, gym-demo)
+cartridges/        — Domain-specific action cartridges (legacy, being replaced by marketplace agents)
 ```
 
 ### Dependency Layers (enforced by ESLint + dependency-cruiser)

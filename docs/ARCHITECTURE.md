@@ -4,9 +4,9 @@
 
 ## What Is Switchboard?
 
-Switchboard is a **governance-first AI operations platform**. Think of it as the "brain + safety layer" that sits between an AI agent and the real-world actions it wants to take. When an AI (or human) says "pause this ad campaign" or "refund this customer $500", Switchboard doesn't just blindly do it — it evaluates the risk, checks policies, may require human approval, and keeps a tamper-proof record of everything that happened.
+Switchboard is an **AI Agent Marketplace with trust-based pricing**. It's the governance layer that sits between AI agents and the real-world actions they want to take. When an agent proposes an action, Switchboard evaluates the risk, checks policies, may require human approval, and keeps a tamper-proof record of everything that happened.
 
-The platform is designed for **lead-generation service businesses** (dental clinics, gyms, aesthetic clinics, interior designers, car resellers, etc.) but the architecture is vertical-agnostic. You configure what kind of business you are via a **Skin** (vertical template) and **Business Profile** (your specific business details), and Switchboard adapts its behavior, vocabulary, and tools accordingly.
+The marketplace model: anyone can list AI agents (open-source, third-party, or native). Agents start free with no reputation. As users approve or reject their work, trust scores rise or fall — driving autonomy levels (supervised → guided → autonomous) and pricing tiers (free → basic → pro → elite) automatically. Governance is the moat that makes it safe to deploy agents from unknown authors.
 
 ---
 
@@ -18,25 +18,23 @@ Defines every data type in the system using [Zod](https://zod.dev/) schemas. Zod
 
 **Key schemas and what they represent:**
 
-| Schema File             | What It Defines                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `principals.ts`         | **Who** is acting — users, AI agents, service accounts, or system. Each has roles: `requester`, `approver`, `operator`, `admin`, `emergency_responder`                                                                                                                                                                                                                                             |
-| `action.ts`             | **What** someone wants to do — action type (e.g. `digital-ads.campaign.pause`), parameters, magnitude (dollar amount, entity count), status lifecycle                                                                                                                                                                                                                                              |
-| `risk.ts`               | **How dangerous** an action is — risk categories (`none`/`low`/`medium`/`high`/`critical`), reversibility, blast radius, dollars at risk, entity volatility                                                                                                                                                                                                                                        |
-| `policy.ts`             | **Rules** that govern actions — conditions with 13 operators (eq, gt, contains, matches, etc.), recursive AND/OR/NOT composition, effects (allow/deny/modify/require_approval)                                                                                                                                                                                                                     |
-| `envelope.ts`           | **The full lifecycle record** of a single action — from initial proposal through evaluation, approval, execution, and audit. Contains proposals, decisions, approval requests, execution results, and audit entry references                                                                                                                                                                       |
-| `governance-profile.ts` | **Org-level governance posture** — four profiles (`observe`=auto-execute everything, `guarded`=approve high-risk, `strict`=approve most things, `locked`=approve everything)                                                                                                                                                                                                                       |
-| `audit.ts`              | **Immutable audit records** — 37 event types, SHA-256 hash-chained entries (like a private blockchain), evidence pointers, PII redaction tracking                                                                                                                                                                                                                                                  |
-| `identity.ts`           | **Identity specs** — risk tolerance levels per risk category, spend limits (daily/weekly/monthly/per-action), trusted/forbidden action types, delegation rules, role overlays                                                                                                                                                                                                                      |
-| `data-flow.ts`          | **Multi-step plans** — sequences of actions with binding expressions between steps, execution strategies (atomic/sequential/best_effort), and approval modes                                                                                                                                                                                                                                       |
-| `skin.ts`               | **Vertical deployment template** — tool filtering (include/exclude/aliases), governance profile, spend limit overrides, language settings (locale, terminology, reply templates, welcome message), playbooks, channel configs, campaign templates                                                                                                                                                  |
-| `business-profile.ts`   | **Per-business knowledge** — business info (name, type, address), service catalog with pricing and duration, team members, customer journey stages with conversion benchmarks, lead scoring weights, objection handling trees, cadence templates, compliance flags (HIPAA, consent gate, medical claim filter), operating hours, policies, FAQ records, LLM context (persona, tone, banned topics) |
-| `lead-profile.ts`       | **Lead/contact data** — name, email, phone, service interest, source, UTM tracking, lead score, stage, assigned staff                                                                                                                                                                                                                                                                              |
-| `cartridge.ts`          | **Cartridge manifest** — ID, name, version, description, required connections, default policies, action definitions with risk categories and parameter schemas                                                                                                                                                                                                                                     |
-| `crm-provider.ts`       | **CRM data types** — contacts, deals, activities, pipeline stages                                                                                                                                                                                                                                                                                                                                  |
-| `campaign-plan.ts`      | **Campaign planning** — budget allocation, creative strategy, audience targeting                                                                                                                                                                                                                                                                                                                   |
-| `ads-operator.ts`       | **Autonomous ads agent config** — per-account settings, scheduling, thresholds                                                                                                                                                                                                                                                                                                                     |
-| `revenue-growth.ts`     | **Revenue growth diagnostics** — constraint types, intervention lifecycle, account learning profiles                                                                                                                                                                                                                                                                                               |
+| Schema File             | What It Defines                                                                                                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `principals.ts`         | **Who** is acting — users, AI agents, service accounts, or system. Each has roles: `requester`, `approver`, `operator`, `admin`, `emergency_responder`                                                                                          |
+| `action.ts`             | **What** someone wants to do — action type (e.g. `digital-ads.campaign.pause`), parameters, magnitude (dollar amount, entity count), status lifecycle                                                                                           |
+| `risk.ts`               | **How dangerous** an action is — risk categories (`none`/`low`/`medium`/`high`/`critical`), reversibility, blast radius, dollars at risk, entity volatility                                                                                     |
+| `policy.ts`             | **Rules** that govern actions — conditions with 13 operators (eq, gt, contains, matches, etc.), recursive AND/OR/NOT composition, effects (allow/deny/modify/require_approval)                                                                  |
+| `envelope.ts`           | **The full lifecycle record** of a single action — from initial proposal through evaluation, approval, execution, and audit. Contains proposals, decisions, approval requests, execution results, and audit entry references                    |
+| `governance-profile.ts` | **Org-level governance posture** — four profiles (`observe`=auto-execute everything, `guarded`=approve high-risk, `strict`=approve most things, `locked`=approve everything)                                                                    |
+| `audit.ts`              | **Immutable audit records** — 37 event types, SHA-256 hash-chained entries (like a private blockchain), evidence pointers, PII redaction tracking                                                                                               |
+| `identity.ts`           | **Identity specs** — risk tolerance levels per risk category, spend limits (daily/weekly/monthly/per-action), trusted/forbidden action types, delegation rules, role overlays                                                                   |
+| `data-flow.ts`          | **Multi-step plans** — sequences of actions with binding expressions between steps, execution strategies (atomic/sequential/best_effort), and approval modes                                                                                    |
+| `marketplace.ts`        | **Marketplace types** — AgentListing (catalog), AgentDeployment (org instance), AgentTask (unit of work), TrustScoreRecord (per-listing per-category trust data). Enums: AgentType, AutonomyLevel, PriceTier, AgentTaskStatus, DeploymentStatus |
+| `cartridge.ts`          | **Cartridge manifest** — ID, name, version, description, required connections, default policies, action definitions with risk categories and parameter schemas                                                                                  |
+| `crm-provider.ts`       | **CRM data types** — contacts, deals, activities, pipeline stages                                                                                                                                                                               |
+| `campaign-plan.ts`      | **Campaign planning** — budget allocation, creative strategy, audience targeting                                                                                                                                                                |
+| `ads-operator.ts`       | **Autonomous ads agent config** — per-account settings, scheduling, thresholds                                                                                                                                                                  |
+| `revenue-growth.ts`     | **Revenue growth diagnostics** — constraint types, intervention lifecycle, account learning profiles                                                                                                                                            |
 
 **Action Status Lifecycle** (the core state machine):
 
@@ -89,7 +87,7 @@ The `LifecycleOrchestrator` is the main entry point for all governed operations.
 - **ApprovalManager** — handles `respondToApproval()`
 - **ExecutionManager** — handles `executeApproved()`, `requestUndo()`
 
-**Configuration** (`OrchestratorConfig`): Wires together ~20 subsystems including storage, ledger, guardrails, routing, risk scoring, competence tracking, SMB tier branching, circuit breakers, idempotency guards, credential resolvers, and cross-cartridge enrichment.
+**Configuration** (`OrchestratorConfig`): Wires together ~20 subsystems including storage, ledger, guardrails, routing, risk scoring, competence tracking, trust score integration, circuit breakers, idempotency guards, credential resolvers, and cross-cartridge enrichment.
 
 #### 3b. ProposePipeline — The Governance Pipeline
 
@@ -99,7 +97,7 @@ When someone wants to do something, this pipeline evaluates whether they should 
 
 1. **Idempotency check** — reject duplicate proposals (same idempotency key)
 2. **Telemetry span** — wrap everything in an OpenTelemetry trace
-3. **SMB tier branching** — if this is a small business, use the simplified 5-step pipeline instead
+3. **Trust score check** — resolve the agent's trust level and autonomy from marketplace trust scores
 4. **Identity resolution** — resolve WHO is asking: merge base identity spec + active role overlays + competence adjustments
 5. **Action type restrictions** — check org-level allowlists/blocklists
 6. **Cartridge lookup + enrichment** — load the cartridge, fetch external context (contact history, portfolio value, etc.)
@@ -160,13 +158,13 @@ Score maps to categories: 0-20=none, 21-40=low, 41-60=medium, 61-80=high, 81-100
 
 A complete approval workflow with tamper-evident binding:
 
-| Component            | File                                  | What It Does                                                                                                                                                                                                |
-| -------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **State Machine**    | `approval/state-machine.ts`           | States: `pending` → `approved`/`rejected`/`expired`/`patched`. Supports **quorum** (multiple approvers required). Optimistic concurrency via version tracking.                                              |
-| **Router**           | `approval/router.ts`                  | Determines approval level, approvers, and expiry (mandatory=4h, elevated=12h, standard=24h) from identity config                                                                                            |
-| **Binding**          | `approval/binding.ts`                 | SHA-256 hash over envelope ID, version, action, parameters, decision trace. **Timing-safe comparison** prevents timing attacks. Ensures the approval matches exactly what was proposed.                     |
-| **Delegation**       | `approval/delegation.ts` + `chain.ts` | BFS graph traversal through delegation rules. Max depth=5, scope narrowing only (each hop can only narrow permissions, never widen), cycle detection, expiration checks. Returns full chain path for audit. |
-| **Approval Manager** | `orchestrator/approval-manager.ts`    | Responds to approvals: validates binding hash, checks authorization (SMB=org owner only, Enterprise=delegation chains), prevents self-approval, executes on approve, re-evaluates on patch.                 |
+| Component            | File                                  | What It Does                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **State Machine**    | `approval/state-machine.ts`           | States: `pending` → `approved`/`rejected`/`expired`/`patched`. Supports **quorum** (multiple approvers required). Optimistic concurrency via version tracking.                                                   |
+| **Router**           | `approval/router.ts`                  | Determines approval level, approvers, and expiry (mandatory=4h, elevated=12h, standard=24h) from identity config                                                                                                 |
+| **Binding**          | `approval/binding.ts`                 | SHA-256 hash over envelope ID, version, action, parameters, decision trace. **Timing-safe comparison** prevents timing attacks. Ensures the approval matches exactly what was proposed.                          |
+| **Delegation**       | `approval/delegation.ts` + `chain.ts` | BFS graph traversal through delegation rules. Max depth=5, scope narrowing only (each hop can only narrow permissions, never widen), cycle detection, expiration checks. Returns full chain path for audit.      |
+| **Approval Manager** | `orchestrator/approval-manager.ts`    | Responds to approvals: validates binding hash, checks authorization (delegation chains), prevents self-approval, executes on approve, re-evaluates on patch. Updates marketplace trust scores on approve/reject. |
 
 #### 3f. Execution Guard + Execution Manager
 
@@ -229,24 +227,20 @@ Converts natural language into structured `GoalBrief` objects using regex patter
 
 Extracts constraints, success metrics, and decomposability flags.
 
-#### 3k. SMB Governance — Simplified Pipeline
+#### 3k. Marketplace — Trust Score Engine
 
-A streamlined governance path for small businesses:
+The marketplace trust system that drives autonomy and pricing:
 
-| Component                                  | What It Does                                                                                                                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Pipeline** (`smb/pipeline.ts`)           | 10-step pipeline, but simplified: no identity resolution, no competence tracking, single-approver routing (org owner), activity log instead of full audit ledger. Non-fatal error handling throughout. |
-| **Evaluator** (`smb/evaluator.ts`)         | 5-step policy evaluation: allowlist/blocklist → guardrails → spend caps → simple 3-bucket risk → approval mapping. Default-allow for observe/guarded, default-deny for strict/locked.                  |
-| **Tier Resolver** (`smb/tier-resolver.ts`) | Resolves org tier (smb vs enterprise). Unknown orgs default to SMB.                                                                                                                                    |
-| **Activity Log** (`smb/activity-log.ts`)   | Simplified audit — no hash chain, but includes PII redaction.                                                                                                                                          |
+| Component                                                    | What It Does                                                                                                                                                                            |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **TrustScoreEngine** (`marketplace/trust-score-engine.ts`)   | Records approval/rejection outcomes with streak bonuses. Maps scores to autonomy levels (supervised/guided/autonomous) and price tiers (free/basic/pro/elite). Configurable thresholds. |
+| **TrustScoreAdapter** (`marketplace/trust-score-adapter.ts`) | Bridges marketplace trust scores into the governance pipeline. Called on approve/reject to update agent reputation.                                                                     |
 
 #### 3l. Other Core Systems
 
 | System                         | File(s)                                            | What It Does                                                                                                                                                                                                                                      |
 | ------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tool Registry**              | `tool-registry/index.ts`                           | Manages available tools. Registers all actions from cartridge manifests. Applies skin-based include/exclude/alias filters. Resolves aliases to canonical action types.                                                                            |
-| **Skin Loader/Resolver**       | `skin/loader.ts`, `skin/resolver.ts`               | Loads JSON skin manifests from disk, validates with Zod, resolves tool filters, governance profile presets, and spend limit overrides.                                                                                                            |
-| **Profile Loader/Resolver**    | `profile/loader.ts`, `profile/resolver.ts`         | Loads JSON business profiles, applies defaults for scoring/compliance/LLM context, builds composite system prompt from business data.                                                                                                             |
+| **Tool Registry**              | `tool-registry/index.ts`                           | Manages available tools. Registers all actions from cartridge manifests. Resolves aliases to canonical action types.                                                                                                                              |
 | **Capability Registry**        | `capability/registry.ts`                           | Maps action types to rich metadata — executor type (LLM vs deterministic), step type (fetch/compute/decide/approve), cost tier. Auto-populates from manifests using heuristics.                                                                   |
 | **Cross-Cartridge Enrichment** | `enrichment/enricher.ts`, `enrichment/mappings.ts` | Resolves entities across cartridges via entity graph (e.g., CRM contact → payments customer). Fetches context from source cartridge with 2-second timeout. Default mappings: customer-engagement↔crm, customer-engagement↔payments, payments↔crm. |
 | **Conversion Event Bus**       | `events/conversion-bus.ts`                         | Pub/sub for CRM-to-ads feedback loop. Events: inquiry→qualified→booked→purchased→completed. Bridges customer-engagement events to Meta CAPI.                                                                                                      |
@@ -280,8 +274,10 @@ All database interactions via Prisma ORM, plus credential encryption and OAuth t
 | **PrismaCrmProvider**            | Full CRM implementation — contacts (with ad attribution tracking: sourceAdId, sourceCampaignId, UTM), deals, activities, pipeline aggregation. All operations org-scoped.                   |
 | **PrismaCadenceStore**           | Automated follow-up cadence instances — tracks current step, step states, evaluation timestamps.                                                                                            |
 | **PrismaGovernanceProfileStore** | Per-org governance profile (observe/guarded/strict/locked) with action type restrictions. Default: `guarded`.                                                                               |
-| **PrismaTierStore**              | Org tier resolution (smb vs enterprise).                                                                                                                                                    |
-| **PrismaSmbActivityLogStorage**  | Simplified audit log for SMB orgs.                                                                                                                                                          |
+| **PrismaListingStore**           | CRUD for AgentListing (marketplace catalog).                                                                                                                                                |
+| **PrismaDeploymentStore**        | CRUD for AgentDeployment (org's agent instances).                                                                                                                                           |
+| **PrismaAgentTaskStore**         | CRUD for AgentTask (units of work with approve/reject flow).                                                                                                                                |
+| **PrismaTrustScoreStore**        | Trust score records per listing per category.                                                                                                                                               |
 
 **Credential Encryption** (`crypto/credentials.ts`):
 
@@ -484,10 +480,10 @@ The authoritative governance spine. All actions flow through the `LifecycleOrche
 2. Storage bootstrap (Prisma or in-memory fallback)
 3. System identity creation (upserts `system` principal + default identity spec)
 4. Credential resolution for cartridges
-5. Cartridge registration (5 cartridges: digital-ads, payments, CRM, customer-engagement, revenue-growth)
-6. Business profile resolution
-7. Skin loading + tool registry + governance profile
-8. ConversionBus wiring (CRM→ads feedback loop)
+5. Cartridge registration
+6. Marketplace trust adapter wiring
+7. Tool registry + governance profile
+8. ConversionBus wiring
 9. Execution queue (BullMQ with Redis, or inline)
 10. Approval notifiers (Telegram, Slack, WhatsApp — CompositeNotifier)
 11. LifecycleOrchestrator construction
@@ -509,7 +505,7 @@ The authoritative governance spine. All actions flow through the `LifecycleOrche
 | `CRUD /api/identity`              | Principal and identity spec management                            |
 | `/api/crm/*`                      | CRM operations                                                    |
 | `/api/campaigns/*`                | Campaign management                                               |
-| `/api/smb/*`                      | SMB tier and activity                                             |
+| `/api/marketplace/*`              | Agent listings, deployments, tasks, trust scores                  |
 | `/api/governance/*`               | Governance profile management                                     |
 | `/api/agents/*`                   | Agent roster management                                           |
 | `/api/revenue-growth/*`           | Revenue growth analysis                                           |
@@ -558,11 +554,11 @@ Processes messages from Telegram, WhatsApp, and Slack. Can operate in two modes:
 
 **Safety Features:**
 
-- Banned phrase filter (from skin config) on all outgoing messages
+- Banned phrase filter on all outgoing messages
 - Medical claim validation (blocks medical claims in responses)
 - WhatsApp 24-hour window enforcement (falls back to template messages)
 - Per-principal proposal rate limiting (30/minute)
-- Response humanizer (applies skin terminology substitutions)
+- Response humanizer
 
 **Bootstrap modes:**
 
@@ -597,7 +593,7 @@ Exposes Switchboard capabilities as MCP tools for integration with LLM assistant
 
 **Tool Registration:**
 
-- Auto-registers tools from cartridge manifests (filtered by skin)
+- Auto-registers tools from cartridge manifests
 - Manual tool definitions for governance, CRM, and payments operations
 - Categories: `SIDE_EFFECT_TOOLS`, `READ_TOOLS`, `GOVERNANCE_TOOLS`, `CRM_*`, `PAYMENTS_*`
 
@@ -627,26 +623,21 @@ All run as `USER node` (non-root) with `NODE_ENV=production`.
 
 ### Turbo
 
-Build orchestration with dependency-aware task scheduling. Global env awareness for `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `SKIN_ID`, `PROFILE_ID`.
+Build orchestration with dependency-aware task scheduling. Global env awareness for `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`.
 
 ---
 
-## Skins & Profiles — The Customization System
+## Marketplace — Trust-Based Agent Economy
 
-### Skins (Vertical Templates)
+### Trust Score Mechanics
 
-| Skin       | Cartridges                                      | Governance | Key Features                                                             |
-| ---------- | ----------------------------------------------- | ---------- | ------------------------------------------------------------------------ |
-| `clinic`   | customer-engagement, digital-ads, crm, payments | guarded    | HIPAA compliance, consent gate, medical claim filter, dental terminology |
-| `gym`      | customer-engagement, digital-ads, crm           | guarded    | Fitness terminology, class booking flows, trial/membership focus         |
-| `generic`  | customer-engagement, digital-ads, crm           | guarded    | Neutral terminology, general service business                            |
-| `commerce` | digital-ads, crm, payments                      | guarded    | E-commerce focus, transaction-oriented                                   |
+| Score Range | Autonomy Level | Price Tier | Behavior                                                   |
+| ----------- | -------------- | ---------- | ---------------------------------------------------------- |
+| 0-39        | Supervised     | Free       | All outputs require human approval                         |
+| 40-69       | Guided         | Basic/Pro  | Low-risk outputs auto-approved, high-risk reviewed         |
+| 70-100      | Autonomous     | Elite      | Most outputs auto-approved, only critical actions reviewed |
 
-Each skin controls: tool filtering (which actions are available), governance profile, spend limit overrides, language settings (locale, interpreter prompt, reply templates, terminology, welcome message), playbooks, channel configs, campaign templates, funnel mode, and conversion value mapping.
-
-### Business Profiles (Per-Instance Knowledge)
-
-| Profile       | Business            | Key Data                                                                                                                                                                                 |
-| ------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clinic-demo` | Bright Smile Dental | 11 dental services with pricing, 4 team members, 9 journey stages with conversion benchmarks, lead scoring weights, 30 FAQ records, HIPAA compliance, objection trees, cadence templates |
-| `gym-demo`    | FitLife Gym         | 8 fitness services, 3 team members, membership-focused journey, trial conversion tracking                                                                                                |
+- **Starting score**: 50 (every new agent)
+- **Approval**: +3 points + streak bonus (up to +5 for consecutive approvals)
+- **Rejection**: −10 points, streak resets to 0
+- **Key models**: `AgentListing` (catalog), `AgentDeployment` (org instance), `AgentTask` (work unit), `TrustScoreRecord` (per-category trust)

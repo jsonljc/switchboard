@@ -17,7 +17,7 @@ const AGENT_ICONS: Record<string, typeof MessageSquare> = {
 };
 
 const AGENT_LABELS: Record<string, string> = {
-  creative: "AI Creative",
+  creative: "Creative Agent",
 };
 
 const TONE_LABELS: Record<string, string> = {
