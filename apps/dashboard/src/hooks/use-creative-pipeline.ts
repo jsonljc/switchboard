@@ -25,9 +25,10 @@ export function useCreativeJobs(deploymentId: string) {
   });
 }
 
-export function useCreativeJob(id: string) {
+export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
   return useQuery({
     queryKey: queryKeys.creativeJobs.detail(id),
+    initialData,
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${id}`);
       if (!res.ok) throw new Error("Failed to fetch creative job");

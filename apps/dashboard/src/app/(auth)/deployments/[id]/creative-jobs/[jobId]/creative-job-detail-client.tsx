@@ -49,8 +49,7 @@ export function CreativeJobDetailClient({
   initialJob,
 }: CreativeJobDetailClientProps) {
   const router = useRouter();
-  const { data: job } = useCreativeJob(initialJob.id);
-  const currentJob = job ?? initialJob;
+  const { data: currentJob = initialJob } = useCreativeJob(initialJob.id, initialJob);
 
   const [selectedStage, setSelectedStage] = useState(() => getLatestCompletedStage(currentJob));
 
