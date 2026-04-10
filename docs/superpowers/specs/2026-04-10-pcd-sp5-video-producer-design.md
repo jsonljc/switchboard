@@ -182,7 +182,23 @@ interface ElevenLabsClient {
 }
 ```
 
-### 5.3 HeyGen Client (V2)
+### 5.3 Whisper Client (Caption Generation)
+
+Uses OpenAI Whisper API to generate captions from voiceover audio:
+
+```typescript
+interface WhisperClient {
+  transcribe(request: {
+    audioUrl: string;
+    language?: string; // default "en"
+  }): Promise<{
+    srtContent: string;
+    segments: Array<{ start: number; end: number; text: string }>;
+  }>;
+}
+```
+
+### 5.5 HeyGen Client (V2)
 
 Async task-based (similar to Kling):
 
@@ -196,7 +212,7 @@ interface HeyGenClient {
 }
 ```
 
-### 5.4 Video Assembler (FFmpeg)
+### 5.6 Video Assembler (FFmpeg)
 
 ```typescript
 interface VideoAssembler {
@@ -244,7 +260,15 @@ Failed final QA → return assembled video with warning flag, don't block delive
 productionTier  String?   // null until Stage 4 approved, then "basic" | "pro"
 ```
 
-### 7.2 VideoProducerOutput Schema — Update
+Add to `CreativeJobSchema` in `packages/schemas/src/creative-job.ts`:
+
+```typescript
+productionTier: z.enum(["basic", "pro", "premium"]).nullable().optional(),
+```
+
+### 7.2 VideoProducerOutput Schema — Update (Breaking Change)
+
+This replaces the existing `VideoProducerOutput` schema. The old schema had `videos[]` and `staticFallbacks[]` — the new schema has `clips[]`, `assembledVideos?`, `voiceover?`, and `errors?`. Since Stage 5 was a stub (never produced real output), this is safe to replace without migration.
 
 ```typescript
 export const VideoProducerOutput = z.object({
@@ -281,7 +305,8 @@ export const VideoProducerOutput = z.object({
   errors: z
     .array(
       z.object({
-        scene: z.string(),
+        stage: z.enum(["generation", "assembly", "voiceover", "captions"]),
+        scene: z.string().nullable(), // null for non-scene errors (FFmpeg, Whisper, ElevenLabs)
         tool: z.string(),
         message: z.string(),
       }),
@@ -298,13 +323,19 @@ export const VideoProducerOutput = z.object({
 
 `POST /api/marketplace/creative-jobs/:id/approve`
 
-After Stage 4, body accepts optional `productionTier`:
+Body accepts optional `productionTier`:
 
 ```typescript
 { action: "continue", productionTier?: "basic" | "pro" }
 ```
 
-The `creative-job-runner.ts` reads `productionTier` from the Stage 4 approval event data and passes it to the video producer. If no tier specified, defaults to `"basic"`.
+**Validation rules:**
+
+- `productionTier` is only accepted when the job's `currentStage === "storyboard"` (Stage 4). If provided at any other stage, it is ignored.
+- If `currentStage === "storyboard"` and no `productionTier` is provided, defaults to `"basic"`.
+- The tier is persisted to `CreativeJob.productionTier` before sending the approval event.
+
+The `creative-job-runner.ts` reads `productionTier` from the job record (set by the approve handler) and passes it to the video producer.
 
 ### 8.2 Cost Estimate Endpoint — New
 
@@ -370,25 +401,26 @@ Show error banner for any partial failures.
 
 ## 11. File Structure
 
-| Action | File                                                                                    | Responsibility                                 |
-| ------ | --------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Create | `packages/core/src/creative-pipeline/stages/kling-client.ts`                            | Kling AI API client                            |
-| Create | `packages/core/src/creative-pipeline/stages/elevenlabs-client.ts`                       | ElevenLabs voice synthesis client              |
-| Create | `packages/core/src/creative-pipeline/stages/heygen-client.ts`                           | HeyGen avatar client (stubbed for V1)          |
-| Create | `packages/core/src/creative-pipeline/stages/video-assembler.ts`                         | FFmpeg wrapper                                 |
-| Create | `packages/core/src/creative-pipeline/stages/cost-estimator.ts`                          | Cost estimation per tier                       |
-| Create | `packages/core/src/creative-pipeline/stages/video-producer.ts`                          | Stage 5 orchestrator + prompt optimization     |
-| Modify | `packages/core/src/creative-pipeline/stages/run-stage.ts`                               | Replace production stub                        |
-| Modify | `packages/core/src/creative-pipeline/creative-job-runner.ts`                            | Pass video config + production tier            |
-| Modify | `packages/schemas/src/creative-job.ts`                                                  | Update VideoProducerOutput, add ProductionTier |
-| Modify | `packages/db/prisma/schema.prisma`                                                      | Add productionTier field                       |
-| Modify | `packages/db/src/stores/prisma-creative-job-store.ts`                                   | Support productionTier field                   |
-| Modify | `apps/api/src/routes/creative-pipeline.ts`                                              | Add estimate endpoint, update approve          |
-| Create | `apps/dashboard/src/components/creative-pipeline/tier-selection.tsx`                    | Tier picker with cost estimates                |
-| Modify | `apps/dashboard/src/components/creative-pipeline/action-bar.tsx`                        | Show tier selection at Stage 4                 |
-| Modify | `apps/dashboard/src/components/creative-pipeline/production-output.tsx`                 | Replace placeholder with video player          |
-| Create | `apps/dashboard/src/app/api/dashboard/marketplace/creative-jobs/[id]/estimate/route.ts` | Proxy for cost estimate                        |
-| Modify | `apps/dashboard/src/hooks/use-creative-pipeline.ts`                                     | Add cost estimate hook, update approve         |
+| Action | File                                                                                    | Responsibility                                                                      |
+| ------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Create | `packages/core/src/creative-pipeline/stages/kling-client.ts`                            | Kling AI API client                                                                 |
+| Create | `packages/core/src/creative-pipeline/stages/elevenlabs-client.ts`                       | ElevenLabs voice synthesis client                                                   |
+| Create | `packages/core/src/creative-pipeline/stages/whisper-client.ts`                          | Whisper caption generation client                                                   |
+| Create | `packages/core/src/creative-pipeline/stages/heygen-client.ts`                           | HeyGen avatar client (stubbed for V1)                                               |
+| Create | `packages/core/src/creative-pipeline/stages/video-assembler.ts`                         | FFmpeg wrapper                                                                      |
+| Create | `packages/core/src/creative-pipeline/stages/cost-estimator.ts`                          | Cost estimation per tier                                                            |
+| Create | `packages/core/src/creative-pipeline/stages/video-producer.ts`                          | Stage 5 orchestrator + prompt optimization                                          |
+| Modify | `packages/core/src/creative-pipeline/stages/run-stage.ts`                               | Replace production stub                                                             |
+| Modify | `packages/core/src/creative-pipeline/creative-job-runner.ts`                            | Pass video config + production tier                                                 |
+| Modify | `packages/schemas/src/creative-job.ts`                                                  | Update VideoProducerOutput, add ProductionTier                                      |
+| Modify | `packages/db/prisma/schema.prisma`                                                      | Add productionTier field                                                            |
+| Modify | `packages/db/src/stores/prisma-creative-job-store.ts`                                   | Support productionTier field                                                        |
+| Modify | `apps/api/src/routes/creative-pipeline.ts`                                              | Add estimate endpoint, update approve                                               |
+| Create | `apps/dashboard/src/components/creative-pipeline/tier-selection.tsx`                    | Tier picker with cost estimates                                                     |
+| Modify | `apps/dashboard/src/components/creative-pipeline/action-bar.tsx`                        | Show tier selection at Stage 4                                                      |
+| Modify | `apps/dashboard/src/components/creative-pipeline/production-output.tsx`                 | Replace placeholder with video player                                               |
+| Create | `apps/dashboard/src/app/api/dashboard/marketplace/creative-jobs/[id]/estimate/route.ts` | Proxy for cost estimate                                                             |
+| Modify | `apps/dashboard/src/hooks/use-creative-pipeline.ts`                                     | Add `useCostEstimate()` hook, update `useApproveStage()` to accept `productionTier` |
 
 ---
 
