@@ -5,6 +5,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaCreativeJobStore, PrismaAgentTaskStore } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
+import { inngestClient } from "@switchboard/core/creative-pipeline";
 import { z } from "zod";
 
 const SubmitBriefInput = z.object({
@@ -59,6 +60,17 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       productImages: brief.productImages,
       references: brief.references,
       pastPerformance: brief.pastPerformance ?? null,
+    });
+
+    // Fire Inngest event to start the pipeline
+    await inngestClient.send({
+      name: "creative-pipeline/job.submitted",
+      data: {
+        jobId: job.id,
+        taskId: task.id,
+        organizationId: orgId,
+        deploymentId,
+      },
     });
 
     return reply.code(201).send({ task, job });
@@ -133,15 +145,22 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
     if (parsed.data.action === "stop") {
       const stopped = await jobStore.stop(id, job.currentStage);
+
+      // Fire stop event so the running Inngest function unblocks and exits
+      await inngestClient.send({
+        name: "creative-pipeline/stage.approved",
+        data: { jobId: id, action: "stop" },
+      });
+
       return reply.send({ job: stopped, action: "stopped" });
     }
 
-    // "continue" — in SP2 this will fire an Inngest event.
-    // For now, just acknowledge the approval.
-    return reply.send({
-      job,
-      action: "approved",
-      note: "Pipeline continuation will be wired in SP2 (Inngest)",
+    // Fire continue event — the running Inngest function's waitForEvent picks this up
+    await inngestClient.send({
+      name: "creative-pipeline/stage.approved",
+      data: { jobId: id, action: "continue" },
     });
+
+    return reply.send({ job, action: "approved" });
   });
 };
