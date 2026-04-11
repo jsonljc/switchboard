@@ -64,6 +64,16 @@ export function ListingCard({ listing }: { listing: MarketplaceListing }) {
           {listing.priceMonthly > 0 && ` · $${listing.priceMonthly}/mo`}
         </span>
       </div>
+
+      <div className="flex justify-end">
+        <Link
+          href={`/login?callbackUrl=${encodeURIComponent(`/deploy/${listing.slug}`)}`}
+          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Deploy
+        </Link>
+      </div>
     </Link>
   );
 }

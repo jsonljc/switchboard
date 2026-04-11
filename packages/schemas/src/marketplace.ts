@@ -163,3 +163,76 @@ export const DeploymentConnectionSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 export type DeploymentConnection = z.infer<typeof DeploymentConnectionSchema>;
+
+// ── Website Scanner ──
+
+export const ScannedBusinessProfileSchema = z.object({
+  businessName: z.string(),
+  description: z.string(),
+  products: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      price: z.string().optional(),
+    }),
+  ),
+  services: z.array(z.string()),
+  location: z
+    .object({
+      address: z.string(),
+      city: z.string(),
+      state: z.string(),
+    })
+    .optional(),
+  hours: z.record(z.string()).optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  faqs: z.array(
+    z.object({
+      question: z.string(),
+      answer: z.string(),
+    }),
+  ),
+  brandLanguage: z.array(z.string()),
+  platformDetected: z.enum(["shopify", "wordpress", "wix", "squarespace", "custom"]).optional(),
+});
+
+export type ScannedBusinessProfile = z.infer<typeof ScannedBusinessProfileSchema>;
+
+// ── Onboarding / Setup Schema ──
+
+export const OnboardingConfigSchema = z.object({
+  websiteScan: z.boolean().default(true),
+  publicChannels: z.boolean().default(false),
+  privateChannel: z.boolean().default(false),
+  integrations: z.array(z.string()).default([]),
+});
+
+export type OnboardingConfig = z.infer<typeof OnboardingConfigSchema>;
+
+export const SetupFieldSchema = z.object({
+  key: z.string(),
+  type: z.enum(["text", "textarea", "select", "url", "toggle"]),
+  label: z.string(),
+  required: z.boolean(),
+  options: z.array(z.string()).optional(),
+  default: z.string().optional(),
+  prefillFrom: z.string().optional(),
+});
+
+export type SetupField = z.infer<typeof SetupFieldSchema>;
+
+export const SetupStepSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  fields: z.array(SetupFieldSchema),
+});
+
+export type SetupStep = z.infer<typeof SetupStepSchema>;
+
+export const SetupSchema = z.object({
+  onboarding: OnboardingConfigSchema,
+  steps: z.array(SetupStepSchema),
+});
+
+export type SetupSchemaType = z.infer<typeof SetupSchema>;

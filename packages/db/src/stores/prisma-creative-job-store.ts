@@ -13,6 +13,7 @@ interface CreateCreativeJobInput {
   productImages: string[];
   references: string[];
   pastPerformance: Record<string, unknown> | null;
+  generateReferenceImages: boolean;
 }
 
 interface CreativeJobFilters {
@@ -40,6 +41,7 @@ export class PrismaCreativeJobStore {
         pastPerformance: input.pastPerformance
           ? (input.pastPerformance as object)
           : Prisma.JsonNull,
+        generateReferenceImages: input.generateReferenceImages,
       },
     }) as unknown as CreativeJob;
   }
@@ -87,6 +89,13 @@ export class PrismaCreativeJobStore {
     return this.prisma.creativeJob.update({
       where: { id },
       data: { stoppedAt },
+    }) as unknown as CreativeJob;
+  }
+
+  async updateProductionTier(id: string, tier: string): Promise<CreativeJob> {
+    return this.prisma.creativeJob.update({
+      where: { id },
+      data: { productionTier: tier },
     }) as unknown as CreativeJob;
   }
 }

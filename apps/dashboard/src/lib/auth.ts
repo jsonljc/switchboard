@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
+import GoogleProvider from "next-auth/providers/google";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { verifyPassword } from "./password";
@@ -37,6 +38,15 @@ const providers: NextAuthConfig["providers"] = [
     },
   }),
 ];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
+  );
+}
 
 // Only include the email (magic link) provider when SMTP is configured
 if (process.env.EMAIL_SERVER_HOST) {
@@ -82,8 +92,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!user) return null;
       return { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified };
     },
-    async getUserByAccount() {
-      return null; // We only use email provider
+    async getUserByAccount({ provider, providerAccountId }) {
+      if (provider === "google") {
+        const user = await prisma.dashboardUser.findUnique({
+          where: { googleId: providerAccountId },
+        });
+        if (!user) return null;
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          emailVerified: user.emailVerified,
+        };
+      }
+      return null;
     },
     async updateUser(user) {
       const updated = await prisma.dashboardUser.update({
@@ -100,9 +122,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         emailVerified: updated.emailVerified,
       };
     },
-    async linkAccount() {
-      // SAFETY: NextAuth adapter requires these methods but they are unused
-      // with credentials + email-only providers (no OAuth linking)
+    async linkAccount({ userId, provider, providerAccountId }) {
+      if (provider === "google") {
+        const existing = await prisma.dashboardUser.findUnique({
+          where: { googleId: providerAccountId },
+        });
+        if (existing && existing.id !== userId) {
+          throw new Error("This Google account is already linked to another user");
+        }
+        await prisma.dashboardUser.update({
+          where: { id: userId },
+          data: { googleId: providerAccountId },
+        });
+      }
       return undefined as never;
     },
     async unlinkAccount() {

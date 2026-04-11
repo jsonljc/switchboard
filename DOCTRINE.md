@@ -54,7 +54,7 @@ The approval token must:
 - Be bound to the exact payload hash
 - Expire quickly
 - Be single-use
-- Be clinic-scoped
+- Be org-scoped
 
 If the payload changes → token invalid.
 No token → no execution.
@@ -158,7 +158,7 @@ Switchboard must not depend on:
 You can swap models tomorrow.
 You cannot swap governance without breaking trust.
 
-## 10. Clinics Don't Buy Intelligence
+## 10. Users Don't Buy Intelligence
 
 They buy:
 

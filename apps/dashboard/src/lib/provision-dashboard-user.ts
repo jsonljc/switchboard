@@ -6,6 +6,7 @@ interface ProvisionDashboardUserInput {
   email: string;
   name?: string | null;
   emailVerified?: Date | null;
+  googleId?: string | null;
 }
 
 export async function provisionDashboardUser(
@@ -74,6 +75,7 @@ export async function provisionDashboardUser(
         email: input.email,
         name: input.name,
         emailVerified: input.emailVerified,
+        googleId: input.googleId ?? null,
         organizationId: orgId,
         principalId,
         apiKeyEncrypted: encryptApiKey(apiKey),

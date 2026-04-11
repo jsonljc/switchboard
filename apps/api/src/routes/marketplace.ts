@@ -12,7 +12,7 @@ import {
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { TrustScoreEngine, computeTrustProgression } from "@switchboard/core";
 import type { AgentListingStatus, AgentType, AgentTaskStatus } from "@switchboard/schemas";
 import { z } from "zod";
@@ -411,11 +411,14 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
     const token = "sw_" + randomBytes(15).toString("base64url").slice(0, 20);
     const encrypted = encryptCredentials({ token });
+    const tokenHash = createHash("sha256").update(token).digest("hex");
 
     const connection = await connectionStore.create({
       deploymentId: id,
       type: "web_widget",
       credentials: encrypted,
+      metadata: {},
+      tokenHash,
     });
 
     return reply.code(201).send({
