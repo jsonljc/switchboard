@@ -53,41 +53,38 @@ Dashboard: conversations, task review, trust score
 
 ### 3.1 What Already Exists (unchanged)
 
-| Component           | Location                                              | What It Does                                                        |
-| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------- |
-| ChannelGateway      | `packages/core/src/channel-gateway/`                  | Routes inbound messages → deployment → LLM → reply                  |
-| DeploymentLookup    | `apps/chat/src/gateway/deployment-lookup.ts`          | Maps channel tokens to deployments, builds persona from inputConfig |
-| Widget endpoints    | `apps/chat/src/endpoints/widget-*.ts`                 | SSE + message POST for web widget                                   |
-| RuntimeRegistry     | `apps/chat/src/managed/runtime-registry.ts`           | Loads gateway connections from DB on boot                           |
-| Marketplace CRUD    | `apps/api/src/routes/marketplace.ts`                  | Listing, deployment, task, trust score routes                       |
-| Deploy wizard UI    | `apps/dashboard/src/components/marketplace/`          | Persona form, connection step, test chat                            |
-| Trust scoring       | `packages/core/src/marketplace/trust-score-engine.ts` | Approval +3 (streak bonus), rejection -10, autonomy/pricing tiers   |
-| Conversation engine | `packages/core/src/channel-gateway/` + `apps/chat/`   | LLM-powered conversation with persona injection                     |
+| Component           | Location                                                                                | What It Does                                                        |
+| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| ChannelGateway      | `packages/core/src/channel-gateway/`                                                    | Routes inbound messages → deployment → LLM → reply                  |
+| DeploymentLookup    | `apps/chat/src/gateway/deployment-lookup.ts`                                            | Maps channel tokens to deployments, builds persona from inputConfig |
+| Widget endpoints    | `apps/chat/src/endpoints/widget-*.ts`                                                   | SSE + message POST for web widget                                   |
+| RuntimeRegistry     | `apps/chat/src/managed/runtime-registry.ts`                                             | Loads gateway connections from DB on boot                           |
+| Marketplace CRUD    | `apps/api/src/routes/marketplace.ts`                                                    | Listing, deployment, task, trust score routes                       |
+| Deploy wizard UI    | `apps/dashboard/src/components/marketplace/`                                            | Persona form, connection step, test chat                            |
+| Trust scoring       | `packages/core/src/marketplace/trust-score-engine.ts`                                   | Approval +3 (streak bonus), rejection -10, autonomy/pricing tiers   |
+| Conversation engine | `packages/core/src/channel-gateway/` (orchestrator) + `apps/chat/` (transport adapters) | LLM-powered conversation with persona injection                     |
 
 ### 3.2 What's New
 
 #### A. Auth (apps/dashboard)
 
-NextAuth.js with Google OAuth. Inline with marketplace flow — triggered by "Deploy" button, redirects back after sign-in. Uses JWT sessions (stateless, no session table needed).
+NextAuth.js with Google OAuth. Extends the existing `DashboardUser` model with a `googleId` field. Inline with marketplace flow — triggered by "Deploy" button, redirects back after sign-in. Uses JWT sessions (stateless, no session table needed).
 
 **New Prisma models:**
 
 ```prisma
-model User {
-  id        String              @id @default(cuid())
-  email     String              @unique
-  name      String?
-  googleId  String              @unique
-  orgId     String?
-  org       OrganizationConfig? @relation(fields: [orgId], references: [id])
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+// Existing model — add googleId for OAuth
+model DashboardUser {
+  // ... existing fields (id, email, name, emailVerified, organizationId,
+  //   principalId, apiKeyEncrypted, passwordHash, apiKeyHash, createdAt, updatedAt) ...
+  googleId  String?  @unique  // NEW — for Google OAuth sign-in
+  sessions  DashboardSession[]
 }
 
 // Addition to existing OrganizationConfig:
 model OrganizationConfig {
   // ... existing fields ...
-  users     User[]
+  users     DashboardUser[]
 }
 ```
 
@@ -96,7 +93,7 @@ model OrganizationConfig {
 ```typescript
 callbacks: {
   async jwt({ token, user }) {
-    if (user) { token.orgId = user.orgId; token.userId = user.id; }
+    if (user) { token.orgId = user.organizationId; token.userId = user.id; }
     return token;
   },
   async session({ session, token }) {
@@ -107,11 +104,12 @@ callbacks: {
 }
 ```
 
-- First-time sign-in → auto-creates User + OrganizationConfig (org ID generated via `cuid()`)
+- First-time sign-in → auto-creates DashboardUser + OrganizationConfig (org ID generated via `cuid()`)
 - Session includes `orgId` — all API calls scoped to it
 - No team/invite system yet (one user per org)
 - No role-based access yet (user is admin)
 - Marketplace browse is public (no auth required)
+- Existing DashboardUser records with password auth continue to work; googleId is nullable
 
 #### B. Website Scanner (packages/core)
 
@@ -171,7 +169,23 @@ export const ScannedBusinessProfileSchema = z.object({
 - Sites that block bots (403/captcha): skip blocked pages, scan what's available
 - Empty/useless results: fall back to manual entry form with helpful prompts
 - Large pages: truncate to first 8K characters per page before LLM extraction
-- Rate limiting: max 3 scans per user per hour
+- Rate limiting: max 3 scans per session per hour (tracked by IP before auth, by userId after auth). Prevents abuse during the unauthenticated scan step.
+
+**Security (SSRF prevention):**
+
+- Validate URL scheme: only `http://` and `https://` allowed (reject `file://`, `ftp://`, `data://`, etc.)
+- Resolve DNS and reject private/internal IPs before connecting:
+  - Block: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1`, `fc00::/7`
+- Reject URLs with IP addresses as hostnames (require DNS names)
+- Follow redirects with the same validation (re-check resolved IP at each hop, max 3 redirects)
+- Set a restrictive `User-Agent` header (e.g., `SwitchboardScanner/1.0`)
+- Strip any auth credentials from the URL before fetching
+
+**Prompt injection mitigation:**
+
+- Scanned HTML content is sent to the LLM for extraction. Malicious sites could embed adversarial instructions in page content.
+- Mitigation: the extraction prompt uses a structured output schema (Zod-validated), so free-form LLM output is rejected. The LLM is instructed to extract factual business information only.
+- The scanned profile is reviewed by the buyer before use — they can correct or remove any injected content.
 
 **Cost:** One LLM call per scan (~2K input tokens, ~1K output). Negligible.
 
@@ -188,7 +202,11 @@ export const OnboardingConfigSchema = z.object({
   privateChannel: z.boolean().default(false),
   integrations: z.array(z.string()).default([]),
 });
+```
 
+**Default behavior note:** The Zod schema defaults (`publicChannels: false`, etc.) apply when a listing HAS a `setupSchema` but omits specific `onboarding` flags. The fallback for listings WITHOUT any `setupSchema` is handled at the application level: the deploy flow treats them as customer-facing with `{ websiteScan: true, publicChannels: true, privateChannel: false, integrations: [] }`.
+
+```typescript
 export const SetupFieldSchema = z.object({
   key: z.string(),
   type: z.enum(["text", "textarea", "select", "url", "toggle"]),
@@ -263,7 +281,7 @@ Agent-specific setup        ← always (from setupSchema.steps)
 - Dashboard reads `setupSchema` and renders the appropriate flow dynamically
 - Fields with `prefillFrom` are auto-populated from the website scan
 - Submitted values become the deployment's `inputConfig`
-- Listings without `setupSchema`: show a minimal default form (business name + description only) with `publicChannels: true` as default
+- Listings without `setupSchema`: apply application-level defaults (`websiteScan: true`, `publicChannels: true`), show a minimal default form (business name + description only)
 - `setupSchema` is validated when listings are created/updated via the API
 
 #### D. Onboarding Endpoint (apps/api)
@@ -307,7 +325,9 @@ The storefront slug lives on `AgentDeployment` (new field):
 slug String? @unique  // e.g. "austin-bakery", "austin-bakery-2" on collision
 ```
 
-**Abuse protection:** Widget message endpoint rate-limited to 10 messages per minute per session/IP. Basic bot detection via honeypot field in the widget form.
+**Note:** `AgentListing` already has a `slug` field (e.g., `speed-to-lead`) for the marketplace catalog URL. The `AgentDeployment.slug` is different — it identifies the buyer's specific instance (e.g., `austin-bakery`) for the storefront URL. Both are needed: listing slug → `/marketplace/speed-to-lead`, deployment slug → `/agent/austin-bakery`.
+
+**Abuse protection:** Widget message endpoint rate-limited to 20 messages per minute per IP+session (matches existing implementation in widget-messages.ts). Future: bot detection via behavioral signals (timing, mouse movement) if abuse becomes a problem. MVP relies on rate limiting.
 
 #### F. Task Recording (apps/chat)
 
@@ -319,6 +339,15 @@ After each conversation (on session timeout or explicit end), the gateway create
 - Status: `awaiting_review` (for supervised agents) or `completed` (for autonomous)
 
 Hook point: `ChannelGateway.handleIncoming()` callback, after persisting the assistant message.
+
+**Session lifecycle for task recording:**
+
+- **Session identity:** Each widget conversation is identified by the `sessionId` sent by the client (generated client-side, persisted in `sessionStorage`).
+- **Session timeout:** 15 minutes of inactivity (no messages sent). Tracked by the ChannelGateway per sessionId.
+- **Explicit end:** Client sends a "close" event or the SSE connection drops (browser tab closed).
+- **On session end:** The gateway aggregates all messages in the session into a single `AgentTask.output` transcript and creates the task record.
+- **Re-engagement:** If a visitor returns with the same sessionId within the timeout window, messages append to the existing session. After timeout, a new session/task is created.
+- **Minimum threshold:** Sessions with fewer than 2 assistant messages are not recorded as tasks (filters out bounces and test pings).
 
 **Trust score clarification:** Trust scores are **per-listing** (global marketplace reputation), not per-deployment. When Buyer A approves a conversation with the Speed-to-Lead agent, it improves the global trust score for ALL deployments of that agent. This is by design — it's the agent's marketplace reputation, like app store ratings. The dashboard should frame it as "Agent Trust Score" not "Your Agent's Score" to set correct expectations.
 
@@ -461,26 +490,26 @@ Post-launch feature. Buyer can chat with their agent in "training mode" to teach
 
 ## 7. New Files Summary
 
-| Location                                                                | What                                                                  |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `packages/schemas/src/marketplace.ts`                                   | Add `ScannedBusinessProfileSchema`, `SetupSchema`, `SetupFieldSchema` |
-| `packages/core/src/website-scanner/scanner.ts`                          | Website fetcher + LLM extraction                                      |
-| `packages/core/src/website-scanner/__tests__/scanner.test.ts`           | Scanner tests                                                         |
-| `packages/core/src/website-scanner/types.ts`                            | Re-export types from schemas                                          |
-| `packages/core/src/website-scanner/platform-detector.ts`                | Detect Shopify/WordPress/Wix from HTML                                |
-| `packages/core/src/website-scanner/__tests__/platform-detector.test.ts` | Platform detector tests                                               |
-| `apps/api/src/routes/onboard.ts`                                        | POST /api/marketplace/onboard                                         |
-| `apps/api/src/routes/__tests__/onboard.test.ts`                         | Onboard endpoint tests                                                |
-| `apps/chat/src/gateway/task-recorder.ts`                                | Conversation → AgentTask recording                                    |
-| `apps/chat/src/gateway/__tests__/task-recorder.test.ts`                 | Task recorder tests                                                   |
-| `apps/dashboard/src/app/api/auth/[...nextauth]/route.ts`                | NextAuth config                                                       |
-| `apps/dashboard/src/app/(public)/agent/[slug]/page.tsx`                 | Agent storefront page (public)                                        |
-| `apps/dashboard/src/app/(public)/marketplace/page.tsx`                  | Public marketplace browse (no auth)                                   |
-| `apps/dashboard/src/app/(auth)/my-agent/page.tsx`                       | Buyer's agent management page                                         |
-| `apps/dashboard/src/components/marketplace/dynamic-setup-form.tsx`      | Renders form from setupSchema                                         |
-| `apps/dashboard/src/components/marketplace/website-scan-review.tsx`     | Review/edit scanned profile                                           |
-| `apps/dashboard/src/components/marketplace/install-instructions.tsx`    | Platform-specific widget install guide                                |
-| Prisma migration                                                        | User model, AgentDeployment.slug, DeploymentConnection.tokenHash      |
+| Location                                                                | What                                                                                                                        |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `packages/schemas/src/marketplace.ts`                                   | Add `ScannedBusinessProfileSchema`, `SetupSchema`, `SetupFieldSchema`                                                       |
+| `packages/core/src/website-scanner/scanner.ts`                          | Website fetcher + LLM extraction                                                                                            |
+| `packages/core/src/website-scanner/__tests__/scanner.test.ts`           | Scanner tests                                                                                                               |
+| `packages/core/src/website-scanner/types.ts`                            | Re-export types from schemas                                                                                                |
+| `packages/core/src/website-scanner/platform-detector.ts`                | Detect Shopify/WordPress/Wix from HTML                                                                                      |
+| `packages/core/src/website-scanner/__tests__/platform-detector.test.ts` | Platform detector tests                                                                                                     |
+| `apps/api/src/routes/onboard.ts`                                        | POST /api/marketplace/onboard                                                                                               |
+| `apps/api/src/routes/__tests__/onboard.test.ts`                         | Onboard endpoint tests                                                                                                      |
+| `apps/chat/src/gateway/task-recorder.ts`                                | Conversation → AgentTask recording                                                                                          |
+| `apps/chat/src/gateway/__tests__/task-recorder.test.ts`                 | Task recorder tests                                                                                                         |
+| `apps/dashboard/src/app/api/auth/[...nextauth]/route.ts`                | NextAuth config                                                                                                             |
+| `apps/dashboard/src/app/(public)/agent/[slug]/page.tsx`                 | Agent storefront page (public)                                                                                              |
+| `apps/dashboard/src/app/(public)/marketplace/page.tsx`                  | Public marketplace browse (no auth)                                                                                         |
+| `apps/dashboard/src/app/(auth)/my-agent/page.tsx`                       | Buyer's agent management page                                                                                               |
+| `apps/dashboard/src/components/marketplace/dynamic-setup-form.tsx`      | Renders form from setupSchema                                                                                               |
+| `apps/dashboard/src/components/marketplace/website-scan-review.tsx`     | Review/edit scanned profile                                                                                                 |
+| `apps/dashboard/src/components/marketplace/install-instructions.tsx`    | Platform-specific widget install guide                                                                                      |
+| Prisma migration                                                        | DashboardUser.googleId, OrganizationConfig.users relation, AgentDeployment.slug (new), DeploymentConnection.tokenHash (new) |
 
 ---
 
@@ -490,7 +519,7 @@ This is too large for a single implementation cycle. Recommended breakdown:
 
 | Sub-Project                          | What                                                                                                 | Depends On      |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | --------------- |
-| **SP1: Auth + Public Marketplace**   | NextAuth, User model, public browse, inline auth gate on "Deploy"                                    | Nothing         |
+| **SP1: Auth + Public Marketplace**   | NextAuth, DashboardUser.googleId migration, public browse, inline auth gate on "Deploy"              | Nothing         |
 | **SP2: Website Scanner**             | Core scanner module, LLM extraction, platform detection, Zod schemas                                 | Nothing         |
 | **SP3: Onboarding Flow**             | Dynamic setup form, website scan review, onboard endpoint, auto-provisioning, tokenHash optimization | SP1 + SP2       |
 | **SP4: Agent Storefront**            | Public storefront page in dashboard, widget embed, slug generation                                   | SP3             |
