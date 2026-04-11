@@ -9,6 +9,15 @@ export interface ChannelGatewayConfig {
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapterFactory: () => LLMAdapter;
+  /** Called after each message is persisted. Used by TaskRecorder. */
+  onMessageRecorded?: (info: {
+    deploymentId: string;
+    listingId: string;
+    channel: string;
+    sessionId: string;
+    role: "user" | "assistant";
+    content: string;
+  }) => void;
 }
 
 export interface DeploymentLookup {
