@@ -44,7 +44,11 @@ export const onboardRoutes: FastifyPluginAsync = async (app) => {
     const orgId = request.organizationIdFromAuth;
     if (!orgId) return reply.code(401).send({ error: "Unauthorized" });
 
-    const body = OnboardInput.parse(request.body);
+    const parsed = OnboardInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const listing = await listingStore.findById(body.listingId);
     if (!listing) return reply.code(404).send({ error: "Listing not found" });
 

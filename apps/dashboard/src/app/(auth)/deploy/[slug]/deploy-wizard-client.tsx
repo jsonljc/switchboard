@@ -11,7 +11,6 @@ import { ScanStep } from "@/components/marketplace/scan-step";
 import { ReviewPersonaStep } from "@/components/marketplace/review-persona-step";
 import { ConnectionStep } from "@/components/marketplace/connection-step";
 import { TestChatStep } from "@/components/marketplace/test-chat-step";
-import { DynamicSetupForm } from "@/components/marketplace/dynamic-setup-form";
 import { WebsiteScanReview } from "@/components/marketplace/website-scan-review";
 import { OperatorCharacter } from "@/components/character/operator-character";
 import type { RoleFocus } from "@/components/character/operator-character";
@@ -105,6 +104,11 @@ export function DeployWizardClient({
 
     if (onboarding.websiteScan !== false) {
       allSteps.push({ id: "scan", label: "Learn your business", component: ScanStep });
+      allSteps.push({
+        id: "review-scan",
+        label: "Review profile",
+        component: WebsiteScanReview as unknown as WizardStep["component"],
+      });
     }
 
     allSteps.push({ id: "review", label: "Review & customize", component: ReviewPersonaStep });
@@ -127,10 +131,6 @@ export function DeployWizardClient({
 
     return allSteps;
   }, [connections, handleDeploy, isDeploying, onboarding.websiteScan]);
-
-  // Suppress unused-import warnings for components imported for future use
-  void DynamicSetupForm;
-  void WebsiteScanReview;
 
   const header = (
     <div className="flex items-center gap-4 mb-8">

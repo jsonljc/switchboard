@@ -50,7 +50,7 @@ describe("WebsiteScanner", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         text: async () =>
-          '<html><head><meta name="shopify-digital-wallet" content="true"></head><body>Shop</body></html>',
+          '<html><head><meta name="shopify-digital-wallet" content="true"></head><body><h1>Welcome to our Shopify store</h1><p>Browse our products and find something you love.</p></body></html>',
       }),
     );
 

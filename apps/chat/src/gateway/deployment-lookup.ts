@@ -2,6 +2,7 @@ import type { PrismaClient } from "@switchboard/db";
 import type { DeploymentLookup, DeploymentInfo } from "@switchboard/core";
 import type { AgentPersona } from "@switchboard/schemas";
 import { createHash } from "node:crypto";
+import { decryptCredentials } from "@switchboard/db";
 
 const CACHE_TTL_MS = 60_000;
 
@@ -39,13 +40,36 @@ export class PrismaDeploymentLookup implements DeploymentLookup {
         matchedDeploymentId = conn.deploymentId;
       }
     } else {
-      // O(1) lookup via tokenHash instead of O(N) decrypt-scan
+      // O(1) lookup via tokenHash
       const tokenHash = createHash("sha256").update(token).digest("hex");
       const connection = await this.prisma.deploymentConnection.findUnique({
         where: { tokenHash },
       });
       if (connection && connection.status === "active") {
         matchedDeploymentId = connection.deploymentId;
+      }
+
+      // Fallback for pre-migration connections without tokenHash
+      if (!matchedDeploymentId) {
+        const connections = await this.prisma.deploymentConnection.findMany({
+          where: { type: channel, status: "active", tokenHash: null },
+        });
+        for (const conn of connections) {
+          try {
+            const creds = decryptCredentials(conn.credentials) as Record<string, unknown>;
+            if (creds["token"] === token) {
+              matchedDeploymentId = conn.deploymentId;
+              // Backfill tokenHash for future O(1) lookups
+              await this.prisma.deploymentConnection.update({
+                where: { id: conn.id },
+                data: { tokenHash },
+              });
+              break;
+            }
+          } catch {
+            continue;
+          }
+        }
       }
     }
 
