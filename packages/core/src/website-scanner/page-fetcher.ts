@@ -62,7 +62,7 @@ export async function fetchPages(
       const rawHtml = await response.text();
       const text = stripHtml(rawHtml);
 
-      if (text.length > 20) {
+      if (text.length > 0) {
         results.push({ path, rawHtml, text });
       }
     } catch {
