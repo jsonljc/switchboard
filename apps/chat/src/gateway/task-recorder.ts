@@ -87,9 +87,9 @@ export class TaskRecorder {
     // Cap messages per session to prevent memory blowup from long conversations
     if (session.messages.length < this.maxMessagesPerSession) {
       session.messages.push({ role: info.role, content: info.content });
-    }
-    if (info.role === "assistant") {
-      session.assistantCount++;
+      if (info.role === "assistant") {
+        session.assistantCount++;
+      }
     }
   }
 

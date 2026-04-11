@@ -70,10 +70,11 @@ export function StorefrontPage({ data }: StorefrontPageProps) {
   const email = typeof scannedProfile?.email === "string" ? scannedProfile.email : null;
 
   const rawHours = scannedProfile?.hours;
-  const hoursEntries =
+  const filteredHoursEntries =
     rawHours && typeof rawHours === "object" && !Array.isArray(rawHours)
       ? Object.entries(rawHours as Record<string, unknown>).filter(([, v]) => typeof v === "string")
-      : null;
+      : [];
+  const hoursEntries = filteredHoursEntries.length > 0 ? filteredHoursEntries : null;
   const hoursString = typeof rawHours === "string" ? rawHours : null;
 
   const chatServerUrl = process.env.NEXT_PUBLIC_CHAT_SERVER_URL || "http://localhost:3001";
