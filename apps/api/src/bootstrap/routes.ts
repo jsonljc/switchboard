@@ -30,6 +30,7 @@ import { operatorRoutes } from "../routes/operator.js";
 import { marketplaceRoutes } from "../routes/marketplace.js";
 import { marketplacePersonaRoutes } from "../routes/marketplace-persona.js";
 import { creativePipelineRoutes } from "../routes/creative-pipeline.js";
+import { onboardRoutes } from "../routes/onboard.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -60,4 +61,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(marketplaceRoutes, { prefix: "/api/marketplace" });
   await app.register(marketplacePersonaRoutes, { prefix: "/api/marketplace" });
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
+  await app.register(onboardRoutes, { prefix: "/api/marketplace" });
 }

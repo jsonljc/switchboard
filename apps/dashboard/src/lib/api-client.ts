@@ -443,6 +443,22 @@ export class SwitchboardClient extends SwitchboardClientBase {
     });
   }
 
+  async onboard(body: {
+    listingId: string;
+    setupAnswers?: Record<string, unknown>;
+    scannedProfile?: Record<string, unknown>;
+    businessName: string;
+  }) {
+    return this.request<{
+      deploymentId: string;
+      slug: string;
+      dashboardUrl: string;
+      storefrontUrl?: string;
+      widgetToken?: string;
+      embedCode?: string;
+    }>("/api/marketplace/onboard", { method: "POST", body: JSON.stringify(body) });
+  }
+
   // ── Agent Persona ──
 
   async getPersona() {
