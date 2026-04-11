@@ -79,6 +79,21 @@ export function useDeployments() {
   });
 }
 
+export function useDeployment(id: string | null) {
+  return useQuery({
+    queryKey: ["marketplace", "deployment", id],
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/marketplace/deployments");
+      if (!res.ok) throw new Error("Failed to fetch deployments");
+      const { deployments } = await res.json();
+      const deployment = deployments.find((d: { id: string }) => d.id === id);
+      if (!deployment) throw new Error("Deployment not found");
+      return deployment as MarketplaceDeployment;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useDeployListing() {
   const queryClient = useQueryClient();
   return useMutation({
