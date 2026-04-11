@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@switchboard/db";
-import { decryptCredentials } from "@switchboard/db";
 import type { DeploymentLookup, DeploymentInfo } from "@switchboard/core";
 import type { AgentPersona } from "@switchboard/schemas";
+import { createHash } from "node:crypto";
 
 const CACHE_TTL_MS = 60_000;
 
@@ -39,21 +39,13 @@ export class PrismaDeploymentLookup implements DeploymentLookup {
         matchedDeploymentId = conn.deploymentId;
       }
     } else {
-      // For web_widget: scan all active connections, decrypt, match token
-      const connections = await this.prisma.deploymentConnection.findMany({
-        where: { type: channel, status: "active" },
+      // O(1) lookup via tokenHash instead of O(N) decrypt-scan
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const connection = await this.prisma.deploymentConnection.findUnique({
+        where: { tokenHash },
       });
-
-      for (const conn of connections) {
-        try {
-          const creds = decryptCredentials(conn.credentials) as Record<string, unknown>;
-          if (creds["token"] === token) {
-            matchedDeploymentId = conn.deploymentId;
-            break;
-          }
-        } catch {
-          continue;
-        }
+      if (connection && connection.status === "active") {
+        matchedDeploymentId = connection.deploymentId;
       }
     }
 
