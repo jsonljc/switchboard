@@ -725,6 +725,7 @@ model AgentDeployment {
   organizationId      String
   listingId           String
   status              String   @default("provisioning") // provisioning, active, paused, deactivated
+  slug                String?  @unique
   inputConfig         Json     @default("{}")
   governanceSettings  Json     @default("{}")
   outputDestination   Json?
@@ -840,6 +841,7 @@ model DeploymentConnection {
   status       String   @default("active") // active, expired, revoked
   credentials  String   // encrypted
   metadata     Json?
+  tokenHash    String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

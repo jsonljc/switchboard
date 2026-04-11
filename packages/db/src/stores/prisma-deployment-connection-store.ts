@@ -6,6 +6,7 @@ interface CreateConnectionInput {
   slot?: string;
   credentials: string;
   metadata?: Record<string, unknown>;
+  tokenHash?: string;
 }
 
 export class PrismaDeploymentConnectionStore {
@@ -19,6 +20,7 @@ export class PrismaDeploymentConnectionStore {
         slot: input.slot ?? "default",
         credentials: input.credentials,
         metadata: (input.metadata as object) ?? undefined,
+        tokenHash: input.tokenHash ?? undefined,
       },
     });
   }
@@ -38,5 +40,11 @@ export class PrismaDeploymentConnectionStore {
 
   async delete(id: string): Promise<void> {
     await this.prisma.deploymentConnection.delete({ where: { id } });
+  }
+
+  async findByTokenHash(tokenHash: string) {
+    return this.prisma.deploymentConnection.findUnique({
+      where: { tokenHash },
+    });
   }
 }
