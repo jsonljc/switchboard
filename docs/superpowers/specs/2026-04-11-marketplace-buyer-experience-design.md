@@ -177,10 +177,18 @@ export const ScannedBusinessProfileSchema = z.object({
 
 #### C. Per-Agent Setup Schema
 
-Each `AgentListing` defines setup questions in its `metadata.setupSchema`. The schema is validated via Zod:
+Each `AgentListing` defines its complete onboarding flow in `metadata.setupSchema`. This includes which onboarding steps to show AND agent-specific setup questions. The schema is validated via Zod:
 
 ```typescript
 // In packages/schemas/src/marketplace.ts
+
+export const OnboardingConfigSchema = z.object({
+  websiteScan: z.boolean().default(true),
+  publicChannels: z.boolean().default(false),
+  privateChannel: z.boolean().default(false),
+  integrations: z.array(z.string()).default([]),
+});
+
 export const SetupFieldSchema = z.object({
   key: z.string(),
   type: z.enum(["text", "textarea", "select", "url", "toggle"]),
@@ -198,33 +206,90 @@ export const SetupStepSchema = z.object({
 });
 
 export const SetupSchema = z.object({
+  onboarding: OnboardingConfigSchema,
   steps: z.array(SetupStepSchema),
 });
 ```
 
-- Dashboard reads `setupSchema` and renders the form dynamically
+**`onboarding` controls which steps appear in the deploy flow:**
+
+| Flag             | What It Enables                                                                                          | Example Agents              |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `websiteScan`    | "Paste your website URL" step — scans site for business knowledge + brand context                        | Sales, Support, Creative    |
+| `publicChannels` | Creates widget + storefront — for agents that talk to the buyer's customers                              | Sales, Support              |
+| `privateChannel` | Sets up a direct channel to the buyer (Telegram/WhatsApp) — for agents that talk to the buyer themselves | Personal Assistant          |
+| `integrations`   | Shows integration connection step for the listed services (e.g. `["xero", "google_calendar"]`)           | Finance, Personal Assistant |
+
+**How different agent types configure this:**
+
+```typescript
+// Speed-to-Lead (customer-facing conversational)
+onboarding: { websiteScan: true, publicChannels: true, privateChannel: false, integrations: [] }
+
+// Performance Creative Director (internal, deliverable-producing)
+onboarding: { websiteScan: true, publicChannels: false, privateChannel: false, integrations: [] }
+
+// Bookkeeper (internal, system-connected)
+onboarding: { websiteScan: false, publicChannels: false, privateChannel: false, integrations: ["xero", "quickbooks", "freshbooks"] }
+
+// Personal Assistant (buyer-facing, mixed)
+onboarding: { websiteScan: true, publicChannels: false, privateChannel: true, integrations: ["google_calendar", "gmail"] }
+
+// Customer Support (customer-facing + system-connected)
+onboarding: { websiteScan: true, publicChannels: true, privateChannel: false, integrations: ["zendesk"] }
+```
+
+**The conditional onboarding flow:**
+
+```
+Auth
+  ▼
+[Website scan]              ← if onboarding.websiteScan
+  ▼
+Agent-specific setup        ← always (from setupSchema.steps)
+  ▼
+[Public channel creation]   ← if onboarding.publicChannels
+  (widget + storefront)       (auto-created, no user input needed)
+  ▼
+[Private channel setup]     ← if onboarding.privateChannel
+  (connect your Telegram)     (guided wizard)
+  ▼
+[Integration connections]   ← if onboarding.integrations.length > 0
+  (connect Xero, etc.)       (OAuth flows per integration)
+  ▼
+"Your agent is live!"
+```
+
+- Dashboard reads `setupSchema` and renders the appropriate flow dynamically
 - Fields with `prefillFrom` are auto-populated from the website scan
 - Submitted values become the deployment's `inputConfig`
-- Listings without `setupSchema`: show a minimal default form (business name + description only)
+- Listings without `setupSchema`: show a minimal default form (business name + description only) with `publicChannels: true` as default
 - `setupSchema` is validated when listings are created/updated via the API
 
 #### D. Onboarding Endpoint (apps/api)
 
 New route: `POST /api/marketplace/onboard`
 
-Single API call that orchestrates provisioning:
+Single API call that orchestrates provisioning. Steps are **conditional based on the listing's `setupSchema.onboarding`**:
 
 1. Creates `AgentDeployment` with `inputConfig` from setup form + scanned profile
 2. Generates deployment slug from business name (collision handling: append `-2`, `-3`, etc.)
-3. Creates `DeploymentConnection` for web widget with auto-generated token + **hashed token column** for indexed lookup (see Section 3.3)
-4. Stores scanned business profile in `inputConfig.scannedProfile` (for MVP; separate knowledge model in future)
-5. Returns: deployment ID, storefront URL, widget embed code, install instructions
+3. **If `publicChannels`:** Creates `DeploymentConnection` for web widget with auto-generated token + **hashed token column** for indexed lookup (see Section 3.3)
+4. **If `privateChannel`:** Creates `DeploymentConnection` for the buyer's chosen messaging app + calls `provision-notify`
+5. **If `integrations`:** Creates `DeploymentConnection` entries for each connected integration (OAuth tokens stored encrypted)
+6. Stores scanned business profile in `inputConfig.scannedProfile` (for MVP; separate knowledge model in future)
+7. Returns response shaped by agent type:
+   - Customer-facing: deployment ID, storefront URL, widget embed code, install instructions
+   - Internal/personal: deployment ID, dashboard link
+   - Mixed: all of the above
 
-**No `provision-notify` call needed for widgets.** Widget connections are resolved at request time by `PrismaDeploymentLookup` with a 60-second cache. The agent is available within 60 seconds of onboarding completion. For Telegram connections (added later via dashboard), `provision-notify` IS called since Telegram requires webhook registration on the chat server.
+**No `provision-notify` call needed for widgets.** Widget connections are resolved at request time by `PrismaDeploymentLookup` with a 60-second cache. For Telegram/WhatsApp connections (whether public bot or private channel to buyer), `provision-notify` IS called since these require webhook registration on the chat server.
 
-#### E. Agent Storefront (apps/dashboard)
+#### E. Agent Storefront (apps/dashboard) — Customer-Facing Agents Only
 
 New Next.js page: `/agent/[slug]` (public, no auth required)
+
+**Only created when `setupSchema.onboarding.publicChannels` is true.** Internal and personal agents skip this entirely — they operate through the dashboard or private channels.
 
 Serves a server-rendered micro-landing page with:
 
@@ -261,15 +326,33 @@ Hook point: `ChannelGateway.handleIncoming()` callback, after persisting the ass
 
 New page: `/my-agent` (or `/dashboard/agent/[deploymentId]`)
 
-Shows the buyer:
+The page adapts to the agent type based on `setupSchema.onboarding`:
+
+**All agents show:**
 
 - Agent status (active/paused)
-- Storefront link (copyable)
-- Widget embed code + platform-specific install instructions (based on `platformDetected`)
-- Recent conversations (from AgentTask entries)
 - Agent trust score (framed as marketplace reputation)
-- "Add Telegram" button (guided setup)
+- Recent tasks/activity
 - "Teach your agent" (future: knowledge chat)
+
+**Customer-facing agents (`publicChannels: true`) additionally show:**
+
+- Storefront link (copyable)
+- Widget embed code + platform-specific install instructions
+- "Add Telegram bot" button (guided setup)
+- Recent conversations with the buyer's customers
+
+**Personal agents (`privateChannel: true`) additionally show:**
+
+- Connected channels (your Telegram, your WhatsApp)
+- "Add another channel" button
+- Recent conversations with you (the buyer)
+
+**Integration-connected agents additionally show:**
+
+- Connected systems (Xero, Google Calendar, etc.) with status
+- "Reconnect" / "Add integration" buttons
+- Recent deliverables or reports
 
 ### 3.3 Widget Token Lookup Optimization
 
@@ -290,9 +373,11 @@ On connection creation, compute `tokenHash = SHA-256(token)`. On lookup, compute
 
 ## 4. Channel Strategy
 
-### Primary: Website Widget with Platform-Detected Install
+Channels are **agent-type-dependent**, controlled by `setupSchema.onboarding`. The same underlying infrastructure (ChannelGateway, DeploymentConnection, widget endpoints, Telegram adapter) serves all agent types — only the configuration and UX framing differ.
 
-The widget is where 80% of real leads come from. We reduce friction by detecting the buyer's website platform during the scan and providing tailored instructions:
+### Customer-Facing Agents (publicChannels: true)
+
+**Primary: Website Widget** — where 80% of real leads come from. Platform-detected install instructions:
 
 | Platform       | Install Method                         |
 | -------------- | -------------------------------------- |
@@ -302,21 +387,35 @@ The widget is where 80% of real leads come from. We reduce friction by detecting
 | Squarespace    | Settings → Code Injection → paste      |
 | Custom/Unknown | Copy-paste `<script>` tag              |
 
-Instructions are shown on the "My Agent" page with screenshots/steps specific to the detected platform.
+**Secondary: Agent Storefront** — the micro-landing page for link-in-bio, email signatures, Google My Business.
 
-### Secondary: Agent Storefront
+**Tertiary: Public Telegram/WhatsApp bot** — optional add-on for markets where messaging is primary.
 
-The micro-landing page serves as:
+### Personal/Buyer-Facing Agents (privateChannel: true)
 
-- Link-in-bio for social media
-- Reply link in email signatures
-- "Message us" destination from Google My Business
-- Demo/test URL before widget install
-- Fallback for buyers who can't edit their website
+**Primary: Direct messaging** — the agent communicates with the buyer through their preferred channel. Same Telegram/WhatsApp infrastructure, different framing:
 
-### Tertiary: Messaging Apps (add-on)
+- Customer-facing: "Create a Telegram bot for your customers"
+- Personal: "Connect your Telegram so your assistant can message you"
 
-Telegram and WhatsApp are optional add-ons, configured from the dashboard. Guided wizard walks the buyer through bot creation. Not required to start.
+**Secondary: In-dashboard chat** — always available as fallback, no setup needed.
+
+### Internal Agents (neither publicChannels nor privateChannel)
+
+**Dashboard-only** — the agent operates through the dashboard UI. The buyer submits briefs, reviews deliverables, and manages the agent entirely within the dashboard. No external channels needed.
+
+Examples: Creative Director (submit brief → receive creative assets), Bookkeeper (connect Xero → receive reports).
+
+### Integration Channels (integrations: [...])
+
+Separate from chat channels. These are system connections the agent uses to do its work:
+
+- Accounting: Xero, QuickBooks, FreshBooks (OAuth)
+- Calendar/Email: Google Calendar, Gmail (OAuth)
+- CRM: HubSpot, Salesforce (OAuth)
+- Commerce: Shopify Admin API (OAuth)
+
+Connected during onboarding if the listing requires them. Managed on the "My Agent" dashboard page.
 
 ---
 
