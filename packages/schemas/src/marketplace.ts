@@ -198,3 +198,41 @@ export const ScannedBusinessProfileSchema = z.object({
 });
 
 export type ScannedBusinessProfile = z.infer<typeof ScannedBusinessProfileSchema>;
+
+// ── Onboarding / Setup Schema ──
+
+export const OnboardingConfigSchema = z.object({
+  websiteScan: z.boolean().default(true),
+  publicChannels: z.boolean().default(false),
+  privateChannel: z.boolean().default(false),
+  integrations: z.array(z.string()).default([]),
+});
+
+export type OnboardingConfig = z.infer<typeof OnboardingConfigSchema>;
+
+export const SetupFieldSchema = z.object({
+  key: z.string(),
+  type: z.enum(["text", "textarea", "select", "url", "toggle"]),
+  label: z.string(),
+  required: z.boolean(),
+  options: z.array(z.string()).optional(),
+  default: z.string().optional(),
+  prefillFrom: z.string().optional(),
+});
+
+export type SetupField = z.infer<typeof SetupFieldSchema>;
+
+export const SetupStepSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  fields: z.array(SetupFieldSchema),
+});
+
+export type SetupStep = z.infer<typeof SetupStepSchema>;
+
+export const SetupSchema = z.object({
+  onboarding: OnboardingConfigSchema,
+  steps: z.array(SetupStepSchema),
+});
+
+export type SetupSchemaType = z.infer<typeof SetupSchema>;
