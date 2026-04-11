@@ -25,6 +25,7 @@ export default async function DeployPage({ params }: PageProps) {
   const connections = Array.isArray(metadata?.connections)
     ? (metadata.connections as Array<{ type: string; reason: string }>)
     : [];
+  const setupSchema = (listing.metadata as Record<string, unknown> | null)?.setupSchema ?? null;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -34,6 +35,7 @@ export default async function DeployPage({ params }: PageProps) {
         agentName={displayName}
         roleFocus={ROLE_MAP[slug] ?? "default"}
         connections={connections}
+        setupSchema={setupSchema}
       />
     </div>
   );

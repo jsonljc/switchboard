@@ -74,6 +74,12 @@ export const HookGeneratorOutput = z.object({
 });
 export type HookGeneratorOutput = z.infer<typeof HookGeneratorOutput>;
 
+export const AdFormat = z.enum(["feed_video", "stories", "skippable", "shorts"]);
+export type AdFormat = z.infer<typeof AdFormat>;
+
+export const ScriptSection = z.enum(["hook", "problem", "solution", "proof", "cta"]);
+export type ScriptSection = z.infer<typeof ScriptSection>;
+
 export const ScriptWriterOutput = z.object({
   scripts: z.array(
     z.object({
@@ -81,13 +87,13 @@ export const ScriptWriterOutput = z.object({
       fullScript: z.string(),
       timing: z.array(
         z.object({
-          section: z.string(),
+          section: ScriptSection,
           startSec: z.number(),
           endSec: z.number(),
           content: z.string(),
         }),
       ),
-      format: z.string(),
+      format: AdFormat,
       platform: z.string(),
       productionNotes: z.string(),
     }),
@@ -114,23 +120,50 @@ export const StoryboardOutput = z.object({
 });
 export type StoryboardOutput = z.infer<typeof StoryboardOutput>;
 
+export const ProductionTier = z.enum(["basic", "pro", "premium"]);
+export type ProductionTier = z.infer<typeof ProductionTier>;
+
 export const VideoProducerOutput = z.object({
-  videos: z.array(
+  tier: ProductionTier,
+  clips: z.array(
     z.object({
-      storyboardRef: z.string(),
+      sceneRef: z.string(),
       videoUrl: z.string(),
-      thumbnailUrl: z.string(),
-      format: z.string(),
       duration: z.number(),
-      platform: z.string(),
+      generatedBy: z.enum(["kling", "heygen"]),
     }),
   ),
-  staticFallbacks: z.array(
-    z.object({
-      imageUrl: z.string(),
-      platform: z.string(),
-    }),
-  ),
+  assembledVideos: z
+    .array(
+      z.object({
+        videoUrl: z.string(),
+        thumbnailUrl: z.string(),
+        format: z.string(),
+        duration: z.number(),
+        platform: z.string(),
+        hasVoiceover: z.boolean(),
+        hasCaptions: z.boolean(),
+        hasBackgroundMusic: z.boolean(),
+      }),
+    )
+    .optional(),
+  voiceover: z
+    .object({
+      audioUrl: z.string(),
+      duration: z.number(),
+      captionsUrl: z.string(),
+    })
+    .optional(),
+  errors: z
+    .array(
+      z.object({
+        stage: z.enum(["generation", "assembly", "voiceover", "captions"]),
+        scene: z.string().nullable(),
+        tool: z.string(),
+        message: z.string(),
+      }),
+    )
+    .optional(),
 });
 export type VideoProducerOutput = z.infer<typeof VideoProducerOutput>;
 
@@ -153,6 +186,7 @@ export const CreativeBriefInput = z.object({
   productImages: z.array(z.string()).default([]),
   references: z.array(z.string()).default([]),
   pastPerformance: z.record(z.unknown()).nullable().optional(),
+  generateReferenceImages: z.boolean().default(false),
 });
 export type CreativeBriefInput = z.infer<typeof CreativeBriefInput>;
 
@@ -170,6 +204,8 @@ export const CreativeJobSchema = z.object({
   productImages: z.array(z.string()),
   references: z.array(z.string()),
   pastPerformance: z.record(z.unknown()).nullable(),
+  generateReferenceImages: z.boolean(),
+  productionTier: ProductionTier.nullable().optional(),
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),

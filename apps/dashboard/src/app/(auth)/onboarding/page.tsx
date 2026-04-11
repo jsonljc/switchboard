@@ -49,7 +49,7 @@ export default function OnboardingPage() {
   // Step 2: Launch
   const [launchStatus, setLaunchStatus] = useState<"idle" | "launching" | "done">("idle");
 
-  const stepLabels = ["Teach your employee", "Connect channels", "Review & launch"];
+  const stepLabels = ["Configure your agent", "Connect channels", "Review & launch"];
   const launchStepIndex = stepLabels.length - 1;
 
   if (status === "loading") return null;
@@ -163,7 +163,7 @@ export default function OnboardingPage() {
 
       setLaunchStatus("done");
       toast({
-        title: "Your employee is ready!",
+        title: "Your agent is ready!",
         description: "Redirecting to your dashboard...",
       });
 

@@ -22,7 +22,7 @@ Nurture Specialist     Chat agent    Trust Score: 0 (starts free, fully supervis
 Sales Pipeline Bundle  All three together (discounted)
 ```
 
-Pricing follows trust-based model: agents start at score 0 (free, fully supervised). Score climbs through founder approvals.
+Pricing follows trust-based model: agents start at score 0 (free, fully supervised). Score climbs through founder approvals. ~15-20 clean approvals to graduate from free to basic tier.
 
 ### Future Agent Families (Catalog Placeholders)
 

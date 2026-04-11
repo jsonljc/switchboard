@@ -42,7 +42,7 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
 
 function createDeploymentInfo(overrides: Partial<DeploymentInfo> = {}): DeploymentInfo {
   return {
-    deployment: { id: "dep-1", listingId: "listing-1" },
+    deployment: { id: "dep-1", listingId: "listing-1", organizationId: "org-1" },
     persona: {
       id: "persona-1",
       organizationId: "org-1",

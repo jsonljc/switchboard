@@ -5,12 +5,10 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 
 const DEFAULT_STEP_LABELS = [
-  "About your business",
-  "How does your AI connect?",
-  "How much oversight?",
-  "Choose your first domain",
-  "Connect your service",
-  "You're ready",
+  "Configure your agent",
+  "Connect channels",
+  "Set governance",
+  "Review & launch",
 ];
 
 interface WizardShellProps {
@@ -62,29 +60,17 @@ export function WizardShell({
 
         <div className="flex gap-2 mt-8">
           {step > 0 && (
-            <Button
-              variant="outline"
-              onClick={onBack}
-              className="flex-1 min-h-[44px]"
-            >
+            <Button variant="outline" onClick={onBack} className="flex-1 min-h-[44px]">
               <ChevronLeft className="mr-1 h-4 w-4" />
               Back
             </Button>
           )}
           {isLastStep ? (
-            <Button
-              onClick={onComplete}
-              className="flex-1 min-h-[44px]"
-              disabled={isSubmitting}
-            >
+            <Button onClick={onComplete} className="flex-1 min-h-[44px]" disabled={isSubmitting}>
               {isSubmitting ? "Setting up…" : "Finish"}
             </Button>
           ) : (
-            <Button
-              onClick={onNext}
-              className="flex-1 min-h-[44px]"
-              disabled={!canProceed}
-            >
+            <Button onClick={onNext} className="flex-1 min-h-[44px]" disabled={!canProceed}>
               Next
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>

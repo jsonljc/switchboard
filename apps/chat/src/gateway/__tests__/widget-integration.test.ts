@@ -8,7 +8,7 @@ describe("Widget integration", () => {
     const gateway = new ChannelGateway({
       deploymentLookup: {
         findByChannelToken: vi.fn().mockResolvedValue({
-          deployment: { id: "dep-1", listingId: "listing-1" },
+          deployment: { id: "dep-1", listingId: "listing-1", organizationId: "org-1" },
           persona: {
             id: "p-1",
             organizationId: "org-1",

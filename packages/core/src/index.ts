@@ -199,3 +199,6 @@ export * from "./marketplace/index.js";
 
 // Channel Gateway (channel → AgentRuntime bridge)
 export * from "./channel-gateway/index.js";
+
+// Website Scanner (URL validation, platform detection, page fetching)
+export { WebsiteScanner, validateScanUrl, detectPlatform } from "./website-scanner/index.js";

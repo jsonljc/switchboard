@@ -205,7 +205,6 @@ export class SwitchboardClientBase {
       runtimeType?: string;
       runtimeConfig?: Record<string, unknown>;
       governanceProfile?: string;
-      skinId?: string;
       onboardingComplete?: boolean;
     },
   ) {

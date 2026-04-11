@@ -28,6 +28,15 @@ export class ChannelGateway {
 
     // 3. Persist incoming message
     await this.config.conversationStore.addMessage(conversationId, "user", message.text);
+    this.config.onMessageRecorded?.({
+      deploymentId: info.deployment.id,
+      listingId: info.deployment.listingId,
+      organizationId: info.deployment.organizationId,
+      channel: message.channel,
+      sessionId: message.sessionId,
+      role: "user",
+      content: message.text,
+    });
 
     // 4. Signal typing
     replySink.onTyping?.();
@@ -50,6 +59,15 @@ export class ChannelGateway {
       onChatExecute: async (reply: string) => {
         await replySink.send(reply);
         await this.config.conversationStore.addMessage(conversationId, "assistant", reply);
+        this.config.onMessageRecorded?.({
+          deploymentId: info.deployment.id,
+          listingId: info.deployment.listingId,
+          organizationId: info.deployment.organizationId,
+          channel: message.channel,
+          sessionId: message.sessionId,
+          role: "assistant",
+          content: reply,
+        });
       },
     });
 

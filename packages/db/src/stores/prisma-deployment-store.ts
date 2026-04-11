@@ -4,6 +4,7 @@ import type { AgentDeployment, DeploymentStatus } from "@switchboard/schemas";
 interface CreateDeploymentInput {
   organizationId: string;
   listingId: string;
+  slug?: string;
   inputConfig?: Record<string, unknown>;
   governanceSettings?: Record<string, unknown>;
   outputDestination?: Record<string, unknown> | null;
@@ -18,6 +19,7 @@ export class PrismaDeploymentStore {
       data: {
         organizationId: input.organizationId,
         listingId: input.listingId,
+        slug: input.slug ?? undefined,
         inputConfig: input.inputConfig ? (input.inputConfig as object) : undefined,
         governanceSettings: input.governanceSettings
           ? (input.governanceSettings as object)

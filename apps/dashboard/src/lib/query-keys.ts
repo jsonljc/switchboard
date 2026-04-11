@@ -86,6 +86,12 @@ export const queryKeys = {
     trustProgression: (id: string) => ["marketplace", "trust-progression", id] as const,
     deployments: () => ["marketplace", "deployments"] as const,
   },
+  creativeJobs: {
+    all: ["creativeJobs"] as const,
+    list: (deploymentId: string) => ["creativeJobs", "list", deploymentId] as const,
+    detail: (id: string) => ["creativeJobs", "detail", id] as const,
+    estimate: (id: string) => ["creativeJobs", "estimate", id] as const,
+  },
   tasks: {
     all: ["tasks"] as const,
     list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,

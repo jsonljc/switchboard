@@ -5,6 +5,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaCreativeJobStore, PrismaAgentTaskStore } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
+import { inngestClient } from "@switchboard/core/creative-pipeline";
 import { z } from "zod";
 
 const SubmitBriefInput = z.object({
@@ -15,6 +16,7 @@ const SubmitBriefInput = z.object({
 
 const ApproveStageInput = z.object({
   action: z.enum(["continue", "stop"]),
+  productionTier: z.enum(["basic", "pro"]).optional(),
 });
 
 export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
@@ -59,6 +61,18 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       productImages: brief.productImages,
       references: brief.references,
       pastPerformance: brief.pastPerformance ?? null,
+      generateReferenceImages: brief.generateReferenceImages,
+    });
+
+    // Fire Inngest event to start the pipeline
+    await inngestClient.send({
+      name: "creative-pipeline/job.submitted",
+      data: {
+        jobId: job.id,
+        taskId: task.id,
+        organizationId: orgId,
+        deploymentId,
+      },
     });
 
     return reply.code(201).send({ task, job });
@@ -131,17 +145,71 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Creative job not found" });
     }
 
+    if (job.currentStage === "complete" || job.stoppedAt) {
+      return reply.code(409).send({ error: "Job is not awaiting approval" });
+    }
+
+    // Persist productionTier if this is Stage 4 (storyboard) approval
+    if (parsed.data.action === "continue" && job.currentStage === "storyboard") {
+      const tier = parsed.data.productionTier ?? "basic";
+      await jobStore.updateProductionTier(id, tier);
+    }
+
     if (parsed.data.action === "stop") {
       const stopped = await jobStore.stop(id, job.currentStage);
+
+      // Fire stop event so the running Inngest function unblocks and exits
+      await inngestClient.send({
+        name: "creative-pipeline/stage.approved",
+        data: { jobId: id, action: "stop" },
+      });
+
       return reply.send({ job: stopped, action: "stopped" });
     }
 
-    // "continue" — in SP2 this will fire an Inngest event.
-    // For now, just acknowledge the approval.
-    return reply.send({
-      job,
-      action: "approved",
-      note: "Pipeline continuation will be wired in SP2 (Inngest)",
+    // Fire continue event — the running Inngest function's waitForEvent picks this up
+    await inngestClient.send({
+      name: "creative-pipeline/stage.approved",
+      data: { jobId: id, action: "continue" },
     });
+
+    return reply.send({ job, action: "approved" });
+  });
+
+  // GET /creative-jobs/:id/estimate — cost estimate per tier
+  app.get("/creative-jobs/:id/estimate", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { id } = request.params as { id: string };
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.findById(id);
+
+    if (!job || job.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Creative job not found" });
+    }
+
+    const stageOutputs = (job.stageOutputs ?? {}) as Record<string, unknown>;
+    const storyboard = stageOutputs["storyboard"];
+    const scripts = stageOutputs["scripts"] as { scripts?: unknown[] } | undefined;
+
+    if (!storyboard) {
+      return reply.send({ estimates: null, reason: "Storyboard not yet complete" });
+    }
+
+    const { estimateCost } = await import("@switchboard/core/creative-pipeline");
+    const scriptCount = scripts?.scripts?.length ?? 1;
+    const estimates = estimateCost(
+      storyboard as { storyboards: Array<{ scenes: Array<{ duration: number }> }> },
+      scriptCount,
+    );
+
+    return reply.send({ estimates });
   });
 };

@@ -67,6 +67,7 @@ export interface CreativeJobSummary {
   currentStage: string;
   stoppedAt: string | null;
   stageOutputs: Record<string, unknown>;
+  productionTier: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -442,6 +443,22 @@ export class SwitchboardClient extends SwitchboardClientBase {
     });
   }
 
+  async onboard(body: {
+    listingId: string;
+    setupAnswers?: Record<string, unknown>;
+    scannedProfile?: Record<string, unknown>;
+    businessName: string;
+  }) {
+    return this.request<{
+      deploymentId: string;
+      slug: string;
+      dashboardUrl: string;
+      storefrontUrl?: string;
+      widgetToken?: string;
+      embedCode?: string;
+    }>("/api/marketplace/onboard", { method: "POST", body: JSON.stringify(body) });
+  }
+
   // ── Agent Persona ──
 
   async getPersona() {
@@ -556,10 +573,26 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ job: CreativeJobSummary }>(`/api/marketplace/creative-jobs/${id}`);
   }
 
-  async approveCreativeJobStage(id: string, action: "continue" | "stop") {
+  async getCostEstimate(jobId: string) {
+    return this.request<{
+      estimates: {
+        basic: { cost: number; description: string };
+        pro: { cost: number; description: string };
+      } | null;
+    }>(`/api/marketplace/creative-jobs/${jobId}/estimate`);
+  }
+
+  async approveCreativeJobStage(
+    id: string,
+    action: "continue" | "stop",
+    productionTier?: "basic" | "pro",
+  ) {
     return this.request<{ job: CreativeJobSummary; action: string }>(
       `/api/marketplace/creative-jobs/${id}/approve`,
-      { method: "POST", body: JSON.stringify({ action }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
+      },
     );
   }
 }

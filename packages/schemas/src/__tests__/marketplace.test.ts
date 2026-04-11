@@ -14,6 +14,10 @@ import {
   AgentActionType,
   AgentActionStatus,
   ConnectionStatus,
+  ScannedBusinessProfileSchema,
+  OnboardingConfigSchema,
+  SetupSchema,
+  SetupFieldSchema,
 } from "../marketplace.js";
 
 describe("Marketplace schemas", () => {
@@ -234,6 +238,118 @@ describe("Marketplace schemas", () => {
   describe("ConnectionStatus enum", () => {
     it("has expected values", () => {
       expect(ConnectionStatus.options).toEqual(["active", "expired", "revoked"]);
+    });
+  });
+
+  describe("OnboardingConfigSchema", () => {
+    it("applies defaults when fields are omitted", () => {
+      const result = OnboardingConfigSchema.parse({});
+      expect(result.websiteScan).toBe(true);
+      expect(result.publicChannels).toBe(false);
+      expect(result.privateChannel).toBe(false);
+      expect(result.integrations).toEqual([]);
+    });
+
+    it("accepts explicit values", () => {
+      const result = OnboardingConfigSchema.parse({
+        websiteScan: false,
+        publicChannels: true,
+        integrations: ["xero"],
+      });
+      expect(result.websiteScan).toBe(false);
+      expect(result.publicChannels).toBe(true);
+      expect(result.integrations).toEqual(["xero"]);
+    });
+  });
+
+  describe("SetupSchema", () => {
+    it("validates a complete setup schema", () => {
+      const schema = {
+        onboarding: { websiteScan: true, publicChannels: true },
+        steps: [
+          {
+            id: "basics",
+            title: "Basic Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Tone",
+                required: true,
+                options: ["friendly", "professional"],
+              },
+              {
+                key: "bookingLink",
+                type: "url",
+                label: "Booking Link",
+                required: false,
+                prefillFrom: "scannedProfile.website",
+              },
+            ],
+          },
+        ],
+      };
+      const result = SetupSchema.parse(schema);
+      expect(result.steps).toHaveLength(1);
+      expect(result.steps[0].fields).toHaveLength(2);
+      expect(result.onboarding.publicChannels).toBe(true);
+    });
+
+    it("rejects invalid field type", () => {
+      expect(() =>
+        SetupFieldSchema.parse({ key: "x", type: "invalid", label: "X", required: true }),
+      ).toThrow();
+    });
+  });
+
+  describe("ScannedBusinessProfileSchema", () => {
+    it("validates a complete business profile", () => {
+      const profile = {
+        businessName: "Austin Bakery",
+        description: "Family-owned bakery since 1985",
+        products: [{ name: "Sourdough Bread", description: "Fresh daily", price: "$8" }],
+        services: ["Custom cakes", "Catering"],
+        location: { address: "123 Main St", city: "Austin", state: "TX" },
+        hours: { monday: "7am-5pm", tuesday: "7am-5pm" },
+        phone: "(512) 555-0100",
+        email: "hello@austinbakery.com",
+        faqs: [{ question: "Do you deliver?", answer: "Yes, within 10 miles" }],
+        brandLanguage: ["artisan", "family", "handcrafted"],
+        platformDetected: "shopify",
+      };
+      const result = ScannedBusinessProfileSchema.parse(profile);
+      expect(result.businessName).toBe("Austin Bakery");
+      expect(result.products).toHaveLength(1);
+      expect(result.platformDetected).toBe("shopify");
+    });
+
+    it("validates a minimal business profile (optional fields omitted)", () => {
+      const minimal = {
+        businessName: "Test Biz",
+        description: "A business",
+        products: [],
+        services: [],
+        faqs: [],
+        brandLanguage: [],
+      };
+      const result = ScannedBusinessProfileSchema.parse(minimal);
+      expect(result.businessName).toBe("Test Biz");
+      expect(result.location).toBeUndefined();
+      expect(result.platformDetected).toBeUndefined();
+    });
+
+    it("rejects invalid platformDetected value", () => {
+      expect(() =>
+        ScannedBusinessProfileSchema.parse({
+          businessName: "Test",
+          description: "Test",
+          products: [],
+          services: [],
+          faqs: [],
+          brandLanguage: [],
+          platformDetected: "invalid-platform",
+        }),
+      ).toThrow();
     });
   });
 });

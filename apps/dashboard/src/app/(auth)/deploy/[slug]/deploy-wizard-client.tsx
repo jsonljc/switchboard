@@ -11,6 +11,7 @@ import { ScanStep } from "@/components/marketplace/scan-step";
 import { ReviewPersonaStep } from "@/components/marketplace/review-persona-step";
 import { ConnectionStep } from "@/components/marketplace/connection-step";
 import { TestChatStep } from "@/components/marketplace/test-chat-step";
+import { WebsiteScanReview } from "@/components/marketplace/website-scan-review";
 import { OperatorCharacter } from "@/components/character/operator-character";
 import type { RoleFocus } from "@/components/character/operator-character";
 
@@ -19,12 +20,25 @@ interface ConnectionRequirement {
   reason: string;
 }
 
+interface OnboardingConfig {
+  websiteScan?: boolean;
+  publicChannels?: boolean;
+  privateChannel?: boolean;
+  integrations?: string[];
+}
+
+interface SetupSchema {
+  onboarding?: OnboardingConfig;
+  steps?: unknown[];
+}
+
 interface DeployWizardClientProps {
   listingId: string;
   listingSlug: string;
   agentName: string;
   roleFocus: RoleFocus;
   connections: ConnectionRequirement[];
+  setupSchema?: SetupSchema | null;
 }
 
 export function DeployWizardClient({
@@ -33,6 +47,7 @@ export function DeployWizardClient({
   agentName,
   roleFocus,
   connections,
+  setupSchema,
 }: DeployWizardClientProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -48,49 +63,74 @@ export function DeployWizardClient({
     wizardDataRef.current = data;
   }, []);
 
+  const onboarding: OnboardingConfig = setupSchema?.onboarding ?? {
+    websiteScan: true,
+    publicChannels: true,
+    privateChannel: false,
+    integrations: [],
+  };
+
   const handleDeploy = useCallback(() => {
     setError(null);
     startDeploy(async () => {
       try {
         const data = wizardDataRef.current;
-        const res = await fetch(`/api/dashboard/marketplace/listings/${listingId}/deploy`, {
+        const res = await fetch("/api/dashboard/marketplace/onboard", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            persona: data.persona,
-            governanceSettings: { startingAutonomy: "supervised" },
-            connectionIds: Object.keys(data.connections),
+            listingId,
+            businessName: data.persona?.businessName ?? "My Business",
+            setupAnswers: data.persona ?? {},
+            scannedProfile: data.scannedProfile ?? null,
           }),
         });
-
-        if (!res.ok) throw new Error("Deploy failed");
-        const { deployment } = await res.json();
-        router.push(`/deployments/${deployment.id}`);
+        if (!res.ok) {
+          const err = await res.json();
+          console.error("Onboard failed:", err);
+          setError("Deploy failed");
+          return;
+        }
+        const result = await res.json();
+        router.push(result.dashboardUrl || `/deployments/${result.deploymentId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Deploy failed");
       }
     });
   }, [listingId, router]);
 
-  const steps: WizardStep[] = useMemo(
-    () => [
-      { id: "scan", label: "Learn your business", component: ScanStep },
-      { id: "review", label: "Review & customize", component: ReviewPersonaStep },
-      ...connections.map((conn) => ({
+  const steps: WizardStep[] = useMemo(() => {
+    const allSteps: WizardStep[] = [];
+
+    if (onboarding.websiteScan !== false) {
+      allSteps.push({ id: "scan", label: "Learn your business", component: ScanStep });
+      allSteps.push({
+        id: "review-scan",
+        label: "Review profile",
+        component: WebsiteScanReview as unknown as WizardStep["component"],
+      });
+    }
+
+    allSteps.push({ id: "review", label: "Review & customize", component: ReviewPersonaStep });
+
+    for (const conn of connections) {
+      allSteps.push({
         id: `connect-${conn.type}`,
         label: `Connect ${conn.type}`,
         component: ConnectionStep as unknown as WizardStep["component"],
         props: { connectionType: conn.type, reason: conn.reason },
-      })),
-      {
-        id: "test-chat",
-        label: "Test your agent",
-        component: TestChatStep as unknown as WizardStep["component"],
-        props: { onDeploy: handleDeploy, isDeploying },
-      },
-    ],
-    [connections, handleDeploy, isDeploying],
-  );
+      });
+    }
+
+    allSteps.push({
+      id: "test-chat",
+      label: "Test your agent",
+      component: TestChatStep as unknown as WizardStep["component"],
+      props: { onDeploy: handleDeploy, isDeploying },
+    });
+
+    return allSteps;
+  }, [connections, handleDeploy, isDeploying, onboarding.websiteScan]);
 
   const header = (
     <div className="flex items-center gap-4 mb-8">
