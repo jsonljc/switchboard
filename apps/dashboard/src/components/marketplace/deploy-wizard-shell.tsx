@@ -43,6 +43,7 @@ export interface WizardData {
   persona?: PersonaInput;
   connections: Record<string, ConnectionConfig>;
   testChatVerified?: boolean;
+  scannedProfile?: Record<string, unknown>;
 }
 
 interface DeployWizardShellProps {
