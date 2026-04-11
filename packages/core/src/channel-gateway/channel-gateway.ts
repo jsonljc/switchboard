@@ -31,6 +31,7 @@ export class ChannelGateway {
     this.config.onMessageRecorded?.({
       deploymentId: info.deployment.id,
       listingId: info.deployment.listingId,
+      organizationId: info.deployment.organizationId,
       channel: message.channel,
       sessionId: message.sessionId,
       role: "user",
@@ -61,6 +62,7 @@ export class ChannelGateway {
         this.config.onMessageRecorded?.({
           deploymentId: info.deployment.id,
           listingId: info.deployment.listingId,
+          organizationId: info.deployment.organizationId,
           channel: message.channel,
           sessionId: message.sessionId,
           role: "assistant",

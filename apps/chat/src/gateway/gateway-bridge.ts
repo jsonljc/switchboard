@@ -17,7 +17,7 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
     createTask: (input) =>
       taskStore.create({
         deploymentId: input.deploymentId,
-        organizationId: "", // Placeholder — will be resolved
+        organizationId: input.organizationId ?? "",
         listingId: input.listingId,
         category: input.category,
         input: input.input,

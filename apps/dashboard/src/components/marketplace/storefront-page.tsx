@@ -53,10 +53,28 @@ export function StorefrontPage({ data }: StorefrontPageProps) {
   const services = getServices(scannedProfile);
   const products = getProducts(scannedProfile);
 
-  const location = typeof scannedProfile?.location === "string" ? scannedProfile.location : null;
+  const rawLocation = scannedProfile?.location;
+  const location =
+    typeof rawLocation === "string"
+      ? rawLocation
+      : rawLocation && typeof rawLocation === "object"
+        ? [
+            (rawLocation as Record<string, unknown>).address,
+            (rawLocation as Record<string, unknown>).city,
+            (rawLocation as Record<string, unknown>).state,
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : null;
   const phone = typeof scannedProfile?.phone === "string" ? scannedProfile.phone : null;
   const email = typeof scannedProfile?.email === "string" ? scannedProfile.email : null;
-  const hours = typeof scannedProfile?.hours === "string" ? scannedProfile.hours : null;
+
+  const rawHours = scannedProfile?.hours;
+  const hoursEntries =
+    rawHours && typeof rawHours === "object" && !Array.isArray(rawHours)
+      ? Object.entries(rawHours as Record<string, unknown>).filter(([, v]) => typeof v === "string")
+      : null;
+  const hoursString = typeof rawHours === "string" ? rawHours : null;
 
   const chatServerUrl = process.env.NEXT_PUBLIC_CHAT_SERVER_URL || "http://localhost:3001";
 
@@ -120,7 +138,7 @@ export function StorefrontPage({ data }: StorefrontPageProps) {
             )}
 
             {/* Contact info */}
-            {(location || phone || email || hours) && (
+            {(location || phone || email || hoursEntries || hoursString) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Contact &amp; Hours</CardTitle>
@@ -151,12 +169,24 @@ export function StorefrontPage({ data }: StorefrontPageProps) {
                       </a>
                     </div>
                   )}
-                  {hours && (
+                  {hoursEntries ? (
                     <div className="flex items-start gap-3 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                      <span className="whitespace-pre-line">{hours}</span>
+                      <div className="space-y-0.5">
+                        {hoursEntries.map(([day, hrs]) => (
+                          <div key={day} className="flex gap-2">
+                            <span className="capitalize w-24">{day}</span>
+                            <span>{hrs as string}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  ) : hoursString ? (
+                    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                      <span className="whitespace-pre-line">{hoursString}</span>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             )}

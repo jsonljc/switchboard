@@ -10,6 +10,7 @@ import { initDedup, checkDedup } from "./dedup/redis-dedup.js";
 import { SseSessionManager } from "./endpoints/widget-sse-manager.js";
 import { registerWidgetMessagesEndpoint } from "./endpoints/widget-messages.js";
 import { registerWidgetEventsEndpoint } from "./endpoints/widget-events.js";
+import { registerWidgetEmbedEndpoint } from "./endpoints/widget-embed.js";
 import { createGatewayBridge } from "./gateway/gateway-bridge.js";
 
 async function main() {
@@ -97,6 +98,7 @@ async function main() {
       sseManager = new SseSessionManager();
       registerWidgetMessagesEndpoint(app, gateway, sseManager);
       registerWidgetEventsEndpoint(app, sseManager);
+      registerWidgetEmbedEndpoint(app);
       app.log.info("Widget endpoints registered");
     } catch (err) {
       app.log.error(err, "Failed to initialize RuntimeRegistry and widget endpoints");

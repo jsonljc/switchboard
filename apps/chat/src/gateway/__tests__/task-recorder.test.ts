@@ -27,6 +27,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-1",
       role: "user",
@@ -35,6 +36,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-1",
       role: "assistant",
@@ -43,6 +45,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-1",
       role: "assistant",
@@ -70,6 +73,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-2",
       role: "user",
@@ -78,6 +82,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-2",
       role: "assistant",
@@ -92,6 +97,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-3",
       role: "user",
@@ -101,6 +107,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-3",
       role: "assistant",
@@ -109,6 +116,7 @@ describe("TaskRecorder", () => {
     recorder.recordMessage({
       deploymentId: "dep-1",
       listingId: "list-1",
+      organizationId: "org-1",
       channel: "web_widget",
       sessionId: "sess-3",
       role: "assistant",

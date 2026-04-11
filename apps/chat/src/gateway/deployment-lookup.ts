@@ -108,7 +108,11 @@ export class PrismaDeploymentLookup implements DeploymentLookup {
     };
 
     const info: DeploymentInfo = {
-      deployment: { id: deployment.id, listingId: deployment.listingId },
+      deployment: {
+        id: deployment.id,
+        listingId: deployment.listingId,
+        organizationId: deployment.organizationId,
+      },
       persona,
       trustScore,
       trustLevel: trustLevelFromScore(trustScore),
