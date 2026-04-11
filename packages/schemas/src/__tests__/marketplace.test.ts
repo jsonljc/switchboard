@@ -14,6 +14,7 @@ import {
   AgentActionType,
   AgentActionStatus,
   ConnectionStatus,
+  ScannedBusinessProfileSchema,
 } from "../marketplace.js";
 
 describe("Marketplace schemas", () => {
@@ -234,6 +235,57 @@ describe("Marketplace schemas", () => {
   describe("ConnectionStatus enum", () => {
     it("has expected values", () => {
       expect(ConnectionStatus.options).toEqual(["active", "expired", "revoked"]);
+    });
+  });
+
+  describe("ScannedBusinessProfileSchema", () => {
+    it("validates a complete business profile", () => {
+      const profile = {
+        businessName: "Austin Bakery",
+        description: "Family-owned bakery since 1985",
+        products: [{ name: "Sourdough Bread", description: "Fresh daily", price: "$8" }],
+        services: ["Custom cakes", "Catering"],
+        location: { address: "123 Main St", city: "Austin", state: "TX" },
+        hours: { monday: "7am-5pm", tuesday: "7am-5pm" },
+        phone: "(512) 555-0100",
+        email: "hello@austinbakery.com",
+        faqs: [{ question: "Do you deliver?", answer: "Yes, within 10 miles" }],
+        brandLanguage: ["artisan", "family", "handcrafted"],
+        platformDetected: "shopify",
+      };
+      const result = ScannedBusinessProfileSchema.parse(profile);
+      expect(result.businessName).toBe("Austin Bakery");
+      expect(result.products).toHaveLength(1);
+      expect(result.platformDetected).toBe("shopify");
+    });
+
+    it("validates a minimal business profile (optional fields omitted)", () => {
+      const minimal = {
+        businessName: "Test Biz",
+        description: "A business",
+        products: [],
+        services: [],
+        faqs: [],
+        brandLanguage: [],
+      };
+      const result = ScannedBusinessProfileSchema.parse(minimal);
+      expect(result.businessName).toBe("Test Biz");
+      expect(result.location).toBeUndefined();
+      expect(result.platformDetected).toBeUndefined();
+    });
+
+    it("rejects invalid platformDetected value", () => {
+      expect(() =>
+        ScannedBusinessProfileSchema.parse({
+          businessName: "Test",
+          description: "Test",
+          products: [],
+          services: [],
+          faqs: [],
+          brandLanguage: [],
+          platformDetected: "invalid-platform",
+        }),
+      ).toThrow();
     });
   });
 });
