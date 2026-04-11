@@ -297,6 +297,8 @@ model DashboardUser {
   apiKeyEncrypted String
   passwordHash    String?
   apiKeyHash      String?   @unique
+  googleId        String?   @unique
+  org             OrganizationConfig @relation(fields: [organizationId], references: [id])
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sessions        DashboardSession[]
@@ -332,6 +334,7 @@ model OrganizationConfig {
   purchasedAgents      String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  users                DashboardUser[]
 }
 
 // ── Agent Roster & State (Mission Control dashboard) ──
