@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ModelRouter } from "../model-router.js";
+import { ModelRouter, effortToSlotAndOptions, TASK_TYPE_EFFORT_MAP } from "../model-router.js";
 
 describe("ModelRouter", () => {
   const router = new ModelRouter();
@@ -59,5 +59,53 @@ describe("ModelRouter", () => {
   it("uses default timeout when none specified", () => {
     const config = router.resolve("default");
     expect(config.timeoutMs).toBe(8000);
+  });
+});
+
+describe("effortToSlotAndOptions", () => {
+  it("maps low effort to default slot", () => {
+    const { slot, options } = effortToSlotAndOptions("low");
+    expect(slot).toBe("default");
+    expect(options.critical).toBe(false);
+  });
+
+  it("maps medium effort to default slot with critical=true", () => {
+    const { slot, options } = effortToSlotAndOptions("medium");
+    expect(slot).toBe("default");
+    expect(options.critical).toBe(true);
+  });
+
+  it("maps high effort to premium slot", () => {
+    const { slot, options } = effortToSlotAndOptions("high");
+    expect(slot).toBe("premium");
+    expect(options.critical).toBe(false);
+  });
+
+  it("medium effort resolves to Sonnet via critical upgrade", () => {
+    const router = new ModelRouter();
+    const { slot, options } = effortToSlotAndOptions("medium");
+    const config = router.resolve(slot, options);
+    expect(config.modelId).toBe("claude-sonnet-4-6");
+  });
+
+  it("low effort resolves to Haiku", () => {
+    const router = new ModelRouter();
+    const { slot, options } = effortToSlotAndOptions("low");
+    const config = router.resolve(slot, options);
+    expect(config.modelId).toBe("claude-haiku-4-5-20251001");
+  });
+});
+
+describe("TASK_TYPE_EFFORT_MAP", () => {
+  it("maps content.draft to medium", () => {
+    expect(TASK_TYPE_EFFORT_MAP["content.draft"]).toBe("medium");
+  });
+
+  it("maps content.publish to low", () => {
+    expect(TASK_TYPE_EFFORT_MAP["content.publish"]).toBe("low");
+  });
+
+  it("maps summarisation to low", () => {
+    expect(TASK_TYPE_EFFORT_MAP["summarisation"]).toBe("low");
   });
 });

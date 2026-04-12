@@ -1,3 +1,5 @@
+import type { Effort } from "./context-budget.js";
+
 export type ModelSlot = "default" | "premium" | "embedding";
 
 export interface ModelConfig {
@@ -67,4 +69,36 @@ export class ModelRouter {
       fallbackSlot,
     };
   }
+}
+
+export function effortToSlotAndOptions(effort: Effort): {
+  slot: ModelSlot;
+  options: ResolveOptions;
+} {
+  switch (effort) {
+    case "low":
+      return { slot: "default", options: { critical: false } };
+    case "medium":
+      return { slot: "default", options: { critical: true } };
+    case "high":
+      return { slot: "premium", options: { critical: false } };
+  }
+}
+
+export const TASK_TYPE_EFFORT_MAP: Record<string, Effort> = {
+  "content.draft": "medium",
+  "content.revise": "medium",
+  "content.publish": "low",
+  "calendar.plan": "medium",
+  "calendar.schedule": "low",
+  "competitor.analyze": "medium",
+  "performance.report": "low",
+  classification: "low",
+  summarisation: "low",
+  retrieval: "low",
+};
+
+/** Look up effort for a task type. Falls back to "medium" if not mapped. */
+export function effortForTaskType(taskType: string): Effort {
+  return TASK_TYPE_EFFORT_MAP[taskType] ?? "medium";
 }
