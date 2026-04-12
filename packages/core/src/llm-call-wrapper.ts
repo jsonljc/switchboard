@@ -24,13 +24,20 @@ export interface UsageInfo {
 export interface LlmCallWrapperConfig {
   router: ModelRouter;
   callFn: LlmCallFn;
+  /** Assembler used to build the prompt from a ContextBudget. Defaults to `new ContextAssembler()` if not provided. */
+  assembler?: ContextAssembler;
   maxRetries?: number;
   failSafe?: LlmCallResult;
   onUsage?: (info: UsageInfo) => void;
 }
 
 export interface CallOptions extends ResolveOptions {
+  /**
+   * Raw prompt string. Used as-is when `budget` is not provided.
+   * Ignored when `budget` is present — pass `""` as a conventional placeholder.
+   */
   prompt: string;
+  /** When provided, the prompt is assembled via ContextAssembler from these budget layers. */
   budget?: ContextBudget;
   limits?: ContextBudgetLimits;
   orgId?: string;
@@ -41,6 +48,7 @@ export interface CallOptions extends ResolveOptions {
 export class LlmCallWrapper {
   private router: ModelRouter;
   private callFn: LlmCallFn;
+  private readonly assembler: ContextAssembler;
   private maxRetries: number;
   private failSafe?: LlmCallResult;
   private onUsage?: (info: UsageInfo) => void;
@@ -48,6 +56,7 @@ export class LlmCallWrapper {
   constructor(config: LlmCallWrapperConfig) {
     this.router = config.router;
     this.callFn = config.callFn;
+    this.assembler = config.assembler ?? new ContextAssembler();
     this.maxRetries = config.maxRetries ?? 1;
     this.failSafe = config.failSafe;
     this.onUsage = config.onUsage;
@@ -59,10 +68,7 @@ export class LlmCallWrapper {
 
     // Resolve prompt from budget if provided
     const resolvedPrompt = options.budget
-      ? new ContextAssembler().assemble(
-          options.budget,
-          options.limits ?? DEFAULT_CONTEXT_BUDGET_LIMITS,
-        )
+      ? this.assembler.assemble(options.budget, options.limits ?? DEFAULT_CONTEXT_BUDGET_LIMITS)
       : options.prompt;
     const resolvedOptions = { ...options, prompt: resolvedPrompt };
 
@@ -123,9 +129,9 @@ export class LlmCallWrapper {
     if (!this.onUsage) return;
     try {
       this.onUsage({
-        orgId: options.orgId ?? "unknown",
+        orgId: options.orgId ?? options.budget?.orgId ?? "unknown",
         model: config.modelId,
-        taskType: options.taskType ?? "unknown",
+        taskType: options.taskType ?? options.budget?.taskType ?? "unknown",
         durationMs: Date.now() - startMs,
         error,
       });

@@ -124,4 +124,33 @@ describe("LlmCallWrapper with ContextBudget", () => {
     await wrapper.call("default", { prompt: "raw prompt here" });
     expect(capturedInput["prompt"]).toBe("raw prompt here");
   });
+
+  it("sources orgId and taskType from budget when not set on options", async () => {
+    const logFn = vi.fn();
+    const callFn: LlmCallFn = vi.fn().mockResolvedValue({ reply: "ok", confidence: 1 });
+
+    const wrapper = new LlmCallWrapper({
+      router: new ModelRouter(),
+      callFn,
+      onUsage: logFn,
+    });
+
+    const budget: ContextBudget = {
+      doctrine: "You are helpful.",
+      memory: {},
+      task: { goal: "Draft post", scope: [], constraints: [], expectedOutput: "post" },
+      effort: "medium",
+      orgId: "org-from-budget",
+      taskType: "tasktype-from-budget",
+    };
+
+    await wrapper.call("default", { prompt: "", budget });
+
+    expect(logFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-from-budget",
+        taskType: "tasktype-from-budget",
+      }),
+    );
+  });
 });
