@@ -286,9 +286,13 @@ When absent, `DEFAULT_CONTEXT_BUDGET_LIMITS` is used.
 - `ContextLoader` interface has production (`PrismaContextLoader`) and test (`NullContextLoader`) implementations
 - `ContextAssembler` assembles budgets, truncates visibly when over limit, has unit tests
 - `LlmCallWrapper` accepts `budget?: ContextBudget` without breaking existing callers
-- `ModelRouter` has `effortToResolveOptions()` and `TASK_TYPE_EFFORT_MAP`
-- At least one employee (Creative) migrated to use `ContextBudget` instead of raw `prompt`
+- `ModelRouter` has `effortToSlotAndOptions()`, `effortForTaskType()`, and `TASK_TYPE_EFFORT_MAP`
 - All existing tests pass
+
+> **Deferred from Phase 2a:** Employee migration (Creative) deferred until creative-pipeline pre-existing
+> failures are resolved. `defineEmployee()` extension deferred until `employee-sdk` package exists.
+> Effort auto-routing (having `LlmCallWrapper` derive the slot from `budget.effort` automatically)
+> is a follow-up design decision — callers must call `effortToSlotAndOptions()` manually for now.
 
 ---
 
