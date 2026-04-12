@@ -66,3 +66,6 @@ export * from "./agent-persona.js";
 
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
+
+// Deployment Memory (three-tier agent memory system)
+export * from "./deployment-memory.js";

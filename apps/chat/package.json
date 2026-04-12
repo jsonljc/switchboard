@@ -19,6 +19,7 @@
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
+    "@switchboard/agents": "workspace:*",
     "fastify": "^5.8.2",
     "ioredis": "^5.10.0",
     "zod": "^3.23.0"

@@ -8,3 +8,11 @@ export type {
   ReplySink,
 } from "./types.js";
 export { UnknownChannelError, InactiveDeploymentError } from "./types.js";
+export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
+export type {
+  ConversationEndEvent,
+  ConversationEndHandler,
+  ConversationEndReason,
+  ConversationLifecycleConfig,
+  RecordMessageInput,
+} from "./conversation-lifecycle.js";

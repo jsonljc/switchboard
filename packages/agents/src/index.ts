@@ -147,3 +147,16 @@ export {
   type RetrieveOptions,
   type ConfidenceInput,
 } from "./knowledge/index.js";
+
+// Memory (post-conversation compounding, context building)
+export {
+  ConversationCompoundingService,
+  type CompoundingDeps,
+  type CompoundingLLMClient,
+} from "./memory/compounding-service.js";
+export {
+  ContextBuilder,
+  type BuiltContext,
+  type ContextBuildInput,
+  type ContextBuilderDeps,
+} from "./memory/context-builder.js";

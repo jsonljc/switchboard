@@ -142,6 +142,9 @@ importers:
 
   apps/chat:
     dependencies:
+      '@switchboard/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk

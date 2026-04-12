@@ -5,6 +5,7 @@ import {
   AgentTaskSchema,
   TrustScoreRecordSchema,
   AgentType,
+  AgentFamily,
   AutonomyLevel,
   PriceTier,
   AgentTaskStatus,
@@ -137,6 +138,18 @@ describe("Marketplace schemas", () => {
         "failed",
         "cancelled",
       ]);
+    });
+  });
+
+  describe("AgentFamily", () => {
+    it("accepts valid family values", () => {
+      expect(AgentFamily.parse("sales_pipeline")).toBe("sales_pipeline");
+      expect(AgentFamily.parse("paid_media")).toBe("paid_media");
+      expect(AgentFamily.parse("organic_growth")).toBe("organic_growth");
+      expect(AgentFamily.parse("customer_experience")).toBe("customer_experience");
+    });
+    it("rejects invalid family", () => {
+      expect(() => AgentFamily.parse("invalid")).toThrow();
     });
   });
 

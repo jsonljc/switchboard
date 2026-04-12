@@ -75,3 +75,5 @@ export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.j
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
+export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summary-store.js";
+export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
