@@ -16,7 +16,7 @@ function createMockDeps() {
       create: vi.fn().mockResolvedValue({ id: "sum-1" }),
     },
     deploymentMemoryStore: {
-      findByContent: vi.fn().mockResolvedValue([]),
+      findByCategory: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: "mem-1" }),
       incrementConfidence: vi.fn().mockResolvedValue({ id: "mem-1", sourceCount: 2 }),
       countByDeployment: vi.fn().mockResolvedValue(0),
@@ -116,7 +116,7 @@ describe("ConversationCompoundingService", () => {
       confidence: 0.5,
       sourceCount: 1,
     };
-    deps.deploymentMemoryStore.findByContent.mockResolvedValue([existingMemory]);
+    deps.deploymentMemoryStore.findByCategory.mockResolvedValue([existingMemory]);
     deps.embeddingAdapter.embed
       .mockResolvedValueOnce(new Array(1024).fill(0.5))
       .mockResolvedValueOnce(new Array(1024).fill(0.5));
@@ -199,7 +199,7 @@ describe("ConversationCompoundingService", () => {
       confidence: 0.6,
       sourceCount: 2,
     };
-    deps.deploymentMemoryStore.findByContent.mockImplementation(
+    deps.deploymentMemoryStore.findByCategory.mockImplementation(
       (_org: string, _dep: string, cat: string) =>
         Promise.resolve(cat === "faq" ? [existingFaq] : []),
     );

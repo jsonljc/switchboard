@@ -22,7 +22,7 @@ export interface CompoundingInteractionSummaryStore {
 }
 
 export interface CompoundingDeploymentMemoryStore {
-  findByContent(
+  findByCategory(
     organizationId: string,
     deploymentId: string,
     category: string,
@@ -166,7 +166,7 @@ export class ConversationCompoundingService {
     const count = await this.memoryStore.countByDeployment(organizationId, deploymentId);
     if (count >= MAX_MEMORY_ENTRIES) return;
 
-    const existing = await this.memoryStore.findByContent(
+    const existing = await this.memoryStore.findByCategory(
       organizationId,
       deploymentId,
       fact.category,
@@ -201,7 +201,7 @@ export class ConversationCompoundingService {
     deploymentId: string,
     question: string,
   ): Promise<void> {
-    const existing = await this.memoryStore.findByContent(organizationId, deploymentId, "faq");
+    const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "faq");
 
     if (existing.length > 0) {
       const questionEmbedding = await this.embedding.embed(question);

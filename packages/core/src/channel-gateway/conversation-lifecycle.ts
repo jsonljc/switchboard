@@ -21,6 +21,7 @@ export type ConversationEndHandler = (event: ConversationEndEvent) => Promise<vo
 export interface ConversationLifecycleConfig {
   onConversationEnd: ConversationEndHandler;
   inactivityTimeoutMs?: number;
+  maxSessions?: number;
 }
 
 export interface RecordMessageInput {
@@ -46,15 +47,18 @@ interface ActiveSession {
 }
 
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const DEFAULT_MAX_SESSIONS = 10_000;
 
 export class ConversationLifecycleTracker {
   private sessions = new Map<string, ActiveSession>();
   private readonly timeoutMs: number;
+  private readonly maxSessions: number;
   private readonly handler: ConversationEndHandler;
 
   constructor(config: ConversationLifecycleConfig) {
     this.handler = config.onConversationEnd;
     this.timeoutMs = config.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
+    this.maxSessions = config.maxSessions ?? DEFAULT_MAX_SESSIONS;
   }
 
   recordMessage(input: RecordMessageInput): void {
@@ -66,6 +70,10 @@ export class ConversationLifecycleTracker {
       if (input.contactId) existing.contactId = input.contactId;
       existing.timer = this.startTimer(input.sessionKey);
     } else {
+      if (this.sessions.size >= this.maxSessions) {
+        console.warn("[ConversationLifecycleTracker] Max sessions reached, dropping new session");
+        return;
+      }
       this.sessions.set(input.sessionKey, {
         deploymentId: input.deploymentId,
         organizationId: input.organizationId,

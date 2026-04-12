@@ -35,7 +35,11 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     }
     const store = new PrismaDeploymentMemoryStore(app.prisma);
     const { orgId, deploymentId } = request.params;
-    const body = CorrectMemoryInput.parse(request.body);
+    const parsed = CorrectMemoryInput.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+    }
+    const body = parsed.data;
     const entry = await store.create({
       organizationId: orgId,
       deploymentId,
@@ -54,7 +58,13 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(503).send({ error: "Database not available" });
     }
     const store = new PrismaDeploymentMemoryStore(app.prisma);
-    const { memoryId } = request.params;
+    const { orgId, deploymentId, memoryId } = request.params;
+    // Verify ownership — only delete entries belonging to this org+deployment
+    const entries = await store.listByDeployment(orgId, deploymentId);
+    const entry = entries.find((e) => e.id === memoryId);
+    if (!entry) {
+      return reply.code(404).send({ error: "Memory entry not found" });
+    }
     await store.delete(memoryId);
     return reply.status(204).send();
   });

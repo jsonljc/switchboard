@@ -119,7 +119,7 @@ describe("PrismaDeploymentMemoryStore", () => {
 
   it("finds entries by category", async () => {
     (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    await store.findByContent("org-1", "dep-1", "preference");
+    await store.findByCategory("org-1", "dep-1", "preference");
     expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith({
       where: { organizationId: "org-1", deploymentId: "dep-1", category: "preference" },
     });

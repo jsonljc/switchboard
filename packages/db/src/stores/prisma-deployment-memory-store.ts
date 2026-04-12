@@ -61,7 +61,7 @@ export class PrismaDeploymentMemoryStore {
     });
   }
 
-  async findByContent(organizationId: string, deploymentId: string, category: string) {
+  async findByCategory(organizationId: string, deploymentId: string, category: string) {
     return this.prisma.deploymentMemory.findMany({
       where: { organizationId, deploymentId, category },
     });
