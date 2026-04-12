@@ -1,5 +1,15 @@
 # Switchboard — Claude Code Instructions
 
+> **Context layers:** This file is organised into five layers. L1 is stable
+> doctrine loaded every session. L2–L5 are conventions applied per task.
+> See `CLAUDE.local.md` for personal wiki pointers and memory file paths.
+
+---
+
+## L1: Doctrine
+
+> Stable. Loaded every session. Everything below this heading is L1.
+
 AI Agent Marketplace with trust-based pricing (TypeScript monorepo, pnpm + Turborepo). For deep architecture details see `docs/ARCHITECTURE.md`.
 
 ---
@@ -137,3 +147,49 @@ chore: update dependencies
 ## Environment Variables
 
 See `.env.example` for the full list. Never commit `.env` files or secrets.
+
+---
+
+## L2: Project Memory
+
+Pointers only — no content dumps. Load the relevant slice for the current task.
+
+- Active decisions and blockers: see `CLAUDE.local.md` → Memory Files section
+- Wiki pages by task type: see `CLAUDE.local.md` → Wiki Context by Task Type
+- Reusable procedures: test scaffold = co-locate `__tests__/<name>.test.ts`; migration = `pnpm db:migrate`; PR review = typecheck + lint + test + coverage
+
+---
+
+## L3: Task Capsule Format
+
+Use this structure for all subagent dispatches. Replace prose briefings.
+
+```json
+{
+  "goal": "",
+  "scope": [],
+  "constraints": [],
+  "expected_deliverable": "",
+  "open_questions": []
+}
+```
+
+---
+
+## L4: Tool Gating
+
+- Read tools first. Confirm scope before using write tools.
+- Never import from `@switchboard/db` or `apps/*` in `schemas`, `core`, or `cartridge-sdk` tasks.
+- Prefer targeted file reads (`Read packages/core/src/model-router.ts`) over directory dumps.
+- Only expose dashboard/db tools for app-layer tasks (Layer 6 in the dependency stack).
+
+---
+
+## L5: Write-Back
+
+After each meaningful session:
+
+1. Update relevant memory files (`~/.claude/projects/.../memory/`)
+2. Append to `~/second brain/06_KNOWLEDGE/wiki/log.md` if a new insight was produced
+3. Note any reusable pattern discovered
+4. Record decisions made (what and why, not just what)
