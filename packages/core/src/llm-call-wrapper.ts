@@ -1,4 +1,7 @@
 import type { ModelRouter, ModelSlot, ModelConfig, ResolveOptions } from "./model-router.js";
+import type { ContextBudget, ContextBudgetLimits } from "./context-budget.js";
+import { DEFAULT_CONTEXT_BUDGET_LIMITS } from "./context-budget.js";
+import { ContextAssembler } from "./context-assembler.js";
 
 export interface LlmCallResult {
   reply: string;
@@ -28,6 +31,8 @@ export interface LlmCallWrapperConfig {
 
 export interface CallOptions extends ResolveOptions {
   prompt: string;
+  budget?: ContextBudget;
+  limits?: ContextBudgetLimits;
   orgId?: string;
   taskType?: string;
   [key: string]: unknown;
@@ -52,11 +57,20 @@ export class LlmCallWrapper {
     const modelConfig = this.router.resolve(slot, options);
     const start = Date.now();
 
+    // Resolve prompt from budget if provided
+    const resolvedPrompt = options.budget
+      ? new ContextAssembler().assemble(
+          options.budget,
+          options.limits ?? DEFAULT_CONTEXT_BUDGET_LIMITS,
+        )
+      : options.prompt;
+    const resolvedOptions = { ...options, prompt: resolvedPrompt };
+
     // Try primary model with retries
     let lastError: Error | undefined;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const result = await this.callWithTimeout(modelConfig, options);
+        const result = await this.callWithTimeout(modelConfig, resolvedOptions);
         this.reportUsage(options, modelConfig, start);
         return result;
       } catch (err) {
@@ -68,7 +82,7 @@ export class LlmCallWrapper {
     if (modelConfig.fallbackSlot) {
       const fallbackConfig = this.router.resolve(modelConfig.fallbackSlot, options);
       try {
-        const result = await this.callWithTimeout(fallbackConfig, options);
+        const result = await this.callWithTimeout(fallbackConfig, resolvedOptions);
         this.reportUsage(options, fallbackConfig, start);
         return result;
       } catch (err) {

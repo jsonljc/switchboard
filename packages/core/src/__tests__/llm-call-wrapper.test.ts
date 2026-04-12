@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { LlmCallWrapper, type LlmCallFn } from "../llm-call-wrapper.js";
-import { ModelRouter } from "../model-router.js";
+import { LlmCallWrapper, type LlmCallFn, type LlmCallResult } from "../llm-call-wrapper.js";
+import { ModelRouter, type ModelConfig } from "../model-router.js";
+import type { ContextBudget } from "../context-budget.js";
+import { DEFAULT_CONTEXT_BUDGET_LIMITS } from "../context-budget.js";
 
 describe("LlmCallWrapper", () => {
   const router = new ModelRouter();
@@ -68,5 +70,58 @@ describe("LlmCallWrapper", () => {
     expect(logFn).toHaveBeenCalledWith(
       expect.objectContaining({ model: "claude-haiku-4-5-20251001", orgId: "org-1" }),
     );
+  });
+});
+
+describe("LlmCallWrapper with ContextBudget", () => {
+  it("assembles prompt from budget when budget is provided", async () => {
+    let capturedInput: Record<string, unknown> = {};
+    const callFn = async (
+      _config: ModelConfig,
+      input: Record<string, unknown>,
+    ): Promise<LlmCallResult> => {
+      capturedInput = input;
+      return { reply: "ok", confidence: 1 };
+    };
+
+    const wrapper = new LlmCallWrapper({
+      router: new ModelRouter(),
+      callFn,
+    });
+
+    const budget: ContextBudget = {
+      doctrine: "You are helpful.",
+      memory: { brand: "Brand: direct." },
+      task: { goal: "Draft post", scope: [], constraints: [], expectedOutput: "post" },
+      effort: "medium",
+      orgId: "org-1",
+      taskType: "content.draft",
+    };
+
+    await wrapper.call("default", { prompt: "", budget, limits: DEFAULT_CONTEXT_BUDGET_LIMITS });
+
+    expect(typeof capturedInput["prompt"]).toBe("string");
+    expect(capturedInput["prompt"] as string).toContain("You are helpful.");
+    expect(capturedInput["prompt"] as string).toContain("Brand: direct.");
+    expect(capturedInput["prompt"] as string).toContain("Draft post");
+  });
+
+  it("uses raw prompt when no budget is provided", async () => {
+    let capturedInput: Record<string, unknown> = {};
+    const callFn = async (
+      _config: ModelConfig,
+      input: Record<string, unknown>,
+    ): Promise<LlmCallResult> => {
+      capturedInput = input;
+      return { reply: "ok", confidence: 1 };
+    };
+
+    const wrapper = new LlmCallWrapper({
+      router: new ModelRouter(),
+      callFn,
+    });
+
+    await wrapper.call("default", { prompt: "raw prompt here" });
+    expect(capturedInput["prompt"]).toBe("raw prompt here");
   });
 });
