@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ModelRouter, effortToSlotAndOptions, TASK_TYPE_EFFORT_MAP } from "../model-router.js";
+import {
+  ModelRouter,
+  effortToSlotAndOptions,
+  TASK_TYPE_EFFORT_MAP,
+  effortForTaskType,
+} from "../model-router.js";
 
 describe("ModelRouter", () => {
   const router = new ModelRouter();
@@ -107,5 +112,15 @@ describe("TASK_TYPE_EFFORT_MAP", () => {
 
   it("maps summarisation to low", () => {
     expect(TASK_TYPE_EFFORT_MAP["summarisation"]).toBe("low");
+  });
+});
+
+describe("effortForTaskType", () => {
+  it("returns mapped effort for a known task type", () => {
+    expect(effortForTaskType("content.draft")).toBe("medium");
+  });
+
+  it("returns medium for an unknown task type (fallback)", () => {
+    expect(effortForTaskType("unknown.task.type")).toBe("medium");
   });
 });
