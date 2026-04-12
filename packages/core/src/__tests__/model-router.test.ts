@@ -113,6 +113,10 @@ describe("TASK_TYPE_EFFORT_MAP", () => {
   it("maps summarisation to low", () => {
     expect(TASK_TYPE_EFFORT_MAP["summarisation"]).toBe("low");
   });
+
+  it("covers all expected task types", () => {
+    expect(Object.keys(TASK_TYPE_EFFORT_MAP)).toHaveLength(10);
+  });
 });
 
 describe("effortForTaskType", () => {

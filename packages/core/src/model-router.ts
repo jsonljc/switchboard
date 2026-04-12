@@ -85,6 +85,11 @@ export function effortToSlotAndOptions(effort: Effort): {
   }
 }
 
+/**
+ * Default effort level per task type. Used by LlmCallWrapper when no explicit
+ * `budget.effort` is provided. "high" effort is not mapped here — callers set
+ * it explicitly on the ContextBudget when a task requires premium-direct routing.
+ */
 export const TASK_TYPE_EFFORT_MAP: Record<string, Effort> = {
   "content.draft": "medium",
   "content.revise": "medium",
