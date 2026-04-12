@@ -38,10 +38,11 @@ describe("ContextAssembler", () => {
     expect(prompt).toContain("Keep paragraphs short.");
   });
 
-  it("does not include orgId or taskType in prompt", () => {
+  it("does not include orgId, taskType, or effort in prompt", () => {
     const prompt = assembler.assemble(budget, DEFAULT_CONTEXT_BUDGET_LIMITS);
     expect(prompt).not.toContain("org-1");
     expect(prompt).not.toContain("content.draft");
+    expect(prompt).not.toContain("medium");
   });
 
   it("truncates doctrine when it exceeds doctrineBudget", () => {

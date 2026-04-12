@@ -5,7 +5,9 @@ const TRUNCATION_NOTICE = "[truncated — see full context in memory store]";
 
 function truncate(text: string, budget: number): string {
   if (text.length <= budget) return text;
-  return text.slice(0, budget - TRUNCATION_NOTICE.length) + TRUNCATION_NOTICE;
+  const cutoff = budget - TRUNCATION_NOTICE.length;
+  if (cutoff <= 0) return TRUNCATION_NOTICE.slice(0, budget);
+  return text.slice(0, cutoff) + TRUNCATION_NOTICE;
 }
 
 export class ContextAssembler {
