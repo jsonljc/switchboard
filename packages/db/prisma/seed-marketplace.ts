@@ -9,7 +9,41 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Responds to inbound leads within 60 seconds. Qualifies through natural conversation.",
     taskCategories: ["lead-qualification"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "leads" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "leads",
+      family: "sales_pipeline",
+      publicChannels: true,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: true,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
   {
     name: "Sales Closer",
@@ -17,7 +51,47 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Takes qualified leads and closes them. Handles objections, builds urgency, confirms decisions.",
     taskCategories: ["sales-closing"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "growth" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "growth",
+      family: "sales_pipeline",
+      publicChannels: true,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: true,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "bookingLink",
+                type: "url",
+                label: "Booking Link",
+                required: true,
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
   {
     name: "Nurture Specialist",
@@ -25,7 +99,41 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Re-engages cold leads through scheduled follow-ups. Varies approach across cadence.",
     taskCategories: ["lead-nurturing"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "care" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "care",
+      family: "sales_pipeline",
+      publicChannels: false,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: false,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
 ];
 
@@ -37,34 +145,55 @@ const SALES_PIPELINE_BUNDLE = {
   taskCategories: ["lead-qualification", "sales-closing", "lead-nurturing"],
 };
 
-const FUTURE_FAMILIES = [
-  {
-    name: "Performance Creative Director",
-    slug: "performance-creative-director",
-    description:
-      "Full creative pipeline — from trend analysis and hooks to scripts, storyboards, and produced video ads. Stop at any stage.",
-    taskCategories: ["creative_strategy", "hooks", "scripts", "storyboard", "production"],
-    metadata: {
-      isBundle: false,
-      family: "creative",
-      stages: ["trends", "hooks", "scripts", "storyboard", "production"],
+const PERFORMANCE_CREATIVE_DIRECTOR = {
+  name: "Performance Creative Director",
+  slug: "performance-creative-director",
+  description:
+    "Full creative pipeline — from trend analysis and hooks to scripts, storyboards, and produced video ads. Stop at any stage.",
+  taskCategories: ["creative_strategy", "hooks", "scripts", "storyboard", "production"],
+  metadata: {
+    isBundle: false,
+    family: "paid_media",
+    stages: ["trends", "hooks", "scripts", "storyboard", "production"],
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Creative Setup",
+          fields: [
+            {
+              key: "targetAudience",
+              type: "textarea",
+              label: "Target Audience",
+              required: false,
+              prefillFrom: "scannedProfile.description",
+            },
+            {
+              key: "platforms",
+              type: "select",
+              label: "Ad Platforms",
+              required: true,
+              options: ["meta", "youtube", "tiktok"],
+            },
+            {
+              key: "brandVoice",
+              type: "textarea",
+              label: "Brand Voice",
+              required: false,
+              prefillFrom: "scannedProfile.brandLanguage",
+            },
+          ],
+        },
+      ],
     },
   },
-  {
-    name: "Trading",
-    slug: "trading-family",
-    description: "Market analysis, alerts, execution. Coming soon.",
-    taskCategories: [] as string[],
-    metadata: { isBundle: true, family: "trading" },
-  },
-  {
-    name: "Finance",
-    slug: "finance-family",
-    description: "Bookkeeping, invoicing, expenses. Coming soon.",
-    taskCategories: [] as string[],
-    metadata: { isBundle: true, family: "finance" },
-  },
-];
+};
 
 export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   const agentIds: string[] = [];
@@ -92,12 +221,53 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     console.warn(`  Seeded listing: ${agent.name} (${listing.id})`);
   }
 
+  const bundleMetadata = {
+    isBundle: true,
+    family: "sales_pipeline",
+    bundleListingIds: agentIds,
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: true,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Bundle Setup",
+          fields: [
+            {
+              key: "tone",
+              type: "select",
+              label: "Conversation Tone",
+              required: true,
+              options: ["friendly", "professional", "casual"],
+            },
+            {
+              key: "bookingLink",
+              type: "url",
+              label: "Booking Link",
+              required: true,
+            },
+            {
+              key: "customInstructions",
+              type: "textarea",
+              label: "Custom Instructions",
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
   const bundle = await prisma.agentListing.upsert({
     where: { slug: SALES_PIPELINE_BUNDLE.slug },
     update: {
       name: SALES_PIPELINE_BUNDLE.name,
       description: SALES_PIPELINE_BUNDLE.description,
-      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
+      metadata: bundleMetadata,
     },
     create: {
       ...SALES_PIPELINE_BUNDLE,
@@ -107,7 +277,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
       autonomyLevel: "supervised",
       priceTier: "free",
       priceMonthly: 0,
-      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
+      metadata: bundleMetadata,
     },
   });
   console.warn(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
@@ -117,22 +287,32 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     where: { slug: "creative-family" },
   });
 
-  for (const family of FUTURE_FAMILIES) {
-    const listing = await prisma.agentListing.upsert({
-      where: { slug: family.slug },
-      update: { name: family.name, description: family.description, metadata: family.metadata },
-      create: {
-        ...family,
-        type: "switchboard_native",
-        status: "pending_review",
-        trustScore: 0,
-        autonomyLevel: "supervised",
-        priceTier: "free",
-        priceMonthly: 0,
-      },
-    });
-    console.warn(`  Seeded placeholder: ${family.name} (${listing.id})`);
-  }
+  // Remove old trading/finance placeholders that have no backing code
+  await prisma.agentListing.deleteMany({
+    where: { slug: { in: ["trading-family", "finance-family"] } },
+  });
+
+  // Seed Performance Creative Director as a listed agent
+  const pcd = await prisma.agentListing.upsert({
+    where: { slug: PERFORMANCE_CREATIVE_DIRECTOR.slug },
+    update: {
+      name: PERFORMANCE_CREATIVE_DIRECTOR.name,
+      description: PERFORMANCE_CREATIVE_DIRECTOR.description,
+      taskCategories: PERFORMANCE_CREATIVE_DIRECTOR.taskCategories,
+      metadata: PERFORMANCE_CREATIVE_DIRECTOR.metadata,
+      status: "listed",
+    },
+    create: {
+      ...PERFORMANCE_CREATIVE_DIRECTOR,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${PERFORMANCE_CREATIVE_DIRECTOR.name} (${pcd.id})`);
 }
 
 /**
