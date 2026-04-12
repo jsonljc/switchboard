@@ -501,6 +501,7 @@ model KnowledgeChunk {
   id              String   @id @default(uuid())
   organizationId  String
   agentId         String
+  deploymentId    String?
   documentId      String
   content         String
   sourceType      String   // "correction" | "wizard" | "document"
@@ -511,8 +512,43 @@ model KnowledgeChunk {
   updatedAt       DateTime @updatedAt
 
   @@index([organizationId, agentId])
+  @@index([organizationId, deploymentId])
   @@index([documentId])
   @@index([sourceType])
+}
+
+model InteractionSummary {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  channelType     String
+  contactId       String?
+  summary         String
+  outcome         String   @default("info_request")
+  extractedFacts  Json     @default("[]")
+  questionsAsked  Json     @default("[]")
+  duration        Int
+  messageCount    Int
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, deploymentId])
+  @@index([createdAt])
+}
+
+model DeploymentMemory {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  category        String
+  content         String
+  confidence      Float    @default(0.5)
+  sourceCount     Int      @default(1)
+  lastSeenAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, deploymentId])
+  @@index([confidence])
 }
 
 // ---------------------------------------------------------------------------
