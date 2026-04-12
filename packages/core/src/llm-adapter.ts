@@ -11,7 +11,7 @@ import type { ModelConfig } from "./model-router.js";
 
 export interface RetrievedChunk {
   content: string;
-  sourceType: "correction" | "wizard" | "document";
+  sourceType: "correction" | "wizard" | "document" | "learned";
   similarity: number;
   metadata?: Record<string, unknown>;
 }

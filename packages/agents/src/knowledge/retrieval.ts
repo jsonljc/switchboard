@@ -19,6 +19,7 @@ import type { RetrievedChunk } from "@switchboard/core";
 const SOURCE_BOOST: Record<KnowledgeSourceType, number> = {
   correction: 1.3,
   wizard: 1.15,
+  learned: 1.1,
   document: 1.0,
 };
 

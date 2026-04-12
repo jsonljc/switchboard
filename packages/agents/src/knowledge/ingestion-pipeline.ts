@@ -17,6 +17,7 @@ import { chunkText } from "./chunker.js";
 export interface IngestionInput {
   organizationId: string;
   agentId: string;
+  deploymentId?: string;
   documentId: string;
   content: string;
   sourceType: KnowledgeSourceType;
@@ -78,6 +79,7 @@ export class IngestionPipeline {
       id: generateId(),
       organizationId: input.organizationId,
       agentId: input.agentId,
+      deploymentId: input.deploymentId,
       documentId: input.documentId,
       content: tc.content,
       sourceType: input.sourceType,
