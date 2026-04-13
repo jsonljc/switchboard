@@ -79,3 +79,5 @@ export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summa
 export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
 export { PrismaEventStore } from "./stores/prisma-event-store.js";
 export type { EmitEventInput } from "./stores/prisma-event-store.js";
+export { PrismaActivityLogStore } from "./stores/prisma-activity-log-store.js";
+export type { WriteActivityLogInput } from "./stores/prisma-activity-log-store.js";
