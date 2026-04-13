@@ -18,7 +18,7 @@ export class PrismaActivityLogStore {
         deploymentId: input.deploymentId,
         eventType: input.eventType,
         description: input.description,
-        metadata: input.metadata ?? {},
+        metadata: (input.metadata ?? {}) as object,
       },
     });
   }

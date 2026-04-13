@@ -81,7 +81,7 @@ export class PrismaAggregateMemoryStore implements AggregateScopedMemoryAccess {
         deploymentId: entry.deploymentId,
         eventType: entry.eventType,
         description: entry.description,
-        metadata: entry.metadata,
+        metadata: entry.metadata as object,
       },
     });
   }

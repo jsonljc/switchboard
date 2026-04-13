@@ -16,7 +16,7 @@ export class PrismaEventStore {
         organizationId: input.organizationId,
         deploymentId: input.deploymentId,
         eventType: input.eventType,
-        payload: input.payload,
+        payload: input.payload as object,
         status: "pending",
         retryCount: 0,
       },
