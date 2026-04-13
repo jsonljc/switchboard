@@ -36,6 +36,7 @@ export interface RetrievalConfig {
 export interface RetrieveOptions {
   organizationId: string;
   agentId: string;
+  deploymentId?: string;
 }
 
 export interface ConfidenceInput {
@@ -78,6 +79,7 @@ export class KnowledgeRetriever {
     const results = await this.store.search(queryEmbedding, {
       organizationId: options.organizationId,
       agentId: options.agentId,
+      deploymentId: options.deploymentId,
       topK: this.topK,
     });
 
