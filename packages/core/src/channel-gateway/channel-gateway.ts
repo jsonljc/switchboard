@@ -45,6 +45,51 @@ export class ChannelGateway {
     const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
     const allMessages = [...recentHistory, { role: "user", content: message.text }];
 
+    // 5.5 Build knowledge context (if available)
+    let knowledgeContext = "";
+    if (this.config.contextBuilder) {
+      try {
+        const ctx = await this.config.contextBuilder.build({
+          organizationId: info.deployment.organizationId,
+          agentId: info.deployment.listingId,
+          deploymentId: info.deployment.id,
+          query: message.text,
+          contactId: message.visitor?.name,
+        });
+
+        const sections: string[] = [];
+        if (ctx.learnedFacts.length > 0) {
+          sections.push(
+            "LEARNED FACTS (from past conversations):\n" +
+              ctx.learnedFacts.map((f) => `- ${f.content} [${f.category}]`).join("\n"),
+          );
+        }
+        if (ctx.retrievedChunks.length > 0) {
+          sections.push(
+            "BUSINESS KNOWLEDGE:\n" + ctx.retrievedChunks.map((c) => c.content).join("\n"),
+          );
+        }
+        if (ctx.recentSummaries.length > 0) {
+          sections.push(
+            "RECENT INTERACTIONS:\n" +
+              ctx.recentSummaries.map((s) => `- ${s.summary} (${s.outcome})`).join("\n"),
+          );
+        }
+        knowledgeContext = sections.join("\n\n");
+      } catch {
+        // Graceful degradation — agent works without knowledge context
+      }
+    }
+
+    const enrichedPersona = knowledgeContext
+      ? {
+          ...info.persona,
+          customInstructions: [info.persona.customInstructions, knowledgeContext]
+            .filter(Boolean)
+            .join("\n\n"),
+        }
+      : info.persona;
+
     // 6. Create ephemeral AgentRuntime
     const runtime = new AgentRuntime({
       handler: DefaultChatHandler,
@@ -52,7 +97,7 @@ export class ChannelGateway {
       surface: message.channel,
       trustScore: info.trustScore,
       trustLevel: info.trustLevel,
-      persona: info.persona,
+      persona: enrichedPersona,
       stateStore: this.config.stateStore,
       actionRequestStore: this.config.actionRequestStore,
       llmAdapter: this.config.llmAdapterFactory(),
