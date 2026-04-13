@@ -206,3 +206,6 @@ export * from "./channel-gateway/index.js";
 
 // Website Scanner (URL validation, platform detection, page fetching)
 export { WebsiteScanner, validateScanUrl, detectPlatform } from "./website-scanner/index.js";
+
+// Memory (scoped store interfaces for three-channel privacy)
+export * from "./memory/index.js";

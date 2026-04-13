@@ -510,6 +510,8 @@ model KnowledgeChunk {
   metadata        Json     @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  draftStatus    String?
+  draftExpiresAt DateTime?
 
   @@index([organizationId, agentId])
   @@index([organizationId, deploymentId])
@@ -550,6 +552,38 @@ model DeploymentMemory {
   @@unique([organizationId, deploymentId, category, content])
   @@index([organizationId, deploymentId])
   @@index([confidence])
+}
+
+// ---------------------------------------------------------------------------
+// Three-Channel Communication
+// ---------------------------------------------------------------------------
+
+model AgentEvent {
+  id              String    @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  eventType       String
+  payload         Json
+  status          String    @default("pending")
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([organizationId, deploymentId])
+}
+
+model ActivityLog {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  eventType       String
+  description     String
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, deploymentId])
+  @@index([createdAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -767,6 +801,8 @@ model AgentDeployment {
   governanceSettings  Json     @default("{}")
   outputDestination   Json?
   connectionIds       String[] @default([])
+  trustLevel              String   @default("observe")
+  spendApprovalThreshold  Float    @default(50)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

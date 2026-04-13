@@ -69,3 +69,6 @@ export * from "./creative-job.js";
 
 // Deployment Memory (three-tier agent memory system)
 export * from "./deployment-memory.js";
+
+// Three-Channel Communication (trust levels, notification tiers, agent events, activity log)
+export * from "./three-channel.js";
