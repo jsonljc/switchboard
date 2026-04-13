@@ -8,7 +8,7 @@ import {
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
-import { ConversationCompoundingService } from "@switchboard/agents";
+import { ConversationCompoundingService, ContextBuilder } from "@switchboard/agents";
 import { PrismaDeploymentLookup } from "./deployment-lookup.js";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
 import { TaskRecorder } from "./task-recorder.js";
@@ -63,12 +63,25 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
     onConversationEnd: (event) => compoundingService.processConversationEnd(event),
   });
 
+  const contextBuilder = new ContextBuilder({
+    knowledgeRetriever: {
+      retrieve: async (_query, _options) => {
+        // Placeholder — full RAG retrieval requires embedding adapter
+        // Memory entries and summaries already provide learned context
+        return [];
+      },
+    },
+    deploymentMemoryStore: new PrismaDeploymentMemoryStore(prisma),
+    interactionSummaryStore: new PrismaInteractionSummaryStore(prisma),
+  });
+
   return new ChannelGateway({
     deploymentLookup: new PrismaDeploymentLookup(prisma),
     conversationStore: new PrismaGatewayConversationStore(prisma),
     stateStore: new PrismaDeploymentStateStore(prisma),
     actionRequestStore: new PrismaActionRequestStore(prisma),
     llmAdapterFactory: () => createAnthropicAdapter(),
+    contextBuilder,
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({
