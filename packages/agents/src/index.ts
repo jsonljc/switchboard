@@ -122,14 +122,16 @@ export {
   type EscalationStore,
 } from "./escalation.js";
 
-// LLM Adapters (Claude implementations)
+// LLM Adapters
 export {
   ClaudeLLMAdapter,
   ClaudeEmbeddingAdapter,
+  VoyageEmbeddingAdapter,
   type ClaudeLLMAdapterConfig,
   type LLMCompleteFn,
   type ClaudeEmbeddingAdapterConfig,
   type EmbeddingClient,
+  type VoyageEmbeddingAdapterConfig,
 } from "./llm/index.js";
 
 // Knowledge (RAG infrastructure)
