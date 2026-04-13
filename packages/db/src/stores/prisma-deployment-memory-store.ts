@@ -76,4 +76,17 @@ export class PrismaDeploymentMemoryStore {
       where: { organizationId, deploymentId },
     });
   }
+
+  async decayStale(cutoffDate: Date, decayAmount: number): Promise<number> {
+    const result = await this.prisma.deploymentMemory.updateMany({
+      where: {
+        lastSeenAt: { lt: cutoffDate },
+        confidence: { gt: 0 },
+      },
+      data: {
+        confidence: { decrement: decayAmount },
+      },
+    });
+    return result.count;
+  }
 }
