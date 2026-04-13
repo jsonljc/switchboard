@@ -9,6 +9,20 @@ export interface ChannelGatewayConfig {
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapterFactory: () => LLMAdapter;
+  /** Builds knowledge context for agent responses. Optional — graceful degradation if not set. */
+  contextBuilder?: {
+    build(input: {
+      organizationId: string;
+      agentId: string;
+      deploymentId: string;
+      query: string;
+      contactId?: string;
+    }): Promise<{
+      retrievedChunks: Array<{ content: string; sourceType: string }>;
+      learnedFacts: Array<{ content: string; category: string }>;
+      recentSummaries: Array<{ summary: string; outcome: string }>;
+    }>;
+  };
   /** Called after each message is persisted. MUST be synchronous — async callbacks are not awaited. */
   onMessageRecorded?: (info: {
     deploymentId: string;

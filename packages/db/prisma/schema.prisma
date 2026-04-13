@@ -547,6 +547,7 @@ model DeploymentMemory {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@unique([organizationId, deploymentId, category, content])
   @@index([organizationId, deploymentId])
   @@index([confidence])
 }

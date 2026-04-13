@@ -46,6 +46,13 @@ interface RawSearchRow {
 
 const DEFAULT_TOP_K = 5;
 
+const SOURCE_BOOST: Record<string, number> = {
+  correction: 1.3,
+  wizard: 1.15,
+  learned: 1.1,
+  document: 1.0,
+};
+
 export class PrismaKnowledgeStore {
   constructor(public readonly prisma: PrismaClient) {}
 
@@ -107,7 +114,7 @@ export class PrismaKnowledgeStore {
             ? (JSON.parse(row.metadata) as Record<string, unknown>)
             : (row.metadata as Record<string, unknown>),
       },
-      similarity: row.similarity,
+      similarity: row.similarity * (SOURCE_BOOST[row.sourceType] ?? 1.0),
     }));
   }
 

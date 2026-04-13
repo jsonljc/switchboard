@@ -98,6 +98,28 @@ describe("ContextBuilder", () => {
     expect(result.learnedFacts.length).toBeLessThan(700);
   });
 
+  it("sorts retrieved chunks by source type priority (corrections first)", async () => {
+    // Set up mock to return chunks in wrong order
+    deps.knowledgeRetriever.retrieve.mockResolvedValue([
+      { content: "from document", sourceType: "document", similarity: 0.95 },
+      { content: "owner correction", sourceType: "correction", similarity: 0.8 },
+      { content: "learned fact", sourceType: "learned", similarity: 0.9 },
+      { content: "from wizard", sourceType: "wizard", similarity: 0.85 },
+    ]);
+    const builder = new ContextBuilder(deps);
+    const result = await builder.build({
+      organizationId: "org-1",
+      agentId: "agent-1",
+      deploymentId: "dep-1",
+      query: "test",
+    });
+    // Verify priority order regardless of similarity
+    expect(result.retrievedChunks[0].sourceType).toBe("correction");
+    expect(result.retrievedChunks[1].sourceType).toBe("wizard");
+    expect(result.retrievedChunks[2].sourceType).toBe("learned");
+    expect(result.retrievedChunks[3].sourceType).toBe("document");
+  });
+
   it("includes repeat customer summaries when contactId provided", async () => {
     deps.interactionSummaryStore.listByDeployment.mockResolvedValue([
       {
