@@ -216,14 +216,17 @@ Use Meta's standard event types for compatibility:
 
 ### 5.3 Widget fbclid Capture
 
-The chat widget (served at `/widget/:token/embed`) captures `fbclid` from the parent page URL:
+The chat widget is served in an iframe (`/widget/:token/embed`), so it **cannot** read `window.parent.location` (cross-origin restriction). Instead, the parent page's embed snippet extracts `fbclid` and passes it via `postMessage`:
 
 ```
 Parent page: example.com/landing?fbclid=abc123
-  → Widget reads fbclid from URL params
-  → Stores on visitor session
+  → Embed snippet reads fbclid from own URL params
+  → Posts message to widget iframe: { type: "sw:init", fbclid: "abc123" }
+  → Widget stores fbclid in visitor session
   → When Contact is created → sourceAdId = fbclid lookup → Contact.sourceCampaignId
 ```
+
+This requires updating the widget embed snippet (the `<script>` tag buyers paste on their site) to include the `postMessage` call, and updating the widget iframe JS to listen for `"sw:init"` messages.
 
 ### 5.4 Meta Leads API Ingestion
 
@@ -566,8 +569,18 @@ The agent uses Facebook OAuth (not manual access tokens). During onboarding:
 1. Buyer clicks "Connect Facebook Ads" button
 2. Facebook OAuth flow requests scopes: `ads_read`, `ads_management`, `business_management`
 3. Buyer selects which ad account(s) to grant access to
-4. OAuth tokens stored encrypted in `DeploymentConnection` (same pattern as existing integrations)
-5. Agent uses long-lived page token (60-day expiry, auto-refreshed)
+4. OAuth tokens stored encrypted in `DeploymentConnection` (credential _storage_ pattern exists; the OAuth exchange, callback, and refresh logic are **new** — no OAuth flow exists in the codebase today)
+5. Agent uses long-lived user token (60-day expiry, auto-refreshed)
+
+### 9.0 Implementation Note
+
+This is the first OAuth integration in Switchboard. Required new components:
+
+- **OAuth route** (`apps/api/src/routes/oauth/facebook.ts`): authorization URL generator + callback handler
+- **Token exchange**: short-lived → long-lived via `GET /oauth/access_token`
+- **Account selector**: after OAuth, query `GET /me/adaccounts` and let buyer pick
+- **Token refresh job**: Inngest cron or middleware check before API calls
+- **Connection status management**: mark `inactive` on revocation, surface re-auth prompt
 
 ### 9.1 Token Refresh
 
@@ -582,18 +595,13 @@ Meta's user access tokens expire after 60 days. The agent:
 
 ## 10. Schema Changes
 
-### 10.1 Contact Model Additions
+### 10.1 Contact Attribution (No Schema Migration Needed)
 
-Add real columns to Contact (not JSON metadata):
+Contact already has an `attribution Json?` field storing `AttributionChainSchema` (defined in `packages/schemas/src/lifecycle.ts`), which includes `fbclid`, `sourceAdId`, `sourceCampaignId`, `utmSource`, `utmMedium`, `utmCampaign`. The existing message pipeline already writes `sourceAdId`/`sourceCampaignId` into this field.
 
-```prisma
-model Contact {
-  // ... existing fields ...
-  sourceAdId        String?   // Meta ad ID that brought this contact
-  sourceCampaignId  String?   // Meta campaign ID
-  sourceFbclid      String?   // Raw fbclid from URL params
-}
-```
+**No new columns needed.** The funnel analyzer queries `Contact.attribution` JSON for ad attribution data. `LifecycleRevenueEvent` also has real `sourceAdId` and `sourceCampaignId` columns for revenue-level attribution.
+
+The widget fbclid capture (Section 5.3) writes `fbclid` into the same `attribution` JSON field on Contact creation.
 
 ### 10.2 Ad Optimizer Schemas (Zod)
 
@@ -629,6 +637,7 @@ Add to `packages/schemas/src/ad-optimizer.ts`:
         { key: "targetCPA", type: "text", label: "Target Cost Per Acquisition ($)", required: false },
         { key: "targetROAS", type: "text", label: "Target ROAS (e.g., 3.0)", required: false },
         { key: "auditFrequency", type: "select", label: "Audit Frequency", required: true, options: ["weekly", "daily"], default: "weekly" },
+        { key: "pixelId", type: "text", label: "Meta Pixel ID (for CAPI)", required: false, hint: "Found in Events Manager → Data Sources" },
       ],
     },
   ],
@@ -682,6 +691,8 @@ For agents with `family: "paid_media"` and Ad Optimizer type, the My Agent page 
 
 ## 14. Scheduling (Inngest)
 
+> **Note:** This is the first cron-triggered Inngest function in Switchboard. Existing PCD pipeline is event-driven only. These functions live in `packages/core/src/ad-optimizer/inngest-functions.ts` and are registered in `apps/api/src/bootstrap/inngest.ts` alongside the creative pipeline functions.
+
 ```typescript
 // Weekly audit cron
 inngest.createFunction(
@@ -723,18 +734,19 @@ inngest.createFunction(
 
 ## 16. Build Order
 
-| Phase | What                                                                                       | New Files                                             |
-| ----- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| 1     | Zod schemas (CampaignInsight, FunnelAnalysis, AuditReport, LearningPhaseStatus, CAPIEvent) | `packages/schemas/src/ad-optimizer.ts`                |
-| 2     | Contact model additions (sourceAdId, sourceCampaignId, sourceFbclid) + migration           | `packages/db/prisma/schema.prisma`                    |
-| 3     | Meta Ads Client (read + draft writes, publish guard, rate limiting)                        | `packages/core/src/ad-optimizer/meta-ads-client.ts`   |
-| 4     | Meta CAPI Client (conversion dispatch)                                                     | `packages/core/src/ad-optimizer/meta-capi-client.ts`  |
-| 5     | Funnel Analyzer + Period Comparator (pure computation, no API)                             | `funnel-analyzer.ts`, `period-comparator.ts`          |
-| 6     | Learning Phase Guard (detection + change gating)                                           | `learning-phase-guard.ts`                             |
-| 7     | Metric Diagnostician + Recommendation Engine (with 3 output types)                         | `metric-diagnostician.ts`, `recommendation-engine.ts` |
-| 8     | Audit Runner (orchestrator) + AgentTask output                                             | `audit-runner.ts`                                     |
-| 9     | Meta Leads API ingestion + widget fbclid capture                                           | `meta-leads-ingester.ts`, widget changes              |
-| 10    | Inngest cron functions (weekly audit + daily check)                                        | `apps/api/src/inngest/ad-optimizer.ts`                |
-| 11    | Facebook OAuth integration + token refresh                                                 | OAuth route + connection handler                      |
-| 12    | Marketplace listing seed data                                                              | Seed data                                             |
-| 13    | Dashboard: audit summary card, output feed, trend charts                                   | Dashboard components                                  |
+| Phase | What                                                                                       | New Files                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 1     | Zod schemas (CampaignInsight, FunnelAnalysis, AuditReport, LearningPhaseStatus, CAPIEvent) | `packages/schemas/src/ad-optimizer.ts`                                                                  |
+| 2     | Meta Ads Client (read + draft writes, publish guard, rate limiting)                        | `packages/core/src/ad-optimizer/meta-ads-client.ts`                                                     |
+| 3     | Meta CAPI Client (conversion dispatch)                                                     | `packages/core/src/ad-optimizer/meta-capi-client.ts`                                                    |
+| 4     | Funnel Analyzer + Period Comparator (pure computation, no API)                             | `funnel-analyzer.ts`, `period-comparator.ts`                                                            |
+| 5     | Learning Phase Guard (detection + change gating)                                           | `learning-phase-guard.ts`                                                                               |
+| 6     | Metric Diagnostician + Recommendation Engine (with 3 output types)                         | `metric-diagnostician.ts`, `recommendation-engine.ts`                                                   |
+| 7     | Audit Runner (orchestrator) + AgentTask output                                             | `audit-runner.ts`                                                                                       |
+| 8     | Meta Leads API ingestion + widget fbclid capture (postMessage)                             | `meta-leads-ingester.ts`, widget embed changes                                                          |
+| 9     | Inngest cron functions (weekly audit + daily check)                                        | `packages/core/src/ad-optimizer/inngest-functions.ts` + register in `apps/api/src/bootstrap/inngest.ts` |
+| 10    | Facebook OAuth integration + token refresh (first OAuth flow in codebase)                  | `apps/api/src/routes/oauth/facebook.ts` + connection handler                                            |
+| 11    | Marketplace listing seed data                                                              | Seed data                                                                                               |
+| 12    | Dashboard: audit summary card, output feed, trend charts                                   | Dashboard components                                                                                    |
+
+> **Dependency note:** Phase 10 (OAuth) is required for live API calls in phases 2-3, but those phases can be built and tested against mocked tokens. Phase 10 should be completed before integration testing.
