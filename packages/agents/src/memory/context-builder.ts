@@ -76,6 +76,13 @@ export interface ContextBuilderDeps {
 
 const DEFAULT_TOKEN_BUDGET = 4000;
 
+const SOURCE_PRIORITY: Record<string, number> = {
+  correction: 0,
+  wizard: 1,
+  learned: 2,
+  document: 3,
+};
+
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -112,7 +119,12 @@ export class ContextBuilder {
     ]);
 
     const retrievedChunks: ContextRetrievedChunk[] = [];
-    for (const chunk of chunks) {
+    const sortedChunks = [...chunks].sort((a, b) => {
+      const pDiff = (SOURCE_PRIORITY[a.sourceType] ?? 9) - (SOURCE_PRIORITY[b.sourceType] ?? 9);
+      if (pDiff !== 0) return pDiff;
+      return b.similarity - a.similarity;
+    });
+    for (const chunk of sortedChunks) {
       const tokens = estimateTokens(chunk.content);
       if (tokensUsed + tokens > budget) break;
       retrievedChunks.push(chunk);
