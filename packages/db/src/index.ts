@@ -81,3 +81,6 @@ export { PrismaEventStore } from "./stores/prisma-event-store.js";
 export type { EmitEventInput } from "./stores/prisma-event-store.js";
 export { PrismaActivityLogStore } from "./stores/prisma-activity-log-store.js";
 export type { WriteActivityLogInput } from "./stores/prisma-activity-log-store.js";
+export { PrismaCustomerMemoryStore } from "./stores/prisma-customer-memory-store.js";
+export { PrismaOwnerMemoryStore } from "./stores/prisma-owner-memory-store.js";
+export { PrismaAggregateMemoryStore } from "./stores/prisma-aggregate-memory-store.js";
