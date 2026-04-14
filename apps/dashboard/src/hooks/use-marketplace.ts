@@ -188,3 +188,63 @@ export function useSubmitTaskOutput() {
     },
   });
 }
+
+// ── FAQ Drafts ──
+
+interface DraftFAQ {
+  id: string;
+  content: string;
+  sourceType: string;
+  draftStatus: string | null;
+  draftExpiresAt: string | null;
+  createdAt: string;
+}
+
+export function useDraftFAQs(deploymentId: string) {
+  return useQuery({
+    queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts`);
+      if (!res.ok) throw new Error("Failed to fetch FAQ drafts");
+      const data = await res.json();
+      return data.data as DraftFAQ[];
+    },
+    enabled: !!deploymentId,
+  });
+}
+
+export function useApproveFAQ(deploymentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (faqId: string) => {
+      const res = await fetch(
+        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/approve`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error("Failed to approve FAQ");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
+      });
+    },
+  });
+}
+
+export function useRejectFAQ(deploymentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (faqId: string) => {
+      const res = await fetch(
+        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/reject`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error("Failed to reject FAQ");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
+      });
+    },
+  });
+}
