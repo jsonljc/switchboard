@@ -18,8 +18,32 @@ export interface ActionResult {
   error?: string;
 }
 
+export interface ActionExecutorConfig {
+  idempotencyGuard?: {
+    checkDuplicate(
+      principalId: string,
+      actionType: string,
+      parameters: Record<string, unknown>,
+    ): Promise<{ isDuplicate: boolean; cachedResponse: unknown | null }>;
+    recordResponse(
+      principalId: string,
+      actionType: string,
+      parameters: Record<string, unknown>,
+      response: unknown,
+    ): Promise<void>;
+  };
+  writeActions?: Set<string>;
+}
+
 export class ActionExecutor {
   private handlers = new Map<string, ActionHandler>();
+  private idempotencyGuard: ActionExecutorConfig["idempotencyGuard"];
+  private writeActions: Set<string>;
+
+  constructor(config?: ActionExecutorConfig) {
+    this.idempotencyGuard = config?.idempotencyGuard;
+    this.writeActions = config?.writeActions ?? new Set();
+  }
 
   register(actionType: string, handler: ActionHandler): void {
     this.handlers.set(actionType, handler);
@@ -62,14 +86,37 @@ export class ActionExecutor {
       };
     }
 
+    const isWriteAction = this.writeActions.has(action.actionType);
+    if (isWriteAction && this.idempotencyGuard) {
+      const { isDuplicate, cachedResponse } = await this.idempotencyGuard.checkDuplicate(
+        context.organizationId,
+        action.actionType,
+        action.parameters,
+      );
+      if (isDuplicate) {
+        return cachedResponse as ActionResult;
+      }
+    }
+
     try {
-      const result = await handler(action.parameters, context);
-      return {
+      const handlerResult = await handler(action.parameters, context);
+      const result: ActionResult = {
         actionType: action.actionType,
-        success: result.success,
+        success: handlerResult.success,
         blockedByPolicy: false,
-        result: result.result,
+        result: handlerResult.result,
       };
+
+      if (isWriteAction && this.idempotencyGuard) {
+        await this.idempotencyGuard.recordResponse(
+          context.organizationId,
+          action.actionType,
+          action.parameters,
+          result,
+        );
+      }
+
+      return result;
     } catch (err) {
       return {
         actionType: action.actionType,
