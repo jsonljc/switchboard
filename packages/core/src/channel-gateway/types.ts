@@ -2,13 +2,16 @@ import type { AgentPersona } from "@switchboard/sdk";
 import type { AgentStateStoreInterface } from "../agent-runtime/state-provider.js";
 import type { ActionRequestStore } from "../agent-runtime/action-request-pipeline.js";
 import type { LLMAdapter } from "../llm-adapter.js";
+import type { ModelRouter, ModelSlot } from "../model-router.js";
 
 export interface ChannelGatewayConfig {
   deploymentLookup: DeploymentLookup;
   conversationStore: GatewayConversationStore;
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
-  llmAdapterFactory: () => LLMAdapter;
+  llmAdapterFactory: (slot?: ModelSlot) => LLMAdapter;
+  /** Optional model router for per-message cost-optimized tier selection. */
+  modelRouter?: ModelRouter;
   /** Builds knowledge context for agent responses. Optional — graceful degradation if not set. */
   contextBuilder?: {
     build(input: {

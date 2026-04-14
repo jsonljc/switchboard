@@ -107,14 +107,15 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
     conversationStore: new PrismaGatewayConversationStore(prisma),
     stateStore: new PrismaDeploymentStateStore(prisma),
     actionRequestStore: new PrismaActionRequestStore(prisma),
-    llmAdapterFactory: () => {
+    llmAdapterFactory: (slot) => {
       const adapter = createAnthropicAdapter();
-      const defaultConfig = modelRouter.resolve("default");
+      const defaultConfig = modelRouter.resolve(slot ?? "default");
       return {
         generateReply: (prompt: ConversationPrompt, overrideConfig?: ModelConfig) =>
           adapter.generateReply(prompt, overrideConfig ?? defaultConfig),
       };
     },
+    modelRouter,
     contextBuilder,
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
