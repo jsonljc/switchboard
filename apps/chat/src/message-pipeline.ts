@@ -34,6 +34,11 @@ import {
   handleAutonomyCommand,
   handleAutonomyStatusCommand,
 } from "./handlers/cockpit-commands.js";
+import {
+  handleSoldCommand,
+  handleSoldConfirmation,
+  checkPendingSale,
+} from "./handlers/sold-command.js";
 import { isOptOutKeyword, isOptInKeyword } from "./runtime-helpers.js";
 
 /** Parsed incoming message structure expected from ChannelAdapter. */
@@ -277,6 +282,34 @@ export async function handleCommands(
   threadId: string,
   rawPayload: unknown,
 ): Promise<boolean> {
+  // Check for pending sale confirmation (only intercept Y/yes/N/no)
+  const pending = checkPendingSale(threadId);
+  if (pending && /^(y(es)?|no?)$/i.test(message.text.trim())) {
+    const ctx = deps.buildHandlerContext();
+    const handled = await handleSoldConfirmation(
+      ctx,
+      threadId,
+      message.principalId,
+      message.organizationId,
+      message.text,
+    );
+    if (handled) return true;
+  }
+
+  // Handle /sold command
+  const soldMatch = message.text.trim().match(/^\/?sold\s+(.+)$/i);
+  if (soldMatch) {
+    const ctx = deps.buildHandlerContext();
+    await handleSoldCommand(
+      ctx,
+      threadId,
+      message.principalId,
+      message.organizationId,
+      soldMatch[1]!,
+    );
+    return true;
+  }
+
   const ctx = deps.buildHandlerContext();
 
   // Handle help command
