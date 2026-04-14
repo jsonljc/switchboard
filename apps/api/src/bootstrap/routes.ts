@@ -35,6 +35,7 @@ import { storefrontRoutes } from "../routes/storefront.js";
 import { deploymentMemoryRoutes } from "../routes/deployment-memory.js";
 import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
+import { revenueRoutes } from "../routes/revenue.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -70,4 +71,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(storefrontRoutes, { prefix: "/api/storefront" });
   await app.register(deploymentMemoryRoutes, { prefix: "/api/marketplace" });
   await app.register(adOptimizerRoutes, { prefix: "/api/marketplace" });
+  await app.register(revenueRoutes, { prefix: "/api" });
 }
