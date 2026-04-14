@@ -15,9 +15,12 @@ import { evaluateRule } from "./rule-evaluator.js";
 import { computeRiskScore, computeCompositeRiskAdjustment } from "./risk-scorer.js";
 import type { RiskScoringConfig, CompositeRiskConfig } from "./risk-scorer.js";
 import { createTraceBuilder, addCheck, buildTrace } from "./decision-trace.js";
+import { computeConfidence } from "./confidence.js";
+import type { ConfidenceResult } from "./confidence.js";
 import type { ResolvedIdentity } from "../identity/spec.js";
 import { formatSimulationResult } from "./simulator.js";
 import type { SimulationResult } from "./simulator.js";
+import { extractSpendAmount, checkSpendLimits } from "./spend-limits.js";
 
 export interface PolicyEngineConfig {
   riskScoringConfig?: RiskScoringConfig;
@@ -257,109 +260,6 @@ function checkGuardrails(
   return false;
 }
 
-function extractSpendAmount(proposal: ActionProposal): number | null {
-  return typeof proposal.parameters["amount"] === "number"
-    ? proposal.parameters["amount"]
-    : typeof proposal.parameters["budgetChange"] === "number"
-      ? proposal.parameters["budgetChange"]
-      : null;
-}
-
-function checkSpendLimits(
-  spendAmount: number | null,
-  resolvedIdentity: ResolvedIdentity,
-  engineContext: PolicyEngineContext,
-  builder: ReturnType<typeof createTraceBuilder>,
-  config?: PolicyEngineConfig,
-): boolean {
-  if (spendAmount === null) return false;
-
-  const limits = resolvedIdentity.effectiveSpendLimits;
-  const perActionLimit = limits.perAction;
-
-  if (perActionLimit !== null && Math.abs(spendAmount) > perActionLimit) {
-    addCheck(
-      builder,
-      "SPEND_LIMIT",
-      {
-        field: "perAction",
-        actualValue: Math.abs(spendAmount),
-        threshold: perActionLimit,
-      },
-      `Spend limit exceeded: $${Math.abs(spendAmount)} exceeds per-action limit of $${perActionLimit}.`,
-      true,
-      "deny",
-    );
-
-    const riskScoreResult = riskInput(engineContext, config);
-    builder.computedRiskScore = riskScoreResult;
-    builder.finalDecision = "deny";
-    builder.approvalRequired = "none";
-    return true;
-  }
-
-  if (perActionLimit !== null) {
-    addCheck(
-      builder,
-      "SPEND_LIMIT",
-      {
-        field: "perAction",
-        actualValue: Math.abs(spendAmount),
-        threshold: perActionLimit,
-      },
-      `Spend limit OK: $${Math.abs(spendAmount)} within per-action limit of $${perActionLimit}.`,
-      false,
-      "skip",
-    );
-  }
-
-  // Time-windowed spend limits
-  if (engineContext.spendLookup) {
-    const lookup = engineContext.spendLookup;
-    const absSpend = Math.abs(spendAmount);
-
-    const windowChecks: Array<{ field: string; cumulative: number; limit: number | null }> = [
-      { field: "daily", cumulative: lookup.dailySpend, limit: limits.daily },
-      { field: "weekly", cumulative: lookup.weeklySpend, limit: limits.weekly },
-      { field: "monthly", cumulative: lookup.monthlySpend, limit: limits.monthly },
-    ];
-
-    for (const wc of windowChecks) {
-      if (wc.limit === null) continue;
-
-      const projected = wc.cumulative + absSpend;
-      const exceeded = projected > wc.limit;
-
-      addCheck(
-        builder,
-        "SPEND_LIMIT",
-        {
-          field: wc.field,
-          currentCumulative: wc.cumulative,
-          proposedSpend: absSpend,
-          projectedTotal: projected,
-          threshold: wc.limit,
-        },
-        exceeded
-          ? `${wc.field} spend limit exceeded: $${wc.cumulative} + $${absSpend} = $${projected} exceeds $${wc.limit} limit.`
-          : `${wc.field} spend limit OK: $${wc.cumulative} + $${absSpend} = $${projected} within $${wc.limit} limit.`,
-        exceeded,
-        exceeded ? "deny" : "skip",
-      );
-
-      if (exceeded) {
-        const riskScoreResult = riskInput(engineContext, config);
-        builder.computedRiskScore = riskScoreResult;
-        builder.finalDecision = "deny";
-        builder.approvalRequired = "none";
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 function evaluatePolicyRules(
   _proposal: ActionProposal,
   evalContext: EvaluationContext,
@@ -511,6 +411,7 @@ function determineApprovalRequirement(
   finalRiskCategory: RiskCategory,
   systemRiskPosture: SystemRiskPosture | undefined,
   builder: ReturnType<typeof createTraceBuilder>,
+  confidence?: ConfidenceResult,
 ): ApprovalRequirement {
   let approvalReq: ApprovalRequirement =
     policyApprovalOverride ?? resolvedIdentity.effectiveRiskTolerance[finalRiskCategory];
@@ -544,6 +445,18 @@ function determineApprovalRequirement(
     );
   }
 
+  if (confidence?.level === "low" && approvalReq === "none") {
+    approvalReq = "standard";
+    addCheck(
+      builder,
+      "CONFIDENCE",
+      { previousApproval: "none", newApproval: "standard", confidenceLevel: "low" },
+      "Low confidence: escalating from auto-allow to standard approval.",
+      true,
+      "skip",
+    );
+  }
+
   return approvalReq;
 }
 
@@ -560,6 +473,23 @@ export function evaluate(
     proposal.id,
   );
 
+  // Step 0: Manual approval gate — hard requirement regardless of trust
+  if (evalContext.metadata["requiresManualApproval"]) {
+    const riskScoreResult = riskInput(engineContext, config);
+    builder.computedRiskScore = riskScoreResult;
+    addCheck(
+      builder,
+      "MANUAL_APPROVAL_GATE",
+      { tool: proposal.actionType },
+      `Tool "${proposal.actionType}" requires manual approval regardless of trust level.`,
+      true,
+      "skip",
+    );
+    builder.finalDecision = "allow";
+    builder.approvalRequired = "mandatory";
+    return buildTrace(builder);
+  }
+
   // Step 1: Forbidden behaviors
   if (checkForbiddenBehavior(proposal, resolvedIdentity, builder, engineContext, config)) {
     return buildTrace(builder);
@@ -575,7 +505,7 @@ export function evaluate(
 
   // Step 6: Spend limits
   const spendAmount = extractSpendAmount(proposal);
-  if (checkSpendLimits(spendAmount, resolvedIdentity, engineContext, builder, config)) {
+  if (checkSpendLimits(spendAmount, resolvedIdentity, engineContext, builder, riskInput, config)) {
     return buildTrace(builder);
   }
 
@@ -600,6 +530,37 @@ export function evaluate(
     builder,
   );
 
+  // Step 8.5: Compute confidence
+  const schemaComplete =
+    typeof evalContext.metadata["schemaComplete"] === "boolean"
+      ? evalContext.metadata["schemaComplete"]
+      : Boolean(evalContext.parameters && Object.keys(evalContext.parameters).length > 0);
+  const hasRequiredParams =
+    typeof evalContext.metadata["hasRequiredParams"] === "boolean"
+      ? evalContext.metadata["hasRequiredParams"]
+      : schemaComplete;
+
+  const confidence = computeConfidence({
+    riskScore: builder.computedRiskScore?.rawScore ?? 0,
+    schemaComplete,
+    hasRequiredParams,
+    retrievalQuality: evalContext.metadata["retrievalQuality"] as number | undefined,
+    toolSuccessRate: evalContext.metadata["toolSuccessRate"] as number | undefined,
+  });
+
+  addCheck(
+    builder,
+    "CONFIDENCE",
+    {
+      score: confidence.score,
+      level: confidence.level,
+      factors: confidence.factors,
+    },
+    `Confidence: ${confidence.score.toFixed(2)} (${confidence.level}).`,
+    confidence.level === "low",
+    "skip",
+  );
+
   // Step 9: Determine approval requirement
   const approvalReq = determineApprovalRequirement(
     policyResult.policyApprovalOverride,
@@ -607,6 +568,7 @@ export function evaluate(
     finalRiskCategory,
     engineContext.systemRiskPosture,
     builder,
+    confidence,
   );
 
   builder.approvalRequired = approvalReq;

@@ -511,3 +511,65 @@ describe("Policy Engine — Composite Risk", () => {
     expect(trace.computedRiskScore.rawScore).toBeGreaterThan(35);
   });
 });
+
+// ===================================================================
+// POLICY ENGINE — MANUAL APPROVAL GATE
+// ===================================================================
+
+describe("Policy Engine — Manual Approval Gate", () => {
+  it("requires mandatory approval when requiresManualApproval metadata is set", () => {
+    const evalCtx = makeEvalContext({
+      metadata: { requiresManualApproval: true },
+    });
+    const engineCtx = makeEngineContext();
+    const proposal = makeProposal();
+
+    const trace = evaluate(proposal, evalCtx, engineCtx);
+
+    expect(trace.approvalRequired).toBe("mandatory");
+    expect(trace.finalDecision).toBe("allow");
+    expect(trace.checks.some((c) => c.checkCode === "MANUAL_APPROVAL_GATE")).toBe(true);
+  });
+
+  it("skips manual gate when metadata not set", () => {
+    const evalCtx = makeEvalContext({ metadata: {} });
+    const engineCtx = makeEngineContext();
+    const proposal = makeProposal();
+
+    const trace = evaluate(proposal, evalCtx, engineCtx);
+    expect(trace.checks.some((c) => c.checkCode === "MANUAL_APPROVAL_GATE")).toBe(false);
+  });
+
+  it("manual gate takes precedence over forbidden behavior", () => {
+    const evalCtx = makeEvalContext({
+      actionType: "account.delete",
+      metadata: { requiresManualApproval: true },
+    });
+    const engineCtx = makeEngineContext({
+      resolvedIdentity: makeResolvedIdentity({
+        effectiveForbiddenBehaviors: ["account.delete"],
+      }),
+    });
+    const proposal = makeProposal({ actionType: "account.delete" });
+
+    const trace = evaluate(proposal, evalCtx, engineCtx);
+    expect(trace.approvalRequired).toBe("mandatory");
+    expect(trace.finalDecision).toBe("allow");
+    expect(trace.checks.some((c) => c.checkCode === "FORBIDDEN_BEHAVIOR")).toBe(false);
+  });
+});
+
+// ===================================================================
+// POLICY ENGINE — CONFIDENCE SCORING
+// ===================================================================
+
+describe("Policy Engine — Confidence Scoring", () => {
+  it("adds CONFIDENCE check to decision trace", () => {
+    const evalCtx = makeEvalContext();
+    const engineCtx = makeEngineContext();
+    const proposal = makeProposal();
+
+    const trace = evaluate(proposal, evalCtx, engineCtx);
+    expect(trace.checks.some((c) => c.checkCode === "CONFIDENCE")).toBe(true);
+  });
+});
