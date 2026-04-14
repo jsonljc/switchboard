@@ -12,6 +12,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 const MAX_TOOL_CALLS = 5;
 const MAX_LLM_TURNS = 6;
+const MAX_TOTAL_TOKENS = 64_000;
+const MAX_RUNTIME_MS = 30_000;
 
 export class SkillExecutorImpl {
   constructor(
@@ -35,17 +37,37 @@ export class SkillExecutorImpl {
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let turnCount = 0;
+    const startTime = Date.now();
 
     while (turnCount < MAX_LLM_TURNS) {
       turnCount++;
-      const response = await this.adapter.chatWithTools({
-        system,
-        messages,
-        tools: anthropicTools,
-      });
+
+      const remainingMs = MAX_RUNTIME_MS - (Date.now() - startTime);
+      if (remainingMs <= 0) {
+        throw new SkillExecutionBudgetError("Exceeded 30s runtime limit");
+      }
+      const response = await Promise.race([
+        this.adapter.chatWithTools({
+          system,
+          messages,
+          tools: anthropicTools,
+        }),
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(
+            () => reject(new SkillExecutionBudgetError("Exceeded 30s runtime limit")),
+            remainingMs,
+          ),
+        ),
+      ]);
 
       totalInputTokens += response.usage.inputTokens;
       totalOutputTokens += response.usage.outputTokens;
+
+      if (totalInputTokens + totalOutputTokens > MAX_TOTAL_TOKENS) {
+        throw new SkillExecutionBudgetError(
+          `Exceeded token budget (${totalInputTokens + totalOutputTokens} > ${MAX_TOTAL_TOKENS})`,
+        );
+      }
 
       if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
         const text = response.content

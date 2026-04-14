@@ -213,4 +213,82 @@ describe("SkillExecutorImpl", () => {
     expect(execResult.toolCalls[0]!.toolId).toBe("crm-write");
     expect(execResult.toolCalls[0]!.operation).toBe("stage.update");
   });
+
+  it("enforces token budget", async () => {
+    const toolSkill: SkillDefinition = {
+      ...mockSkill,
+      tools: ["test-tool"],
+      body: "Use test-tool.do {{NAME}}",
+    };
+    const mockTool: SkillTool = {
+      id: "test-tool",
+      operations: {
+        do: {
+          description: "do",
+          inputSchema: { type: "object", properties: {} },
+          execute: vi.fn().mockResolvedValue({ ok: true }),
+        },
+      },
+    };
+
+    // Each response reports 40K input tokens — second call will exceed 64K
+    let callIndex = 0;
+    const bigAdapter: ToolCallingAdapter = {
+      chatWithTools: vi.fn().mockImplementation(() => {
+        callIndex++;
+        return Promise.resolve({
+          content: [{ type: "tool_use", id: `t${callIndex}`, name: "test-tool.do", input: {} }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 40_000, outputTokens: 1_000 },
+        });
+      }),
+    };
+
+    const executor = new SkillExecutorImpl(bigAdapter, new Map([["test-tool", mockTool]]));
+
+    await expect(
+      executor.execute({
+        skill: toolSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+  });
+
+  it("enforces runtime timeout", async () => {
+    const slowAdapter: ToolCallingAdapter = {
+      chatWithTools: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: [{ type: "text", text: "too slow" }],
+                  stopReason: "end_turn",
+                  usage: { inputTokens: 100, outputTokens: 50 },
+                }),
+              35_000,
+            ),
+          ),
+      ),
+    };
+
+    const executor = new SkillExecutorImpl(slowAdapter, new Map());
+
+    await expect(
+      executor.execute({
+        skill: mockSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+  }, 40_000);
 });
