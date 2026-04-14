@@ -47,6 +47,14 @@ export function registerWidgetEmbedEndpoint(app: FastifyInstance): void {
     const SESSION_ID = sessionStorage.getItem("sw_session") || crypto.randomUUID();
     sessionStorage.setItem("sw_session", SESSION_ID);
 
+    // fbclid capture from parent page via postMessage
+    let SW_FBCLID = null;
+    window.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "sw:init" && e.data.fbclid) {
+        SW_FBCLID = e.data.fbclid;
+      }
+    });
+
     const messagesEl = document.getElementById("messages");
     const inputEl = document.getElementById("msg-input");
     const sendBtn = document.getElementById("send-btn");
@@ -85,7 +93,7 @@ export function registerWidgetEmbedEndpoint(app: FastifyInstance): void {
         await fetch(BASE + "/widget/" + TOKEN + "/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: SESSION_ID, text }),
+          body: JSON.stringify({ sessionId: SESSION_ID, text, ...(SW_FBCLID ? { visitor: { fbclid: SW_FBCLID } } : {}) }),
         });
       } catch (err) { addMessage("assistant", "Failed to send. Please try again."); }
       sendBtn.disabled = false;

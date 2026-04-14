@@ -25,9 +25,8 @@ import type {
 } from "@switchboard/core";
 import type { PrismaClient } from "@switchboard/db";
 import { PrismaOperatorCommandStore } from "@switchboard/db";
-import type { MetaAdsWriteProvider } from "@switchboard/digital-ads";
 import { createExecutionQueue, createExecutionWorker } from "../queue/index.js";
-import { wireConversionBus } from "./conversion-bus-bootstrap.js";
+import { wireCAPIDispatcher } from "./conversion-bus-wiring.js";
 import { buildOperatorDeps } from "./operator-deps.js";
 import type { OperatorDeps } from "./operator-deps.js";
 import type { WorkflowDeps } from "./workflow-deps.js";
@@ -45,7 +44,6 @@ export interface ServicesBootstrapInput {
   governanceProfileStore: GovernanceProfileStore;
   prismaClient: PrismaClient | null;
   logger: FastifyBaseLogger;
-  adsWriteProvider: MetaAdsWriteProvider | null;
 }
 
 export interface ServicesBootstrapResult {
@@ -76,17 +74,16 @@ export async function bootstrapServices(
     governanceProfileStore,
     prismaClient,
     logger,
-    adsWriteProvider,
   } = input;
 
   // --- ConversionBus wiring (CRM → ads feedback loop) ---
   const conversionBus = new InMemoryConversionBus();
-  await wireConversionBus({
-    conversionBus,
-    adsWriteProvider,
-    prismaClient,
-    logger,
-  });
+  const pixelId = process.env["META_PIXEL_ID"];
+  const accessToken = process.env["META_ACCESS_TOKEN"];
+  if (pixelId && accessToken) {
+    wireCAPIDispatcher(conversionBus, { pixelId, accessToken });
+    logger.info("CAPI dispatcher wired to ConversionBus");
+  }
 
   // --- Agent orchestration system ---
   const { bootstrapAgentSystem } = await import("../agent-bootstrap.js");

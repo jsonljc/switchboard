@@ -6,7 +6,7 @@ import { checkIngressRateLimit } from "../adapters/security.js";
 interface WidgetMessageBody {
   sessionId: string;
   text: string;
-  visitor?: { name?: string; email?: string };
+  visitor?: { name?: string; email?: string; fbclid?: string };
 }
 
 export function registerWidgetMessagesEndpoint(

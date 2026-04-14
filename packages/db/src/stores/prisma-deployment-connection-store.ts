@@ -31,10 +31,26 @@ export class PrismaDeploymentConnectionStore {
     });
   }
 
+  async findByDeploymentAndType(deploymentId: string, type: string) {
+    return this.prisma.deploymentConnection.findFirst({
+      where: { deploymentId, type },
+    });
+  }
+
   async updateStatus(id: string, status: string) {
     return this.prisma.deploymentConnection.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async updateCredentials(id: string, credentials: string, metadata?: Record<string, unknown>) {
+    return this.prisma.deploymentConnection.update({
+      where: { id },
+      data: {
+        credentials,
+        ...(metadata ? { metadata: metadata as object } : {}),
+      },
     });
   }
 

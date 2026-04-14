@@ -92,6 +92,10 @@ export const queryKeys = {
     detail: (id: string) => ["creativeJobs", "detail", id] as const,
     estimate: (id: string) => ["creativeJobs", "estimate", id] as const,
   },
+  adOptimizer: {
+    all: ["adOptimizer"] as const,
+    audit: (deploymentId: string) => ["adOptimizer", "audit", deploymentId] as const,
+  },
   tasks: {
     all: ["tasks"] as const,
     list: (filters?: Record<string, string | undefined>) => ["tasks", "list", filters] as const,

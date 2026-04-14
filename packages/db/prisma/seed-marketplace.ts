@@ -145,6 +145,57 @@ const SALES_PIPELINE_BUNDLE = {
   taskCategories: ["lead-qualification", "sales-closing", "lead-nurturing"],
 };
 
+const AD_OPTIMIZER = {
+  name: "Ad Optimizer",
+  slug: "ad-optimizer",
+  description:
+    "Media strategist that diagnoses funnel leakage, compares period-over-period metrics, and recommends campaign actions. Connects to Meta Ads via OAuth. Builds draft campaigns but never publishes — human clicks publish.",
+  taskCategories: ["audit", "recommendation", "draft_creation"],
+  metadata: {
+    isBundle: false,
+    family: "paid_media",
+    setupSchema: {
+      onboarding: {
+        websiteScan: false,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: ["meta-ads"],
+      },
+      steps: [
+        {
+          id: "ad-config",
+          title: "Ad Account Settings",
+          fields: [
+            { key: "monthlyBudget", type: "text", label: "Monthly Ad Budget ($)", required: true },
+            {
+              key: "targetCPA",
+              type: "text",
+              label: "Target Cost Per Acquisition ($)",
+              required: false,
+            },
+            { key: "targetROAS", type: "text", label: "Target ROAS (e.g., 3.0)", required: false },
+            {
+              key: "auditFrequency",
+              type: "select",
+              label: "Audit Frequency",
+              required: true,
+              options: ["weekly", "daily"],
+              default: "weekly",
+            },
+            {
+              key: "pixelId",
+              type: "text",
+              label: "Meta Pixel ID (for CAPI)",
+              required: false,
+              hint: "Found in Events Manager → Data Sources",
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
+
 const PERFORMANCE_CREATIVE_DIRECTOR = {
   name: "Performance Creative Director",
   slug: "performance-creative-director",
@@ -313,6 +364,28 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     },
   });
   console.warn(`  Seeded listing: ${PERFORMANCE_CREATIVE_DIRECTOR.name} (${pcd.id})`);
+
+  // Seed Ad Optimizer as a listed agent
+  const adOptimizer = await prisma.agentListing.upsert({
+    where: { slug: AD_OPTIMIZER.slug },
+    update: {
+      name: AD_OPTIMIZER.name,
+      description: AD_OPTIMIZER.description,
+      taskCategories: AD_OPTIMIZER.taskCategories,
+      metadata: AD_OPTIMIZER.metadata,
+      status: "listed",
+    },
+    create: {
+      ...AD_OPTIMIZER,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${AD_OPTIMIZER.name} (${adOptimizer.id})`);
 }
 
 /**

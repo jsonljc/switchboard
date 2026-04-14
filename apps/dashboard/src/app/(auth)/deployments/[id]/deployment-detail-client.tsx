@@ -14,6 +14,7 @@ import { useTasks, useTrustProgression } from "@/hooks/use-marketplace";
 import { useCreativeJobs } from "@/hooks/use-creative-pipeline";
 import { CreativeJobCard } from "@/components/creative-pipeline/creative-job-card";
 import { BriefSubmissionSheet } from "@/components/creative-pipeline/brief-submission-sheet";
+import { AdOptimizerSection } from "@/components/ad-optimizer/ad-optimizer-section";
 import type { MarketplaceListing, TrustScoreBreakdown } from "@/lib/api-client";
 
 interface Connection {
@@ -29,6 +30,7 @@ interface DeploymentDetailClientProps {
   connections: Connection[];
   listing: MarketplaceListing | null;
   trustBreakdown: TrustScoreBreakdown | null;
+  inputConfig?: Record<string, unknown>;
 }
 
 export function DeploymentDetailClient({
@@ -37,6 +39,7 @@ export function DeploymentDetailClient({
   connections,
   listing,
   trustBreakdown,
+  inputConfig,
 }: DeploymentDetailClientProps) {
   const router = useRouter();
   const { data: tasks, isLoading: tasksLoading } = useTasks({ deploymentId });
@@ -202,6 +205,12 @@ export function DeploymentDetailClient({
         deploymentId={deploymentId}
         listingId={listingId}
       />
+
+      {listing?.metadata &&
+        (listing.metadata as Record<string, unknown>).family === "paid_media" &&
+        listing?.slug === "ad-optimizer" && (
+          <AdOptimizerSection deploymentId={deploymentId} inputConfig={inputConfig} />
+        )}
     </div>
   );
 }

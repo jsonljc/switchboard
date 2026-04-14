@@ -200,12 +200,15 @@ model Connection {
   scopes          String[]
   refreshStrategy String   @default("auto")
   status          String   @default("connected")
-  lastHealthCheck DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  lastHealthCheck      DateTime?
+  externalAccountId    String?   // Meta page/ad account ID for webhook matching
+  greetingTemplateName String?   // WhatsApp template name for lead greeting
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@unique([serviceId, organizationId])
   @@index([organizationId])
+  @@index([externalAccountId])
 }
 
 model IdempotencyRecord {

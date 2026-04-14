@@ -72,3 +72,6 @@ export * from "./deployment-memory.js";
 
 // Three-Channel Communication (trust levels, notification tiers, agent events, activity log)
 export * from "./three-channel.js";
+
+// Ad Optimizer (campaign insights, funnel analysis, audit reports)
+export * from "./ad-optimizer.js";
