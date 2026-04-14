@@ -45,6 +45,15 @@ export class PrismaDeploymentStore {
     }) as unknown as AgentDeployment[];
   }
 
+  async listByListing(listingId: string, status?: string): Promise<AgentDeployment[]> {
+    return this.prisma.agentDeployment.findMany({
+      where: {
+        listingId,
+        ...(status ? { status } : {}),
+      },
+    }) as unknown as AgentDeployment[];
+  }
+
   async updateStatus(id: string, status: DeploymentStatus): Promise<AgentDeployment> {
     return this.prisma.agentDeployment.update({
       where: { id },
