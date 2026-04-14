@@ -136,7 +136,7 @@ export class VideoAssembler {
   private async downloadClips(clips: ClipInput[], workDir: string): Promise<string[]> {
     const paths: string[] = [];
     for (let i = 0; i < clips.length; i++) {
-      const clip = clips[i];
+      const clip = clips[i]!;
       if (clip.videoUrl.startsWith("http")) {
         const res = await fetch(clip.videoUrl);
         if (!res.ok) throw new Error(`Failed to download clip: ${res.status}`);

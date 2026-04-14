@@ -46,7 +46,7 @@ function getWeeklyDateRanges() {
 }
 
 function fmt(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return d.toISOString().split("T")[0] ?? "";
 }
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
@@ -87,27 +87,35 @@ export async function executeDailyCheck(step: StepTools, deps: CronDependencies)
 
     await step.run(`check-${deployment.id}`, async () => {
       const adsClient = deps.createAdsClient(creds);
-      const _summary = await adsClient.getAccountSummary();
+      await adsClient.getAccountSummary();
     });
   }
 }
 
 export function createWeeklyAuditCron(deps: CronDependencies) {
   return inngestClient.createFunction(
-    { id: "ad-optimizer-weekly-audit", name: "Ad Optimizer Weekly Audit", retries: 2 },
-    { cron: "0 9 * * 1" },
+    {
+      id: "ad-optimizer-weekly-audit",
+      name: "Ad Optimizer Weekly Audit",
+      retries: 2,
+      triggers: [{ cron: "0 9 * * 1" }],
+    },
     async ({ step }) => {
-      await executeWeeklyAudit(step, deps);
+      await executeWeeklyAudit(step as StepTools, deps);
     },
   );
 }
 
 export function createDailyCheckCron(deps: CronDependencies) {
   return inngestClient.createFunction(
-    { id: "ad-optimizer-daily-check", name: "Ad Optimizer Daily Check", retries: 2 },
-    { cron: "0 8 * * *" },
+    {
+      id: "ad-optimizer-daily-check",
+      name: "Ad Optimizer Daily Check",
+      retries: 2,
+      triggers: [{ cron: "0 8 * * *" }],
+    },
     async ({ step }) => {
-      await executeDailyCheck(step, deps);
+      await executeDailyCheck(step as StepTools, deps);
     },
   );
 }

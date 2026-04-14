@@ -68,12 +68,13 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
 
   // 3. Handle zero-impressions edge case
   if (totalImpressions === 0) {
-    return { stages, leakagePoint: stages[1].name, leakageMagnitude: 0 };
+    const fallbackName = stages[1]?.name ?? "Clicks";
+    return { stages, leakagePoint: fallbackName, leakageMagnitude: 0 };
   }
 
   // 4. Find worst leakage (most negative delta), skip Impressions stage
   const candidates = stages.slice(1);
-  let worstStage = candidates[0];
+  let worstStage = candidates[0]!;
   for (const stage of candidates) {
     if (stage.delta < worstStage.delta) {
       worstStage = stage;

@@ -81,8 +81,8 @@ export class LearningPhaseGuard {
     const { daysSinceChange, eventsAccumulated, eventsRequired, estimatedExitDate } = status;
 
     const checkBackDate = estimatedExitDate
-      ? estimatedExitDate.toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0];
+      ? (estimatedExitDate.toISOString().split("T")[0] ?? "")
+      : (new Date().toISOString().split("T")[0] ?? "");
 
     const message =
       `Campaign is in learning (Day ${daysSinceChange}/${LEARNING_DAYS}, ` +

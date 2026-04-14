@@ -21,3 +21,5 @@ export type {
   AdsClientInterface,
   CrmDataProvider,
 } from "./audit-runner.js";
+export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions.js";
+export type { CronDependencies } from "./inngest-functions.js";
