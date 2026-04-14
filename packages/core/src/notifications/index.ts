@@ -11,3 +11,12 @@ export type {
   ChannelCredentials,
   ProactiveSenderConfig,
 } from "./proactive-sender.js";
+export { classifyNotification } from "./notification-classifier.js";
+export type {
+  NotificationTier,
+  TrustLevel,
+  NotificationEvent,
+  NotificationEventType,
+} from "./notification-classifier.js";
+export { NotificationBatcher } from "./notification-batcher.js";
+export type { NotificationBatcherConfig } from "./notification-batcher.js";
