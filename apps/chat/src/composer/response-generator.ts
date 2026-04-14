@@ -114,7 +114,11 @@ export class ResponseGenerator {
    * Main entry point. Checks LLM availability, calls LLM if available,
    * falls back to templates otherwise.
    */
-  async generate(context: ResponseContext, orgId?: string): Promise<GeneratedResponse> {
+  async generate(
+    context: ResponseContext,
+    orgId?: string,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
+  ): Promise<GeneratedResponse> {
     if (!this.isLLMAvailable(orgId)) {
       return this.fallback(context);
     }
@@ -129,7 +133,7 @@ export class ResponseGenerator {
 
     try {
       const userPrompt = this.buildUserPrompt(context);
-      const result = await this.callLLM(this.systemPrompt, userPrompt);
+      const result = await this.callLLM(this.systemPrompt, userPrompt, modelOverride);
 
       // Output injection check
       const injectionCheck = detectPromptInjectionInOutput(result.text);
@@ -325,6 +329,7 @@ export class ResponseGenerator {
   private async callLLM(
     system: string,
     user: string,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
   ): Promise<{ text: string; usage?: { promptTokens: number; completionTokens: number } }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -334,9 +339,9 @@ export class ResponseGenerator {
       const isOpenAI = baseUrl.includes("openai");
 
       if (isOpenAI) {
-        return await this.callOpenAI(system, user, controller.signal);
+        return await this.callOpenAI(system, user, controller.signal, modelOverride);
       }
-      return await this.callAnthropic(system, user, controller.signal);
+      return await this.callAnthropic(system, user, controller.signal, modelOverride);
     } finally {
       clearTimeout(timeout);
     }
@@ -346,6 +351,7 @@ export class ResponseGenerator {
     system: string,
     user: string,
     signal: AbortSignal,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
   ): Promise<{ text: string; usage?: { promptTokens: number; completionTokens: number } }> {
     const baseUrl = this.config.llmConfig.baseUrl ?? "https://api.anthropic.com";
     const response = await fetch(`${baseUrl}/v1/messages`, {
@@ -356,11 +362,11 @@ export class ResponseGenerator {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: this.config.llmConfig.model,
-        max_tokens: this.config.llmConfig.maxTokens ?? 256,
+        model: modelOverride?.model ?? this.config.llmConfig.model,
+        max_tokens: modelOverride?.maxTokens ?? this.config.llmConfig.maxTokens ?? 256,
         system,
         messages: [{ role: "user", content: user }],
-        temperature: this.config.llmConfig.temperature ?? 0.4,
+        temperature: modelOverride?.temperature ?? this.config.llmConfig.temperature ?? 0.4,
       }),
       signal,
     });
@@ -391,6 +397,7 @@ export class ResponseGenerator {
     system: string,
     user: string,
     signal: AbortSignal,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
   ): Promise<{ text: string; usage?: { promptTokens: number; completionTokens: number } }> {
     const baseUrl = this.config.llmConfig.baseUrl ?? "https://api.openai.com";
     const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -400,13 +407,13 @@ export class ResponseGenerator {
         Authorization: `Bearer ${this.config.llmConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: this.config.llmConfig.model,
-        max_tokens: this.config.llmConfig.maxTokens ?? 256,
+        model: modelOverride?.model ?? this.config.llmConfig.model,
+        max_tokens: modelOverride?.maxTokens ?? this.config.llmConfig.maxTokens ?? 256,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        temperature: this.config.llmConfig.temperature ?? 0.4,
+        temperature: modelOverride?.temperature ?? this.config.llmConfig.temperature ?? 0.4,
       }),
       signal,
     });
