@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadSkill } from "./skill-loader.js";
 import { SkillParseError, SkillValidationError } from "./types.js";
 
@@ -185,5 +186,18 @@ tools: []
 
   it("throws for nonexistent skill slug", () => {
     expect(() => loadSkill("nonexistent", TEST_DIR)).toThrow();
+  });
+});
+
+describe("loadSkill - real files", () => {
+  it("loads the sales-pipeline skill file", () => {
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    const skill = loadSkill("sales-pipeline", join(repoRoot, "skills"));
+    expect(skill.slug).toBe("sales-pipeline");
+    expect(skill.parameters).toHaveLength(5);
+    expect(skill.tools).toEqual(["crm-query", "crm-write", "pipeline-handoff"]);
+    expect(skill.body).toContain("Speed-to-Lead");
+    expect(skill.body).toContain("Sales Closer");
+    expect(skill.body).toContain("Nurture Specialist");
   });
 });
