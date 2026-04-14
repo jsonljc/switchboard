@@ -38,6 +38,16 @@ export class PrismaDeploymentConnectionStore {
     });
   }
 
+  async updateCredentials(id: string, credentials: string, metadata?: Record<string, unknown>) {
+    return this.prisma.deploymentConnection.update({
+      where: { id },
+      data: {
+        credentials,
+        ...(metadata ? { metadata: metadata as object } : {}),
+      },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.deploymentConnection.delete({ where: { id } });
   }
