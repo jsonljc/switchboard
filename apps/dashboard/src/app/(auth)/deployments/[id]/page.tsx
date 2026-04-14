@@ -28,6 +28,7 @@ export default async function DeploymentDetailPage({ params }: PageProps) {
         connections={connections}
         listing={listingResult?.listing ?? null}
         trustBreakdown={trustResult}
+        inputConfig={(deployment.inputConfig as Record<string, unknown>) ?? {}}
       />
     );
   } catch {
