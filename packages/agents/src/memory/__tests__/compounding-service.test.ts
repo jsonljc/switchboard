@@ -182,7 +182,7 @@ describe("ConversationCompoundingService", () => {
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
   });
 
-  it("tracks questions as FAQ and promotes to knowledge store at 3+ occurrences", async () => {
+  it("tracks questions as FAQ and promotes to knowledge store at exactly 3 occurrences", async () => {
     const mockKnowledgeStore = {
       store: vi.fn().mockResolvedValue(undefined),
     };

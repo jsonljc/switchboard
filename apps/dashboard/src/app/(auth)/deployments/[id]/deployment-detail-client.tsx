@@ -27,6 +27,7 @@ interface Connection {
 
 interface DeploymentDetailClientProps {
   deploymentId: string;
+  orgId: string;
   listingId: string;
   connections: Connection[];
   listing: MarketplaceListing | null;
@@ -36,6 +37,7 @@ interface DeploymentDetailClientProps {
 
 export function DeploymentDetailClient({
   deploymentId,
+  orgId,
   listingId,
   connections,
   listing,
@@ -156,7 +158,7 @@ export function DeploymentDetailClient({
       </section>
 
       {/* FAQ Drafts */}
-      <FAQReviewQueue deploymentId={deploymentId} />
+      <FAQReviewQueue deploymentId={deploymentId} orgId={orgId} />
 
       {/* Work Log */}
       <section>

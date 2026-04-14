@@ -6,6 +6,7 @@ import type {
   MarketplaceDeployment,
   MarketplaceTask,
   TrustScoreBreakdown,
+  DraftFAQ,
 } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -191,20 +192,13 @@ export function useSubmitTaskOutput() {
 
 // ── FAQ Drafts ──
 
-interface DraftFAQ {
-  id: string;
-  content: string;
-  sourceType: string;
-  draftStatus: string | null;
-  draftExpiresAt: string | null;
-  createdAt: string;
-}
-
-export function useDraftFAQs(deploymentId: string) {
+export function useDraftFAQs(deploymentId: string, orgId: string) {
   return useQuery({
     queryKey: queryKeys.marketplace.faqDrafts(deploymentId),
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts`);
+      const res = await fetch(
+        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts?orgId=${orgId}`,
+      );
       if (!res.ok) throw new Error("Failed to fetch FAQ drafts");
       const data = await res.json();
       return data.data as DraftFAQ[];
@@ -213,12 +207,12 @@ export function useDraftFAQs(deploymentId: string) {
   });
 }
 
-export function useApproveFAQ(deploymentId: string) {
+export function useApproveFAQ(deploymentId: string, orgId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (faqId: string) => {
       const res = await fetch(
-        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/approve`,
+        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/approve?orgId=${orgId}`,
         { method: "POST" },
       );
       if (!res.ok) throw new Error("Failed to approve FAQ");
@@ -231,12 +225,12 @@ export function useApproveFAQ(deploymentId: string) {
   });
 }
 
-export function useRejectFAQ(deploymentId: string) {
+export function useRejectFAQ(deploymentId: string, orgId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (faqId: string) => {
       const res = await fetch(
-        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/reject`,
+        `/api/dashboard/marketplace/deployments/${deploymentId}/faq-drafts/${faqId}/reject?orgId=${orgId}`,
         { method: "POST" },
       );
       if (!res.ok) throw new Error("Failed to reject FAQ");

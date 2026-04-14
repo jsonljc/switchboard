@@ -9,6 +9,7 @@ import { useDraftFAQs, useApproveFAQ, useRejectFAQ } from "@/hooks/use-marketpla
 
 interface FAQReviewQueueProps {
   deploymentId: string;
+  orgId: string;
 }
 
 function formatTimeLeft(expiresAt: string | null): string {
@@ -20,10 +21,10 @@ function formatTimeLeft(expiresAt: string | null): string {
   return `${hours}h left`;
 }
 
-export function FAQReviewQueue({ deploymentId }: FAQReviewQueueProps) {
-  const { data: drafts, isLoading } = useDraftFAQs(deploymentId);
-  const approveMutation = useApproveFAQ(deploymentId);
-  const rejectMutation = useRejectFAQ(deploymentId);
+export function FAQReviewQueue({ deploymentId, orgId }: FAQReviewQueueProps) {
+  const { data: drafts, isLoading } = useDraftFAQs(deploymentId, orgId);
+  const approveMutation = useApproveFAQ(deploymentId, orgId);
+  const rejectMutation = useRejectFAQ(deploymentId, orgId);
 
   if (isLoading) {
     return (

@@ -218,7 +218,7 @@ export class ConversationCompoundingService {
           const newConfidence = computeConfidenceScore(newSourceCount, false);
           const result = await this.memoryStore.incrementConfidence(entry.id, newConfidence);
 
-          if (result.sourceCount >= FAQ_PROMOTION_THRESHOLD && this.knowledgeStore) {
+          if (result.sourceCount === FAQ_PROMOTION_THRESHOLD && this.knowledgeStore) {
             const embedding = await this.embedding.embed(entry.content);
             const draftExpiresAt = new Date(Date.now() + FAQ_DRAFT_EXPIRY_MS);
             await this.knowledgeStore.store({
