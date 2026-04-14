@@ -65,10 +65,10 @@ describe("analyzeFunnel", () => {
     expect(lpv.benchmark).toBe(0.8);
     expect(lpv.delta).toBeCloseTo(0, 5);
 
-    // Leads: 50 leads, rate = 50/400 = 0.125
+    // Leads: 50 leads, rate = 50/320 (leads/LPV)
     expect(leads.name).toBe("Leads");
     expect(leads.count).toBe(50);
-    expect(leads.rate).toBeCloseTo(50 / 400, 5);
+    expect(leads.rate).toBeCloseTo(50 / 320, 5);
     expect(leads.benchmark).toBe(0.04);
 
     // Qualified: 20/50 = 0.4
@@ -85,7 +85,8 @@ describe("analyzeFunnel", () => {
   });
 
   it("identifies the worst leakage point when lead rate is far below benchmark", () => {
-    // Lead rate: 5/1000 = 0.005, benchmark 0.04 → delta = -0.035
+    // LPV count = round(1000 * 0.8) = 800
+    // Lead rate: 5/800 = 0.00625, benchmark 0.04 → delta = -0.03375
     // Qualification rate: 2/5 = 0.4, benchmark 0.5 → delta = -0.1
     // Close rate: 1/2 = 0.5, benchmark 0.3 → delta = +0.2
     // CTR rate: 1000/10000 = 0.1, benchmark 0.025 → delta = +0.075

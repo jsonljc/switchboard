@@ -1,4 +1,5 @@
 // packages/core/src/ad-optimizer/meta-capi-client.ts
+import { createHash } from "node:crypto";
 import type { CAPIEventSchema as CAPIEvent } from "@switchboard/schemas";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
@@ -35,10 +36,10 @@ export class MetaCAPIClient {
       userData["fbc"] = `fb.1.${Date.now()}.${event.userData.fbclid}`;
     }
     if (event.userData.email) {
-      userData["em"] = [event.userData.email];
+      userData["em"] = [sha256(event.userData.email.toLowerCase().trim())];
     }
     if (event.userData.phone) {
-      userData["ph"] = [event.userData.phone];
+      userData["ph"] = [sha256(event.userData.phone.replace(/\D/g, ""))];
     }
 
     const body = {
@@ -78,4 +79,8 @@ export class MetaCAPIClient {
     const result = (await response.json()) as CAPIResponseBody;
     return { eventsReceived: result.events_received };
   }
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }

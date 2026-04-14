@@ -53,7 +53,7 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
   const lpvCount = Math.round(totalClicks * lpvRate);
 
   const clickRate = safeDivide(totalClicks, totalImpressions);
-  const leadRate = safeDivide(crmData.leads, totalClicks);
+  const leadRate = safeDivide(crmData.leads, lpvCount);
   const qualRate = safeDivide(crmData.qualified, crmData.leads);
   const closeRate = safeDivide(crmData.closed, crmData.qualified);
 
