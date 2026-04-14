@@ -7,6 +7,7 @@ import {
   PrismaListingStore,
   PrismaDeploymentConnectionStore,
   PrismaAgentTaskStore,
+  decryptCredentials,
 } from "@switchboard/db";
 import { inngestClient, createCreativeJobRunner } from "@switchboard/core/creative-pipeline";
 import {
@@ -56,8 +57,11 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       const connections = await connectionStore.listByDeployment(deploymentId);
       const conn = connections.find((c) => c.type === "meta-ads");
       if (!conn) return null;
-      const creds = JSON.parse(conn.credentials);
-      return { accessToken: creds.accessToken, accountId: creds.accountId };
+      const creds = decryptCredentials(conn.credentials);
+      return {
+        accessToken: creds.accessToken as string,
+        accountId: creds.accountId as string,
+      };
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
     createCrmProvider: (_deploymentId) => ({
