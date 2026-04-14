@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { PrismaDeploymentMemoryStore } from "@switchboard/db";
+import { PrismaDeploymentMemoryStore, PrismaOwnerMemoryStore } from "@switchboard/db";
 import { z } from "zod";
 
 const CorrectMemoryInput = z.object({
@@ -66,6 +66,55 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: "Memory entry not found" });
     }
     await store.delete(memoryId);
+    return reply.status(204).send();
+  });
+
+  // List pending FAQ drafts for a deployment
+  app.get<{
+    Params: { orgId: string; deploymentId: string };
+  }>("/:orgId/deployments/:deploymentId/faq-drafts", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+    const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
+    const { orgId, deploymentId } = request.params;
+    const drafts = await ownerStore.listDraftFAQs(orgId, deploymentId);
+    return { data: drafts };
+  });
+
+  // Approve a FAQ draft (with ownership verification)
+  app.post<{
+    Params: { orgId: string; deploymentId: string; faqId: string };
+  }>("/:orgId/deployments/:deploymentId/faq-drafts/:faqId/approve", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+    const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
+    const { orgId, deploymentId, faqId } = request.params;
+    // Verify the FAQ belongs to this org+deployment
+    const drafts = await ownerStore.listDraftFAQs(orgId, deploymentId);
+    if (!drafts.some((d) => d.id === faqId)) {
+      return reply.code(404).send({ error: "FAQ draft not found" });
+    }
+    await ownerStore.approveDraftFAQ(faqId);
+    return { success: true };
+  });
+
+  // Reject (delete) a FAQ draft (with ownership verification)
+  app.post<{
+    Params: { orgId: string; deploymentId: string; faqId: string };
+  }>("/:orgId/deployments/:deploymentId/faq-drafts/:faqId/reject", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+    const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
+    const { orgId, deploymentId, faqId } = request.params;
+    // Verify the FAQ belongs to this org+deployment
+    const drafts = await ownerStore.listDraftFAQs(orgId, deploymentId);
+    if (!drafts.some((d) => d.id === faqId)) {
+      return reply.code(404).send({ error: "FAQ draft not found" });
+    }
+    await ownerStore.rejectDraftFAQ(faqId);
     return reply.status(204).send();
   });
 };
