@@ -28,3 +28,5 @@ export type {
 } from "./policy-engine.js";
 export { InMemoryRiskPostureStore } from "./risk-posture.js";
 export type { RiskPostureStore } from "./risk-posture.js";
+export { computeConfidence } from "./confidence.js";
+export type { ConfidenceInput, ConfidenceResult, ConfidenceLevel } from "./confidence.js";
