@@ -105,6 +105,10 @@
     "./creative-pipeline": {
       "types": "./dist/creative-pipeline/index.d.ts",
       "import": "./dist/creative-pipeline/index.js"
+    },
+    "./ad-optimizer": {
+      "types": "./dist/ad-optimizer/index.d.ts",
+      "import": "./dist/ad-optimizer/index.js"
     }
   },
   "scripts": {
