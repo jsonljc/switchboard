@@ -109,6 +109,10 @@
     "./ad-optimizer": {
       "types": "./dist/ad-optimizer/index.d.ts",
       "import": "./dist/ad-optimizer/index.js"
+    },
+    "./skill-runtime": {
+      "types": "./dist/skill-runtime/index.d.ts",
+      "import": "./dist/skill-runtime/index.js"
     }
   },
   "scripts": {

@@ -1,3 +1,4 @@
+import type { AgentHandler } from "@switchboard/sdk";
 import { AgentRuntime } from "../agent-runtime/agent-runtime.js";
 import { DefaultChatHandler } from "../agent-runtime/default-chat-handler.js";
 import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "./types.js";
@@ -101,9 +102,12 @@ export class ChannelGateway {
         modelFloor: undefined,
       }) ?? "default";
 
+    // 5.7 Resolve handler — skill-based or legacy
+    const handler = this.resolveHandler(info, message);
+
     // 6. Create ephemeral AgentRuntime
     const runtime = new AgentRuntime({
-      handler: DefaultChatHandler,
+      handler,
       deploymentId: info.deployment.id,
       surface: message.channel,
       trustScore: info.trustScore,
@@ -132,5 +136,30 @@ export class ChannelGateway {
       conversationId,
       messages: allMessages,
     });
+  }
+
+  /**
+   * Resolves the handler for a deployment. If the deployment has a skillSlug
+   * and skill runtime deps are configured, creates a SkillHandler. Otherwise
+   * falls back to the DefaultChatHandler.
+   */
+  private resolveHandler(
+    info: { deployment: { id: string; organizationId: string; skillSlug?: string | null } },
+    message: IncomingChannelMessage,
+  ): AgentHandler {
+    const { skillRuntime } = this.config;
+    const { skillSlug } = info.deployment;
+
+    if (skillSlug && skillRuntime) {
+      const skill = skillRuntime.loadSkill(skillSlug, skillRuntime.skillsDir);
+      const executor = skillRuntime.createExecutor();
+      return skillRuntime.createHandler(skill, executor, {
+        deploymentId: info.deployment.id,
+        orgId: info.deployment.organizationId,
+        contactId: message.sessionId,
+      });
+    }
+
+    return DefaultChatHandler;
   }
 }

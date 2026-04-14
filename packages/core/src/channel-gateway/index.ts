@@ -6,6 +6,7 @@ export type {
   GatewayConversationStore,
   IncomingChannelMessage,
   ReplySink,
+  SkillRuntimeDeps,
 } from "./types.js";
 export { UnknownChannelError, InactiveDeploymentError } from "./types.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
