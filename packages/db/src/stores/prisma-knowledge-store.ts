@@ -96,6 +96,7 @@ export class PrismaKnowledgeStore {
       WHERE "organizationId" = ${options.organizationId}
         AND "agentId" = ${options.agentId}
         ${deploymentFilter}
+        AND ("draftStatus" IS NULL OR "draftStatus" = 'approved')
       ORDER BY "embedding" <=> ${vectorStr}::vector
       LIMIT ${topK}
     `;

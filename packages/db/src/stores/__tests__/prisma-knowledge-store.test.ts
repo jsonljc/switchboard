@@ -135,6 +135,31 @@ describe("PrismaKnowledgeStore", () => {
       // Verify the query was called (topK default is internal)
       expect(mockPrisma.$queryRaw).toHaveBeenCalledOnce();
     });
+
+    it("excludes pending draft chunks from search results", async () => {
+      mockPrisma.$queryRaw.mockResolvedValue([
+        {
+          id: "chunk-approved",
+          organizationId: "org-1",
+          agentId: "employee-a",
+          deploymentId: null,
+          documentId: "doc-1",
+          content: "Approved FAQ",
+          sourceType: "learned",
+          chunkIndex: 0,
+          metadata: "{}",
+          similarity: 0.95,
+        },
+      ]);
+
+      const results = await store.search([0.1, 0.2, 0.3], {
+        organizationId: "org-1",
+        agentId: "employee-a",
+      });
+
+      expect(results).toHaveLength(1);
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledOnce();
+    });
   });
 
   describe("deleteByDocument()", () => {
