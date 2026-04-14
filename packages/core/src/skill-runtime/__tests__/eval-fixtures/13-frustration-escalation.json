@@ -1,0 +1,33 @@
+{
+  "name": "Frustrated user triggers escalation",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "This is really frustrating, nothing is working" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "I'm sorry to hear you're having a difficult experience. Let me connect you with a member of our team who can help resolve this directly."
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "response_contains", "substring": "connect" },
+    { "type": "response_contains", "substring": "team" }
+  ]
+}

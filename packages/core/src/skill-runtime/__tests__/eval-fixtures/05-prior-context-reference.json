@@ -1,0 +1,41 @@
+{
+  "name": "References prior conversation context",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "qualified",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [
+    { "role": "assistant", "content": "Welcome to TestBiz! What brings you here today?" },
+    { "role": "user", "content": "I mentioned earlier I need help with my marketing campaign" },
+    {
+      "role": "assistant",
+      "content": "Yes, you mentioned a marketing campaign with a $5000 budget targeting local customers."
+    },
+    { "role": "user", "content": "Exactly. So what are the next steps?" }
+  ],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Since you're looking at a local marketing campaign with a $5000 budget, here's what I recommend as next steps: Let's schedule a strategy call where we can map out the specifics. You can book a time that works for you at https://calendly.com/testbiz."
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "response_contains", "substring": "marketing" },
+    { "type": "response_contains", "substring": "calendly.com/testbiz" }
+  ]
+}

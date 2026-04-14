@@ -1,0 +1,35 @@
+{
+  "name": "Price objection handled with value reframe",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "qualified",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "That's too expensive for what you're offering" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "I understand cost is an important factor. What many of our clients find is that the value they receive far exceeds the investment. We also offer flexible payment options that can make it more manageable. Would you like me to walk you through how the ROI typically works?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "response_contains", "substring": "value" },
+    { "type": "response_not_contains", "substring": "CompetitorCo" },
+    { "type": "tool_not_called", "toolName": "crm-write.stage.update" },
+    { "type": "tool_not_called", "toolName": "crm-query.contact.get" }
+  ]
+}

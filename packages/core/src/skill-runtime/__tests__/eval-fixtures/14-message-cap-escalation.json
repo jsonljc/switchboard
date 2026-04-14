@@ -1,0 +1,47 @@
+{
+  "name": "Long conversation without qualification",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [
+    { "role": "user", "content": "Hi" },
+    { "role": "assistant", "content": "Hello! Welcome to TestBiz." },
+    { "role": "user", "content": "What do you offer?" },
+    { "role": "assistant", "content": "We offer a range of services." },
+    { "role": "user", "content": "Tell me more" },
+    { "role": "assistant", "content": "Sure, we have several packages." },
+    { "role": "user", "content": "Which one is best?" },
+    { "role": "assistant", "content": "It depends on your needs." },
+    { "role": "user", "content": "I'm not sure what I need" },
+    { "role": "assistant", "content": "Let me help you figure it out." },
+    { "role": "user", "content": "Ok" },
+    { "role": "assistant", "content": "What's your budget range?" },
+    { "role": "user", "content": "I'm not sure" },
+    { "role": "assistant", "content": "That's fine. What about your timeline?" },
+    { "role": "user", "content": "Also not sure" },
+    { "role": "assistant", "content": "I understand. Let me ask a few more questions." }
+  ],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "We've been chatting for a while and I want to make sure you get the best help possible. Let me have someone from our team reach out to you directly to discuss your needs in more detail."
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [{ "type": "response_contains", "substring": "team" }]
+}

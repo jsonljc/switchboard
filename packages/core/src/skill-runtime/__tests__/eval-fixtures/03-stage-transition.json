@@ -1,0 +1,50 @@
+{
+  "name": "Stage transition from interested to qualified",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "I have a budget of $5000, I need to start within 2 months, and I'm located downtown."
+    }
+  ],
+  "mockResponses": [
+    {
+      "content": [
+        { "type": "text", "text": "You meet all our criteria. Let me update your status." },
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "crm-write.stage.update",
+          "input": { "opportunityId": "opp-test-1", "newStage": "qualified" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Excellent! You're now qualified. I'd love to walk you through our options and find the best fit for your needs. Would you like to schedule a call?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "crm-write.stage.update" },
+    { "type": "response_contains", "substring": "qualified" }
+  ]
+}

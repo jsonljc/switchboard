@@ -1,0 +1,20 @@
+{
+  "name": "Missing BUSINESS_NAME throws SkillParameterError",
+  "parameters": {
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Hi" }],
+  "mockResponses": [],
+  "assertions": [{ "type": "error_thrown", "errorType": "SkillParameterError" }],
+  "expectError": true
+}

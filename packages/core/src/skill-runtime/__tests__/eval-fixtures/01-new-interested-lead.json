@@ -1,0 +1,34 @@
+{
+  "name": "New interested lead receives greeting",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Hi, I'm interested in your services" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Thanks for reaching out to TestBiz! We'd love to learn more about what you're looking for. What specific services are you most interested in?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "response_contains", "substring": "TestBiz" },
+    { "type": "tool_not_called", "toolName": "crm-write.stage.update" },
+    { "type": "tool_not_called", "toolName": "crm-query.contact.get" }
+  ]
+}
