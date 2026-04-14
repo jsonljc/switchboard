@@ -93,7 +93,7 @@ export class ActionExecutor {
         action.actionType,
         action.parameters,
       );
-      if (isDuplicate) {
+      if (isDuplicate && cachedResponse) {
         return cachedResponse as ActionResult;
       }
     }
