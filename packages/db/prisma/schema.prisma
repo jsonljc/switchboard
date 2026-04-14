@@ -804,6 +804,7 @@ model AgentDeployment {
   governanceSettings  Json     @default("{}")
   outputDestination   Json?
   connectionIds       String[] @default([])
+  skillSlug           String?  // When set, use skill executor instead of TypeScript handler
   trustLevel              String   @default("observe")
   spendApprovalThreshold  Float    @default(50)
   createdAt           DateTime @default(now())
