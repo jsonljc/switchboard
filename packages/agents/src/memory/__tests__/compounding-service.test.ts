@@ -237,5 +237,13 @@ describe("ConversationCompoundingService", () => {
         content: expect.stringContaining("Frequently asked question"),
       }),
     );
+
+    const storeCall = mockKnowledgeStore.store.mock.calls[0]?.[0];
+    expect(storeCall).toHaveProperty("draftStatus", "pending");
+    expect(storeCall).toHaveProperty("draftExpiresAt");
+    expect(storeCall.draftExpiresAt).toBeInstanceOf(Date);
+    // Verify expiry is roughly 72 hours from now (within 1 minute tolerance)
+    const expectedExpiry = Date.now() + 72 * 60 * 60 * 1000;
+    expect(Math.abs(storeCall.draftExpiresAt.getTime() - expectedExpiry)).toBeLessThan(60_000);
   });
 });
