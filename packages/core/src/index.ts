@@ -181,7 +181,7 @@ export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from ".
 
 // Model Router (slot-based model selection)
 export { ModelRouter } from "./model-router.js";
-export type { ModelSlot, ModelConfig, ResolveOptions } from "./model-router.js";
+export type { ModelSlot, ModelConfig, ResolveOptions, TierContext } from "./model-router.js";
 
 // Sessions (session runtime)
 export * from "./sessions/index.js";

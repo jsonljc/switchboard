@@ -90,6 +90,17 @@ export class ChannelGateway {
         }
       : info.persona;
 
+    // 5.6 Resolve model tier for cost optimization
+    const modelSlot =
+      this.config.modelRouter?.resolveTier({
+        messageIndex: allMessages.length - 1,
+        toolCount: 0,
+        hasHighRiskTools: false,
+        previousTurnUsedTools: false,
+        previousTurnEscalated: false,
+        modelFloor: undefined,
+      }) ?? "default";
+
     // 6. Create ephemeral AgentRuntime
     const runtime = new AgentRuntime({
       handler: DefaultChatHandler,
@@ -100,7 +111,7 @@ export class ChannelGateway {
       persona: enrichedPersona,
       stateStore: this.config.stateStore,
       actionRequestStore: this.config.actionRequestStore,
-      llmAdapter: this.config.llmAdapterFactory(),
+      llmAdapter: this.config.llmAdapterFactory(modelSlot),
       onChatExecute: async (reply: string) => {
         await replySink.send(reply);
         await this.config.conversationStore.addMessage(conversationId, "assistant", reply);
