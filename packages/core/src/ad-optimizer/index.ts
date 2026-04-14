@@ -25,3 +25,11 @@ export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions
 export type { CronDependencies } from "./inngest-functions.js";
 export { parseLeadWebhook } from "./meta-leads-ingester.js";
 export type { LeadData } from "./meta-leads-ingester.js";
+export {
+  buildAuthorizationUrl,
+  exchangeCodeForToken,
+  exchangeForLongLivedToken,
+  listAdAccounts,
+  refreshTokenIfNeeded,
+} from "./facebook-oauth.js";
+export type { FacebookOAuthConfig, TokenResult, AdAccount } from "./facebook-oauth.js";
