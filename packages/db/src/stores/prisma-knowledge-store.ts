@@ -17,6 +17,8 @@ interface KnowledgeChunk {
   embedding: number[];
   chunkIndex: number;
   metadata: Record<string, unknown>;
+  draftStatus?: string | null;
+  draftExpiresAt?: Date | null;
 }
 
 interface RetrievalResult {
@@ -62,11 +64,11 @@ export class PrismaKnowledgeStore {
       INSERT INTO "KnowledgeChunk" (
         "id", "organizationId", "agentId", "deploymentId", "documentId",
         "content", "sourceType", "embedding", "chunkIndex",
-        "metadata", "createdAt", "updatedAt"
+        "metadata", "draftStatus", "draftExpiresAt", "createdAt", "updatedAt"
       ) VALUES (
         ${chunk.id}, ${chunk.organizationId}, ${chunk.agentId}, ${chunk.deploymentId ?? null}, ${chunk.documentId},
         ${chunk.content}, ${chunk.sourceType}, ${vectorStr}::vector, ${chunk.chunkIndex},
-        ${JSON.stringify(chunk.metadata)}::jsonb, NOW(), NOW()
+        ${JSON.stringify(chunk.metadata)}::jsonb, ${chunk.draftStatus ?? null}, ${chunk.draftExpiresAt ?? null}, NOW(), NOW()
       )
     `;
   }

@@ -20,6 +20,8 @@ export interface KnowledgeChunk {
   embedding: number[];
   chunkIndex: number;
   metadata: Record<string, unknown>;
+  draftStatus?: string | null;
+  draftExpiresAt?: Date | null;
 }
 
 export interface RetrievalResult {

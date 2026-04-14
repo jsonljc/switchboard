@@ -40,6 +40,27 @@ describe("PrismaKnowledgeStore", () => {
 
       expect(mockPrisma.$executeRaw).toHaveBeenCalledOnce();
     });
+
+    it("includes draftStatus and draftExpiresAt in INSERT when provided", async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(1);
+      const expiresAt = new Date("2026-05-01T00:00:00Z");
+
+      await store.store({
+        id: "chunk-draft",
+        organizationId: "org-1",
+        agentId: "employee-a",
+        documentId: "doc-faq",
+        content: "FAQ answer",
+        sourceType: "learned",
+        embedding: [0.1, 0.2, 0.3],
+        chunkIndex: 0,
+        metadata: {},
+        draftStatus: "pending",
+        draftExpiresAt: expiresAt,
+      });
+
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledOnce();
+    });
   });
 
   describe("storeBatch()", () => {
