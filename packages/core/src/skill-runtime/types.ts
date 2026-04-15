@@ -1,3 +1,10 @@
+import type {
+  GovernanceTier,
+  GovernanceOutcome,
+  TrustLevel,
+  GovernanceDecision,
+} from "./governance.js";
+
 // ---------------------------------------------------------------------------
 // Skill Definition (output of loader)
 // ---------------------------------------------------------------------------
@@ -50,7 +57,7 @@ export interface ToolCallRecord {
   params: unknown;
   result: unknown;
   durationMs: number;
-  governanceDecision: "auto-approved" | "require-approval";
+  governanceDecision: GovernanceOutcome;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +72,9 @@ export interface SkillTool {
 export interface SkillToolOperation {
   description: string;
   inputSchema: Record<string, unknown>;
+  governanceTier: GovernanceTier;
+  governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
+  idempotent?: boolean;
   execute(params: unknown): Promise<unknown>;
 }
 
@@ -109,24 +119,4 @@ export class SkillExecutionBudgetError extends Error {
     super(message);
     this.name = "SkillExecutionBudgetError";
   }
-}
-
-// ---------------------------------------------------------------------------
-// Tool Governance Policy (fixed table for SP1)
-// ---------------------------------------------------------------------------
-
-export type ToolGovernanceDecision = "auto-approve" | "require-approval";
-
-/**
- * Fixed governance policy for SP1. Only crm-write.stage.update requires
- * approval in supervised mode. Everything else auto-approves.
- */
-export function getToolGovernanceDecision(
-  toolName: string,
-  trustLevel: "supervised" | "guided" | "autonomous",
-): ToolGovernanceDecision {
-  if (toolName === "crm-write.stage.update" && trustLevel === "supervised") {
-    return "require-approval";
-  }
-  return "auto-approve";
 }
