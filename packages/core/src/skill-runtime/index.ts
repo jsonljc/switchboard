@@ -9,4 +9,22 @@ export {
   createCrmWriteTool,
   createPipelineHandoffTool,
 } from "./tools/index.js";
-export * from "./types.js";
+export type {
+  SkillDefinition,
+  ParameterDeclaration,
+  ParameterType,
+  SkillExecutionParams,
+  SkillExecutionResult,
+  ToolCallRecord,
+  SkillTool,
+  SkillToolOperation,
+  SkillExecutor,
+  ToolGovernanceDecision,
+} from "./types.js";
+export {
+  SkillParseError,
+  SkillValidationError,
+  SkillParameterError,
+  SkillExecutionBudgetError,
+  getToolGovernanceDecision,
+} from "./types.js";

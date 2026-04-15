@@ -1,6 +1,5 @@
 import type { AgentHandler, AgentContext } from "@switchboard/sdk";
-import type { SkillExecutorImpl } from "./skill-executor.js";
-import type { SkillDefinition } from "./types.js";
+import type { SkillDefinition, SkillExecutor } from "./types.js";
 
 interface OpportunityStoreSubset {
   findActiveByContact(
@@ -27,7 +26,7 @@ interface SkillHandlerConfig {
 export class SkillHandler implements AgentHandler {
   constructor(
     private skill: SkillDefinition,
-    private executor: SkillExecutorImpl,
+    private executor: SkillExecutor,
     private stores: SkillHandlerStores,
     private config: SkillHandlerConfig,
   ) {}

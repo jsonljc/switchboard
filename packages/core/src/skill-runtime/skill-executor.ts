@@ -2,6 +2,7 @@ import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
 import type {
   SkillExecutionParams,
   SkillExecutionResult,
+  SkillExecutor,
   ToolCallRecord,
   SkillTool,
 } from "./types.js";
@@ -15,7 +16,7 @@ const MAX_LLM_TURNS = 6;
 const MAX_TOTAL_TOKENS = 64_000;
 const MAX_RUNTIME_MS = 30_000;
 
-export class SkillExecutorImpl {
+export class SkillExecutorImpl implements SkillExecutor {
   constructor(
     private adapter: ToolCallingAdapter,
     private tools: Map<string, SkillTool>,
@@ -46,19 +47,22 @@ export class SkillExecutorImpl {
       if (remainingMs <= 0) {
         throw new SkillExecutionBudgetError("Exceeded 30s runtime limit");
       }
+      let timeoutId: ReturnType<typeof setTimeout>;
       const response = await Promise.race([
         this.adapter.chatWithTools({
           system,
           messages,
           tools: anthropicTools,
         }),
-        new Promise<never>((_resolve, reject) =>
-          setTimeout(
+        new Promise<never>((_resolve, reject) => {
+          timeoutId = setTimeout(
             () => reject(new SkillExecutionBudgetError("Exceeded 30s runtime limit")),
             remainingMs,
-          ),
-        ),
-      ]);
+          );
+        }),
+      ]).finally(() => {
+        clearTimeout(timeoutId);
+      });
 
       totalInputTokens += response.usage.inputTokens;
       totalOutputTokens += response.usage.outputTokens;

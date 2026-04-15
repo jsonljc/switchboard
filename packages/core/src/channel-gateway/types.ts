@@ -3,23 +3,22 @@ import type { AgentStateStoreInterface } from "../agent-runtime/state-provider.j
 import type { ActionRequestStore } from "../agent-runtime/action-request-pipeline.js";
 import type { LLMAdapter } from "../llm-adapter.js";
 import type { ModelRouter, ModelSlot } from "../model-router.js";
-import type { SkillDefinition } from "../skill-runtime/types.js";
-import type { SkillExecutorImpl } from "../skill-runtime/skill-executor.js";
-import type { SkillHandler } from "../skill-runtime/skill-handler.js";
+import type { SkillDefinition, SkillExecutor } from "../skill-runtime/types.js";
+import type { AgentHandler } from "@switchboard/sdk";
 
 export interface SkillRuntimeDeps {
   /** Directory containing .md skill files */
   skillsDir: string;
   /** Load a skill definition by slug from disk */
   loadSkill: (slug: string, skillsDir: string) => SkillDefinition;
-  /** Factory to create a SkillExecutorImpl (adapter + tools wired) */
-  createExecutor: () => SkillExecutorImpl;
-  /** Factory to create a SkillHandler for a given skill + deployment */
+  /** Factory to create a SkillExecutor (adapter + tools wired) */
+  createExecutor: () => SkillExecutor;
+  /** Factory to create an AgentHandler for a given skill + deployment */
   createHandler: (
     skill: SkillDefinition,
-    executor: SkillExecutorImpl,
+    executor: SkillExecutor,
     config: { deploymentId: string; orgId: string; contactId: string },
-  ) => SkillHandler;
+  ) => AgentHandler;
 }
 
 export interface ChannelGatewayConfig {
@@ -54,7 +53,7 @@ export interface ChannelGatewayConfig {
     role: "user" | "assistant";
     content: string;
   }) => void;
-  /** Optional skill runtime deps — when provided, deployments with skillSlug use SkillHandler. */
+  /** Optional skill runtime deps — when provided, deployments with skillSlug use skill-based handlers. */
   skillRuntime?: SkillRuntimeDeps;
 }
 

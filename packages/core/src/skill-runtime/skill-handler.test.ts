@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillHandler } from "./skill-handler.js";
-import type { SkillDefinition } from "./types.js";
+import type { SkillDefinition, SkillExecutor } from "./types.js";
 
 const mockSkill: SkillDefinition = {
   name: "test",
@@ -59,7 +59,7 @@ describe("SkillHandler", () => {
 
     const handler = new SkillHandler(
       mockSkill,
-      mockExecutor as unknown as import("./skill-executor.js").SkillExecutorImpl,
+      mockExecutor as unknown as SkillExecutor,
       { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
@@ -90,7 +90,7 @@ describe("SkillHandler", () => {
 
     const handler = new SkillHandler(
       mockSkill,
-      mockExecutor as unknown as import("./skill-executor.js").SkillExecutorImpl,
+      mockExecutor as unknown as SkillExecutor,
       { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
@@ -126,7 +126,7 @@ describe("SkillHandler", () => {
 
     const handler = new SkillHandler(
       mockSkill,
-      mockExecutor as unknown as import("./skill-executor.js").SkillExecutorImpl,
+      mockExecutor as unknown as SkillExecutor,
       { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
