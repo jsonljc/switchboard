@@ -1,0 +1,195 @@
+// packages/core/src/creative-pipeline/ugc/ugc-job-runner.ts
+import { inngestClient } from "../inngest-client.js";
+import { shouldRequireApproval, UGC_PHASE_ORDER } from "./approval-config.js";
+import type { UgcPhase } from "./approval-config.js";
+import type { CreativeJob } from "@switchboard/schemas";
+
+// ── Interfaces ──
+
+interface UgcJobEventData {
+  jobId: string;
+  taskId: string;
+  organizationId: string;
+  deploymentId: string;
+}
+
+interface UgcStepTools {
+  run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
+  waitForEvent: (
+    id: string,
+    opts: { event: string; timeout: string; match: string; if?: string },
+  ) => Promise<{ data: { action: string; phase?: string } } | null>;
+  sendEvent: (id: string, event: { name: string; data: Record<string, unknown> }) => Promise<void>;
+}
+
+interface UgcJobStore {
+  findById(id: string): Promise<CreativeJob | null>;
+  updateUgcPhase(id: string, phase: string, outputs: Record<string, unknown>): Promise<CreativeJob>;
+  stopUgc(id: string, phase: string): Promise<CreativeJob>;
+  failUgc(id: string, phase: string, error: Record<string, unknown>): Promise<CreativeJob>;
+}
+
+interface CreatorStore {
+  findByDeployment(deploymentId: string): Promise<unknown[]>;
+}
+
+interface DeploymentStore {
+  findById(id: string): Promise<{ listing?: { trustScore?: number }; type?: string } | null>;
+}
+
+interface UgcPipelineDeps {
+  jobStore: UgcJobStore;
+  creatorStore: CreatorStore;
+  deploymentStore: DeploymentStore;
+}
+
+interface UgcPipelineContext {
+  creatorPool: unknown[];
+  trustLevel: number;
+  deploymentType: string;
+}
+
+// ── Phase execution (no-op stubs for SP2) ──
+// SP3-SP5 replace these with real implementations.
+// SP3+ must also add try/catch with error classification per spec Section 5.10.
+
+function executePhase(
+  phase: UgcPhase,
+  _ctx: {
+    job: CreativeJob;
+    context: UgcPipelineContext;
+    previousPhaseOutputs: Record<string, unknown>;
+  },
+): Record<string, unknown> {
+  return { phase, status: "no-op", completedAt: new Date().toISOString() };
+}
+
+function getNextPhase(phase: UgcPhase): string {
+  const idx = UGC_PHASE_ORDER.indexOf(phase);
+  if (idx === UGC_PHASE_ORDER.length - 1) return "complete";
+  return UGC_PHASE_ORDER[idx + 1];
+}
+
+// ── Preload context ──
+
+async function preloadContext(
+  job: CreativeJob,
+  deps: UgcPipelineDeps,
+): Promise<UgcPipelineContext> {
+  const [creatorPool, deployment] = await Promise.all([
+    deps.creatorStore.findByDeployment(job.deploymentId),
+    deps.deploymentStore.findById(job.deploymentId),
+  ]);
+
+  return {
+    creatorPool,
+    trustLevel: deployment?.listing?.trustScore ?? 0,
+    deploymentType: deployment?.type ?? "standard",
+  };
+}
+
+// ── Core pipeline logic ──
+
+const APPROVAL_TIMEOUT = "24h";
+
+export async function executeUgcPipeline(
+  eventData: UgcJobEventData,
+  step: UgcStepTools,
+  deps: UgcPipelineDeps,
+): Promise<void> {
+  const job = await step.run("load-job", () => deps.jobStore.findById(eventData.jobId));
+  if (!job) throw new Error(`UGC job not found: ${eventData.jobId}`);
+
+  const context = await step.run("preload-context", () => preloadContext(job, deps));
+
+  let phaseOutputs: Record<string, unknown> = (job.ugcPhaseOutputs ?? {}) as Record<
+    string,
+    unknown
+  >;
+
+  // Resume from last completed phase
+  const startPhase = (job.ugcPhase as UgcPhase) ?? "planning";
+  const startIdx = UGC_PHASE_ORDER.indexOf(startPhase);
+
+  for (let i = startIdx; i < UGC_PHASE_ORDER.length; i++) {
+    const phase = UGC_PHASE_ORDER[i];
+    const startedAt = Date.now();
+
+    // Execute phase
+    const output = await step.run(`phase-${phase}`, () =>
+      executePhase(phase, { job, context, previousPhaseOutputs: phaseOutputs }),
+    );
+
+    const durationMs = Date.now() - startedAt;
+
+    // Persist
+    phaseOutputs = { ...phaseOutputs, [phase]: output };
+    const nextPhase = getNextPhase(phase);
+
+    await step.run(`save-${phase}`, () =>
+      deps.jobStore.updateUgcPhase(job.id, nextPhase, phaseOutputs),
+    );
+
+    // Emit phase completion event
+    await step.sendEvent(`emit-${phase}-complete`, {
+      name: "creative-pipeline/ugc-phase.completed",
+      data: {
+        jobId: job.id,
+        phase,
+        durationMs,
+        substagesCompleted: [],
+        resultSummary: {},
+      },
+    });
+
+    // Approval gate
+    if (
+      shouldRequireApproval({
+        phase,
+        trustLevel: context.trustLevel,
+        deploymentType: context.deploymentType,
+      })
+    ) {
+      const approval = await step.waitForEvent(`wait-approval-${phase}`, {
+        event: "creative-pipeline/ugc-phase.approved",
+        timeout: APPROVAL_TIMEOUT,
+        match: "data.jobId",
+        if: `async.data.phase == '${phase}'`,
+      });
+
+      if (!approval || approval.data.action === "stop") {
+        await step.run(`stop-at-${phase}`, () => deps.jobStore.stopUgc(job.id, phase));
+
+        await step.sendEvent("emit-stopped", {
+          name: "creative-pipeline/ugc.stopped",
+          data: { jobId: job.id, stoppedAtPhase: phase },
+        });
+        return;
+      }
+    }
+
+    if (nextPhase === "complete") break;
+  }
+
+  // Emit final completion event
+  await step.sendEvent("emit-completed", {
+    name: "creative-pipeline/ugc.completed",
+    data: { jobId: job.id, assetsProduced: 0, failed: 0 },
+  });
+}
+
+// ── Inngest function definition ──
+
+export function createUgcJobRunner(deps: UgcPipelineDeps) {
+  return inngestClient.createFunction(
+    {
+      id: "ugc-job-runner",
+      name: "UGC Pipeline Job Runner",
+      retries: 3,
+      triggers: [{ event: "creative-pipeline/ugc.submitted" }],
+    },
+    async ({ event, step }: { event: { data: UgcJobEventData }; step: UgcStepTools }) => {
+      await executeUgcPipeline(event.data, step, deps);
+    },
+  );
+}
