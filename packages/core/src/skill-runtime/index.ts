@@ -15,8 +15,9 @@ export {
   createCrmQueryTool,
   createCrmWriteTool,
   createPipelineHandoffTool,
+  createWebScannerTool,
 } from "./tools/index.js";
-export { salesPipelineBuilder } from "./builders/index.js";
+export { salesPipelineBuilder, websiteProfilerBuilder } from "./builders/index.js";
 
 // Types
 export type {
@@ -29,6 +30,7 @@ export type {
   SkillTool,
   SkillToolOperation,
   SkillExecutor,
+  OutputFieldDeclaration,
 } from "./types.js";
 export {
   SkillParseError,
