@@ -304,8 +304,8 @@ describe("Marketplace schemas", () => {
       };
       const result = SetupSchema.parse(schema);
       expect(result.steps).toHaveLength(1);
-      expect(result.steps[0].fields).toHaveLength(2);
-      expect(result.onboarding.publicChannels).toBe(true);
+      expect(result.steps[0]?.fields).toHaveLength(2);
+      expect(result.onboarding?.publicChannels).toBe(true);
     });
 
     it("rejects invalid field type", () => {
