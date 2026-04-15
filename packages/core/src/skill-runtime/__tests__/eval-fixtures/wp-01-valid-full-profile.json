@@ -1,0 +1,74 @@
+{
+  "name": "Valid URL with complete website profile",
+  "parameters": {
+    "TARGET_URL": "https://example.com",
+    "BUSINESS_NAME": "Example Corp",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://example.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://example.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://example.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Example Corp is a service-based business offering consulting.\",\"business_model\":\"service\",\"price_positioning\":\"premium\",\"primary_cta\":\"book\",\"lead_intent_type\":\"exploratory\",\"platform\":\"wordpress\",\"platform_confidence\":\"high\",\"confidence\":\"high\",\"data_completeness\":\"high\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.validate-url" },
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "tool_called", "toolName": "web-scanner.detect-platform" },
+    { "type": "tool_called", "toolName": "web-scanner.extract-business-info" },
+    { "type": "response_contains", "substring": "business_model" }
+  ]
+}

@@ -123,12 +123,70 @@ function createMockTools(): Map<string, SkillTool> {
     },
   });
   tools.set("pipeline-handoff", createPipelineHandoffTool());
+  tools.set("web-scanner", {
+    id: "web-scanner",
+    operations: {
+      "validate-url": {
+        description: "Validate URL",
+        inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+        governanceTier: "read" as const,
+        execute: async (params: unknown) => {
+          const { url } = params as { url: string };
+          try {
+            new URL(url);
+            return { valid: true, validatedUrl: url, error: null };
+          } catch {
+            return { valid: false, validatedUrl: null, error: "Invalid URL format" };
+          }
+        },
+      },
+      "fetch-pages": {
+        description: "Fetch pages",
+        inputSchema: {
+          type: "object",
+          properties: { baseUrl: { type: "string" } },
+          required: ["baseUrl"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({
+          pages: [
+            { path: "/", text: "Homepage content", status: "ok" },
+            { path: "/about", text: "About us content", status: "ok" },
+          ],
+          homepageHtml: "<html><head></head><body>Homepage</body></html>",
+          fetchedCount: 2,
+          failedPaths: [],
+        }),
+      },
+      "detect-platform": {
+        description: "Detect platform",
+        inputSchema: {
+          type: "object",
+          properties: { html: { type: "string" } },
+          required: ["html"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({ platform: null, confidence: "none" }),
+      },
+      "extract-business-info": {
+        description: "Extract business info",
+        inputSchema: {
+          type: "object",
+          properties: { html: { type: "string" } },
+          required: ["html"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({ structuredData: [], openGraph: {}, meta: {} }),
+      },
+    },
+  });
   return tools;
 }
 
 async function runFixture(fixtureName: string): Promise<void> {
   const fixture = loadFixture(fixtureName);
-  const skill = loadSkill("sales-pipeline", join(REPO_ROOT, "skills"));
+  const skillName = fixtureName.startsWith("wp-") ? "website-profiler" : "sales-pipeline";
+  const skill = loadSkill(skillName, join(REPO_ROOT, "skills"));
   const adapter = createMockAdapter(fixture);
   const tools = createMockTools();
   const executor = new SkillExecutorImpl(adapter, tools);

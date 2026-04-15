@@ -1,0 +1,75 @@
+{
+  "name": "Sparse website content with low completeness",
+  "parameters": {
+    "TARGET_URL": "https://sparse-site.com",
+    "BUSINESS_NAME": "Sparse Biz",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://sparse-site.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://sparse-site.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://sparse-site.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Sparse Biz has limited online presence.\",\"business_model\":\"unclear\",\"price_positioning\":\"unclear\",\"primary_cta\":\"unclear\",\"lead_intent_type\":\"unclear\",\"platform\":\"unknown\",\"platform_confidence\":\"low\",\"confidence\":\"low\",\"data_completeness\":\"low\",\"missing_fields\":[\"pricing\",\"services\",\"contact_info\"]}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.validate-url" },
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "tool_called", "toolName": "web-scanner.detect-platform" },
+    { "type": "tool_called", "toolName": "web-scanner.extract-business-info" },
+    { "type": "response_contains", "substring": "data_completeness" },
+    { "type": "response_contains", "substring": "missing_fields" }
+  ]
+}
