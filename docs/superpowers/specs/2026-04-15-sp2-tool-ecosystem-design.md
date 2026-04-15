@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-15
 **Status:** Draft
-**Governing sentence:** SP2 is not building new agents. SP2 is locking the pattern that all future conversational agent migrations will follow — tool registry, governance tiers, generic handler, and a proof migration that validates the pattern is not sales-pipeline-specific.
+**Governing sentence:** SP2 locks the migration pattern for conversational agents that sit inside the revenue loop (lead responder, profiler, qualifier, nurturer, closer), so future agents can be added by standard extension points instead of bespoke runtime logic.
 
 ---
 
