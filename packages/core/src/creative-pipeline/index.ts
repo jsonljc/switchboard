@@ -11,3 +11,7 @@ export { runStoryboardBuilder, buildStoryboardPrompt } from "./stages/storyboard
 export { DalleImageGenerator } from "./stages/image-generator.js";
 export type { ImageGenerator } from "./stages/image-generator.js";
 export { estimateCost } from "./stages/cost-estimator.js";
+export { createModeDispatcher, executeModeDispatch } from "./mode-dispatcher.js";
+export { createUgcJobRunner, executeUgcPipeline } from "./ugc/ugc-job-runner.js";
+export { shouldRequireApproval, DEFAULT_APPROVAL_CONFIG } from "./ugc/approval-config.js";
+export type { UgcPhase, ApprovalConfig } from "./ugc/approval-config.js";

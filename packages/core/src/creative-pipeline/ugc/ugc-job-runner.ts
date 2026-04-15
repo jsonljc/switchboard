@@ -67,7 +67,7 @@ function executePhase(
 function getNextPhase(phase: UgcPhase): string {
   const idx = UGC_PHASE_ORDER.indexOf(phase);
   if (idx === UGC_PHASE_ORDER.length - 1) return "complete";
-  return UGC_PHASE_ORDER[idx + 1];
+  return UGC_PHASE_ORDER[idx + 1] as string;
 }
 
 // ── Preload context ──
@@ -117,14 +117,15 @@ export async function executeUgcPipeline(
 
     // Execute phase
     const output = await step.run(`phase-${phase}`, () =>
-      executePhase(phase, { job, context, previousPhaseOutputs: phaseOutputs }),
+      executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }),
     );
 
     const durationMs = Date.now() - startedAt;
 
     // Persist
-    phaseOutputs = { ...phaseOutputs, [phase]: output };
-    const nextPhase = getNextPhase(phase);
+    const phaseKey: string = phase as string;
+    phaseOutputs = { ...phaseOutputs, [phaseKey]: output };
+    const nextPhase = getNextPhase(phase as UgcPhase);
 
     await step.run(`save-${phase}`, () =>
       deps.jobStore.updateUgcPhase(job.id, nextPhase, phaseOutputs),
@@ -145,7 +146,7 @@ export async function executeUgcPipeline(
     // Approval gate
     if (
       shouldRequireApproval({
-        phase,
+        phase: phase as UgcPhase,
         trustLevel: context.trustLevel,
         deploymentType: context.deploymentType,
       })
@@ -158,11 +159,11 @@ export async function executeUgcPipeline(
       });
 
       if (!approval || approval.data.action === "stop") {
-        await step.run(`stop-at-${phase}`, () => deps.jobStore.stopUgc(job.id, phase));
+        await step.run(`stop-at-${phase}`, () => deps.jobStore.stopUgc(job.id, phase as string));
 
         await step.sendEvent("emit-stopped", {
           name: "creative-pipeline/ugc.stopped",
-          data: { jobId: job.id, stoppedAtPhase: phase },
+          data: { jobId: job.id, stoppedAtPhase: phase as string },
         });
         return;
       }

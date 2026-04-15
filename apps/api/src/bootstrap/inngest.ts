@@ -7,9 +7,15 @@ import {
   PrismaListingStore,
   PrismaDeploymentConnectionStore,
   PrismaAgentTaskStore,
+  PrismaCreatorIdentityStore,
   decryptCredentials,
 } from "@switchboard/db";
-import { inngestClient, createCreativeJobRunner } from "@switchboard/core/creative-pipeline";
+import {
+  inngestClient,
+  createCreativeJobRunner,
+  createModeDispatcher,
+  createUgcJobRunner,
+} from "@switchboard/core/creative-pipeline";
 import {
   createWeeklyAuditCron,
   createDailyCheckCron,
@@ -36,6 +42,7 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
   }
 
   const jobStore = new PrismaCreativeJobStore(app.prisma);
+  const creatorStore = new PrismaCreatorIdentityStore(app.prisma);
 
   // Ad Optimizer cron dependencies
   const deploymentStore = new PrismaDeploymentStore(app.prisma);
@@ -100,7 +107,23 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
+      createModeDispatcher(),
       createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
+      createUgcJobRunner({
+        jobStore,
+        creatorStore,
+        deploymentStore: {
+          findById: async (id: string) => {
+            const deployment = await deploymentStore.findById(id);
+            if (!deployment) return null;
+            const listing = await listingStore.findById(deployment.listingId);
+            return {
+              listing: listing ? { trustScore: listing.trustScore } : undefined,
+              type: "standard",
+            };
+          },
+        },
+      }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
     ],
