@@ -4,7 +4,7 @@ import type { ActionRequestStore } from "../agent-runtime/action-request-pipelin
 import type { LLMAdapter } from "../llm-adapter.js";
 import type { ModelRouter, ModelSlot } from "../model-router.js";
 import type { SkillDefinition, SkillExecutor } from "../skill-runtime/types.js";
-import type { AgentHandler } from "@switchboard/sdk";
+import type { ParameterBuilder, SkillStores } from "../skill-runtime/parameter-builder.js";
 
 export interface SkillRuntimeDeps {
   /** Directory containing .md skill files */
@@ -13,12 +13,10 @@ export interface SkillRuntimeDeps {
   loadSkill: (slug: string, skillsDir: string) => SkillDefinition;
   /** Factory to create a SkillExecutor (adapter + tools wired) */
   createExecutor: () => SkillExecutor;
-  /** Factory to create an AgentHandler for a given skill + deployment */
-  createHandler: (
-    skill: SkillDefinition,
-    executor: SkillExecutor,
-    config: { deploymentId: string; orgId: string; contactId: string },
-  ) => AgentHandler;
+  /** Map of parameter builders registered for skill parameter resolution */
+  builderMap: Map<string, ParameterBuilder>;
+  /** Stores required by parameter builders (deployments, listings, tasks, contacts, etc.) */
+  stores: SkillStores;
 }
 
 export interface ChannelGatewayConfig {

@@ -1,6 +1,7 @@
 import type { AgentHandler } from "@switchboard/sdk";
 import { AgentRuntime } from "../agent-runtime/agent-runtime.js";
 import { DefaultChatHandler } from "../agent-runtime/default-chat-handler.js";
+import { SkillHandler } from "../skill-runtime/skill-handler.js";
 import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "./types.js";
 import { UnknownChannelError } from "./types.js";
 
@@ -145,7 +146,7 @@ export class ChannelGateway {
    */
   private resolveHandler(
     info: { deployment: { id: string; organizationId: string; skillSlug?: string | null } },
-    message: IncomingChannelMessage,
+    _message: IncomingChannelMessage,
   ): AgentHandler {
     const { skillRuntime } = this.config;
     const { skillSlug } = info.deployment;
@@ -153,10 +154,9 @@ export class ChannelGateway {
     if (skillSlug && skillRuntime) {
       const skill = skillRuntime.loadSkill(skillSlug, skillRuntime.skillsDir);
       const executor = skillRuntime.createExecutor();
-      return skillRuntime.createHandler(skill, executor, {
+      return new SkillHandler(skill, executor, skillRuntime.builderMap, skillRuntime.stores, {
         deploymentId: info.deployment.id,
         orgId: info.deployment.organizationId,
-        contactId: message.sessionId,
       });
     }
 

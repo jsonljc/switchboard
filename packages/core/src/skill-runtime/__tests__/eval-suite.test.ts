@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
 import { createPipelineHandoffTool } from "../tools/pipeline-handoff.js";
@@ -50,11 +51,16 @@ function loadFixture(name: string): EvalFixture {
 function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
   let callIndex = 0;
   return {
-    chatWithTools: async () => {
+    chatWithTools: async (_params: {
+      system: string;
+      messages: Array<Anthropic.MessageParam>;
+      tools: Array<Anthropic.Tool>;
+      maxTokens?: number;
+    }) => {
       const resp = fixture.mockResponses[callIndex];
       if (!resp) {
         return {
-          content: [{ type: "text" as const, text: "Mock exhausted" }],
+          content: [{ type: "text" as const, text: "Mock exhausted" } as Anthropic.TextBlock],
           stopReason: "end_turn" as const,
           usage: { inputTokens: 100, outputTokens: 50 },
         };
@@ -68,9 +74,10 @@ function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
               id: block.id ?? "mock-id",
               name: block.name ?? "unknown",
               input: block.input ?? {},
-            };
+              caller: { type: "direct" as const },
+            } as Anthropic.ToolUseBlock;
           }
-          return { type: "text" as const, text: block.text ?? "" };
+          return { type: "text" as const, text: block.text ?? "" } as Anthropic.TextBlock;
         }),
         stopReason: resp.stop_reason as "end_turn" | "tool_use",
         usage: { inputTokens: 100, outputTokens: 50 },
@@ -87,11 +94,13 @@ function createMockTools(): Map<string, SkillTool> {
       "contact.get": {
         description: "Get contact",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
         execute: async () => ({ id: "c1", name: "Test Lead", stage: "new" }),
       },
       "activity.list": {
         description: "List activities",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
         execute: async () => [],
       },
     },
@@ -102,11 +111,13 @@ function createMockTools(): Map<string, SkillTool> {
       "stage.update": {
         description: "Update stage",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "internal_write" as const,
         execute: async (params: unknown) => ({ ...(params as object), updated: true }),
       },
       "activity.log": {
         description: "Log activity",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "internal_write" as const,
         execute: async () => undefined,
       },
     },
