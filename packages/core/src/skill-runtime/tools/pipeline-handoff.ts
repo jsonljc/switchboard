@@ -67,6 +67,8 @@ export function createPipelineHandoffTool(): SkillTool {
       determine: {
         description:
           "Check if a lead should be handed off to a different pipeline agent based on current stage and time since last customer reply.",
+        governanceTier: "read" as const,
+        idempotent: true,
         inputSchema: {
           type: "object",
           properties: {

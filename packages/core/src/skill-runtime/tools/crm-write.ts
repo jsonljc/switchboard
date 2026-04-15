@@ -28,6 +28,8 @@ export function createCrmWriteTool(
     operations: {
       "stage.update": {
         description: "Update an opportunity's pipeline stage.",
+        governanceTier: "internal_write" as const,
+        idempotent: true,
         inputSchema: {
           type: "object",
           properties: {
@@ -60,6 +62,8 @@ export function createCrmWriteTool(
       },
       "activity.log": {
         description: "Log an activity event.",
+        governanceTier: "internal_write" as const,
+        idempotent: false,
         inputSchema: {
           type: "object",
           properties: {
