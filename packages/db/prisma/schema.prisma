@@ -965,19 +965,99 @@ model CreativeJob {
   pastPerformance     Json?
   generateReferenceImages  Boolean  @default(false)
 
-  // Pipeline state
+  // Pipeline state (polished)
   currentStage    String   @default("trends")
   stageOutputs    Json     @default("{}")
   stoppedAt       String?
   productionTier  String?
 
+  // Pipeline mode
+  mode                    String   @default("polished")
+
+  // UGC pipeline state (nullable — only populated when mode = "ugc")
+  ugcPhase                String?
+  ugcPhaseOutputs         Json?
+  ugcPhaseOutputsVersion  String?  @default("v1")
+  ugcConfig               Json?
+  ugcFailure              Json?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   task AgentTask @relation(fields: [taskId], references: [id])
+  assets AssetRecord[]
 
   @@index([organizationId])
   @@index([deploymentId])
+  @@index([mode])
+}
+
+model CreatorIdentity {
+  id                  String   @id @default(cuid())
+  deploymentId        String
+  name                String
+
+  identityRefIds      String[]
+  heroImageAssetId    String
+  identityDescription String
+
+  identityObjects     Json?
+
+  voice               Json
+  personality         Json
+  appearanceRules     Json
+
+  environmentSet      String[]
+
+  approved            Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  bibleVersion        String   @default("1.0")
+  previousVersionId   String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  assets              AssetRecord[]
+
+  @@index([deploymentId])
+}
+
+model AssetRecord {
+  id                  String   @id @default(cuid())
+  jobId               String
+  job                 CreativeJob @relation(fields: [jobId], references: [id])
+  specId              String
+  creatorId           String?
+  creator             CreatorIdentity? @relation(fields: [creatorId], references: [id])
+
+  provider            String
+  modelId             String
+  modelVersion        String?
+  seed                Int?
+
+  inputHashes         Json
+  outputs             Json
+
+  qaMetrics           Json?
+  qaHistory           Json?
+
+  identityDriftScore  Float?
+  baselineAssetId     String?
+
+  latencyMs           Int?
+  costEstimate        Float?
+  attemptNumber       Int?
+
+  approvalState       String   @default("pending")
+  lockedDerivativeOf  String?
+
+  createdAt           DateTime @default(now())
+
+  @@unique([specId, attemptNumber, provider])
+  @@index([jobId])
+  @@index([specId])
+  @@index([creatorId])
+  @@index([approvalState])
 }
 
 model LlmUsageLog {
