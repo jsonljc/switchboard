@@ -77,7 +77,7 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       new Map(),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(),
       makeBlastRadius(),
@@ -95,7 +95,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       builderMap,
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(),
       makeBlastRadius(),
@@ -107,7 +107,7 @@ describe("SkillHandler (generic)", () => {
 
     expect(builder).toHaveBeenCalledWith(
       ctx,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       mockStores,
     );
     expect(executor.execute).toHaveBeenCalledOnce();
@@ -125,7 +125,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       builderMap,
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(),
       makeBlastRadius(),
@@ -147,7 +147,7 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       builderMap,
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(),
       makeBlastRadius(),
@@ -165,7 +165,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       new Map([["test-skill", builder]]),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       traceStore,
       makeCircuitBreaker(),
       makeBlastRadius(),
@@ -190,7 +190,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       new Map([["test-skill", vi.fn()]]),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(false),
       makeBlastRadius(),
@@ -211,7 +211,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       new Map([["test-skill", vi.fn()]]),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       makeTraceStore(),
       makeCircuitBreaker(),
       makeBlastRadius(false),
@@ -225,6 +225,39 @@ describe("SkillHandler (generic)", () => {
     expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("active"));
   });
 
+  it("persists error trace when executor throws", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const traceStore = makeTraceStore();
+    const { SkillExecutionBudgetError } = await import("./types.js");
+    const executor = {
+      execute: vi.fn().mockRejectedValue(new SkillExecutionBudgetError("Exceeded 30s")),
+    };
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      traceStore,
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(traceStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "budget_exceeded",
+        error: "Exceeded 30s",
+      }),
+    );
+    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("issue"));
+    consoleErrorSpy.mockRestore();
+  });
+
   it("still sends response when trace persistence fails", async () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
     const traceStore = makeTraceStore();
@@ -236,7 +269,7 @@ describe("SkillHandler (generic)", () => {
       executor as any,
       new Map([["test-skill", builder]]),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       traceStore,
       makeCircuitBreaker(),
       makeBlastRadius(),

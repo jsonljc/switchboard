@@ -163,6 +163,7 @@ export class ChannelGateway {
           deploymentId: info.deployment.id,
           orgId: info.deployment.organizationId,
           contactId: message.sessionId,
+          sessionId: message.sessionId,
         },
         skillRuntime.traceStore,
         skillRuntime.circuitBreaker,

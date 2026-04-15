@@ -1,5 +1,11 @@
 import type { AgentHandler, AgentContext } from "@switchboard/sdk";
-import type { SkillDefinition, SkillExecutor, SkillExecutionTrace } from "./types.js";
+import type {
+  SkillDefinition,
+  SkillExecutor,
+  SkillExecutionTrace,
+  SkillExecutionResult,
+} from "./types.js";
+import { SkillExecutionBudgetError } from "./types.js";
 import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 import { ParameterResolutionError } from "./parameter-builder.js";
 import type { CircuitBreaker } from "./circuit-breaker.js";
@@ -12,6 +18,7 @@ interface SkillHandlerConfig {
   deploymentId: string;
   orgId: string;
   contactId: string;
+  sessionId: string;
 }
 
 interface ExecutionTraceStore {
@@ -78,17 +85,53 @@ export class SkillHandler implements AgentHandler {
       content: m.content,
     }));
 
-    const result = await this.executor.execute({
-      skill: this.skill,
-      parameters,
-      messages,
-      deploymentId: this.config.deploymentId,
-      orgId: this.config.orgId,
-      trustScore: ctx.trust.score,
-      trustLevel: ctx.trust.level,
-    });
+    const startTime = Date.now();
+    let result: SkillExecutionResult;
+    try {
+      result = await this.executor.execute({
+        skill: this.skill,
+        parameters,
+        messages,
+        deploymentId: this.config.deploymentId,
+        orgId: this.config.orgId,
+        trustScore: ctx.trust.score,
+        trustLevel: ctx.trust.level,
+      });
+    } catch (err) {
+      // Persist error trace so circuit breaker can detect failure patterns
+      const status = err instanceof SkillExecutionBudgetError ? "budget_exceeded" : "error";
+      const errorTrace: SkillExecutionTrace = {
+        id: createId(),
+        deploymentId: this.config.deploymentId,
+        organizationId: this.config.orgId,
+        skillSlug: this.skill.slug,
+        skillVersion: this.skill.version,
+        trigger: "chat_message",
+        sessionId: this.config.sessionId,
+        inputParametersHash: hashParameters(parameters),
+        toolCalls: [],
+        governanceDecisions: [],
+        tokenUsage: { input: 0, output: 0 },
+        durationMs: Date.now() - startTime,
+        turnCount: 0,
+        status,
+        error: err instanceof Error ? err.message : String(err),
+        responseSummary: "",
+        writeCount: 0,
+        createdAt: new Date(),
+      };
+      try {
+        await this.traceStore.create(errorTrace);
+      } catch (traceErr) {
+        console.error(`Error trace persistence failed for ${errorTrace.id}:`, traceErr);
+      }
+      await ctx.chat.send(
+        "I ran into an issue processing your request. Let me connect you with the team.",
+      );
+      return;
+    }
 
-    // Assemble trace — handler owns the ID
+    // Assemble success trace — handler owns the ID
     const trace: SkillExecutionTrace = {
       id: createId(),
       deploymentId: this.config.deploymentId,
@@ -96,7 +139,7 @@ export class SkillHandler implements AgentHandler {
       skillSlug: this.skill.slug,
       skillVersion: this.skill.version,
       trigger: "chat_message",
-      sessionId: this.config.contactId,
+      sessionId: this.config.sessionId,
       inputParametersHash: hashParameters(parameters),
       toolCalls: result.toolCalls,
       governanceDecisions: result.trace.governanceDecisions,
