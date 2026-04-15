@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { castCreators, type CastingInput } from "../ugc/scene-caster.js";
 import type { StructureSelection } from "../ugc/structure-engine.js";
 
-function makeCreator(id: string, energy: string = "conversational") {
+function makeCreator(
+  id: string,
+  energy: "conversational" | "energetic" | "intense" | "calm" = "conversational",
+) {
   return {
     id,
     deploymentId: "dep_1",
@@ -108,6 +111,6 @@ describe("castCreators", () => {
 
     const freshResult = castCreators(fresh);
     const repeatedResult = castCreators(repeated);
-    expect(repeatedResult[0].score).toBeLessThan(freshResult[0].score);
+    expect(repeatedResult[0]!.score).toBeLessThan(freshResult[0]!.score);
   });
 });

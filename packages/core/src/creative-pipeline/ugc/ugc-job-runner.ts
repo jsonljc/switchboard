@@ -84,7 +84,7 @@ function executePhase(
     case "planning": {
       const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
       const brief = (ugcConfig.brief ?? {}) as UgcBriefInput;
-      return executePlanningPhase({
+      const result = executePlanningPhase({
         brief: {
           productDescription: brief.productDescription ?? "",
           targetAudience: brief.targetAudience ?? "",
@@ -100,6 +100,7 @@ function executePhase(
         performanceMemory: { structureHistory: {}, creatorHistory: {} },
         providerCapabilities: ctx.context.providerCapabilities as ProviderCapabilityProfile[],
       });
+      return result as unknown as Record<string, unknown>;
     }
     default:
       // SP4-SP5 replace these

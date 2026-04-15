@@ -222,10 +222,10 @@ export function selectStructures(input: StructureSelectionInput): StructureSelec
     structureId: raw.template.id,
     template: raw.template,
     score:
-      WEIGHTS.platform * platformScores[i] +
-      WEIGHTS.friction * frictionScores[i] +
-      WEIGHTS.performance * performanceScores[i] -
-      WEIGHTS.fatigue * fatigueScores[i],
+      WEIGHTS.platform * (platformScores[i] ?? 0) +
+      WEIGHTS.friction * (frictionScores[i] ?? 0) +
+      WEIGHTS.performance * (performanceScores[i] ?? 0) -
+      WEIGHTS.fatigue * (fatigueScores[i] ?? 0),
   }));
 
   // Sort descending by score, take top N
