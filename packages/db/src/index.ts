@@ -86,3 +86,4 @@ export { PrismaOwnerMemoryStore } from "./stores/prisma-owner-memory-store.js";
 export { PrismaAggregateMemoryStore } from "./stores/prisma-aggregate-memory-store.js";
 export { PrismaCreatorIdentityStore } from "./stores/prisma-creator-identity-store.js";
 export { PrismaAssetRecordStore } from "./stores/prisma-asset-record-store.js";
+export { PrismaExecutionTraceStore } from "./stores/prisma-execution-trace-store.js";

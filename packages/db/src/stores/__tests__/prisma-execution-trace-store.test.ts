@@ -42,7 +42,7 @@ describe("PrismaExecutionTraceStore", () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    store = new PrismaExecutionTraceStore(prisma);
+    store = new PrismaExecutionTraceStore(prisma as never);
   });
 
   describe("create", () => {

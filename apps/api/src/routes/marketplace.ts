@@ -9,6 +9,7 @@ import {
   PrismaAgentTaskStore,
   PrismaTrustScoreStore,
   PrismaDeploymentConnectionStore,
+  PrismaExecutionTraceStore,
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
@@ -588,5 +589,54 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
     await connectionStore.updateStatus(connectionId, "revoked");
     return reply.send({ ok: true });
+  });
+
+  // ── Execution Traces ──
+
+  app.get<{
+    Params: { deploymentId: string };
+    Querystring: { limit?: string; cursor?: string };
+  }>("/deployments/:deploymentId/traces", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { deploymentId } = request.params;
+    const limit = Math.min(Number(request.query.limit) || 20, 100);
+    const cursor = request.query.cursor;
+
+    const traceStore = new PrismaExecutionTraceStore(app.prisma);
+    const result = await traceStore.listByDeployment(orgId, deploymentId, { limit, cursor });
+
+    return reply.send(result);
+  });
+
+  app.get<{
+    Params: { traceId: string };
+  }>("/traces/:traceId", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available" });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Organization required" });
+    }
+
+    const { traceId } = request.params;
+
+    const traceStore = new PrismaExecutionTraceStore(app.prisma);
+    const trace = await traceStore.findById(orgId, traceId);
+
+    if (!trace) {
+      return reply.status(404).send({ error: "Trace not found" });
+    }
+
+    return reply.send({ trace });
   });
 };
