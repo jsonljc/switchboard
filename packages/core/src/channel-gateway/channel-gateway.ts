@@ -146,7 +146,7 @@ export class ChannelGateway {
    */
   private resolveHandler(
     info: { deployment: { id: string; organizationId: string; skillSlug?: string | null } },
-    _message: IncomingChannelMessage,
+    message: IncomingChannelMessage,
   ): AgentHandler {
     const { skillRuntime } = this.config;
     const { skillSlug } = info.deployment;
@@ -157,6 +157,7 @@ export class ChannelGateway {
       return new SkillHandler(skill, executor, skillRuntime.builderMap, skillRuntime.stores, {
         deploymentId: info.deployment.id,
         orgId: info.deployment.organizationId,
+        contactId: message.sessionId,
       });
     }
 

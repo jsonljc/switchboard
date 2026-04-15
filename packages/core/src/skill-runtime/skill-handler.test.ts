@@ -37,7 +37,7 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       new Map(),
       mockStores,
-      { deploymentId: "d1", orgId: "org1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("No parameter builder registered");
   });
@@ -55,12 +55,17 @@ describe("SkillHandler (generic)", () => {
     const handler = new SkillHandler(mockSkill, executor as any, builderMap, mockStores, {
       deploymentId: "d1",
       orgId: "org1",
+      contactId: "c1",
     });
 
     const ctx = makeCtx();
     await handler.onMessage!(ctx);
 
-    expect(builder).toHaveBeenCalledWith(ctx, { deploymentId: "d1", orgId: "org1" }, mockStores);
+    expect(builder).toHaveBeenCalledWith(
+      ctx,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      mockStores,
+    );
     expect(executor.execute).toHaveBeenCalledOnce();
     expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
   });
@@ -91,7 +96,7 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       builderMap,
       mockStores,
-      { deploymentId: "d1", orgId: "org1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("DB down");
   });

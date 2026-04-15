@@ -16,7 +16,7 @@ function makeCtx(lastMessage = "Check out https://example.com") {
   } as any;
 }
 
-const config = { deploymentId: "d1", orgId: "org1" };
+const config = { deploymentId: "d1", orgId: "org1", contactId: "contact-1" };
 const mockStores = {
   opportunityStore: { findActiveByContact: vi.fn() },
   contactStore: { findById: vi.fn() },

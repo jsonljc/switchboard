@@ -6,6 +6,7 @@ import { ParameterResolutionError } from "./parameter-builder.js";
 interface SkillHandlerConfig {
   deploymentId: string;
   orgId: string;
+  contactId: string;
 }
 
 export class SkillHandler implements AgentHandler {

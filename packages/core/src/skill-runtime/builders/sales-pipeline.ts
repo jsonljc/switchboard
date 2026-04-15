@@ -2,7 +2,7 @@ import type { ParameterBuilder } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 
 export const salesPipelineBuilder: ParameterBuilder = async (ctx, config, stores) => {
-  const contactId = ctx.conversation?.id ?? "";
+  const contactId = config.contactId;
 
   const opportunities = await stores.opportunityStore.findActiveByContact(config.orgId, contactId);
 

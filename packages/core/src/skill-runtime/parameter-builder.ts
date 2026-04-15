@@ -31,7 +31,7 @@ export interface SkillStores {
  */
 export type ParameterBuilder = (
   ctx: AgentContext,
-  config: { deploymentId: string; orgId: string },
+  config: { deploymentId: string; orgId: string; contactId: string },
   stores: SkillStores,
 ) => Promise<Record<string, unknown>>;
 

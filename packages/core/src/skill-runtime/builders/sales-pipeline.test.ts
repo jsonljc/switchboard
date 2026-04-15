@@ -31,7 +31,7 @@ const mockStores = {
   },
 };
 
-const config = { deploymentId: "d1", orgId: "org1" };
+const config = { deploymentId: "d1", orgId: "org1", contactId: "session-1" };
 
 describe("salesPipelineBuilder", () => {
   it("throws ParameterResolutionError when no active opportunities", async () => {
@@ -57,17 +57,14 @@ describe("salesPipelineBuilder", () => {
     expect((result.PERSONA_CONFIG as any).bookingLink).toBe("https://book.test");
   });
 
-  it("uses conversation.id as contactId", async () => {
+  it("uses config.contactId as contactId", async () => {
     mockStores.opportunityStore.findActiveByContact.mockResolvedValue([
       { id: "opp1", stage: "interested", createdAt: new Date() },
     ]);
     mockStores.contactStore.findById.mockResolvedValue(null);
 
-    await salesPipelineBuilder(
-      makeCtx({ conversation: { id: "phone-123", messages: [] } }),
-      config,
-      mockStores,
-    );
+    const phoneConfig = { deploymentId: "d1", orgId: "org1", contactId: "phone-123" };
+    await salesPipelineBuilder(makeCtx(), phoneConfig, mockStores);
 
     expect(mockStores.opportunityStore.findActiveByContact).toHaveBeenCalledWith(
       "org1",
