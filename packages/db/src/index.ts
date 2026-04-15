@@ -84,3 +84,5 @@ export type { WriteActivityLogInput } from "./stores/prisma-activity-log-store.j
 export { PrismaCustomerMemoryStore } from "./stores/prisma-customer-memory-store.js";
 export { PrismaOwnerMemoryStore } from "./stores/prisma-owner-memory-store.js";
 export { PrismaAggregateMemoryStore } from "./stores/prisma-aggregate-memory-store.js";
+export { PrismaCreatorIdentityStore } from "./stores/prisma-creator-identity-store.js";
+export { PrismaAssetRecordStore } from "./stores/prisma-asset-record-store.js";
