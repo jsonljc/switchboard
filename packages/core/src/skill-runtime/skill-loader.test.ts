@@ -252,4 +252,13 @@ describe("loadSkill - real files", () => {
     expect(skill.body).toContain("Sales Closer");
     expect(skill.body).toContain("Nurture Specialist");
   });
+
+  it("loads the website-profiler skill file", () => {
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    const skill = loadSkill("website-profiler", join(repoRoot, "skills"));
+    expect(skill.slug).toBe("website-profiler");
+    expect(skill.tools).toEqual(["web-scanner"]);
+    expect(skill.output).toBeDefined();
+    expect(skill.output!.fields.length).toBeGreaterThan(0);
+  });
 });
