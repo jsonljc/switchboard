@@ -17,6 +17,8 @@ export function createCrmQueryTool(
     operations: {
       "contact.get": {
         description: "Get a contact by ID. Returns name, phone, email, stage, source.",
+        governanceTier: "read" as const,
+        idempotent: true,
         inputSchema: {
           type: "object",
           properties: {
@@ -32,6 +34,8 @@ export function createCrmQueryTool(
       },
       "activity.list": {
         description: "List recent activity logs for a deployment.",
+        governanceTier: "read" as const,
+        idempotent: true,
         inputSchema: {
           type: "object",
           properties: {

@@ -67,6 +67,15 @@ export * from "./agent-persona.js";
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
 
+// UGC v2 — Creative Pipeline
+export * from "./ugc-job.js";
+export * from "./creator-identity.js";
+export * from "./asset-record.js";
+export * from "./identity-strategy.js";
+export * from "./provider-capabilities.js";
+export * from "./realism-score.js";
+export * from "./funnel-friction.js";
+
 // Deployment Memory (three-tier agent memory system)
 export * from "./deployment-memory.js";
 

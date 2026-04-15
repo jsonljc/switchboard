@@ -1,0 +1,71 @@
+{
+  "name": "Partial page fetch due to timeout handled gracefully",
+  "parameters": {
+    "TARGET_URL": "https://slow-site.com",
+    "BUSINESS_NAME": "Slow Site",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://slow-site.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://slow-site.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://slow-site.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Slow Site provides consulting services. Analysis based on partial data.\",\"business_model\":\"service\",\"price_positioning\":\"unclear\",\"primary_cta\":\"contact\",\"lead_intent_type\":\"exploratory\",\"platform\":\"unknown\",\"platform_confidence\":\"low\",\"confidence\":\"low\",\"data_completeness\":\"low\",\"fetch_note\":\"Some pages timed out during fetch\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "response_contains", "substring": "profile_summary" }
+  ]
+}

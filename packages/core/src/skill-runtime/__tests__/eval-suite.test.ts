@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import type Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
 import { createPipelineHandoffTool } from "../tools/pipeline-handoff.js";
@@ -50,11 +51,16 @@ function loadFixture(name: string): EvalFixture {
 function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
   let callIndex = 0;
   return {
-    chatWithTools: async () => {
+    chatWithTools: async (_params: {
+      system: string;
+      messages: Array<Anthropic.MessageParam>;
+      tools: Array<Anthropic.Tool>;
+      maxTokens?: number;
+    }) => {
       const resp = fixture.mockResponses[callIndex];
       if (!resp) {
         return {
-          content: [{ type: "text" as const, text: "Mock exhausted" }],
+          content: [{ type: "text" as const, text: "Mock exhausted" } as Anthropic.TextBlock],
           stopReason: "end_turn" as const,
           usage: { inputTokens: 100, outputTokens: 50 },
         };
@@ -68,9 +74,10 @@ function createMockAdapter(fixture: EvalFixture): ToolCallingAdapter {
               id: block.id ?? "mock-id",
               name: block.name ?? "unknown",
               input: block.input ?? {},
-            };
+              caller: { type: "direct" as const },
+            } as Anthropic.ToolUseBlock;
           }
-          return { type: "text" as const, text: block.text ?? "" };
+          return { type: "text" as const, text: block.text ?? "" } as Anthropic.TextBlock;
         }),
         stopReason: resp.stop_reason as "end_turn" | "tool_use",
         usage: { inputTokens: 100, outputTokens: 50 },
@@ -87,11 +94,13 @@ function createMockTools(): Map<string, SkillTool> {
       "contact.get": {
         description: "Get contact",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
         execute: async () => ({ id: "c1", name: "Test Lead", stage: "new" }),
       },
       "activity.list": {
         description: "List activities",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
         execute: async () => [],
       },
     },
@@ -102,22 +111,82 @@ function createMockTools(): Map<string, SkillTool> {
       "stage.update": {
         description: "Update stage",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "internal_write" as const,
         execute: async (params: unknown) => ({ ...(params as object), updated: true }),
       },
       "activity.log": {
         description: "Log activity",
         inputSchema: { type: "object", properties: {} },
+        governanceTier: "internal_write" as const,
         execute: async () => undefined,
       },
     },
   });
   tools.set("pipeline-handoff", createPipelineHandoffTool());
+  tools.set("web-scanner", {
+    id: "web-scanner",
+    operations: {
+      "validate-url": {
+        description: "Validate URL",
+        inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+        governanceTier: "read" as const,
+        execute: async (params: unknown) => {
+          const { url } = params as { url: string };
+          try {
+            new URL(url);
+            return { valid: true, validatedUrl: url, error: null };
+          } catch {
+            return { valid: false, validatedUrl: null, error: "Invalid URL format" };
+          }
+        },
+      },
+      "fetch-pages": {
+        description: "Fetch pages",
+        inputSchema: {
+          type: "object",
+          properties: { baseUrl: { type: "string" } },
+          required: ["baseUrl"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({
+          pages: [
+            { path: "/", text: "Homepage content", status: "ok" },
+            { path: "/about", text: "About us content", status: "ok" },
+          ],
+          homepageHtml: "<html><head></head><body>Homepage</body></html>",
+          fetchedCount: 2,
+          failedPaths: [],
+        }),
+      },
+      "detect-platform": {
+        description: "Detect platform",
+        inputSchema: {
+          type: "object",
+          properties: { html: { type: "string" } },
+          required: ["html"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({ platform: null, confidence: "none" }),
+      },
+      "extract-business-info": {
+        description: "Extract business info",
+        inputSchema: {
+          type: "object",
+          properties: { html: { type: "string" } },
+          required: ["html"],
+        },
+        governanceTier: "read" as const,
+        execute: async () => ({ structuredData: [], openGraph: {}, meta: {} }),
+      },
+    },
+  });
   return tools;
 }
 
 async function runFixture(fixtureName: string): Promise<void> {
   const fixture = loadFixture(fixtureName);
-  const skill = loadSkill("sales-pipeline", join(REPO_ROOT, "skills"));
+  const skillName = fixtureName.startsWith("wp-") ? "website-profiler" : "sales-pipeline";
+  const skill = loadSkill(skillName, join(REPO_ROOT, "skills"));
   const adapter = createMockAdapter(fixture);
   const tools = createMockTools();
   const executor = new SkillExecutorImpl(adapter, tools);

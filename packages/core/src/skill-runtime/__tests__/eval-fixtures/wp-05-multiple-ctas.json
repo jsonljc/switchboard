@@ -1,0 +1,72 @@
+{
+  "name": "Multiple CTAs detected with ambiguity",
+  "parameters": {
+    "TARGET_URL": "https://multi-cta.com",
+    "BUSINESS_NAME": "Multi CTA Co",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://multi-cta.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://multi-cta.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://multi-cta.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Multi CTA Co offers both products and services.\",\"business_model\":\"hybrid\",\"price_positioning\":\"mid\",\"primary_cta\":\"contact\",\"lead_intent_type\":\"exploratory\",\"platform\":\"custom\",\"platform_confidence\":\"medium\",\"confidence\":\"medium\",\"data_completeness\":\"high\",\"cta_notes\":\"Multiple CTAs present: Shop Now, Book Consultation, Contact Us. Classified primary as contact based on prominence.\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.validate-url" },
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "response_contains", "substring": "primary_cta" }
+  ]
+}

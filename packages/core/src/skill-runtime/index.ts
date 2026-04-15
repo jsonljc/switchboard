@@ -4,11 +4,22 @@ export { SkillHandler } from "./skill-handler.js";
 export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
+export { ToolRegistry } from "./tool-registry.js";
+export {
+  getToolGovernanceDecision,
+  mapDecisionToOutcome,
+  GOVERNANCE_POLICY,
+} from "./governance.js";
+export { ParameterResolutionError, validateBuilderRegistration } from "./parameter-builder.js";
 export {
   createCrmQueryTool,
   createCrmWriteTool,
   createPipelineHandoffTool,
+  createWebScannerTool,
 } from "./tools/index.js";
+export { salesPipelineBuilder, websiteProfilerBuilder } from "./builders/index.js";
+
+// Types
 export type {
   SkillDefinition,
   ParameterDeclaration,
@@ -19,12 +30,19 @@ export type {
   SkillTool,
   SkillToolOperation,
   SkillExecutor,
-  ToolGovernanceDecision,
+  OutputFieldDeclaration,
 } from "./types.js";
 export {
   SkillParseError,
   SkillValidationError,
   SkillParameterError,
   SkillExecutionBudgetError,
-  getToolGovernanceDecision,
 } from "./types.js";
+export type {
+  GovernanceTier,
+  TrustLevel,
+  GovernanceDecision,
+  GovernanceOutcome,
+  GovernanceLogEntry,
+} from "./governance.js";
+export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";

@@ -1,0 +1,39 @@
+{
+  "name": "Invalid URL returns error without further processing",
+  "parameters": {
+    "TARGET_URL": "not-a-valid-url",
+    "BUSINESS_NAME": "Test Business",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile not-a-valid-url" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "not-a-valid-url" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"error\":\"Invalid URL format\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.validate-url" },
+    { "type": "tool_not_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "response_contains", "substring": "error" }
+  ]
+}

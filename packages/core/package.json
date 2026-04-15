@@ -128,6 +128,7 @@
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",
+    "cheerio": "^1.2.0",
     "inngest": "^4.2.0",
     "openai": "^6.34.0",
     "yaml": "^2.8.3",

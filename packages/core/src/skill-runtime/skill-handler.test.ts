@@ -1,142 +1,103 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillHandler } from "./skill-handler.js";
-import type { SkillDefinition, SkillExecutor } from "./types.js";
+import { ParameterResolutionError } from "./parameter-builder.js";
+import type { SkillDefinition } from "./types.js";
+import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 
 const mockSkill: SkillDefinition = {
   name: "test",
-  slug: "test",
+  slug: "test-skill",
   version: "1.0.0",
   description: "test",
   author: "test",
-  parameters: [
-    { name: "BUSINESS_NAME", type: "string", required: true },
-    { name: "PIPELINE_STAGE", type: "enum", required: true, values: ["interested", "qualified"] },
-    { name: "OPPORTUNITY_ID", type: "string", required: true },
-    {
-      name: "PERSONA_CONFIG",
-      type: "object",
-      required: true,
-      schema: { tone: { type: "string" } },
-    },
-  ],
+  parameters: [{ name: "NAME", type: "string", required: true }],
   tools: [],
-  body: "test",
+  body: "Hello {{NAME}}",
 };
 
-function createMockCtx() {
+const mockStores: SkillStores = {
+  opportunityStore: { findActiveByContact: vi.fn() },
+  contactStore: { findById: vi.fn() },
+  activityStore: { listByDeployment: vi.fn() },
+};
+
+function makeCtx() {
   return {
-    persona: {
-      businessName: "TestBiz",
-      tone: "friendly",
-      qualificationCriteria: {},
-      disqualificationCriteria: {},
-      escalationRules: {},
-      bookingLink: null,
-      customInstructions: null,
-    },
-    conversation: {
-      id: "conv1",
-      messages: [{ role: "user", content: "hi" }],
-    },
+    persona: { businessName: "Biz" },
+    conversation: { id: "conv-1", messages: [{ role: "user", content: "hi" }] },
     trust: { score: 50, level: "guided" as const },
-    chat: { send: vi.fn(), sendToThread: vi.fn() },
-    state: { get: vi.fn(), set: vi.fn(), list: vi.fn(), delete: vi.fn() },
-    files: { read: vi.fn(), write: vi.fn() },
-    browser: { navigate: vi.fn(), click: vi.fn(), extract: vi.fn(), screenshot: vi.fn() },
-    llm: { chat: vi.fn() },
-    notify: vi.fn(),
-    handoff: vi.fn(),
-  } as unknown as import("@switchboard/sdk").AgentContext;
+    chat: { send: vi.fn() },
+  } as any;
 }
 
-describe("SkillHandler", () => {
-  it("escalates when no active opportunity found", async () => {
-    const mockOpportunityStore = {
-      findActiveByContact: vi.fn().mockResolvedValue([]),
-    };
-    const mockContactStore = { findById: vi.fn().mockResolvedValue(null) };
-    const mockExecutor = { execute: vi.fn() };
-
+describe("SkillHandler (generic)", () => {
+  it("throws when no builder registered for slug", async () => {
     const handler = new SkillHandler(
       mockSkill,
-      mockExecutor as unknown as SkillExecutor,
-      { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
+      { execute: vi.fn() } as any,
+      new Map(),
+      mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
-
-    const ctx = createMockCtx();
-    await handler.onMessage(ctx);
-
-    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("no active deal"));
-    expect(mockExecutor.execute).not.toHaveBeenCalled();
+    await expect(handler.onMessage!(makeCtx())).rejects.toThrow("No parameter builder registered");
   });
 
-  it("resolves opportunity and calls executor", async () => {
-    const mockOpportunityStore = {
-      findActiveByContact: vi
-        .fn()
-        .mockResolvedValue([{ id: "opp1", stage: "interested", createdAt: new Date() }]),
-    };
-    const mockContactStore = {
-      findById: vi.fn().mockResolvedValue({ id: "c1", name: "Alice" }),
-    };
-    const mockExecutor = {
+  it("calls builder and executor, sends response", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const executor = {
       execute: vi.fn().mockResolvedValue({
-        response: "Hello!",
+        response: "Hello Alice",
         toolCalls: [],
-        tokenUsage: { input: 0, output: 0 },
+        tokenUsage: { input: 100, output: 50 },
       }),
     };
+    const builderMap = new Map([["test-skill", builder]]);
+    const handler = new SkillHandler(mockSkill, executor as any, builderMap, mockStores, {
+      deploymentId: "d1",
+      orgId: "org1",
+      contactId: "c1",
+    });
 
-    const handler = new SkillHandler(
-      mockSkill,
-      mockExecutor as unknown as SkillExecutor,
-      { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(builder).toHaveBeenCalledWith(
+      ctx,
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      mockStores,
     );
-
-    const ctx = createMockCtx();
-    await handler.onMessage(ctx);
-
-    expect(mockExecutor.execute).toHaveBeenCalledOnce();
-    const executorArgs = mockExecutor.execute.mock.calls[0]![0] as Record<string, unknown>;
-    const params = executorArgs["parameters"] as Record<string, unknown>;
-    expect(params["BUSINESS_NAME"]).toBe("TestBiz");
-    expect(params["PIPELINE_STAGE"]).toBe("interested");
-    expect(params["OPPORTUNITY_ID"]).toBe("opp1");
-    expect(ctx.chat.send).toHaveBeenCalledWith("Hello!");
+    expect(executor.execute).toHaveBeenCalledOnce();
+    expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
   });
 
-  it("takes most recent opportunity when multiple exist", async () => {
-    const older = { id: "opp1", stage: "interested", createdAt: new Date("2025-01-01") };
-    const newer = { id: "opp2", stage: "qualified", createdAt: new Date("2026-01-01") };
-    const mockOpportunityStore = {
-      findActiveByContact: vi.fn().mockResolvedValue([older, newer]),
-    };
-    const mockContactStore = {
-      findById: vi.fn().mockResolvedValue({ id: "c1", name: "Bob" }),
-    };
-    const mockExecutor = {
-      execute: vi.fn().mockResolvedValue({
-        response: "Hi",
-        toolCalls: [],
-        tokenUsage: { input: 0, output: 0 },
-      }),
-    };
+  it("catches ParameterResolutionError and sends userMessage", async () => {
+    const builder: ParameterBuilder = vi
+      .fn()
+      .mockRejectedValue(new ParameterResolutionError("no-opp", "No active deal found."));
+    const executor = { execute: vi.fn() };
+    const builderMap = new Map([["test-skill", builder]]);
+    const handler = new SkillHandler(mockSkill, executor as any, builderMap, mockStores, {
+      deploymentId: "d1",
+      orgId: "org1",
+    });
 
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(ctx.chat.send).toHaveBeenCalledWith("No active deal found.");
+    expect(executor.execute).not.toHaveBeenCalled();
+  });
+
+  it("re-throws non-ParameterResolutionError errors", async () => {
+    const builder: ParameterBuilder = vi.fn().mockRejectedValue(new Error("DB down"));
+    const builderMap = new Map([["test-skill", builder]]);
     const handler = new SkillHandler(
       mockSkill,
-      mockExecutor as unknown as SkillExecutor,
-      { opportunityStore: mockOpportunityStore, contactStore: mockContactStore },
+      { execute: vi.fn() } as any,
+      builderMap,
+      mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1" },
     );
-
-    const ctx = createMockCtx();
-    await handler.onMessage(ctx);
-
-    const executorArgs = mockExecutor.execute.mock.calls[0]![0] as Record<string, unknown>;
-    const params = executorArgs["parameters"] as Record<string, unknown>;
-    expect(params["OPPORTUNITY_ID"]).toBe("opp2");
-    expect(params["PIPELINE_STAGE"]).toBe("qualified");
+    await expect(handler.onMessage!(makeCtx())).rejects.toThrow("DB down");
   });
 });

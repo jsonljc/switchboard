@@ -96,6 +96,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do something",
           inputSchema: { type: "object", properties: {} },
+          governanceTier: "read" as const,
           execute: vi.fn().mockResolvedValue({ done: true }),
         },
       },
@@ -143,6 +144,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
+          governanceTier: "read" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },
@@ -181,6 +183,7 @@ describe("SkillExecutorImpl", () => {
         "stage.update": {
           description: "update stage",
           inputSchema: { type: "object", properties: {} },
+          governanceTier: "internal_write" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },
@@ -214,6 +217,52 @@ describe("SkillExecutorImpl", () => {
     expect(execResult.toolCalls[0]!.operation).toBe("stage.update");
   });
 
+  it("handles deny governance decision", async () => {
+    const toolSkill: SkillDefinition = {
+      ...mockSkill,
+      tools: ["dangerous-tool"],
+      body: "Use dangerous-tool.delete {{NAME}}",
+    };
+    const dangerousTool: SkillTool = {
+      id: "dangerous-tool",
+      operations: {
+        delete: {
+          description: "delete something",
+          inputSchema: { type: "object", properties: {} },
+          governanceTier: "destructive" as const,
+          execute: vi.fn().mockResolvedValue({ deleted: true }),
+        },
+      },
+    };
+
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "dangerous-tool.delete", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Cannot delete." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const executor = new SkillExecutorImpl(adapter, new Map([["dangerous-tool", dangerousTool]]));
+    const result = await executor.execute({
+      skill: toolSkill,
+      parameters: { NAME: "X" },
+      messages: [{ role: "user", content: "delete it" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 10,
+      trustLevel: "supervised",
+    });
+
+    // Tool should NOT have been executed
+    expect(dangerousTool.operations["delete"]!.execute).not.toHaveBeenCalled();
+    // Record should show denied
+    expect(result.toolCalls[0]!.governanceDecision).toBe("denied");
+  });
+
   it("enforces token budget", async () => {
     const toolSkill: SkillDefinition = {
       ...mockSkill,
@@ -226,6 +275,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
+          governanceTier: "read" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },

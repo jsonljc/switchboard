@@ -1,0 +1,71 @@
+{
+  "name": "Platform tool returns WordPress but content indicates Shopify",
+  "parameters": {
+    "TARGET_URL": "https://shopify-disguised.com",
+    "BUSINESS_NAME": "Shop Disguised",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://shopify-disguised.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://shopify-disguised.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://shopify-disguised.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Shop Disguised appears to be an ecommerce store.\",\"business_model\":\"ecommerce\",\"price_positioning\":\"mid\",\"primary_cta\":\"buy\",\"lead_intent_type\":\"transactional\",\"platform\":\"shopify\",\"platform_confidence\":\"medium\",\"confidence\":\"high\",\"data_completeness\":\"high\",\"reasoning\":\"Tool detected wordpress but Shopify checkout URLs found in content\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.detect-platform" },
+    { "type": "response_contains", "substring": "platform" }
+  ]
+}

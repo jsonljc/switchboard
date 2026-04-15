@@ -1,0 +1,72 @@
+{
+  "name": "Non-English website handled with reduced confidence",
+  "parameters": {
+    "TARGET_URL": "https://spanish-site.es",
+    "BUSINESS_NAME": "Spanish Site",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://spanish-site.es" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://spanish-site.es" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://spanish-site.es" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"Spanish Site is a service business targeting Spanish-speaking markets.\",\"business_model\":\"service\",\"price_positioning\":\"mid\",\"primary_cta\":\"contact\",\"lead_intent_type\":\"exploratory\",\"platform\":\"wordpress\",\"platform_confidence\":\"high\",\"confidence\":\"medium\",\"data_completeness\":\"medium\",\"language_note\":\"Website primarily in Spanish\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.validate-url" },
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "response_contains", "substring": "confidence" }
+  ]
+}

@@ -12,6 +12,7 @@ const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
   listingId: z.string().min(1),
   brief: CreativeBriefInput,
+  mode: z.enum(["polished", "ugc"]).default("polished"),
 });
 
 const ApproveStageInput = z.object({
@@ -36,7 +37,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Invalid input", details: parsed.error });
     }
 
-    const { deploymentId, listingId, brief } = parsed.data;
+    const { deploymentId, listingId, brief, mode } = parsed.data;
 
     // Create the AgentTask
     const taskStore = new PrismaAgentTaskStore(app.prisma);
@@ -50,19 +51,35 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
     // Create the CreativeJob
     const jobStore = new PrismaCreativeJobStore(app.prisma);
-    const job = await jobStore.create({
-      taskId: task.id,
-      organizationId: orgId,
-      deploymentId,
-      productDescription: brief.productDescription,
-      targetAudience: brief.targetAudience,
-      platforms: brief.platforms,
-      brandVoice: brief.brandVoice ?? null,
-      productImages: brief.productImages,
-      references: brief.references,
-      pastPerformance: brief.pastPerformance ?? null,
-      generateReferenceImages: brief.generateReferenceImages,
-    });
+    const job =
+      mode === "ugc"
+        ? await jobStore.createUgc({
+            taskId: task.id,
+            organizationId: orgId,
+            deploymentId,
+            productDescription: brief.productDescription,
+            targetAudience: brief.targetAudience,
+            platforms: brief.platforms,
+            brandVoice: brief.brandVoice ?? null,
+            productImages: brief.productImages,
+            references: brief.references,
+            pastPerformance: brief.pastPerformance ?? null,
+            generateReferenceImages: brief.generateReferenceImages,
+            ugcConfig: brief as unknown as Record<string, unknown>,
+          })
+        : await jobStore.create({
+            taskId: task.id,
+            organizationId: orgId,
+            deploymentId,
+            productDescription: brief.productDescription,
+            targetAudience: brief.targetAudience,
+            platforms: brief.platforms,
+            brandVoice: brief.brandVoice ?? null,
+            productImages: brief.productImages,
+            references: brief.references,
+            pastPerformance: brief.pastPerformance ?? null,
+            generateReferenceImages: brief.generateReferenceImages,
+          });
 
     // Fire Inngest event to start the pipeline
     await inngestClient.send({
@@ -72,6 +89,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
         taskId: task.id,
         organizationId: orgId,
         deploymentId,
+        mode,
       },
     });
 
@@ -147,6 +165,23 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
     if (job.currentStage === "complete" || job.stoppedAt) {
       return reply.code(409).send({ error: "Job is not awaiting approval" });
+    }
+
+    // UGC mode: emit phase-specific approval event
+    if (job.mode === "ugc") {
+      if (parsed.data.action === "stop") {
+        await inngestClient.send({
+          name: "creative-pipeline/ugc-phase.approved",
+          data: { jobId: id, phase: job.ugcPhase, action: "stop" },
+        });
+        return reply.send({ job, action: "stopped" });
+      }
+
+      await inngestClient.send({
+        name: "creative-pipeline/ugc-phase.approved",
+        data: { jobId: id, phase: job.ugcPhase, action: "continue" },
+      });
+      return reply.send({ job, action: "approved" });
     }
 
     // Persist productionTier if this is Stage 4 (storyboard) approval
