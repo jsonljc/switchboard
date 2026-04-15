@@ -18,6 +18,9 @@ export {
   createWebScannerTool,
 } from "./tools/index.js";
 export { salesPipelineBuilder, websiteProfilerBuilder } from "./builders/index.js";
+export { CircuitBreaker } from "./circuit-breaker.js";
+export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
+export { OutcomeLinker } from "./outcome-linker.js";
 
 // Types
 export type {
@@ -31,6 +34,8 @@ export type {
   SkillToolOperation,
   SkillExecutor,
   OutputFieldDeclaration,
+  SkillExecutionTraceData,
+  SkillExecutionTrace,
 } from "./types.js";
 export {
   SkillParseError,
