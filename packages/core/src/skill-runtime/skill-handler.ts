@@ -1,12 +1,26 @@
 import type { AgentHandler, AgentContext } from "@switchboard/sdk";
-import type { SkillDefinition, SkillExecutor } from "./types.js";
+import type { SkillDefinition, SkillExecutor, SkillExecutionTrace } from "./types.js";
 import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 import { ParameterResolutionError } from "./parameter-builder.js";
+import type { CircuitBreaker } from "./circuit-breaker.js";
+import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
+import type { OutcomeLinker } from "./outcome-linker.js";
+import { createId } from "@paralleldrive/cuid2";
+import { createHash } from "node:crypto";
 
 interface SkillHandlerConfig {
   deploymentId: string;
   orgId: string;
   contactId: string;
+}
+
+interface ExecutionTraceStore {
+  create(trace: SkillExecutionTrace): Promise<void>;
+}
+
+function hashParameters(params: Record<string, unknown>): string {
+  const sorted = JSON.stringify(params, Object.keys(params).sort());
+  return createHash("sha256").update(sorted).digest("hex");
 }
 
 export class SkillHandler implements AgentHandler {
@@ -16,9 +30,33 @@ export class SkillHandler implements AgentHandler {
     private builderMap: Map<string, ParameterBuilder>,
     private stores: SkillStores,
     private config: SkillHandlerConfig,
+    private traceStore: ExecutionTraceStore,
+    private circuitBreaker: CircuitBreaker,
+    private blastRadiusLimiter: BlastRadiusLimiter,
+    private outcomeLinker: OutcomeLinker,
   ) {}
 
   async onMessage(ctx: AgentContext): Promise<void> {
+    // Safety gates first
+    const cbResult = await this.circuitBreaker.check(this.config.deploymentId);
+    if (!cbResult.allowed) {
+      await ctx.chat.send(
+        "I'm having some trouble right now. Let me connect you with the team directly.",
+      );
+      console.error(`Circuit breaker: ${cbResult.reason}`);
+      return;
+    }
+
+    const brResult = await this.blastRadiusLimiter.check(this.config.deploymentId);
+    if (!brResult.allowed) {
+      await ctx.chat.send(
+        "I've been quite active recently. Let me connect you with the team for this one.",
+      );
+      console.error(`Blast radius: ${brResult.reason}`);
+      return;
+    }
+
+    // Existing builder flow
     const builder = this.builderMap.get(this.skill.slug);
     if (!builder) {
       throw new Error(`No parameter builder registered for skill: ${this.skill.slug}`);
@@ -49,6 +87,36 @@ export class SkillHandler implements AgentHandler {
       trustScore: ctx.trust.score,
       trustLevel: ctx.trust.level,
     });
+
+    // Assemble trace — handler owns the ID
+    const trace: SkillExecutionTrace = {
+      id: createId(),
+      deploymentId: this.config.deploymentId,
+      organizationId: this.config.orgId,
+      skillSlug: this.skill.slug,
+      skillVersion: this.skill.version,
+      trigger: "chat_message",
+      sessionId: ctx.sessionId,
+      inputParametersHash: hashParameters(parameters),
+      toolCalls: result.toolCalls,
+      governanceDecisions: result.trace.governanceDecisions,
+      tokenUsage: result.tokenUsage,
+      durationMs: result.trace.durationMs,
+      turnCount: result.trace.turnCount,
+      status: result.trace.status,
+      error: result.trace.error,
+      responseSummary: result.response.slice(0, 500),
+      writeCount: result.trace.writeCount,
+      createdAt: new Date(),
+    };
+
+    // Persist + link outcome (try/catch — tracing must not block user)
+    try {
+      await this.traceStore.create(trace);
+      await this.outcomeLinker.linkFromToolCalls(trace.id, result.toolCalls);
+    } catch (err) {
+      console.error(`Trace persistence failed for ${trace.id}:`, err);
+    }
 
     await ctx.chat.send(result.response);
   }
