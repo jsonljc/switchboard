@@ -96,7 +96,7 @@ export class SkillHandler implements AgentHandler {
       skillSlug: this.skill.slug,
       skillVersion: this.skill.version,
       trigger: "chat_message",
-      sessionId: ctx.sessionId,
+      sessionId: this.config.contactId,
       inputParametersHash: hashParameters(parameters),
       toolCalls: result.toolCalls,
       governanceDecisions: result.trace.governanceDecisions,
