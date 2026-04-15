@@ -560,18 +560,54 @@ The website profiler is the right second migration because it validates the patt
 - Exercises the interpretive layer (business model, confidence)
 - Conversational (user sends URL → agent profiles the business)
 
+#### Latent vs Deterministic Split
+
+This is the most important decision in any migration — and the pattern all future migrations follow.
+
+| Current File             | Current Behavior                                                                  | Classification    | SP2 Destination                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| `url-validator.ts`       | URL parsing, scheme check, credential check, private IP detection, DNS resolution | **Deterministic** | `web-scanner.validate-url` tool (wraps existing `validateScanUrl()` + `assertPublicHostname()`) |
+| `page-fetcher.ts`        | HTTP fetch with timeout, HTML stripping, abort signal                             | **Deterministic** | `web-scanner.fetch-pages` tool (wraps existing `fetchPages()` + `stripHtml()`)                  |
+| `platform-detector.ts`   | Regex-based platform matching (Shopify/WP/Wix/Squarespace)                        | **Deterministic** | `web-scanner.detect-platform` tool (wraps existing `detectPlatform()`, adds confidence hint)    |
+| `scanner.ts` lines 11-27 | LLM extraction prompt                                                             | **Latent**        | `website-profiler.md` skill body                                                                |
+| `scanner.ts` lines 29-74 | Orchestration — validate → fetch → detect → extract → assemble                    | **Process**       | `website-profiler.md` skill body (step sequence)                                                |
+| _(new)_                  | JSON-LD / Open Graph / meta tag parsing                                           | **Deterministic** | `web-scanner.extract-business-info` tool (new, uses cheerio)                                    |
+
+**Key reframe — Platform Detection:** The existing `platform-detector.ts` uses 11 hardcoded regex patterns. This is a deterministic fast-path that catches obvious cases (Shopify CDN URL, WordPress generator tag, Wix SDK). But it misses custom themes, headless storefronts, and lesser-known platforms. SP2 keeps the regex detector as a deterministic tool hint. The skill body instructs the LLM to also analyze page content and make its own platform judgment. If the tool found a match, the LLM confirms or overrides. If the tool found nothing, the LLM infers from page structure.
+
 #### Tools
 
 **`web-scanner`** (tier: `read`)
 
-| Operation               | Description                                                                                                                                                              | Idempotent |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `validate-url`          | Validate and normalize a URL, check accessibility                                                                                                                        | Yes        |
-| `fetch-pages`           | Fetch homepage + key pages (pricing, about, FAQ), strip HTML to text, return structured content. `rawHtml` is NOT returned — avoid blowing token budget.                 | Yes        |
-| `detect-platform`       | Regex-based platform detection from HTML signatures (Shopify, WordPress, Wix, etc.). Returns `{ platform, confidence, reasoning }` as a hint — LLM makes final judgment. | Yes        |
-| `extract-business-info` | Parse structured data (JSON-LD, Open Graph, meta tags) from fetched pages. Returns factual fields only — no inference.                                                   | Yes        |
+All operations wrap existing `packages/core/src/website-scanner/` functions — preserving SSRF protections, private IP detection, and HTML stripping logic. No rewrite.
+
+| Operation               | Wraps                                          | Description                                                                                                                                                       | Idempotent |
+| ----------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `validate-url`          | `validateScanUrl()` + `assertPublicHostname()` | Validate URL scheme, check for credentials, resolve DNS to verify non-private IP. Returns structured result instead of throwing.                                  | Yes        |
+| `fetch-pages`           | `fetchPages()` + `stripHtml()`                 | Fetch homepage + key pages, strip HTML to text. Returns `homepageHtml` (raw HTML of homepage only, max 50KB) for platform detection. Per-page text capped at 8KB. | Yes        |
+| `detect-platform`       | `detectPlatform()`                             | Regex-based platform detection from `homepageHtml`. Returns `{ platform, confidence, reasoning }` as a hint — LLM makes final judgment.                           | Yes        |
+| `extract-business-info` | _(new — cheerio)_                              | Parse JSON-LD, Open Graph, and meta tags from HTML. Returns factual fields only — no inference.                                                                   | Yes        |
 
 All operations are `read` tier (no side effects, safe to retry).
+
+**Token budget management:**
+
+- `fetch-pages` returns stripped text only (max 8KB per page). 6 pages × 8KB = ~48KB max.
+- `homepageHtml` is raw HTML of homepage only (max 50KB) — consumed by `detect-platform` tool, not returned to the LLM as text.
+- `rawHtml` is NOT returned per page. This prevents 6 × 50-100KB HTML pages from blowing the 64K token budget.
+
+```typescript
+interface FetchPagesOutput {
+  pages: Array<{
+    path: string;
+    text: string; // Stripped text content (max 8KB per page)
+    status: string; // "ok" | "http-{status}" | "error: {message}"
+  }>;
+  homepageHtml: string; // Raw HTML of homepage ONLY (for detect-platform, max 50KB)
+  fetchedCount: number;
+  failedPaths: string[];
+}
+```
 
 #### Skill File: `skills/website-profiler.md`
 
@@ -649,18 +685,16 @@ output:
 ---
 ```
 
-Skill body defines a 4-step process:
+Skill body defines a 5-step process:
 
-1. Validate URL and check accessibility
-2. Fetch and scan key pages
-3. Detect platform (tool provides hint, LLM confirms/overrides with reasoning)
-4. Extract and interpret business profile:
-   - 4A: Extract factual data (from structured data + page content)
-   - 4B: Interpret business model (LLM judgment on business type, pricing, CTA, intent)
-   - 4C: Confirm platform (reconcile tool hint with content signals — handle contradictions)
+1. Validate URL via `web-scanner.validate-url` — if invalid, respond with error JSON, stop
+2. Fetch key pages via `web-scanner.fetch-pages` — if `fetchedCount` is 0, respond with error JSON, stop
+3. Detect platform via `web-scanner.detect-platform` using `homepageHtml` from step 2 — this is a hint, not final
+4. Extract and interpret:
+   - 4A: Extract factual data via `web-scanner.extract-business-info` (JSON-LD, Open Graph, meta tags)
+   - 4B: Interpret business model from page content (LLM judgment on type, pricing, CTA, intent)
+   - 4C: Confirm platform — reconcile tool hint with content signals, handle contradictions with reasoning
 5. Produce final profile with confidence and completeness signals
-
-The full skill body content is in the existing website profiler spec at `docs/superpowers/specs/2026-04-15-website-profiler-sp2-design.md`.
 
 #### Eval Fixtures
 
@@ -695,23 +729,23 @@ The full skill body content is in the existing website profiler spec at `docs/su
 
 ### New Files
 
-| File                                                                | Purpose                                                                                  |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `packages/core/src/skill-runtime/tool-registry.ts`                  | `ToolRegistry` class                                                                     |
-| `packages/core/src/skill-runtime/tool-registry.test.ts`             | Registry tests (registration, validation, resolution)                                    |
-| `packages/core/src/skill-runtime/governance.ts`                     | Tier policy table, `getToolGovernanceDecision`, `GovernanceLogEntry`                     |
-| `packages/core/src/skill-runtime/governance.test.ts`                | Governance policy tests (all tiers × trust levels, overrides, deny)                      |
-| `packages/core/src/skill-runtime/parameter-builder.ts`              | `ParameterBuilder` type, `ParameterResolutionError`, `SkillStores`, validation utilities |
-| `packages/core/src/skill-runtime/parameter-builder.test.ts`         | Builder validation tests                                                                 |
-| `packages/core/src/skill-runtime/builders/sales-pipeline.ts`        | Extracted sales-pipeline builder                                                         |
-| `packages/core/src/skill-runtime/builders/sales-pipeline.test.ts`   | Sales-pipeline builder tests                                                             |
-| `packages/core/src/skill-runtime/builders/website-profiler.ts`      | Website profiler builder                                                                 |
-| `packages/core/src/skill-runtime/builders/website-profiler.test.ts` | Website profiler builder tests                                                           |
-| `packages/core/src/skill-runtime/builders/index.ts`                 | Builder barrel export                                                                    |
-| `packages/core/src/skill-runtime/tools/web-scanner.ts`              | URL validation, page fetching, platform detection, structured data extraction            |
-| `packages/core/src/skill-runtime/tools/web-scanner.test.ts`         | Web scanner tool tests                                                                   |
-| `skills/website-profiler.md`                                        | Website profiler skill file                                                              |
-| `packages/core/src/skill-runtime/__tests__/eval-fixtures/wp-*.json` | 8 website profiler eval fixtures                                                         |
+| File                                                                | Purpose                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `packages/core/src/skill-runtime/tool-registry.ts`                  | `ToolRegistry` class                                                                       |
+| `packages/core/src/skill-runtime/tool-registry.test.ts`             | Registry tests (registration, validation, resolution)                                      |
+| `packages/core/src/skill-runtime/governance.ts`                     | Tier policy table, `getToolGovernanceDecision`, `GovernanceLogEntry`                       |
+| `packages/core/src/skill-runtime/governance.test.ts`                | Governance policy tests (all tiers × trust levels, overrides, deny)                        |
+| `packages/core/src/skill-runtime/parameter-builder.ts`              | `ParameterBuilder` type, `ParameterResolutionError`, `SkillStores`, validation utilities   |
+| `packages/core/src/skill-runtime/parameter-builder.test.ts`         | Builder validation tests                                                                   |
+| `packages/core/src/skill-runtime/builders/sales-pipeline.ts`        | Extracted sales-pipeline builder                                                           |
+| `packages/core/src/skill-runtime/builders/sales-pipeline.test.ts`   | Sales-pipeline builder tests                                                               |
+| `packages/core/src/skill-runtime/builders/website-profiler.ts`      | Website profiler builder                                                                   |
+| `packages/core/src/skill-runtime/builders/website-profiler.test.ts` | Website profiler builder tests                                                             |
+| `packages/core/src/skill-runtime/builders/index.ts`                 | Builder barrel export                                                                      |
+| `packages/core/src/skill-runtime/tools/web-scanner.ts`              | Wraps existing `website-scanner/` functions + new cheerio-based structured data extraction |
+| `packages/core/src/skill-runtime/tools/web-scanner.test.ts`         | Web scanner tool tests                                                                     |
+| `skills/website-profiler.md`                                        | Website profiler skill file                                                                |
+| `packages/core/src/skill-runtime/__tests__/eval-fixtures/wp-*.json` | 8 website profiler eval fixtures                                                           |
 
 ---
 
