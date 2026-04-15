@@ -1,0 +1,34 @@
+{
+  "name": "Dormant lead receives nurture message",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "nurturing",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "..." }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Hi there! Just wanted to check in. Last time we spoke, you were exploring marketing options for your business. We've recently launched some new packages that might be a great fit. Would you like to hear more?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_not_called", "toolName": "crm-write.stage.update" },
+    { "type": "tool_not_called", "toolName": "crm-write.activity.log" },
+    { "type": "response_contains", "substring": "check in" }
+  ]
+}

@@ -3,6 +3,23 @@ import type { AgentStateStoreInterface } from "../agent-runtime/state-provider.j
 import type { ActionRequestStore } from "../agent-runtime/action-request-pipeline.js";
 import type { LLMAdapter } from "../llm-adapter.js";
 import type { ModelRouter, ModelSlot } from "../model-router.js";
+import type { SkillDefinition, SkillExecutor } from "../skill-runtime/types.js";
+import type { AgentHandler } from "@switchboard/sdk";
+
+export interface SkillRuntimeDeps {
+  /** Directory containing .md skill files */
+  skillsDir: string;
+  /** Load a skill definition by slug from disk */
+  loadSkill: (slug: string, skillsDir: string) => SkillDefinition;
+  /** Factory to create a SkillExecutor (adapter + tools wired) */
+  createExecutor: () => SkillExecutor;
+  /** Factory to create an AgentHandler for a given skill + deployment */
+  createHandler: (
+    skill: SkillDefinition,
+    executor: SkillExecutor,
+    config: { deploymentId: string; orgId: string; contactId: string },
+  ) => AgentHandler;
+}
 
 export interface ChannelGatewayConfig {
   deploymentLookup: DeploymentLookup;
@@ -36,6 +53,8 @@ export interface ChannelGatewayConfig {
     role: "user" | "assistant";
     content: string;
   }) => void;
+  /** Optional skill runtime deps — when provided, deployments with skillSlug use skill-based handlers. */
+  skillRuntime?: SkillRuntimeDeps;
 }
 
 export interface DeploymentLookup {
@@ -43,7 +62,7 @@ export interface DeploymentLookup {
 }
 
 export interface DeploymentInfo {
-  deployment: { id: string; listingId: string; organizationId: string };
+  deployment: { id: string; listingId: string; organizationId: string; skillSlug?: string | null };
   persona: AgentPersona;
   trustScore: number;
   trustLevel: "supervised" | "guided" | "autonomous";

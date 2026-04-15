@@ -24,6 +24,7 @@ export default async function DeploymentDetailPage({ params }: PageProps) {
     return (
       <DeploymentDetailClient
         deploymentId={id}
+        orgId={deployment.organizationId}
         listingId={deployment.listingId}
         connections={connections}
         listing={listingResult?.listing ?? null}

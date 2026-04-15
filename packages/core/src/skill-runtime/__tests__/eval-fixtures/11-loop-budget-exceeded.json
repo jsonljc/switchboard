@@ -1,0 +1,78 @@
+{
+  "name": "Too many tool calls exceeds execution budget",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Tell me everything about my account" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-loop-1",
+          "name": "crm-query.contact.get",
+          "input": { "id": "c1" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        { "type": "tool_use", "id": "call-loop-2", "name": "crm-query.activity.list", "input": {} }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-loop-3",
+          "name": "crm-query.contact.get",
+          "input": { "id": "c2" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        { "type": "tool_use", "id": "call-loop-4", "name": "crm-query.activity.list", "input": {} }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-loop-5",
+          "name": "crm-query.contact.get",
+          "input": { "id": "c3" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-loop-6",
+          "name": "crm-query.contact.get",
+          "input": { "id": "c4" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    }
+  ],
+  "assertions": [{ "type": "error_thrown", "errorType": "SkillExecutionBudgetError" }],
+  "expectError": true
+}

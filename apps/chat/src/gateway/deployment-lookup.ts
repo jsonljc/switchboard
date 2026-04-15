@@ -112,6 +112,7 @@ export class PrismaDeploymentLookup implements DeploymentLookup {
         id: deployment.id,
         listingId: deployment.listingId,
         organizationId: deployment.organizationId,
+        skillSlug: deployment.skillSlug as string | null,
       },
       persona,
       trustScore,

@@ -58,6 +58,8 @@ export interface CompoundingDeps {
       embedding: number[];
       chunkIndex: number;
       metadata: Record<string, unknown>;
+      draftStatus?: string | null;
+      draftExpiresAt?: Date | null;
     }): Promise<void>;
   };
   agentId?: string;
@@ -67,6 +69,7 @@ const MIN_MESSAGES = 2;
 const SIMILARITY_THRESHOLD = 0.92;
 const MAX_MEMORY_ENTRIES = 500;
 const FAQ_PROMOTION_THRESHOLD = 3;
+const FAQ_DRAFT_EXPIRY_MS = 72 * 60 * 60 * 1000; // 72 hours
 
 interface SummarizationResult {
   summary: string;
@@ -215,8 +218,9 @@ export class ConversationCompoundingService {
           const newConfidence = computeConfidenceScore(newSourceCount, false);
           const result = await this.memoryStore.incrementConfidence(entry.id, newConfidence);
 
-          if (result.sourceCount >= FAQ_PROMOTION_THRESHOLD && this.knowledgeStore) {
+          if (result.sourceCount === FAQ_PROMOTION_THRESHOLD && this.knowledgeStore) {
             const embedding = await this.embedding.embed(entry.content);
+            const draftExpiresAt = new Date(Date.now() + FAQ_DRAFT_EXPIRY_MS);
             await this.knowledgeStore.store({
               id: crypto.randomUUID(),
               organizationId,
@@ -228,6 +232,8 @@ export class ConversationCompoundingService {
               embedding,
               chunkIndex: 0,
               metadata: { source: "faq-auto", sourceCount: result.sourceCount },
+              draftStatus: "pending",
+              draftExpiresAt,
             });
           }
           return;

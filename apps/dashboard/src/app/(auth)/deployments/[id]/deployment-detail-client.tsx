@@ -15,6 +15,7 @@ import { useCreativeJobs } from "@/hooks/use-creative-pipeline";
 import { CreativeJobCard } from "@/components/creative-pipeline/creative-job-card";
 import { BriefSubmissionSheet } from "@/components/creative-pipeline/brief-submission-sheet";
 import { AdOptimizerSection } from "@/components/ad-optimizer/ad-optimizer-section";
+import { FAQReviewQueue } from "@/components/marketplace/faq-review-queue";
 import type { MarketplaceListing, TrustScoreBreakdown } from "@/lib/api-client";
 
 interface Connection {
@@ -26,6 +27,7 @@ interface Connection {
 
 interface DeploymentDetailClientProps {
   deploymentId: string;
+  orgId: string;
   listingId: string;
   connections: Connection[];
   listing: MarketplaceListing | null;
@@ -35,6 +37,7 @@ interface DeploymentDetailClientProps {
 
 export function DeploymentDetailClient({
   deploymentId,
+  orgId,
   listingId,
   connections,
   listing,
@@ -153,6 +156,9 @@ export function DeploymentDetailClient({
           onRefresh={() => router.refresh()}
         />
       </section>
+
+      {/* FAQ Drafts */}
+      <FAQReviewQueue deploymentId={deploymentId} orgId={orgId} />
 
       {/* Work Log */}
       <section>

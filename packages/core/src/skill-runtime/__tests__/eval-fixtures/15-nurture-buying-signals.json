@@ -1,0 +1,48 @@
+{
+  "name": "Nurture lead shows buying signals and moves to qualified",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "nurturing",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Actually I'm ready to buy now" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "That's wonderful to hear! Let me update your status right away."
+        },
+        {
+          "type": "tool_use",
+          "id": "call-buy-1",
+          "name": "crm-write.stage.update",
+          "input": { "opportunityId": "opp-test-1", "newStage": "qualified" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "You're all set! Let's get you started. Would you like to book a time to finalize everything? You can schedule at https://calendly.com/testbiz."
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "crm-write.stage.update" },
+    { "type": "response_contains", "substring": "calendly.com/testbiz" }
+  ]
+}

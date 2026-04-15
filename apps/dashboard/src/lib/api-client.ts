@@ -86,6 +86,15 @@ export interface TrustScoreBreakdown {
   }>;
 }
 
+export interface DraftFAQ {
+  id: string;
+  content: string;
+  sourceType: string;
+  draftStatus: string | null;
+  draftExpiresAt: string | null;
+  createdAt: string;
+}
+
 export class SwitchboardClient extends SwitchboardClientBase {
   // Token Usage
   async getTokenUsage(params?: { period?: string }) {
@@ -498,6 +507,28 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ persona: unknown; deployments: unknown[]; count: number }>(
       "/api/marketplace/persona/deploy",
       { method: "POST", body: JSON.stringify(body) },
+    );
+  }
+
+  // ── FAQ Drafts ──
+
+  async listDraftFAQs(orgId: string, deploymentId: string) {
+    return this.request<{ data: DraftFAQ[] }>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts`,
+    );
+  }
+
+  async approveDraftFAQ(orgId: string, deploymentId: string, faqId: string) {
+    return this.request<{ success: boolean }>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts/${faqId}/approve`,
+      { method: "POST" },
+    );
+  }
+
+  async rejectDraftFAQ(orgId: string, deploymentId: string, faqId: string) {
+    return this.request<void>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts/${faqId}/reject`,
+      { method: "POST" },
     );
   }
 

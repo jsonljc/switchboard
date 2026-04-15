@@ -109,6 +109,10 @@
     "./ad-optimizer": {
       "types": "./dist/ad-optimizer/index.d.ts",
       "import": "./dist/ad-optimizer/index.js"
+    },
+    "./skill-runtime": {
+      "types": "./dist/skill-runtime/index.d.ts",
+      "import": "./dist/skill-runtime/index.js"
     }
   },
   "scripts": {
@@ -126,6 +130,7 @@
     "@switchboard/sdk": "workspace:*",
     "inngest": "^4.2.0",
     "openai": "^6.34.0",
+    "yaml": "^2.8.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {
