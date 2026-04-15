@@ -590,6 +590,45 @@ model ActivityLog {
 }
 
 // ---------------------------------------------------------------------------
+// Execution Traces (SP3)
+// ---------------------------------------------------------------------------
+
+model ExecutionTrace {
+  id                   String    @id @default(cuid())
+  deploymentId         String
+  organizationId       String
+  skillSlug            String
+  skillVersion         String
+
+  trigger              String    @default("chat_message")
+  sessionId            String
+  inputParametersHash  String
+
+  toolCalls            Json      @default("[]")
+  governanceDecisions  Json      @default("[]")
+  tokenUsage           Json      @default("{}")
+  durationMs           Int
+  turnCount            Int
+
+  status               String
+  error                String?
+  responseSummary      String
+
+  linkedOutcomeId      String?
+  linkedOutcomeType    String?
+  linkedOutcomeResult  String?
+
+  writeCount           Int       @default(0)
+
+  createdAt            DateTime  @default(now())
+
+  @@index([deploymentId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status])
+  @@index([sessionId])
+}
+
+// ---------------------------------------------------------------------------
 // Session Runtime
 // ---------------------------------------------------------------------------
 
@@ -805,6 +844,8 @@ model AgentDeployment {
   outputDestination   Json?
   connectionIds       String[] @default([])
   skillSlug           String?  // When set, use skill executor instead of TypeScript handler
+  circuitBreakerThreshold  Int?
+  maxWritesPerHour          Int?
   trustLevel              String   @default("observe")
   spendApprovalThreshold  Float    @default(50)
   createdAt           DateTime @default(now())
