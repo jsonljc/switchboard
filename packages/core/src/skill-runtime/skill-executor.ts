@@ -6,7 +6,8 @@ import type {
   ToolCallRecord,
   SkillTool,
 } from "./types.js";
-import { SkillExecutionBudgetError, getToolGovernanceDecision } from "./types.js";
+import { SkillExecutionBudgetError } from "./types.js";
+import { getToolGovernanceDecision, mapDecisionToOutcome } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -105,10 +106,17 @@ export class SkillExecutorImpl implements SkillExecutor {
         const tool = this.tools.get(toolId!);
         const op = tool?.operations[operation];
 
-        const governanceDecision = getToolGovernanceDecision(toolUse.name, params.trustLevel);
+        const governanceDecision = op
+          ? getToolGovernanceDecision(op, params.trustLevel)
+          : "auto-approve";
 
         let result: unknown;
-        if (governanceDecision === "require-approval") {
+        if (governanceDecision === "deny") {
+          result = {
+            status: "denied",
+            message: "This action is not permitted at your current trust level.",
+          };
+        } else if (governanceDecision === "require-approval") {
           result = {
             status: "pending_approval",
             message: "This action requires human approval.",
@@ -125,8 +133,7 @@ export class SkillExecutorImpl implements SkillExecutor {
           params: toolUse.input,
           result,
           durationMs: Date.now() - start,
-          governanceDecision:
-            governanceDecision === "require-approval" ? "require-approval" : "auto-approved",
+          governanceDecision: mapDecisionToOutcome(governanceDecision),
         });
 
         toolResults.push({
