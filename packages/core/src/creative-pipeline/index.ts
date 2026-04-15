@@ -15,3 +15,11 @@ export { createModeDispatcher, executeModeDispatch } from "./mode-dispatcher.js"
 export { createUgcJobRunner, executeUgcPipeline } from "./ugc/ugc-job-runner.js";
 export { shouldRequireApproval, DEFAULT_APPROVAL_CONFIG } from "./ugc/approval-config.js";
 export type { UgcPhase, ApprovalConfig } from "./ugc/approval-config.js";
+export { translateFrictions } from "./ugc/funnel-friction-translator.js";
+export { selectStructures, getStructureTemplates } from "./ugc/structure-engine.js";
+export type { StructureTemplate, StructureSelection, StructureId } from "./ugc/structure-engine.js";
+export { castCreators } from "./ugc/scene-caster.js";
+export type { CastingAssignment } from "./ugc/scene-caster.js";
+export { routeIdentityStrategy } from "./ugc/identity-strategy-router.js";
+export { executePlanningPhase } from "./ugc/phases/planning.js";
+export type { PlanningInput, PlanningOutput } from "./ugc/phases/planning.js";

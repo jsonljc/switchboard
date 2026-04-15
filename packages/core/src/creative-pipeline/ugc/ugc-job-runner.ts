@@ -2,7 +2,13 @@
 import { inngestClient } from "../inngest-client.js";
 import { shouldRequireApproval, UGC_PHASE_ORDER } from "./approval-config.js";
 import type { UgcPhase } from "./approval-config.js";
-import type { CreativeJob } from "@switchboard/schemas";
+import type {
+  CreativeJob,
+  CreatorIdentity,
+  FunnelFriction,
+  ProviderCapabilityProfile,
+} from "@switchboard/schemas";
+import { executePlanningPhase } from "./phases/planning.js";
 
 // ── Interfaces ──
 
@@ -47,21 +53,58 @@ interface UgcPipelineContext {
   creatorPool: unknown[];
   trustLevel: number;
   deploymentType: string;
+  funnelFrictions: unknown[];
+  providerCapabilities: unknown[];
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
 // SP3-SP5 replace these with real implementations.
 // SP3+ must also add try/catch with error classification per spec Section 5.10.
 
+interface UgcBriefInput {
+  productDescription?: string;
+  targetAudience?: string;
+  platforms?: string[];
+  creatorPoolIds?: string[];
+  ugcFormat?: string;
+  productImages?: string[];
+  references?: string[];
+  generateReferenceImages?: boolean;
+}
+
 function executePhase(
   phase: UgcPhase,
-  _ctx: {
+  ctx: {
     job: CreativeJob;
     context: UgcPipelineContext;
     previousPhaseOutputs: Record<string, unknown>;
   },
 ): Record<string, unknown> {
-  return { phase, status: "no-op", completedAt: new Date().toISOString() };
+  switch (phase) {
+    case "planning": {
+      const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
+      const brief = (ugcConfig.brief ?? {}) as UgcBriefInput;
+      return executePlanningPhase({
+        brief: {
+          productDescription: brief.productDescription ?? "",
+          targetAudience: brief.targetAudience ?? "",
+          platforms: brief.platforms ?? [],
+          creatorPoolIds: brief.creatorPoolIds ?? [],
+          ugcFormat: brief.ugcFormat ?? "talking_head",
+          productImages: brief.productImages ?? [],
+          references: brief.references ?? [],
+          generateReferenceImages: brief.generateReferenceImages ?? false,
+        },
+        creatorPool: ctx.context.creatorPool as CreatorIdentity[],
+        funnelFrictions: ctx.context.funnelFrictions as FunnelFriction[],
+        performanceMemory: { structureHistory: {}, creatorHistory: {} },
+        providerCapabilities: ctx.context.providerCapabilities as ProviderCapabilityProfile[],
+      });
+    }
+    default:
+      // SP4-SP5 replace these
+      return { phase, status: "no-op", completedAt: new Date().toISOString() };
+  }
 }
 
 function getNextPhase(phase: UgcPhase): string {
@@ -85,6 +128,8 @@ async function preloadContext(
     creatorPool,
     trustLevel: deployment?.listing?.trustScore ?? 0,
     deploymentType: deployment?.type ?? "standard",
+    funnelFrictions: [], // SP8 adds real friction store
+    providerCapabilities: [], // SP5 adds real provider registry
   };
 }
 
