@@ -187,6 +187,58 @@ tools: []
   it("throws for nonexistent skill slug", () => {
     expect(() => loadSkill("nonexistent", TEST_DIR)).toThrow();
   });
+
+  it("loads a skill with output schema", () => {
+    writeSkill(
+      "with-output",
+      `---
+name: test
+slug: with-output
+version: 1.0.0
+description: test
+author: test
+parameters: []
+tools: []
+output:
+  fields:
+    - name: summary
+      type: string
+      required: true
+    - name: confidence
+      type: enum
+      values: [high, medium, low]
+      required: true
+    - name: items
+      type: array
+      items: { type: string }
+      required: false
+---
+Body here`,
+    );
+    const skill = loadSkill("with-output", TEST_DIR);
+    expect(skill.output).toBeDefined();
+    expect(skill.output!.fields).toHaveLength(3);
+    expect(skill.output!.fields[0]!.name).toBe("summary");
+    expect(skill.output!.fields[2]!.items).toEqual({ type: "string" });
+  });
+
+  it("loads a skill without output schema (optional)", () => {
+    writeSkill(
+      "no-output",
+      `---
+name: test
+slug: no-output
+version: 1.0.0
+description: test
+author: test
+parameters: []
+tools: []
+---
+Body`,
+    );
+    const skill = loadSkill("no-output", TEST_DIR);
+    expect(skill.output).toBeUndefined();
+  });
 });
 
 describe("loadSkill - real files", () => {

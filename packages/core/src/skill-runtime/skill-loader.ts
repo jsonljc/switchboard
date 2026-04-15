@@ -14,6 +14,15 @@ const ParameterDeclarationSchema = z.object({
   schema: z.record(z.unknown()).optional(),
 });
 
+const OutputFieldSchema = z.object({
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean", "enum", "array"]),
+  required: z.boolean(),
+  description: z.string().optional(),
+  values: z.array(z.string()).optional(),
+  items: z.record(z.string()).optional(),
+});
+
 const SkillFrontmatterSchema = z.object({
   name: z.string(),
   slug: z.string(),
@@ -22,6 +31,11 @@ const SkillFrontmatterSchema = z.object({
   author: z.string(),
   parameters: z.array(ParameterDeclarationSchema),
   tools: z.array(z.string()),
+  output: z
+    .object({
+      fields: z.array(OutputFieldSchema),
+    })
+    .optional(),
 });
 
 function splitFrontmatter(raw: string): { frontmatterStr: string; body: string } {
@@ -122,5 +136,6 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
     parameters: frontmatter.parameters,
     tools: frontmatter.tools,
     body: body.trim(),
+    output: frontmatter.output,
   };
 }

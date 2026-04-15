@@ -18,6 +18,7 @@ export interface SkillDefinition {
   parameters: ParameterDeclaration[];
   tools: string[];
   body: string;
+  output?: { fields: OutputFieldDeclaration[] };
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";
@@ -29,6 +30,15 @@ export interface ParameterDeclaration {
   description?: string;
   values?: string[];
   schema?: Record<string, unknown>;
+}
+
+export interface OutputFieldDeclaration {
+  name: string;
+  type: "string" | "number" | "boolean" | "enum" | "array";
+  required: boolean;
+  description?: string;
+  values?: string[];
+  items?: { type: string };
 }
 
 // ---------------------------------------------------------------------------
