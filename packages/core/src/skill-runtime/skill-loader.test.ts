@@ -261,4 +261,13 @@ describe("loadSkill - real files", () => {
     expect(skill.output).toBeDefined();
     expect(skill.output!.fields.length).toBeGreaterThan(0);
   });
+
+  it("loads the ad-optimizer skill file", () => {
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    const skill = loadSkill("ad-optimizer", join(repoRoot, "skills"));
+    expect(skill.slug).toBe("ad-optimizer");
+    expect(skill.tools).toEqual(["ads-analytics"]);
+    expect(skill.output).toBeDefined();
+    expect(skill.output!.fields.length).toBeGreaterThan(0);
+  });
 });
