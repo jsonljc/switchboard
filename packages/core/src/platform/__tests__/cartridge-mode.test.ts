@@ -4,6 +4,7 @@ import type { CartridgeOrchestrator, CartridgeModeConfig } from "../modes/cartri
 import type { WorkUnit } from "../work-unit.js";
 import type { ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionContext } from "../execution-context.js";
+import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 
 function makeWorkUnit(overrides: Partial<WorkUnit> = {}): WorkUnit {
   return {
@@ -42,12 +43,36 @@ const defaultContext: ExecutionContext = {
   },
 };
 
+function successResult(summary = "Campaign paused"): ExecuteResult {
+  return {
+    success: true,
+    summary,
+    externalRefs: { campaignId: "camp-42" },
+    rollbackAvailable: false,
+    partialFailures: [],
+    durationMs: 120,
+    undoRecipe: null,
+  };
+}
+
+function failureResult(summary = "Cartridge failed"): ExecuteResult {
+  return {
+    success: false,
+    summary,
+    externalRefs: {},
+    rollbackAvailable: false,
+    partialFailures: [{ step: "execute", error: summary }],
+    durationMs: 50,
+    undoRecipe: null,
+  };
+}
+
 function makeConfig(
-  proposeFn: CartridgeOrchestrator["propose"],
+  executeFn: CartridgeOrchestrator["executePreApproved"],
   lookupResult?: { executor: { actionId: string } },
 ): CartridgeModeConfig {
   return {
-    orchestrator: { propose: proposeFn },
+    orchestrator: { executePreApproved: executeFn },
     intentRegistry: {
       lookup: vi.fn().mockReturnValue(
         lookupResult ?? {
@@ -59,67 +84,40 @@ function makeConfig(
 }
 
 describe("CartridgeMode", () => {
-  it("returns completed when orchestrator allows", async () => {
-    const propose = vi.fn().mockResolvedValue({
-      envelope: { id: "env-1", status: "executed" },
-      approvalRequest: null,
-      denied: false,
-      explanation: "Campaign paused",
-    });
-    const mode = new CartridgeMode(makeConfig(propose));
+  it("returns completed when executePreApproved succeeds", async () => {
+    const exec = vi.fn().mockResolvedValue(successResult());
+    const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
     expect(result.outcome).toBe("completed");
     expect(result.workUnitId).toBe("wu-1");
     expect(result.mode).toBe("cartridge");
     expect(result.summary).toBe("Campaign paused");
-    expect(result.outputs).toEqual({ envelopeId: "env-1" });
+    expect(result.outputs).toEqual({
+      externalRefs: { campaignId: "camp-42" },
+      data: undefined,
+    });
   });
 
-  it("returns pending_approval when approval requested", async () => {
-    const propose = vi.fn().mockResolvedValue({
-      envelope: { id: "env-2", status: "pending" },
-      approvalRequest: { approvers: ["mgr-1"] },
-      denied: false,
-      explanation: "Needs manager approval",
-    });
-    const mode = new CartridgeMode(makeConfig(propose));
-    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
-
-    expect(result.outcome).toBe("pending_approval");
-    expect(result.approvalId).toBe("env-2");
-    expect(result.summary).toBe("Needs manager approval");
-  });
-
-  it("returns failed when denied", async () => {
-    const propose = vi.fn().mockResolvedValue({
-      envelope: { id: "env-3", status: "denied" },
-      approvalRequest: null,
-      denied: true,
-      explanation: "Policy violation",
-    });
-    const mode = new CartridgeMode(makeConfig(propose));
+  it("returns failed when executePreApproved returns success=false", async () => {
+    const exec = vi.fn().mockResolvedValue(failureResult("Policy violation"));
+    const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
     expect(result.outcome).toBe("failed");
-    expect(result.error?.code).toBe("DENIED");
+    expect(result.error?.code).toBe("CARTRIDGE_ERROR");
     expect(result.error?.message).toBe("Policy violation");
   });
 
-  it("maps workUnit fields correctly to propose params", async () => {
-    const propose = vi.fn().mockResolvedValue({
-      envelope: { id: "env-4", status: "executed" },
-      approvalRequest: null,
-      denied: false,
-      explanation: "OK",
-    });
-    const mode = new CartridgeMode(makeConfig(propose));
+  it("maps workUnit fields correctly to executePreApproved params", async () => {
+    const exec = vi.fn().mockResolvedValue(successResult());
+    const mode = new CartridgeMode(makeConfig(exec));
     const workUnit = makeWorkUnit({
       idempotencyKey: "idem-1",
     });
     await mode.execute(workUnit, defaultConstraints, defaultContext);
 
-    expect(propose).toHaveBeenCalledWith({
+    expect(exec).toHaveBeenCalledWith({
       actionType: "digital-ads.campaign.pause",
       parameters: { campaignId: "camp-42" },
       principalId: "user-1",
@@ -131,12 +129,34 @@ describe("CartridgeMode", () => {
   });
 
   it("returns failed on orchestrator error", async () => {
-    const propose = vi.fn().mockRejectedValue(new Error("Connection timeout"));
-    const mode = new CartridgeMode(makeConfig(propose));
+    const exec = vi.fn().mockRejectedValue(new Error("Connection timeout"));
+    const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("CARTRIDGE_ERROR");
     expect(result.error?.message).toBe("Connection timeout");
+  });
+
+  it("passes null organizationId when workUnit has none", async () => {
+    const exec = vi.fn().mockResolvedValue(successResult());
+    const mode = new CartridgeMode(makeConfig(exec));
+    const workUnit = makeWorkUnit({ organizationId: undefined });
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(exec).toHaveBeenCalledWith(expect.objectContaining({ organizationId: null }));
+  });
+
+  it("passes through data field from ExecuteResult", async () => {
+    const resultWithData = { ...successResult(), data: { diagnostics: [1, 2] } };
+    const exec = vi.fn().mockResolvedValue(resultWithData);
+    const mode = new CartridgeMode(makeConfig(exec));
+    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs).toEqual({
+      externalRefs: { campaignId: "camp-42" },
+      data: { diagnostics: [1, 2] },
+    });
   });
 });
