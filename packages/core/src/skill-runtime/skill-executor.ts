@@ -7,8 +7,9 @@ import type {
   SkillTool,
   SkillHook,
   ResolvedModelProfile,
+  SkillRuntimePolicy,
 } from "./types.js";
-import { SkillExecutionBudgetError } from "./types.js";
+import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
@@ -23,17 +24,13 @@ import {
   runAfterToolCallHooks,
 } from "./hook-runner.js";
 
-const MAX_TOOL_CALLS = 5;
-const MAX_LLM_TURNS = 6;
-const MAX_TOTAL_TOKENS = 64_000;
-const MAX_RUNTIME_MS = 30_000;
-
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
     private adapter: ToolCallingAdapter,
     private tools: Map<string, SkillTool>,
     private router?: ModelRouter,
     private hooks: SkillHook[] = [],
+    private policy: SkillRuntimePolicy = DEFAULT_SKILL_RUNTIME_POLICY,
   ) {}
 
   private resolveProfile(
@@ -87,7 +84,7 @@ export class SkillExecutorImpl implements SkillExecutor {
     let turnCount = 0;
     const startTime = Date.now();
 
-    while (turnCount < MAX_LLM_TURNS) {
+    while (turnCount < this.policy.maxLlmTurns) {
       turnCount++;
 
       const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceHook);
@@ -105,7 +102,7 @@ export class SkillExecutorImpl implements SkillExecutor {
       }
       const resolvedCtx = hookResult.ctx ?? llmCtx;
 
-      const remainingMs = MAX_RUNTIME_MS - (Date.now() - startTime);
+      const remainingMs = this.policy.maxRuntimeMs - (Date.now() - startTime);
       if (remainingMs <= 0) {
         throw new SkillExecutionBudgetError("Exceeded 30s runtime limit");
       }
@@ -130,9 +127,9 @@ export class SkillExecutorImpl implements SkillExecutor {
       totalInputTokens += response.usage.inputTokens;
       totalOutputTokens += response.usage.outputTokens;
 
-      if (totalInputTokens + totalOutputTokens > MAX_TOTAL_TOKENS) {
+      if (totalInputTokens + totalOutputTokens > this.policy.maxTotalTokens) {
         throw new SkillExecutionBudgetError(
-          `Exceeded token budget (${totalInputTokens + totalOutputTokens} > ${MAX_TOTAL_TOKENS})`,
+          `Exceeded token budget (${totalInputTokens + totalOutputTokens} > ${this.policy.maxTotalTokens})`,
         );
       }
 
@@ -179,8 +176,10 @@ export class SkillExecutorImpl implements SkillExecutor {
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
       for (const toolUse of toolUseBlocks) {
-        if (toolCallRecords.length >= MAX_TOOL_CALLS) {
-          throw new SkillExecutionBudgetError(`Exceeded maximum tool calls (${MAX_TOOL_CALLS})`);
+        if (toolCallRecords.length >= this.policy.maxToolCalls) {
+          throw new SkillExecutionBudgetError(
+            `Exceeded maximum tool calls (${this.policy.maxToolCalls})`,
+          );
         }
 
         const start = Date.now();
@@ -235,7 +234,7 @@ export class SkillExecutorImpl implements SkillExecutor {
       messages.push({ role: "user", content: toolResults });
     }
 
-    throw new SkillExecutionBudgetError(`Exceeded maximum LLM turns (${MAX_LLM_TURNS})`);
+    throw new SkillExecutionBudgetError(`Exceeded maximum LLM turns (${this.policy.maxLlmTurns})`);
   }
 
   private buildAnthropicTools(toolIds: string[]): Anthropic.Tool[] {
