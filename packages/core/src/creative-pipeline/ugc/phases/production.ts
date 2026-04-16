@@ -6,6 +6,7 @@ import {
   type RankedProvider,
 } from "../provider-router.js";
 import { evaluateRealism } from "../realism-scorer.js";
+import { createVideoProvider } from "../video-provider.js";
 
 // ── Types ──
 
@@ -40,21 +41,13 @@ interface AssetRecordOutput {
   lockedDerivativeOf?: string | null;
 }
 
-interface KlingLike {
-  generateVideo(req: {
-    prompt: string;
-    duration: 5 | 10;
-    aspectRatio: "16:9" | "9:16" | "1:1";
-  }): Promise<{ videoUrl: string; duration: number }>;
-}
-
 interface AssetStoreLike {
   upsertByKey(input: Record<string, unknown>): Promise<Record<string, unknown>>;
   findLockedByCreator(creatorId: string): Promise<Record<string, unknown> | null>;
 }
 
 interface ProductionDeps {
-  klingClient: KlingLike;
+  providerClients: { klingClient?: unknown };
   assetStore: AssetStoreLike;
   apiKey: string;
 }
@@ -71,18 +64,6 @@ export interface ProductionOutput {
   assets: AssetRecordOutput[];
   qaResults: Record<string, Array<{ attempt: number; provider: string; score: RealismScore }>>;
   failedSpecs: Array<{ specId: string; reason: string }>;
-}
-
-// ── Aspect ratio mapping ──
-
-function mapAspect(aspect: string): "16:9" | "9:16" | "1:1" {
-  if (aspect === "9:16") return "9:16";
-  if (aspect === "1:1") return "1:1";
-  return "9:16"; // default to vertical for UGC
-}
-
-function mapDuration(sec: number): 5 | 10 {
-  return sec <= 7 ? 5 : 10;
 }
 
 // ── Hash helper ──
@@ -127,10 +108,14 @@ async function processSpec(
 
       try {
         // Generate video
-        const result = await deps.klingClient.generateVideo({
+        const videoProvider = createVideoProvider(
+          provider.profile.provider,
+          deps.providerClients as never,
+        );
+        const result = await videoProvider.generate({
           prompt: spec.script.text,
-          duration: mapDuration(spec.renderTargets.durationSec),
-          aspectRatio: mapAspect(spec.renderTargets.aspect),
+          durationSec: spec.renderTargets.durationSec,
+          aspectRatio: spec.renderTargets.aspect,
         });
 
         // Realism scorer

@@ -15,11 +15,13 @@ vi.mock("../stages/call-claude.js", () => ({
 
 function createMockDeps() {
   return {
-    klingClient: {
-      generateVideo: vi.fn().mockResolvedValue({
-        videoUrl: "https://cdn.example.com/generated.mp4",
-        duration: 15,
-      }),
+    providerClients: {
+      klingClient: {
+        generateVideo: vi.fn().mockResolvedValue({
+          videoUrl: "https://cdn.example.com/generated.mp4",
+          duration: 15,
+        }),
+      },
     },
     assetStore: {
       upsertByKey: vi.fn().mockImplementation((input: Record<string, unknown>) => ({
@@ -45,7 +47,7 @@ function makeSpec(id: string, overrides: Record<string, unknown> = {}) {
     script: { text: "Hey so...", language: "en" },
     style: {},
     direction: {},
-    format: "talking_head",
+    format: "product_demo", // Use product_demo instead of talking_head to avoid heygen bonus
     identityConstraints: { strategy: "reference_conditioning", maxIdentityDrift: 0.5 },
     renderTargets: { aspect: "9:16", durationSec: 15 },
     qaThresholds: { faceSimilarityMin: 0.7, realismMin: 0.5 },
@@ -58,7 +60,19 @@ function makeSpec(id: string, overrides: Record<string, unknown> = {}) {
 describe("executeProductionPhase", () => {
   let deps: ReturnType<typeof createMockDeps>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Reset callClaude mock to default passing scores
+    const { callClaude } = await import("../stages/call-claude.js");
+    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
+      faceSimilarity: 0.9,
+      ocrAccuracy: 0.95,
+      artifactFlags: [],
+      visualRealism: 0.8,
+      behavioralRealism: 0.8,
+      ugcAuthenticity: 0.85,
+      audioNaturalness: 0.75,
+    });
     deps = createMockDeps();
   });
 
@@ -108,7 +122,7 @@ describe("executeProductionPhase", () => {
     const result = await executeProductionPhase(input);
     expect(result.assets.length).toBe(1);
     // Should have generated twice (first fail, then pass)
-    expect(deps.klingClient.generateVideo).toHaveBeenCalledTimes(2);
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(2);
   });
 
   it("reports failed spec when all attempts exhausted", async () => {
@@ -193,7 +207,7 @@ describe("executeProductionPhase", () => {
     };
     const result = await executeProductionPhase(input);
     // Should stop before all 5 attempts due to circuit breaker (triggers at 3 failures with 80%+ fail rate)
-    expect(deps.klingClient.generateVideo.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(deps.providerClients.klingClient.generateVideo.mock.calls.length).toBeLessThanOrEqual(4);
     expect(result.failedSpecs.length).toBe(1);
   });
 

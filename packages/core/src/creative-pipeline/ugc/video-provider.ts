@@ -62,6 +62,17 @@ function createKlingAdapter(klingClient: KlingLike): VideoProvider {
   };
 }
 
+// ── HeyGen adapter (stub — activates when API is available) ──
+
+function createHeyGenAdapter(): VideoProvider {
+  return {
+    name: "heygen",
+    async generate(_req: VideoGenerationRequest): Promise<VideoGenerationResult> {
+      throw new Error("HeyGen provider not yet implemented — awaiting API access");
+    },
+  };
+}
+
 // ── Seedance adapter (stub — activates when API is available) ──
 
 function createSeedanceAdapter(): VideoProvider {
@@ -98,6 +109,8 @@ export function createVideoProvider(provider: string, clients: ProviderClients):
       }
       return createKlingAdapter(clients.klingClient);
     }
+    case "heygen":
+      return createHeyGenAdapter();
     case "seedance":
       return createSeedanceAdapter();
     case "runway":

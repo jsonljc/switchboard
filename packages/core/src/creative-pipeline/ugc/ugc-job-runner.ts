@@ -169,7 +169,7 @@ async function executePhase(
           costAuthority: "estimated",
         },
         deps: {
-          klingClient: ctx.context.klingClient as ProductionInput["deps"]["klingClient"],
+          providerClients: { klingClient: ctx.context.klingClient },
           assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
         },

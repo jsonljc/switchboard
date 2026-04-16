@@ -39,3 +39,11 @@ export type { QaThresholdConfig, RealismScorerInput } from "./ugc/realism-scorer
 export { executeProductionPhase } from "./ugc/phases/production.js";
 export type { ProductionInput, ProductionOutput } from "./ugc/phases/production.js";
 export { KlingClient } from "./stages/kling-client.js";
+export { createVideoProvider } from "./ugc/video-provider.js";
+export type {
+  VideoProvider,
+  VideoGenerationRequest,
+  VideoGenerationResult,
+} from "./ugc/video-provider.js";
+export { ProviderPerformanceTracker, emptyPerformanceHistory } from "./ugc/provider-performance.js";
+export type { ProviderPerformanceHistory, PerformanceRecord } from "./ugc/provider-performance.js";
