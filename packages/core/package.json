@@ -113,6 +113,10 @@
     "./skill-runtime": {
       "types": "./dist/skill-runtime/index.d.ts",
       "import": "./dist/skill-runtime/index.js"
+    },
+    "./platform": {
+      "types": "./dist/platform/index.d.ts",
+      "import": "./dist/platform/index.js"
     }
   },
   "scripts": {
