@@ -47,6 +47,24 @@ tools:
   - crm-query
   - crm-write
   - pipeline-handoff
+
+context:
+  - kind: playbook
+    scope: objection-handling
+    inject_as: PLAYBOOK_CONTEXT
+  - kind: policy
+    scope: messaging-rules
+    inject_as: POLICY_CONTEXT
+  - kind: knowledge
+    scope: offer-catalog
+    inject_as: KNOWLEDGE_CONTEXT
+    required: false
+  - kind: playbook
+    scope: qualification-framework
+    inject_as: QUALIFICATION_CONTEXT
+  - kind: playbook
+    scope: nurture-cadence
+    inject_as: NURTURE_CONTEXT
 ---
 
 # Sales Pipeline Agent
@@ -63,6 +81,7 @@ Your job: respond quickly, build rapport, qualify through natural conversation.
 
 **Qualification framework:**
 {{PERSONA_CONFIG.qualificationCriteria}}
+{{QUALIFICATION_CONTEXT}}
 
 **Disqualifiers:**
 {{PERSONA_CONFIG.disqualificationCriteria}}
@@ -93,13 +112,7 @@ Your first message MUST reference something specific from the prior conversation
 Never re-ask questions already answered.
 
 **Objection handling:**
-
-- Price: reframe around value, mention payment options if available
-- Timing: create urgency through value, not pressure
-- Trust: share relevant proof points or guarantees
-- Competitor: differentiate on strengths, never disparage
-- "Need to think": suggest a specific next step with a timeline
-- Anything else: escalate to the business owner
+{{PLAYBOOK_CONTEXT}}
 
 **Close after:**
 
@@ -121,11 +134,7 @@ Your job: re-engage leads who have gone cold.
 
 **Approach — vary across the cadence:**
 
-1. Value reminder — highlight what they were interested in
-2. New angle — present offering from a different perspective
-3. Social proof — share a relevant success story
-4. Soft check-in — ask if their situation has changed
-5. Final touch — let them know you're here if needed
+{{NURTURE_CONTEXT}}
 
 **Rules:**
 
@@ -148,3 +157,11 @@ escalate to the business owner.
 
 {{PERSONA_CONFIG.tone}}
 {{PERSONA_CONFIG.customInstructions}}
+
+## Messaging Policy
+
+{{POLICY_CONTEXT}}
+
+## Available Services
+
+{{KNOWLEDGE_CONTEXT}}
