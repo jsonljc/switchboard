@@ -5,6 +5,7 @@ import type {
   SkillExecutor,
   ToolCallRecord,
   SkillTool,
+  ResolvedModelProfile,
 } from "./types.js";
 import { SkillExecutionBudgetError } from "./types.js";
 import { getToolGovernanceDecision, mapDecisionToOutcome } from "./governance.js";
@@ -12,6 +13,8 @@ import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { ModelRouter } from "../model-router.js";
+import { buildTierContext } from "./skill-tier-context-builder.js";
 
 const MAX_TOOL_CALLS = 5;
 const MAX_LLM_TURNS = 6;
@@ -22,7 +25,36 @@ export class SkillExecutorImpl implements SkillExecutor {
   constructor(
     private adapter: ToolCallingAdapter,
     private tools: Map<string, SkillTool>,
+    private router?: ModelRouter,
   ) {}
+
+  private resolveProfile(
+    params: SkillExecutionParams,
+    turnCount: number,
+    toolCallRecords: ToolCallRecord[],
+    governanceLogs: GovernanceLogEntry[],
+  ): ResolvedModelProfile | undefined {
+    if (!this.router) return undefined;
+
+    const tierCtx = buildTierContext({
+      turnCount: turnCount - 1,
+      declaredToolIds: params.skill.tools,
+      tools: this.tools,
+      previousTurnHadToolUse: turnCount > 1 && toolCallRecords.length > 0,
+      previousTurnEscalated: governanceLogs.some(
+        (log) => log.decision === "require-approval" || log.decision === "deny",
+      ),
+      minimumModelTier: params.skill.minimumModelTier,
+    });
+    const slot = this.router.resolveTier(tierCtx);
+    const modelConfig = this.router.resolve(slot);
+    return {
+      model: modelConfig.modelId,
+      maxTokens: modelConfig.maxTokens,
+      temperature: modelConfig.temperature,
+      timeoutMs: modelConfig.timeoutMs,
+    };
+  }
 
   async execute(params: SkillExecutionParams): Promise<SkillExecutionResult> {
     const interpolated = interpolate(params.skill.body, params.parameters, params.skill.parameters);
@@ -46,6 +78,8 @@ export class SkillExecutorImpl implements SkillExecutor {
     while (turnCount < MAX_LLM_TURNS) {
       turnCount++;
 
+      const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceLogs);
+
       const remainingMs = MAX_RUNTIME_MS - (Date.now() - startTime);
       if (remainingMs <= 0) {
         throw new SkillExecutionBudgetError("Exceeded 30s runtime limit");
@@ -56,6 +90,7 @@ export class SkillExecutorImpl implements SkillExecutor {
           system,
           messages,
           tools: anthropicTools,
+          profile,
         }),
         new Promise<never>((_resolve, reject) => {
           timeoutId = setTimeout(
