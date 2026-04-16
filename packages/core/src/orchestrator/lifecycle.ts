@@ -186,6 +186,18 @@ export class LifecycleOrchestrator {
     );
   }
 
+  async executePreApproved(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId: string | null;
+    cartridgeId: string;
+    traceId: string;
+    idempotencyKey?: string;
+  }): Promise<ExecuteResult> {
+    return this.executionManager.executePreApproved(params);
+  }
+
   async executeApproved(envelopeId: string): Promise<ExecuteResult> {
     return this.executionManager.executeApproved(envelopeId);
   }
