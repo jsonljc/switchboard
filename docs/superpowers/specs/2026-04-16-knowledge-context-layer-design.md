@@ -216,7 +216,7 @@ interface KnowledgeEntryStore {
 ```
 
 - `create` validates via `KnowledgeEntryCreateSchema` (content non-empty, scope kebab-case)
-- `update` creates a new row with bumped version and deactivates the specific predecessor (not all entries for that scope — only the one being replaced)
+- `update` always creates a full new row (all fields copied, changed fields overwritten) with bumped version, then deactivates the specific predecessor. Partial updates (e.g., only changing `title`) still produce a complete new version — this is append-only, not in-place.
 - `deactivate` sets `active = false` — no hard deletes
 - All methods scope by `orgId` — no cross-org access
 
@@ -275,7 +275,7 @@ const mergedScope = { ...params, ...resolved.variables };
 const result = await executor.execute({ skill, parameters: mergedScope, ... });
 ```
 
-3. **`batch-skill-handler.ts`** — same pattern: resolve context before execution, merge into interpolation scope
+3. **`batch-skill-handler.ts`** — resolve context after `BatchParameterBuilder` returns, merge `resolved.variables` into the builder's output before passing to the executor. The injection point differs from `SkillHandler` (builder is a callback, not a separate step), but the merge logic is identical: `{ ...builderOutput, ...resolved.variables }`
 
 4. **`skill-executor.ts`** — no changes. Already interpolates `parameters` into template. Context variables arrive as additional parameters.
 
@@ -301,7 +301,7 @@ interface SkillExecutionTrace {
 }
 ```
 
-Stored as JSON column in `prisma-execution-trace-store.ts` — no schema migration beyond the `KnowledgeEntry` table.
+The existing execution trace table has a `metadata` JSON column — `contextResolution` is serialized into it alongside existing trace data. No additional migration needed beyond the `KnowledgeEntry` table.
 
 ### Backward Compatibility
 
