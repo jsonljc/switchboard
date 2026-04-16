@@ -47,8 +47,12 @@ export { SkillMode } from "./modes/index.js";
 export type { SkillModeConfig } from "./modes/index.js";
 export { CartridgeMode } from "./modes/index.js";
 export type { CartridgeModeConfig } from "./modes/index.js";
+export { PipelineMode } from "./modes/index.js";
+export type { PipelineModeConfig, PipelineEventSender } from "./modes/index.js";
 
 // Registrars
 export { registerSkillIntents } from "./skill-intent-registrar.js";
 export { registerCartridgeIntents } from "./cartridge-intent-registrar.js";
 export type { CartridgeManifestForRegistration } from "./cartridge-intent-registrar.js";
+export { registerPipelineIntents } from "./pipeline-intent-registrar.js";
+export type { PipelineDefinition } from "./pipeline-intent-registrar.js";
