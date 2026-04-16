@@ -6,6 +6,20 @@ import type {
   GovernanceLogEntry,
 } from "./governance.js";
 import type { ContextRequirement } from "@switchboard/schemas";
+import type { ModelSlot } from "../model-router.js";
+
+// ---------------------------------------------------------------------------
+// Model Routing (SP6 Phase 1)
+// ---------------------------------------------------------------------------
+
+/** Concrete model selection resolved by ModelRouter — skills never see this directly. */
+export interface ResolvedModelProfile {
+  /** Concrete model ID from ModelConfig.modelId */
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  timeoutMs: number;
+}
 
 // ---------------------------------------------------------------------------
 // Skill Definition (output of loader)
@@ -22,6 +36,7 @@ export interface SkillDefinition {
   body: string;
   output?: { fields: OutputFieldDeclaration[] };
   context: ContextRequirement[];
+  minimumModelTier?: ModelSlot;
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";
