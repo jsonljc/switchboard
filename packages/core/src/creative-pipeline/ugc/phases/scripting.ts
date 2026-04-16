@@ -93,7 +93,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
   const { planningOutput, brief, creatorPool, creativeWeights, apiKey } = input;
   const { castingAssignments, structures, identityPlans } = planningOutput;
 
-  if (castingAssignments.length === 0) {
+  if (!castingAssignments || castingAssignments.length === 0) {
     return { specs: [] };
   }
 

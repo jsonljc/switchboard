@@ -23,3 +23,7 @@ export type { CastingAssignment } from "./ugc/scene-caster.js";
 export { routeIdentityStrategy } from "./ugc/identity-strategy-router.js";
 export { executePlanningPhase } from "./ugc/phases/planning.js";
 export type { PlanningInput, PlanningOutput } from "./ugc/phases/planning.js";
+export { generateDirection } from "./ugc/ugc-director.js";
+export { buildUgcScriptPrompt, runUgcScriptWriter } from "./ugc/ugc-script-writer.js";
+export { executeScriptingPhase } from "./ugc/phases/scripting.js";
+export type { ScriptingInput, ScriptingOutput } from "./ugc/phases/scripting.js";

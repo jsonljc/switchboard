@@ -9,6 +9,7 @@ import type {
   ProviderCapabilityProfile,
 } from "@switchboard/schemas";
 import { executePlanningPhase } from "./phases/planning.js";
+import { translateFrictions } from "./funnel-friction-translator.js";
 
 // ── Interfaces ──
 
@@ -47,6 +48,7 @@ interface UgcPipelineDeps {
   jobStore: UgcJobStore;
   creatorStore: CreatorStore;
   deploymentStore: DeploymentStore;
+  llmConfig?: { apiKey: string };
 }
 
 interface UgcPipelineContext {
@@ -55,6 +57,8 @@ interface UgcPipelineContext {
   deploymentType: string;
   funnelFrictions: unknown[];
   providerCapabilities: unknown[];
+  creativeWeights: unknown;
+  apiKey: string;
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
@@ -72,14 +76,14 @@ interface UgcBriefInput {
   generateReferenceImages?: boolean;
 }
 
-function executePhase(
+async function executePhase(
   phase: UgcPhase,
   ctx: {
     job: CreativeJob;
     context: UgcPipelineContext;
     previousPhaseOutputs: Record<string, unknown>;
   },
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   switch (phase) {
     case "planning": {
       const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
@@ -102,8 +106,38 @@ function executePhase(
       });
       return result as unknown as Record<string, unknown>;
     }
+    case "scripting": {
+      const planningOutput = ctx.previousPhaseOutputs.planning as Record<string, unknown>;
+      const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
+      const brief = (ugcConfig.brief ?? {}) as UgcBriefInput;
+      const { executeScriptingPhase } = await import("./phases/scripting.js");
+      const { CreativeWeights } = await import("@switchboard/schemas");
+      return await executeScriptingPhase({
+        planningOutput: planningOutput as {
+          structures: unknown[];
+          castingAssignments: unknown[];
+          identityPlans: unknown[];
+        },
+        brief: {
+          productDescription: brief.productDescription ?? "",
+          targetAudience: brief.targetAudience ?? "",
+          platforms: brief.platforms ?? [],
+          creatorPoolIds: brief.creatorPoolIds ?? [],
+          ugcFormat: brief.ugcFormat ?? "talking_head",
+          brandVoice: brief.brandVoice ?? null,
+        },
+        creatorPool: ctx.context.creatorPool as CreatorIdentity[],
+        creativeWeights: (ctx.context.creativeWeights as typeof CreativeWeights) ?? {
+          structurePriorities: {},
+          motivatorPriorities: {},
+          scriptConstraints: [],
+          hookDirectives: [],
+        },
+        apiKey: ctx.context.apiKey,
+      });
+    }
     default:
-      // SP4-SP5 replace these
+      // SP5+ replace remaining phases
       return { phase, status: "no-op", completedAt: new Date().toISOString() };
   }
 }
@@ -131,6 +165,8 @@ async function preloadContext(
     deploymentType: deployment?.type ?? "standard",
     funnelFrictions: [], // SP8 adds real friction store
     providerCapabilities: [], // SP5 adds real provider registry
+    creativeWeights: translateFrictions([] as FunnelFriction[]),
+    apiKey: deps.llmConfig?.apiKey ?? "",
   };
 }
 

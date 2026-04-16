@@ -123,6 +123,7 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
             };
           },
         },
+        llmConfig: { apiKey },
       }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
