@@ -7,9 +7,17 @@ import {
   PrismaListingStore,
   PrismaDeploymentConnectionStore,
   PrismaAgentTaskStore,
+  PrismaCreatorIdentityStore,
+  PrismaAssetRecordStore,
   decryptCredentials,
 } from "@switchboard/db";
-import { inngestClient, createCreativeJobRunner } from "@switchboard/core/creative-pipeline";
+import {
+  inngestClient,
+  createCreativeJobRunner,
+  createModeDispatcher,
+  createUgcJobRunner,
+  KlingClient,
+} from "@switchboard/core/creative-pipeline";
 import {
   createWeeklyAuditCron,
   createDailyCheckCron,
@@ -36,6 +44,10 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
   }
 
   const jobStore = new PrismaCreativeJobStore(app.prisma);
+  const creatorStore = new PrismaCreatorIdentityStore(app.prisma);
+  const assetStore = new PrismaAssetRecordStore(app.prisma);
+  const klingApiKey = process.env["KLING_API_KEY"] ?? "";
+  const klingClient = klingApiKey ? new KlingClient({ apiKey: klingApiKey }) : undefined;
 
   // Ad Optimizer cron dependencies
   const deploymentStore = new PrismaDeploymentStore(app.prisma);
@@ -100,7 +112,26 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
+      createModeDispatcher(),
       createCreativeJobRunner(jobStore, { apiKey }, openaiApiKey ? { openaiApiKey } : undefined),
+      createUgcJobRunner({
+        jobStore,
+        creatorStore,
+        deploymentStore: {
+          findById: async (id: string) => {
+            const deployment = await deploymentStore.findById(id);
+            if (!deployment) return null;
+            const listing = await listingStore.findById(deployment.listingId);
+            return {
+              listing: listing ? { trustScore: listing.trustScore } : undefined,
+              type: "standard",
+            };
+          },
+        },
+        llmConfig: { apiKey },
+        klingClient,
+        assetStore,
+      }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
     ],

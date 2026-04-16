@@ -1,0 +1,110 @@
+{
+  "name": "Campaign way over CPA target requiring kill",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "Campaign 1",
+          "spend": 3000,
+          "impressions": 30000,
+          "clicks": 300,
+          "leads": 10,
+          "cpm": 100,
+          "ctr": 1.0,
+          "cpc": 10.0,
+          "cpl": 300,
+          "cpa": 400,
+          "roas": 1.0,
+          "frequency": 2.0
+        }
+      ],
+      "aggregated": {
+        "cpm": 100,
+        "ctr": 1.0,
+        "cpc": 10.0,
+        "cpl": 300,
+        "cpa": 400,
+        "roas": 1.0,
+        "frequency": 2.0
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 95,
+        "ctr": 1.1,
+        "cpc": 9.5,
+        "cpl": 290,
+        "cpa": 380,
+        "roas": 1.1,
+        "frequency": 1.9
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_789",
+      "totalSpend": 3000,
+      "totalLeads": 10
+    },
+    "CRM_FUNNEL": {
+      "leads": 10,
+      "qualified": 3,
+      "closed": 1,
+      "revenue": 1000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 100,
+              "ctr": 1.0,
+              "cpc": 10.0,
+              "cpl": 300,
+              "cpa": 400,
+              "roas": 1.0,
+              "frequency": 2.0
+            },
+            "previous": {
+              "cpm": 95,
+              "ctr": 1.1,
+              "cpc": 9.5,
+              "cpl": 290,
+              "cpa": 380,
+              "roas": 1.1,
+              "frequency": 1.9
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [{\"type\": \"kill\", \"action\": \"Pause Campaign 1 immediately. CPA is 4x target with no improvement trend.\", \"confidence\": \"high\", \"reasoning\": \"CPA ($400) is 4x the target ($100) and has been consistently high. ROAS is 1.0 vs target of 3.0. This campaign is burning budget with no path to profitability.\"}], \"proposedWrites\": [], \"summary\": \"Campaign 1 is severely underperforming with CPA 4x target. Immediate pause recommended to stop budget waste.\", \"confidence\": \"high\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "response_contains", "substring": "kill" }
+  ]
+}

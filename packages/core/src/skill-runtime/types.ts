@@ -3,6 +3,7 @@ import type {
   GovernanceOutcome,
   TrustLevel,
   GovernanceDecision,
+  GovernanceLogEntry,
 } from "./governance.js";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,7 @@ export interface SkillExecutionResult {
   response: string;
   toolCalls: ToolCallRecord[];
   tokenUsage: { input: number; output: number };
+  trace: SkillExecutionTraceData;
 }
 
 export interface ToolCallRecord {
@@ -68,6 +70,44 @@ export interface ToolCallRecord {
   result: unknown;
   durationMs: number;
   governanceDecision: GovernanceOutcome;
+}
+
+// ---------------------------------------------------------------------------
+// Execution Trace (SP3)
+// ---------------------------------------------------------------------------
+
+export interface SkillExecutionTraceData {
+  durationMs: number;
+  turnCount: number;
+  status: "success" | "error" | "budget_exceeded" | "denied";
+  error?: string;
+  responseSummary: string;
+  writeCount: number;
+  governanceDecisions: GovernanceLogEntry[];
+}
+
+export interface SkillExecutionTrace {
+  id: string;
+  deploymentId: string;
+  organizationId: string;
+  skillSlug: string;
+  skillVersion: string;
+  trigger: "chat_message" | "batch_job";
+  sessionId: string;
+  inputParametersHash: string;
+  toolCalls: ToolCallRecord[];
+  governanceDecisions: GovernanceLogEntry[];
+  tokenUsage: { input: number; output: number };
+  durationMs: number;
+  turnCount: number;
+  status: "success" | "error" | "budget_exceeded" | "denied";
+  error?: string;
+  responseSummary: string;
+  linkedOutcomeId?: string;
+  linkedOutcomeType?: "opportunity" | "task" | "campaign";
+  linkedOutcomeResult?: string;
+  writeCount: number;
+  createdAt: Date;
 }
 
 // ---------------------------------------------------------------------------

@@ -18,12 +18,70 @@ export type CreativePipelineEvents = {
       taskId: string;
       organizationId: string;
       deploymentId: string;
+      mode?: string;
+    };
+  };
+  "creative-pipeline/polished.submitted": {
+    data: {
+      jobId: string;
+      taskId: string;
+      organizationId: string;
+      deploymentId: string;
+      mode: "polished";
+      dispatchedAt: Date;
     };
   };
   "creative-pipeline/stage.approved": {
     data: {
       jobId: string;
       action: "continue" | "stop";
+    };
+  };
+  "creative-pipeline/ugc.submitted": {
+    data: {
+      jobId: string;
+      taskId: string;
+      organizationId: string;
+      deploymentId: string;
+      mode: "ugc";
+      pipelineVersion: string;
+      dispatchedAt: Date;
+    };
+  };
+  "creative-pipeline/ugc-phase.completed": {
+    data: {
+      jobId: string;
+      phase: string;
+      durationMs: number;
+      substagesCompleted: string[];
+      resultSummary: Record<string, unknown>;
+    };
+  };
+  "creative-pipeline/ugc-phase.approved": {
+    data: {
+      jobId: string;
+      phase: string;
+      action: "continue" | "stop";
+    };
+  };
+  "creative-pipeline/ugc.completed": {
+    data: {
+      jobId: string;
+      assetsProduced: number;
+      failed: number;
+    };
+  };
+  "creative-pipeline/ugc.stopped": {
+    data: {
+      jobId: string;
+      stoppedAtPhase: string;
+    };
+  };
+  "creative-pipeline/ugc.failed": {
+    data: {
+      jobId: string;
+      phase: string;
+      error: Record<string, unknown>;
     };
   };
 };

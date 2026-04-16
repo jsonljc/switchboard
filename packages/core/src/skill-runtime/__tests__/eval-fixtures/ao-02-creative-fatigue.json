@@ -1,0 +1,132 @@
+{
+  "name": "Creative fatigue detected",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "Campaign 1",
+          "spend": 2000,
+          "impressions": 40000,
+          "clicks": 600,
+          "leads": 20,
+          "cpm": 50,
+          "ctr": 1.5,
+          "cpc": 3.33,
+          "cpl": 100,
+          "cpa": 200,
+          "roas": 2.0,
+          "frequency": 3.5
+        }
+      ],
+      "aggregated": {
+        "cpm": 50,
+        "ctr": 1.5,
+        "cpc": 3.33,
+        "cpl": 100,
+        "cpa": 200,
+        "roas": 2.0,
+        "frequency": 3.5
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 20,
+        "ctr": 2.5,
+        "cpc": 0.8,
+        "cpl": 40,
+        "cpa": 80,
+        "roas": 4.0,
+        "frequency": 1.2
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_456",
+      "totalSpend": 2000,
+      "totalLeads": 20
+    },
+    "CRM_FUNNEL": {
+      "leads": 20,
+      "qualified": 10,
+      "closed": 4,
+      "revenue": 4000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 50,
+              "ctr": 1.5,
+              "cpc": 3.33,
+              "cpl": 100,
+              "cpa": 200,
+              "roas": 2.0,
+              "frequency": 3.5
+            },
+            "previous": {
+              "cpm": 20,
+              "ctr": 2.5,
+              "cpc": 0.8,
+              "cpl": 40,
+              "cpa": 80,
+              "roas": 4.0,
+              "frequency": 1.2
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "ads-analytics.diagnose",
+          "input": {
+            "deltas": {
+              "cpm": 30,
+              "ctr": -1.0,
+              "cpc": 2.53,
+              "cpl": 60,
+              "cpa": 120,
+              "roas": -2.0,
+              "frequency": 2.3
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [{\"type\": \"refresh_creative\", \"action\": \"Launch new creative variations for Campaign 1 to combat creative fatigue.\", \"confidence\": \"high\", \"reasoning\": \"CTR dropped 40% while frequency increased to 3.5, indicating audience fatigue with current creative.\"}], \"proposedWrites\": [], \"summary\": \"Creative fatigue detected: CTR down significantly while frequency climbed. Immediate creative refresh needed.\", \"confidence\": \"high\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "tool_called", "toolName": "ads-analytics.diagnose" },
+    { "type": "response_contains", "substring": "refresh_creative" }
+  ]
+}

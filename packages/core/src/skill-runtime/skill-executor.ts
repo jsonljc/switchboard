@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 import { SkillExecutionBudgetError } from "./types.js";
 import { getToolGovernanceDecision, mapDecisionToOutcome } from "./governance.js";
+import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -40,6 +41,7 @@ export class SkillExecutorImpl implements SkillExecutor {
     let totalOutputTokens = 0;
     let turnCount = 0;
     const startTime = Date.now();
+    const governanceLogs: GovernanceLogEntry[] = [];
 
     while (turnCount < MAX_LLM_TURNS) {
       turnCount++;
@@ -75,15 +77,30 @@ export class SkillExecutorImpl implements SkillExecutor {
       }
 
       if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
-        const text = response.content
+        const responseText = response.content
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
           .map((b) => b.text)
           .join("");
 
         return {
-          response: text,
+          response: responseText,
           toolCalls: toolCallRecords,
           tokenUsage: { input: totalInputTokens, output: totalOutputTokens },
+          trace: {
+            durationMs: Date.now() - startTime,
+            turnCount,
+            status: "success" as const,
+            responseSummary: responseText.slice(0, 500),
+            writeCount: toolCallRecords.filter((tc) => {
+              const tool = this.tools.get(tc.toolId);
+              const opDef = tool?.operations[tc.operation];
+              return (
+                opDef?.governanceTier === "internal_write" ||
+                opDef?.governanceTier === "external_write"
+              );
+            }).length,
+            governanceDecisions: governanceLogs,
+          },
         };
       }
 
@@ -109,6 +126,17 @@ export class SkillExecutorImpl implements SkillExecutor {
         const governanceDecision = op
           ? getToolGovernanceDecision(op, params.trustLevel)
           : "auto-approve";
+
+        if (op) {
+          governanceLogs.push({
+            operationId: `${toolId}.${operation}`,
+            tier: op.governanceTier,
+            trustLevel: params.trustLevel,
+            decision: governanceDecision,
+            overridden: !!op.governanceOverride?.[params.trustLevel],
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         let result: unknown;
         if (governanceDecision === "deny") {

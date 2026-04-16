@@ -154,11 +154,22 @@ export class ChannelGateway {
     if (skillSlug && skillRuntime) {
       const skill = skillRuntime.loadSkill(skillSlug, skillRuntime.skillsDir);
       const executor = skillRuntime.createExecutor();
-      return new SkillHandler(skill, executor, skillRuntime.builderMap, skillRuntime.stores, {
-        deploymentId: info.deployment.id,
-        orgId: info.deployment.organizationId,
-        contactId: message.sessionId,
-      });
+      return new SkillHandler(
+        skill,
+        executor,
+        skillRuntime.builderMap,
+        skillRuntime.stores,
+        {
+          deploymentId: info.deployment.id,
+          orgId: info.deployment.organizationId,
+          contactId: message.sessionId,
+          sessionId: message.sessionId,
+        },
+        skillRuntime.traceStore,
+        skillRuntime.circuitBreaker,
+        skillRuntime.blastRadiusLimiter,
+        skillRuntime.outcomeLinker,
+      );
     }
 
     return DefaultChatHandler;

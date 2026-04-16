@@ -23,11 +23,51 @@ const mockStores: SkillStores = {
 
 function makeCtx() {
   return {
+    sessionId: "session-1",
     persona: { businessName: "Biz" },
     conversation: { id: "conv-1", messages: [{ role: "user", content: "hi" }] },
     trust: { score: 50, level: "guided" as const },
     chat: { send: vi.fn() },
   } as any;
+}
+
+function makeTraceStore() {
+  return {
+    create: vi.fn().mockResolvedValue(undefined),
+  } as any;
+}
+
+function makeCircuitBreaker(allowed = true) {
+  return {
+    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "tripped" }),
+  } as any;
+}
+
+function makeBlastRadius(allowed = true) {
+  return {
+    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "capped" }),
+  } as any;
+}
+
+function makeOutcomeLinker() {
+  return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) } as any;
+}
+
+function makeExecutorResult(overrides: Record<string, unknown> = {}) {
+  return {
+    response: "Hello Alice",
+    toolCalls: [],
+    tokenUsage: { input: 100, output: 50 },
+    trace: {
+      durationMs: 150,
+      turnCount: 1,
+      status: "success",
+      responseSummary: "Hello Alice",
+      writeCount: 0,
+      governanceDecisions: [],
+    },
+    ...overrides,
+  };
 }
 
 describe("SkillHandler (generic)", () => {
@@ -37,33 +77,37 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       new Map(),
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("No parameter builder registered");
   });
 
   it("calls builder and executor, sends response", async () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
-    const executor = {
-      execute: vi.fn().mockResolvedValue({
-        response: "Hello Alice",
-        toolCalls: [],
-        tokenUsage: { input: 100, output: 50 },
-      }),
-    };
+    const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
     const builderMap = new Map([["test-skill", builder]]);
-    const handler = new SkillHandler(mockSkill, executor as any, builderMap, mockStores, {
-      deploymentId: "d1",
-      orgId: "org1",
-      contactId: "c1",
-    });
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      builderMap,
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
 
     const ctx = makeCtx();
     await handler.onMessage!(ctx);
 
     expect(builder).toHaveBeenCalledWith(
       ctx,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
       mockStores,
     );
     expect(executor.execute).toHaveBeenCalledOnce();
@@ -76,10 +120,17 @@ describe("SkillHandler (generic)", () => {
       .mockRejectedValue(new ParameterResolutionError("no-opp", "No active deal found."));
     const executor = { execute: vi.fn() };
     const builderMap = new Map([["test-skill", builder]]);
-    const handler = new SkillHandler(mockSkill, executor as any, builderMap, mockStores, {
-      deploymentId: "d1",
-      orgId: "org1",
-    });
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      builderMap,
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
 
     const ctx = makeCtx();
     await handler.onMessage!(ctx);
@@ -96,8 +147,140 @@ describe("SkillHandler (generic)", () => {
       { execute: vi.fn() } as any,
       builderMap,
       mockStores,
-      { deploymentId: "d1", orgId: "org1", contactId: "c1" },
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("DB down");
+  });
+
+  it("persists trace after execution", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const traceStore = makeTraceStore();
+    const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      traceStore,
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
+
+    await handler.onMessage!(makeCtx());
+    expect(traceStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deploymentId: "d1",
+        organizationId: "org1",
+        skillSlug: "test-skill",
+        status: "success",
+      }),
+    );
+  });
+
+  it("blocks execution when circuit breaker trips", async () => {
+    const executor = { execute: vi.fn() };
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", vi.fn()]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(false),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("trouble"));
+  });
+
+  it("blocks execution when blast radius limit reached", async () => {
+    const executor = { execute: vi.fn() };
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", vi.fn()]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(false),
+      makeOutcomeLinker(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("active"));
+  });
+
+  it("persists error trace when executor throws", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const traceStore = makeTraceStore();
+    const { SkillExecutionBudgetError } = await import("./types.js");
+    const executor = {
+      execute: vi.fn().mockRejectedValue(new SkillExecutionBudgetError("Exceeded 30s")),
+    };
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      traceStore,
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(traceStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "budget_exceeded",
+        error: "Exceeded 30s",
+      }),
+    );
+    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("issue"));
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("still sends response when trace persistence fails", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const traceStore = makeTraceStore();
+    traceStore.create.mockRejectedValue(new Error("DB down"));
+    const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      traceStore,
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

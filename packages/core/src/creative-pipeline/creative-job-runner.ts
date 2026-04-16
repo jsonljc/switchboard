@@ -126,7 +126,7 @@ export function createCreativeJobRunner(
       id: "creative-job-runner",
       name: "Creative Pipeline Job Runner",
       retries: 3,
-      triggers: [{ event: "creative-pipeline/job.submitted" }],
+      triggers: [{ event: "creative-pipeline/polished.submitted" }],
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
       await executeCreativePipeline(event.data, step, jobStore, llmConfig, imageConfig);

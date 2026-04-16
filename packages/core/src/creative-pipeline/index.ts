@@ -11,3 +11,39 @@ export { runStoryboardBuilder, buildStoryboardPrompt } from "./stages/storyboard
 export { DalleImageGenerator } from "./stages/image-generator.js";
 export type { ImageGenerator } from "./stages/image-generator.js";
 export { estimateCost } from "./stages/cost-estimator.js";
+export { createModeDispatcher, executeModeDispatch } from "./mode-dispatcher.js";
+export { createUgcJobRunner, executeUgcPipeline } from "./ugc/ugc-job-runner.js";
+export { shouldRequireApproval, DEFAULT_APPROVAL_CONFIG } from "./ugc/approval-config.js";
+export type { UgcPhase, ApprovalConfig } from "./ugc/approval-config.js";
+export { translateFrictions } from "./ugc/funnel-friction-translator.js";
+export { selectStructures, getStructureTemplates } from "./ugc/structure-engine.js";
+export type { StructureTemplate, StructureSelection, StructureId } from "./ugc/structure-engine.js";
+export { castCreators } from "./ugc/scene-caster.js";
+export type { CastingAssignment } from "./ugc/scene-caster.js";
+export { routeIdentityStrategy } from "./ugc/identity-strategy-router.js";
+export { executePlanningPhase } from "./ugc/phases/planning.js";
+export type { PlanningInput, PlanningOutput } from "./ugc/phases/planning.js";
+export { generateDirection } from "./ugc/ugc-director.js";
+export { buildUgcScriptPrompt, runUgcScriptWriter } from "./ugc/ugc-script-writer.js";
+export { executeScriptingPhase } from "./ugc/phases/scripting.js";
+export type { ScriptingInput, ScriptingOutput } from "./ugc/phases/scripting.js";
+export { rankProviders, getDefaultProviderRegistry } from "./ugc/provider-router.js";
+export type { RankedProvider } from "./ugc/provider-router.js";
+export {
+  evaluateRealism,
+  computeDecision,
+  computeWeightedSoftScore,
+  DEFAULT_QA_THRESHOLDS,
+} from "./ugc/realism-scorer.js";
+export type { QaThresholdConfig, RealismScorerInput } from "./ugc/realism-scorer.js";
+export { executeProductionPhase } from "./ugc/phases/production.js";
+export type { ProductionInput, ProductionOutput } from "./ugc/phases/production.js";
+export { KlingClient } from "./stages/kling-client.js";
+export { createVideoProvider } from "./ugc/video-provider.js";
+export type {
+  VideoProvider,
+  VideoGenerationRequest,
+  VideoGenerationResult,
+} from "./ugc/video-provider.js";
+export { ProviderPerformanceTracker, emptyPerformanceHistory } from "./ugc/provider-performance.js";
+export type { ProviderPerformanceHistory, PerformanceRecord } from "./ugc/provider-performance.js";

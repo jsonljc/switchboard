@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   executeWeeklyAudit,
   executeDailyCheck,
+  createWeeklyAuditDispatcher,
+  createDailyCheckDispatcher,
   type CronDependencies,
 } from "../inngest-functions.js";
 
@@ -122,5 +124,66 @@ describe("executeDailyCheck", () => {
     await executeDailyCheck(step, deps);
     expect(deps.listActiveDeployments).toHaveBeenCalledTimes(1);
     expect(deps.getDeploymentCredentials).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createWeeklyAuditDispatcher", () => {
+  it("dispatches one event per deployment", async () => {
+    const events: Array<{ name: string; data: unknown }> = [];
+    const mockStep = {
+      run: vi.fn().mockImplementation((_name: string, fn: () => unknown) => fn()),
+      sendEvent: vi.fn().mockImplementation((_id: string, event: unknown) => {
+        events.push(event as { name: string; data: unknown });
+      }),
+    };
+    const mockInngest = {
+      createFunction: vi.fn().mockImplementation((_config: unknown, handler: unknown) => handler),
+    };
+    const deps = {
+      listActiveDeployments: vi.fn().mockResolvedValue([{ id: "d1" }, { id: "d2" }]),
+    };
+
+    const handler = createWeeklyAuditDispatcher(mockInngest, deps);
+    await (handler as { step: unknown })({ step: mockStep });
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({
+      name: "skill-runtime/batch.requested",
+      data: {
+        deploymentId: "d1",
+        skillSlug: "ad-optimizer",
+        trigger: "weekly_audit",
+        scheduleName: "ad-optimizer-weekly",
+      },
+    });
+  });
+});
+
+describe("createDailyCheckDispatcher", () => {
+  it("dispatches one event per deployment with daily_check trigger", async () => {
+    const events: Array<{ name: string; data: unknown }> = [];
+    const mockStep = {
+      run: vi.fn().mockImplementation((_name: string, fn: () => unknown) => fn()),
+      sendEvent: vi.fn().mockImplementation((_id: string, event: unknown) => {
+        events.push(event as { name: string; data: unknown });
+      }),
+    };
+    const mockInngest = {
+      createFunction: vi.fn().mockImplementation((_config: unknown, handler: unknown) => handler),
+    };
+    const deps = {
+      listActiveDeployments: vi.fn().mockResolvedValue([{ id: "d1" }]),
+    };
+
+    const handler = createDailyCheckDispatcher(mockInngest, deps);
+    await (handler as { step: unknown })({ step: mockStep });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        name: "skill-runtime/batch.requested",
+        data: expect.objectContaining({ trigger: "daily_check" }),
+      }),
+    );
   });
 });

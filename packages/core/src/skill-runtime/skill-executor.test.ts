@@ -60,6 +60,8 @@ describe("SkillExecutorImpl", () => {
 
     expect(result.response).toBe("Hi there");
     expect(result.toolCalls).toHaveLength(0);
+    expect(result.trace).toBeDefined();
+    expect(result.trace.status).toBe("success");
     const callArgs = (adapter.chatWithTools as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
       system: string;
     };
@@ -129,6 +131,8 @@ describe("SkillExecutorImpl", () => {
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls[0]!.toolId).toBe("test-tool");
     expect(result.toolCalls[0]!.operation).toBe("do");
+    expect(result.trace).toBeDefined();
+    expect(result.trace.status).toBe("success");
     expect(mockTool.operations["do"]!.execute).toHaveBeenCalled();
   });
 
@@ -215,6 +219,8 @@ describe("SkillExecutorImpl", () => {
     expect(execResult.toolCalls[0]!.governanceDecision).toBe("require-approval");
     expect(execResult.toolCalls[0]!.toolId).toBe("crm-write");
     expect(execResult.toolCalls[0]!.operation).toBe("stage.update");
+    expect(execResult.trace).toBeDefined();
+    expect(execResult.trace.status).toBe("success");
   });
 
   it("handles deny governance decision", async () => {
@@ -261,6 +267,8 @@ describe("SkillExecutorImpl", () => {
     expect(dangerousTool.operations["delete"]!.execute).not.toHaveBeenCalled();
     // Record should show denied
     expect(result.toolCalls[0]!.governanceDecision).toBe("denied");
+    expect(result.trace).toBeDefined();
+    expect(result.trace.status).toBe("success");
   });
 
   it("enforces token budget", async () => {
@@ -341,4 +349,85 @@ describe("SkillExecutorImpl", () => {
       }),
     ).rejects.toThrow(SkillExecutionBudgetError);
   }, 40_000);
+
+  it("returns trace data with execution metadata", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "text", text: "Hi there" }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const executor = new SkillExecutorImpl(adapter, new Map());
+    const result = await executor.execute({
+      skill: mockSkill,
+      parameters: { NAME: "Alice" },
+      messages: [{ role: "user", content: "hello" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.trace).toBeDefined();
+    expect(result.trace.status).toBe("success");
+    expect(result.trace.turnCount).toBe(1);
+    expect(result.trace.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.trace.writeCount).toBe(0);
+    expect(result.trace.responseSummary).toBe("Hi there");
+    expect(result.trace.governanceDecisions).toEqual([]);
+  });
+
+  it("counts writes and logs governance decisions in trace data", async () => {
+    const writeTool: SkillTool = {
+      id: "crm-write",
+      operations: {
+        "stage.update": {
+          description: "update stage",
+          inputSchema: { type: "object", properties: {} },
+          governanceTier: "internal_write" as any,
+          execute: vi.fn().mockResolvedValue({ stage: "qualified" }),
+        },
+      },
+    };
+
+    const toolSkill: SkillDefinition = {
+      ...mockSkill,
+      tools: ["crm-write"],
+      body: "Update stage {{NAME}}",
+    };
+
+    const adapter = createMockAdapter([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "t1",
+            name: "crm-write.stage.update",
+            input: { stage: "qualified" },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Stage updated." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const executor = new SkillExecutorImpl(adapter, new Map([["crm-write", writeTool]]));
+    const result = await executor.execute({
+      skill: toolSkill,
+      parameters: { NAME: "X" },
+      messages: [{ role: "user", content: "update" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.trace.writeCount).toBe(1);
+    expect(result.trace.governanceDecisions).toHaveLength(1);
+    expect(result.trace.governanceDecisions[0]!.tier).toBe("internal_write");
+  });
 });

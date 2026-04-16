@@ -95,6 +95,19 @@ export interface DraftFAQ {
   createdAt: string;
 }
 
+export interface ExecutionTraceSummary {
+  id: string;
+  skillSlug: string;
+  status: string;
+  durationMs: number;
+  turnCount: number;
+  writeCount: number;
+  responseSummary: string;
+  linkedOutcomeType?: string;
+  linkedOutcomeResult?: string;
+  createdAt: string;
+}
+
 export class SwitchboardClient extends SwitchboardClientBase {
   // Token Usage
   async getTokenUsage(params?: { period?: string }) {
@@ -624,6 +637,16 @@ export class SwitchboardClient extends SwitchboardClientBase {
         method: "POST",
         body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
       },
+    );
+  }
+
+  async listTraces(deploymentId: string, opts?: { limit?: number; cursor?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.cursor) params.set("cursor", opts.cursor);
+    const qs = params.toString();
+    return this.request<{ traces: ExecutionTraceSummary[]; nextCursor?: string }>(
+      `/api/marketplace/deployments/${deploymentId}/traces${qs ? `?${qs}` : ""}`,
     );
   }
 }

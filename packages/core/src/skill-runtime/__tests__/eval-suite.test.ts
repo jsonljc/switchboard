@@ -180,12 +180,57 @@ function createMockTools(): Map<string, SkillTool> {
       },
     },
   });
+  tools.set("ads-analytics", {
+    id: "ads-analytics",
+    operations: {
+      diagnose: {
+        description: "Diagnose performance issues",
+        inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
+        execute: async () => ({ diagnoses: [] }),
+      },
+      "compare-periods": {
+        description: "Compare current vs previous period metrics",
+        inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
+        execute: async () => ({ deltas: [] }),
+      },
+      "analyze-funnel": {
+        description: "Analyze conversion funnel",
+        inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
+        execute: async () => ({
+          stages: [],
+          leakagePoint: "Clicks",
+          leakageMagnitude: 0,
+        }),
+      },
+      "check-learning-phase": {
+        description: "Check if campaign is in learning phase",
+        inputSchema: { type: "object", properties: {} },
+        governanceTier: "read" as const,
+        execute: async () => ({
+          campaignId: "c1",
+          inLearning: false,
+          daysSinceChange: 14,
+          eventsAccumulated: 100,
+          eventsRequired: 50,
+          estimatedExitDate: null,
+        }),
+      },
+    },
+  });
   return tools;
 }
 
 async function runFixture(fixtureName: string): Promise<void> {
   const fixture = loadFixture(fixtureName);
-  const skillName = fixtureName.startsWith("wp-") ? "website-profiler" : "sales-pipeline";
+  let skillName = "sales-pipeline";
+  if (fixtureName.startsWith("wp-")) {
+    skillName = "website-profiler";
+  } else if (fixtureName.startsWith("ao-")) {
+    skillName = "ad-optimizer";
+  }
   const skill = loadSkill(skillName, join(REPO_ROOT, "skills"));
   const adapter = createMockAdapter(fixture);
   const tools = createMockTools();

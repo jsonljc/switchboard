@@ -27,6 +27,10 @@ export interface CronDependencies {
 
 interface StepTools {
   run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
+  sendEvent: (
+    stepId: string,
+    event: { name: string; data: Record<string, unknown> },
+  ) => Promise<void>;
 }
 
 function getWeeklyDateRanges() {
@@ -116,6 +120,65 @@ export function createDailyCheckCron(deps: CronDependencies) {
     },
     async ({ step }) => {
       await executeDailyCheck(step as StepTools, deps);
+    },
+  );
+}
+
+// Thin Dispatcher Functions — emit one event per deployment
+
+interface DispatchDependencies {
+  listActiveDeployments: () => Promise<Array<{ id: string }>>;
+}
+
+interface InngestLike {
+  createFunction(config: { id: string; triggers: unknown[] }, handler: unknown): unknown;
+}
+
+export function createWeeklyAuditDispatcher(
+  inngestClient: InngestLike,
+  deps: DispatchDependencies,
+) {
+  return inngestClient.createFunction(
+    { id: "ad-optimizer-weekly-dispatch", triggers: [{ cron: "0 6 * * 1" }] },
+    async ({ step }: { step: StepTools }) => {
+      const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
+
+      for (const deployment of deployments) {
+        await step.sendEvent(`dispatch-${deployment.id}`, {
+          name: "skill-runtime/batch.requested",
+          data: {
+            deploymentId: deployment.id,
+            skillSlug: "ad-optimizer",
+            trigger: "weekly_audit",
+            scheduleName: "ad-optimizer-weekly",
+          },
+        });
+      }
+
+      return { dispatched: deployments.length };
+    },
+  );
+}
+
+export function createDailyCheckDispatcher(inngestClient: InngestLike, deps: DispatchDependencies) {
+  return inngestClient.createFunction(
+    { id: "ad-optimizer-daily-dispatch", triggers: [{ cron: "0 8 * * *" }] },
+    async ({ step }: { step: StepTools }) => {
+      const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
+
+      for (const deployment of deployments) {
+        await step.sendEvent(`dispatch-${deployment.id}`, {
+          name: "skill-runtime/batch.requested",
+          data: {
+            deploymentId: deployment.id,
+            skillSlug: "ad-optimizer",
+            trigger: "daily_check",
+            scheduleName: "ad-optimizer-daily",
+          },
+        });
+      }
+
+      return { dispatched: deployments.length };
     },
   );
 }
