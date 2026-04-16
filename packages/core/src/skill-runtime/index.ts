@@ -16,11 +16,30 @@ export {
   createCrmWriteTool,
   createPipelineHandoffTool,
   createWebScannerTool,
+  createAdsAnalyticsTool,
+  createAdsDataTool,
 } from "./tools/index.js";
 export { salesPipelineBuilder, websiteProfilerBuilder } from "./builders/index.js";
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
+
+// Batch execution
+export { BatchSkillHandler } from "./batch-skill-handler.js";
+export type { BatchExecutionResult } from "./batch-skill-handler.js";
+export { validateBatchSkillResult } from "./batch-types.js";
+export type {
+  BatchContextRequirement,
+  BatchContextContract,
+  BatchSkillResult,
+  BatchExecutionConfig,
+  BatchParameterBuilder,
+  BatchSkillStores,
+  BatchRecommendation,
+  BatchProposedWrite,
+} from "./batch-types.js";
+export { adOptimizerBuilder, AD_OPTIMIZER_CONTRACT } from "./builders/index.js";
+export { createBatchExecutorFunction } from "./batch-executor-function.js";
 
 // Types
 export type {
