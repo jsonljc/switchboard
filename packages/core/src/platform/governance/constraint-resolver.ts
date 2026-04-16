@@ -31,9 +31,11 @@ export const DEFAULT_CONSTRAINTS: ExecutionConstraints = {
   trustLevel: "guided",
 };
 
+export type ConstraintOverrides = Partial<ExecutionConstraints>;
+
 export function resolveConstraints(
   registration: IntentRegistration,
-  overrides?: Partial<ExecutionConstraints>,
+  overrides?: ConstraintOverrides,
 ): ExecutionConstraints {
   return {
     allowedModelTiers: overrides?.allowedModelTiers ?? BUDGET_MODEL_TIERS[registration.budgetClass],

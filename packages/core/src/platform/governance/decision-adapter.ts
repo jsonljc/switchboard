@@ -33,7 +33,7 @@ export function toGovernanceDecision(
   return {
     outcome: "execute",
     riskScore,
-    budgetProfile: "standard",
+    budgetProfile: riskScore <= 20 ? "cheap" : riskScore <= 60 ? "standard" : "expensive",
     constraints,
     matchedPolicies,
   };

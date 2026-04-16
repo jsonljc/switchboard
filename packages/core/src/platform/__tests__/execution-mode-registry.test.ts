@@ -35,11 +35,6 @@ const defaultConstraints: ExecutionConstraints = {
 describe("ExecutionModeRegistry", () => {
   it("registers and dispatches to a mode", async () => {
     const registry = new ExecutionModeRegistry();
-    const mockExecute = vi.fn<
-      [WorkUnit, ExecutionConstraints, { traceId: string; governanceDecision: unknown }],
-      Promise<ExecutionResult>
-    >();
-
     const expectedResult: ExecutionResult = {
       workUnitId: "wu-1",
       outcome: "completed",
@@ -50,7 +45,7 @@ describe("ExecutionModeRegistry", () => {
       traceId: "trace-1",
     };
 
-    mockExecute.mockResolvedValue(expectedResult);
+    const mockExecute = vi.fn().mockResolvedValue(expectedResult);
 
     const skillMode: ExecutionMode = {
       name: "skill",
