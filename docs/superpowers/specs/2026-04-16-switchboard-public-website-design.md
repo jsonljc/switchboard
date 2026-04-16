@@ -14,6 +14,50 @@ CTA is "Get early access" (pre-launch waitlist). The deploy flow ships later onc
 
 ---
 
+## Visual Direction
+
+**Inspired by Claude-style product design: warm, playful, editorial, human.**
+
+The site should feel intelligent and optimistic — not an enterprise SaaS dashboard, not a heavy operator tool. The tone is closer to a thoughtful product studio than a compliance platform.
+
+**Mood:** Soft, confident, characterful. Like someone who knows what they're doing but doesn't need to prove it.
+
+**What to avoid:**
+
+- Heavy operator/infra framing ("audit ledger," "governance layer," "trust threshold" as dominant visual language)
+- Hard enterprise grid layouts — 4-column tables, dense feature checklists, rigid strips
+- Dark hero as the primary visual statement — use light or very soft dark, not "terminal operator mode"
+- Clutter and internal-tool chrome
+
+**What to lean into:**
+
+- Warm off-white / cream base — soft, breathable, inviting
+- Editorial typography used expressively: oversized Cormorant headlines, asymmetric line breaks, italic accents with charm not just emphasis
+- Soft shapes and abstract illustration moments — not mascots, not cartoon startup. Gentle geometric forms, color washes, product metaphors
+- Amber used sparingly as a warm accent, not a dominant brand hammer
+- More breathing room — generous whitespace, staged reveals, guided discovery
+- Governance and trust framed as **reassurance**, not compliance theater: "it starts careful and earns confidence" not "audit trails and thresholds"
+- Agent cards that feel **curated and characterful**, not database-driven
+- Motion that is gentle and charming — staggered CSS fade-ins, subtle floats, no jarring transitions
+
+**Typography intent:** Cormorant Garamond for display used at scale (5–7rem) with personality — line breaks that feel like breathing, not paragraph formatting. Inter body kept clean and light.
+
+**Color principles:**
+
+- Base: warm off-white / cream (existing parchment vars are fine)
+- Hero: light or very-soft tinted background — not full dark. A pale amber wash or soft cream-to-white gradient is preferable to black.
+- Accent: amber used at most in 1–2 moments per page — CTA button, key emphasis word, pulse dot
+- Supporting palette: soft blues, warm greens, and muted rose can appear in agent role colors — follow existing character color system
+
+**Illustration / visual language:**
+
+- Abstract product illustrations: soft gradient shapes, overlapping circles, gentle line art suggesting connection and flow
+- The "switchboard" metaphor can appear as subtle connection lines, node clusters, or routing paths — decorative, not diagrammatic
+- Agent cards can have a small visual "character" element (the existing OperatorCharacter system) that gives them personality
+- Trust progression: visual steps or a soft ladder/arc — not a bar chart or threshold table
+
+---
+
 ## Technical Architecture
 
 **Location:** `apps/dashboard/src/app/(public)/` — existing route group, no new app needed.
@@ -36,15 +80,15 @@ CTA is "Get early access" (pre-launch waitlist). The deploy flow ships later onc
 
 #### Sections (top to bottom)
 
-**Hero** — Dark section (`.dark` wrapper), full-screen-ish height
+**Hero** — Light, soft, warm — NOT dark. Cream or pale amber-wash background.
 
-- Eyebrow: "AI Agent Marketplace" with amber pulse dot
-- Headline (Cormorant, ~6rem): "Your AI sales team, ready in minutes." — word "ready in minutes" in italic amber
+- Eyebrow: "AI Agent Marketplace" with small amber pulse dot — understated
+- Headline (Cormorant, ~6–7rem, light weight): "Your AI sales team, ready in minutes." — "ready in minutes" in italic, slightly warm-accented. Let the Cormorant scale and weight do the work.
 - Subhead: "Browse AI agents built for growth. Deploy to WhatsApp, Telegram, or your website. They qualify leads, book calls, and earn your trust over time."
 - CTA: "Get early access" (amber pill button) + "Browse agents →" (ghost link)
-- Social proof line: "Join 200+ businesses on the early access list"
-- Background: dot-grid radial-gradient at low opacity + subtle amber ambient glow
-- Bottom: gradient fade to parchment background (seamless transition to next section)
+- Social proof line: "Join 200+ businesses on the early access list" — small, muted
+- Background: soft warm gradient (cream → white, or pale amber wash). Add an abstract illustration or soft geometric shapes (overlapping circles, gentle curves) as a decorative right-side visual moment — no dot-grid, no dark mode.
+- Feel: like opening a well-designed book. Inviting and confident, not a terminal or dashboard.
 
 **Problem / Solution strip** — 3 columns, icon-driven
 
@@ -137,18 +181,22 @@ Act 3 — **Earn trust**
 
 - "Every agent starts on Free. As it proves reliability, safety, and performance, it unlocks higher trust tiers with more autonomy."
 
-**Tier table** — 4 columns: Free, Basic, Pro, Elite
+**Tier progression** — 4 stages: Free, Basic, Pro, Elite
 
-Each column shows:
+**Do not use a hard comparison table.** Render as 4 soft cards or progression blocks arranged horizontally (or in a 2×2 on mobile). Each card feels like a stage of confidence, not a plan grid.
 
-1. Tier name
-2. Price / month
-3. Trust score threshold (e.g., "Unlocks at 40+ trust")
-4. Autonomy level (e.g., "Supervised", "Semi-autonomous", "Autonomous", "Fully autonomous")
-5. Example permissions / operating range (3-4 bullets — what the agent can do independently at this tier)
+Each card shows:
+
+1. Tier name (smaller, secondary)
+2. Price / month (placeholder values — mark as `[TBD]` in implementation)
+3. Trust score threshold (e.g., "Unlocks at 40+ trust") — **most visually prominent element**
+4. Autonomy level (e.g., "Supervised → Semi-autonomous") — second most prominent
+5. 2–3 short capability lines (what the agent can do at this stage)
 6. CTA button
 
-The **unlock mechanic and autonomy level are visually more prominent than the tier name**. The table is not a feature checklist — it's a trust progression story.
+Visual style: soft card backgrounds (slightly different tones — cream, warm gray, soft amber tint for highest tier). Gentle progression arrow or connecting line between cards to reinforce "this is a journey, not a plan selector."
+
+The pricing page should feel like a trust story, not a spreadsheet.
 
 **Differentiator strip** (below table)
 
@@ -186,7 +234,15 @@ The **unlock mechanic and autonomy level are visually more prominent than the ti
 
 ### 5. Agent Profile (`/agents/[slug]`)
 
-Existing route at `(public)/agents/[slug]`. Check what's there and update or replace to match the marketing structure below. The existing page may have dashboard-internal framing that needs to be stripped.
+Existing route at `(public)/agents/[slug]`. Check what's there and update or replace. The existing page may have dashboard-internal framing that must be stripped.
+
+**Tone rules for agent profile pages:**
+
+- No auth-era chrome (no "manage deployment" buttons, no internal status indicators)
+- No operational jargon ("task queue," "approval posture," "autonomy level label") as primary UI — this is a product page, not an admin view
+- Must read like a **product page**: what this agent does for you, how it works, what you get
+- Governance/trust framing appears as reassurance ("starts supervised, earns autonomy") — not compliance language
+- Warm, specific, outcome-led — describe what a business owner experiences, not what the system does internally
 
 **Sections:**
 
@@ -210,18 +266,31 @@ Data: `AgentListing` model, slug-based lookup.
 - Headline: "Get early access"
 - Subhead: "We're onboarding businesses one by one. We review every request personally and follow up with next steps."
 - Two-column layout:
-  - Left: email input + "Join waitlist" button
-  - Right: one representative agent card (Speed-to-Lead) — makes the outcome concrete
+  - Left: email input + "Join waitlist" button (soft amber, not aggressive)
+  - Right: one representative agent card (Speed-to-Lead) with OperatorCharacter visual — warm, characterful, concrete
 - Trust signals below form (pre-launch appropriate):
   - "No credit card required"
   - "Early onboarding support included"
   - "We'll reach out when your access opens"
 - No nav clutter — stripped-back layout
+- **Tone:** "Come in" — welcoming and calm, not lead-capture transactional. The page should feel like an invitation, not a form.
 
-**State B: Post-launch**
+**State B: Post-launch** (`NEXT_PUBLIC_LAUNCH_MODE=live`)
 
-- Same layout, CTA changes to "Create account" or "Book a demo"
+- Same layout structure
+- CTA label changes: "Join waitlist" → "Create account"
+- Form action: POST to waitlist API → redirect to auth signup
 - Trust signals update to: "No credit card required", "Cancel anytime", "Onboarding support included"
+- "Sign in" link becomes more prominent (existing users returning)
+
+**Launch-mode diff summary:**
+
+| Element       | waitlist mode        | live mode                        |
+| ------------- | -------------------- | -------------------------------- |
+| CTA label     | "Join waitlist"      | "Create account"                 |
+| Form action   | POST `/api/waitlist` | Redirect to `/login?signup=true` |
+| Trust signals | waitlist-appropriate | subscription-appropriate         |
+| Right panel   | agent card (preview) | agent card (same)                |
 
 **Lead quality (optional):** small qualifier line: "Best for service businesses using chat, leads, or inbound sales." Not a required field — just sets expectations.
 
