@@ -37,6 +37,7 @@ export interface SkillDefinition {
   output?: { fields: OutputFieldDeclaration[] };
   context: ContextRequirement[];
   minimumModelTier?: ModelSlot;
+  intent?: string;
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";

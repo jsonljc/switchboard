@@ -34,6 +34,7 @@ const SkillFrontmatterSchema = z.object({
   parameters: z.array(ParameterDeclarationSchema),
   tools: z.array(z.string()),
   minimumModelTier: z.enum(["default", "premium", "critical"]).optional(),
+  intent: z.string().optional(),
   output: z
     .object({
       fields: z.array(OutputFieldSchema),
@@ -185,5 +186,6 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
     output: frontmatter.output,
     context,
     minimumModelTier: frontmatter.minimumModelTier,
+    intent: frontmatter.intent,
   };
 }

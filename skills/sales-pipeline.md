@@ -1,6 +1,7 @@
 ---
 name: sales-pipeline
 slug: sales-pipeline
+intent: sales-pipeline.run
 version: 1.0.0
 description: >
   Qualifies new leads, closes qualified leads, and re-engages dormant leads

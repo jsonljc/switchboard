@@ -1,6 +1,7 @@
 ---
 name: website-profiler
 slug: website-profiler
+intent: website-profiler.run
 version: 1.0.0
 description: >
   Profiles a business from its website — extracts factual data, classifies

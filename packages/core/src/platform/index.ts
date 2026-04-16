@@ -28,10 +28,16 @@ export type { ExecutionContext, ExecutionMode } from "./execution-context.js";
 
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
+export { buildWorkTrace } from "./work-trace-recorder.js";
+export type { TraceInput, WorkTraceStore } from "./work-trace-recorder.js";
 
 // Errors
 export type { IngressError } from "./ingress-error.js";
 export { isIngressError } from "./ingress-error.js";
+
+// Platform Ingress
+export { PlatformIngress } from "./platform-ingress.js";
+export type { PlatformIngressConfig, SubmitWorkResponse } from "./platform-ingress.js";
 
 // Registries
 export { IntentRegistry } from "./intent-registry.js";
@@ -41,3 +47,18 @@ export { ExecutionModeRegistry } from "./execution-mode-registry.js";
 export { GovernanceGate } from "./governance/index.js";
 export type { GovernanceGateDeps, ConstraintOverrides } from "./governance/index.js";
 export { resolveConstraints, DEFAULT_CONSTRAINTS } from "./governance/index.js";
+
+// Modes
+export { SkillMode } from "./modes/index.js";
+export type { SkillModeConfig } from "./modes/index.js";
+export { CartridgeMode } from "./modes/index.js";
+export type { CartridgeModeConfig } from "./modes/index.js";
+export { PipelineMode } from "./modes/index.js";
+export type { PipelineModeConfig, PipelineEventSender } from "./modes/index.js";
+
+// Registrars
+export { registerSkillIntents } from "./skill-intent-registrar.js";
+export { registerCartridgeIntents } from "./cartridge-intent-registrar.js";
+export type { CartridgeManifestForRegistration } from "./cartridge-intent-registrar.js";
+export { registerPipelineIntents } from "./pipeline-intent-registrar.js";
+export type { PipelineDefinition } from "./pipeline-intent-registrar.js";
