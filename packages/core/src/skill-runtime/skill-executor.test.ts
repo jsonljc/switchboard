@@ -3,6 +3,7 @@ import { SkillExecutorImpl } from "./skill-executor.js";
 import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
 import type { SkillDefinition, SkillTool } from "./types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
+import { GovernanceHook } from "./hooks/governance-hook.js";
 
 const mockSkill: SkillDefinition = {
   name: "test",
@@ -205,7 +206,10 @@ describe("SkillExecutorImpl", () => {
       },
     ]);
 
-    const executor = new SkillExecutorImpl(adapter, new Map([["crm-write", mockTool]]));
+    const toolMap = new Map([["crm-write", mockTool]]);
+    const executor = new SkillExecutorImpl(adapter, toolMap, undefined, [
+      new GovernanceHook(toolMap),
+    ]);
 
     const execResult = await executor.execute({
       skill: toolSkill,
@@ -253,7 +257,10 @@ describe("SkillExecutorImpl", () => {
       },
     ]);
 
-    const executor = new SkillExecutorImpl(adapter, new Map([["dangerous-tool", dangerousTool]]));
+    const toolMap = new Map([["dangerous-tool", dangerousTool]]);
+    const executor = new SkillExecutorImpl(adapter, toolMap, undefined, [
+      new GovernanceHook(toolMap),
+    ]);
     const result = await executor.execute({
       skill: toolSkill,
       parameters: { NAME: "X" },
@@ -416,7 +423,10 @@ describe("SkillExecutorImpl", () => {
       },
     ]);
 
-    const executor = new SkillExecutorImpl(adapter, new Map([["crm-write", writeTool]]));
+    const toolMap = new Map([["crm-write", writeTool]]);
+    const executor = new SkillExecutorImpl(adapter, toolMap, undefined, [
+      new GovernanceHook(toolMap),
+    ]);
     const result = await executor.execute({
       skill: toolSkill,
       parameters: { NAME: "X" },

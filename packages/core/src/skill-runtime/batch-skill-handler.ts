@@ -1,4 +1,10 @@
-import type { SkillDefinition, SkillExecutor, SkillExecutionTrace, SkillTool } from "./types.js";
+import type {
+  SkillDefinition,
+  SkillExecutor,
+  SkillTool,
+  SkillHook,
+  SkillHookContext,
+} from "./types.js";
 import type {
   BatchParameterBuilder,
   BatchSkillStores,
@@ -9,17 +15,9 @@ import type {
 import { validateBatchSkillResult } from "./batch-types.js";
 import { getToolGovernanceDecision } from "./governance.js";
 import type { TrustLevel } from "./governance.js";
-import type { CircuitBreaker } from "./circuit-breaker.js";
-import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
-import type { OutcomeLinker } from "./outcome-linker.js";
 import type { ContextResolverImpl } from "./context-resolver.js";
 import { ContextResolutionError } from "./types.js";
-import { createId } from "@paralleldrive/cuid2";
-import { createHash } from "node:crypto";
-
-interface ExecutionTraceStore {
-  create(trace: SkillExecutionTrace): Promise<void>;
-}
+import { runBeforeSkillHooks, runAfterSkillHooks, runOnErrorHooks } from "./hook-runner.js";
 
 interface BatchSkillHandlerConfig {
   skill: SkillDefinition;
@@ -30,10 +28,7 @@ interface BatchSkillHandlerConfig {
   tools: Map<string, SkillTool>;
   trustLevel: TrustLevel;
   trustScore: number;
-  traceStore: ExecutionTraceStore;
-  circuitBreaker: CircuitBreaker;
-  blastRadiusLimiter: BlastRadiusLimiter;
-  outcomeLinker: OutcomeLinker;
+  hooks: SkillHook[];
   contextResolver: { resolve: ContextResolverImpl["resolve"] };
 }
 
@@ -41,37 +36,37 @@ export interface BatchExecutionResult extends BatchSkillResult {
   executedWrites: number;
   deniedWrites: number;
   pendingApprovalWrites: number;
-  traceId: string;
-}
-
-function hashParameters(params: Record<string, unknown>): string {
-  const sorted = JSON.stringify(params, Object.keys(params).sort());
-  return createHash("sha256").update(sorted).digest("hex");
 }
 
 export class BatchSkillHandler {
   constructor(private config: BatchSkillHandlerConfig) {}
 
   async execute(execConfig: BatchExecutionConfig): Promise<BatchExecutionResult> {
-    // 1. Safety gates
-    const cbResult = await this.config.circuitBreaker.check(execConfig.deploymentId);
-    if (!cbResult.allowed) {
-      throw new Error(`Circuit breaker tripped for ${execConfig.deploymentId}: ${cbResult.reason}`);
+    // 1. Build hook context
+    const hookContext: SkillHookContext = {
+      deploymentId: execConfig.deploymentId,
+      orgId: execConfig.orgId,
+      skillSlug: this.config.skill.slug,
+      skillVersion: this.config.skill.version,
+      sessionId: execConfig.trigger,
+      trustLevel: this.config.trustLevel,
+      trustScore: this.config.trustScore,
+    };
+
+    // 2. Run beforeSkill hooks (circuit breaker, blast radius)
+    const beforeResult = await runBeforeSkillHooks(this.config.hooks, hookContext);
+    if (!beforeResult.proceed) {
+      throw new Error(`Batch skill blocked: ${beforeResult.reason}`);
     }
 
-    const brResult = await this.config.blastRadiusLimiter.check(execConfig.deploymentId);
-    if (!brResult.allowed) {
-      throw new Error(`Blast radius limit for ${execConfig.deploymentId}: ${brResult.reason}`);
-    }
-
-    // 2. Load context via builder
+    // 3. Load context via builder
     const parameters = await this.config.builder(
       execConfig,
       this.config.stores,
       this.config.contract,
     );
 
-    // Resolve curated knowledge context
+    // 4. Resolve curated knowledge context
     let contextVariables: Record<string, string> = {};
     try {
       const resolved = await this.config.contextResolver.resolve(
@@ -89,18 +84,24 @@ export class BatchSkillHandler {
     }
     const mergedParameters = { ...parameters, ...contextVariables };
 
-    // 3. Run skill via executor
-    const executionResult = await this.config.executor.execute({
-      skill: this.config.skill,
-      parameters: mergedParameters,
-      messages: [{ role: "user", content: `Execute batch: ${execConfig.trigger}` }],
-      deploymentId: execConfig.deploymentId,
-      orgId: execConfig.orgId,
-      trustScore: this.config.trustScore,
-      trustLevel: this.config.trustLevel,
-    });
+    // 5. Run skill via executor
+    let executionResult;
+    try {
+      executionResult = await this.config.executor.execute({
+        skill: this.config.skill,
+        parameters: mergedParameters,
+        messages: [{ role: "user", content: `Execute batch: ${execConfig.trigger}` }],
+        deploymentId: execConfig.deploymentId,
+        orgId: execConfig.orgId,
+        trustScore: this.config.trustScore,
+        trustLevel: this.config.trustLevel,
+      });
+    } catch (err) {
+      await runOnErrorHooks(this.config.hooks, hookContext, err as Error);
+      throw err;
+    }
 
-    // 4. Parse structured result
+    // 6. Parse structured result
     let batchResult: BatchSkillResult;
     try {
       const parsed = JSON.parse(executionResult.response);
@@ -114,7 +115,7 @@ export class BatchSkillHandler {
       };
     }
 
-    // 5. Route proposed writes through governance — sequentially
+    // 7. Route proposed writes through governance — sequentially (KEEP INLINE)
     let executedWrites = 0;
     let deniedWrites = 0;
     let pendingApprovalWrites = 0;
@@ -148,34 +149,11 @@ export class BatchSkillHandler {
       }
     }
 
-    // 6. Assemble + persist trace
-    const traceId = createId();
-    const trace: SkillExecutionTrace = {
-      id: traceId,
-      deploymentId: execConfig.deploymentId,
-      organizationId: execConfig.orgId,
-      skillSlug: this.config.skill.slug,
-      skillVersion: this.config.skill.version,
-      trigger: "batch_job",
-      sessionId: execConfig.trigger,
-      inputParametersHash: hashParameters(mergedParameters),
-      toolCalls: executionResult.toolCalls,
-      governanceDecisions: executionResult.trace.governanceDecisions,
-      tokenUsage: executionResult.tokenUsage,
-      durationMs: executionResult.trace.durationMs,
-      turnCount: executionResult.trace.turnCount,
-      status: writeError ? "error" : executionResult.trace.status,
-      error: writeError ?? executionResult.trace.error,
-      responseSummary: batchResult.summary.slice(0, 500),
-      writeCount: executedWrites,
-      createdAt: new Date(),
-    };
-
-    try {
-      await this.config.traceStore.create(trace);
-      await this.config.outcomeLinker.linkFromToolCalls(traceId, executionResult.toolCalls);
-    } catch (err) {
-      console.error(`Batch trace persistence failed for ${traceId}:`, err);
+    // 8. Run afterSkill hooks (trace persistence, outcome linking)
+    if (writeError) {
+      await runOnErrorHooks(this.config.hooks, hookContext, new Error(writeError));
+    } else {
+      await runAfterSkillHooks(this.config.hooks, hookContext, executionResult);
     }
 
     return {
@@ -183,7 +161,6 @@ export class BatchSkillHandler {
       executedWrites,
       deniedWrites,
       pendingApprovalWrites,
-      traceId,
     };
   }
 }

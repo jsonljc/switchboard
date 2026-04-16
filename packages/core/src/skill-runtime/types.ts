@@ -6,6 +6,20 @@ import type {
   GovernanceLogEntry,
 } from "./governance.js";
 import type { ContextRequirement } from "@switchboard/schemas";
+import type { ModelSlot } from "../model-router.js";
+
+// ---------------------------------------------------------------------------
+// Model Routing (SP6 Phase 1)
+// ---------------------------------------------------------------------------
+
+/** Concrete model selection resolved by ModelRouter — skills never see this directly. */
+export interface ResolvedModelProfile {
+  /** Concrete model ID from ModelConfig.modelId */
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  timeoutMs: number;
+}
 
 // ---------------------------------------------------------------------------
 // Skill Definition (output of loader)
@@ -22,6 +36,7 @@ export interface SkillDefinition {
   body: string;
   output?: { fields: OutputFieldDeclaration[] };
   context: ContextRequirement[];
+  minimumModelTier?: ModelSlot;
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";
@@ -137,6 +152,97 @@ export interface SkillToolOperation {
 export interface SkillExecutor {
   execute(params: SkillExecutionParams): Promise<SkillExecutionResult>;
 }
+
+// ---------------------------------------------------------------------------
+// Skill Hooks (SP6 Phase 2)
+// ---------------------------------------------------------------------------
+
+export interface SkillHookContext {
+  deploymentId: string;
+  orgId: string;
+  skillSlug: string;
+  skillVersion: string;
+  sessionId: string;
+  trustLevel: "supervised" | "guided" | "autonomous";
+  trustScore: number;
+}
+
+export interface LlmCallContext {
+  turnCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  elapsedMs: number;
+  profile?: ResolvedModelProfile;
+}
+
+export interface LlmResponse {
+  content: unknown[];
+  stopReason: "end_turn" | "tool_use" | "max_tokens";
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+export interface ToolCallContext {
+  toolId: string;
+  operation: string;
+  params: unknown;
+  governanceTier: GovernanceTier;
+  trustLevel: "supervised" | "guided" | "autonomous";
+}
+
+export interface HookResult {
+  proceed: boolean;
+  reason?: string;
+  /** When a hook blocks a tool call, this distinguishes deny from pending_approval. */
+  decision?: "denied" | "pending_approval";
+}
+
+export interface LlmHookResult extends HookResult {
+  ctx?: LlmCallContext;
+}
+
+export interface SkillHook {
+  name: string;
+  beforeSkill?(ctx: SkillHookContext): Promise<HookResult>;
+  afterSkill?(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>;
+  beforeLlmCall?(ctx: LlmCallContext): Promise<LlmHookResult>;
+  afterLlmCall?(ctx: LlmCallContext, response: LlmResponse): Promise<void>;
+  beforeToolCall?(ctx: ToolCallContext): Promise<HookResult>;
+  afterToolCall?(ctx: ToolCallContext, result: unknown): Promise<void>;
+  onError?(ctx: SkillHookContext, error: Error): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime Policy (SP6 Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface SkillRuntimePolicy {
+  allowedModelTiers: ModelSlot[];
+  minimumModelTier?: ModelSlot;
+  maxToolCalls: number;
+  maxLlmTurns: number;
+  maxTotalTokens: number;
+  maxRuntimeMs: number;
+  maxWritesPerExecution: number;
+  maxWritesPerHour: number;
+  trustLevel: "supervised" | "guided" | "autonomous";
+  writeApprovalRequired: boolean;
+  circuitBreakerThreshold: number;
+  maxConcurrentExecutions: number;
+}
+
+export const DEFAULT_SKILL_RUNTIME_POLICY: SkillRuntimePolicy = {
+  allowedModelTiers: ["default", "premium", "critical"],
+  maxToolCalls: 5,
+  maxLlmTurns: 6,
+  maxTotalTokens: 64_000,
+  maxRuntimeMs: 30_000,
+  maxWritesPerExecution: 5,
+  maxWritesPerHour: 20,
+  trustLevel: "guided",
+  writeApprovalRequired: false,
+  circuitBreakerThreshold: 5,
+  maxConcurrentExecutions: 3,
+};
 
 // ---------------------------------------------------------------------------
 // Errors
