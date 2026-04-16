@@ -5,16 +5,23 @@ import type {
   SkillExecutor,
   ToolCallRecord,
   SkillTool,
+  SkillHook,
   ResolvedModelProfile,
 } from "./types.js";
 import { SkillExecutionBudgetError } from "./types.js";
-import { getToolGovernanceDecision, mapDecisionToOutcome } from "./governance.js";
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
+import { GovernanceHook } from "./hooks/governance-hook.js";
+import {
+  runBeforeLlmCallHooks,
+  runAfterLlmCallHooks,
+  runBeforeToolCallHooks,
+  runAfterToolCallHooks,
+} from "./hook-runner.js";
 
 const MAX_TOOL_CALLS = 5;
 const MAX_LLM_TURNS = 6;
@@ -26,22 +33,24 @@ export class SkillExecutorImpl implements SkillExecutor {
     private adapter: ToolCallingAdapter,
     private tools: Map<string, SkillTool>,
     private router?: ModelRouter,
+    private hooks: SkillHook[] = [],
   ) {}
 
   private resolveProfile(
     params: SkillExecutionParams,
     turnCount: number,
     toolCallRecords: ToolCallRecord[],
-    governanceLogs: GovernanceLogEntry[],
+    governanceHook?: GovernanceHook,
   ): ResolvedModelProfile | undefined {
     if (!this.router) return undefined;
 
+    const logs: GovernanceLogEntry[] = governanceHook?.getGovernanceLogs() ?? [];
     const tierCtx = buildTierContext({
       turnCount: turnCount - 1,
       declaredToolIds: params.skill.tools,
       tools: this.tools,
       previousTurnHadToolUse: turnCount > 1 && toolCallRecords.length > 0,
-      previousTurnEscalated: governanceLogs.some(
+      previousTurnEscalated: logs.some(
         (log) => log.decision === "require-approval" || log.decision === "deny",
       ),
       minimumModelTier: params.skill.minimumModelTier,
@@ -57,6 +66,10 @@ export class SkillExecutorImpl implements SkillExecutor {
   }
 
   async execute(params: SkillExecutionParams): Promise<SkillExecutionResult> {
+    const governanceHook = this.hooks.find((h): h is GovernanceHook => h.name === "governance") as
+      | GovernanceHook
+      | undefined;
+
     const interpolated = interpolate(params.skill.body, params.parameters, params.skill.parameters);
 
     const system = `${interpolated}\n\n${getGovernanceConstraints()}`;
@@ -73,12 +86,24 @@ export class SkillExecutorImpl implements SkillExecutor {
     let totalOutputTokens = 0;
     let turnCount = 0;
     const startTime = Date.now();
-    const governanceLogs: GovernanceLogEntry[] = [];
 
     while (turnCount < MAX_LLM_TURNS) {
       turnCount++;
 
-      const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceLogs);
+      const profile = this.resolveProfile(params, turnCount, toolCallRecords, governanceHook);
+
+      const llmCtx = {
+        turnCount,
+        totalInputTokens,
+        totalOutputTokens,
+        elapsedMs: Date.now() - startTime,
+        profile,
+      };
+      const hookResult = await runBeforeLlmCallHooks(this.hooks, llmCtx);
+      if (!hookResult.proceed) {
+        throw new SkillExecutionBudgetError(hookResult.reason ?? "Aborted by hook");
+      }
+      const resolvedCtx = hookResult.ctx ?? llmCtx;
 
       const remainingMs = MAX_RUNTIME_MS - (Date.now() - startTime);
       if (remainingMs <= 0) {
@@ -111,6 +136,12 @@ export class SkillExecutorImpl implements SkillExecutor {
         );
       }
 
+      await runAfterLlmCallHooks(this.hooks, resolvedCtx, {
+        content: response.content,
+        stopReason: response.stopReason,
+        usage: response.usage,
+      });
+
       if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
         const responseText = response.content
           .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -134,7 +165,7 @@ export class SkillExecutorImpl implements SkillExecutor {
                 opDef?.governanceTier === "external_write"
               );
             }).length,
-            governanceDecisions: governanceLogs,
+            governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
           },
         };
       }
@@ -158,37 +189,32 @@ export class SkillExecutorImpl implements SkillExecutor {
         const tool = this.tools.get(toolId!);
         const op = tool?.operations[operation];
 
-        const governanceDecision = op
-          ? getToolGovernanceDecision(op, params.trustLevel)
-          : "auto-approve";
-
-        if (op) {
-          governanceLogs.push({
-            operationId: `${toolId}.${operation}`,
-            tier: op.governanceTier,
-            trustLevel: params.trustLevel,
-            decision: governanceDecision,
-            overridden: !!op.governanceOverride?.[params.trustLevel],
-            timestamp: new Date().toISOString(),
-          });
-        }
+        const toolCtx = {
+          toolId: toolId!,
+          operation,
+          params: toolUse.input,
+          governanceTier: op?.governanceTier ?? ("read" as const),
+          trustLevel: params.trustLevel,
+        };
+        const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);
 
         let result: unknown;
-        if (governanceDecision === "deny") {
-          result = {
-            status: "denied",
-            message: "This action is not permitted at your current trust level.",
-          };
-        } else if (governanceDecision === "require-approval") {
-          result = {
-            status: "pending_approval",
-            message: "This action requires human approval.",
-          };
+        let governanceOutcome: string;
+
+        if (!toolHookResult.proceed) {
+          const status =
+            toolHookResult.decision === "pending_approval" ? "pending_approval" : "denied";
+          result = { status, message: toolHookResult.reason };
+          governanceOutcome = status === "pending_approval" ? "require-approval" : "denied";
         } else if (op) {
           result = await op.execute(toolUse.input);
+          governanceOutcome = "auto-approved";
         } else {
           result = { error: `Unknown tool: ${toolUse.name}` };
+          governanceOutcome = "auto-approved";
         }
+
+        await runAfterToolCallHooks(this.hooks, toolCtx, result);
 
         toolCallRecords.push({
           toolId: toolId!,
@@ -196,7 +222,7 @@ export class SkillExecutorImpl implements SkillExecutor {
           params: toolUse.input,
           result,
           durationMs: Date.now() - start,
-          governanceDecision: mapDecisionToOutcome(governanceDecision),
+          governanceDecision: governanceOutcome as ToolCallRecord["governanceDecision"],
         });
 
         toolResults.push({
