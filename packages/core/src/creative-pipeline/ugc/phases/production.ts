@@ -6,7 +6,8 @@ import {
   type RankedProvider,
 } from "../provider-router.js";
 import { evaluateRealism } from "../realism-scorer.js";
-import { createVideoProvider } from "../video-provider.js";
+import { createVideoProvider, type ProviderClients } from "../video-provider.js";
+import type { ProviderPerformanceHistory } from "../provider-performance.js";
 
 // ── Types ──
 
@@ -47,7 +48,7 @@ interface AssetStoreLike {
 }
 
 interface ProductionDeps {
-  providerClients: { klingClient?: unknown };
+  providerClients: ProviderClients;
   assetStore: AssetStoreLike;
   apiKey: string;
 }
@@ -55,6 +56,7 @@ interface ProductionDeps {
 export interface ProductionInput {
   specs: CreativeSpecInput[];
   providerRegistry: ProviderCapabilityProfile[];
+  providerHistory?: ProviderPerformanceHistory;
   retryConfig: { maxAttempts: number; maxProviderFallbacks: number };
   budget: { totalJobBudget: number; costAuthority: string };
   deps: ProductionDeps;
@@ -69,7 +71,7 @@ export interface ProductionOutput {
 // ── Hash helper ──
 
 function hashInputs(spec: CreativeSpecInput): Record<string, string> {
-  // Simple hash for SP5 — real hashing in SP7+
+  // Simple hash — upgrade to content-addressable hashing when asset deduplication is needed
   return {
     promptHash: Buffer.from(spec.script.text).toString("base64").slice(0, 16),
     referencesHash: "none",
@@ -108,10 +110,7 @@ async function processSpec(
 
       try {
         // Generate video
-        const videoProvider = createVideoProvider(
-          provider.profile.provider,
-          deps.providerClients as never,
-        );
+        const videoProvider = createVideoProvider(provider.profile.provider, deps.providerClients);
         const result = await videoProvider.generate({
           prompt: spec.script.text,
           durationSec: spec.renderTargets.durationSec,
@@ -214,7 +213,7 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   const qaResults: ProductionOutput["qaResults"] = {};
   const failedSpecs: ProductionOutput["failedSpecs"] = [];
 
-  // Process specs sequentially for SP5 (p-limit parallelism deferred to SP7)
+  // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed
   let totalCost = 0;
 
   for (const spec of specs) {
@@ -227,6 +226,7 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
     const ranked = rankProviders(
       { format: spec.format, identityConstraints: spec.identityConstraints },
       registry,
+      input.providerHistory,
     ).slice(0, retryConfig.maxProviderFallbacks + 1);
 
     const result = await processSpec(spec, ranked, retryConfig, deps);

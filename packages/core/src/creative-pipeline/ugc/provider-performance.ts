@@ -64,8 +64,8 @@ export class ProviderPerformanceTracker {
       const passRate = history.passRateByProvider[provider] ?? 0;
       const avgLatency = history.avgLatencyByProvider[provider] ?? 0;
       const avgCost = history.costByProvider[provider] ?? 0;
-      // Use 10 as synthetic sample size to represent the historical data
-      const sampleSize = 10;
+      // Use 100 as synthetic sample size to minimize rounding error when reconstructing rates
+      const sampleSize = 100;
       tracker.stats[provider] = {
         totalAttempts: sampleSize,
         passedAttempts: Math.round(passRate * sampleSize),

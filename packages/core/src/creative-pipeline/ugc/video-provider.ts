@@ -97,7 +97,7 @@ function createRunwayAdapter(): VideoProvider {
 
 // ── Factory ──
 
-interface ProviderClients {
+export interface ProviderClients {
   klingClient?: KlingLike;
 }
 
