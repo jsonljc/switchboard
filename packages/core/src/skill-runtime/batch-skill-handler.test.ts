@@ -29,28 +29,23 @@ const mockStores: BatchSkillStores = {
   deploymentStore: { findById: vi.fn() },
 };
 
-function makeTraceStore() {
-  return { create: vi.fn().mockResolvedValue(undefined) } as any;
-}
-
-function makeCircuitBreaker(allowed = true) {
-  return {
-    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "tripped" }),
-  } as any;
-}
-
-function makeBlastRadius(allowed = true) {
-  return {
-    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "capped" }),
-  } as any;
-}
-
-function makeOutcomeLinker() {
-  return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) } as any;
-}
-
 function makeContextResolver() {
   return { resolve: vi.fn().mockResolvedValue({ variables: {}, metadata: [] }) } as any;
+}
+
+function makeHooks(
+  beforeResult = { proceed: true },
+  afterFn = vi.fn(),
+  onErrorFn = vi.fn(),
+): any[] {
+  return [
+    {
+      name: "test-hook",
+      beforeSkill: vi.fn().mockResolvedValue(beforeResult),
+      afterSkill: afterFn,
+      onError: onErrorFn,
+    },
+  ];
 }
 
 function makeExecutor(response: string) {
@@ -92,10 +87,7 @@ describe("BatchSkillHandler", () => {
       tools: new Map(),
       trustLevel: "guided",
       trustScore: 50,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks(),
       contextResolver: makeContextResolver(),
     });
 
@@ -124,10 +116,7 @@ describe("BatchSkillHandler", () => {
       tools: new Map(),
       trustLevel: "guided",
       trustScore: 50,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks(),
       contextResolver: makeContextResolver(),
     });
 
@@ -177,10 +166,7 @@ describe("BatchSkillHandler", () => {
       tools: new Map([["test-tool", mockTool]]),
       trustLevel: "autonomous",
       trustScore: 80,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks(),
       contextResolver: makeContextResolver(),
     });
 
@@ -224,10 +210,7 @@ describe("BatchSkillHandler", () => {
       tools: new Map([["dangerous", mockTool]]),
       trustLevel: "supervised",
       trustScore: 10,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks(),
       contextResolver: makeContextResolver(),
     });
 
@@ -242,7 +225,7 @@ describe("BatchSkillHandler", () => {
   });
 
   it("persists batch_job trace", async () => {
-    const traceStore = makeTraceStore();
+    const afterFn = vi.fn();
     const builder: BatchParameterBuilder = vi.fn().mockResolvedValue({ DATA: {} });
     const resultJson = JSON.stringify({
       recommendations: [],
@@ -259,20 +242,17 @@ describe("BatchSkillHandler", () => {
       tools: new Map(),
       trustLevel: "guided",
       trustScore: 50,
-      traceStore,
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks({ proceed: true }, afterFn),
       contextResolver: makeContextResolver(),
     });
 
     await handler.execute({ deploymentId: "d1", orgId: "org1", trigger: "weekly_audit" });
-    expect(traceStore.create).toHaveBeenCalledWith(
+    expect(afterFn).toHaveBeenCalledWith(
       expect.objectContaining({
         deploymentId: "d1",
-        trigger: "batch_job",
         skillSlug: "test-batch",
       }),
+      expect.any(Object),
     );
   });
 
@@ -287,16 +267,13 @@ describe("BatchSkillHandler", () => {
       tools: new Map(),
       trustLevel: "guided",
       trustScore: 50,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(false),
-      blastRadiusLimiter: makeBlastRadius(),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks({ proceed: false, reason: "circuit breaker tripped" }),
       contextResolver: makeContextResolver(),
     });
 
     await expect(
       handler.execute({ deploymentId: "d1", orgId: "org1", trigger: "weekly_audit" }),
-    ).rejects.toThrow("Circuit breaker");
+    ).rejects.toThrow("circuit breaker");
     expect(executor.execute).not.toHaveBeenCalled();
   });
 
@@ -311,16 +288,13 @@ describe("BatchSkillHandler", () => {
       tools: new Map(),
       trustLevel: "guided",
       trustScore: 50,
-      traceStore: makeTraceStore(),
-      circuitBreaker: makeCircuitBreaker(),
-      blastRadiusLimiter: makeBlastRadius(false),
-      outcomeLinker: makeOutcomeLinker(),
+      hooks: makeHooks({ proceed: false, reason: "blast radius limit reached" }),
       contextResolver: makeContextResolver(),
     });
 
     await expect(
       handler.execute({ deploymentId: "d1", orgId: "org1", trigger: "weekly_audit" }),
-    ).rejects.toThrow("Blast radius");
+    ).rejects.toThrow("blast radius");
     expect(executor.execute).not.toHaveBeenCalled();
   });
 });

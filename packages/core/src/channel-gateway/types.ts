@@ -3,15 +3,8 @@ import type { AgentStateStoreInterface } from "../agent-runtime/state-provider.j
 import type { ActionRequestStore } from "../agent-runtime/action-request-pipeline.js";
 import type { LLMAdapter } from "../llm-adapter.js";
 import type { ModelRouter, ModelSlot } from "../model-router.js";
-import type {
-  SkillDefinition,
-  SkillExecutor,
-  SkillExecutionTrace,
-} from "../skill-runtime/types.js";
+import type { SkillDefinition, SkillExecutor, SkillHook } from "../skill-runtime/types.js";
 import type { ParameterBuilder, SkillStores } from "../skill-runtime/parameter-builder.js";
-import type { CircuitBreaker } from "../skill-runtime/circuit-breaker.js";
-import type { BlastRadiusLimiter } from "../skill-runtime/blast-radius-limiter.js";
-import type { OutcomeLinker } from "../skill-runtime/outcome-linker.js";
 import type { ContextResolverImpl } from "../skill-runtime/context-resolver.js";
 
 export interface SkillRuntimeDeps {
@@ -25,14 +18,8 @@ export interface SkillRuntimeDeps {
   builderMap: Map<string, ParameterBuilder>;
   /** Stores required by parameter builders (deployments, listings, tasks, contacts, etc.) */
   stores: SkillStores;
-  /** Trace store for recording skill execution traces */
-  traceStore: { create(trace: SkillExecutionTrace): Promise<void> };
-  /** Circuit breaker for skill-level failure management */
-  circuitBreaker: CircuitBreaker;
-  /** Blast radius limiter for per-deployment execution constraints */
-  blastRadiusLimiter: BlastRadiusLimiter;
-  /** Outcome linker for chaining skill outputs */
-  outcomeLinker: OutcomeLinker;
+  /** Hooks for skill lifecycle events (circuit breaker, trace persistence, etc.) */
+  hooks: SkillHook[];
   /** Context resolver for knowledge entry resolution */
   contextResolver: { resolve: ContextResolverImpl["resolve"] };
 }

@@ -2,33 +2,21 @@ import type { AgentHandler, AgentContext } from "@switchboard/sdk";
 import type {
   SkillDefinition,
   SkillExecutor,
-  SkillExecutionTrace,
   SkillExecutionResult,
+  SkillHook,
+  SkillHookContext,
 } from "./types.js";
-import { SkillExecutionBudgetError, ContextResolutionError } from "./types.js";
+import { ContextResolutionError } from "./types.js";
 import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 import { ParameterResolutionError } from "./parameter-builder.js";
-import type { CircuitBreaker } from "./circuit-breaker.js";
-import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
-import type { OutcomeLinker } from "./outcome-linker.js";
 import type { ContextResolverImpl } from "./context-resolver.js";
-import { createId } from "@paralleldrive/cuid2";
-import { createHash } from "node:crypto";
+import { runBeforeSkillHooks, runAfterSkillHooks, runOnErrorHooks } from "./hook-runner.js";
 
 interface SkillHandlerConfig {
   deploymentId: string;
   orgId: string;
   contactId: string;
   sessionId: string;
-}
-
-interface ExecutionTraceStore {
-  create(trace: SkillExecutionTrace): Promise<void>;
-}
-
-function hashParameters(params: Record<string, unknown>): string {
-  const sorted = JSON.stringify(params, Object.keys(params).sort());
-  return createHash("sha256").update(sorted).digest("hex");
 }
 
 export class SkillHandler implements AgentHandler {
@@ -38,34 +26,33 @@ export class SkillHandler implements AgentHandler {
     private builderMap: Map<string, ParameterBuilder>,
     private stores: SkillStores,
     private config: SkillHandlerConfig,
-    private traceStore: ExecutionTraceStore,
-    private circuitBreaker: CircuitBreaker,
-    private blastRadiusLimiter: BlastRadiusLimiter,
-    private outcomeLinker: OutcomeLinker,
+    private hooks: SkillHook[],
     private contextResolver: { resolve: ContextResolverImpl["resolve"] },
   ) {}
 
   async onMessage(ctx: AgentContext): Promise<void> {
-    // Safety gates first
-    const cbResult = await this.circuitBreaker.check(this.config.deploymentId);
-    if (!cbResult.allowed) {
+    // 1. Build hook context
+    const hookContext: SkillHookContext = {
+      deploymentId: this.config.deploymentId,
+      orgId: this.config.orgId,
+      skillSlug: this.skill.slug,
+      skillVersion: this.skill.version,
+      sessionId: this.config.sessionId,
+      trustLevel: ctx.trust.level,
+      trustScore: ctx.trust.score,
+    };
+
+    // 2. Run beforeSkill hooks (circuit breaker, blast radius)
+    const beforeResult = await runBeforeSkillHooks(this.hooks, hookContext);
+    if (!beforeResult.proceed) {
       await ctx.chat.send(
         "I'm having some trouble right now. Let me connect you with the team directly.",
       );
-      console.error(`Circuit breaker: ${cbResult.reason}`);
+      console.error(`Skill blocked: ${beforeResult.reason}`);
       return;
     }
 
-    const brResult = await this.blastRadiusLimiter.check(this.config.deploymentId);
-    if (!brResult.allowed) {
-      await ctx.chat.send(
-        "I've been quite active recently. Let me connect you with the team for this one.",
-      );
-      console.error(`Blast radius: ${brResult.reason}`);
-      return;
-    }
-
-    // Existing builder flow
+    // 3. Parameter building
     const builder = this.builderMap.get(this.skill.slug);
     if (!builder) {
       throw new Error(`No parameter builder registered for skill: ${this.skill.slug}`);
@@ -82,7 +69,7 @@ export class SkillHandler implements AgentHandler {
       throw err;
     }
 
-    // Resolve curated knowledge context
+    // 4. Resolve curated knowledge context
     let contextVariables: Record<string, string> = {};
     try {
       const resolved = await this.contextResolver.resolve(this.config.orgId, this.skill.context);
@@ -98,7 +85,7 @@ export class SkillHandler implements AgentHandler {
       throw err;
     }
 
-    // Merge runtime params + knowledge context
+    // 5. Merge runtime params + knowledge context
     const mergedParameters = { ...parameters, ...contextVariables };
 
     const messages = (ctx.conversation?.messages ?? []).map((m) => ({
@@ -106,7 +93,7 @@ export class SkillHandler implements AgentHandler {
       content: m.content,
     }));
 
-    const startTime = Date.now();
+    // 6. Execute skill
     let result: SkillExecutionResult;
     try {
       result = await this.executor.execute({
@@ -119,69 +106,18 @@ export class SkillHandler implements AgentHandler {
         trustLevel: ctx.trust.level,
       });
     } catch (err) {
-      // Persist error trace so circuit breaker can detect failure patterns
-      const status = err instanceof SkillExecutionBudgetError ? "budget_exceeded" : "error";
-      const errorTrace: SkillExecutionTrace = {
-        id: createId(),
-        deploymentId: this.config.deploymentId,
-        organizationId: this.config.orgId,
-        skillSlug: this.skill.slug,
-        skillVersion: this.skill.version,
-        trigger: "chat_message",
-        sessionId: this.config.sessionId,
-        inputParametersHash: hashParameters(mergedParameters),
-        toolCalls: [],
-        governanceDecisions: [],
-        tokenUsage: { input: 0, output: 0 },
-        durationMs: Date.now() - startTime,
-        turnCount: 0,
-        status,
-        error: err instanceof Error ? err.message : String(err),
-        responseSummary: "",
-        writeCount: 0,
-        createdAt: new Date(),
-      };
-      try {
-        await this.traceStore.create(errorTrace);
-      } catch (traceErr) {
-        console.error(`Error trace persistence failed for ${errorTrace.id}:`, traceErr);
-      }
+      // 7. On error: run error hooks (trace persistence)
+      await runOnErrorHooks(this.hooks, hookContext, err as Error);
       await ctx.chat.send(
         "I ran into an issue processing your request. Let me connect you with the team.",
       );
       return;
     }
 
-    // Assemble success trace — handler owns the ID
-    const trace: SkillExecutionTrace = {
-      id: createId(),
-      deploymentId: this.config.deploymentId,
-      organizationId: this.config.orgId,
-      skillSlug: this.skill.slug,
-      skillVersion: this.skill.version,
-      trigger: "chat_message",
-      sessionId: this.config.sessionId,
-      inputParametersHash: hashParameters(mergedParameters),
-      toolCalls: result.toolCalls,
-      governanceDecisions: result.trace.governanceDecisions,
-      tokenUsage: result.tokenUsage,
-      durationMs: result.trace.durationMs,
-      turnCount: result.trace.turnCount,
-      status: result.trace.status,
-      error: result.trace.error,
-      responseSummary: result.response.slice(0, 500),
-      writeCount: result.trace.writeCount,
-      createdAt: new Date(),
-    };
+    // 8. On success: run afterSkill hooks (trace persistence, outcome linking)
+    await runAfterSkillHooks(this.hooks, hookContext, result);
 
-    // Persist + link outcome (try/catch — tracing must not block user)
-    try {
-      await this.traceStore.create(trace);
-      await this.outcomeLinker.linkFromToolCalls(trace.id, result.toolCalls);
-    } catch (err) {
-      console.error(`Trace persistence failed for ${trace.id}:`, err);
-    }
-
+    // 9. Send response
     await ctx.chat.send(result.response);
   }
 }

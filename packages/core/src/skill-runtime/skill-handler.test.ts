@@ -32,30 +32,23 @@ function makeCtx() {
   } as any;
 }
 
-function makeTraceStore() {
-  return {
-    create: vi.fn().mockResolvedValue(undefined),
-  } as any;
-}
-
-function makeCircuitBreaker(allowed = true) {
-  return {
-    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "tripped" }),
-  } as any;
-}
-
-function makeBlastRadius(allowed = true) {
-  return {
-    check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "capped" }),
-  } as any;
-}
-
-function makeOutcomeLinker() {
-  return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) } as any;
-}
-
 function makeContextResolver() {
   return { resolve: vi.fn().mockResolvedValue({ variables: {}, metadata: [] }) } as any;
+}
+
+function makeHooks(
+  beforeResult = { proceed: true },
+  afterFn = vi.fn(),
+  onErrorFn = vi.fn(),
+): any[] {
+  return [
+    {
+      name: "test-hook",
+      beforeSkill: vi.fn().mockResolvedValue(beforeResult),
+      afterSkill: afterFn,
+      onError: onErrorFn,
+    },
+  ];
 }
 
 function makeExecutorResult(overrides: Record<string, unknown> = {}) {
@@ -83,10 +76,7 @@ describe("SkillHandler (generic)", () => {
       new Map(),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       makeContextResolver(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("No parameter builder registered");
@@ -96,16 +86,14 @@ describe("SkillHandler (generic)", () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
     const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
     const builderMap = new Map([["test-skill", builder]]);
+    const afterFn = vi.fn();
     const handler = new SkillHandler(
       mockSkill,
       executor as any,
       builderMap,
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: true }, afterFn),
       makeContextResolver(),
     );
 
@@ -118,6 +106,7 @@ describe("SkillHandler (generic)", () => {
       mockStores,
     );
     expect(executor.execute).toHaveBeenCalledOnce();
+    expect(afterFn).toHaveBeenCalledOnce();
     expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
   });
 
@@ -133,10 +122,7 @@ describe("SkillHandler (generic)", () => {
       builderMap,
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       makeContextResolver(),
     );
 
@@ -156,10 +142,7 @@ describe("SkillHandler (generic)", () => {
       builderMap,
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       makeContextResolver(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("DB down");
@@ -167,28 +150,27 @@ describe("SkillHandler (generic)", () => {
 
   it("persists trace after execution", async () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
-    const traceStore = makeTraceStore();
     const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const afterFn = vi.fn();
     const handler = new SkillHandler(
       mockSkill,
       executor as any,
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      traceStore,
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: true }, afterFn),
       makeContextResolver(),
     );
 
     await handler.onMessage!(makeCtx());
-    expect(traceStore.create).toHaveBeenCalledWith(
+    expect(afterFn).toHaveBeenCalledWith(
       expect.objectContaining({
         deploymentId: "d1",
-        organizationId: "org1",
+        orgId: "org1",
         skillSlug: "test-skill",
-        status: "success",
+      }),
+      expect.objectContaining({
+        response: "Hello Alice",
       }),
     );
   });
@@ -201,10 +183,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", vi.fn()]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(false),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: false, reason: "circuit breaker tripped" }),
       makeContextResolver(),
     );
 
@@ -223,10 +202,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", vi.fn()]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(false),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: false, reason: "blast radius limit reached" }),
       makeContextResolver(),
     );
 
@@ -234,48 +210,44 @@ describe("SkillHandler (generic)", () => {
     await handler.onMessage!(ctx);
 
     expect(executor.execute).not.toHaveBeenCalled();
-    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("active"));
+    expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("trouble"));
   });
 
   it("persists error trace when executor throws", async () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
-    const traceStore = makeTraceStore();
     const { SkillExecutionBudgetError } = await import("./types.js");
     const executor = {
       execute: vi.fn().mockRejectedValue(new SkillExecutionBudgetError("Exceeded 30s")),
     };
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onErrorFn = vi.fn();
     const handler = new SkillHandler(
       mockSkill,
       executor as any,
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      traceStore,
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: true }, vi.fn(), onErrorFn),
       makeContextResolver(),
     );
 
     const ctx = makeCtx();
     await handler.onMessage!(ctx);
 
-    expect(traceStore.create).toHaveBeenCalledWith(
+    expect(onErrorFn).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: "budget_exceeded",
-        error: "Exceeded 30s",
+        deploymentId: "d1",
+        orgId: "org1",
+        skillSlug: "test-skill",
       }),
+      expect.any(SkillExecutionBudgetError),
     );
     expect(ctx.chat.send).toHaveBeenCalledWith(expect.stringContaining("issue"));
-    consoleErrorSpy.mockRestore();
   });
 
   it("still sends response when trace persistence fails", async () => {
     const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
-    const traceStore = makeTraceStore();
-    traceStore.create.mockRejectedValue(new Error("DB down"));
     const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const afterFn = vi.fn().mockRejectedValue(new Error("DB down"));
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const handler = new SkillHandler(
       mockSkill,
@@ -283,10 +255,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      traceStore,
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks({ proceed: true }, afterFn),
       makeContextResolver(),
     );
 
@@ -310,10 +279,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       contextResolver as any,
     );
 
@@ -342,10 +308,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       contextResolver as any,
     );
 
@@ -368,10 +331,7 @@ describe("SkillHandler (generic)", () => {
       new Map([["test-skill", builder]]),
       mockStores,
       { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
-      makeTraceStore(),
-      makeCircuitBreaker(),
-      makeBlastRadius(),
-      makeOutcomeLinker(),
+      makeHooks(),
       makeContextResolver(),
     );
 

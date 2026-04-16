@@ -165,10 +165,7 @@ export class ChannelGateway {
           contactId: message.sessionId,
           sessionId: message.sessionId,
         },
-        skillRuntime.traceStore,
-        skillRuntime.circuitBreaker,
-        skillRuntime.blastRadiusLimiter,
-        skillRuntime.outcomeLinker,
+        skillRuntime.hooks,
         skillRuntime.contextResolver,
       );
     }

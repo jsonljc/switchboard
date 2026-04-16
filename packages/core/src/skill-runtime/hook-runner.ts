@@ -81,7 +81,11 @@ export async function runAfterSkillHooks(
 ): Promise<void> {
   for (const hook of hooks) {
     if (hook.afterSkill) {
-      await hook.afterSkill(ctx, result);
+      try {
+        await hook.afterSkill(ctx, result);
+      } catch (err) {
+        console.error(`Hook ${hook.name} afterSkill failed:`, err);
+      }
     }
   }
 }
