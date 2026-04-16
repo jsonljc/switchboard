@@ -154,6 +154,64 @@ export interface SkillExecutor {
 }
 
 // ---------------------------------------------------------------------------
+// Skill Hooks (SP6 Phase 2)
+// ---------------------------------------------------------------------------
+
+export interface SkillHookContext {
+  deploymentId: string;
+  orgId: string;
+  skillSlug: string;
+  skillVersion: string;
+  sessionId: string;
+  trustLevel: "supervised" | "guided" | "autonomous";
+  trustScore: number;
+}
+
+export interface LlmCallContext {
+  turnCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  elapsedMs: number;
+  profile?: ResolvedModelProfile;
+}
+
+export interface LlmResponse {
+  content: unknown[];
+  stopReason: "end_turn" | "tool_use" | "max_tokens";
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+export interface ToolCallContext {
+  toolId: string;
+  operation: string;
+  params: unknown;
+  governanceTier: GovernanceTier;
+  trustLevel: "supervised" | "guided" | "autonomous";
+}
+
+export interface HookResult {
+  proceed: boolean;
+  reason?: string;
+  /** When a hook blocks a tool call, this distinguishes deny from pending_approval. */
+  decision?: "denied" | "pending_approval";
+}
+
+export interface LlmHookResult extends HookResult {
+  ctx?: LlmCallContext;
+}
+
+export interface SkillHook {
+  name: string;
+  beforeSkill?(ctx: SkillHookContext): Promise<HookResult>;
+  afterSkill?(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>;
+  beforeLlmCall?(ctx: LlmCallContext): Promise<LlmHookResult>;
+  afterLlmCall?(ctx: LlmCallContext, response: LlmResponse): Promise<void>;
+  beforeToolCall?(ctx: ToolCallContext): Promise<HookResult>;
+  afterToolCall?(ctx: ToolCallContext, result: unknown): Promise<void>;
+  onError?(ctx: SkillHookContext, error: Error): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
