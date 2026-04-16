@@ -12,6 +12,7 @@ import type { ParameterBuilder, SkillStores } from "../skill-runtime/parameter-b
 import type { CircuitBreaker } from "../skill-runtime/circuit-breaker.js";
 import type { BlastRadiusLimiter } from "../skill-runtime/blast-radius-limiter.js";
 import type { OutcomeLinker } from "../skill-runtime/outcome-linker.js";
+import type { ContextResolverImpl } from "../skill-runtime/context-resolver.js";
 
 export interface SkillRuntimeDeps {
   /** Directory containing .md skill files */
@@ -32,6 +33,8 @@ export interface SkillRuntimeDeps {
   blastRadiusLimiter: BlastRadiusLimiter;
   /** Outcome linker for chaining skill outputs */
   outcomeLinker: OutcomeLinker;
+  /** Context resolver for knowledge entry resolution */
+  contextResolver: { resolve: ContextResolverImpl["resolve"] };
 }
 
 export interface ChannelGatewayConfig {

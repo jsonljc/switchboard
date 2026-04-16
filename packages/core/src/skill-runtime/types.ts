@@ -5,6 +5,7 @@ import type {
   GovernanceDecision,
   GovernanceLogEntry,
 } from "./governance.js";
+import type { ContextRequirement } from "@switchboard/schemas";
 
 // ---------------------------------------------------------------------------
 // Skill Definition (output of loader)
@@ -20,6 +21,7 @@ export interface SkillDefinition {
   tools: string[];
   body: string;
   output?: { fields: OutputFieldDeclaration[] };
+  context: ContextRequirement[];
 }
 
 export type ParameterType = "string" | "number" | "boolean" | "enum" | "object";
@@ -168,5 +170,15 @@ export class SkillExecutionBudgetError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SkillExecutionBudgetError";
+  }
+}
+
+export class ContextResolutionError extends Error {
+  constructor(
+    public readonly kind: string,
+    public readonly scope: string,
+  ) {
+    super(`Required knowledge not found: kind=${kind}, scope=${scope}`);
+    this.name = "ContextResolutionError";
   }
 }

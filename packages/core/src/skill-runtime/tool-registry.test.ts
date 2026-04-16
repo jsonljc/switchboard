@@ -27,6 +27,7 @@ function makeSkill(tools: string[]): SkillDefinition {
     parameters: [],
     tools,
     body: "test body",
+    context: [],
   };
 }
 

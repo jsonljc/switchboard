@@ -21,6 +21,7 @@ import { conversationsRoutes } from "../routes/conversations.js";
 import { agentsRoutes } from "../routes/agents.js";
 import { setupRoutes } from "../routes/setup.js";
 import { knowledgeRoutes } from "../routes/knowledge.js";
+import { knowledgeEntryRoutes } from "../routes/knowledge-entries.js";
 import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
 import { agentConversationRoutes } from "../routes/conversation.js";
@@ -58,6 +59,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });
   await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
+  await app.register(knowledgeEntryRoutes, { prefix: "/api/knowledge-entries" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
   await app.register(agentConversationRoutes, { prefix: "/api/conversation" });
