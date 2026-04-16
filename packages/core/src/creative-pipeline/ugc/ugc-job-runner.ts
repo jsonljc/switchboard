@@ -157,7 +157,7 @@ async function executePhase(
       const { executeProductionPhase } = await import("./phases/production.js");
       type ProductionInput = import("./phases/production.js").ProductionInput;
       const productionInput: ProductionInput = {
-        specs: specs as ProductionInput["specs"],
+        specs: specs as unknown as ProductionInput["specs"],
         providerRegistry: ctx.context.providerCapabilities as ProviderCapabilityProfile[],
         retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
         budget: {
