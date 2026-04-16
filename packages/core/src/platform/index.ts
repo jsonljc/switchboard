@@ -28,10 +28,20 @@ export type { ExecutionContext, ExecutionMode } from "./execution-context.js";
 
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
+export { buildWorkTrace } from "./work-trace-recorder.js";
+export type { TraceInput, WorkTraceStore } from "./work-trace-recorder.js";
 
 // Errors
 export type { IngressError } from "./ingress-error.js";
 export { isIngressError } from "./ingress-error.js";
+
+// Platform Ingress
+export { PlatformIngress } from "./platform-ingress.js";
+export type {
+  PlatformIngressConfig,
+  SubmitWorkResponse,
+  GovernanceGate,
+} from "./platform-ingress.js";
 
 // Registries
 export { IntentRegistry } from "./intent-registry.js";
