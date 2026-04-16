@@ -212,6 +212,39 @@ export interface SkillHook {
 }
 
 // ---------------------------------------------------------------------------
+// Runtime Policy (SP6 Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface SkillRuntimePolicy {
+  allowedModelTiers: ModelSlot[];
+  minimumModelTier?: ModelSlot;
+  maxToolCalls: number;
+  maxLlmTurns: number;
+  maxTotalTokens: number;
+  maxRuntimeMs: number;
+  maxWritesPerExecution: number;
+  maxWritesPerHour: number;
+  trustLevel: "supervised" | "guided" | "autonomous";
+  writeApprovalRequired: boolean;
+  circuitBreakerThreshold: number;
+  maxConcurrentExecutions: number;
+}
+
+export const DEFAULT_SKILL_RUNTIME_POLICY: SkillRuntimePolicy = {
+  allowedModelTiers: ["default", "premium", "critical"],
+  maxToolCalls: 5,
+  maxLlmTurns: 6,
+  maxTotalTokens: 64_000,
+  maxRuntimeMs: 30_000,
+  maxWritesPerExecution: 5,
+  maxWritesPerHour: 20,
+  trustLevel: "guided",
+  writeApprovalRequired: false,
+  circuitBreakerThreshold: 5,
+  maxConcurrentExecutions: 3,
+};
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
