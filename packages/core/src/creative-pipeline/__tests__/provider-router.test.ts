@@ -76,4 +76,40 @@ describe("rankProviders", () => {
       expect(r.estimatedCost).toBeGreaterThan(0);
     }
   });
+
+  it("includes Seedance and Runway in default registry", () => {
+    const registry = getDefaultProviderRegistry();
+    expect(registry.find((p) => p.provider === "seedance")).toBeDefined();
+    expect(registry.find((p) => p.provider === "runway")).toBeDefined();
+  });
+
+  it("excludes planned providers from ranking (apiMaturity=low)", () => {
+    const ranked = rankProviders(
+      { format: "talking_head", identityConstraints: { strategy: "reference_conditioning" } },
+      getDefaultProviderRegistry(),
+    );
+    expect(ranked.find((r) => r.profile.provider === "seedance")).toBeUndefined();
+    expect(ranked.find((r) => r.profile.provider === "runway")).toBeUndefined();
+  });
+
+  it("boosts providers with high pass rate from history", () => {
+    const registry = getDefaultProviderRegistry().filter((p) => p.role !== "planned");
+    const withHistory = rankProviders(
+      { format: "talking_head", identityConstraints: { strategy: "reference_conditioning" } },
+      registry,
+      {
+        passRateByProvider: { heygen: 0.95, kling: 0.5 },
+        avgLatencyByProvider: {},
+        costByProvider: {},
+      },
+    );
+    const withoutHistory = rankProviders(
+      { format: "talking_head", identityConstraints: { strategy: "reference_conditioning" } },
+      registry,
+    );
+    // HeyGen should rank higher with strong history
+    const heygenWithHistory = withHistory.find((r) => r.profile.provider === "heygen")!;
+    const heygenWithout = withoutHistory.find((r) => r.profile.provider === "heygen")!;
+    expect(heygenWithHistory.score).toBeGreaterThan(heygenWithout.score);
+  });
 });
