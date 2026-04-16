@@ -3,9 +3,13 @@ import { executeProductionPhase, type ProductionInput } from "../ugc/phases/prod
 
 vi.mock("../stages/call-claude.js", () => ({
   callClaude: vi.fn().mockResolvedValue({
-    decision: "pass",
-    reasoning: "Looks good",
+    faceSimilarity: 0.9,
+    ocrAccuracy: 0.95,
     artifactFlags: [],
+    visualRealism: 0.8,
+    behavioralRealism: 0.8,
+    ugcAuthenticity: 0.85,
+    audioNaturalness: 0.75,
   }),
 }));
 
@@ -75,8 +79,24 @@ describe("executeProductionPhase", () => {
     const { callClaude } = await import("../stages/call-claude.js");
     const mockClaude = callClaude as ReturnType<typeof vi.fn>;
     mockClaude
-      .mockResolvedValueOnce({ decision: "fail", reasoning: "Bad", artifactFlags: ["face_drift"] })
-      .mockResolvedValueOnce({ decision: "pass", reasoning: "Good now", artifactFlags: [] });
+      .mockResolvedValueOnce({
+        faceSimilarity: 0.3, // below 0.7 threshold → fail
+        ocrAccuracy: 0.9,
+        artifactFlags: ["face_drift"],
+        visualRealism: 0.3,
+        behavioralRealism: 0.3,
+        ugcAuthenticity: 0.3,
+        audioNaturalness: 0.3,
+      })
+      .mockResolvedValueOnce({
+        faceSimilarity: 0.9,
+        ocrAccuracy: 0.95,
+        artifactFlags: [],
+        visualRealism: 0.8,
+        behavioralRealism: 0.8,
+        ugcAuthenticity: 0.85,
+        audioNaturalness: 0.75,
+      });
 
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
@@ -95,9 +115,13 @@ describe("executeProductionPhase", () => {
     const { callClaude } = await import("../stages/call-claude.js");
     const mockClaude = callClaude as ReturnType<typeof vi.fn>;
     mockClaude.mockResolvedValue({
-      decision: "fail",
-      reasoning: "Always bad",
+      faceSimilarity: 0.3, // below 0.7 threshold → fail
+      ocrAccuracy: 0.9,
       artifactFlags: ["face_drift"],
+      visualRealism: 0.3,
+      behavioralRealism: 0.3,
+      ugcAuthenticity: 0.3,
+      audioNaturalness: 0.3,
     });
 
     const input: ProductionInput = {
@@ -116,9 +140,13 @@ describe("executeProductionPhase", () => {
   it("falls back to asset reuse when generation exhausted", async () => {
     const { callClaude } = await import("../stages/call-claude.js");
     (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
-      decision: "fail",
-      reasoning: "Bad",
+      faceSimilarity: 0.3, // below 0.7 threshold → fail
+      ocrAccuracy: 0.9,
       artifactFlags: [],
+      visualRealism: 0.3,
+      behavioralRealism: 0.3,
+      ugcAuthenticity: 0.3,
+      audioNaturalness: 0.3,
     });
 
     const reusableAsset = {
@@ -147,9 +175,13 @@ describe("executeProductionPhase", () => {
   it("triggers circuit breaker after repeated failures", async () => {
     const { callClaude } = await import("../stages/call-claude.js");
     (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
-      decision: "fail",
-      reasoning: "Bad",
+      faceSimilarity: 0.3, // below 0.7 threshold → fail
+      ocrAccuracy: 0.9,
       artifactFlags: [],
+      visualRealism: 0.3,
+      behavioralRealism: 0.3,
+      ugcAuthenticity: 0.3,
+      audioNaturalness: 0.3,
     });
 
     const input: ProductionInput = {

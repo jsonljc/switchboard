@@ -29,7 +29,13 @@ export { executeScriptingPhase } from "./ugc/phases/scripting.js";
 export type { ScriptingInput, ScriptingOutput } from "./ugc/phases/scripting.js";
 export { rankProviders, getDefaultProviderRegistry } from "./ugc/provider-router.js";
 export type { RankedProvider } from "./ugc/provider-router.js";
-export { evaluateMinimalQa } from "./ugc/minimal-qa.js";
+export {
+  evaluateRealism,
+  computeDecision,
+  computeWeightedSoftScore,
+  DEFAULT_QA_THRESHOLDS,
+} from "./ugc/realism-scorer.js";
+export type { QaThresholdConfig, RealismScorerInput } from "./ugc/realism-scorer.js";
 export { executeProductionPhase } from "./ugc/phases/production.js";
 export type { ProductionInput, ProductionOutput } from "./ugc/phases/production.js";
 export { KlingClient } from "./stages/kling-client.js";

@@ -5,7 +5,7 @@ import {
   getDefaultProviderRegistry,
   type RankedProvider,
 } from "../provider-router.js";
-import { evaluateMinimalQa } from "../minimal-qa.js";
+import { evaluateRealism } from "../realism-scorer.js";
 
 // ── Types ──
 
@@ -133,8 +133,8 @@ async function processSpec(
           aspectRatio: mapAspect(spec.renderTargets.aspect),
         });
 
-        // Minimal QA
-        const qaScore = await evaluateMinimalQa({
+        // Realism scorer
+        const qaScore = await evaluateRealism({
           videoUrl: result.videoUrl,
           specDescription: `${spec.format} ${spec.structureId} ad`,
           apiKey: deps.apiKey,
