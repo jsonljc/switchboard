@@ -13,6 +13,7 @@ const mockSkill: SkillDefinition = {
   parameters: [{ name: "NAME", type: "string", required: true }],
   tools: [],
   body: "Hello {{NAME}}",
+  context: [],
 };
 
 const mockStores: SkillStores = {

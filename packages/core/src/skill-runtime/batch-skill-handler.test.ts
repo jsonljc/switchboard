@@ -16,6 +16,7 @@ const mockSkill: SkillDefinition = {
   parameters: [{ name: "DATA", type: "object", required: true }],
   tools: [],
   body: "Analyze {{DATA}}",
+  context: [],
 };
 
 const mockContract: BatchContextContract = {

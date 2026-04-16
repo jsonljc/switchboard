@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { ContextRequirementSchema } from "@switchboard/schemas";
+import type { ContextRequirement } from "@switchboard/schemas";
 import { SkillParseError, SkillValidationError } from "./types.js";
 import type { SkillDefinition, ParameterDeclaration } from "./types.js";
 
@@ -20,7 +22,7 @@ const OutputFieldSchema = z.object({
   required: z.boolean(),
   description: z.string().optional(),
   values: z.array(z.string()).optional(),
-  items: z.record(z.string()).optional(),
+  items: z.object({ type: z.string() }).optional(),
 });
 
 const SkillFrontmatterSchema = z.object({
@@ -36,6 +38,16 @@ const SkillFrontmatterSchema = z.object({
       fields: z.array(OutputFieldSchema),
     })
     .optional(),
+  context: z
+    .array(
+      z.object({
+        kind: z.string(),
+        scope: z.string(),
+        inject_as: z.string(),
+        required: z.boolean().default(true),
+      }),
+    )
+    .default([]),
 });
 
 function splitFrontmatter(raw: string): { frontmatterStr: string; body: string } {
@@ -86,6 +98,36 @@ function validateToolReferences(body: string, declaredTools: string[]): string[]
   return issues;
 }
 
+function validateContext(
+  rawContext: Array<{ kind: string; scope: string; inject_as: string; required: boolean }>,
+): { normalized: ContextRequirement[]; issues: string[] } {
+  const issues: string[] = [];
+  const normalized: ContextRequirement[] = [];
+  const injectAsNames = new Set<string>();
+
+  for (const entry of rawContext) {
+    const req = {
+      kind: entry.kind,
+      scope: entry.scope,
+      injectAs: entry.inject_as,
+      required: entry.required,
+    };
+    const parsed = ContextRequirementSchema.safeParse(req);
+    if (!parsed.success) {
+      issues.push(...parsed.error.issues.map((i) => `context[${entry.inject_as}]: ${i.message}`));
+      continue;
+    }
+
+    if (injectAsNames.has(parsed.data.injectAs)) {
+      issues.push(`Duplicate injectAs value: ${parsed.data.injectAs}`);
+    }
+    injectAsNames.add(parsed.data.injectAs);
+    normalized.push(parsed.data);
+  }
+
+  return { normalized, issues };
+}
+
 export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
   const filePath = join(skillsDir, `${slug}.md`);
   let raw: string;
@@ -115,6 +157,9 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
 
   issues.push(...validateParameters(frontmatter.parameters));
 
+  const { normalized: context, issues: contextIssues } = validateContext(frontmatter.context);
+  issues.push(...contextIssues);
+
   if (!body.trim()) {
     issues.push("Skill body must not be empty");
   }
@@ -137,5 +182,6 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
     tools: frontmatter.tools,
     body: body.trim(),
     output: frontmatter.output,
+    context,
   };
 }

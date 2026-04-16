@@ -241,6 +241,112 @@ Body`,
   });
 });
 
+describe("context block parsing", () => {
+  it("parses valid context block from frontmatter", () => {
+    writeSkill(
+      "test-with-context",
+      `---
+name: test-with-context
+slug: test-with-context
+version: 1.0.0
+description: Test skill with context block
+author: test
+parameters: []
+tools: []
+context:
+  - kind: playbook
+    scope: objection-handling
+    inject_as: PLAYBOOK_CONTEXT
+  - kind: knowledge
+    scope: offer-catalog
+    inject_as: KNOWLEDGE_CONTEXT
+    required: false
+---
+
+Test body with {{PLAYBOOK_CONTEXT}} and {{KNOWLEDGE_CONTEXT}}.`,
+    );
+    const skill = loadSkill("test-with-context", TEST_DIR);
+    expect(skill.context).toHaveLength(2);
+    expect(skill.context[0]!.injectAs).toBe("PLAYBOOK_CONTEXT");
+    expect(skill.context[0]!.required).toBe(true);
+    expect(skill.context[1]!.required).toBe(false);
+  });
+
+  it("defaults to empty context array when no context block", () => {
+    writeSkill(
+      "no-context",
+      `---
+name: test
+slug: no-context
+version: 1.0.0
+description: test
+author: test
+parameters: []
+tools: []
+---
+body`,
+    );
+    const skill = loadSkill("no-context", TEST_DIR);
+    expect(skill.context).toEqual([]);
+  });
+
+  it("rejects duplicate injectAs values", () => {
+    writeSkill(
+      "test-duplicate-inject-as",
+      `---
+name: test-duplicate-inject-as
+slug: test-duplicate-inject-as
+version: 1.0.0
+description: Test skill with duplicate injectAs
+author: test
+parameters: []
+tools: []
+context:
+  - kind: playbook
+    scope: objection-handling
+    inject_as: PLAYBOOK_CONTEXT
+  - kind: policy
+    scope: messaging-rules
+    inject_as: PLAYBOOK_CONTEXT
+---
+
+Test body.`,
+    );
+    expect(() => loadSkill("test-duplicate-inject-as", TEST_DIR)).toThrow(SkillValidationError);
+    try {
+      loadSkill("test-duplicate-inject-as", TEST_DIR);
+    } catch (error) {
+      expect((error as SkillValidationError).issues).toContain(
+        "Duplicate injectAs value: PLAYBOOK_CONTEXT",
+      );
+    }
+  });
+
+  it("normalizes inject_as to injectAs", () => {
+    writeSkill(
+      "test-normalize",
+      `---
+name: test-normalize
+slug: test-normalize
+version: 1.0.0
+description: Test normalization
+author: test
+parameters: []
+tools: []
+context:
+  - kind: playbook
+    scope: test-scope
+    inject_as: TEST_CONTEXT
+---
+
+body`,
+    );
+    const skill = loadSkill("test-normalize", TEST_DIR);
+    expect(skill.context[0]).toHaveProperty("injectAs");
+    expect(skill.context[0]).not.toHaveProperty("inject_as");
+  });
+});
+
 describe("loadSkill - real files", () => {
   it("loads the sales-pipeline skill file", () => {
     const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
