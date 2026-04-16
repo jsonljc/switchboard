@@ -80,7 +80,7 @@ interface WorkUnit {
   parameters: Record<string, unknown>;
 
   suggestedMode?: "skill" | "pipeline" | "cartridge";
-  resolvedMode?: "skill" | "pipeline" | "cartridge";
+  resolvedMode: "skill" | "pipeline" | "cartridge"; // required after normalization
 
   idempotencyKey?: string;
   parentWorkUnitId?: string;
@@ -266,7 +266,7 @@ These are currently pure functions and inline logic, not standalone classes. Pha
 If the intent is not found in the registry, the platform returns a typed error before reaching governance:
 
 ```typescript
-interface IngresError {
+interface IngressError {
   type: "intent_not_found" | "validation_failed" | "trigger_not_allowed";
   intent: string;
   message: string;
@@ -348,7 +348,7 @@ interface ExecutionMode {
   ): Promise<ExecutionResult>;
 }
 
-class ModeRegistry {
+class ExecutionModeRegistry {
   private modes = new Map<string, ExecutionMode>();
   register(mode: ExecutionMode): void { ... }
   dispatch(modeName: string, ...): Promise<ExecutionResult> { ... }
@@ -460,7 +460,7 @@ interface WorkTrace {
 - **Pipeline:** `{ stagesCompleted, currentStage, jobId }`
 - **Cartridge:** `{ externalRefs, rollbackAvailable }`
 
-Shared fields for universal querying. modeMetrics for engine-specific detail.
+Shared fields for universal querying. modeMetrics for engine-specific detail. **Guardrail:** modeMetrics is append-only diagnostic detail and must not carry fields required for cross-mode querying. If a field needs to be queryable across modes, it belongs in the shared schema.
 
 ### What this kills
 
@@ -592,5 +592,32 @@ What matters now:
 - Control lives in the platform
 - The platform provides one shared execution contract
 - Execution modes are engines behind the contract, not identities above it
+
+---
+
+## Platform Invariants
+
+These are hard rules. Violating any of them is a design bug, not a trade-off.
+
+1. **No execution without a registered intent.** Every WorkUnit must resolve to a registered IntentRegistration. Unknown intents fail at ingress.
+2. **No execution without governance.** Every WorkUnit passes through the GovernanceGate before mode dispatch. No exceptions, no bypass paths.
+3. **No new direct path entrypoints.** All work enters through SubmitWorkRequest → platform ingress. No API route, chat handler, or scheduler may invoke an execution engine directly.
+4. **No mode may own platform identity.** Modes are engines behind the contract. No mode defines its own ingress, governance, or tracing.
+5. **All child work must re-enter through WorkUnit.** Pipeline stages, sub-skills, or follow-on actions that spawn additional work submit new WorkUnits with `parentWorkUnitId`. They do not bypass the contract.
+
+---
+
+## Architecture Narrative
+
+"Thin harness, fat skills" was a useful wedge principle, not a durable architecture principle. The runtime IS control, and control for a governed agent marketplace is not thin.
+
+What matters now:
+
+- Business logic stays in skills and agents
+- Control lives in the platform
+- The platform provides one shared execution contract
+- Execution modes are engines behind the contract, not identities above it
+
+We are not replacing our engines. We are replacing their sovereignty with one shared platform contract.
 
 One-line summary: **Every unit of work enters the same contract, is classified the same way, is governed before execution, runs in one of a few bounded modes, and is traced end-to-end in one shared model.**
