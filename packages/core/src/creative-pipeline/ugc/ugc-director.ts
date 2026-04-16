@@ -58,7 +58,14 @@ export interface DirectionOutput {
 // ── Deterministic selection helpers ──
 
 function pickFrom<T>(arr: T[], seed: number = 0): T {
-  return arr[seed % arr.length];
+  if (arr.length === 0) {
+    throw new Error("Cannot pick from empty array");
+  }
+  const selected = arr[seed % arr.length];
+  if (selected === undefined) {
+    throw new Error("Unexpected undefined in array");
+  }
+  return selected;
 }
 
 // ── Energy mapping ──

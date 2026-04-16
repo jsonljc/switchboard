@@ -74,6 +74,7 @@ interface UgcBriefInput {
   productImages?: string[];
   references?: string[];
   generateReferenceImages?: boolean;
+  brandVoice?: string | null;
 }
 
 async function executePhase(
@@ -111,12 +112,14 @@ async function executePhase(
       const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
       const brief = (ugcConfig.brief ?? {}) as UgcBriefInput;
       const { executeScriptingPhase } = await import("./phases/scripting.js");
-      const { CreativeWeights } = await import("@switchboard/schemas");
-      return await executeScriptingPhase({
-        planningOutput: planningOutput as {
-          structures: unknown[];
-          castingAssignments: unknown[];
-          identityPlans: unknown[];
+      type StructureSelection = import("./structure-engine.js").StructureSelection;
+      type CastingAssignment = import("./scene-caster.js").CastingAssignment;
+      type IdentityPlan = import("@switchboard/schemas").IdentityPlan;
+      const result = await executeScriptingPhase({
+        planningOutput: {
+          structures: (planningOutput.structures ?? []) as StructureSelection[],
+          castingAssignments: (planningOutput.castingAssignments ?? []) as CastingAssignment[],
+          identityPlans: (planningOutput.identityPlans ?? []) as IdentityPlan[],
         },
         brief: {
           productDescription: brief.productDescription ?? "",
@@ -127,7 +130,12 @@ async function executePhase(
           brandVoice: brief.brandVoice ?? null,
         },
         creatorPool: ctx.context.creatorPool as CreatorIdentity[],
-        creativeWeights: (ctx.context.creativeWeights as typeof CreativeWeights) ?? {
+        creativeWeights: (ctx.context.creativeWeights as {
+          structurePriorities: Record<string, number>;
+          motivatorPriorities: Record<string, number>;
+          scriptConstraints: string[];
+          hookDirectives: string[];
+        }) ?? {
           structurePriorities: {},
           motivatorPriorities: {},
           scriptConstraints: [],
@@ -135,6 +143,7 @@ async function executePhase(
         },
         apiKey: ctx.context.apiKey,
       });
+      return result as unknown as Record<string, unknown>;
     }
     default:
       // SP5+ replace remaining phases
