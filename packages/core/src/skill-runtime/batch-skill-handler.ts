@@ -97,6 +97,7 @@ export class BatchSkillHandler {
     let executedWrites = 0;
     let deniedWrites = 0;
     let pendingApprovalWrites = 0;
+    let writeError: string | undefined;
 
     for (const write of batchResult.proposedWrites) {
       const tool = this.config.tools.get(write.tool);
@@ -111,11 +112,16 @@ export class BatchSkillHandler {
         try {
           await op.execute(write.params);
           executedWrites++;
-        } catch {
-          break;
-        } // sequential — stop on failure
+        } catch (err) {
+          writeError = `Write ${write.tool}.${write.operation} failed: ${(err as Error).message}`;
+          console.error(writeError);
+          break; // sequential — stop on failure
+        }
       } else if (decision === "require-approval") {
         pendingApprovalWrites++;
+        console.warn(
+          `Batch write ${write.tool}.${write.operation} requires approval — queued for review`,
+        );
       } else {
         deniedWrites++;
       }
@@ -137,8 +143,8 @@ export class BatchSkillHandler {
       tokenUsage: executionResult.tokenUsage,
       durationMs: executionResult.trace.durationMs,
       turnCount: executionResult.trace.turnCount,
-      status: executionResult.trace.status,
-      error: executionResult.trace.error,
+      status: writeError ? "error" : executionResult.trace.status,
+      error: writeError ?? executionResult.trace.error,
       responseSummary: batchResult.summary.slice(0, 500),
       writeCount: executedWrites,
       createdAt: new Date(),

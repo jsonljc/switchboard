@@ -26,6 +26,7 @@ export function createBatchExecutorFunction(inngestClient: InngestLike, runtime:
       event: {
         data: {
           deploymentId: string;
+          orgId: string;
           skillSlug: string;
           trigger: string;
           scheduleName?: string;
@@ -41,7 +42,7 @@ export function createBatchExecutorFunction(inngestClient: InngestLike, runtime:
       return step.run("execute-batch-skill", () =>
         handler.execute({
           deploymentId: event.data.deploymentId,
-          orgId: "",
+          orgId: event.data.orgId,
           trigger: event.data.trigger,
           scheduleName: event.data.scheduleName,
         }),
