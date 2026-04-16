@@ -1382,3 +1382,30 @@ model OwnerTask {
   @@index([organizationId, priority])
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge Entry — org-scoped, versioned curated knowledge
+// ---------------------------------------------------------------------------
+
+enum KnowledgeKind {
+  playbook
+  policy
+  knowledge
+}
+
+model KnowledgeEntry {
+  id             String        @id @default(cuid())
+  organizationId String
+  kind           KnowledgeKind
+  scope          String
+  title          String
+  content        String        @db.Text
+  version        Int           @default(1)
+  active         Boolean       @default(true)
+  priority       Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, kind, scope, version])
+  @@index([organizationId, kind, scope, active])
+}
+
