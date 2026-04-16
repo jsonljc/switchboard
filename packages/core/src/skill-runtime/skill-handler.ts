@@ -5,12 +5,13 @@ import type {
   SkillExecutionTrace,
   SkillExecutionResult,
 } from "./types.js";
-import { SkillExecutionBudgetError } from "./types.js";
+import { SkillExecutionBudgetError, ContextResolutionError } from "./types.js";
 import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 import { ParameterResolutionError } from "./parameter-builder.js";
 import type { CircuitBreaker } from "./circuit-breaker.js";
 import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 import type { OutcomeLinker } from "./outcome-linker.js";
+import type { ContextResolverImpl } from "./context-resolver.js";
 import { createId } from "@paralleldrive/cuid2";
 import { createHash } from "node:crypto";
 
@@ -41,6 +42,7 @@ export class SkillHandler implements AgentHandler {
     private circuitBreaker: CircuitBreaker,
     private blastRadiusLimiter: BlastRadiusLimiter,
     private outcomeLinker: OutcomeLinker,
+    private contextResolver: { resolve: ContextResolverImpl["resolve"] },
   ) {}
 
   async onMessage(ctx: AgentContext): Promise<void> {
@@ -80,6 +82,25 @@ export class SkillHandler implements AgentHandler {
       throw err;
     }
 
+    // Resolve curated knowledge context
+    let contextVariables: Record<string, string> = {};
+    try {
+      const resolved = await this.contextResolver.resolve(this.config.orgId, this.skill.context);
+      contextVariables = resolved.variables;
+    } catch (err) {
+      if (err instanceof ContextResolutionError) {
+        await ctx.chat.send(
+          "I'm missing some required setup. Please contact your admin to configure knowledge entries.",
+        );
+        console.error(`Context resolution failed: ${err.message}`);
+        return;
+      }
+      throw err;
+    }
+
+    // Merge runtime params + knowledge context
+    const mergedParameters = { ...parameters, ...contextVariables };
+
     const messages = (ctx.conversation?.messages ?? []).map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -90,7 +111,7 @@ export class SkillHandler implements AgentHandler {
     try {
       result = await this.executor.execute({
         skill: this.skill,
-        parameters,
+        parameters: mergedParameters,
         messages,
         deploymentId: this.config.deploymentId,
         orgId: this.config.orgId,
@@ -108,7 +129,7 @@ export class SkillHandler implements AgentHandler {
         skillVersion: this.skill.version,
         trigger: "chat_message",
         sessionId: this.config.sessionId,
-        inputParametersHash: hashParameters(parameters),
+        inputParametersHash: hashParameters(mergedParameters),
         toolCalls: [],
         governanceDecisions: [],
         tokenUsage: { input: 0, output: 0 },
@@ -140,7 +161,7 @@ export class SkillHandler implements AgentHandler {
       skillVersion: this.skill.version,
       trigger: "chat_message",
       sessionId: this.config.sessionId,
-      inputParametersHash: hashParameters(parameters),
+      inputParametersHash: hashParameters(mergedParameters),
       toolCalls: result.toolCalls,
       governanceDecisions: result.trace.governanceDecisions,
       tokenUsage: result.tokenUsage,

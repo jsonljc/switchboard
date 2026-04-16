@@ -169,6 +169,7 @@ export class ChannelGateway {
         skillRuntime.circuitBreaker,
         skillRuntime.blastRadiusLimiter,
         skillRuntime.outcomeLinker,
+        skillRuntime.contextResolver,
       );
     }
 

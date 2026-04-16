@@ -54,6 +54,10 @@ function makeOutcomeLinker() {
   return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) } as any;
 }
 
+function makeContextResolver() {
+  return { resolve: vi.fn().mockResolvedValue({ variables: {}, metadata: [] }) } as any;
+}
+
 function makeExecutorResult(overrides: Record<string, unknown> = {}) {
   return {
     response: "Hello Alice",
@@ -83,6 +87,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("No parameter builder registered");
   });
@@ -101,6 +106,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -131,6 +137,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -153,6 +160,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
     await expect(handler.onMessage!(makeCtx())).rejects.toThrow("DB down");
   });
@@ -171,6 +179,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     await handler.onMessage!(makeCtx());
@@ -196,6 +205,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(false),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -217,6 +227,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(false),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -244,6 +255,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -275,6 +287,7 @@ describe("SkillHandler (generic)", () => {
       makeCircuitBreaker(),
       makeBlastRadius(),
       makeOutcomeLinker(),
+      makeContextResolver(),
     );
 
     const ctx = makeCtx();
@@ -283,5 +296,89 @@ describe("SkillHandler (generic)", () => {
     expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+
+  it("merges resolved context variables into execution parameters", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const contextResolver = {
+      resolve: vi.fn().mockResolvedValue({ variables: { BRAND_VOICE: "friendly" }, metadata: [] }),
+    };
+    const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+      contextResolver as any,
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(contextResolver.resolve).toHaveBeenCalledWith("org1", mockSkill.context);
+    expect(executor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parameters: { NAME: "Alice", BRAND_VOICE: "friendly" },
+      }),
+    );
+  });
+
+  it("fails before LLM call when required context is missing", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const { ContextResolutionError } = await import("./types.js");
+    const contextResolver = {
+      resolve: vi.fn().mockRejectedValue(new ContextResolutionError("policy", "global")),
+    };
+    const executor = { execute: vi.fn() };
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = new SkillHandler(
+      mockSkill,
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+      contextResolver as any,
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(executor.execute).not.toHaveBeenCalled();
+    expect(ctx.chat.send).toHaveBeenCalledWith(
+      "I'm missing some required setup. Please contact your admin to configure knowledge entries.",
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("proceeds normally when no context requirements exist", async () => {
+    const builder: ParameterBuilder = vi.fn().mockResolvedValue({ NAME: "Alice" });
+    const executor = { execute: vi.fn().mockResolvedValue(makeExecutorResult()) };
+    const handler = new SkillHandler(
+      { ...mockSkill, context: [] },
+      executor as any,
+      new Map([["test-skill", builder]]),
+      mockStores,
+      { deploymentId: "d1", orgId: "org1", contactId: "c1", sessionId: "sess-1" },
+      makeTraceStore(),
+      makeCircuitBreaker(),
+      makeBlastRadius(),
+      makeOutcomeLinker(),
+      makeContextResolver(),
+    );
+
+    const ctx = makeCtx();
+    await handler.onMessage!(ctx);
+
+    expect(executor.execute).toHaveBeenCalled();
+    expect(ctx.chat.send).toHaveBeenCalledWith("Hello Alice");
   });
 });
