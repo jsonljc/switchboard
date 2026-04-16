@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 interface LandingNavProps {
   isAuthenticated: boolean;
@@ -21,12 +20,11 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
   const pathname = usePathname();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
+    const onScroll = () => setScrolled(window.scrollY > 48);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close menu on route change
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
@@ -35,33 +33,55 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
     <header>
       <nav
         aria-label="Main navigation"
-        className={cn(
-          "fixed left-0 right-0 top-0 z-50 transition-all",
-          scrolled
-            ? "bg-[hsl(45_25%_98%/0.95)] shadow-sm backdrop-blur-sm border-b border-[hsl(35_12%_89%)]"
-            : "bg-transparent",
-        )}
-        style={{ transitionDuration: "300ms" }}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          transition: "background 250ms ease, border-color 250ms ease",
+          background: scrolled ? "rgba(249, 248, 246, 0.96)" : "transparent",
+          borderBottom: scrolled ? "1px solid #DDD9D3" : "1px solid transparent",
+          backdropFilter: scrolled ? "blur(8px)" : "none",
+        }}
       >
-        <div className="page-width flex h-16 items-center justify-between">
-          {/* Logo */}
+        <div
+          className="page-width"
+          style={{
+            display: "flex",
+            height: "4rem",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          {/* Wordmark */}
           <Link
             href="/"
-            className="font-display text-xl font-medium tracking-tight"
-            style={{ color: "hsl(30 8% 10%)" }}
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "1.125rem",
+              letterSpacing: "-0.015em",
+              color: "#1A1714",
+              textDecoration: "none",
+            }}
           >
             Switchboard
           </Link>
 
-          {/* Desktop nav links */}
-          <div className="hidden items-center gap-8 md:flex">
+          {/* Desktop nav */}
+          <div style={{ display: "none", alignItems: "center", gap: "2rem" }} className="md:flex">
             {NAV_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
-                className="text-sm font-medium transition-colors"
                 style={{
-                  color: pathname === href ? "hsl(30 8% 10%)" : "hsl(30 6% 48%)",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  color: pathname === href ? "#1A1714" : "#6B6560",
+                  textDecoration: "none",
+                  transition: "color 150ms ease",
                 }}
               >
                 {label}
@@ -70,30 +90,50 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
           </div>
 
           {/* Desktop right actions */}
-          <div className="hidden items-center gap-4 md:flex">
+          <div
+            style={{ display: "none", alignItems: "center", gap: "1.25rem" }}
+            className="md:flex"
+          >
             {isAuthenticated ? (
               <Link
                 href="/me"
-                className="text-sm font-medium transition-colors"
-                style={{ color: "hsl(30 6% 48%)" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
               >
                 Dashboard
               </Link>
             ) : (
               <Link
                 href="/login"
-                className="text-sm font-medium transition-colors"
-                style={{ color: "hsl(30 6% 48%)" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
               >
                 Sign in
               </Link>
             )}
             <Link
               href="/get-started"
-              className="rounded-full px-5 py-2 text-sm font-medium transition-all"
               style={{
-                background: "hsl(30 55% 46%)",
-                color: "white",
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                background: "#1A1714",
+                color: "#F5F3F0",
+                borderRadius: "9999px",
+                padding: "0.5rem 1.25rem",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                transition: "opacity 150ms ease",
               }}
             >
               Get early access
@@ -102,8 +142,17 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
 
           {/* Mobile hamburger */}
           <button
-            className="flex items-center justify-center rounded-lg p-2 md:hidden"
-            style={{ color: "hsl(30 8% 30%)" }}
+            className="md:hidden"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0.5rem",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#1A1714",
+            }}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             onClick={() => setMenuOpen((v) => !v)}
           >
@@ -153,45 +202,82 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
         {/* Mobile menu */}
         {menuOpen && (
           <div
-            className="border-t md:hidden"
+            className="md:hidden"
             style={{
-              background: "hsl(45 25% 98%)",
-              borderColor: "hsl(35 12% 89%)",
+              background: "#F9F8F6",
+              borderTop: "1px solid #DDD9D3",
             }}
           >
-            <div className="page-width flex flex-col gap-1 py-4">
+            <div
+              className="page-width"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+                padding: "1rem 0",
+              }}
+            >
               {NAV_LINKS.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
-                  style={{ color: "hsl(30 6% 35%)" }}
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 600,
+                    fontSize: "0.9375rem",
+                    color: "#1A1714",
+                    textDecoration: "none",
+                    padding: "0.625rem 0.75rem",
+                    borderRadius: "0.5rem",
+                  }}
                 >
                   {label}
                 </Link>
               ))}
-              <div className="my-2 h-px" style={{ background: "hsl(35 12% 89%)" }} />
+              <div style={{ height: "1px", background: "#DDD9D3", margin: "0.5rem 0.75rem" }} />
               {isAuthenticated ? (
                 <Link
                   href="/me"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium"
-                  style={{ color: "hsl(30 6% 40%)" }}
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 600,
+                    fontSize: "0.9375rem",
+                    color: "#6B6560",
+                    textDecoration: "none",
+                    padding: "0.625rem 0.75rem",
+                  }}
                 >
                   Dashboard
                 </Link>
               ) : (
                 <Link
                   href="/login"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium"
-                  style={{ color: "hsl(30 6% 40%)" }}
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 600,
+                    fontSize: "0.9375rem",
+                    color: "#6B6560",
+                    textDecoration: "none",
+                    padding: "0.625rem 0.75rem",
+                  }}
                 >
                   Sign in
                 </Link>
               )}
               <Link
                 href="/get-started"
-                className="mt-1 rounded-full px-4 py-3 text-center text-sm font-medium"
-                style={{ background: "hsl(30 55% 46%)", color: "white" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 600,
+                  fontSize: "0.9375rem",
+                  background: "#1A1714",
+                  color: "#F5F3F0",
+                  borderRadius: "9999px",
+                  padding: "0.75rem 1rem",
+                  textAlign: "center",
+                  textDecoration: "none",
+                  marginTop: "0.25rem",
+                }}
               >
                 Get early access
               </Link>

@@ -1,214 +1,280 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { AgentMark } from "@/components/character/agent-mark";
 
-export function HomepageHero() {
-  const [visible, setVisible] = useState(false);
+interface PreviewAgent {
+  name: string;
+  description: string;
+  trustScore: number;
+  slug: string;
+}
 
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 60);
-    return () => clearTimeout(t);
-  }, []);
+interface HomepageHeroProps {
+  previewAgent?: PreviewAgent | null;
+}
 
-  const s = (delay: number) => ({
-    opacity: visible ? 1 : 0,
-    transform: visible ? "translateY(0)" : "translateY(14px)",
-    transition: `opacity 0.75s ease, transform 0.75s ease`,
-    transitionDelay: `${delay}ms`,
-  });
-
+export function HomepageHero({ previewAgent }: HomepageHeroProps) {
   return (
-    <section
-      className="relative overflow-hidden"
-      style={{
-        background: "hsl(45 25% 98%)",
-        minHeight: "92vh",
-      }}
-    >
-      {/* Warm radial wash — top right */}
+    <section style={{ background: "#F5F3F0", minHeight: "92vh" }}>
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="page-width"
         style={{
-          background:
-            "radial-gradient(ellipse 70% 60% at 75% 15%, hsl(38 70% 91%) 0%, transparent 65%)",
+          display: "flex",
+          alignItems: "center",
+          minHeight: "92vh",
+          paddingTop: "8rem",
+          paddingBottom: "5rem",
         }}
-      />
-
-      {/* Abstract SVG illustration — connection nodes */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute right-0 top-0 hidden xl:block"
-        style={{ width: 580, height: 580 }}
       >
-        <svg viewBox="0 0 580 580" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Soft background circles */}
-          <circle cx="370" cy="210" r="200" fill="hsl(30 55% 46% / 0.04)" />
-          <circle cx="460" cy="130" r="140" fill="hsl(38 65% 88% / 0.55)" />
-          <ellipse cx="440" cy="290" rx="180" ry="110" fill="hsl(38 55% 92% / 0.7)" />
-          <circle
-            cx="300"
-            cy="320"
-            r="260"
-            stroke="hsl(30 40% 70% / 0.1)"
-            strokeWidth="0.75"
-            fill="none"
-          />
-
-          {/* Connection lines */}
-          <line
-            x1="180"
-            y1="160"
-            x2="370"
-            y2="210"
-            stroke="hsl(30 45% 60% / 0.18)"
-            strokeWidth="0.75"
-            strokeDasharray="4 6"
-          />
-          <line
-            x1="370"
-            y1="210"
-            x2="460"
-            y2="130"
-            stroke="hsl(30 45% 60% / 0.18)"
-            strokeWidth="0.75"
-            strokeDasharray="4 6"
-          />
-          <line
-            x1="460"
-            y1="130"
-            x2="510"
-            y2="260"
-            stroke="hsl(30 45% 60% / 0.15)"
-            strokeWidth="0.75"
-            strokeDasharray="4 6"
-          />
-          <line
-            x1="370"
-            y1="210"
-            x2="440"
-            y2="340"
-            stroke="hsl(30 45% 60% / 0.12)"
-            strokeWidth="0.75"
-            strokeDasharray="4 6"
-          />
-
-          {/* Nodes */}
-          <circle cx="180" cy="160" r="5" fill="hsl(30 55% 46% / 0.25)" />
-          <circle cx="370" cy="210" r="8" fill="hsl(30 55% 46% / 0.18)" />
-          <circle cx="460" cy="130" r="6" fill="hsl(30 55% 46% / 0.22)" />
-          <circle cx="510" cy="260" r="4" fill="hsl(30 45% 60% / 0.2)" />
-          <circle cx="440" cy="340" r="5" fill="hsl(30 45% 60% / 0.18)" />
-
-          {/* Inner glow on main node */}
-          <circle cx="370" cy="210" r="18" fill="hsl(30 55% 46% / 0.07)" />
-          <circle cx="370" cy="210" r="32" fill="hsl(30 55% 46% / 0.04)" />
-        </svg>
-      </div>
-
-      {/* Content */}
-      <div
-        className="page-width relative z-10 flex flex-col justify-center"
-        style={{ minHeight: "92vh", paddingTop: "7rem", paddingBottom: "5rem" }}
-      >
-        <div style={{ maxWidth: 640 }}>
-          {/* Eyebrow */}
-          <div className="mb-8 inline-flex items-center gap-2.5" style={s(80)}>
-            <span
-              className="h-1.5 w-1.5 rounded-full"
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: "3rem",
+            alignItems: "center",
+            width: "100%",
+          }}
+          className="md:grid-cols-[1fr_auto] md:gap-16 lg:gap-24"
+        >
+          {/* ── Left column ── */}
+          <div>
+            <p
               style={{
-                background: "hsl(30 55% 46%)",
-                boxShadow: "0 0 0 3px hsl(30 55% 46% / 0.2)",
-                animation: "pulse 2.4s ease-in-out infinite",
+                marginBottom: "1.5rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "#9C958F",
               }}
-            />
-            <span
-              className="text-xs font-medium uppercase tracking-widest"
-              style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
             >
               AI Agent Marketplace
-            </span>
+            </p>
+
+            <h1
+              style={{
+                fontSize: "clamp(3rem, 5.5vw, 5.5rem)",
+                fontWeight: 700,
+                lineHeight: 1.02,
+                letterSpacing: "-0.028em",
+                color: "#1A1714",
+                margin: 0,
+              }}
+            >
+              Your AI sales team.
+              <br />
+              Ready in minutes.
+            </h1>
+
+            <p
+              style={{
+                marginTop: "1.5rem",
+                fontSize: "1.125rem",
+                lineHeight: 1.6,
+                color: "#6B6560",
+                maxWidth: "44ch",
+              }}
+            >
+              Browse AI agents built for growth. Deploy to WhatsApp, Telegram, or your website. They
+              qualify leads, book calls, and earn your trust over time.
+            </p>
+
+            <div
+              style={{
+                marginTop: "2.5rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "1.5rem",
+                flexWrap: "wrap",
+              }}
+            >
+              <Link
+                href="/get-started"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: "#1A1714",
+                  color: "#F5F3F0",
+                  borderRadius: "9999px",
+                  padding: "0.875rem 1.75rem",
+                  fontSize: "0.9375rem",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Get early access
+              </Link>
+              <Link
+                href="/agents"
+                style={{
+                  fontSize: "0.9375rem",
+                  fontWeight: 600,
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
+              >
+                Browse agents →
+              </Link>
+            </div>
+
+            <p style={{ marginTop: "2rem", fontSize: "0.8125rem", color: "#9C958F" }}>
+              Join 200+ businesses on the early access list
+            </p>
           </div>
 
-          {/* Headline — the centrepiece */}
-          <h1
-            className="font-display"
-            style={{
-              fontSize: "clamp(3.2rem, 6.5vw, 6.2rem)",
-              lineHeight: 1.02,
-              letterSpacing: "-0.025em",
-              fontWeight: 300,
-              color: "hsl(30 8% 10%)",
-              ...s(180),
-            }}
-          >
-            Your AI sales team,
-            <br />
-            <em
+          {/* ── Right column: agent card preview (desktop only) ── */}
+          <div className="hidden md:flex" style={{ justifyContent: "flex-end" }}>
+            <div
               style={{
-                fontStyle: "italic",
-                fontWeight: 300,
-                color: "hsl(30 48% 40%)",
+                width: "17rem",
+                background: "#F9F8F6",
+                border: "1px solid #DDD9D3",
+                borderRadius: "1.25rem",
+                padding: "1.75rem",
+                flexShrink: 0,
               }}
             >
-              ready in minutes.
-            </em>
-          </h1>
+              {/* Character mark */}
+              <div
+                style={{ display: "flex", justifyContent: "flex-start", marginBottom: "1.25rem" }}
+              >
+                <AgentMark agent="alex" size="lg" />
+              </div>
 
-          {/* Subhead */}
-          <p
-            className="mt-8 text-lg leading-relaxed"
-            style={{
-              color: "hsl(30 6% 40%)",
-              maxWidth: 500,
-              ...s(320),
-            }}
-          >
-            Browse AI agents built for growth. Deploy to WhatsApp, Telegram, or your website. They
-            qualify leads, book calls, and earn your trust over time.
-          </p>
+              {/* Agent info */}
+              <p
+                style={{
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: "#9C958F",
+                  marginBottom: "0.375rem",
+                }}
+              >
+                Lead Qualifier
+              </p>
+              <h3
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 700,
+                  letterSpacing: "-0.015em",
+                  color: "#1A1714",
+                  margin: 0,
+                }}
+              >
+                {previewAgent?.name ?? "Speed-to-Lead"}
+              </h3>
+              <p
+                style={{
+                  marginTop: "0.625rem",
+                  fontSize: "0.8125rem",
+                  lineHeight: 1.55,
+                  color: "#6B6560",
+                }}
+              >
+                {previewAgent?.description ??
+                  "Responds to every new lead in under 5 minutes. Qualifies, books, and follows up — so you never miss a prospect."}
+              </p>
 
-          {/* CTAs */}
-          <div className="mt-10 flex items-center gap-5" style={s(460)}>
-            <Link
-              href="/get-started"
-              className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-medium tracking-wide"
-              style={{
-                background: "hsl(30 55% 46%)",
-                color: "white",
-                transition: "opacity 0.18s ease, transform 0.18s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-                (e.currentTarget as HTMLElement).style.transform = "scale(1.025)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-                (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-              }}
-            >
-              Get early access
-            </Link>
-            <Link
-              href="/agents"
-              className="text-sm font-medium transition-colors"
-              style={{ color: "hsl(30 6% 50%)" }}
-            >
-              Browse agents →
-            </Link>
+              {/* Trust score */}
+              <div
+                style={{
+                  marginTop: "1.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: "2rem",
+                    height: "2rem",
+                    borderRadius: "9999px",
+                    background: "rgba(160,120,80,0.1)",
+                    border: "1.5px solid rgba(160,120,80,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#A07850",
+                  }}
+                >
+                  {previewAgent?.trustScore ?? 84}
+                </div>
+                <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>trust score</span>
+              </div>
+
+              {/* Capabilities */}
+              <div
+                style={{
+                  marginTop: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                }}
+              >
+                {[
+                  "Responds in under 5 minutes",
+                  "Qualifies leads automatically",
+                  "Books calls to your calendar",
+                ].map((cap) => (
+                  <div
+                    key={cap}
+                    style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}
+                  >
+                    <div
+                      style={{
+                        width: "1rem",
+                        height: "1rem",
+                        borderRadius: "9999px",
+                        background: "rgba(160,120,80,0.1)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        marginTop: "0.125rem",
+                      }}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                        <path
+                          d="M1.5 4l2 2 3-3"
+                          stroke="#A07850"
+                          strokeWidth="1.25"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                    <span style={{ fontSize: "0.8125rem", color: "#6B6560", lineHeight: 1.4 }}>
+                      {cap}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <Link
+                href="/agents/speed-to-lead"
+                style={{
+                  display: "block",
+                  marginTop: "1.5rem",
+                  padding: "0.625rem 1rem",
+                  background: "#EDEAE5",
+                  border: "1px solid #DDD9D3",
+                  borderRadius: "9999px",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  color: "#1A1714",
+                  textAlign: "center",
+                  textDecoration: "none",
+                }}
+              >
+                Learn more →
+              </Link>
+            </div>
           </div>
-
-          {/* Social proof */}
-          <p
-            className="mt-8 text-xs"
-            style={{
-              color: "hsl(30 5% 62%)",
-              ...s(640),
-            }}
-          >
-            Join 200+ businesses on the early access list
-          </p>
         </div>
       </div>
     </section>

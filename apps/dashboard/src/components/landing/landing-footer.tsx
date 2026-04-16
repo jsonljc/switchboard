@@ -2,15 +2,33 @@ import Link from "next/link";
 
 export function LandingFooter() {
   return (
-    <footer style={{ background: "hsl(40 20% 96%)", borderTop: "1px solid hsl(35 12% 90%)" }}>
-      <div className="page-width py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+    <footer style={{ background: "#EDEAE5", borderTop: "1px solid #DDD9D3" }}>
+      <div className="page-width" style={{ paddingTop: "3rem", paddingBottom: "3rem" }}>
+        <div
+          style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}
+          className="sm:grid-cols-4"
+        >
           {/* Brand */}
-          <div className="col-span-2 sm:col-span-1">
-            <span className="font-display text-xl font-medium" style={{ color: "hsl(30 8% 12%)" }}>
+          <div style={{ gridColumn: "span 2" }} className="sm:col-span-1">
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: "1.125rem",
+                letterSpacing: "-0.015em",
+                color: "#1A1714",
+              }}
+            >
               Switchboard
             </span>
-            <p className="mt-2 text-xs leading-relaxed" style={{ color: "hsl(30 5% 52%)" }}>
+            <p
+              style={{
+                marginTop: "0.5rem",
+                fontSize: "0.8125rem",
+                color: "#9C958F",
+                lineHeight: 1.5,
+              }}
+            >
               AI agents that earn your trust over time.
             </p>
           </div>
@@ -18,22 +36,33 @@ export function LandingFooter() {
           {/* Product */}
           <div>
             <p
-              className="mb-3 text-xs font-medium uppercase tracking-wider"
-              style={{ color: "hsl(30 5% 48%)" }}
+              style={{
+                marginBottom: "0.75rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "#9C958F",
+              }}
             >
               Product
             </p>
-            <div className="flex flex-col gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {[
                 { href: "/agents", label: "Browse agents" },
                 { href: "/how-it-works", label: "How it works" },
                 { href: "/pricing", label: "Pricing" },
+                { href: "/get-started", label: "Get early access" },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
-                  className="text-sm transition-colors"
-                  style={{ color: "hsl(30 5% 50%)" }}
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "0.875rem",
+                    color: "#6B6560",
+                    textDecoration: "none",
+                  }}
                 >
                   {label}
                 </Link>
@@ -44,55 +73,59 @@ export function LandingFooter() {
           {/* Company */}
           <div>
             <p
-              className="mb-3 text-xs font-medium uppercase tracking-wider"
-              style={{ color: "hsl(30 5% 48%)" }}
+              style={{
+                marginBottom: "0.75rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "#9C958F",
+              }}
             >
               Company
             </p>
-            <div className="flex flex-col gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               <a
                 href="mailto:builders@switchboard.ai"
-                className="text-sm transition-colors"
-                style={{ color: "hsl(30 5% 50%)" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
               >
                 Build an agent
               </a>
               <a
                 href="mailto:hello@switchboard.ai"
-                className="text-sm transition-colors"
-                style={{ color: "hsl(30 5% 50%)" }}
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
               >
                 Contact us
               </a>
             </div>
           </div>
-
-          {/* CTA */}
-          <div>
-            <p
-              className="mb-3 text-xs font-medium uppercase tracking-wider"
-              style={{ color: "hsl(30 5% 48%)" }}
-            >
-              Get started
-            </p>
-            <Link
-              href="/get-started"
-              className="inline-flex items-center gap-1.5 text-sm font-medium transition-colors"
-              style={{ color: "hsl(30 48% 42%)" }}
-            >
-              Get early access →
-            </Link>
-          </div>
         </div>
 
         <div
-          className="mt-10 flex flex-col gap-2 border-t pt-8 sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderColor: "hsl(35 12% 89%)" }}
+          style={{
+            marginTop: "2.5rem",
+            paddingTop: "2rem",
+            borderTop: "1px solid #DDD9D3",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          }}
+          className="sm:flex-row sm:items-center sm:justify-between"
         >
-          <span className="text-xs" style={{ color: "hsl(30 5% 58%)" }}>
+          <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>
             &copy; {new Date().getFullYear()} Switchboard. All rights reserved.
           </span>
-          <span className="text-xs" style={{ color: "hsl(30 5% 62%)" }}>
+          <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>
             AI agents that earn autonomy through trust.
           </span>
         </div>

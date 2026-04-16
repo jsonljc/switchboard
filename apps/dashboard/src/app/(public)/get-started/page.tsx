@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { getListingBySlug } from "@/lib/demo-data";
-import { OperatorCharacter } from "@/components/character/operator-character";
+import { AgentMark } from "@/components/character/agent-mark";
 
 export const metadata: Metadata = {
   title: "Get early access — Switchboard",
@@ -9,38 +9,56 @@ export const metadata: Metadata = {
 };
 
 export default async function GetStartedPage() {
-  // Show the Speed-to-Lead agent card as the right-panel visual
   const agent = await getListingBySlug("speed-to-lead").catch(() => null);
 
   return (
     <section
-      className="flex min-h-screen flex-col justify-center py-32"
-      style={{ background: "hsl(45 25% 98%)" }}
+      style={{
+        background: "#F5F3F0",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        paddingTop: "8rem",
+        paddingBottom: "5rem",
+      }}
     >
       <div className="page-width">
         <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
           {/* ── Left: form ── */}
           <div>
             <p
-              className="mb-4 text-xs font-medium uppercase tracking-widest"
-              style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+              style={{
+                marginBottom: "0.75rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "#9C958F",
+              }}
             >
               Early access
             </p>
             <h1
-              className="mb-3 font-display font-light"
               style={{
                 fontSize: "clamp(2.4rem, 4.5vw, 4rem)",
-                letterSpacing: "-0.025em",
-                lineHeight: 1.06,
-                color: "hsl(30 8% 10%)",
+                fontWeight: 700,
+                letterSpacing: "-0.028em",
+                lineHeight: 1.02,
+                color: "#1A1714",
+                marginBottom: "1rem",
               }}
             >
               Get early access.
             </h1>
             <p
-              className="mb-10 text-base leading-relaxed"
-              style={{ color: "hsl(30 5% 44%)", maxWidth: "44ch" }}
+              style={{
+                fontSize: "1.0625rem",
+                lineHeight: 1.65,
+                color: "#6B6560",
+                maxWidth: "44ch",
+                marginBottom: "2.5rem",
+              }}
             >
               We&rsquo;re onboarding businesses one by one. We review every request personally and
               follow up with next steps.
@@ -48,107 +66,132 @@ export default async function GetStartedPage() {
 
             <WaitlistForm />
 
-            {/* Qualifier */}
-            <p className="mt-8 text-xs" style={{ color: "hsl(30 5% 58%)" }}>
+            <p style={{ marginTop: "2rem", fontSize: "0.8125rem", color: "#9C958F" }}>
               Best for service businesses using chat, leads, or inbound sales.
             </p>
           </div>
 
           {/* ── Right: agent preview ── */}
           <div className="hidden lg:block">
-            {agent ? (
-              <div
-                className="rounded-2xl p-8"
+            <div
+              style={{
+                background: "#F9F8F6",
+                border: "1px solid #DDD9D3",
+                borderRadius: "1.25rem",
+                padding: "2rem",
+              }}
+            >
+              {/* Character mark */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <AgentMark agent="alex" size="xl" />
+              </div>
+
+              {/* Agent info */}
+              <p
                 style={{
-                  background: "hsl(38 35% 96%)",
-                  border: "1px solid hsl(35 18% 88%)",
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: "#9C958F",
+                  marginBottom: "0.375rem",
                 }}
               >
-                {/* Character */}
-                <div className="mb-6 flex justify-center">
-                  <OperatorCharacter roleFocus="leads" />
+                Featured agent
+              </p>
+              <h3
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                  color: "#1A1714",
+                  marginBottom: "0.625rem",
+                }}
+              >
+                {agent?.name ?? "Speed-to-Lead"}
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.9375rem",
+                  lineHeight: 1.6,
+                  color: "#6B6560",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                {agent?.description ??
+                  "Responds to every new lead in under 5 minutes. Qualifies, books, and follows up — so you never miss a prospect."}
+              </p>
+
+              {/* Trust score */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div
+                  style={{
+                    width: "2.25rem",
+                    height: "2.25rem",
+                    borderRadius: "9999px",
+                    background: "rgba(160,120,80,0.1)",
+                    border: "1.5px solid rgba(160,120,80,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    color: "#A07850",
+                  }}
+                >
+                  {agent?.trustScore ?? 84}
                 </div>
+                <span style={{ fontSize: "0.875rem", color: "#9C958F" }}>trust score</span>
+              </div>
 
-                {/* Agent info */}
-                <div className="text-center">
-                  <p
-                    className="mb-1 text-xs font-medium uppercase tracking-widest"
-                    style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.12em" }}
-                  >
-                    Featured agent
-                  </p>
-                  <h3
-                    className="mb-2 font-display text-2xl font-light"
-                    style={{ color: "hsl(30 8% 10%)", letterSpacing: "-0.01em" }}
-                  >
-                    {agent.name}
-                  </h3>
-                  <p
-                    className="mb-6 text-sm leading-relaxed"
-                    style={{ color: "hsl(30 5% 46%)", maxWidth: "32ch", margin: "0 auto 1.5rem" }}
-                  >
-                    {agent.description}
-                  </p>
-
-                  {/* Trust score */}
+              {/* Capabilities */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {[
+                  "Responds to inbound leads in under 2 minutes",
+                  "Qualifies intent, budget, and urgency",
+                  "Routes warm leads to your calendar",
+                ].map((cap) => (
                   <div
-                    className="inline-flex items-center gap-2 rounded-full px-4 py-2"
-                    style={{ background: "hsl(30 55% 46% / 0.1)" }}
+                    key={cap}
+                    style={{ display: "flex", alignItems: "flex-start", gap: "0.625rem" }}
                   >
                     <div
-                      className="h-2 w-2 rounded-full"
-                      style={{ background: "hsl(30 55% 46%)" }}
-                    />
-                    <span className="text-xs font-medium" style={{ color: "hsl(30 48% 38%)" }}>
-                      Trust score: {agent.trustScore}/100
-                    </span>
-                  </div>
-                </div>
-
-                {/* Capabilities */}
-                <div className="mt-6 space-y-2">
-                  {[
-                    "Responds to inbound leads in under 2 minutes",
-                    "Qualifies intent, budget, and urgency",
-                    "Routes warm leads to your calendar",
-                  ].map((cap) => (
-                    <div key={cap} className="flex items-center gap-2.5">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      style={{
+                        width: "1.125rem",
+                        height: "1.125rem",
+                        borderRadius: "9999px",
+                        background: "rgba(160,120,80,0.1)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        marginTop: "0.125rem",
+                      }}
+                    >
+                      <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
                         <path
-                          d="M2 6l3 3 5-5"
-                          stroke="hsl(30 55% 46%)"
-                          strokeWidth="1.5"
+                          d="M1.5 4.5l2 2 3.5-3.5"
+                          stroke="#A07850"
+                          strokeWidth="1.25"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                       </svg>
-                      <span className="text-xs" style={{ color: "hsl(30 5% 42%)" }}>
-                        {cap}
-                      </span>
                     </div>
-                  ))}
-                </div>
+                    <span style={{ fontSize: "0.875rem", color: "#6B6560", lineHeight: 1.45 }}>
+                      {cap}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ) : (
-              /* Fallback if no DB data */
-              <div
-                className="rounded-2xl p-8 text-center"
-                style={{
-                  background: "hsl(38 35% 96%)",
-                  border: "1px solid hsl(35 18% 88%)",
-                }}
-              >
-                <p
-                  className="font-display text-xl font-light"
-                  style={{ color: "hsl(30 5% 50%)", letterSpacing: "-0.01em" }}
-                >
-                  AI agents that earn your trust over time.
-                </p>
-                <p className="mt-3 text-sm" style={{ color: "hsl(30 5% 58%)" }}>
-                  Start free. No credit card required. Deploy in minutes.
-                </p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

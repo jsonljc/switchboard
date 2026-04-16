@@ -10,33 +10,48 @@ export const metadata: Metadata = {
 const ACTS = [
   {
     n: "01",
+    label: "Browse",
     title: "Find the right agent for the job",
-    subtitle: "Browse",
     copy: "Every agent is built around a specific business outcome — qualifying leads, booking calls, re-engaging cold contacts. Browse by outcome, not by feature list. Each one is designed for a specific job, so you're not buying potential — you're deploying a proven pattern.",
     visual: (
       <div
-        className="flex items-center gap-3 rounded-xl p-5"
-        style={{ background: "hsl(38 45% 94%)", border: "1px solid hsl(35 18% 88%)" }}
+        style={{
+          background: "#F9F8F6",
+          border: "1px solid #DDD9D3",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+        }}
       >
         {[
-          { label: "Speed-to-Lead", role: "Qualifies leads", color: "hsl(238 28% 56%)" },
-          { label: "Sales Closer", role: "Books calls", color: "hsl(152 28% 40%)" },
-        ].map(({ label, role, color }) => (
+          { name: "Speed-to-Lead", role: "Qualifies leads" },
+          { name: "Sales Closer", role: "Books calls" },
+          { name: "Nurture Specialist", role: "Re-engages contacts" },
+        ].map(({ name, role }) => (
           <div
-            key={label}
-            className="flex-1 rounded-lg p-3 text-center"
-            style={{ background: "hsl(0 0% 100%)", border: "1px solid hsl(35 12% 90%)" }}
+            key={name}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0.75rem 1rem",
+              background: "#F5F3F0",
+              border: "1px solid #DDD9D3",
+              borderRadius: "0.5rem",
+              marginBottom: "0.5rem",
+            }}
           >
-            <div
-              className="mx-auto mb-2 h-8 w-8 rounded-full"
-              style={{ background: `${color}20`, border: `1.5px solid ${color}40` }}
-            />
-            <p className="text-xs font-medium" style={{ color: "hsl(30 8% 12%)" }}>
-              {label}
-            </p>
-            <p className="mt-0.5 text-[10px]" style={{ color: "hsl(30 5% 55%)" }}>
+            <span style={{ fontWeight: 700, fontSize: "0.875rem", color: "#1A1714" }}>{name}</span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "#9C958F",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
               {role}
-            </p>
+            </span>
           </div>
         ))}
       </div>
@@ -44,51 +59,59 @@ const ACTS = [
   },
   {
     n: "02",
+    label: "Deploy",
     title: "Connect it to your channels in minutes",
-    subtitle: "Deploy",
     copy: "No code. Choose a channel, connect it to your account, and the agent is live. We handle the integration — you handle the business. Channels are where your customers already are.",
     visual: (
       <div
-        className="rounded-xl p-5"
-        style={{ background: "hsl(38 45% 94%)", border: "1px solid hsl(35 18% 88%)" }}
+        style={{
+          background: "#F9F8F6",
+          border: "1px solid #DDD9D3",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+        }}
       >
-        <div className="flex items-center justify-between">
-          {[
-            { label: "WhatsApp", color: "hsl(142 50% 42%)" },
-            { label: "Telegram", color: "hsl(206 62% 50%)" },
-            { label: "Web widget", color: "hsl(30 55% 46%)" },
-          ].map(({ label, color }, i) => (
-            <div key={label} className="flex flex-col items-center gap-2">
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full"
-                style={{ background: `${color}15`, border: `1.5px solid ${color}35` }}
-              >
-                <div className="h-3 w-3 rounded-full" style={{ background: color }} />
-              </div>
-              <span className="text-[10px] font-medium" style={{ color: "hsl(30 5% 45%)" }}>
-                {label}
-              </span>
-              {i < 2 && (
-                <div
-                  className="absolute"
-                  style={{
-                    width: 20,
-                    height: 1,
-                    background: "hsl(30 15% 80%)",
-                  }}
-                />
-              )}
+        <div
+          style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}
+        >
+          {["WhatsApp", "Telegram", "Web widget"].map((ch) => (
+            <div
+              key={ch}
+              style={{
+                flex: 1,
+                padding: "0.75rem 0.5rem",
+                background: "#F5F3F0",
+                border: "1px solid #DDD9D3",
+                borderRadius: "0.5rem",
+                textAlign: "center",
+              }}
+            >
+              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#6B6560" }}>{ch}</span>
             </div>
           ))}
-          <div className="h-px flex-1 mx-3" style={{ background: "hsl(30 15% 80%)" }} />
-          <div
-            className="flex h-10 items-center gap-2 rounded-full px-4"
-            style={{ background: "hsl(30 55% 46%)", color: "white" }}
-          >
-            <span className="text-xs font-medium">Go live</span>
-          </div>
         </div>
-        <p className="mt-4 text-xs text-center" style={{ color: "hsl(30 5% 55%)" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0.625rem 1.25rem",
+            background: "#1A1714",
+            borderRadius: "9999px",
+            width: "fit-content",
+            margin: "0 auto",
+          }}
+        >
+          <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#F5F3F0" }}>Go live</span>
+        </div>
+        <p
+          style={{
+            marginTop: "0.875rem",
+            fontSize: "0.75rem",
+            color: "#9C958F",
+            textAlign: "center",
+          }}
+        >
           No code required — connect and launch in minutes
         </p>
       </div>
@@ -96,13 +119,17 @@ const ACTS = [
   },
   {
     n: "03",
+    label: "Earn trust",
     title: "Earn trust. Earn autonomy.",
-    subtitle: "Earn trust",
-    copy: "Every agent starts supervised. It proves itself through real tasks — you review and approve its first actions. As its trust score climbs, it earns more operating freedom. You step in only when it flags something important. Governance isn't a constraint — it's what makes the system safe to scale.",
+    copy: "Every agent starts supervised. It proves itself through real tasks — you review and approve its first actions. As its trust score climbs, it earns more operating freedom. You step in only when it flags something important. That's not compliance theater — it's what makes the system safe to scale.",
     visual: (
       <div
-        className="rounded-xl p-5"
-        style={{ background: "hsl(38 45% 94%)", border: "1px solid hsl(35 18% 88%)" }}
+        style={{
+          background: "#F9F8F6",
+          border: "1px solid #DDD9D3",
+          borderRadius: "1rem",
+          padding: "1.5rem",
+        }}
       >
         {[
           { label: "Starts supervised", score: "0", active: false },
@@ -110,37 +137,58 @@ const ACTS = [
           { label: "Earns autonomy", score: "70", active: false },
           { label: "Fully trusted", score: "90+", active: true },
         ].map(({ label, score, active }, i) => (
-          <div key={score} className="flex items-center gap-3">
+          <div
+            key={score}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.875rem",
+              marginBottom: i < 3 ? "0.75rem" : 0,
+            }}
+          >
             <div
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium"
               style={{
-                background: active ? "hsl(30 55% 46%)" : "hsl(30 8% 90%)",
-                color: active ? "white" : "hsl(30 5% 50%)",
+                width: "2.25rem",
+                height: "2.25rem",
+                borderRadius: "9999px",
+                background: active ? "#1A1714" : "#EDEAE5",
+                border: `1.5px solid ${active ? "#1A1714" : "#DDD9D3"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                color: active ? "#F5F3F0" : "#9C958F",
+                flexShrink: 0,
               }}
             >
               {score}
             </div>
-            <div className="flex flex-1 items-center gap-2">
-              <p
-                className="text-xs font-medium"
-                style={{ color: active ? "hsl(30 8% 12%)" : "hsl(30 5% 52%)" }}
+            <span
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: active ? 700 : 400,
+                color: active ? "#1A1714" : "#6B6560",
+              }}
+            >
+              {label}
+            </span>
+            {active && (
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: "0.625rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "#A07850",
+                  background: "rgba(160,120,80,0.1)",
+                  borderRadius: "9999px",
+                  padding: "0.2rem 0.5rem",
+                }}
               >
-                {label}
-              </p>
-              {active && (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide"
-                  style={{ background: "hsl(30 55% 46% / 0.12)", color: "hsl(30 55% 42%)" }}
-                >
-                  Goal
-                </span>
-              )}
-            </div>
-            {i < 3 && (
-              <div
-                className="ml-4 mt-1 h-4 w-px self-end"
-                style={{ background: "hsl(30 15% 82%)" }}
-              />
+                Goal
+              </span>
             )}
           </div>
         ))}
@@ -153,29 +201,40 @@ export default function HowItWorksPage() {
   return (
     <>
       {/* ── Hero ── */}
-      <section className="pb-16 pt-32" style={{ background: "hsl(45 25% 98%)" }}>
+      <section style={{ background: "#F5F3F0", paddingTop: "8rem", paddingBottom: "4rem" }}>
         <div className="page-width">
           <p
-            className="mb-4 text-xs font-medium uppercase tracking-widest"
-            style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+            style={{
+              marginBottom: "0.75rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
           >
             How it works
           </p>
           <h1
-            className="font-display font-light"
             style={{
               fontSize: "clamp(2.8rem, 5.5vw, 5rem)",
-              letterSpacing: "-0.025em",
-              lineHeight: 1.05,
-              color: "hsl(30 8% 10%)",
-              maxWidth: "18ch",
+              fontWeight: 700,
+              letterSpacing: "-0.028em",
+              lineHeight: 1.02,
+              color: "#1A1714",
+              maxWidth: "16ch",
             }}
           >
             From discovery to trusted automation.
           </h1>
           <p
-            className="mt-6 text-lg leading-relaxed"
-            style={{ color: "hsl(30 6% 42%)", maxWidth: "52ch" }}
+            style={{
+              marginTop: "1.5rem",
+              fontSize: "1.125rem",
+              lineHeight: 1.6,
+              color: "#6B6560",
+              maxWidth: "48ch",
+            }}
           >
             Find the right agent, connect it to your channels, and let it earn autonomy through real
             performance.
@@ -184,57 +243,74 @@ export default function HowItWorksPage() {
       </section>
 
       {/* ── 3 Acts ── */}
-      <section className="py-8" style={{ background: "hsl(45 25% 98%)" }}>
-        <div className="page-width space-y-24">
-          {ACTS.map(({ n, title, subtitle, copy, visual }, i) => (
+      <section style={{ background: "#F5F3F0", paddingBottom: "5rem" }}>
+        <div
+          className="page-width"
+          style={{ display: "flex", flexDirection: "column", gap: "6rem" }}
+        >
+          {ACTS.map(({ n, label, title, copy, visual }, i) => (
             <div
               key={n}
-              className={`grid grid-cols-1 items-center gap-12 lg:grid-cols-2 ${i % 2 === 1 ? "lg:[&>div:first-child]:order-2" : ""}`}
+              className="grid grid-cols-1 lg:grid-cols-2"
+              style={{
+                gap: "3rem",
+                alignItems: "center",
+                direction: i % 2 === 1 ? "rtl" : "ltr",
+              }}
             >
               {/* Text */}
-              <div>
-                <div className="mb-6 flex items-baseline gap-4">
+              <div style={{ direction: "ltr" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "1rem",
+                    marginBottom: "1.5rem",
+                  }}
+                >
                   <span
-                    className="font-display"
                     style={{
-                      fontSize: "5.5rem",
-                      fontWeight: 200,
+                      fontSize: "5rem",
+                      fontWeight: 700,
                       lineHeight: 1,
-                      color: "hsl(30 20% 88%)",
                       letterSpacing: "-0.04em",
+                      color: "#DDD9D3",
                       userSelect: "none",
                     }}
                   >
                     {n}
                   </span>
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wider"
                     style={{
-                      background: "hsl(30 55% 46% / 0.1)",
-                      color: "hsl(30 50% 42%)",
+                      fontSize: "0.6875rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
                       letterSpacing: "0.1em",
+                      color: "#A07850",
+                      background: "rgba(160,120,80,0.1)",
+                      borderRadius: "9999px",
+                      padding: "0.25rem 0.75rem",
                     }}
                   >
-                    {subtitle}
+                    {label}
                   </span>
                 </div>
                 <h2
-                  className="mb-5 font-display font-light"
                   style={{
                     fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-                    letterSpacing: "-0.015em",
-                    color: "hsl(30 8% 10%)",
+                    fontWeight: 700,
+                    letterSpacing: "-0.02em",
+                    color: "#1A1714",
+                    marginBottom: "1rem",
                   }}
                 >
                   {title}
                 </h2>
-                <p className="text-base leading-relaxed" style={{ color: "hsl(30 5% 44%)" }}>
-                  {copy}
-                </p>
+                <p style={{ fontSize: "1rem", lineHeight: 1.65, color: "#6B6560" }}>{copy}</p>
               </div>
 
               {/* Visual */}
-              <div>{visual}</div>
+              <div style={{ direction: "ltr" }}>{visual}</div>
             </div>
           ))}
         </div>
@@ -242,17 +318,18 @@ export default function HowItWorksPage() {
 
       {/* ── Governance strip ── */}
       <section
-        className="py-16"
-        style={{ background: "hsl(40 20% 96%)", borderTop: "1px solid hsl(35 15% 90%)" }}
+        style={{
+          background: "#EDEAE5",
+          borderTop: "1px solid #DDD9D3",
+          paddingTop: "4rem",
+          paddingBottom: "4rem",
+        }}
       >
-        <div className="page-width text-center">
-          <p
-            className="mx-auto max-w-2xl text-sm leading-relaxed"
-            style={{ color: "hsl(30 5% 48%)" }}
-          >
-            Switchboard&rsquo;s governance layer audits every action, tracks trust in real time, and
-            puts humans back in control when it matters.{" "}
-            <span style={{ color: "hsl(30 8% 28%)" }}>
+        <div className="page-width" style={{ maxWidth: "42rem", margin: "0 auto" }}>
+          <p style={{ fontSize: "0.9375rem", lineHeight: 1.7, color: "#6B6560" }}>
+            Switchboard audits every action, tracks trust in real time, and puts humans back in
+            control when it matters.{" "}
+            <span style={{ color: "#1A1714", fontWeight: 600 }}>
               That&rsquo;s not compliance theater — it&rsquo;s what makes the system safe to scale.
             </span>
           </p>
@@ -260,22 +337,36 @@ export default function HowItWorksPage() {
       </section>
 
       {/* ── Bottom CTA ── */}
-      <section className="py-24" style={{ background: "hsl(45 25% 98%)" }}>
-        <div className="page-width flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-center sm:gap-6">
+      <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
+        <div
+          className="page-width"
+          style={{ display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "center" }}
+        >
           <Link
             href="/agents"
-            className="rounded-full px-8 py-4 text-sm font-medium"
-            style={{ background: "hsl(30 55% 46%)", color: "white" }}
+            style={{
+              background: "#1A1714",
+              color: "#F5F3F0",
+              borderRadius: "9999px",
+              padding: "0.875rem 2rem",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
           >
             Browse agents
           </Link>
           <Link
             href="/get-started"
-            className="rounded-full border px-8 py-4 text-sm font-medium transition-colors"
             style={{
-              borderColor: "hsl(35 15% 85%)",
-              color: "hsl(30 6% 38%)",
               background: "transparent",
+              border: "1px solid #DDD9D3",
+              color: "#1A1714",
+              borderRadius: "9999px",
+              padding: "0.875rem 2rem",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              textDecoration: "none",
             }}
           >
             Join waitlist

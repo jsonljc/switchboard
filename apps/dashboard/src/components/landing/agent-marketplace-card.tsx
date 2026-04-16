@@ -1,23 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { OperatorCharacter } from "@/components/character/operator-character";
-import type { RoleFocus } from "@/components/character/operator-character";
-import { TrustBar } from "@/components/marketplace/trust-bar";
-import { cn } from "@/lib/utils";
-import { useScrollReveal } from "@/hooks/use-scroll-reveal";
-
-function formatTimeAgo(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
+import type { AgentId } from "@/components/character/agent-mark";
 
 interface AgentMarketplaceCardProps {
   name: string;
@@ -25,15 +8,12 @@ interface AgentMarketplaceCardProps {
   description: string;
   trustScore: number;
   autonomyLevel: string;
-  roleFocus: RoleFocus;
-  bundleSlug: string;
   stats: {
     totalTasks: number;
     approvalRate: number;
     lastActiveAt: string | null;
   };
   className?: string;
-  animationDelay?: number;
 }
 
 export function AgentMarketplaceCard({
@@ -42,91 +22,117 @@ export function AgentMarketplaceCard({
   description,
   trustScore,
   autonomyLevel,
-  roleFocus,
-  bundleSlug,
-  stats,
   className,
-  animationDelay = 0,
 }: AgentMarketplaceCardProps) {
-  const { ref, isVisible } = useScrollReveal({ threshold: 0.1 });
+  const agent: AgentId = SLUG_TO_AGENT[slug] ?? "alex";
 
   return (
     <div
-      ref={ref}
-      className={cn(
-        "rounded-xl border border-border bg-surface p-6 flex flex-col",
-        "transition-shadow hover:shadow-md",
-        isVisible && "animate-fade-in-up",
-        className,
-      )}
-      style={
-        isVisible
-          ? { animationDelay: `${animationDelay}ms`, animationFillMode: "both" }
-          : { opacity: 0 }
-      }
+      className={className}
+      style={{
+        background: "#F9F8F6",
+        border: "1px solid #DDD9D3",
+        borderRadius: "1rem",
+        padding: "1.5rem",
+        display: "flex",
+        flexDirection: "column",
+        transition: "border-color 150ms ease, transform 150ms ease",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = "#C8C3BC";
+        (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = "#DDD9D3";
+        (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+      }}
     >
-      {/* Character */}
-      <div className="flex justify-center mb-4">
-        <div className="w-28 h-28">
-          <OperatorCharacter roleFocus={roleFocus} className="w-full h-full" />
-        </div>
-      </div>
-
-      {/* Name */}
-      <h3 className="font-display text-xl font-medium text-foreground text-center">{name}</h3>
-
-      {/* Trust score */}
-      <div className="flex justify-center mt-3">
-        <TrustBar score={trustScore} />
-      </div>
-
-      {/* Autonomy badge */}
-      <div className="flex justify-center mt-2">
-        <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-0.5 rounded">
+      {/* Character mark + category */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+        <AgentMark agent={agent} size="sm" />
+        <span
+          style={{
+            fontSize: "0.6875rem",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            color: "#9C958F",
+          }}
+        >
           {autonomyLevel}
         </span>
       </div>
 
+      {/* Name */}
+      <h3
+        style={{
+          fontWeight: 700,
+          fontSize: "1.125rem",
+          letterSpacing: "-0.015em",
+          color: "#1A1714",
+          margin: 0,
+        }}
+      >
+        {name}
+      </h3>
+
       {/* Description */}
-      <p className="mt-4 text-sm text-muted-foreground text-center line-clamp-2">{description}</p>
+      <p
+        style={{
+          marginTop: "0.5rem",
+          fontSize: "0.875rem",
+          lineHeight: 1.55,
+          color: "#6B6560",
+          flex: 1,
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {description}
+      </p>
 
-      {/* Divider */}
-      <div className="border-t border-border-subtle my-4" />
-
-      {/* Today stats */}
-      <div className="space-y-1.5">
-        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-          today
-        </span>
-        <div className="space-y-1 text-sm">
-          <p>
-            <span className="font-mono tabular-nums">{stats.totalTasks}</span>
-            <span className="text-muted-foreground"> tasks</span>
-          </p>
-          <p>
-            <span className="font-mono tabular-nums">{stats.approvalRate}%</span>
-            <span className="text-muted-foreground"> approved</span>
-          </p>
-          <p className="text-muted-foreground">
-            last active{" "}
-            <span className="font-mono tabular-nums">{formatTimeAgo(stats.lastActiveAt)}</span>
-          </p>
+      {/* Trust score */}
+      <div
+        style={{
+          marginTop: "1.25rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div
+            style={{
+              width: "1.875rem",
+              height: "1.875rem",
+              borderRadius: "9999px",
+              background: "rgba(160,120,80,0.1)",
+              border: "1.5px solid rgba(160,120,80,0.28)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "0.6875rem",
+              fontWeight: 700,
+              color: "#A07850",
+            }}
+          >
+            {trustScore}
+          </div>
+          <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>trust score</span>
         </div>
-      </div>
 
-      {/* Divider */}
-      <div className="border-t border-border-subtle my-4" />
-
-      {/* Actions */}
-      <div className="flex items-center justify-between mt-auto">
-        <Button asChild size="sm">
-          <Link href={`/deploy/${bundleSlug}`}>Hire</Link>
-        </Button>
         <Link
           href={`/agents/${slug}`}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          style={{
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            color: "#1A1714",
+            textDecoration: "none",
+          }}
         >
-          See work &rarr;
+          Learn more →
         </Link>
       </div>
     </div>

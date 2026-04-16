@@ -31,17 +31,30 @@ export function WaitlistForm() {
   if (state === "success") {
     return (
       <div
-        className="rounded-2xl p-8 text-center"
-        style={{ background: "hsl(38 40% 95%)", border: "1px solid hsl(35 20% 88%)" }}
+        style={{
+          borderRadius: "1rem",
+          padding: "2rem",
+          textAlign: "center",
+          background: "#F9F8F6",
+          border: "1px solid #DDD9D3",
+        }}
       >
         <div
-          className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: "hsl(30 55% 46% / 0.12)" }}
+          style={{
+            margin: "0 auto 1rem",
+            display: "flex",
+            width: "3rem",
+            height: "3rem",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "9999px",
+            background: "rgba(160,120,80,0.12)",
+          }}
         >
           <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
             <path
               d="M4 11l5 5L18 7"
-              stroke="hsl(30 55% 46%)"
+              stroke="#A07850"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -49,12 +62,16 @@ export function WaitlistForm() {
           </svg>
         </div>
         <p
-          className="font-display text-xl font-light"
-          style={{ color: "hsl(30 8% 12%)", letterSpacing: "-0.01em" }}
+          style={{
+            fontSize: "1.25rem",
+            fontWeight: 700,
+            letterSpacing: "-0.015em",
+            color: "#1A1714",
+          }}
         >
           You&rsquo;re on the list.
         </p>
-        <p className="mt-2 text-sm" style={{ color: "hsl(30 6% 45%)" }}>
+        <p style={{ marginTop: "0.5rem", fontSize: "0.875rem", color: "#6B6560" }}>
           We review every request personally. We&rsquo;ll reach out when your access opens.
         </p>
       </div>
@@ -62,40 +79,49 @@ export function WaitlistForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+        className="sm:flex-row"
+      >
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@company.com"
-          className="flex-1 rounded-full px-5 py-3.5 text-sm outline-none transition-all"
           style={{
-            background: "hsl(0 0% 100%)",
-            border: "1px solid hsl(35 12% 85%)",
-            color: "hsl(30 8% 12%)",
-            boxShadow: "inset 0 1px 2px hsl(30 8% 10% / 0.04)",
+            flex: 1,
+            borderRadius: "9999px",
+            padding: "0.875rem 1.25rem",
+            fontSize: "0.875rem",
+            outline: "none",
+            background: "#F9F8F6",
+            border: "1px solid #DDD9D3",
+            color: "#1A1714",
           }}
           onFocus={(e) => {
-            (e.target as HTMLElement).style.borderColor = "hsl(30 55% 46% / 0.5)";
-            (e.target as HTMLElement).style.boxShadow =
-              "0 0 0 3px hsl(30 55% 46% / 0.1), inset 0 1px 2px hsl(30 8% 10% / 0.04)";
+            (e.target as HTMLElement).style.borderColor = "rgba(160,120,80,0.5)";
+            (e.target as HTMLElement).style.boxShadow = "0 0 0 3px rgba(160,120,80,0.1)";
           }}
           onBlur={(e) => {
-            (e.target as HTMLElement).style.borderColor = "hsl(35 12% 85%)";
-            (e.target as HTMLElement).style.boxShadow = "inset 0 1px 2px hsl(30 8% 10% / 0.04)";
+            (e.target as HTMLElement).style.borderColor = "#DDD9D3";
+            (e.target as HTMLElement).style.boxShadow = "none";
           }}
         />
         <button
           type="submit"
           disabled={state === "loading"}
-          className="rounded-full px-7 py-3.5 text-sm font-medium tracking-wide transition-all"
           style={{
-            background: state === "loading" ? "hsl(30 40% 55%)" : "hsl(30 55% 46%)",
-            color: "white",
-            cursor: state === "loading" ? "wait" : "pointer",
+            borderRadius: "9999px",
+            padding: "0.875rem 1.75rem",
+            fontSize: "0.875rem",
+            fontWeight: 600,
             whiteSpace: "nowrap",
+            cursor: state === "loading" ? "wait" : "pointer",
+            background: state === "loading" ? "#C8C3BC" : "#1A1714",
+            color: "#F5F3F0",
+            border: "none",
           }}
         >
           {state === "loading" ? "Joining…" : "Join waitlist"}
@@ -103,9 +129,9 @@ export function WaitlistForm() {
       </div>
 
       {state === "error" && (
-        <p className="pl-2 text-xs" style={{ color: "hsl(0 38% 45%)" }}>
+        <p style={{ paddingLeft: "0.5rem", fontSize: "0.75rem", color: "#8B3A3A" }}>
           Something went wrong. Try again or email{" "}
-          <a href="mailto:hello@switchboard.ai" style={{ color: "hsl(30 55% 46%)" }}>
+          <a href="mailto:hello@switchboard.ai" style={{ color: "#A07850" }}>
             hello@switchboard.ai
           </a>
           .
@@ -113,7 +139,9 @@ export function WaitlistForm() {
       )}
 
       {/* Trust signals */}
-      <div className="flex flex-wrap gap-x-5 gap-y-1 pl-2">
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 1.25rem", paddingLeft: "0.5rem" }}
+      >
         {[
           "No credit card required",
           "Early onboarding support",
@@ -121,13 +149,18 @@ export function WaitlistForm() {
         ].map((t) => (
           <span
             key={t}
-            className="flex items-center gap-1.5 text-xs"
-            style={{ color: "hsl(30 5% 55%)" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              fontSize: "0.75rem",
+              color: "#9C958F",
+            }}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path
                 d="M2 5l2 2 4-4"
-                stroke="hsl(30 55% 46%)"
+                stroke="#A07850"
                 strokeWidth="1.25"
                 strokeLinecap="round"
                 strokeLinejoin="round"

@@ -2,236 +2,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getListingBySlug } from "@/lib/demo-data";
-import { OperatorCharacter } from "@/components/character/operator-character";
-import type { RoleFocus } from "@/components/character/operator-character";
-
-const ROLE_MAP: Record<string, RoleFocus> = {
-  "speed-to-lead": "leads",
-  "sales-closer": "growth",
-  "nurture-specialist": "care",
-};
-
-// ── Static marketing content per agent ──
-
-interface AgentContent {
-  tagline: string;
-  capabilities: string[];
-  howItWorks: { step: string; label: string; body: string }[];
-  channels: { name: string; icon: string }[];
-  trustNote: string;
-  faq: { q: string; a: string }[];
-}
-
-const AGENT_CONTENT: Record<string, AgentContent> = {
-  "speed-to-lead": {
-    tagline:
-      "Responds to every new lead in under 5 minutes — so you never lose a hot prospect to slow follow-up.",
-    capabilities: [
-      "Greets every new inbound lead within minutes, 24 hours a day",
-      "Qualifies prospects with a short conversation — budget, timing, fit",
-      "Books discovery calls directly into your calendar",
-      "Escalates high-priority leads to a human when the moment demands it",
-    ],
-    howItWorks: [
-      {
-        step: "01",
-        label: "Lead comes in",
-        body: "A new contact fills out a form, sends a DM, or clicks your widget. Speed-to-Lead picks it up instantly.",
-      },
-      {
-        step: "02",
-        label: "Qualify the conversation",
-        body: "The agent asks 3–4 natural questions to understand fit, budget, and urgency — no interrogation, just good listening.",
-      },
-      {
-        step: "03",
-        label: "Book or hand off",
-        body: "Qualified leads get a calendar link. Hot ones get flagged for you immediately. Everything is logged.",
-      },
-    ],
-    channels: [
-      { name: "WhatsApp", icon: "💬" },
-      { name: "Telegram", icon: "✈️" },
-      { name: "Web widget", icon: "🌐" },
-    ],
-    trustNote:
-      "Starts supervised — every booking reviewed by you. As it proves itself, it earns the right to book independently.",
-    faq: [
-      {
-        q: "What happens if a lead asks something the agent can't handle?",
-        a: "It flags the conversation for you and holds warmly until you step in. No lead falls through the cracks.",
-      },
-      {
-        q: "Can it book into my existing calendar?",
-        a: "Yes — it integrates with Google Calendar and Calendly. You control which slots it can offer.",
-      },
-      {
-        q: "How fast does it really respond?",
-        a: "Under 5 minutes for any new lead, any time of day. Most responses are much faster.",
-      },
-      {
-        q: "What if I want to review its conversations?",
-        a: "Every conversation is logged with full transcript. You can review, approve, or correct at any time.",
-      },
-    ],
-  },
-  "sales-closer": {
-    tagline:
-      "Keeps warm prospects engaged until they're ready to buy — so nothing falls out of your pipeline.",
-    capabilities: [
-      "Follows up with prospects who've gone quiet — at the right time, with the right tone",
-      "Sends personalised check-ins based on where each lead is in the pipeline",
-      "Surfaces objections early so you can address them before they kill the deal",
-      "Knows when to back off and when to push — based on conversation signals",
-    ],
-    howItWorks: [
-      {
-        step: "01",
-        label: "Prospect enters the pipeline",
-        body: "Sales Closer picks up any lead that hasn't converted yet — from your CRM or wherever you track them.",
-      },
-      {
-        step: "02",
-        label: "Timed, personalised follow-up",
-        body: "It sends a message at the right moment — not a spammy sequence, but a thoughtful nudge based on timing and context.",
-      },
-      {
-        step: "03",
-        label: "Move the deal forward",
-        body: "Objections get surfaced. Interested prospects get booked. Quiet ones get re-engaged. You focus on the conversations worth having.",
-      },
-    ],
-    channels: [
-      { name: "WhatsApp", icon: "💬" },
-      { name: "Telegram", icon: "✈️" },
-      { name: "Email", icon: "📧" },
-    ],
-    trustNote:
-      "Starts with you approving every follow-up. As you build confidence, it handles routine nudges independently.",
-    faq: [
-      {
-        q: "Will it come across as spammy?",
-        a: "No — it's trained to be direct and respectful, not pushy. You can review its tone before it sends anything.",
-      },
-      {
-        q: "Can I set how often it follows up?",
-        a: "Yes. You control the cadence, the channels, and the intensity. It adapts based on prospect engagement.",
-      },
-      {
-        q: "Does it work with my existing CRM?",
-        a: "It reads pipeline state from your CRM. Native integrations are in active development — ask us about your stack.",
-      },
-      {
-        q: "What if a prospect asks to stop hearing from us?",
-        a: "It honours unsubscribe requests immediately and logs the opt-out.",
-      },
-    ],
-  },
-  "nurture-specialist": {
-    tagline: "Keeps your audience warm between purchases — so they come back when they're ready.",
-    capabilities: [
-      "Sends personalised check-ins that feel human, not automated",
-      "Celebrates wins, asks for feedback, and stays top of mind without being annoying",
-      "Identifies re-engagement opportunities in your existing contacts",
-      "Surfaces loyal customers who might be ready for an upsell conversation",
-    ],
-    howItWorks: [
-      {
-        step: "01",
-        label: "Know your contacts",
-        body: "Nurture Specialist learns who your contacts are — past purchases, engagement history, preferences — and builds a picture over time.",
-      },
-      {
-        step: "02",
-        label: "Stay present, not pushy",
-        body: "It sends the kind of messages people actually appreciate: a check-in after a purchase, a relevant tip, a quiet 'how's it going?'",
-      },
-      {
-        step: "03",
-        label: "Surface the right moment",
-        body: "When a contact shows buying signals — engagement spikes, a question, a milestone — it flags them for you or moves them into an active sales flow.",
-      },
-    ],
-    channels: [
-      { name: "WhatsApp", icon: "💬" },
-      { name: "Telegram", icon: "✈️" },
-      { name: "Web widget", icon: "🌐" },
-    ],
-    trustNote:
-      "Every message is reviewable. As trust builds, it handles routine nurture independently — you focus on the moments that matter.",
-    faq: [
-      {
-        q: "How is this different from email marketing?",
-        a: "It's conversational — two-way, personalised, and responsive. Not a broadcast. People can reply, ask questions, and get real answers.",
-      },
-      {
-        q: "Can it handle a list of 1,000 contacts?",
-        a: "Yes — it prioritises based on engagement signals and works through your list intelligently, not all at once.",
-      },
-      {
-        q: "What if a contact wants to speak to a human?",
-        a: "It hands off immediately, with full context so you don't have to start from scratch.",
-      },
-      {
-        q: "Can I set the tone and voice?",
-        a: "Yes. You can set how formal or casual it should be, and review its messages until you're comfortable with its style.",
-      },
-    ],
-  },
-};
-
-const FALLBACK_CONTENT: AgentContent = {
-  tagline:
-    "An AI agent built to handle your growth work — reliably, consistently, and on your terms.",
-  capabilities: [
-    "Handles routine tasks so you can focus on the work only you can do",
-    "Works across your preferred channels — WhatsApp, Telegram, or your website",
-    "Every action is logged and reviewable at any time",
-    "Earns autonomy through performance — starts careful, grows confident",
-  ],
-  howItWorks: [
-    {
-      step: "01",
-      label: "Browse and choose",
-      body: "Find the agent that fits your use case. Every agent is purpose-built — not a general chatbot.",
-    },
-    {
-      step: "02",
-      label: "Deploy in minutes",
-      body: "Connect your channels, review the defaults, and go live. No engineering required.",
-    },
-    {
-      step: "03",
-      label: "Grow with trust",
-      body: "The more it performs, the more autonomy it earns — and the less you have to oversee.",
-    },
-  ],
-  channels: [
-    { name: "WhatsApp", icon: "💬" },
-    { name: "Telegram", icon: "✈️" },
-    { name: "Web widget", icon: "🌐" },
-  ],
-  trustNote:
-    "Every agent starts supervised. It earns autonomy by proving itself — in your context, with your standards.",
-  faq: [
-    {
-      q: "Is this a general chatbot?",
-      a: "No — each agent is purpose-built for a specific job. Narrow scope means higher reliability.",
-    },
-    {
-      q: "Do I need technical skills to set it up?",
-      a: "No. Setup takes minutes. If you run into anything, we walk you through it personally.",
-    },
-    {
-      q: "What if it makes a mistake?",
-      a: "Everything is reviewable. You can correct any action and the agent learns from your feedback.",
-    },
-    {
-      q: "How do I know it's working?",
-      a: "You get a full log of every conversation and action. Performance is visible from day one.",
-    },
-  ],
-};
+import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
+import { AGENT_CONTENT, FALLBACK_CONTENT } from "./agent-content.js";
 
 // ── Trust tier lookup ──
 
@@ -268,85 +40,132 @@ export default async function AgentProfilePage({ params }: PageProps) {
   if (!listing) notFound();
 
   const content = AGENT_CONTENT[slug] ?? FALLBACK_CONTENT;
-  const roleFocus = ROLE_MAP[slug] ?? ("default" as RoleFocus);
+  const agentId = SLUG_TO_AGENT[slug] ?? "alex";
   const tier = trustTierLabel(listing.priceTier);
 
   return (
-    <div style={{ background: "hsl(45 25% 98%)" }}>
+    <div style={{ background: "#F5F3F0" }}>
       {/* ── Header ── */}
-      <section
-        className="pt-28 pb-16"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 60% 0%, hsl(38 70% 91%) 0%, transparent 65%)",
-        }}
-      >
-        <div className="page-width max-w-4xl mx-auto">
+      <section style={{ background: "#F5F3F0", paddingTop: "7rem", paddingBottom: "4rem" }}>
+        <div className="page-width" style={{ maxWidth: "56rem", margin: "0 auto" }}>
           <Link
             href="/agents"
-            className="mb-10 inline-flex items-center gap-1.5 text-sm transition-colors"
-            style={{ color: "hsl(30 6% 50%)" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              fontSize: "0.8125rem",
+              color: "#9C958F",
+              textDecoration: "none",
+              marginBottom: "2.5rem",
+            }}
           >
             ← All agents
           </Link>
 
-          <div className="flex flex-col items-start gap-8 md:flex-row md:items-center">
-            <div className="flex-shrink-0">
-              <OperatorCharacter roleFocus={roleFocus} className="w-36 h-36" />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: "2rem",
+            }}
+            className="md:flex-row md:items-center"
+          >
+            <div style={{ flexShrink: 0 }}>
+              <AgentMark agent={agentId} size="lg" />
             </div>
 
-            <div className="flex-1">
+            <div style={{ flex: 1 }}>
               {/* Category chip */}
               <span
-                className="mb-3 inline-block rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wider"
-                style={{ background: "hsl(30 55% 46% / 0.1)", color: "hsl(30 50% 42%)" }}
+                style={{
+                  display: "inline-block",
+                  marginBottom: "0.75rem",
+                  borderRadius: "9999px",
+                  padding: "0.2rem 0.75rem",
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  background: "rgba(160,120,80,0.1)",
+                  color: "#A07850",
+                }}
               >
                 {listing.taskCategories[0] ?? "Sales"}
               </span>
 
               <h1
-                className="font-display font-light"
                 style={{
                   fontSize: "clamp(2.2rem, 4vw, 3.6rem)",
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.02em",
-                  color: "hsl(30 8% 10%)",
+                  fontWeight: 700,
+                  lineHeight: 1.02,
+                  letterSpacing: "-0.028em",
+                  color: "#1A1714",
                 }}
               >
                 {listing.name}
               </h1>
 
               <p
-                className="mt-3 text-base leading-relaxed"
-                style={{ color: "hsl(30 6% 40%)", maxWidth: "52ch" }}
+                style={{
+                  marginTop: "0.75rem",
+                  fontSize: "1rem",
+                  lineHeight: 1.65,
+                  color: "#6B6560",
+                  maxWidth: "52ch",
+                }}
               >
                 {content.tagline}
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center gap-4">
+              <div
+                style={{
+                  marginTop: "1.5rem",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "1rem",
+                }}
+              >
                 <Link
                   href="/get-started"
-                  className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-medium"
-                  style={{ background: "hsl(30 55% 46%)", color: "white" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    borderRadius: "9999px",
+                    padding: "0.75rem 1.75rem",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    background: "#1A1714",
+                    color: "#F5F3F0",
+                  }}
                 >
                   Get early access
                 </Link>
 
                 {/* Trust score badge */}
-                <div className="flex items-center gap-2">
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <div
-                    className="flex h-7 w-7 items-center justify-center rounded-full font-display text-xs font-light"
                     style={{
-                      background: "hsl(30 55% 46% / 0.1)",
-                      border: "1.5px solid hsl(30 55% 46% / 0.3)",
-                      color: "hsl(30 50% 42%)",
+                      width: "2rem",
+                      height: "2rem",
+                      borderRadius: "9999px",
+                      background: "rgba(160,120,80,0.1)",
+                      border: "1.5px solid rgba(160,120,80,0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: "#A07850",
                     }}
                   >
                     {listing.trustScore}
                   </div>
-                  <span className="text-xs" style={{ color: "hsl(30 5% 52%)" }}>
-                    trust score
-                  </span>
+                  <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>trust score</span>
                 </div>
               </div>
             </div>
@@ -356,51 +175,85 @@ export default async function AgentProfilePage({ params }: PageProps) {
 
       {/* ── Capabilities ── */}
       <section
-        className="py-16"
-        style={{ background: "hsl(40 20% 96%)", borderTop: "1px solid hsl(35 12% 90%)" }}
+        style={{
+          background: "#EDEAE5",
+          borderTop: "1px solid #DDD9D3",
+          paddingTop: "4rem",
+          paddingBottom: "4rem",
+        }}
       >
-        <div className="page-width max-w-4xl mx-auto">
+        <div className="page-width" style={{ maxWidth: "56rem", margin: "0 auto" }}>
           <p
-            className="mb-2 text-xs font-medium uppercase tracking-widest"
-            style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+            style={{
+              marginBottom: "0.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#A07850",
+            }}
           >
             What it does
           </p>
           <h2
-            className="mb-10 font-display font-light"
             style={{
+              marginBottom: "2.5rem",
               fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-              letterSpacing: "-0.02em",
-              color: "hsl(30 8% 10%)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
             }}
           >
             Built for one job.
-            <br />
-            <em style={{ fontStyle: "italic", color: "hsl(30 48% 40%)" }}>Done well.</em>
           </h2>
 
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <ul
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(1, 1fr)",
+              gap: "1rem",
+              listStyle: "none",
+              padding: 0,
+            }}
+            className="sm:grid-cols-2"
+          >
             {content.capabilities.map((cap) => (
               <li
                 key={cap}
-                className="flex items-start gap-3 rounded-2xl p-5"
-                style={{ background: "hsl(0 0% 100%)", border: "1px solid hsl(35 12% 88%)" }}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.75rem",
+                  borderRadius: "0.75rem",
+                  padding: "1.25rem",
+                  background: "#F9F8F6",
+                  border: "1px solid #DDD9D3",
+                }}
               >
                 <span
-                  className="mt-0.5 flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-full"
-                  style={{ background: "hsl(30 55% 46% / 0.1)" }}
+                  style={{
+                    marginTop: "0.125rem",
+                    flexShrink: 0,
+                    display: "flex",
+                    width: "1.25rem",
+                    height: "1.25rem",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "9999px",
+                    background: "rgba(160,120,80,0.1)",
+                  }}
                 >
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                     <path
                       d="M2 5l2 2 4-4"
-                      stroke="hsl(30 55% 46%)"
+                      stroke="#A07850"
                       strokeWidth="1.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
                   </svg>
                 </span>
-                <span className="text-sm leading-relaxed" style={{ color: "hsl(30 5% 35%)" }}>
+                <span style={{ fontSize: "0.875rem", lineHeight: 1.6, color: "#6B6560" }}>
                   {cap}
                 </span>
               </li>
@@ -410,55 +263,67 @@ export default async function AgentProfilePage({ params }: PageProps) {
       </section>
 
       {/* ── How it works ── */}
-      <section className="py-20" style={{ background: "hsl(45 25% 98%)" }}>
-        <div className="page-width max-w-4xl mx-auto">
+      <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
+        <div className="page-width" style={{ maxWidth: "56rem", margin: "0 auto" }}>
           <p
-            className="mb-2 text-xs font-medium uppercase tracking-widest"
-            style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+            style={{
+              marginBottom: "0.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#A07850",
+            }}
           >
             How it works
           </p>
           <h2
-            className="mb-14 font-display font-light"
             style={{
+              marginBottom: "3.5rem",
               fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-              letterSpacing: "-0.02em",
-              color: "hsl(30 8% 10%)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
             }}
           >
             Simple from day one.
           </h2>
 
-          <div className="space-y-12">
+          <div style={{ display: "flex", flexDirection: "column", gap: "3rem" }}>
             {content.howItWorks.map(({ step, label, body }) => (
-              <div key={step} className="flex gap-6 md:gap-10">
+              <div key={step} style={{ display: "flex", gap: "1.5rem" }} className="md:gap-10">
                 <span
-                  className="font-display flex-shrink-0"
                   style={{
-                    fontSize: "3.5rem",
-                    fontWeight: 200,
+                    fontSize: "4rem",
+                    fontWeight: 700,
                     lineHeight: 1,
-                    color: "hsl(30 20% 88%)",
-                    letterSpacing: "-0.02em",
-                    width: "3rem",
+                    color: "#DDD9D3",
+                    letterSpacing: "-0.04em",
+                    flexShrink: 0,
+                    width: "3.5rem",
                   }}
                 >
                   {step}
                 </span>
-                <div className="pt-1">
+                <div style={{ paddingTop: "0.25rem" }}>
                   <h3
-                    className="mb-2 font-display font-light"
                     style={{
-                      fontSize: "1.4rem",
-                      letterSpacing: "-0.01em",
-                      color: "hsl(30 8% 12%)",
+                      marginBottom: "0.5rem",
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      letterSpacing: "-0.015em",
+                      color: "#1A1714",
                     }}
                   >
                     {label}
                   </h3>
                   <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: "hsl(30 5% 45%)", maxWidth: "52ch" }}
+                    style={{
+                      fontSize: "0.9375rem",
+                      lineHeight: 1.65,
+                      color: "#6B6560",
+                      maxWidth: "52ch",
+                    }}
                   >
                     {body}
                   </p>
@@ -471,28 +336,39 @@ export default async function AgentProfilePage({ params }: PageProps) {
 
       {/* ── Trust & Pricing ── */}
       <section
-        className="py-16"
         style={{
-          background: "hsl(38 35% 95%)",
-          borderTop: "1px solid hsl(35 15% 88%)",
-          borderBottom: "1px solid hsl(35 15% 88%)",
+          background: "#EDEAE5",
+          borderTop: "1px solid #DDD9D3",
+          borderBottom: "1px solid #DDD9D3",
+          paddingTop: "4rem",
+          paddingBottom: "4rem",
         }}
       >
-        <div className="page-width max-w-4xl mx-auto">
-          <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-16">
-            <div className="flex-1">
+        <div className="page-width" style={{ maxWidth: "56rem", margin: "0 auto" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
+            className="md:flex-row md:items-start md:gap-16"
+          >
+            <div style={{ flex: 1 }}>
               <p
-                className="mb-2 text-xs font-medium uppercase tracking-widest"
-                style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+                style={{
+                  marginBottom: "0.5rem",
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: "#A07850",
+                }}
               >
                 Trust & pricing
               </p>
               <h2
-                className="mb-4 font-display font-light"
                 style={{
+                  marginBottom: "1rem",
                   fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-                  letterSpacing: "-0.02em",
-                  color: "hsl(30 8% 10%)",
+                  fontWeight: 700,
+                  letterSpacing: "-0.025em",
+                  color: "#1A1714",
                 }}
               >
                 Starts free.
@@ -500,15 +376,24 @@ export default async function AgentProfilePage({ params }: PageProps) {
                 Earns its way up.
               </h2>
               <p
-                className="mb-6 text-sm leading-relaxed"
-                style={{ color: "hsl(30 5% 45%)", maxWidth: "44ch" }}
+                style={{
+                  marginBottom: "1.5rem",
+                  fontSize: "0.9375rem",
+                  lineHeight: 1.65,
+                  color: "#6B6560",
+                  maxWidth: "44ch",
+                }}
               >
                 {content.trustNote}
               </p>
               <Link
                 href="/pricing"
-                className="text-sm font-medium transition-colors"
-                style={{ color: "hsl(30 48% 42%)" }}
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  color: "#A07850",
+                  textDecoration: "none",
+                }}
               >
                 See full pricing →
               </Link>
@@ -516,34 +401,54 @@ export default async function AgentProfilePage({ params }: PageProps) {
 
             {/* Current tier card */}
             <div
-              className="rounded-2xl p-6 md:w-64"
               style={{
-                background: "hsl(0 0% 100%)",
-                border: "1.5px solid hsl(35 18% 86%)",
+                borderRadius: "1rem",
+                padding: "1.5rem",
+                background: "#F9F8F6",
+                border: "1.5px solid #DDD9D3",
+                minWidth: "14rem",
               }}
             >
-              <div className="mb-3 flex items-center gap-2">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                  marginBottom: "0.75rem",
+                }}
+              >
                 <div
-                  className="flex h-8 w-8 items-center justify-center rounded-full font-display text-sm font-light"
                   style={{
-                    background: "hsl(30 55% 46% / 0.1)",
-                    border: "1.5px solid hsl(30 55% 46% / 0.3)",
-                    color: "hsl(30 50% 42%)",
+                    width: "2.25rem",
+                    height: "2.25rem",
+                    borderRadius: "9999px",
+                    background: "rgba(160,120,80,0.1)",
+                    border: "1.5px solid rgba(160,120,80,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    color: "#A07850",
                   }}
                 >
                   {tier.score}
                 </div>
-                <span className="text-xs font-medium" style={{ color: "hsl(30 50% 42%)" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#A07850" }}>
                   Current tier
                 </span>
               </div>
               <p
-                className="font-display text-2xl font-light"
-                style={{ color: "hsl(30 8% 10%)", letterSpacing: "-0.01em" }}
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 700,
+                  letterSpacing: "-0.02em",
+                  color: "#1A1714",
+                }}
               >
                 {tier.name}
               </p>
-              <p className="mt-1 text-xs" style={{ color: "hsl(30 5% 50%)" }}>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.8125rem", color: "#9C958F" }}>
                 {tier.desc}
               </p>
             </div>
@@ -552,37 +457,48 @@ export default async function AgentProfilePage({ params }: PageProps) {
       </section>
 
       {/* ── Channels ── */}
-      <section className="py-16" style={{ background: "hsl(45 25% 98%)" }}>
-        <div className="page-width max-w-4xl mx-auto">
+      <section style={{ background: "#F5F3F0", paddingTop: "4rem", paddingBottom: "4rem" }}>
+        <div className="page-width" style={{ maxWidth: "56rem", margin: "0 auto" }}>
           <p
-            className="mb-2 text-xs font-medium uppercase tracking-widest"
-            style={{ color: "hsl(30 55% 46%)", letterSpacing: "0.14em" }}
+            style={{
+              marginBottom: "0.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#A07850",
+            }}
           >
             Channels
           </p>
           <h2
-            className="mb-8 font-display font-light"
             style={{
+              marginBottom: "2rem",
               fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-              letterSpacing: "-0.02em",
-              color: "hsl(30 8% 10%)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
             }}
           >
             Works where your customers are.
           </h2>
 
-          <div className="flex flex-wrap gap-4">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
             {content.channels.map(({ name, icon }) => (
               <div
                 key={name}
-                className="flex items-center gap-3 rounded-full px-5 py-3"
                 style={{
-                  background: "hsl(40 20% 96%)",
-                  border: "1px solid hsl(35 12% 88%)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                  borderRadius: "9999px",
+                  padding: "0.625rem 1.25rem",
+                  background: "#F9F8F6",
+                  border: "1px solid #DDD9D3",
                 }}
               >
-                <span className="text-lg">{icon}</span>
-                <span className="text-sm font-medium" style={{ color: "hsl(30 8% 22%)" }}>
+                <span style={{ fontSize: "1rem" }}>{icon}</span>
+                <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1A1714" }}>
                   {name}
                 </span>
               </div>
@@ -593,33 +509,41 @@ export default async function AgentProfilePage({ params }: PageProps) {
 
       {/* ── FAQ ── */}
       <section
-        className="py-20"
-        style={{ background: "hsl(40 20% 96%)", borderTop: "1px solid hsl(35 12% 90%)" }}
+        style={{
+          background: "#EDEAE5",
+          borderTop: "1px solid #DDD9D3",
+          paddingTop: "5rem",
+          paddingBottom: "5rem",
+        }}
       >
-        <div className="page-width max-w-3xl mx-auto">
+        <div className="page-width" style={{ maxWidth: "42rem" }}>
           <h2
-            className="mb-12 font-display font-light"
             style={{
-              fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-              letterSpacing: "-0.02em",
-              color: "hsl(30 8% 10%)",
+              marginBottom: "3rem",
+              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
             }}
           >
             Common questions.
           </h2>
 
-          <div className="space-y-8">
+          <div style={{ display: "flex", flexDirection: "column", gap: "2.5rem" }}>
             {content.faq.map(({ q, a }) => (
-              <div key={q} className="border-b pb-8" style={{ borderColor: "hsl(35 12% 87%)" }}>
+              <div key={q} style={{ borderBottom: "1px solid #DDD9D3", paddingBottom: "2.5rem" }}>
                 <h3
-                  className="mb-3 font-display font-light"
-                  style={{ fontSize: "1.2rem", letterSpacing: "-0.01em", color: "hsl(30 8% 12%)" }}
+                  style={{
+                    marginBottom: "0.625rem",
+                    fontSize: "1.0625rem",
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                    color: "#1A1714",
+                  }}
                 >
                   {q}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "hsl(30 5% 45%)" }}>
-                  {a}
-                </p>
+                <p style={{ fontSize: "0.9375rem", lineHeight: 1.65, color: "#6B6560" }}>{a}</p>
               </div>
             ))}
           </div>
@@ -627,25 +551,33 @@ export default async function AgentProfilePage({ params }: PageProps) {
       </section>
 
       {/* ── Bottom CTA ── */}
-      <section
-        className="py-20"
-        style={{ background: "linear-gradient(to bottom, hsl(38 50% 94%), hsl(45 25% 98%))" }}
-      >
-        <div className="page-width text-center">
+      <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
+        <div className="page-width">
           <p
-            className="mb-6 font-display font-light"
             style={{
+              marginBottom: "1.5rem",
               fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-              letterSpacing: "-0.02em",
-              color: "hsl(30 8% 10%)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
             }}
           >
             Ready to put {listing.name} to work?
           </p>
           <Link
             href="/get-started"
-            className="inline-flex items-center gap-2 rounded-full px-8 py-4 text-sm font-medium"
-            style={{ background: "hsl(30 55% 46%)", color: "white" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              borderRadius: "9999px",
+              padding: "0.875rem 2rem",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              textDecoration: "none",
+              background: "#1A1714",
+              color: "#F5F3F0",
+            }}
           >
             Get early access →
           </Link>

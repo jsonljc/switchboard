@@ -3,18 +3,11 @@ import Link from "next/link";
 import { getListedAgents, getDemoTaskStats } from "@/lib/demo-data";
 import { HomepageHero } from "@/components/landing/homepage-hero";
 import { AgentMarketplaceCard } from "@/components/landing/agent-marketplace-card";
-import type { RoleFocus } from "@/components/character/operator-character";
 
 export const metadata: Metadata = {
   title: "Switchboard — Your AI sales team, ready in minutes",
   description:
     "Browse AI agents built for growth. Deploy to WhatsApp, Telegram, or your website. They qualify leads, book calls, and earn your trust over time.",
-};
-
-const ROLE_MAP: Record<string, RoleFocus> = {
-  "speed-to-lead": "leads",
-  "sales-closer": "growth",
-  "nurture-specialist": "care",
 };
 
 const PREVIEW_SLUGS = ["speed-to-lead", "sales-closer", "nurture-specialist"];
@@ -24,48 +17,16 @@ const PROBLEMS = [
     problem: "Missed leads",
     solution: "Speed-to-Lead",
     description: "Qualifies inbound leads within minutes — before they go cold.",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path
-          d="M11 3v2M11 17v2M3 11h2M17 11h2M5.64 5.64l1.42 1.42M14.95 14.95l1.41 1.41M5.64 16.36l1.42-1.42M14.95 7.05l1.41-1.41"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <circle cx="11" cy="11" r="4" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-    ),
   },
   {
     problem: "Slow follow-up",
     solution: "Sales Closer",
     description: "Books calls and closes deals while your team is focused elsewhere.",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path
-          d="M4 7h14M4 11h10M4 15h7"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
   },
   {
     problem: "No sales team",
     solution: "Nurture Specialist",
     description: "Re-engages cold contacts and keeps relationships warm automatically.",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path
-          d="M11 4C7.13 4 4 7.13 4 11c0 1.74.63 3.33 1.67 4.56L4 19l3.44-1.67A6.93 6.93 0 0011 18c3.87 0 7-3.13 7-7s-3.13-7-7-7z"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
   },
 ];
 
@@ -88,14 +49,14 @@ const STEPS = [
 ];
 
 const TRUST_STEPS = [
-  { score: "0", label: "Starts free", color: "hsl(30 5% 72%)" },
-  { score: "40+", label: "Basic autonomy", color: "hsl(38 45% 58%)" },
-  { score: "70+", label: "Semi-autonomous", color: "hsl(30 50% 50%)" },
-  { score: "90+", label: "Fully trusted", color: "hsl(30 55% 42%)" },
+  { score: "0", label: "Starts free", accent: "#C8C3BC" },
+  { score: "40+", label: "Basic autonomy", accent: "#B89870" },
+  { score: "70+", label: "Semi-autonomous", accent: "#A07850" },
+  { score: "90+", label: "Fully trusted", accent: "#8B6540" },
 ];
 
 export default async function HomePage() {
-  const agents = await getListedAgents();
+  const agents = await getListedAgents().catch(() => []);
   const previewAgents = PREVIEW_SLUGS.map((slug) => agents.find((a) => a.slug === slug)).filter(
     Boolean,
   );
@@ -103,53 +64,96 @@ export default async function HomePage() {
   const previewWithStats = await Promise.all(
     previewAgents.map(async (agent) => ({
       agent: agent!,
-      stats: await getDemoTaskStats(agent!.id),
+      stats: await getDemoTaskStats(agent!.id).catch(() => ({
+        totalTasks: 0,
+        approvedCount: 0,
+        approvalRate: 0,
+        lastActiveAt: null,
+      })),
     })),
   );
+
+  const alexAgent = agents.find((a) => a.slug === "speed-to-lead") ?? null;
 
   return (
     <>
       {/* ── Hero ── */}
-      <HomepageHero />
+      <HomepageHero
+        previewAgent={
+          alexAgent
+            ? {
+                name: alexAgent.name,
+                description: alexAgent.description,
+                trustScore: alexAgent.trustScore,
+                slug: alexAgent.slug,
+              }
+            : null
+        }
+      />
 
       {/* ── Problem → Solution strip ── */}
-      <section className="py-20" style={{ background: "hsl(40 20% 96%)" }}>
+      <section style={{ background: "#EDEAE5", paddingTop: "5rem", paddingBottom: "5rem" }}>
         <div className="page-width">
           <p
-            className="mb-10 text-center text-xs font-medium uppercase tracking-widest"
-            style={{ color: "hsl(30 6% 52%)", letterSpacing: "0.14em" }}
+            style={{
+              marginBottom: "0.75rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
           >
             Built for real business problems
           </p>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            {PROBLEMS.map(({ problem, solution, description, icon }) => (
+          <h2
+            style={{
+              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
+              marginBottom: "3rem",
+            }}
+          >
+            The work that slips through.
+            <br />
+            Handled.
+          </h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {PROBLEMS.map(({ problem, solution, description }) => (
               <div
                 key={problem}
-                className="rounded-2xl p-8"
                 style={{
-                  background: "hsl(0 0% 100%)",
-                  border: "1px solid hsl(35 15% 90%)",
+                  background: "#F9F8F6",
+                  border: "1px solid #DDD9D3",
+                  borderRadius: "1rem",
+                  padding: "1.75rem",
                 }}
               >
-                <div
-                  className="mb-5 inline-flex rounded-xl p-3"
+                <p
                   style={{
-                    background: "hsl(30 55% 46% / 0.08)",
-                    color: "hsl(30 55% 46%)",
+                    fontSize: "0.6875rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "#9C958F",
+                    marginBottom: "0.5rem",
                   }}
                 >
-                  {icon}
-                </div>
-                <p className="mb-1 text-xs font-medium" style={{ color: "hsl(30 5% 60%)" }}>
-                  Problem: {problem}
+                  {problem}
                 </p>
                 <h3
-                  className="mb-2 font-display text-2xl font-light"
-                  style={{ color: "hsl(30 8% 10%)", letterSpacing: "-0.01em" }}
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "1.25rem",
+                    letterSpacing: "-0.015em",
+                    color: "#1A1714",
+                    marginBottom: "0.625rem",
+                  }}
                 >
                   {solution}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "hsl(30 5% 42%)" }}>
+                <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>
                   {description}
                 </p>
               </div>
@@ -159,61 +163,73 @@ export default async function HomePage() {
       </section>
 
       {/* ── How It Works preview ── */}
-      <section className="py-24" style={{ background: "hsl(45 25% 98%)" }}>
+      <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
         <div className="page-width">
-          <div className="mb-16 text-center">
-            <p
-              className="mb-3 text-xs font-medium uppercase tracking-widest"
-              style={{ color: "hsl(30 6% 52%)", letterSpacing: "0.14em" }}
-            >
-              How it works
-            </p>
-            <h2
-              className="font-display font-light"
-              style={{
-                fontSize: "clamp(2rem, 3.5vw, 3rem)",
-                letterSpacing: "-0.02em",
-                color: "hsl(30 8% 10%)",
-              }}
-            >
-              From discovery to trusted automation.
-            </h2>
-          </div>
+          <p
+            style={{
+              marginBottom: "0.75rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
+          >
+            How it works
+          </p>
+          <h2
+            style={{
+              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
+              marginBottom: "3rem",
+            }}
+          >
+            From discovery to trusted automation.
+          </h2>
 
-          <div className="grid grid-cols-1 gap-12 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
             {STEPS.map(({ n, title, desc }) => (
-              <div key={n} className="relative">
+              <div key={n}>
                 <p
-                  className="mb-4 font-display"
                   style={{
-                    fontSize: "5rem",
-                    fontWeight: 200,
+                    fontSize: "4rem",
+                    fontWeight: 700,
                     lineHeight: 1,
-                    color: "hsl(30 20% 88%)",
                     letterSpacing: "-0.04em",
+                    color: "#DDD9D3",
+                    marginBottom: "1rem",
                     userSelect: "none",
                   }}
                 >
                   {n}
                 </p>
                 <h3
-                  className="mb-2 font-display text-2xl font-light"
-                  style={{ color: "hsl(30 8% 10%)", letterSpacing: "-0.01em" }}
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "1.125rem",
+                    letterSpacing: "-0.015em",
+                    color: "#1A1714",
+                    marginBottom: "0.5rem",
+                  }}
                 >
                   {title}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "hsl(30 5% 45%)" }}>
-                  {desc}
-                </p>
+                <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>{desc}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-12 text-center">
+          <div style={{ marginTop: "2.5rem" }}>
             <Link
               href="/how-it-works"
-              className="text-sm font-medium transition-colors"
-              style={{ color: "hsl(30 45% 45%)" }}
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                color: "#A07850",
+                textDecoration: "none",
+              }}
             >
               See the full breakdown →
             </Link>
@@ -223,146 +239,172 @@ export default async function HomePage() {
 
       {/* ── Agent preview cards ── */}
       {previewWithStats.length > 0 && (
-        <section className="py-24" style={{ background: "hsl(40 20% 96%)" }}>
+        <section style={{ background: "#EDEAE5", paddingTop: "5rem", paddingBottom: "5rem" }}>
           <div className="page-width">
-            <div className="mb-14 flex items-end justify-between">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                marginBottom: "2.5rem",
+              }}
+            >
               <h2
-                className="font-display font-light"
                 style={{
-                  fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-                  letterSpacing: "-0.02em",
-                  color: "hsl(30 8% 10%)",
+                  fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+                  fontWeight: 700,
+                  letterSpacing: "-0.025em",
+                  color: "#1A1714",
                 }}
               >
                 Meet the team.
               </h2>
               <Link
                 href="/agents"
-                className="hidden text-sm font-medium transition-colors sm:block"
-                style={{ color: "hsl(30 45% 45%)" }}
+                className="hidden sm:block"
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
               >
-                See all agents →
+                See all →
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {previewWithStats.map(({ agent, stats }, i) => {
-                const meta = agent.metadata as Record<string, unknown> | null;
-                return (
-                  <AgentMarketplaceCard
-                    key={agent.id}
-                    name={agent.name}
-                    slug={agent.slug}
-                    description={agent.description}
-                    trustScore={agent.trustScore}
-                    autonomyLevel={agent.autonomyLevel}
-                    roleFocus={ROLE_MAP[agent.slug] ?? "default"}
-                    bundleSlug={(meta?.bundleSlug as string) ?? "sales-pipeline-bundle"}
-                    stats={{
-                      totalTasks: stats.totalTasks,
-                      approvalRate: stats.approvalRate,
-                      lastActiveAt: stats.lastActiveAt?.toISOString() ?? null,
-                    }}
-                    animationDelay={i * 120}
-                  />
-                );
-              })}
-            </div>
-
-            <div className="mt-8 text-center sm:hidden">
-              <Link
-                href="/agents"
-                className="text-sm font-medium"
-                style={{ color: "hsl(30 45% 45%)" }}
-              >
-                See all agents →
-              </Link>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {previewWithStats.map(({ agent, stats }) => (
+                <AgentMarketplaceCard
+                  key={agent.id}
+                  name={agent.name}
+                  slug={agent.slug}
+                  description={agent.description}
+                  trustScore={agent.trustScore}
+                  autonomyLevel={agent.autonomyLevel}
+                  stats={{
+                    totalTasks: stats.totalTasks,
+                    approvalRate: stats.approvalRate,
+                    lastActiveAt: stats.lastActiveAt?.toISOString() ?? null,
+                  }}
+                />
+              ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* ── Trust explainer ── */}
-      <section className="py-24" style={{ background: "hsl(45 25% 98%)" }}>
+      {/* ── Trust progression ── */}
+      <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
         <div className="page-width">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2
-              className="mb-4 font-display font-light"
-              style={{
-                fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-                letterSpacing: "-0.02em",
-                color: "hsl(30 8% 10%)",
-              }}
-            >
-              Pricing that earns its way up.
-            </h2>
-            <p className="text-base leading-relaxed" style={{ color: "hsl(30 6% 42%)" }}>
-              Agents start free. As they prove themselves through real performance, they unlock more
-              autonomy. You only pay for what&rsquo;s working.
-            </p>
-          </div>
+          <p
+            style={{
+              marginBottom: "0.75rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
+          >
+            Pricing
+          </p>
+          <h2
+            style={{
+              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              color: "#1A1714",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Starts free. Earns its way up.
+          </h2>
+          <p
+            style={{
+              fontSize: "1rem",
+              lineHeight: 1.6,
+              color: "#6B6560",
+              maxWidth: "44ch",
+              marginBottom: "3.5rem",
+            }}
+          >
+            You only pay for what&rsquo;s working. Agents that underperform stay on free.
+          </p>
 
-          {/* Trust progression arc */}
-          <div className="mx-auto mt-16 max-w-3xl">
-            <div className="relative flex items-end justify-between gap-2">
-              {/* Connecting line */}
+          {/* Trust progression strip */}
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.5rem",
+            }}
+          >
+            {/* Connecting line */}
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "12.5%",
+                right: "12.5%",
+                height: "1px",
+                background: "linear-gradient(to right, #DDD9D3, #A07850, #8B6540)",
+                transform: "translateY(-50%)",
+              }}
+            />
+            {TRUST_STEPS.map(({ score, label, accent }) => (
               <div
-                className="absolute inset-x-0"
+                key={score}
                 style={{
-                  bottom: 36,
-                  height: 1,
-                  background:
-                    "linear-gradient(to right, hsl(30 5% 80%), hsl(30 50% 50%), hsl(30 55% 42%))",
-                  marginLeft: "calc(12.5% - 1px)",
-                  marginRight: "calc(12.5% - 1px)",
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.625rem",
+                  position: "relative",
+                  zIndex: 1,
                 }}
-              />
-              {TRUST_STEPS.map(({ score, label, color }, i) => (
-                <div key={score} className="relative flex flex-1 flex-col items-center gap-3">
-                  <p className="text-xs font-medium" style={{ color: "hsl(30 5% 55%)" }}>
-                    {label}
-                  </p>
-                  {/* Node */}
-                  <div
-                    className="relative z-10 flex h-[72px] w-[72px] flex-col items-center justify-center rounded-full"
+              >
+                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#9C958F" }}>{label}</p>
+                <div
+                  style={{
+                    width: "4rem",
+                    height: "4rem",
+                    borderRadius: "9999px",
+                    background: `${accent}18`,
+                    border: `1.5px solid ${accent}40`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span
                     style={{
-                      background: `${color}18`,
-                      border: `1.5px solid ${color}40`,
+                      fontSize: "1rem",
+                      fontWeight: 700,
+                      color: accent,
+                      letterSpacing: "-0.02em",
                     }}
                   >
-                    <span
-                      className="font-display"
-                      style={{
-                        fontSize: "1.1rem",
-                        fontWeight: 300,
-                        color,
-                        letterSpacing: "-0.02em",
-                      }}
-                    >
-                      {score}
-                    </span>
-                    <span
-                      className="text-[9px] font-medium uppercase tracking-wider"
-                      style={{ color }}
-                    >
-                      trust
-                    </span>
-                  </div>
-                  {/* Index dot */}
-                  <div
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: i === 3 ? color : "hsl(30 8% 78%)" }}
-                  />
+                    {score}
+                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
 
-          <div className="mt-14 text-center">
+          <div style={{ marginTop: "2.5rem" }}>
             <Link
               href="/pricing"
-              className="mr-5 text-sm font-medium transition-colors"
-              style={{ color: "hsl(30 45% 45%)" }}
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                color: "#A07850",
+                textDecoration: "none",
+              }}
             >
               See full pricing →
             </Link>
@@ -371,30 +413,35 @@ export default async function HomePage() {
       </section>
 
       {/* ── Bottom CTA ── */}
-      <section
-        className="py-24"
-        style={{
-          background: "linear-gradient(to bottom, hsl(38 55% 94%), hsl(45 25% 98%))",
-        }}
-      >
-        <div className="page-width text-center">
+      <section style={{ background: "#EDEAE5", paddingTop: "5rem", paddingBottom: "5rem" }}>
+        <div className="page-width">
           <h2
-            className="mb-4 font-display font-light"
             style={{
-              fontSize: "clamp(2rem, 4vw, 3.5rem)",
+              fontSize: "clamp(2rem, 4vw, 3.2rem)",
+              fontWeight: 700,
               letterSpacing: "-0.025em",
-              color: "hsl(30 8% 10%)",
+              color: "#1A1714",
+              marginBottom: "1rem",
             }}
           >
             Ready to meet your team?
           </h2>
-          <p className="mb-10 text-base" style={{ color: "hsl(30 6% 45%)" }}>
+          <p style={{ fontSize: "1rem", color: "#6B6560", marginBottom: "2.5rem" }}>
             Join 200+ businesses on the early access list.
           </p>
           <Link
             href="/get-started"
-            className="inline-flex items-center gap-2 rounded-full px-8 py-4 text-sm font-medium tracking-wide"
-            style={{ background: "hsl(30 55% 46%)", color: "white" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              background: "#1A1714",
+              color: "#F5F3F0",
+              borderRadius: "9999px",
+              padding: "0.875rem 2rem",
+              fontSize: "0.9375rem",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
           >
             Get early access
           </Link>
