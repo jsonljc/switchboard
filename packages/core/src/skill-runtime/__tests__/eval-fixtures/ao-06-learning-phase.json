@@ -1,0 +1,127 @@
+{
+  "name": "Campaign in learning phase - watch not action",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "New Campaign",
+          "spend": 500,
+          "impressions": 10000,
+          "clicks": 150,
+          "leads": 8,
+          "cpm": 50,
+          "ctr": 1.5,
+          "cpc": 3.33,
+          "cpl": 62.5,
+          "cpa": 150,
+          "roas": 2.0,
+          "frequency": 1.0
+        }
+      ],
+      "aggregated": {
+        "cpm": 50,
+        "ctr": 1.5,
+        "cpc": 3.33,
+        "cpl": 62.5,
+        "cpa": 150,
+        "roas": 2.0,
+        "frequency": 1.0
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 0,
+        "ctr": 0,
+        "cpc": 0,
+        "cpl": 0,
+        "cpa": 0,
+        "roas": 0,
+        "frequency": 0
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_111",
+      "totalSpend": 500,
+      "totalLeads": 8
+    },
+    "CRM_FUNNEL": {
+      "leads": 8,
+      "qualified": 4,
+      "closed": 2,
+      "revenue": 2000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 50,
+              "ctr": 1.5,
+              "cpc": 3.33,
+              "cpl": 62.5,
+              "cpa": 150,
+              "roas": 2.0,
+              "frequency": 1.0
+            },
+            "previous": {
+              "cpm": 0,
+              "ctr": 0,
+              "cpc": 0,
+              "cpl": 0,
+              "cpa": 0,
+              "roas": 0,
+              "frequency": 0
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "ads-analytics.check-learning-phase",
+          "input": {
+            "campaignId": "c1",
+            "daysSinceChange": 3,
+            "eventsAccumulated": 8,
+            "eventsRequired": 50
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [], \"proposedWrites\": [], \"summary\": \"New Campaign is in learning phase with only 8 conversion events accumulated (50 required). CPA currently $150 vs target $100, but it's too early to take action. Watch item: allow campaign to exit learning phase before evaluating performance.\", \"confidence\": \"medium\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "tool_called", "toolName": "ads-analytics.check-learning-phase" },
+    { "type": "response_contains", "substring": "learning" }
+  ]
+}
