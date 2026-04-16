@@ -63,6 +63,8 @@ parameters:
 tools:
   - ads-analytics
 
+minimumModelTier: premium
+
 output:
   fields:
     - name: recommendations
