@@ -36,3 +36,8 @@ export { isIngressError } from "./ingress-error.js";
 // Registries
 export { IntentRegistry } from "./intent-registry.js";
 export { ExecutionModeRegistry } from "./execution-mode-registry.js";
+
+// Governance
+export { GovernanceGate } from "./governance/index.js";
+export type { GovernanceGateDeps, ConstraintOverrides } from "./governance/index.js";
+export { resolveConstraints, DEFAULT_CONSTRAINTS } from "./governance/index.js";
