@@ -49,6 +49,8 @@ interface UgcPipelineDeps {
   creatorStore: CreatorStore;
   deploymentStore: DeploymentStore;
   llmConfig?: { apiKey: string };
+  klingClient?: unknown;
+  assetStore?: unknown;
 }
 
 interface UgcPipelineContext {
@@ -59,6 +61,8 @@ interface UgcPipelineContext {
   providerCapabilities: unknown[];
   creativeWeights: unknown;
   apiKey: string;
+  klingClient: unknown;
+  assetStore: unknown;
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
@@ -145,6 +149,29 @@ async function executePhase(
       });
       return result as unknown as Record<string, unknown>;
     }
+    case "production": {
+      const scriptingOutput = ctx.previousPhaseOutputs.scripting as Record<string, unknown>;
+      const specs = (scriptingOutput.specs ?? []) as Array<Record<string, unknown>>;
+      const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
+      const budgetConfig = (ugcConfig.budget as Record<string, unknown>) ?? {};
+      const { executeProductionPhase } = await import("./phases/production.js");
+      type ProductionInput = import("./phases/production.js").ProductionInput;
+      const productionInput: ProductionInput = {
+        specs: specs as ProductionInput["specs"],
+        providerRegistry: ctx.context.providerCapabilities as ProviderCapabilityProfile[],
+        retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+        budget: {
+          totalJobBudget: (budgetConfig.totalJobBudget as number) ?? 50,
+          costAuthority: "estimated",
+        },
+        deps: {
+          klingClient: ctx.context.klingClient as ProductionInput["deps"]["klingClient"],
+          assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
+          apiKey: ctx.context.apiKey,
+        },
+      };
+      return (await executeProductionPhase(productionInput)) as unknown as Record<string, unknown>;
+    }
     default:
       // SP5+ replace remaining phases
       return { phase, status: "no-op", completedAt: new Date().toISOString() };
@@ -176,6 +203,8 @@ async function preloadContext(
     providerCapabilities: [], // SP5 adds real provider registry
     creativeWeights: translateFrictions([] as FunnelFriction[]),
     apiKey: deps.llmConfig?.apiKey ?? "",
+    klingClient: deps.klingClient,
+    assetStore: deps.assetStore,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   PrismaDeploymentConnectionStore,
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
+  PrismaAssetRecordStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -15,6 +16,7 @@ import {
   createCreativeJobRunner,
   createModeDispatcher,
   createUgcJobRunner,
+  KlingClient,
 } from "@switchboard/core/creative-pipeline";
 import {
   createWeeklyAuditCron,
@@ -43,6 +45,9 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
 
   const jobStore = new PrismaCreativeJobStore(app.prisma);
   const creatorStore = new PrismaCreatorIdentityStore(app.prisma);
+  const assetStore = new PrismaAssetRecordStore(app.prisma);
+  const klingApiKey = process.env["KLING_API_KEY"] ?? "";
+  const klingClient = klingApiKey ? new KlingClient({ apiKey: klingApiKey }) : undefined;
 
   // Ad Optimizer cron dependencies
   const deploymentStore = new PrismaDeploymentStore(app.prisma);
@@ -124,6 +129,8 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
           },
         },
         llmConfig: { apiKey },
+        klingClient,
+        assetStore,
       }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
