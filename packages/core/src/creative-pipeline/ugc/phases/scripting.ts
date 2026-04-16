@@ -72,14 +72,14 @@ function findIdentityPlan(plans: IdentityPlan[], creatorId: string): IdentityPla
   return plans.find((p) => p.creatorId === creatorId);
 }
 
-function mapPlatformToUgc(platform: string): string {
+function mapPlatformToUgc(platform: string): string[] {
   switch (platform) {
     case "meta":
-      return "meta_feed";
+      return ["meta_feed", "instagram_reels"];
     case "tiktok":
-      return "tiktok";
+      return ["tiktok"];
     default:
-      return "meta_feed";
+      return [];
   }
 }
 
@@ -97,7 +97,8 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
     return { specs: [] };
   }
 
-  const ugcPlatform = mapPlatformToUgc(brief.platforms[0] ?? "meta");
+  const ugcPlatforms = brief.platforms.flatMap(mapPlatformToUgc);
+  if (ugcPlatforms.length === 0) ugcPlatforms.push("meta_feed");
   const specs: CreativeSpecOutput[] = [];
 
   for (const casting of castingAssignments) {
@@ -148,7 +149,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
         name: structure.template.name,
         sections: structure.template.sections,
       },
-      platform: ugcPlatform,
+      platform: ugcPlatforms[0],
       ugcFormat: brief.ugcFormat,
     });
 
@@ -161,7 +162,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       creatorId: casting.creatorId,
       structureId: casting.structureId,
       motivator: "general",
-      platform: ugcPlatform,
+      platform: ugcPlatforms[0],
       script: {
         text: scriptResult.text,
         language: scriptResult.language,
@@ -171,7 +172,10 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       direction: ugcDirection as unknown as Record<string, unknown>,
       format: brief.ugcFormat,
       identityConstraints: identityPlan
-        ? (identityPlan.constraints as unknown as Record<string, unknown>)
+        ? {
+            strategy: identityPlan.primaryStrategy,
+            ...(identityPlan.constraints as Record<string, unknown>),
+          }
         : { strategy: "reference_conditioning", maxIdentityDrift: 0.5 },
       renderTargets: {
         aspect: "9:16",

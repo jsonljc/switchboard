@@ -11,6 +11,7 @@ import { evaluateMinimalQa } from "../minimal-qa.js";
 
 interface CreativeSpecInput {
   specId: string;
+  jobId?: string;
   deploymentId?: string;
   creatorId: string;
   structureId: string;
@@ -169,7 +170,7 @@ async function processSpec(
         };
 
         await deps.assetStore.upsertByKey({
-          jobId: spec.deploymentId ?? "unknown",
+          jobId: spec.jobId ?? "unknown",
           ...assetData,
         });
 
@@ -229,7 +230,15 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   const failedSpecs: ProductionOutput["failedSpecs"] = [];
 
   // Process specs sequentially for SP5 (p-limit parallelism deferred to SP7)
+  let totalCost = 0;
+
   for (const spec of specs) {
+    // Budget guard
+    if (totalCost > input.budget.totalJobBudget) {
+      failedSpecs.push({ specId: spec.specId, reason: "budget exceeded" });
+      continue;
+    }
+
     const ranked = rankProviders(
       { format: spec.format, identityConstraints: spec.identityConstraints },
       registry,
@@ -241,6 +250,7 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
 
     if (result.asset) {
       assets.push(result.asset);
+      totalCost += result.asset.costEstimate;
     }
     if (result.failed) {
       failedSpecs.push(result.failed);

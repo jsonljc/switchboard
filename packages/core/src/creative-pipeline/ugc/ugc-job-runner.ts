@@ -152,12 +152,16 @@ async function executePhase(
     case "production": {
       const scriptingOutput = ctx.previousPhaseOutputs.scripting as Record<string, unknown>;
       const specs = (scriptingOutput.specs ?? []) as Array<Record<string, unknown>>;
+      const specsWithJobId = specs.map((s: Record<string, unknown>) => ({
+        ...s,
+        jobId: ctx.job.id,
+      }));
       const ugcConfig = (ctx.job.ugcConfig ?? {}) as Record<string, unknown>;
       const budgetConfig = (ugcConfig.budget as Record<string, unknown>) ?? {};
       const { executeProductionPhase } = await import("./phases/production.js");
       type ProductionInput = import("./phases/production.js").ProductionInput;
       const productionInput: ProductionInput = {
-        specs: specs as unknown as ProductionInput["specs"],
+        specs: specsWithJobId as unknown as ProductionInput["specs"],
         providerRegistry: ctx.context.providerCapabilities as ProviderCapabilityProfile[],
         retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
         budget: {
@@ -235,10 +239,29 @@ export async function executeUgcPipeline(
     const phase = UGC_PHASE_ORDER[i];
     const startedAt = Date.now();
 
-    // Execute phase
-    const output = await step.run(`phase-${phase}`, () =>
-      executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }),
-    );
+    // Execute phase with error classification
+    let output: Record<string, unknown>;
+    try {
+      output = await step.run(`phase-${phase}`, () =>
+        executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }),
+      );
+    } catch (err) {
+      // Terminal error — persist failure and emit event
+      const phaseError = {
+        kind: "terminal",
+        phase,
+        code: "PHASE_EXECUTION_FAILED",
+        message: err instanceof Error ? err.message : String(err),
+      };
+      await step.run(`fail-${phase}`, () =>
+        deps.jobStore.failUgc(job.id, phase as string, phaseError),
+      );
+      await step.sendEvent("emit-failure", {
+        name: "creative-pipeline/ugc.failed",
+        data: { jobId: job.id, phase: phase as string, error: phaseError },
+      });
+      return;
+    }
 
     const durationMs = Date.now() - startedAt;
 
@@ -292,10 +315,18 @@ export async function executeUgcPipeline(
     if (nextPhase === "complete") break;
   }
 
-  // Emit final completion event
+  // Read production results for completion event
+  const productionOutput = phaseOutputs.production as Record<string, unknown> | undefined;
+  const assets = (productionOutput?.assets as unknown[]) ?? [];
+  const failedSpecsList = (productionOutput?.failedSpecs as unknown[]) ?? [];
+
   await step.sendEvent("emit-completed", {
     name: "creative-pipeline/ugc.completed",
-    data: { jobId: job.id, assetsProduced: 0, failed: 0 },
+    data: {
+      jobId: job.id,
+      assetsProduced: assets.length,
+      failed: failedSpecsList.length,
+    },
   });
 }
 
