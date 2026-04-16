@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type { ResolvedModelProfile } from "./types.js";
 
 export interface ToolCallingAdapterResponse {
   content: Array<Anthropic.TextBlock | Anthropic.ToolUseBlock>;
@@ -12,6 +13,7 @@ export interface ToolCallingAdapter {
     messages: Array<Anthropic.MessageParam>;
     tools: Array<Anthropic.Tool>;
     maxTokens?: number;
+    profile?: ResolvedModelProfile;
   }): Promise<ToolCallingAdapterResponse>;
 }
 
@@ -26,13 +28,15 @@ export class AnthropicToolCallingAdapter implements ToolCallingAdapter {
     messages: Array<Anthropic.MessageParam>;
     tools: Array<Anthropic.Tool>;
     maxTokens?: number;
+    profile?: ResolvedModelProfile;
   }): Promise<ToolCallingAdapterResponse> {
     const response = await this.client.messages.create({
-      model: DEFAULT_MODEL,
-      max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+      model: params.profile?.model ?? DEFAULT_MODEL,
+      max_tokens: params.profile?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
       system: params.system,
       messages: params.messages,
       tools: params.tools.length > 0 ? params.tools : undefined,
+      ...(params.profile?.temperature !== undefined && { temperature: params.profile.temperature }),
     });
 
     return {
