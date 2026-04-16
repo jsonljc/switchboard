@@ -13,6 +13,7 @@ import type { CircuitBreaker } from "./circuit-breaker.js";
 import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 import type { OutcomeLinker } from "./outcome-linker.js";
 import type { ContextResolverImpl } from "./context-resolver.js";
+import { ContextResolutionError } from "./types.js";
 import { createId } from "@paralleldrive/cuid2";
 import { createHash } from "node:crypto";
 
@@ -71,11 +72,22 @@ export class BatchSkillHandler {
     );
 
     // Resolve curated knowledge context
-    const resolved = await this.config.contextResolver.resolve(
-      execConfig.orgId,
-      this.config.skill.context,
-    );
-    const mergedParameters = { ...parameters, ...resolved.variables };
+    let contextVariables: Record<string, string> = {};
+    try {
+      const resolved = await this.config.contextResolver.resolve(
+        execConfig.orgId,
+        this.config.skill.context,
+      );
+      contextVariables = resolved.variables;
+    } catch (err) {
+      if (err instanceof ContextResolutionError) {
+        throw new Error(
+          `Required knowledge missing for batch skill ${this.config.skill.slug}: ${err.message}`,
+        );
+      }
+      throw err;
+    }
+    const mergedParameters = { ...parameters, ...contextVariables };
 
     // 3. Run skill via executor
     const executionResult = await this.config.executor.execute({

@@ -16,7 +16,7 @@ export const knowledgeEntryRoutes: FastifyPluginAsync = async (app) => {
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
 
-    const query = request.query as { kind?: string; scope?: string };
+    const query = request.query as { kind?: string; scope?: string; active?: string };
     const store = new PrismaKnowledgeEntryStore(app.prisma);
 
     const kindParse = query.kind ? KnowledgeKindSchema.safeParse(query.kind) : undefined;
@@ -24,9 +24,12 @@ export const knowledgeEntryRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: "Invalid kind filter", statusCode: 400 });
     }
 
+    const active = query.active === "false" ? false : true;
+
     const entries = await store.list(orgId, {
       kind: kindParse?.data,
       scope: query.scope,
+      active,
     });
 
     return reply.send({ entries });
@@ -41,9 +44,8 @@ export const knowledgeEntryRoutes: FastifyPluginAsync = async (app) => {
     if (!orgId) return;
 
     const { id } = request.params as { id: string };
-    const entry = await app.prisma.knowledgeEntry.findFirst({
-      where: { id, organizationId: orgId },
-    });
+    const store = new PrismaKnowledgeEntryStore(app.prisma);
+    const entry = await store.getById(id, orgId);
 
     if (!entry) {
       return reply.code(404).send({ error: "Not found", statusCode: 404 });

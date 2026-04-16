@@ -19,6 +19,7 @@ interface KnowledgeEntryUpdateInput {
 interface KnowledgeEntryFilter {
   kind?: KnowledgeKind;
   scope?: string;
+  active?: boolean;
 }
 
 export class PrismaKnowledgeEntryStore {
@@ -99,12 +100,19 @@ export class PrismaKnowledgeEntryStore {
     }
   }
 
+  async getById(id: string, orgId: string) {
+    return this.prisma.knowledgeEntry.findFirst({
+      where: { id, organizationId: orgId },
+    });
+  }
+
   async list(orgId: string, filters?: KnowledgeEntryFilter) {
     return this.prisma.knowledgeEntry.findMany({
       where: {
         organizationId: orgId,
         ...(filters?.kind ? { kind: filters.kind } : {}),
         ...(filters?.scope ? { scope: filters.scope } : {}),
+        ...(filters?.active !== undefined ? { active: filters.active } : {}),
       },
       orderBy: { createdAt: "desc" },
     });
