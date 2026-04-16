@@ -37,7 +37,11 @@ export { isIngressError } from "./ingress-error.js";
 
 // Platform Ingress
 export { PlatformIngress } from "./platform-ingress.js";
-export type { PlatformIngressConfig, SubmitWorkResponse } from "./platform-ingress.js";
+export type {
+  PlatformIngressConfig,
+  SubmitWorkResponse,
+  GovernanceGateInterface,
+} from "./platform-ingress.js";
 
 // Registries
 export { IntentRegistry } from "./intent-registry.js";
