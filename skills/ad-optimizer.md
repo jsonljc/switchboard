@@ -1,6 +1,7 @@
 ---
 name: ad-optimizer
 slug: ad-optimizer
+intent: ad-optimizer.run
 version: 1.0.0
 description: >
   Weekly campaign audit — analyzes ad performance across current and previous
