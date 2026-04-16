@@ -115,7 +115,12 @@ export class SkillHandler implements AgentHandler {
     }
 
     // 8. On success: run afterSkill hooks (trace persistence, outcome linking)
-    await runAfterSkillHooks(this.hooks, hookContext, result);
+    // Trace/linking failures must not block the user from getting their response.
+    try {
+      await runAfterSkillHooks(this.hooks, hookContext, result);
+    } catch (err) {
+      console.error(`afterSkill hooks failed for ${this.skill.slug}:`, err);
+    }
 
     // 9. Send response
     await ctx.chat.send(result.response);

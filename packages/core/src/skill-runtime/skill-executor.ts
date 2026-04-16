@@ -102,9 +102,15 @@ export class SkillExecutorImpl implements SkillExecutor {
       }
       const resolvedCtx = hookResult.ctx ?? llmCtx;
 
+      // BudgetEnforcementHook checks elapsed time *before* the LLM call starts.
+      // This inline check guards the gap: if time expired between hook check and here,
+      // or during a long tool execution in the previous turn, catch it before starting
+      // the LLM call. The Promise.race timeout below catches calls that run too long.
       const remainingMs = this.policy.maxRuntimeMs - (Date.now() - startTime);
       if (remainingMs <= 0) {
-        throw new SkillExecutionBudgetError("Exceeded 30s runtime limit");
+        throw new SkillExecutionBudgetError(
+          `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
+        );
       }
       let timeoutId: ReturnType<typeof setTimeout>;
       const response = await Promise.race([
@@ -116,7 +122,12 @@ export class SkillExecutorImpl implements SkillExecutor {
         }),
         new Promise<never>((_resolve, reject) => {
           timeoutId = setTimeout(
-            () => reject(new SkillExecutionBudgetError("Exceeded 30s runtime limit")),
+            () =>
+              reject(
+                new SkillExecutionBudgetError(
+                  `Exceeded ${this.policy.maxRuntimeMs / 1000}s runtime limit`,
+                ),
+              ),
             remainingMs,
           );
         }),
