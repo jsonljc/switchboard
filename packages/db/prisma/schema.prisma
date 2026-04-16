@@ -846,6 +846,7 @@ model AgentDeployment {
   skillSlug           String?  // When set, use skill executor instead of TypeScript handler
   circuitBreakerThreshold  Int?
   maxWritesPerHour          Int?
+  allowedModelTiers       String[] @default([])
   trustLevel              String   @default("observe")
   spendApprovalThreshold  Float    @default(50)
   createdAt           DateTime @default(now())
