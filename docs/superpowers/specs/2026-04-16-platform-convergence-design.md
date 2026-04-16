@@ -234,17 +234,46 @@ interface ExecutionConstraints {
 }
 ```
 
+### ExecutionConstraints → SkillRuntimePolicy mapping
+
+`ExecutionConstraints` covers the subset of `SkillRuntimePolicy` that the governance gate resolves. The remaining `SkillRuntimePolicy` fields come from deployment config and are merged by `SkillMode` before calling the executor:
+
+| SkillRuntimePolicy field                                                                                                    | Source                                        |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `allowedModelTiers`, `maxToolCalls`, `maxLlmTurns`, `maxTotalTokens`, `maxRuntimeMs`, `maxWritesPerExecution`, `trustLevel` | `ExecutionConstraints` (from governance gate) |
+| `minimumModelTier`                                                                                                          | Skill frontmatter (via intent registration)   |
+| `maxWritesPerHour`, `circuitBreakerThreshold`, `maxConcurrentExecutions`                                                    | Deployment config (per-deployment DB fields)  |
+| `writeApprovalRequired`                                                                                                     | Deployment config                             |
+
+Non-skill modes ignore fields they don't use (e.g., pipeline mode ignores `allowedModelTiers`).
+
 ### What gets reused from the existing orchestrator
 
-- `PolicyEngine.evaluate()` — 10-step rule evaluator (production-grade, not cartridge-specific)
-- `RiskScorer` — composite risk scoring (dollars-at-risk, blast radius, irreversibility, velocity)
-- `ApprovalRouter` — approval level, approvers, delegation chains
-- Identity resolution — `IdentitySpec` merging with role overlays
+These are currently pure functions and inline logic, not standalone classes. Phase 2 wraps them in facade classes:
+
+- `computeRiskScore()` + `computeCompositeRiskAdjustment()` from `engine/risk-scorer.ts` — wrapped in a `RiskScoringFacade`
+- `determineApprovalRequirement()` from `engine/policy-engine.ts` — wrapped in an `ApprovalRoutingFacade`
+- `PolicyEngine.evaluate()` — the 10-step rule evaluator (already a class, used directly)
+- Identity resolution — `IdentitySpec` merging with role overlays (already modular)
 
 ### What gets extracted/generalized
 
 - `ProposePipeline` currently takes `cartridgeId` and calls `cartridge.enrichContext()`. The governance gate does not do context enrichment — that is an execution-mode concern that happens after governance approves.
 - `ActionEnvelope` is the orchestrator's record format. The governance gate produces a `GovernanceDecision`, not an envelope.
+
+### Error handling at ingress
+
+If the intent is not found in the registry, the platform returns a typed error before reaching governance:
+
+```typescript
+interface IngresError {
+  type: "intent_not_found" | "validation_failed" | "trigger_not_allowed";
+  intent: string;
+  message: string;
+}
+```
+
+This is returned from the ingress layer, not from `ExecutionResult` (which only covers post-governance outcomes).
 
 ### Ingress-time vs execution-time governance
 
@@ -301,10 +330,11 @@ GovernanceDecision.outcome === "execute"
 
 **Cartridge Mode** — Direct deterministic action execution
 
-- Wraps `ExecutionManager` + `GuardedCartridge` + interceptor chain
+- Wraps `ExecutionManager` + execution guard (`execution-guard.ts` token-based pattern) + interceptor chain
 - Context enrichment (`cartridge.enrichContext()`) happens here, inside the mode
 - Receives pre-approved WorkUnit — no longer owns governance
-- GuardedCartridge is unchanged — it's a good engine
+- The execution guard's token system (`beginExecution`/`endExecution` with module-level `activeTokens` Set) is called by CartridgeMode internally, same as ExecutionManager does today
+- Execution guard is unchanged — it's a good engine
 
 ### ModeRegistry
 
@@ -330,6 +360,10 @@ class ModeRegistry {
 ```typescript
 interface ExecutionResult {
   workUnitId: string;
+  // "pending_approval" here means execution-TIME approval (e.g., SP6 tool-level
+  // governance blocked a specific action within a running skill). This is distinct
+  // from ingress-time approval which is handled by the governance gate before
+  // execution begins and never reaches ExecutionResult.
   outcome: "completed" | "failed" | "pending_approval" | "queued" | "running";
 
   summary: string;
@@ -534,7 +568,7 @@ Aggressive contract-first with selective rip-and-replace.
 - `PolicyEngine`, `RiskScorer`, `ApprovalRouter` (extracted, not rewritten)
 - `SkillExecutorImpl` + SP6 hooks (wrapped, not replaced)
 - Creative pipeline Inngest runner (wrapped, not replaced)
-- `GuardedCartridge` + interceptor chain (wrapped, not replaced)
+- Execution guard (`execution-guard.ts`) + interceptor chain (wrapped, not replaced)
 - `ModelRouter` (consumed by SkillMode)
 
 ### What gets deleted
