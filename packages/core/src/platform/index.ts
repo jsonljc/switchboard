@@ -41,3 +41,10 @@ export { ExecutionModeRegistry } from "./execution-mode-registry.js";
 export { GovernanceGate } from "./governance/index.js";
 export type { GovernanceGateDeps, ConstraintOverrides } from "./governance/index.js";
 export { resolveConstraints, DEFAULT_CONSTRAINTS } from "./governance/index.js";
+
+// Modes
+export { SkillMode } from "./modes/index.js";
+export type { SkillModeConfig } from "./modes/index.js";
+
+// Registrars
+export { registerSkillIntents } from "./skill-intent-registrar.js";
