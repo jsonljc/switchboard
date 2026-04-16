@@ -5,7 +5,7 @@ import type {
   BatchSkillStores,
   BatchContextContract,
 } from "./batch-types.js";
-import type { SkillDefinition, SkillExecutor } from "./types.js";
+import type { SkillDefinition, SkillExecutor, HookResult } from "./types.js";
 
 const mockSkill: SkillDefinition = {
   name: "test-batch",
@@ -34,7 +34,7 @@ function makeContextResolver() {
 }
 
 function makeHooks(
-  beforeResult = { proceed: true },
+  beforeResult: HookResult = { proceed: true },
   afterFn = vi.fn(),
   onErrorFn = vi.fn(),
 ): any[] {

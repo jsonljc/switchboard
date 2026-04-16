@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillHandler } from "./skill-handler.js";
 import { ParameterResolutionError } from "./parameter-builder.js";
-import type { SkillDefinition } from "./types.js";
+import type { SkillDefinition, HookResult } from "./types.js";
 import type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 
 const mockSkill: SkillDefinition = {
@@ -37,7 +37,7 @@ function makeContextResolver() {
 }
 
 function makeHooks(
-  beforeResult = { proceed: true },
+  beforeResult: HookResult = { proceed: true },
   afterFn = vi.fn(),
   onErrorFn = vi.fn(),
 ): any[] {

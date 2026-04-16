@@ -53,15 +53,18 @@ describe("GovernanceHook", () => {
     toolId: string,
     operation: string,
     trustLevel: "supervised" | "guided" | "autonomous",
-  ): ToolCallContext => ({
-    toolId,
-    operation,
-    trustLevel,
-    input: {},
-    deploymentId: "test-deployment",
-    orgId: "test-org",
-    sessionId: "test-session",
-  });
+  ): ToolCallContext => {
+    const tools = createTools();
+    const tool = tools.get(toolId);
+    const op = tool?.operations[operation];
+    return {
+      toolId,
+      operation,
+      params: {},
+      governanceTier: op?.governanceTier ?? "read",
+      trustLevel,
+    };
+  };
 
   it("auto-approves read-tier tool at guided trust", async () => {
     const hook = new GovernanceHook(createTools());
@@ -74,8 +77,8 @@ describe("GovernanceHook", () => {
 
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(1);
-    expect(logs[0].decision).toBe("auto-approve");
-    expect(logs[0].tier).toBe("read");
+    expect(logs[0]!.decision).toBe("auto-approve");
+    expect(logs[0]!.tier).toBe("read");
   });
 
   it("denies destructive tool at supervised trust", async () => {
@@ -90,8 +93,8 @@ describe("GovernanceHook", () => {
 
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(1);
-    expect(logs[0].decision).toBe("deny");
-    expect(logs[0].tier).toBe("destructive");
+    expect(logs[0]!.decision).toBe("deny");
+    expect(logs[0]!.tier).toBe("destructive");
   });
 
   it("requires approval for external_write at guided trust", async () => {
@@ -106,8 +109,8 @@ describe("GovernanceHook", () => {
 
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(1);
-    expect(logs[0].decision).toBe("require-approval");
-    expect(logs[0].tier).toBe("external_write");
+    expect(logs[0]!.decision).toBe("require-approval");
+    expect(logs[0]!.tier).toBe("external_write");
   });
 
   it("accumulates governance logs across multiple calls", async () => {
@@ -119,8 +122,8 @@ describe("GovernanceHook", () => {
 
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(3);
-    expect(logs[0].operationId).toBe("crm-query.contact.get");
-    expect(logs[1].operationId).toBe("email-sender.send");
-    expect(logs[2].operationId).toBe("crm-write.contact.delete");
+    expect(logs[0]!.operationId).toBe("crm-query.contact.get");
+    expect(logs[1]!.operationId).toBe("email-sender.send");
+    expect(logs[2]!.operationId).toBe("crm-write.contact.delete");
   });
 });

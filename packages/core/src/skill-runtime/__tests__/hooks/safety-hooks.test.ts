@@ -12,12 +12,14 @@ describe("CircuitBreakerHook", () => {
     sessionId: "test-session",
     skillSlug: "test-skill",
     skillVersion: "1.0.0",
+    trustLevel: "guided",
+    trustScore: 50,
   });
 
   it("proceeds when circuit breaker allows", async () => {
-    const mockCircuitBreaker: CircuitBreaker = {
+    const mockCircuitBreaker = {
       check: async () => ({ allowed: true }),
-    } as CircuitBreaker;
+    } as unknown as CircuitBreaker;
 
     const hook = new CircuitBreakerHook(mockCircuitBreaker);
     const result = await hook.beforeSkill(createContext());
@@ -27,12 +29,12 @@ describe("CircuitBreakerHook", () => {
   });
 
   it("blocks when circuit breaker denies", async () => {
-    const mockCircuitBreaker: CircuitBreaker = {
+    const mockCircuitBreaker = {
       check: async () => ({
         allowed: false,
         reason: "Circuit open: too many recent failures",
       }),
-    } as CircuitBreaker;
+    } as unknown as CircuitBreaker;
 
     const hook = new CircuitBreakerHook(mockCircuitBreaker);
     const result = await hook.beforeSkill(createContext());
@@ -49,12 +51,14 @@ describe("BlastRadiusHook", () => {
     sessionId: "test-session",
     skillSlug: "test-skill",
     skillVersion: "1.0.0",
+    trustLevel: "guided",
+    trustScore: 50,
   });
 
   it("proceeds when blast radius limiter allows", async () => {
-    const mockLimiter: BlastRadiusLimiter = {
+    const mockLimiter = {
       check: async () => ({ allowed: true }),
-    } as BlastRadiusLimiter;
+    } as unknown as BlastRadiusLimiter;
 
     const hook = new BlastRadiusHook(mockLimiter);
     const result = await hook.beforeSkill(createContext());
@@ -64,12 +68,12 @@ describe("BlastRadiusHook", () => {
   });
 
   it("blocks when blast radius limiter denies", async () => {
-    const mockLimiter: BlastRadiusLimiter = {
+    const mockLimiter = {
       check: async () => ({
         allowed: false,
         reason: "Concurrent execution limit reached (max 5)",
       }),
-    } as BlastRadiusLimiter;
+    } as unknown as BlastRadiusLimiter;
 
     const hook = new BlastRadiusHook(mockLimiter);
     const result = await hook.beforeSkill(createContext());
