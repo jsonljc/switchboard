@@ -45,7 +45,11 @@ export { ExecutionModeRegistry } from "./execution-mode-registry.js";
 
 // Governance
 export { GovernanceGate } from "./governance/index.js";
-export type { GovernanceGateDeps, ConstraintOverrides } from "./governance/index.js";
+export type {
+  GovernanceGateDeps,
+  GovernanceCartridge,
+  ConstraintOverrides,
+} from "./governance/index.js";
 export {
   resolveConstraints,
   DEFAULT_CONSTRAINTS,
