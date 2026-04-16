@@ -12,6 +12,7 @@ import type { TrustLevel } from "./governance.js";
 import type { CircuitBreaker } from "./circuit-breaker.js";
 import type { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 import type { OutcomeLinker } from "./outcome-linker.js";
+import type { ContextResolverImpl } from "./context-resolver.js";
 import { createId } from "@paralleldrive/cuid2";
 import { createHash } from "node:crypto";
 
@@ -32,6 +33,7 @@ interface BatchSkillHandlerConfig {
   circuitBreaker: CircuitBreaker;
   blastRadiusLimiter: BlastRadiusLimiter;
   outcomeLinker: OutcomeLinker;
+  contextResolver: { resolve: ContextResolverImpl["resolve"] };
 }
 
 export interface BatchExecutionResult extends BatchSkillResult {
@@ -68,10 +70,17 @@ export class BatchSkillHandler {
       this.config.contract,
     );
 
+    // Resolve curated knowledge context
+    const resolved = await this.config.contextResolver.resolve(
+      execConfig.orgId,
+      this.config.skill.context,
+    );
+    const mergedParameters = { ...parameters, ...resolved.variables };
+
     // 3. Run skill via executor
     const executionResult = await this.config.executor.execute({
       skill: this.config.skill,
-      parameters,
+      parameters: mergedParameters,
       messages: [{ role: "user", content: `Execute batch: ${execConfig.trigger}` }],
       deploymentId: execConfig.deploymentId,
       orgId: execConfig.orgId,
@@ -137,7 +146,7 @@ export class BatchSkillHandler {
       skillVersion: this.config.skill.version,
       trigger: "batch_job",
       sessionId: execConfig.trigger,
-      inputParametersHash: hashParameters(parameters),
+      inputParametersHash: hashParameters(mergedParameters),
       toolCalls: executionResult.toolCalls,
       governanceDecisions: executionResult.trace.governanceDecisions,
       tokenUsage: executionResult.tokenUsage,

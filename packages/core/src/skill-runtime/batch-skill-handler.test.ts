@@ -30,23 +30,27 @@ const mockStores: BatchSkillStores = {
 };
 
 function makeTraceStore() {
-  return { create: vi.fn().mockResolvedValue(undefined) };
+  return { create: vi.fn().mockResolvedValue(undefined) } as any;
 }
 
 function makeCircuitBreaker(allowed = true) {
   return {
     check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "tripped" }),
-  };
+  } as any;
 }
 
 function makeBlastRadius(allowed = true) {
   return {
     check: vi.fn().mockResolvedValue({ allowed, reason: allowed ? undefined : "capped" }),
-  };
+  } as any;
 }
 
 function makeOutcomeLinker() {
-  return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) };
+  return { linkFromToolCalls: vi.fn().mockResolvedValue(undefined) } as any;
+}
+
+function makeContextResolver() {
+  return { resolve: vi.fn().mockResolvedValue({ variables: {}, metadata: [] }) } as any;
 }
 
 function makeExecutor(response: string) {
@@ -92,6 +96,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     const result = await handler.execute({
@@ -123,6 +128,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     const result = await handler.execute({
@@ -175,6 +181,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     const result = await handler.execute({
@@ -221,6 +228,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     const result = await handler.execute({
@@ -255,6 +263,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     await handler.execute({ deploymentId: "d1", orgId: "org1", trigger: "weekly_audit" });
@@ -282,6 +291,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(false),
       blastRadiusLimiter: makeBlastRadius(),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     await expect(
@@ -305,6 +315,7 @@ describe("BatchSkillHandler", () => {
       circuitBreaker: makeCircuitBreaker(),
       blastRadiusLimiter: makeBlastRadius(false),
       outcomeLinker: makeOutcomeLinker(),
+      contextResolver: makeContextResolver(),
     });
 
     await expect(
