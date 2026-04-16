@@ -30,7 +30,7 @@ const executeDecision: GovernanceDecision = {
   riskScore: 0.2,
   budgetProfile: "standard",
   constraints: {
-    allowedModelTiers: ["haiku"],
+    allowedModelTiers: ["default"],
     maxToolCalls: 5,
     maxLlmTurns: 3,
     maxTotalTokens: 4000,
@@ -47,7 +47,7 @@ const approvalDecision: GovernanceDecision = {
   approvalLevel: "manager",
   approvers: ["mgr-1"],
   constraints: {
-    allowedModelTiers: ["haiku"],
+    allowedModelTiers: ["default"],
     maxToolCalls: 5,
     maxLlmTurns: 3,
     maxTotalTokens: 4000,

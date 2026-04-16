@@ -46,6 +46,6 @@ describe("registerPipelineIntents", () => {
     registerPipelineIntents(registry);
 
     const registration = registry.lookup("creative.produce");
-    expect(registration?.allowedTriggers).toEqual(["api", "schedule", "event", "chat"]);
+    expect(registration?.allowedTriggers).toEqual(["api", "schedule", "internal", "chat"]);
   });
 });

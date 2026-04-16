@@ -36,7 +36,7 @@ export function registerPipelineIntents(
       budgetClass: "expensive",
       approvalPolicy: "threshold",
       idempotent: false,
-      allowedTriggers: ["api", "schedule", "event", "chat"],
+      allowedTriggers: ["api", "schedule", "internal", "chat"],
       timeoutMs: pipeline.timeoutMs ?? 300_000,
       retryable: false,
     };

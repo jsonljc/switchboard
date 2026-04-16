@@ -11,7 +11,7 @@ import type { GovernanceDecision, ExecutionConstraints } from "../governance-typ
 import type { ExecutionMode } from "../execution-context.js";
 
 const testConstraints: ExecutionConstraints = {
-  allowedModelTiers: ["haiku"],
+  allowedModelTiers: ["default"],
   maxToolCalls: 5,
   maxLlmTurns: 3,
   maxTotalTokens: 4000,

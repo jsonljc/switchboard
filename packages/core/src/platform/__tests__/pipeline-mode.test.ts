@@ -12,7 +12,7 @@ describe("PipelineMode", () => {
     id: "work-123",
     requestedAt: "2026-04-16T12:00:00Z",
     organizationId: "org-456",
-    actor: { type: "user", userId: "user-789" },
+    actor: { id: "user-789", type: "user" },
     intent: "creative.produce",
     parameters: {},
     resolvedMode: "pipeline",
@@ -24,14 +24,16 @@ describe("PipelineMode", () => {
   const baseContext: ExecutionContext = {
     traceId: "trace-abc",
     governanceDecision: {
-      verdict: "approved",
-      trustLevel: "autonomous",
+      outcome: "execute",
+      riskScore: 0.2,
+      budgetProfile: "expensive",
       constraints: {} as ExecutionConstraints,
+      matchedPolicies: ["default-policy"],
     },
   };
 
   const baseConstraints: ExecutionConstraints = {
-    allowedModelTiers: ["sonnet"],
+    allowedModelTiers: ["premium"],
     maxToolCalls: 20,
     maxLlmTurns: 5,
     maxTotalTokens: 100000,
