@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard/core";
+import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 
@@ -58,43 +59,75 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
 
       // Phase 2: when API key has org metadata, bind request to that org if body does not set it
       const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
-      const requestPayload = {
-        actorId: body.actorId,
+      if (!organizationId) {
+        return reply.code(400).send({
+          error: "organizationId is required (set via API key metadata or request body)",
+          statusCode: 400,
+        });
+      }
+
+      const submitRequest: SubmitWorkRequest = {
+        intent: body.action.actionType,
+        parameters: body.action.parameters,
+        actor: { id: body.actorId, type: "user" as const },
         organizationId,
-        requestedAction: body.action,
-        entityRefs: body.entityRefs,
-        message: body.message,
-        traceId: body.traceId,
+        trigger: "api" as const,
         idempotencyKey,
+        traceId: body.traceId,
       };
 
       try {
-        const result = await app.executionService.execute(requestPayload);
+        const response = await app.platformIngress.submit(submitRequest);
 
-        if (result.outcome === "DENIED") {
-          return reply.code(200).send({
-            outcome: result.outcome,
-            envelopeId: result.envelopeId,
-            traceId: result.traceId,
-            deniedExplanation: result.deniedExplanation,
+        // Ingress rejection (intent not found, trigger not allowed)
+        if (!response.ok) {
+          const status = response.error.type === "intent_not_found" ? 404 : 400;
+          return reply.code(status).send({
+            error: response.error.message,
+            statusCode: status,
           });
         }
 
-        if (result.outcome === "PENDING_APPROVAL") {
+        const { result, workUnit } = response;
+
+        // Approval pending
+        if ("approvalRequired" in response && response.approvalRequired) {
           return reply.code(200).send({
-            outcome: result.outcome,
-            envelopeId: result.envelopeId,
-            traceId: result.traceId,
+            outcome: "PENDING_APPROVAL",
+            envelopeId: workUnit.id,
+            traceId: workUnit.traceId,
             approvalId: result.approvalId,
-            approvalRequest: result.approvalRequest,
+            approvalRequest: result.outputs,
           });
         }
 
+        // Governance deny (ingress-time)
+        if (result.outcome === "failed" && result.error?.code) {
+          // GovernanceGate sets reasonCode (e.g. "FORBIDDEN_BEHAVIOR", "GOVERNANCE_ERROR")
+          return reply.code(200).send({
+            outcome: "DENIED",
+            envelopeId: workUnit.id,
+            traceId: workUnit.traceId,
+            deniedExplanation: result.summary,
+          });
+        }
+
+        // Execution failure (execution-time)
+        if (result.outcome === "failed") {
+          return reply.code(200).send({
+            outcome: "FAILED",
+            envelopeId: workUnit.id,
+            traceId: workUnit.traceId,
+            error: result.error,
+          });
+        }
+
+        // Success
         return reply.code(200).send({
-          outcome: result.outcome,
-          envelopeId: result.envelopeId,
-          traceId: result.traceId,
-          executionResult: result.executionResult,
+          outcome: "EXECUTED",
+          envelopeId: workUnit.id,
+          traceId: workUnit.traceId,
+          executionResult: result.outputs,
         });
       } catch (err) {
         if (err instanceof NeedsClarificationError) {
