@@ -102,26 +102,26 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // Governance deny (ingress-time) vs execution failure (execution-time)
+        // Execution-time errors use known codes; everything else is a governance deny.
+        const EXECUTION_ERROR_CODES = ["CARTRIDGE_ERROR", "EXECUTION_ERROR", "GOVERNANCE_ERROR"];
         if (result.outcome === "failed") {
-          const isGovernanceDeny =
-            result.error?.code &&
-            result.error.code !== "CARTRIDGE_ERROR" &&
-            result.error.code !== "EXECUTION_ERROR";
+          const isExecutionFailure =
+            !result.error?.code || EXECUTION_ERROR_CODES.includes(result.error.code);
 
-          if (isGovernanceDeny) {
+          if (isExecutionFailure) {
             return reply.code(200).send({
-              outcome: "DENIED",
+              outcome: "FAILED",
               envelopeId: workUnit.id,
               traceId: workUnit.traceId,
-              deniedExplanation: result.summary,
+              error: result.error,
             });
           }
 
           return reply.code(200).send({
-            outcome: "FAILED",
+            outcome: "DENIED",
             envelopeId: workUnit.id,
             traceId: workUnit.traceId,
-            error: result.error,
+            deniedExplanation: result.summary,
           });
         }
 

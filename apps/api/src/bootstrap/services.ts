@@ -88,7 +88,9 @@ function buildIntentRegistry(cartridgeRegistry: CartridgeRegistry): IntentRegist
     manifests.push({
       id: manifest.id,
       actions: manifest.actions.map((a) => ({
-        name: a.actionType,
+        name: a.actionType.startsWith(`${manifest.id}.`)
+          ? a.actionType.slice(manifest.id.length + 1)
+          : a.actionType,
         description: a.description,
         riskCategory: a.baseRiskCategory,
       })),
