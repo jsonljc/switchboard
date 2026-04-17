@@ -33,9 +33,10 @@ export class ExecutionManager {
     cartridgeId: string;
     traceId: string;
     idempotencyKey?: string;
+    workUnitId?: string;
   }): Promise<ExecuteResult> {
     const proposalId = `prop_${randomUUID()}`;
-    const envelopeId = `env_${randomUUID()}`;
+    const envelopeId = params.workUnitId ?? `env_${randomUUID()}`;
 
     const proposal: ActionProposal = {
       id: proposalId,

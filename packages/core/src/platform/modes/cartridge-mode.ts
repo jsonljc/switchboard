@@ -14,6 +14,7 @@ export interface CartridgeOrchestrator {
     cartridgeId: string;
     traceId: string;
     idempotencyKey?: string;
+    workUnitId?: string;
   }): Promise<ExecuteResult>;
 }
 
@@ -60,6 +61,7 @@ export class CartridgeMode implements ExecutionMode {
         cartridgeId,
         traceId: workUnit.traceId,
         idempotencyKey: workUnit.idempotencyKey,
+        workUnitId: workUnit.id,
       });
 
       const durationMs = Date.now() - startMs;

@@ -194,6 +194,7 @@ export class LifecycleOrchestrator {
     cartridgeId: string;
     traceId: string;
     idempotencyKey?: string;
+    workUnitId?: string;
   }): Promise<ExecuteResult> {
     return this.executionManager.executePreApproved(params);
   }

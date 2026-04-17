@@ -89,6 +89,53 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         const { result, workUnit } = response;
 
         if ("approvalRequired" in response && response.approvalRequired) {
+          // Create a pending envelope for backward compatibility with GET/execute/undo endpoints
+          const proposal: import("@switchboard/schemas").ActionProposal = {
+            id: `prop_${workUnit.id}`,
+            actionType: workUnit.intent,
+            parameters: {
+              ...workUnit.parameters,
+              _principalId: workUnit.actor.id,
+              _organizationId: workUnit.organizationId,
+            },
+            evidence: "Platform ingress pending approval",
+            confidence: 1.0,
+            originatingMessageId: "",
+          };
+
+          const decision: import("@switchboard/schemas").DecisionTrace = {
+            actionId: proposal.id,
+            envelopeId: workUnit.id,
+            checks: [],
+            computedRiskScore: { rawScore: 0, category: "none", factors: [] },
+            finalDecision: "allow",
+            approvalRequired: "standard",
+            explanation: "Pending approval",
+            evaluatedAt: new Date(),
+          };
+
+          const now = new Date();
+          const envelope: import("@switchboard/schemas").ActionEnvelope = {
+            id: workUnit.id,
+            version: 1,
+            incomingMessage: null,
+            conversationId: null,
+            proposals: [proposal],
+            resolvedEntities: [],
+            plan: null,
+            decisions: [decision],
+            approvalRequests: [],
+            executionResults: [],
+            auditEntryIds: [],
+            status: "pending_approval",
+            createdAt: now,
+            updatedAt: now,
+            parentEnvelopeId: null,
+            traceId: workUnit.traceId,
+          };
+
+          await app.storageContext.envelopes.save(envelope);
+
           return reply.code(201).send({
             outcome: "PENDING_APPROVAL",
             envelopeId: workUnit.id,

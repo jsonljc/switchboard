@@ -37,6 +37,7 @@ export interface RuntimeOrchestrator {
     cartridgeId: string;
     traceId: string;
     idempotencyKey?: string;
+    workUnitId?: string;
   }): Promise<ExecuteResult>;
 
   executeApproved(envelopeId: string): Promise<ExecuteResult>;
