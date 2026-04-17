@@ -64,7 +64,7 @@ describe("executeUgcPipeline", () => {
     expect(step.waitForEvent).toHaveBeenCalledTimes(4);
 
     // Final event is ugc.completed
-    const lastSendCall = step.sendEvent.mock.calls[4];
+    const lastSendCall = step.sendEvent.mock.calls[4]!;
     expect(lastSendCall[1]).toMatchObject({
       name: "creative-pipeline/ugc.completed",
     });
@@ -73,7 +73,7 @@ describe("executeUgcPipeline", () => {
   it("stops pipeline when approval returns stop", async () => {
     step.waitForEvent
       .mockResolvedValueOnce({ data: { action: "continue", phase: "planning" } })
-      .mockResolvedValueOnce({ data: { action: "stop", phase: "scripting" } });
+      .mockResolvedValueOnce({ data: { action: "stop", phase: "scripting" } } as never);
 
     await executeUgcPipeline(eventData, step as never, deps as never);
 
@@ -83,7 +83,7 @@ describe("executeUgcPipeline", () => {
   });
 
   it("stops pipeline on approval timeout (null)", async () => {
-    step.waitForEvent.mockResolvedValueOnce(null);
+    step.waitForEvent.mockResolvedValueOnce(null as never);
 
     await executeUgcPipeline(eventData, step as never, deps as never);
 
@@ -116,7 +116,7 @@ describe("executeUgcPipeline", () => {
     const phaseRunCalls = step.run.mock.calls.filter(
       (c) => typeof c[0] === "string" && c[0].startsWith("phase-"),
     );
-    expect(phaseRunCalls[0][0]).toBe("phase-scripting");
+    expect(phaseRunCalls[0]![0]).toBe("phase-scripting");
   });
 
   it("skips approval gates when trust level is high enough", async () => {
@@ -139,21 +139,21 @@ describe("executeUgcPipeline", () => {
       (c) => c[1]?.name === "creative-pipeline/ugc-phase.completed",
     );
     expect(phaseCompleteEvents).toHaveLength(4);
-    expect(phaseCompleteEvents[0][1].data.phase).toBe("planning");
-    expect(phaseCompleteEvents[1][1].data.phase).toBe("scripting");
-    expect(phaseCompleteEvents[2][1].data.phase).toBe("production");
-    expect(phaseCompleteEvents[3][1].data.phase).toBe("delivery");
+    expect(phaseCompleteEvents[0]![1].data.phase).toBe("planning");
+    expect(phaseCompleteEvents[1]![1].data.phase).toBe("scripting");
+    expect(phaseCompleteEvents[2]![1].data.phase).toBe("production");
+    expect(phaseCompleteEvents[3]![1].data.phase).toBe("delivery");
   });
 
   it("matches approval event on both jobId and phase", async () => {
     await executeUgcPipeline(eventData, step as never, deps as never);
 
-    const firstWait = step.waitForEvent.mock.calls[0];
-    expect(firstWait[1]).toMatchObject({
+    const firstWait = step.waitForEvent.mock.calls[0]!;
+    expect((firstWait as unknown[])[1]).toMatchObject({
       event: "creative-pipeline/ugc-phase.approved",
       match: "data.jobId",
     });
     // The `if` clause should filter by phase
-    expect(firstWait[1].if).toContain("planning");
+    expect(((firstWait as unknown[])[1] as Record<string, unknown>).if).toContain("planning");
   });
 });

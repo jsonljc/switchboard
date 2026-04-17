@@ -148,7 +148,7 @@ describe("executeProductionPhase", () => {
     const result = await executeProductionPhase(input);
     expect(result.assets).toHaveLength(0);
     expect(result.failedSpecs).toHaveLength(1);
-    expect(result.failedSpecs[0].specId).toBe("spec_1");
+    expect(result.failedSpecs[0]!.specId).toBe("spec_1");
   });
 
   it("falls back to asset reuse when generation exhausted", async () => {
@@ -183,7 +183,7 @@ describe("executeProductionPhase", () => {
     };
     const result = await executeProductionPhase(input);
     expect(result.assets.length).toBe(1);
-    expect(result.assets[0].lockedDerivativeOf).toBe("existing_asset");
+    expect(result.assets[0]!.lockedDerivativeOf).toBe("existing_asset");
   });
 
   it("triggers circuit breaker after repeated failures", async () => {
@@ -221,7 +221,7 @@ describe("executeProductionPhase", () => {
     };
     await executeProductionPhase(input);
     expect(deps.assetStore.upsertByKey).toHaveBeenCalled();
-    const firstCall = deps.assetStore.upsertByKey.mock.calls[0][0];
+    const firstCall = deps.assetStore.upsertByKey.mock.calls[0]![0];
     expect(firstCall).toMatchObject({
       specId: "spec_1",
       attemptNumber: 1,
