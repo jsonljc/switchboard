@@ -514,7 +514,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       },
       update: {
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
@@ -522,7 +527,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
         organizationId: ORG_ID,
         listingId: listing.id,
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
