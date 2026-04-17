@@ -1,7 +1,5 @@
-import type { AgentHandler } from "@switchboard/sdk";
 import { AgentRuntime } from "../agent-runtime/agent-runtime.js";
 import { DefaultChatHandler } from "../agent-runtime/default-chat-handler.js";
-import { SkillHandler } from "../skill-runtime/skill-handler.js";
 import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "./types.js";
 import { UnknownChannelError } from "./types.js";
 import type { SubmitWorkRequest } from "../platform/work-unit.js";
@@ -115,8 +113,8 @@ export class ChannelGateway {
         modelFloor: undefined,
       }) ?? "default";
 
-    // 5.7 Resolve handler — skill-based or legacy
-    const handler = this.resolveHandler(info, message);
+    // 5.7 Resolve handler — legacy path uses DefaultChatHandler only
+    const handler = this.resolveHandler();
 
     // 6. Create ephemeral AgentRuntime
     const runtime = new AgentRuntime({
@@ -231,36 +229,11 @@ export class ChannelGateway {
   }
 
   /**
-   * Resolves the handler for a deployment. If the deployment has a skillSlug
-   * and skill runtime deps are configured, creates a SkillHandler. Otherwise
-   * falls back to the DefaultChatHandler.
+   * Legacy handler resolution. Skill-based execution now routes through the
+   * converged path (handleConverged → PlatformIngress → SkillMode). This
+   * fallback returns DefaultChatHandler for deployments still on the legacy path.
    */
-  private resolveHandler(
-    info: { deployment: { id: string; organizationId: string; skillSlug?: string | null } },
-    message: IncomingChannelMessage,
-  ): AgentHandler {
-    const { skillRuntime } = this.config;
-    const { skillSlug } = info.deployment;
-
-    if (skillSlug && skillRuntime) {
-      const skill = skillRuntime.loadSkill(skillSlug, skillRuntime.skillsDir);
-      const executor = skillRuntime.createExecutor();
-      return new SkillHandler(
-        skill,
-        executor,
-        skillRuntime.builderMap,
-        skillRuntime.stores,
-        {
-          deploymentId: info.deployment.id,
-          orgId: info.deployment.organizationId,
-          contactId: message.sessionId,
-          sessionId: message.sessionId,
-        },
-        skillRuntime.hooks,
-        skillRuntime.contextResolver,
-      );
-    }
-
+  private resolveHandler(): typeof DefaultChatHandler {
     return DefaultChatHandler;
   }
 }

@@ -63,7 +63,7 @@ export interface ChannelGatewayConfig {
   skillRuntime?: SkillRuntimeDeps;
   /** Optional deployment resolver for converged execution path */
   deploymentResolver?: DeploymentResolver;
-  /** Optional platform ingress for converged execution path. When both deploymentResolver and platformIngress are set, the gateway uses the converged path instead of the legacy SkillHandler/DefaultChatHandler path. */
+  /** Optional platform ingress for converged execution path. When both deploymentResolver and platformIngress are set, the gateway uses the converged path instead of the legacy DefaultChatHandler path. */
   platformIngress?: { submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> };
 }
 

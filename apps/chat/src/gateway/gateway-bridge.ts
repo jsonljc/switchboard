@@ -29,19 +29,14 @@ import {
   AnthropicToolCallingAdapter,
   createCrmQueryTool,
   createCrmWriteTool,
-  alexBuilder,
-  salesPipelineBuilder,
-  websiteProfilerBuilder,
-  adOptimizerInteractiveBuilder,
   createWebScannerTool,
   createAdsAnalyticsTool,
   ContextResolverImpl,
 } from "@switchboard/core/skill-runtime";
-import type { ParameterBuilder, SkillStores } from "@switchboard/core/skill-runtime";
+import type { SkillStores } from "@switchboard/core/skill-runtime";
 import { PrismaDeploymentResolver } from "@switchboard/core/platform";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
-import { PrismaDeploymentLookup } from "./deployment-lookup.js";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
 import { TaskRecorder } from "./task-recorder.js";
 
@@ -142,13 +137,6 @@ export function createGatewayBridge(
 
   const contextResolver = new ContextResolverImpl(knowledgeEntryStore);
 
-  const builderMap = new Map<string, ParameterBuilder>([
-    ["sales-pipeline", salesPipelineBuilder],
-    ["alex", alexBuilder],
-    ["website-profiler", websiteProfilerBuilder],
-    ["ad-optimizer", adOptimizerInteractiveBuilder],
-  ]);
-
   const skillStores: SkillStores = {
     opportunityStore,
     contactStore,
@@ -179,7 +167,9 @@ export function createGatewayBridge(
   const deploymentResolver = new PrismaDeploymentResolver(prisma);
 
   return new ChannelGateway({
-    deploymentLookup: new PrismaDeploymentLookup(prisma),
+    deploymentLookup: {
+      findByChannelToken: async () => null,
+    },
     deploymentResolver,
     platformIngress: options.platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
@@ -211,7 +201,7 @@ export function createGatewayBridge(
       skillsDir,
       loadSkill,
       createExecutor,
-      builderMap,
+      builderMap: new Map(),
       stores: skillStores,
       hooks: [],
       contextResolver: {
