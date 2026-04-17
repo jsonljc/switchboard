@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getListedAgents, getDemoTaskStats } from "@/lib/demo-data";
 import { HomepageHero } from "@/components/landing/homepage-hero";
 import { AgentMarketplaceCard } from "@/components/landing/agent-marketplace-card";
+import { FadeIn } from "@/components/ui/fade-in";
 
 export const metadata: Metadata = {
   title: "Switchboard — Your AI sales team, ready in minutes",
@@ -120,43 +121,44 @@ export default async function HomePage() {
             Handled.
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {PROBLEMS.map(({ problem, solution, description }) => (
-              <div
-                key={problem}
-                style={{
-                  background: "#F9F8F6",
-                  border: "1px solid #DDD9D3",
-                  borderRadius: "1rem",
-                  padding: "1.75rem",
-                }}
-              >
-                <p
+            {PROBLEMS.map(({ problem, solution, description }, index) => (
+              <FadeIn key={problem} delay={index * 60}>
+                <div
                   style={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    color: "#9C958F",
-                    marginBottom: "0.5rem",
+                    background: "#F9F8F6",
+                    border: "1px solid #DDD9D3",
+                    borderRadius: "1rem",
+                    padding: "1.75rem",
                   }}
                 >
-                  {problem}
-                </p>
-                <h3
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "1.25rem",
-                    letterSpacing: "-0.015em",
-                    color: "#1A1714",
-                    marginBottom: "0.625rem",
-                  }}
-                >
-                  {solution}
-                </h3>
-                <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>
-                  {description}
-                </p>
-              </div>
+                  <p
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "#9C958F",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    {problem}
+                  </p>
+                  <h3
+                    style={{
+                      fontWeight: 700,
+                      fontSize: "1.25rem",
+                      letterSpacing: "-0.015em",
+                      color: "#1A1714",
+                      marginBottom: "0.625rem",
+                    }}
+                  >
+                    {solution}
+                  </h3>
+                  <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>
+                    {description}
+                  </p>
+                </div>
+              </FadeIn>
             ))}
           </div>
         </div>
@@ -190,34 +192,36 @@ export default async function HomePage() {
           </h2>
 
           <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
-            {STEPS.map(({ n, title, desc }) => (
-              <div key={n}>
-                <p
-                  style={{
-                    fontSize: "4rem",
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    letterSpacing: "-0.04em",
-                    color: "#DDD9D3",
-                    marginBottom: "1rem",
-                    userSelect: "none",
-                  }}
-                >
-                  {n}
-                </p>
-                <h3
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "1.125rem",
-                    letterSpacing: "-0.015em",
-                    color: "#1A1714",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  {title}
-                </h3>
-                <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>{desc}</p>
-              </div>
+            {STEPS.map(({ n, title, desc }, index) => (
+              <FadeIn key={n} delay={index * 60}>
+                <div>
+                  <p
+                    style={{
+                      fontSize: "4rem",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      letterSpacing: "-0.04em",
+                      color: "#DDD9D3",
+                      marginBottom: "1rem",
+                      userSelect: "none",
+                    }}
+                  >
+                    {n}
+                  </p>
+                  <h3
+                    style={{
+                      fontWeight: 700,
+                      fontSize: "1.125rem",
+                      letterSpacing: "-0.015em",
+                      color: "#1A1714",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    {title}
+                  </h3>
+                  <p style={{ fontSize: "0.875rem", lineHeight: 1.55, color: "#6B6560" }}>{desc}</p>
+                </div>
+              </FadeIn>
             ))}
           </div>
 
@@ -274,20 +278,21 @@ export default async function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {previewWithStats.map(({ agent, stats }) => (
-                <AgentMarketplaceCard
-                  key={agent.id}
-                  name={agent.name}
-                  slug={agent.slug}
-                  description={agent.description}
-                  trustScore={agent.trustScore}
-                  autonomyLevel={agent.autonomyLevel}
-                  stats={{
-                    totalTasks: stats.totalTasks,
-                    approvalRate: stats.approvalRate,
-                    lastActiveAt: stats.lastActiveAt?.toISOString() ?? null,
-                  }}
-                />
+              {previewWithStats.map(({ agent, stats }, index) => (
+                <FadeIn key={agent.id} delay={index * 60}>
+                  <AgentMarketplaceCard
+                    name={agent.name}
+                    slug={agent.slug}
+                    description={agent.description}
+                    trustScore={agent.trustScore}
+                    autonomyLevel={agent.autonomyLevel}
+                    stats={{
+                      totalTasks: stats.totalTasks,
+                      approvalRate: stats.approvalRate,
+                      lastActiveAt: stats.lastActiveAt?.toISOString() ?? null,
+                    }}
+                  />
+                </FadeIn>
               ))}
             </div>
           </div>
@@ -297,154 +302,160 @@ export default async function HomePage() {
       {/* ── Trust progression ── */}
       <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
         <div className="page-width">
-          <p
-            style={{
-              marginBottom: "0.75rem",
-              fontSize: "0.6875rem",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "#9C958F",
-            }}
-          >
-            Pricing
-          </p>
-          <h2
-            style={{
-              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
-              fontWeight: 700,
-              letterSpacing: "-0.025em",
-              color: "#1A1714",
-              marginBottom: "0.75rem",
-            }}
-          >
-            Starts free. Earns its way up.
-          </h2>
-          <p
-            style={{
-              fontSize: "1rem",
-              lineHeight: 1.6,
-              color: "#6B6560",
-              maxWidth: "44ch",
-              marginBottom: "3.5rem",
-            }}
-          >
-            You only pay for what&rsquo;s working. Agents that underperform stay on free.
-          </p>
+          <FadeIn>
+            <p
+              style={{
+                marginBottom: "0.75rem",
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "#9C958F",
+              }}
+            >
+              Pricing
+            </p>
+            <h2
+              style={{
+                fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+                fontWeight: 700,
+                letterSpacing: "-0.025em",
+                color: "#1A1714",
+                marginBottom: "0.75rem",
+              }}
+            >
+              Starts free. Earns its way up.
+            </h2>
+            <p
+              style={{
+                fontSize: "1rem",
+                lineHeight: 1.6,
+                color: "#6B6560",
+                maxWidth: "44ch",
+                marginBottom: "3.5rem",
+              }}
+            >
+              You only pay for what&rsquo;s working. Agents that underperform stay on free.
+            </p>
+          </FadeIn>
 
-          {/* Trust progression strip */}
-          <div
-            style={{
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.5rem",
-            }}
-          >
-            {/* Connecting line */}
+          <FadeIn delay={120}>
+            {/* Trust progression strip */}
             <div
               style={{
-                position: "absolute",
-                top: "50%",
-                left: "12.5%",
-                right: "12.5%",
-                height: "1px",
-                background: "linear-gradient(to right, #DDD9D3, #A07850, #8B6540)",
-                transform: "translateY(-50%)",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
               }}
-            />
-            {TRUST_STEPS.map(({ score, label, accent }) => (
+            >
+              {/* Connecting line */}
               <div
-                key={score}
                 style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.625rem",
-                  position: "relative",
-                  zIndex: 1,
+                  position: "absolute",
+                  top: "50%",
+                  left: "12.5%",
+                  right: "12.5%",
+                  height: "1px",
+                  background: "linear-gradient(to right, #DDD9D3, #A07850, #8B6540)",
+                  transform: "translateY(-50%)",
                 }}
-              >
-                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#9C958F" }}>{label}</p>
+              />
+              {TRUST_STEPS.map(({ score, label, accent }) => (
                 <div
+                  key={score}
                   style={{
-                    width: "4rem",
-                    height: "4rem",
-                    borderRadius: "9999px",
-                    background: `${accent}18`,
-                    border: `1.5px solid ${accent}40`,
+                    flex: 1,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center",
+                    gap: "0.625rem",
+                    position: "relative",
+                    zIndex: 1,
                   }}
                 >
-                  <span
+                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#9C958F" }}>{label}</p>
+                  <div
                     style={{
-                      fontSize: "1rem",
-                      fontWeight: 700,
-                      color: accent,
-                      letterSpacing: "-0.02em",
+                      width: "4rem",
+                      height: "4rem",
+                      borderRadius: "9999px",
+                      background: `${accent}18`,
+                      border: `1.5px solid ${accent}40`,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
-                    {score}
-                  </span>
+                    <span
+                      style={{
+                        fontSize: "1rem",
+                        fontWeight: 700,
+                        color: accent,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      {score}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div style={{ marginTop: "2.5rem" }}>
-            <Link
-              href="/pricing"
-              style={{
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                color: "#A07850",
-                textDecoration: "none",
-              }}
-            >
-              See full pricing →
-            </Link>
-          </div>
+            <div style={{ marginTop: "2.5rem" }}>
+              <Link
+                href="/pricing"
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  color: "#A07850",
+                  textDecoration: "none",
+                }}
+              >
+                See full pricing →
+              </Link>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
       {/* ── Bottom CTA ── */}
       <section style={{ background: "#EDEAE5", paddingTop: "5rem", paddingBottom: "5rem" }}>
         <div className="page-width">
-          <h2
-            style={{
-              fontSize: "clamp(2rem, 4vw, 3.2rem)",
-              fontWeight: 700,
-              letterSpacing: "-0.025em",
-              color: "#1A1714",
-              marginBottom: "1rem",
-            }}
-          >
-            Ready to meet your team?
-          </h2>
-          <p style={{ fontSize: "1rem", color: "#6B6560", marginBottom: "2.5rem" }}>
-            Join 200+ businesses on the early access list.
-          </p>
-          <Link
-            href="/get-started"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              background: "#1A1714",
-              color: "#F5F3F0",
-              borderRadius: "9999px",
-              padding: "0.875rem 2rem",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Get early access
-          </Link>
+          <FadeIn>
+            <h2
+              style={{
+                fontSize: "clamp(2rem, 4vw, 3.2rem)",
+                fontWeight: 700,
+                letterSpacing: "-0.025em",
+                color: "#1A1714",
+                marginBottom: "1rem",
+              }}
+            >
+              Ready to meet your team?
+            </h2>
+            <p style={{ fontSize: "1rem", color: "#6B6560", marginBottom: "2.5rem" }}>
+              Join 200+ businesses on the early access list.
+            </p>
+            <Link
+              href="/get-started"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                background: "#1A1714",
+                color: "#F5F3F0",
+                borderRadius: "9999px",
+                padding: "0.875rem 2rem",
+                fontSize: "0.9375rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Get early access
+            </Link>
+          </FadeIn>
         </div>
       </section>
     </>
