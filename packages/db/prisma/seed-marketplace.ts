@@ -700,6 +700,48 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     console.warn(`  Created deployment: ${WEBSITE_PROFILER.name} (${profilerDeployment.id})`);
   }
 
+  // 6. Create ad optimizer deployment
+  const adOptimizerListing = await prisma.agentListing.findUnique({
+    where: { slug: "ad-optimizer" },
+  });
+  if (adOptimizerListing) {
+    const adOptDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: adOptimizerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: adOptimizerListing.id,
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${AD_OPTIMIZER.name} (${adOptDeployment.id})`);
+  }
+
   const deploymentMap = new Map(deployments.map((d) => [d.slug, d]));
 
   // 5. Delete existing demo tasks for clean re-seed
