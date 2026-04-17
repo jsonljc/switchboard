@@ -125,6 +125,7 @@ describe("CartridgeMode", () => {
       cartridgeId: "digital-ads",
       traceId: "trace-abc",
       idempotencyKey: "idem-1",
+      workUnitId: "wu-1",
     });
   });
 
