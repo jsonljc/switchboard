@@ -1424,3 +1424,51 @@ model WorkTrace {
   @@index([requestedAt])
 }
 
+// ---------------------------------------------------------------------------
+// Booking — calendar bookings with provenance
+// ---------------------------------------------------------------------------
+
+model Booking {
+  id              String    @id @default(uuid())
+  organizationId  String
+  contactId       String
+  opportunityId   String?
+  calendarEventId String?
+  service         String
+  startsAt        DateTime
+  endsAt          DateTime
+  timezone        String    @default("Asia/Singapore")
+  status          String    @default("pending_confirmation")
+  attendeeName    String?
+  attendeeEmail   String?
+  connectionId    String?
+  createdByType   String    @default("agent")
+  sourceChannel   String?
+  workTraceId     String?
+  rescheduledAt   DateTime?
+  rescheduleCount Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([organizationId, startsAt])
+  @@index([contactId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// OutboxEvent — transactional outbox for guaranteed event publication
+// ---------------------------------------------------------------------------
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventId       String    @unique
+  type          String
+  payload       Json
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
+}
+
