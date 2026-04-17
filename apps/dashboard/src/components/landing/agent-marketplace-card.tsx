@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
 import type { AgentId } from "@/components/character/agent-mark";
@@ -36,15 +38,17 @@ export function AgentMarketplaceCard({
         padding: "1.5rem",
         display: "flex",
         flexDirection: "column",
-        transition: "border-color 150ms ease, transform 150ms ease",
+        transition: "border-color 220ms ease, transform 220ms ease, box-shadow 220ms ease",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = "#C8C3BC";
         (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 24px rgba(26,23,20,0.08)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = "#DDD9D3";
         (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "none";
       }}
     >
       {/* Character mark + category */}
@@ -109,7 +113,7 @@ export function AgentMarketplaceCard({
               height: "1.875rem",
               borderRadius: "9999px",
               background: "rgba(160,120,80,0.1)",
-              border: "1.5px solid rgba(160,120,80,0.28)",
+              border: "1.5px solid rgba(160,120,80,0.38)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
