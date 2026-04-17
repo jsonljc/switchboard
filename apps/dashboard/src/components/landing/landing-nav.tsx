@@ -133,7 +133,13 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                 padding: "0.5rem 1.25rem",
                 textDecoration: "none",
                 whiteSpace: "nowrap",
-                transition: "opacity 150ms ease",
+                transition: "background 150ms ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#2C2825";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#1A1714";
               }}
             >
               Get early access
@@ -277,6 +283,13 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                   textAlign: "center",
                   textDecoration: "none",
                   marginTop: "0.25rem",
+                  transition: "background 150ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "#2C2825";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "#1A1714";
                 }}
               >
                 Get early access
