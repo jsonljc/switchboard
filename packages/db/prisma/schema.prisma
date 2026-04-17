@@ -417,25 +417,6 @@ model FailedMessage {
   @@index([createdAt])
 }
 
-// ── Agent Delivery Tracking ──
-
-model AgentDeliveryAttempt {
-  id             String    @id @default(uuid())
-  eventId        String
-  destinationId  String
-  status         String    @default("pending") // pending, dispatched, succeeded, failed, retrying, dead_letter, skipped
-  attempts       Int       @default(0)
-  lastAttemptAt  DateTime?
-  error          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@unique([eventId, destinationId])
-  @@index([status])
-  @@index([eventId])
-  @@index([createdAt])
-}
-
 
 // ── AI Agent System: Business Config Persistence ──
 
