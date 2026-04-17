@@ -66,10 +66,6 @@
       "types": "./dist/data-flow/index.d.ts",
       "import": "./dist/data-flow/index.js"
     },
-    "./smb": {
-      "types": "./dist/smb/index.d.ts",
-      "import": "./dist/smb/index.js"
-    },
     "./capability": {
       "types": "./dist/capability/index.d.ts",
       "import": "./dist/capability/index.js"
@@ -77,14 +73,6 @@
     "./planning": {
       "types": "./dist/planning/index.d.ts",
       "import": "./dist/planning/index.js"
-    },
-    "./skin": {
-      "types": "./dist/skin/index.d.ts",
-      "import": "./dist/skin/index.js"
-    },
-    "./profile": {
-      "types": "./dist/profile/index.d.ts",
-      "import": "./dist/profile/index.js"
     },
     "./tool-registry": {
       "types": "./dist/tool-registry/index.d.ts",
