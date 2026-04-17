@@ -66,6 +66,7 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // TODO(ingress-convergence): Replace with DeploymentResolver lookup
       const submitRequest: SubmitWorkRequest = {
         intent: body.action.actionType,
         parameters: body.action.parameters,

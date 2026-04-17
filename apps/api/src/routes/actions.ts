@@ -71,6 +71,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // TODO(ingress-convergence): Replace with DeploymentResolver lookup
       const submitRequest: SubmitWorkRequest = {
         intent: body.actionType,
         parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
@@ -397,6 +398,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       for (let i = 0; i < body.proposals.length; i++) {
         const proposal = body.proposals[i];
 
+        // TODO(ingress-convergence): Replace with DeploymentResolver lookup
         const submitRequest: SubmitWorkRequest = {
           intent: proposal.actionType,
           parameters: proposal.parameters,

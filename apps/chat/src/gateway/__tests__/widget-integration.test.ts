@@ -4,29 +4,30 @@ import { SseSessionManager } from "../../endpoints/widget-sse-manager.js";
 
 describe("Widget integration", () => {
   it("delivers reply via SSE after POST message", async () => {
-    // Create gateway with mock stores
+    // Create gateway with converged path mocks
     const gateway = new ChannelGateway({
-      deploymentLookup: {
-        findByChannelToken: vi.fn().mockResolvedValue({
-          deployment: { id: "dep-1", listingId: "listing-1", organizationId: "org-1" },
-          persona: {
-            id: "p-1",
-            organizationId: "org-1",
-            businessName: "Test",
-            businessType: "saas",
-            productService: "widgets",
-            valueProposition: "best",
-            tone: "professional",
-            qualificationCriteria: {},
-            disqualificationCriteria: {},
-            escalationRules: {},
-            bookingLink: null,
-            customInstructions: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-          trustScore: 50,
+      deploymentResolver: {
+        resolveByChannelToken: vi.fn().mockResolvedValue({
+          deploymentId: "dep-1",
+          listingId: "listing-1",
+          organizationId: "org-1",
+          skillSlug: "alex",
           trustLevel: "guided",
+          trustScore: 50,
+          deploymentConfig: {},
+        }),
+        resolveByDeploymentId: vi.fn(),
+        resolveByOrgAndSlug: vi.fn(),
+      },
+      platformIngress: {
+        submit: vi.fn().mockResolvedValue({
+          ok: true,
+          result: {
+            outcome: "completed",
+            outputs: { response: "Hello! How can I help?" },
+            summary: "Responded to user",
+          },
+          workUnit: { id: "wu-1", traceId: "trace-1" },
         }),
       },
       conversationStore: {
@@ -36,22 +37,6 @@ describe("Widget integration", () => {
         }),
         addMessage: vi.fn().mockResolvedValue(undefined),
       },
-      stateStore: {
-        get: vi.fn().mockResolvedValue(null),
-        set: vi.fn().mockResolvedValue(undefined),
-        list: vi.fn().mockResolvedValue([]),
-        delete: vi.fn().mockResolvedValue(undefined),
-      },
-      actionRequestStore: {
-        create: vi.fn().mockResolvedValue({ id: "ar-1", status: "executed" }),
-        updateStatus: vi.fn().mockResolvedValue(undefined),
-      },
-      llmAdapterFactory: () => ({
-        generateReply: vi.fn().mockResolvedValue({
-          reply: "Hello! How can I help?",
-          confidence: 0.9,
-        }),
-      }),
     });
 
     // Track SSE messages

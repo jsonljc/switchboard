@@ -128,8 +128,12 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
   }
 
   async resolveByChannelToken(channel: string, token: string): Promise<DeploymentResolverResult> {
+    // Telegram passes the DeploymentConnection ID directly as the token.
+    // Other channels use a hashed token to look up the connection.
     const where =
-      channel === "telegram" ? { channel, token } : { channel, tokenHash: this.hashToken(token) };
+      channel === "telegram"
+        ? { id: token, type: channel }
+        : { type: channel, tokenHash: this.hashToken(token) };
 
     const conn = await this.prisma.deploymentConnection.findFirst({ where });
 
