@@ -75,3 +75,12 @@ export { registerCartridgeIntents } from "./cartridge-intent-registrar.js";
 export type { CartridgeManifestForRegistration } from "./cartridge-intent-registrar.js";
 export { registerPipelineIntents } from "./pipeline-intent-registrar.js";
 export type { PipelineDefinition } from "./pipeline-intent-registrar.js";
+
+// Deployment Resolution
+export type {
+  DeploymentContext,
+  AgentPersona,
+  DeploymentPolicyOverrides,
+} from "./deployment-context.js";
+export type { DeploymentResolverResult, DeploymentResolver } from "./deployment-resolver.js";
+export { DeploymentInactiveError, toDeploymentContext } from "./deployment-resolver.js";
