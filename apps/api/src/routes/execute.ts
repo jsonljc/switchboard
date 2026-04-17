@@ -71,6 +71,12 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         parameters: body.action.parameters,
         actor: { id: body.actorId, type: "user" as const },
         organizationId,
+        deployment: {
+          deploymentId: "unresolved",
+          skillSlug: body.action.actionType.split(".")[0] ?? "unknown",
+          trustLevel: "supervised" as const,
+          trustScore: 0,
+        },
         trigger: "api" as const,
         idempotencyKey,
         traceId: body.traceId,

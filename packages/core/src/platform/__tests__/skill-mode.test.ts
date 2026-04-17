@@ -34,6 +34,12 @@ function makeWorkUnit(overrides: Partial<WorkUnit> = {}): WorkUnit {
     actor: { id: "user-1", type: "user" },
     intent: "sales-pipeline.run",
     parameters: {},
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "test-skill",
+      trustLevel: "guided",
+      trustScore: 42,
+    },
     resolvedMode: "skill",
     traceId: "trace-abc",
     trigger: "chat",

@@ -37,6 +37,7 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     workUnitId: workUnit.id,
     traceId: workUnit.traceId,
     parentWorkUnitId: workUnit.parentWorkUnitId,
+    deploymentId: workUnit.deployment?.deploymentId,
     intent: workUnit.intent,
     mode: workUnit.resolvedMode,
     organizationId: workUnit.organizationId,

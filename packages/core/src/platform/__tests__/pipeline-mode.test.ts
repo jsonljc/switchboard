@@ -15,6 +15,12 @@ describe("PipelineMode", () => {
     actor: { id: "user-789", type: "user" },
     intent: "creative.produce",
     parameters: {},
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "test-skill",
+      trustLevel: "guided",
+      trustScore: 42,
+    },
     resolvedMode: "pipeline",
     traceId: "trace-abc",
     trigger: "api",

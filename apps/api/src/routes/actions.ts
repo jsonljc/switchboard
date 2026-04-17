@@ -76,6 +76,12 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
         actor: { id: body.principalId, type: "user" as const },
         organizationId,
+        deployment: {
+          deploymentId: "unresolved",
+          skillSlug: body.actionType.split(".")[0] ?? "unknown",
+          trustLevel: "supervised" as const,
+          trustScore: 0,
+        },
         trigger: "api" as const,
         idempotencyKey,
       };
@@ -396,6 +402,12 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           parameters: proposal.parameters,
           actor: { id: body.principalId, type: "user" as const },
           organizationId,
+          deployment: {
+            deploymentId: "unresolved",
+            skillSlug: proposal.actionType.split(".")[0] ?? "unknown",
+            trustLevel: "supervised" as const,
+            trustScore: 0,
+          },
           trigger: "api" as const,
           idempotencyKey: `${batchKey}:${i}`,
         };
