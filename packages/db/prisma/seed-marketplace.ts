@@ -248,6 +248,40 @@ const PERFORMANCE_CREATIVE_DIRECTOR = {
   },
 };
 
+const WEBSITE_PROFILER = {
+  name: "Website Profiler",
+  slug: "website-profiler",
+  description:
+    "Scans a business website and extracts a structured profile — platform, contact info, services, pricing signals, and brand language. Results feed into other agents.",
+  taskCategories: ["website-analysis"],
+  metadata: {
+    isBundle: false,
+    family: "onboarding",
+    setupSchema: {
+      onboarding: {
+        websiteScan: false,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Profiler Setup",
+          fields: [
+            {
+              key: "targetUrl",
+              type: "url",
+              label: "Website URL to scan",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
+
 const ALEX_CONVERSION_AGENT = {
   name: "Alex — Frontline Conversion Agent",
   slug: "alex-conversion",
@@ -436,6 +470,28 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   });
   console.warn(`  Seeded listing: ${AD_OPTIMIZER.name} (${adOptimizer.id})`);
 
+  // Seed Website Profiler as a listed agent
+  const profiler = await prisma.agentListing.upsert({
+    where: { slug: WEBSITE_PROFILER.slug },
+    update: {
+      name: WEBSITE_PROFILER.name,
+      description: WEBSITE_PROFILER.description,
+      taskCategories: WEBSITE_PROFILER.taskCategories,
+      metadata: WEBSITE_PROFILER.metadata,
+      status: "listed",
+    },
+    create: {
+      ...WEBSITE_PROFILER,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${WEBSITE_PROFILER.name} (${profiler.id})`);
+
   // Seed Alex Conversion Agent as a listed agent
   const alex = await prisma.agentListing.upsert({
     where: { slug: ALEX_CONVERSION_AGENT.slug },
@@ -610,6 +666,38 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       listingId: alexListing.id,
     });
     console.warn(`  Created deployment: ${ALEX_CONVERSION_AGENT.name} (${alexDeployment.id})`);
+  }
+
+  // 5. Create website profiler deployment
+  const profilerListing = await prisma.agentListing.findUnique({
+    where: { slug: "website-profiler" },
+  });
+  if (profilerListing) {
+    const profilerDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: profilerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: profilerListing.id,
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${WEBSITE_PROFILER.name} (${profilerDeployment.id})`);
   }
 
   const deploymentMap = new Map(deployments.map((d) => [d.slug, d]));
