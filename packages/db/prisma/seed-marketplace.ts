@@ -2,6 +2,7 @@
 /* eslint-disable max-lines */
 import type { PrismaClient } from "@prisma/client";
 import { DEMO_CONVERSATIONS } from "./fixtures/demo-conversations.js";
+import { seedDemoKnowledge } from "./fixtures/demo-knowledge.js";
 
 const SALES_PIPELINE_AGENTS = [
   {
@@ -799,4 +800,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       `  Updated listing ${deployment.slug}: trustScore=${avgScore.toFixed(1)}, autonomy=${autonomyLevel}, tier=${priceTier}`,
     );
   }
+
+  // 10. Seed demo business knowledge for Glow Aesthetics
+  await seedDemoKnowledge(prisma, ORG_ID);
 }
