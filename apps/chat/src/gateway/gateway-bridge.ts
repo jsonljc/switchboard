@@ -31,6 +31,8 @@ import {
   createCrmWriteTool,
   alexBuilder,
   salesPipelineBuilder,
+  websiteProfilerBuilder,
+  createWebScannerTool,
   ContextResolverImpl,
 } from "@switchboard/core/skill-runtime";
 import type { ParameterBuilder, SkillStores } from "@switchboard/core/skill-runtime";
@@ -130,6 +132,7 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
   const builderMap = new Map<string, ParameterBuilder>([
     ["sales-pipeline", salesPipelineBuilder],
     ["alex", alexBuilder],
+    ["website-profiler", websiteProfilerBuilder],
   ]);
 
   const skillStores: SkillStores = {
@@ -143,10 +146,12 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
   const createExecutor = () => {
     const crmQueryTool = createCrmQueryTool(contactStore, activityStore);
     const crmWriteTool = createCrmWriteTool(opportunityStore, activityStore);
+    const webScannerTool = createWebScannerTool();
 
     const toolsMap = new Map([
       [crmQueryTool.id, crmQueryTool],
       [crmWriteTool.id, crmWriteTool],
+      [webScannerTool.id, webScannerTool],
     ]);
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
