@@ -19,11 +19,13 @@ describe("Audit API", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
+      headers: { "Idempotency-Key": `test-audit-${Date.now()}-${Math.random()}` },
       payload: {
         actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_123" },
         principalId: "default",
         cartridgeId: "digital-ads",
+        organizationId: "default",
       },
     });
     return res.json();

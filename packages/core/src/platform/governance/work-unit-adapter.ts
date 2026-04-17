@@ -10,6 +10,15 @@ const MUTATION_RISK_MAP: Record<MutationClass, string> = {
   destructive: "high",
 };
 
+/**
+ * Derives the cartridge ID from an action ID by taking the first segment.
+ * E.g. "digital-ads.campaign.pause" → "digital-ads"
+ */
+function deriveCartridgeId(actionId: string): string {
+  const dotIndex = actionId.indexOf(".");
+  return dotIndex > 0 ? actionId.slice(0, dotIndex) : actionId;
+}
+
 export function toActionProposal(
   workUnit: WorkUnit,
   _registration: IntentRegistration,
@@ -29,7 +38,9 @@ export function toEvaluationContext(
   registration: IntentRegistration,
 ): EvaluationContext {
   const cartridgeId =
-    registration.executor.mode === "cartridge" ? registration.executor.actionId : workUnit.intent;
+    registration.executor.mode === "cartridge"
+      ? deriveCartridgeId(registration.executor.actionId)
+      : workUnit.intent;
 
   return {
     actionType: workUnit.intent,

@@ -1410,3 +1410,36 @@ model KnowledgeEntry {
   @@index([organizationId, kind, scope, active])
 }
 
+// ---------------------------------------------------------------------------
+// WorkTrace — unified telemetry record for every platform work unit
+// ---------------------------------------------------------------------------
+
+model WorkTrace {
+  id                    String    @id @default(cuid())
+  workUnitId            String    @unique
+  traceId               String
+  parentWorkUnitId      String?
+  intent                String
+  mode                  String
+  organizationId        String
+  actorId               String
+  actorType             String
+  trigger               String
+  governanceOutcome     String
+  riskScore             Float
+  matchedPolicies       String    @db.Text
+  outcome               String
+  durationMs            Int
+  errorCode             String?
+  errorMessage          String?
+  modeMetrics           String?   @db.Text
+  requestedAt           DateTime
+  governanceCompletedAt DateTime
+  executionStartedAt    DateTime?
+  completedAt           DateTime?
+
+  @@index([organizationId, intent])
+  @@index([traceId])
+  @@index([requestedAt])
+}
+

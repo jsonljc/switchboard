@@ -15,6 +15,7 @@ export interface ContextBuilderConfig {
   trustScore: number;
   trustLevel: "supervised" | "guided" | "autonomous";
   persona: AgentPersona;
+  deploymentInputConfig?: Record<string, unknown>;
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapter: LLMAdapter;
@@ -93,6 +94,9 @@ export class ContextBuilder {
         score: this.config.trustScore,
         level: this.config.trustLevel,
       },
+      deployment: this.config.deploymentInputConfig
+        ? { inputConfig: this.config.deploymentInputConfig }
+        : undefined,
     };
 
     return { ctx, notifications, handoffs };

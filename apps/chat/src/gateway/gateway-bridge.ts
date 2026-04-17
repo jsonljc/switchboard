@@ -1,3 +1,5 @@
+import { resolve as pathResolve } from "node:path";
+import Anthropic from "@anthropic-ai/sdk";
 import type { PrismaClient } from "@switchboard/db";
 import {
   PrismaDeploymentStateStore,
@@ -6,6 +8,10 @@ import {
   PrismaInteractionSummaryStore,
   PrismaDeploymentMemoryStore,
   PrismaKnowledgeStore,
+  PrismaContactStore,
+  PrismaOpportunityStore,
+  PrismaActivityLogStore,
+  PrismaKnowledgeEntryStore,
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker, ModelRouter } from "@switchboard/core";
 import type { ConversationPrompt, ModelConfig } from "@switchboard/core";
@@ -17,6 +23,21 @@ import {
   VoyageEmbeddingAdapter,
 } from "@switchboard/agents";
 import type { EmbeddingAdapter } from "@switchboard/core";
+import {
+  loadSkill,
+  SkillExecutorImpl,
+  AnthropicToolCallingAdapter,
+  createCrmQueryTool,
+  createCrmWriteTool,
+  alexBuilder,
+  salesPipelineBuilder,
+  websiteProfilerBuilder,
+  adOptimizerInteractiveBuilder,
+  createWebScannerTool,
+  createAdsAnalyticsTool,
+  ContextResolverImpl,
+} from "@switchboard/core/skill-runtime";
+import type { ParameterBuilder, SkillStores } from "@switchboard/core/skill-runtime";
 import { PrismaDeploymentLookup } from "./deployment-lookup.js";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
 import { TaskRecorder } from "./task-recorder.js";
@@ -102,6 +123,47 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
   // Model-aware LLM adapter — default slot uses Haiku for cost savings
   const modelRouter = new ModelRouter();
 
+  // Skill runtime dependencies — enables skill-based handlers for deployments with skillSlug
+  const contactStore = new PrismaContactStore(prisma);
+  const opportunityStore = new PrismaOpportunityStore(prisma);
+  const activityStore = new PrismaActivityLogStore(prisma);
+  const knowledgeEntryStore = new PrismaKnowledgeEntryStore(prisma);
+
+  const contextResolver = new ContextResolverImpl(knowledgeEntryStore);
+
+  const builderMap = new Map<string, ParameterBuilder>([
+    ["sales-pipeline", salesPipelineBuilder],
+    ["alex", alexBuilder],
+    ["website-profiler", websiteProfilerBuilder],
+    ["ad-optimizer", adOptimizerInteractiveBuilder],
+  ]);
+
+  const skillStores: SkillStores = {
+    opportunityStore,
+    contactStore,
+    activityStore,
+  };
+
+  const skillsDir = pathResolve(process.cwd(), "skills");
+
+  const createExecutor = () => {
+    const crmQueryTool = createCrmQueryTool(contactStore, activityStore);
+    const crmWriteTool = createCrmWriteTool(opportunityStore, activityStore);
+    const webScannerTool = createWebScannerTool();
+    const adsAnalyticsTool = createAdsAnalyticsTool();
+
+    const toolsMap = new Map([
+      [crmQueryTool.id, crmQueryTool],
+      [crmWriteTool.id, crmWriteTool],
+      [webScannerTool.id, webScannerTool],
+      [adsAnalyticsTool.id, adsAnalyticsTool],
+    ]);
+
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    return new SkillExecutorImpl(new AnthropicToolCallingAdapter(client), toolsMap, modelRouter);
+  };
+
   return new ChannelGateway({
     deploymentLookup: new PrismaDeploymentLookup(prisma),
     conversationStore: new PrismaGatewayConversationStore(prisma),
@@ -128,6 +190,17 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
         role: info.role,
         content: info.content,
       });
+    },
+    skillRuntime: {
+      skillsDir,
+      loadSkill,
+      createExecutor,
+      builderMap,
+      stores: skillStores,
+      hooks: [],
+      contextResolver: {
+        resolve: contextResolver.resolve.bind(contextResolver),
+      },
     },
   });
 }

@@ -114,6 +114,7 @@ export class ChannelGateway {
       trustScore: info.trustScore,
       trustLevel: info.trustLevel,
       persona: enrichedPersona,
+      deploymentInputConfig: info.deployment.inputConfig,
       stateStore: this.config.stateStore,
       actionRequestStore: this.config.actionRequestStore,
       llmAdapter: this.config.llmAdapterFactory(modelSlot),

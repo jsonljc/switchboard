@@ -19,10 +19,16 @@ export {
   createAdsAnalyticsTool,
   createAdsDataTool,
 } from "./tools/index.js";
-export { salesPipelineBuilder, websiteProfilerBuilder } from "./builders/index.js";
+export {
+  alexBuilder,
+  salesPipelineBuilder,
+  websiteProfilerBuilder,
+  adOptimizerInteractiveBuilder,
+} from "./builders/index.js";
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
+export { ContextResolverImpl } from "./context-resolver.js";
 
 // Batch execution
 export { BatchSkillHandler } from "./batch-skill-handler.js";

@@ -23,7 +23,6 @@ import {
   InMemoryConversionBus,
 } from "@switchboard/core";
 import type { AgentNotifier } from "@switchboard/core";
-import type { CrmProvider } from "@switchboard/schemas";
 import { createGuardrailStateStore } from "./guardrail-state/index.js";
 import { LifecycleOrchestrator as OrchestratorClass } from "@switchboard/core";
 import { ApiOrchestratorAdapter } from "./api-orchestrator-adapter.js";
@@ -97,8 +96,6 @@ export async function createChatRuntime(
   }
 
   let ledger: AuditLedger | undefined;
-
-  const _crmProvider: CrmProvider | null = null;
 
   if (!orchestrator) {
     // Create storage — use Prisma when DATABASE_URL is set, otherwise in-memory
@@ -243,7 +240,7 @@ export async function createChatRuntime(
     planGraphBuilder,
     failedMessageStore: failedMessageStore ?? undefined,
     availableActions: config?.availableActions ?? DEFAULT_CHAT_AVAILABLE_ACTIONS,
-    crmProvider: _crmProvider,
+    crmProvider: null,
     dataFlowExecutor,
     conversionBus,
     isLeadBot: false,

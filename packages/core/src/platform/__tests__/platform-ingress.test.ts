@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { PlatformIngress } from "../platform-ingress.js";
 import { IntentRegistry } from "../intent-registry.js";
 import { ExecutionModeRegistry } from "../execution-mode-registry.js";
-import type { GovernanceGate, PlatformIngressConfig } from "../platform-ingress.js";
+import type { GovernanceGateInterface, PlatformIngressConfig } from "../platform-ingress.js";
 import type { WorkTraceStore } from "../work-trace-recorder.js";
 import type { IntentRegistration } from "../intent-registration.js";
 import type { SubmitWorkRequest } from "../work-unit.js";
@@ -103,7 +103,7 @@ function createConfig(
   const mode = overrides.mode ?? createMockMode();
   modeRegistry.register(mode);
 
-  const governanceGate: GovernanceGate = {
+  const governanceGate: GovernanceGateInterface = {
     evaluate: overrides.governanceThrows
       ? vi.fn().mockRejectedValue(new Error("boom"))
       : vi.fn().mockResolvedValue(overrides.decision ?? buildExecuteDecision()),
@@ -193,7 +193,7 @@ describe("PlatformIngress", () => {
     await ingress.submit(baseRequest);
 
     expect(traceStore.persist).toHaveBeenCalledOnce();
-    const trace = vi.mocked(traceStore.persist).mock.calls[0][0];
+    const trace = vi.mocked(traceStore.persist).mock.calls[0]![0];
     expect(trace.outcome).toBe("completed");
     expect(trace.governanceOutcome).toBe("execute");
     expect(trace.intent).toBe("campaign.pause");
@@ -207,7 +207,7 @@ describe("PlatformIngress", () => {
     await ingress.submit(baseRequest);
 
     expect(traceStore.persist).toHaveBeenCalledOnce();
-    const trace = vi.mocked(traceStore.persist).mock.calls[0][0];
+    const trace = vi.mocked(traceStore.persist).mock.calls[0]![0];
     expect(trace.outcome).toBe("failed");
     expect(trace.governanceOutcome).toBe("deny");
   });

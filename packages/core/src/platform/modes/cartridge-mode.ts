@@ -1,3 +1,4 @@
+import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { ExecutionMode, ExecutionContext } from "../execution-context.js";
 import type { ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionResult } from "../execution-result.js";
@@ -5,20 +6,16 @@ import type { WorkUnit } from "../work-unit.js";
 import type { ExecutionModeName } from "../types.js";
 
 export interface CartridgeOrchestrator {
-  propose(params: {
+  executePreApproved(params: {
     actionType: string;
     parameters: Record<string, unknown>;
     principalId: string;
-    organizationId?: string | null;
+    organizationId: string | null;
     cartridgeId: string;
-    traceId?: string;
+    traceId: string;
     idempotencyKey?: string;
-  }): Promise<{
-    envelope: { id: string; status: string };
-    approvalRequest: unknown | null;
-    denied: boolean;
-    explanation: string;
-  }>;
+    workUnitId?: string;
+  }): Promise<ExecuteResult>;
 }
 
 export interface CartridgeModeConfig {
@@ -56,49 +53,37 @@ export class CartridgeMode implements ExecutionMode {
 
     const startMs = Date.now();
     try {
-      const result = await this.config.orchestrator.propose({
+      const result = await this.config.orchestrator.executePreApproved({
         actionType: actionId,
         parameters: workUnit.parameters,
         principalId: workUnit.actor.id,
-        organizationId: workUnit.organizationId,
+        organizationId: workUnit.organizationId ?? null,
         cartridgeId,
         traceId: workUnit.traceId,
         idempotencyKey: workUnit.idempotencyKey,
+        workUnitId: workUnit.id,
       });
 
       const durationMs = Date.now() - startMs;
 
-      if (result.denied) {
+      if (!result.success) {
         return {
           workUnitId: workUnit.id,
           outcome: "failed",
-          summary: result.explanation,
-          outputs: {},
+          summary: result.summary,
+          outputs: { externalRefs: result.externalRefs },
           mode: "cartridge",
           durationMs,
           traceId: context.traceId,
-          error: { code: "DENIED", message: result.explanation },
-        };
-      }
-
-      if (result.approvalRequest) {
-        return {
-          workUnitId: workUnit.id,
-          outcome: "pending_approval",
-          summary: result.explanation,
-          outputs: { envelopeId: result.envelope.id },
-          mode: "cartridge",
-          durationMs,
-          traceId: context.traceId,
-          approvalId: result.envelope.id,
+          error: { code: "CARTRIDGE_ERROR", message: result.summary },
         };
       }
 
       return {
         workUnitId: workUnit.id,
         outcome: "completed",
-        summary: result.explanation,
-        outputs: { envelopeId: result.envelope.id },
+        summary: result.summary,
+        outputs: { externalRefs: result.externalRefs, data: result.data },
         mode: "cartridge",
         durationMs,
         traceId: context.traceId,

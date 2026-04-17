@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
+/* eslint-disable max-lines */
 import type { PrismaClient } from "@prisma/client";
 import { DEMO_CONVERSATIONS } from "./fixtures/demo-conversations.js";
+import { seedDemoKnowledge } from "./fixtures/demo-knowledge.js";
 
 const SALES_PIPELINE_AGENTS = [
   {
@@ -246,6 +248,87 @@ const PERFORMANCE_CREATIVE_DIRECTOR = {
   },
 };
 
+const WEBSITE_PROFILER = {
+  name: "Website Profiler",
+  slug: "website-profiler",
+  description:
+    "Scans a business website and extracts a structured profile — platform, contact info, services, pricing signals, and brand language. Results feed into other agents.",
+  taskCategories: ["website-analysis"],
+  metadata: {
+    isBundle: false,
+    family: "onboarding",
+    setupSchema: {
+      onboarding: {
+        websiteScan: false,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Profiler Setup",
+          fields: [
+            {
+              key: "targetUrl",
+              type: "url",
+              label: "Website URL to scan",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
+
+const ALEX_CONVERSION_AGENT = {
+  name: "Alex — Frontline Conversion Agent",
+  slug: "alex-conversion",
+  description:
+    "Responds to inbound leads instantly, qualifies through natural conversation, handles objections, and books appointments.",
+  taskCategories: ["lead-qualification", "sales-closing", "booking"],
+  metadata: {
+    family: "sales_pipeline",
+    publicChannels: true,
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: true,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Agent Setup",
+          fields: [
+            {
+              key: "tone",
+              type: "select",
+              label: "Conversation Tone",
+              required: true,
+              options: ["friendly", "professional", "casual"],
+            },
+            {
+              key: "bookingLink",
+              type: "url",
+              label: "Booking Link",
+              required: true,
+            },
+            {
+              key: "customInstructions",
+              type: "textarea",
+              label: "Custom Instructions",
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
+
 export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   const agentIds: string[] = [];
 
@@ -386,6 +469,50 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     },
   });
   console.warn(`  Seeded listing: ${AD_OPTIMIZER.name} (${adOptimizer.id})`);
+
+  // Seed Website Profiler as a listed agent
+  const profiler = await prisma.agentListing.upsert({
+    where: { slug: WEBSITE_PROFILER.slug },
+    update: {
+      name: WEBSITE_PROFILER.name,
+      description: WEBSITE_PROFILER.description,
+      taskCategories: WEBSITE_PROFILER.taskCategories,
+      metadata: WEBSITE_PROFILER.metadata,
+      status: "listed",
+    },
+    create: {
+      ...WEBSITE_PROFILER,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${WEBSITE_PROFILER.name} (${profiler.id})`);
+
+  // Seed Alex Conversion Agent as a listed agent
+  const alex = await prisma.agentListing.upsert({
+    where: { slug: ALEX_CONVERSION_AGENT.slug },
+    update: {
+      name: ALEX_CONVERSION_AGENT.name,
+      description: ALEX_CONVERSION_AGENT.description,
+      taskCategories: ALEX_CONVERSION_AGENT.taskCategories,
+      metadata: ALEX_CONVERSION_AGENT.metadata,
+      status: "listed",
+    },
+    create: {
+      ...ALEX_CONVERSION_AGENT,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${ALEX_CONVERSION_AGENT.name} (${alex.id})`);
 }
 
 /**
@@ -416,16 +543,16 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   });
   console.warn(`  Created demo org: ${ORG_ID}`);
 
-  // 2. Get all sales pipeline agent listings
+  // 2. Get all sales pipeline agent listings + Alex
   const listings = await prisma.agentListing.findMany({
     where: {
-      slug: { in: ["speed-to-lead", "sales-closer", "nurture-specialist"] },
+      slug: { in: ["speed-to-lead", "sales-closer", "nurture-specialist", "alex-conversion"] },
     },
   });
 
   const listingMap = new Map(listings.map((l) => [l.slug, l]));
 
-  // 3. Create deployments for all 3 agents
+  // 3. Create deployments for all 3 sales pipeline agents
   const deployments: { slug: string; id: string; listingId: string }[] = [];
   for (const agent of SALES_PIPELINE_AGENTS) {
     const listing = listingMap.get(agent.slug);
@@ -443,7 +570,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       },
       update: {
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
@@ -451,7 +583,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
         organizationId: ORG_ID,
         listingId: listing.id,
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
@@ -460,15 +597,160 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     console.warn(`  Created deployment: ${agent.name} (${deployment.id})`);
   }
 
+  // 4. Create Alex deployment with skillSlug
+  const alexListing = listingMap.get("alex-conversion");
+  if (alexListing) {
+    const alexDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: alexListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "alex",
+        inputConfig: {
+          businessName: "Glow Aesthetics",
+          businessType: "aesthetics_clinic",
+          tone: "friendly",
+          bookingLink: "https://cal.com/glow-aesthetics",
+          qualificationCriteria: {
+            ageRequirement: "21+",
+            noContraindications: true,
+          },
+          disqualificationCriteria: {
+            underage: true,
+            activeInfection: true,
+          },
+          escalationRules: {
+            medicalQuestions: true,
+            pricingNegotiation: true,
+            complaints: true,
+          },
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: alexListing.id,
+        status: "active",
+        skillSlug: "alex",
+        inputConfig: {
+          businessName: "Glow Aesthetics",
+          businessType: "aesthetics_clinic",
+          tone: "friendly",
+          bookingLink: "https://cal.com/glow-aesthetics",
+          qualificationCriteria: {
+            ageRequirement: "21+",
+            noContraindications: true,
+          },
+          disqualificationCriteria: {
+            underage: true,
+            activeInfection: true,
+          },
+          escalationRules: {
+            medicalQuestions: true,
+            pricingNegotiation: true,
+            complaints: true,
+          },
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    deployments.push({
+      slug: "alex-conversion",
+      id: alexDeployment.id,
+      listingId: alexListing.id,
+    });
+    console.warn(`  Created deployment: ${ALEX_CONVERSION_AGENT.name} (${alexDeployment.id})`);
+  }
+
+  // 5. Create website profiler deployment
+  const profilerListing = await prisma.agentListing.findUnique({
+    where: { slug: "website-profiler" },
+  });
+  if (profilerListing) {
+    const profilerDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: profilerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: profilerListing.id,
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${WEBSITE_PROFILER.name} (${profilerDeployment.id})`);
+  }
+
+  // 6. Create ad optimizer deployment
+  const adOptimizerListing = await prisma.agentListing.findUnique({
+    where: { slug: "ad-optimizer" },
+  });
+  if (adOptimizerListing) {
+    const adOptDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: adOptimizerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: adOptimizerListing.id,
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${AD_OPTIMIZER.name} (${adOptDeployment.id})`);
+  }
+
   const deploymentMap = new Map(deployments.map((d) => [d.slug, d]));
 
-  // 4. Delete existing demo tasks for clean re-seed
+  // 5. Delete existing demo tasks for clean re-seed
   const deleteResult = await prisma.agentTask.deleteMany({
     where: { organizationId: ORG_ID },
   });
   console.warn(`  Deleted ${deleteResult.count} existing demo tasks`);
 
-  // 5. Track trust score progression per listing per category
+  // 6. Track trust score progression per listing per category
   interface TrustScoreState {
     score: number;
     totalApprovals: number;
@@ -514,7 +796,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     state.score = Math.max(0, Math.min(100, state.score));
   }
 
-  // 6. Create tasks from DEMO_CONVERSATIONS
+  // 7. Create tasks from DEMO_CONVERSATIONS
   let taskCount = 0;
   for (const conv of DEMO_CONVERSATIONS) {
     const deployment = deploymentMap.get(conv.agentSlug);
@@ -568,7 +850,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   }
   console.warn(`  Created ${taskCount} demo tasks from fixtures`);
 
-  // 7. Create/update TrustScoreRecord entries
+  // 8. Create/update TrustScoreRecord entries
   for (const [key, state] of trustScores.entries()) {
     const parts = key.split(":");
     const listingId = parts[0];
@@ -605,7 +887,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   }
   console.warn(`  Created/updated ${trustScores.size} trust score records`);
 
-  // 8. Update listing trustScore and autonomyLevel based on aggregate scores
+  // 9. Update listing trustScore and autonomyLevel based on aggregate scores
   for (const deployment of deployments) {
     const listing = listingMap.get(deployment.slug);
     if (!listing) continue;
@@ -658,4 +940,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       `  Updated listing ${deployment.slug}: trustScore=${avgScore.toFixed(1)}, autonomy=${autonomyLevel}, tier=${priceTier}`,
     );
   }
+
+  // 10. Seed demo business knowledge for Glow Aesthetics
+  await seedDemoKnowledge(prisma, ORG_ID);
 }

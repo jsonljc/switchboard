@@ -87,3 +87,6 @@ export * from "./ad-optimizer.js";
 
 // Knowledge entries (curated playbooks, policies, domain guidance)
 export * from "./knowledge.js";
+
+// Temporal Fact (entity-scoped temporal fact system)
+export * from "./temporal-fact.js";

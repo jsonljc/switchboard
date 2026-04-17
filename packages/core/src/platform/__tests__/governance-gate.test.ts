@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { GovernanceGate } from "../governance/governance-gate.js";
-import type { GovernanceGateDeps } from "../governance/governance-gate.js";
+import type { GovernanceGateDeps, GovernanceCartridge } from "../governance/governance-gate.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { IntentRegistration } from "../intent-registration.js";
-import type { DecisionTrace, IdentitySpec } from "@switchboard/schemas";
+import type { DecisionTrace, IdentitySpec, RiskInput, GuardrailConfig } from "@switchboard/schemas";
 import type { ResolvedIdentity } from "../../identity/spec.js";
 
 function makeWorkUnit(overrides?: Partial<WorkUnit>): WorkUnit {
@@ -38,6 +38,13 @@ function makeRegistration(overrides?: Partial<IntentRegistration>): IntentRegist
     retryable: false,
     ...overrides,
   };
+}
+
+function makeCartridgeRegistration(overrides?: Partial<IntentRegistration>): IntentRegistration {
+  return makeRegistration({
+    executor: { mode: "cartridge", actionId: "crm-cartridge" },
+    ...overrides,
+  });
 }
 
 function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
@@ -99,6 +106,21 @@ function makeTrace(overrides?: Partial<DecisionTrace>): DecisionTrace {
   };
 }
 
+function makeCartridge(overrides?: Partial<GovernanceCartridge>): GovernanceCartridge {
+  return {
+    manifest: { id: "crm-cartridge", actions: [{ actionType: "crm.deal.update" }] },
+    getGuardrails: vi.fn().mockReturnValue(null),
+    enrichContext: vi.fn().mockResolvedValue({}),
+    getRiskInput: vi.fn().mockResolvedValue({
+      baseRisk: "medium",
+      exposure: { dollarsAtRisk: 100, blastRadius: 5 },
+      reversibility: "partial",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: true },
+    } satisfies RiskInput),
+    ...overrides,
+  };
+}
+
 function makeDeps(overrides?: Partial<GovernanceGateDeps>): GovernanceGateDeps {
   const spec = makeIdentitySpec();
   return {
@@ -106,6 +128,8 @@ function makeDeps(overrides?: Partial<GovernanceGateDeps>): GovernanceGateDeps {
     resolveIdentity: vi.fn().mockReturnValue(makeResolvedIdentity(spec)),
     loadPolicies: vi.fn().mockResolvedValue([]),
     loadIdentitySpec: vi.fn().mockResolvedValue({ spec, overlays: [] }),
+    loadCartridge: vi.fn().mockResolvedValue(null),
+    getGovernanceProfile: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -176,19 +200,164 @@ describe("GovernanceGate", () => {
     expect(deps.loadIdentitySpec).toHaveBeenCalledWith("actor-7");
   });
 
-  it("passes constraints from registration", async () => {
+  it("uses DEFAULT_CARTRIDGE_CONSTRAINTS for execute decisions", async () => {
     const deps = makeDeps();
     const gate = new GovernanceGate(deps);
-    const registration = makeRegistration({ budgetClass: "expensive", timeoutMs: 60_000 });
 
-    const decision = await gate.evaluate(makeWorkUnit(), registration);
+    const decision = await gate.evaluate(makeWorkUnit(), makeRegistration());
 
     expect(decision.outcome).toBe("execute");
     if (decision.outcome === "execute") {
-      expect(decision.constraints.maxTotalTokens).toBe(128_000);
-      expect(decision.constraints.maxLlmTurns).toBe(10);
-      expect(decision.constraints.maxRuntimeMs).toBe(60_000);
-      expect(decision.constraints.allowedModelTiers).toContain("critical");
+      expect(decision.constraints.maxToolCalls).toBe(10);
+      expect(decision.constraints.maxLlmTurns).toBe(1);
+      expect(decision.constraints.maxRuntimeMs).toBe(30_000);
+      expect(decision.constraints.allowedModelTiers).toEqual(["default"]);
     }
+  });
+
+  it("loads cartridge for risk input enrichment", async () => {
+    const cartridge = makeCartridge();
+    const deps = makeDeps({
+      loadCartridge: vi.fn().mockResolvedValue(cartridge),
+    });
+    const gate = new GovernanceGate(deps);
+    const registration = makeCartridgeRegistration();
+
+    await gate.evaluate(makeWorkUnit(), registration);
+
+    expect(deps.loadCartridge).toHaveBeenCalledWith("crm-cartridge");
+    expect(cartridge.getRiskInput).toHaveBeenCalledWith(
+      "crm.deal.update",
+      { dealId: "d-1", stage: "closed" },
+      {},
+    );
+
+    // Verify the engine context received by evaluate has the cartridge risk input
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    expect(engineContext.riskInput).toEqual({
+      baseRisk: "medium",
+      exposure: { dollarsAtRisk: 100, blastRadius: 5 },
+      reversibility: "partial",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: true },
+    });
+  });
+
+  it("uses default risk input when cartridge is not found", async () => {
+    const deps = makeDeps({
+      loadCartridge: vi.fn().mockResolvedValue(null),
+    });
+    const gate = new GovernanceGate(deps);
+    const registration = makeCartridgeRegistration();
+
+    await gate.evaluate(makeWorkUnit(), registration);
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    expect(engineContext.riskInput).toEqual({
+      baseRisk: "low",
+      exposure: { dollarsAtRisk: 0, blastRadius: 1 },
+      reversibility: "full",
+      sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
+    });
+  });
+
+  it("uses default risk input when cartridge.getRiskInput throws", async () => {
+    const cartridge = makeCartridge({
+      getRiskInput: vi.fn().mockRejectedValue(new Error("cartridge error")),
+    });
+    const deps = makeDeps({
+      loadCartridge: vi.fn().mockResolvedValue(cartridge),
+    });
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeCartridgeRegistration());
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    expect(engineContext.riskInput.baseRisk).toBe("low");
+  });
+
+  it("loads guardrails from cartridge", async () => {
+    const guardrails: GuardrailConfig = {
+      rateLimits: [{ scope: "global", maxActions: 5, windowMs: 60_000 }],
+      cooldowns: [],
+      protectedEntities: [],
+    };
+    const cartridge = makeCartridge({
+      getGuardrails: vi.fn().mockReturnValue(guardrails),
+    });
+    const deps = makeDeps({
+      loadCartridge: vi.fn().mockResolvedValue(cartridge),
+    });
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeCartridgeRegistration());
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    expect(engineContext.guardrails).toBe(guardrails);
+  });
+
+  it("builds system risk posture from governance profile", async () => {
+    const deps = makeDeps({
+      getGovernanceProfile: vi.fn().mockResolvedValue("strict"),
+    });
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeRegistration());
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    expect(engineContext.systemRiskPosture).toBe("elevated");
+  });
+
+  it("defaults to guarded profile when getGovernanceProfile returns null", async () => {
+    const deps = makeDeps({
+      getGovernanceProfile: vi.fn().mockResolvedValue(null),
+    });
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeRegistration());
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const engineContext = evaluateCall[2];
+    // guarded maps to "normal"
+    expect(engineContext.systemRiskPosture).toBe("normal");
+  });
+
+  it("does not load cartridge for non-cartridge executors", async () => {
+    const deps = makeDeps();
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeRegistration());
+
+    expect(deps.loadCartridge).not.toHaveBeenCalled();
+  });
+
+  it("passes riskScoringConfig to evaluate when provided", async () => {
+    // Use a partial config cast — test only verifies passthrough, not engine behavior
+    const riskScoringConfig = {
+      volatilityMultiplier: 2,
+    } as unknown as GovernanceGateDeps["riskScoringConfig"];
+    const deps = makeDeps({ riskScoringConfig });
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeRegistration());
+
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const config = evaluateCall[3];
+    expect(config).toEqual({ riskScoringConfig });
+  });
+
+  it("resolves identity with cartridgeId context", async () => {
+    const deps = makeDeps();
+    const gate = new GovernanceGate(deps);
+
+    await gate.evaluate(makeWorkUnit(), makeCartridgeRegistration());
+
+    expect(deps.resolveIdentity).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      cartridgeId: "crm-cartridge",
+    });
   });
 });

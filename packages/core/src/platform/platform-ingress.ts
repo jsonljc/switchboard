@@ -3,19 +3,20 @@ import type { ExecutionModeRegistry } from "./execution-mode-registry.js";
 import type { GovernanceDecision } from "./governance-types.js";
 import type { ExecutionResult } from "./execution-result.js";
 import type { IngressError } from "./ingress-error.js";
+import type { IntentRegistration } from "./intent-registration.js";
 import type { SubmitWorkRequest, WorkUnit } from "./work-unit.js";
 import type { WorkTraceStore } from "./work-trace-recorder.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
 
-export interface GovernanceGate {
-  evaluate(workUnit: WorkUnit): Promise<GovernanceDecision>;
+export interface GovernanceGateInterface {
+  evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
 }
 
 export interface PlatformIngressConfig {
   intentRegistry: IntentRegistry;
   modeRegistry: ExecutionModeRegistry;
-  governanceGate: GovernanceGate;
+  governanceGate: GovernanceGateInterface;
   traceStore?: WorkTraceStore;
 }
 
@@ -67,7 +68,7 @@ export class PlatformIngress {
     let decision: GovernanceDecision;
     const governanceCompletedAt = new Date().toISOString();
     try {
-      decision = await governanceGate.evaluate(workUnit);
+      decision = await governanceGate.evaluate(workUnit, registration);
     } catch {
       decision = {
         outcome: "deny",

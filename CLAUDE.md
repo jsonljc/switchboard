@@ -117,6 +117,12 @@ chore: update dependencies
 - No grab-bag `utils.ts` — every file has a single clear responsibility
 - If a refactor creates >3 new files, justify why
 
+### Platform Ingress Boundary
+
+After the first caller proof (POST /api/execute), app-layer code must not call
+`orchestrator.resolveAndPropose()` directly. Use `PlatformIngress.submit()` instead.
+Existing routes migrate incrementally. Enforced by code review.
+
 ### Barrel Files
 
 - Flag if an `index.ts` exceeds 40 exported symbols

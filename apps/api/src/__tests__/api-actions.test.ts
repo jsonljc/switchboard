@@ -1,16 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
-import type { TestCartridge } from "@switchboard/cartridge-sdk";
 
 describe("Actions API", () => {
   let app: FastifyInstance;
-  let cartridge: TestCartridge;
 
   beforeEach(async () => {
     const ctx: TestContext = await buildTestServer();
     app = ctx.app;
-    cartridge = ctx.cartridge;
   });
 
   afterEach(async () => {
@@ -18,43 +15,50 @@ describe("Actions API", () => {
   });
 
   describe("POST /api/actions/propose", () => {
-    it("should return 201 with envelope, decisionTrace, and approvalRequest", async () => {
+    it("should return 201 with outcome, envelopeId, and traceId", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-propose-1",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
 
       expect(res.statusCode).toBe(201);
       const body = res.json();
-      expect(body.envelope).toBeDefined();
-      expect(body.decisionTrace).toBeDefined();
-      expect(body.envelope.id).toBeDefined();
-      expect(body.envelope.status).toBeDefined();
+      expect(body.outcome).toBeDefined();
+      expect(body.envelopeId).toBeDefined();
+      expect(body.traceId).toBeDefined();
     });
 
-    it("should return 400 when cartridgeId is missing and cannot be inferred", async () => {
+    it("should return 404 for unknown action type", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-propose-2",
+        },
         payload: {
           actionType: "unknown.action",
           parameters: {},
           principalId: "default",
+          organizationId: "org_test",
         },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(404);
       const body = res.json();
-      expect(body.error).toContain("cartridgeId");
+      expect(body.error).toBeDefined();
     });
 
-    it("should return 201 with denied status for forbidden behavior", async () => {
+    it("should return 201 with DENIED outcome for forbidden behavior", async () => {
       // Update identity spec to forbid this action
       await app.storageContext.identity.saveSpec({
         id: "spec_default",
@@ -81,24 +85,31 @@ describe("Actions API", () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-propose-3",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
 
       expect(res.statusCode).toBe(201);
       const body = res.json();
+      expect(body.outcome).toBe("DENIED");
       expect(body.denied).toBe(true);
-      expect(body.envelope.status).toBe("denied");
     });
 
     it("should return 400 for empty body", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-propose-4",
+        },
         payload: {},
       });
 
@@ -111,6 +122,9 @@ describe("Actions API", () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-propose-5",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
@@ -120,6 +134,22 @@ describe("Actions API", () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBeDefined();
     });
+
+    it("returns 400 when Idempotency-Key header is missing on propose", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/propose",
+        payload: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_123" },
+          principalId: "default",
+          organizationId: "org_test",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Idempotency-Key");
+    });
   });
 
   describe("GET /api/actions/:id", () => {
@@ -128,14 +158,19 @@ describe("Actions API", () => {
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-get-1",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
-      const envelopeId = proposeRes.json().envelope.id;
+      const proposeBody = proposeRes.json();
+      const envelopeId = proposeBody.envelopeId;
 
       const res = await app.inject({
         method: "GET",
@@ -157,29 +192,44 @@ describe("Actions API", () => {
   });
 
   describe("POST /api/actions/:id/execute", () => {
-    it("should return 200 after executing an approved envelope", async () => {
-      // Use low risk to get auto-approved
-      cartridge.onRiskInput(() => ({
-        baseRisk: "low" as const,
-        exposure: { dollarsAtRisk: 10, blastRadius: 1 },
-        reversibility: "full" as const,
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      }));
+    it("should execute a pending approval envelope", async () => {
+      // Override risk tolerance so medium-risk actions require approval
+      const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+      if (spec) {
+        spec.riskTolerance = {
+          ...spec.riskTolerance,
+          medium: "standard" as const,
+          high: "elevated" as const,
+        };
+        await app.storageContext.identity.saveSpec(spec);
+      }
 
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-execute-1",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
 
-      expect(proposeRes.json().envelope.status).toBe("approved");
-      const envelopeId = proposeRes.json().envelope.id;
+      const proposeBody = proposeRes.json();
+      expect(proposeBody.outcome).toBe("PENDING_APPROVAL");
+      const envelopeId = proposeBody.envelopeId;
 
+      // Approve the envelope first
+      const envelope = await app.storageContext.envelopes.getById(envelopeId);
+      if (envelope) {
+        await app.storageContext.envelopes.update(envelopeId, { status: "approved" });
+      }
+
+      // Now execute it
       const res = await app.inject({
         method: "POST",
         url: `/api/actions/${envelopeId}/execute`,
@@ -191,19 +241,33 @@ describe("Actions API", () => {
     });
 
     it("should return 400 when executing a non-approved envelope", async () => {
-      // Default risk is high → needs approval → status is pending_approval
+      // Override risk tolerance so medium-risk actions require approval
+      const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+      if (spec) {
+        spec.riskTolerance = {
+          ...spec.riskTolerance,
+          medium: "standard" as const,
+          high: "elevated" as const,
+        };
+        await app.storageContext.identity.saveSpec(spec);
+      }
+
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
+        headers: {
+          "Idempotency-Key": "test-execute-2",
+        },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
 
-      const envelopeId = proposeRes.json().envelope.id;
+      const envelopeId = proposeRes.json().envelopeId;
 
       const res = await app.inject({
         method: "POST",
@@ -218,30 +282,75 @@ describe("Actions API", () => {
 
   describe("POST /api/actions/:id/undo", () => {
     it("should return 201 with new proposal after undoing executed envelope", async () => {
-      // Low risk → auto-approved
-      cartridge.onRiskInput(() => ({
-        baseRisk: "low" as const,
-        exposure: { dollarsAtRisk: 10, blastRadius: 1 },
-        reversibility: "full" as const,
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      }));
+      // First create and execute an envelope via the old orchestrator path
+      // (since propose+execute are combined in the new platform path)
+      const envelopeId = `env_undo_test`;
+      const proposalId = `prop_undo_test`;
 
-      // Propose and execute
-      const proposeRes = await app.inject({
-        method: "POST",
-        url: "/api/actions/propose",
-        payload: {
-          actionType: "digital-ads.campaign.pause",
-          parameters: { campaignId: "camp_123" },
-          principalId: "default",
-          cartridgeId: "digital-ads",
-        },
-      });
-      const envelopeId = proposeRes.json().envelope.id;
-
-      await app.inject({
-        method: "POST",
-        url: `/api/actions/${envelopeId}/execute`,
+      // Create envelope with execution result
+      const now = new Date();
+      await app.storageContext.envelopes.save({
+        id: envelopeId,
+        version: 1,
+        incomingMessage: null,
+        conversationId: null,
+        proposals: [
+          {
+            id: proposalId,
+            actionType: "digital-ads.campaign.pause",
+            parameters: {
+              campaignId: "camp_123",
+              _principalId: "default",
+              _cartridgeId: "digital-ads",
+            },
+            evidence: "Test envelope for undo",
+            confidence: 1.0,
+            originatingMessageId: "",
+          },
+        ],
+        resolvedEntities: [],
+        plan: null,
+        decisions: [
+          {
+            actionId: proposalId,
+            envelopeId,
+            checks: [],
+            computedRiskScore: { rawScore: 0, category: "none", factors: [] },
+            finalDecision: "allow",
+            approvalRequired: "none",
+            explanation: "Test",
+            evaluatedAt: now,
+          },
+        ],
+        approvalRequests: [],
+        executionResults: [
+          {
+            actionId: proposalId,
+            envelopeId,
+            success: true,
+            summary: "Executed",
+            externalRefs: { campaignId: "camp_123" },
+            rollbackAvailable: true,
+            partialFailures: [],
+            durationMs: 15,
+            undoRecipe: {
+              originalActionId: "digital-ads.campaign.pause",
+              originalEnvelopeId: envelopeId,
+              reverseActionType: "digital-ads.campaign.resume",
+              reverseParameters: { campaignId: "camp_123" },
+              undoExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+              undoRiskCategory: "medium",
+              undoApprovalRequired: "none",
+            },
+            executedAt: now,
+          },
+        ],
+        auditEntryIds: [],
+        status: "executed",
+        createdAt: now,
+        updatedAt: now,
+        parentEnvelopeId: null,
+        traceId: "trace_undo_test",
       });
 
       // Now undo
@@ -271,12 +380,16 @@ describe("Actions API", () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/batch",
+        headers: {
+          "Idempotency-Key": "test-batch-1",
+        },
         payload: {
           proposals: [
             { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_1" } },
             { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_2" } },
           ],
           principalId: "default",
+          organizationId: "org_test",
           cartridgeId: "digital-ads",
         },
       });
@@ -284,6 +397,25 @@ describe("Actions API", () => {
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.results).toHaveLength(2);
+      expect(body.results[0].outcome).toBeDefined();
+      expect(body.results[0].envelopeId).toBeDefined();
+    });
+
+    it("returns 400 when Idempotency-Key header is missing on batch", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/actions/batch",
+        payload: {
+          proposals: [
+            { actionType: "digital-ads.campaign.pause", parameters: { campaignId: "camp_1" } },
+          ],
+          principalId: "default",
+          organizationId: "org_test",
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Idempotency-Key");
     });
   });
 });

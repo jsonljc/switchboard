@@ -65,7 +65,13 @@ export interface DeploymentLookup {
 }
 
 export interface DeploymentInfo {
-  deployment: { id: string; listingId: string; organizationId: string; skillSlug?: string | null };
+  deployment: {
+    id: string;
+    listingId: string;
+    organizationId: string;
+    skillSlug?: string | null;
+    inputConfig?: Record<string, unknown>;
+  };
   persona: AgentPersona;
   trustScore: number;
   trustLevel: "supervised" | "guided" | "autonomous";

@@ -9,6 +9,8 @@ import {
   ExecutionService,
   CompositeNotifier,
   setMetrics,
+  evaluate,
+  resolveIdentity,
 } from "@switchboard/core";
 import type {
   StorageContext,
@@ -17,6 +19,15 @@ import type {
   AgentNotifier,
 } from "@switchboard/core";
 import { AuditLedger } from "@switchboard/core";
+import {
+  IntentRegistry,
+  ExecutionModeRegistry,
+  GovernanceGate,
+  CartridgeMode,
+  PlatformIngress,
+  registerCartridgeIntents,
+} from "@switchboard/core/platform";
+import type { CartridgeManifestForRegistration } from "@switchboard/core/platform";
 import { initTelemetry } from "./telemetry/otel-init.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { authMiddleware } from "./middleware/auth.js";
@@ -47,6 +58,7 @@ declare module "fastify" {
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
+    platformIngress: import("@switchboard/core/platform").PlatformIngress;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -366,6 +378,64 @@ export async function buildServer() {
   app.decorate("governanceProfileStore", governanceProfileStore);
   app.decorate("agentNotifier", null as AgentNotifier | null);
   app.decorate("conversionBus", conversionBus);
+
+  // --- PlatformIngress wiring ---
+  const intentRegistry = new IntentRegistry();
+  const cartridgeManifests: CartridgeManifestForRegistration[] = [];
+  for (const cartridgeId of storage.cartridges.list()) {
+    const cartridge = storage.cartridges.get(cartridgeId);
+    if (!cartridge) continue;
+    const manifest = cartridge.manifest;
+    if (!manifest.actions || manifest.actions.length === 0) continue;
+    cartridgeManifests.push({
+      id: manifest.id,
+      actions: manifest.actions.map((a) => ({
+        name: a.actionType.startsWith(`${manifest.id}.`)
+          ? a.actionType.slice(manifest.id.length + 1)
+          : a.actionType,
+        description: a.description,
+        riskCategory: a.baseRiskCategory,
+      })),
+    });
+  }
+  registerCartridgeIntents(intentRegistry, cartridgeManifests);
+
+  const modeRegistry = new ExecutionModeRegistry();
+  modeRegistry.register(new CartridgeMode({ orchestrator, intentRegistry }));
+
+  const platformGovernanceGate = new GovernanceGate({
+    evaluate,
+    resolveIdentity,
+    loadPolicies: async (orgId) => storage.policies.listActive({ organizationId: orgId }),
+    loadIdentitySpec: async (actorId) => {
+      const spec = await storage.identity.getSpecByPrincipalId(actorId);
+      if (!spec) throw new Error(`Identity spec not found: ${actorId}`);
+      const overlays = await storage.identity.listOverlaysBySpecId(spec.id);
+      return { spec, overlays };
+    },
+    loadCartridge: async (cartridgeId) =>
+      storage.cartridges.get(cartridgeId) as
+        | import("@switchboard/core/platform").GovernanceCartridge
+        | null,
+    getGovernanceProfile: async (orgId) => {
+      if (!governanceProfileStore) return null;
+      return governanceProfileStore.get(orgId);
+    },
+  });
+
+  let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
+  if (prismaClient) {
+    const { PrismaWorkTraceStore } = await import("@switchboard/db");
+    workTraceStore = new PrismaWorkTraceStore(prismaClient);
+  }
+
+  const platformIngress = new PlatformIngress({
+    intentRegistry,
+    modeRegistry,
+    governanceGate: platformGovernanceGate,
+    traceStore: workTraceStore,
+  });
+  app.decorate("platformIngress", platformIngress);
 
   // Resource cleanup on close — order: agents → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {

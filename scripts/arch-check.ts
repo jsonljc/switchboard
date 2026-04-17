@@ -89,7 +89,7 @@ function hasEslintDisableMaxLines(filePath: string): boolean {
 
 function getPackageDirs(): string[] {
   const dirs: string[] = [];
-  for (const base of ["packages", "cartridges", "apps"]) {
+  for (const base of ["packages", "apps"]) {
     const baseDir = join(ROOT, base);
     try {
       const entries = readdirSync(baseDir, { withFileTypes: true });
@@ -133,58 +133,6 @@ function analyzePackage(pkgDir: string): PackageInfo {
     anyCount,
     longFiles,
   };
-}
-
-// ─── Dockerfile Check ───
-
-function checkDockerfile(): string[] {
-  const issues: string[] = [];
-  try {
-    const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf-8");
-    const cartridgesDir = join(ROOT, "cartridges");
-    const cartridges = readdirSync(cartridgesDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name);
-
-    for (const cartridge of cartridges) {
-      if (!dockerfile.includes(`cartridges/${cartridge}/`)) {
-        issues.push(`Cartridge "${cartridge}" is missing from Dockerfile`);
-      }
-    }
-  } catch {
-    issues.push("Could not read Dockerfile");
-  }
-  return issues;
-}
-
-// ─── ESLint Config Sync Check ───
-
-function checkEslintSync(): string[] {
-  const issues: string[] = [];
-  try {
-    const eslintConfig = readFileSync(join(ROOT, ".eslintrc.json"), "utf-8");
-    const cartridgesDir = join(ROOT, "cartridges");
-    const cartridges = readdirSync(cartridgesDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name);
-
-    for (const cartridge of cartridges) {
-      // Check if the cartridge appears in the db override's no-restricted-imports
-      // (db cannot import from cartridges)
-      // We need to verify two things:
-      // 1. The cartridge is in the db override blocklist
-      // 2. The cartridge is in the cartridge cross-import blocklist
-      const hasDbBlock = eslintConfig.includes(`"@switchboard/${cartridge}"`);
-      if (!hasDbBlock) {
-        issues.push(
-          `Cartridge "${cartridge}" is missing from .eslintrc.json blocklists — add it to the db override and cartridge cross-import override`,
-        );
-      }
-    }
-  } catch {
-    issues.push("Could not read .eslintrc.json");
-  }
-  return issues;
 }
 
 // ─── Main Report ───
@@ -258,39 +206,9 @@ function main(): void {
   }
   console.error("");
 
-  // 5. Dockerfile check
-  const dockerIssues = checkDockerfile();
-  if (dockerIssues.length > 0) {
-    console.error("⚠  DOCKERFILE ISSUES:");
-    for (const issue of dockerIssues) {
-      console.error(`   🔴 ${issue}`);
-      hasErrors = true;
-    }
-  } else {
-    console.error("✅ Dockerfile includes all cartridges");
-  }
-  console.error("");
-
-  // 6. ESLint config sync
-  const eslintIssues = checkEslintSync();
-  if (eslintIssues.length > 0) {
-    console.error("⚠  ESLINT CONFIG SYNC ISSUES:");
-    for (const issue of eslintIssues) {
-      console.error(`   🔴 ${issue}`);
-      hasErrors = true;
-    }
-  } else {
-    console.error("✅ ESLint blocklists include all cartridges");
-  }
-  console.error("");
-
   // Summary
   const totalIssues =
-    allLongFiles.length +
-    lowTestPkgs.length +
-    anyPkgs.reduce((s, p) => s + p.anyCount, 0) +
-    dockerIssues.length +
-    eslintIssues.length;
+    allLongFiles.length + lowTestPkgs.length + anyPkgs.reduce((s, p) => s + p.anyCount, 0);
   if (totalIssues === 0) {
     console.error("🎉 Architecture health: EXCELLENT — no issues found");
   } else {

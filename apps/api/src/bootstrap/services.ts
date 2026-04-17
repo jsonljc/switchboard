@@ -12,6 +12,8 @@ import {
   ExecutionService,
   CompositeNotifier,
   InMemoryConversionBus,
+  evaluate,
+  resolveIdentity,
 } from "@switchboard/core";
 import type {
   StorageContext,
@@ -22,7 +24,17 @@ import type {
   GovernanceProfileStore,
   ApprovalNotifier,
   ConversionBus,
+  CartridgeRegistry,
 } from "@switchboard/core";
+import {
+  IntentRegistry,
+  ExecutionModeRegistry,
+  GovernanceGate,
+  CartridgeMode,
+  PlatformIngress,
+  registerCartridgeIntents,
+} from "@switchboard/core/platform";
+import type { CartridgeManifestForRegistration } from "@switchboard/core/platform";
 import type { PrismaClient } from "@switchboard/db";
 import { PrismaOperatorCommandStore } from "@switchboard/db";
 import { createExecutionQueue, createExecutionWorker } from "../queue/index.js";
@@ -51,6 +63,7 @@ export interface ServicesBootstrapResult {
   executionService: ExecutionService;
   agentSystem: AgentSystem;
   conversionBus: ConversionBus;
+  platformIngress: PlatformIngress;
   sessionManager: import("@switchboard/core/sessions").SessionManager | null;
   workflowDeps: WorkflowDeps | null;
   schedulerDeps: SchedulerDeps | null;
@@ -60,6 +73,32 @@ export interface ServicesBootstrapResult {
   ingestionPipeline: import("@switchboard/agents").IngestionPipeline | null;
   queue: Queue | null;
   worker: Worker | null;
+}
+
+function buildIntentRegistry(cartridgeRegistry: CartridgeRegistry): IntentRegistry {
+  const registry = new IntentRegistry();
+  const manifests: CartridgeManifestForRegistration[] = [];
+
+  for (const cartridgeId of cartridgeRegistry.list()) {
+    const cartridge = cartridgeRegistry.get(cartridgeId);
+    if (!cartridge) continue;
+    const manifest = cartridge.manifest;
+    if (!manifest.actions || manifest.actions.length === 0) continue;
+
+    manifests.push({
+      id: manifest.id,
+      actions: manifest.actions.map((a) => ({
+        name: a.actionType.startsWith(`${manifest.id}.`)
+          ? a.actionType.slice(manifest.id.length + 1)
+          : a.actionType,
+        description: a.description,
+        riskCategory: a.baseRiskCategory,
+      })),
+    });
+  }
+
+  registerCartridgeIntents(registry, manifests);
+  return registry;
 }
 
 export async function bootstrapServices(
@@ -317,11 +356,51 @@ export async function bootstrapServices(
 
   const executionService = new ExecutionService(orchestrator, storage);
 
+  // --- PlatformIngress wiring ---
+  const intentRegistry = buildIntentRegistry(storage.cartridges);
+
+  const modeRegistry = new ExecutionModeRegistry();
+  modeRegistry.register(new CartridgeMode({ orchestrator, intentRegistry }));
+
+  const governanceGate = new GovernanceGate({
+    evaluate,
+    resolveIdentity,
+    loadPolicies: async (orgId) => storage.policies.listActive({ organizationId: orgId }),
+    loadIdentitySpec: async (actorId) => {
+      const spec = await storage.identity.getSpecByPrincipalId(actorId);
+      if (!spec) throw new Error(`Identity spec not found: ${actorId}`);
+      const overlays = await storage.identity.listOverlaysBySpecId(spec.id);
+      return { spec, overlays };
+    },
+    loadCartridge: async (cartridgeId) =>
+      storage.cartridges.get(cartridgeId) as
+        | import("@switchboard/core/platform").GovernanceCartridge
+        | null,
+    getGovernanceProfile: async (orgId) => {
+      if (!governanceProfileStore) return null;
+      return governanceProfileStore.get(orgId);
+    },
+  });
+
+  let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
+  if (prismaClient) {
+    const { PrismaWorkTraceStore } = await import("@switchboard/db");
+    workTraceStore = new PrismaWorkTraceStore(prismaClient);
+  }
+
+  const platformIngress = new PlatformIngress({
+    intentRegistry,
+    modeRegistry,
+    governanceGate,
+    traceStore: workTraceStore,
+  });
+
   return {
     orchestrator,
     executionService,
     agentSystem,
     conversionBus,
+    platformIngress,
     sessionManager,
     workflowDeps,
     schedulerDeps,
