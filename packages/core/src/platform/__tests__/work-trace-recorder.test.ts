@@ -13,6 +13,12 @@ const baseWorkUnit: WorkUnit = {
   actor: { id: "user-1", type: "user" },
   intent: "campaign.pause",
   parameters: { campaignId: "camp-123" },
+  deployment: {
+    deploymentId: "dep-1",
+    skillSlug: "test-skill",
+    trustLevel: "guided",
+    trustScore: 42,
+  },
   resolvedMode: "skill",
   trigger: "chat",
   priority: "normal",

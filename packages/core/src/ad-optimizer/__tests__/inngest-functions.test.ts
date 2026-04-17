@@ -70,7 +70,7 @@ describe("executeWeeklyAudit", () => {
   });
 
   it("runs audit for each active deployment", async () => {
-    await executeWeeklyAudit(step, deps);
+    await executeWeeklyAudit(step as never, deps);
     expect(deps.listActiveDeployments).toHaveBeenCalledTimes(1);
     expect(deps.createAdsClient).toHaveBeenCalledTimes(2);
     expect(deps.saveAuditReport).toHaveBeenCalledTimes(2);
@@ -81,7 +81,7 @@ describe("executeWeeklyAudit", () => {
       .fn()
       .mockResolvedValueOnce({ accessToken: "token", accountId: "act_123" })
       .mockResolvedValueOnce(null);
-    await executeWeeklyAudit(step, deps);
+    await executeWeeklyAudit(step as never, deps);
     expect(deps.createAdsClient).toHaveBeenCalledTimes(1);
     expect(deps.saveAuditReport).toHaveBeenCalledTimes(1);
   });
@@ -121,7 +121,7 @@ describe("executeDailyCheck", () => {
   });
 
   it("checks account summary for each deployment", async () => {
-    await executeDailyCheck(step, deps);
+    await executeDailyCheck(step as never, deps);
     expect(deps.listActiveDeployments).toHaveBeenCalledTimes(1);
     expect(deps.getDeploymentCredentials).toHaveBeenCalledTimes(1);
   });
@@ -144,7 +144,7 @@ describe("createWeeklyAuditDispatcher", () => {
     };
 
     const handler = createWeeklyAuditDispatcher(mockInngest, deps);
-    await (handler as { step: unknown })({ step: mockStep });
+    await (handler as unknown as (ctx: { step: unknown }) => Promise<void>)({ step: mockStep });
 
     expect(events).toHaveLength(2);
     expect(events[0]).toEqual({
@@ -176,7 +176,7 @@ describe("createDailyCheckDispatcher", () => {
     };
 
     const handler = createDailyCheckDispatcher(mockInngest, deps);
-    await (handler as { step: unknown })({ step: mockStep });
+    await (handler as unknown as (ctx: { step: unknown }) => Promise<void>)({ step: mockStep });
 
     expect(events).toHaveLength(1);
     expect(events[0]).toEqual(

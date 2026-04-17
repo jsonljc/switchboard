@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { executeScriptingPhase, type ScriptingInput } from "../ugc/phases/scripting.js";
+import type { StructureId } from "../ugc/structure-engine.js";
 
 vi.mock("../stages/call-claude.js", () => ({
   callClaude: vi.fn().mockResolvedValue({
@@ -18,7 +19,7 @@ function makeCreator(id: string) {
   };
 }
 
-function makeStructure(id: string) {
+function makeStructure(id: StructureId) {
   return {
     structureId: id,
     template: {
@@ -114,14 +115,14 @@ describe("executeScriptingPhase", () => {
       },
       creatorPool: [makeCreator("cr_1"), makeCreator("cr_2")] as any,
     };
-    const result = await executeScriptingPhase(inputWith2);
+    const result = await executeScriptingPhase(inputWith2 as unknown as ScriptingInput);
     expect(result.specs).toHaveLength(2);
-    expect(result.specs[0].specId).not.toBe(result.specs[1].specId);
+    expect(result.specs[0]!.specId).not.toBe(result.specs[1]!.specId);
   });
 
   it("spec includes script, style, direction, and identity constraints", async () => {
     const result = await executeScriptingPhase(baseInput);
-    const spec = result.specs[0];
+    const spec = result.specs[0]!;
     expect(spec.script.text).toBeTruthy();
     expect(spec.style).toBeDefined();
     expect(spec.direction).toBeDefined();

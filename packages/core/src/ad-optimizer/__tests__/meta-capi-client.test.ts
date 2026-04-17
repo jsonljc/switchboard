@@ -47,7 +47,7 @@ describe("MetaCAPIClient", () => {
       userData: { fbclid: "abc123" },
     });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(body.data[0].user_data.fbc).toMatch(/^fb\.1\.\d+\.abc123$/);
   });
 
@@ -63,7 +63,7 @@ describe("MetaCAPIClient", () => {
       userData: { email: " User@Example.com " },
     });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     const expectedHash = createHash("sha256").update("user@example.com").digest("hex");
     expect(body.data[0].user_data.em).toEqual([expectedHash]);
   });
@@ -81,7 +81,7 @@ describe("MetaCAPIClient", () => {
       customData: { value: 100, currency: "USD" },
     });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     const expectedHash = createHash("sha256").update("15551234567").digest("hex");
     expect(body.data[0].user_data.ph).toEqual([expectedHash]);
   });
@@ -98,7 +98,7 @@ describe("MetaCAPIClient", () => {
       userData: {},
     });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(body.data[0].action_source).toBe("system_generated");
   });
 

@@ -1,44 +1,16 @@
-import { resolve as pathResolve } from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
 import type { PrismaClient } from "@switchboard/db";
 import {
-  PrismaDeploymentStateStore,
-  PrismaActionRequestStore,
   PrismaAgentTaskStore,
   PrismaInteractionSummaryStore,
   PrismaDeploymentMemoryStore,
-  PrismaKnowledgeStore,
-  PrismaContactStore,
-  PrismaOpportunityStore,
-  PrismaActivityLogStore,
-  PrismaKnowledgeEntryStore,
 } from "@switchboard/db";
-import { ChannelGateway, ConversationLifecycleTracker, ModelRouter } from "@switchboard/core";
-import type { ConversationPrompt, ModelConfig } from "@switchboard/core";
+import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
-import {
-  ConversationCompoundingService,
-  ContextBuilder,
-  KnowledgeRetriever,
-  VoyageEmbeddingAdapter,
-} from "@switchboard/core";
+import { ConversationCompoundingService, VoyageEmbeddingAdapter } from "@switchboard/core";
 import type { EmbeddingAdapter } from "@switchboard/core";
-import {
-  loadSkill,
-  SkillExecutorImpl,
-  AnthropicToolCallingAdapter,
-  createCrmQueryTool,
-  createCrmWriteTool,
-  alexBuilder,
-  salesPipelineBuilder,
-  websiteProfilerBuilder,
-  adOptimizerInteractiveBuilder,
-  createWebScannerTool,
-  createAdsAnalyticsTool,
-  ContextResolverImpl,
-} from "@switchboard/core/skill-runtime";
-import type { ParameterBuilder, SkillStores } from "@switchboard/core/skill-runtime";
-import { PrismaDeploymentLookup } from "./deployment-lookup.js";
+import { PrismaDeploymentResolver } from "@switchboard/core/platform";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
+import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
 import { TaskRecorder } from "./task-recorder.js";
 
@@ -56,7 +28,15 @@ function createEmbeddingAdapter(): EmbeddingAdapter {
   };
 }
 
-export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
+export interface GatewayBridgeOptions {
+  /** Platform ingress for converged execution path. Required for message handling. */
+  platformIngress?: { submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> };
+}
+
+export function createGatewayBridge(
+  prisma: PrismaClient,
+  options: GatewayBridgeOptions = {},
+): ChannelGateway {
   const taskStore = new PrismaAgentTaskStore(prisma);
 
   const taskRecorder = new TaskRecorder({
@@ -105,80 +85,20 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
     onConversationEnd: (event) => compoundingService.processConversationEnd(event),
   });
 
-  // Wire KnowledgeRetriever with shared embedding adapter
-  const knowledgeStore = new PrismaKnowledgeStore(prisma);
-  const knowledgeRetriever = new KnowledgeRetriever({
-    embedding: embeddingAdapter,
-    store: knowledgeStore,
-  });
+  // Converged execution path
+  const deploymentResolver = new PrismaDeploymentResolver(prisma);
 
-  const contextBuilder = new ContextBuilder({
-    knowledgeRetriever: {
-      retrieve: async (query, options) => knowledgeRetriever.retrieve(query, options),
+  // TODO(ingress-convergence): Wire PlatformIngress from chat app startup
+  const platformIngress = options.platformIngress ?? {
+    submit: async () => {
+      throw new Error("PlatformIngress not configured — wire it in chat app main.ts");
     },
-    deploymentMemoryStore: new PrismaDeploymentMemoryStore(prisma),
-    interactionSummaryStore: new PrismaInteractionSummaryStore(prisma),
-  });
-
-  // Model-aware LLM adapter — default slot uses Haiku for cost savings
-  const modelRouter = new ModelRouter();
-
-  // Skill runtime dependencies — enables skill-based handlers for deployments with skillSlug
-  const contactStore = new PrismaContactStore(prisma);
-  const opportunityStore = new PrismaOpportunityStore(prisma);
-  const activityStore = new PrismaActivityLogStore(prisma);
-  const knowledgeEntryStore = new PrismaKnowledgeEntryStore(prisma);
-
-  const contextResolver = new ContextResolverImpl(knowledgeEntryStore);
-
-  const builderMap = new Map<string, ParameterBuilder>([
-    ["sales-pipeline", salesPipelineBuilder],
-    ["alex", alexBuilder],
-    ["website-profiler", websiteProfilerBuilder],
-    ["ad-optimizer", adOptimizerInteractiveBuilder],
-  ]);
-
-  const skillStores: SkillStores = {
-    opportunityStore,
-    contactStore,
-    activityStore,
-  };
-
-  const skillsDir = pathResolve(process.cwd(), "skills");
-
-  const createExecutor = () => {
-    const crmQueryTool = createCrmQueryTool(contactStore, activityStore);
-    const crmWriteTool = createCrmWriteTool(opportunityStore, activityStore);
-    const webScannerTool = createWebScannerTool();
-    const adsAnalyticsTool = createAdsAnalyticsTool();
-
-    const toolsMap = new Map([
-      [crmQueryTool.id, crmQueryTool],
-      [crmWriteTool.id, crmWriteTool],
-      [webScannerTool.id, webScannerTool],
-      [adsAnalyticsTool.id, adsAnalyticsTool],
-    ]);
-
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    return new SkillExecutorImpl(new AnthropicToolCallingAdapter(client), toolsMap, modelRouter);
   };
 
   return new ChannelGateway({
-    deploymentLookup: new PrismaDeploymentLookup(prisma),
+    deploymentResolver,
+    platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
-    stateStore: new PrismaDeploymentStateStore(prisma),
-    actionRequestStore: new PrismaActionRequestStore(prisma),
-    llmAdapterFactory: (slot) => {
-      const adapter = createAnthropicAdapter();
-      const defaultConfig = modelRouter.resolve(slot ?? "default");
-      return {
-        generateReply: (prompt: ConversationPrompt, overrideConfig?: ModelConfig) =>
-          adapter.generateReply(prompt, overrideConfig ?? defaultConfig),
-      };
-    },
-    modelRouter,
-    contextBuilder,
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({
@@ -190,17 +110,6 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
         role: info.role,
         content: info.content,
       });
-    },
-    skillRuntime: {
-      skillsDir,
-      loadSkill,
-      createExecutor,
-      builderMap,
-      stores: skillStores,
-      hooks: [],
-      contextResolver: {
-        resolve: contextResolver.resolve.bind(contextResolver),
-      },
     },
   });
 }

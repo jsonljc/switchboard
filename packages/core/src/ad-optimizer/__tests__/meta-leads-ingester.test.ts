@@ -76,7 +76,7 @@ describe("parseLeadWebhook", () => {
     };
     const leads = parseLeadWebhook(payload);
     expect(leads).toHaveLength(1);
-    expect(leads[0].name).toBeUndefined();
-    expect(leads[0].email).toBeUndefined();
+    expect(leads[0]!.name).toBeUndefined();
+    expect(leads[0]!.email).toBeUndefined();
   });
 });
