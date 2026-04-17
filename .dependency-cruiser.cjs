@@ -7,7 +7,7 @@ module.exports = {
       severity: "error",
       comment: "schemas is a leaf package and cannot import any @switchboard/* package.",
       from: { path: "^packages/schemas/src" },
-      to: { path: "^(packages|cartridges|apps)/" },
+      to: { path: "^(packages|apps)/" },
     },
 
     // ─── cartridge-sdk may only import schemas ───
@@ -17,7 +17,7 @@ module.exports = {
       comment: "cartridge-sdk may only import @switchboard/schemas.",
       from: { path: "^packages/cartridge-sdk/src" },
       to: {
-        path: "^(packages/(core|db)|cartridges|apps)/",
+        path: "^(packages/(core|db)|apps)/",
       },
     },
 
@@ -28,7 +28,7 @@ module.exports = {
       comment: "core may only import @switchboard/schemas and @switchboard/cartridge-sdk.",
       from: { path: "^packages/core/src" },
       to: {
-        path: "^(packages/db|cartridges|apps)/",
+        path: "^(packages/db|apps)/",
       },
     },
 
@@ -39,35 +39,7 @@ module.exports = {
       comment: "db may only import @switchboard/schemas and @switchboard/core.",
       from: { path: "^packages/db/src" },
       to: {
-        path: "^(packages/cartridge-sdk|cartridges|apps)/",
-      },
-    },
-
-    // ─── cartridges may only import schemas, cartridge-sdk, and core ───
-    {
-      name: "cartridges-no-db",
-      severity: "error",
-      comment: "Cartridges cannot import from db.",
-      from: { path: "^cartridges/.+/src" },
-      to: { path: "^packages/db/" },
-    },
-    {
-      name: "cartridges-no-apps",
-      severity: "error",
-      comment: "Cartridges cannot import from apps.",
-      from: { path: "^cartridges/.+/src" },
-      to: { path: "^apps/" },
-    },
-
-    // ─── no cartridge-to-cartridge imports ───
-    {
-      name: "no-cross-cartridge-imports",
-      severity: "error",
-      comment: "Cartridges cannot import from other cartridges.",
-      from: { path: "^cartridges/([^/]+)/src" },
-      to: {
-        path: "^cartridges/([^/]+)/",
-        pathNot: "^cartridges/$1/",
+        path: "^(packages/cartridge-sdk|apps)/",
       },
     },
 
