@@ -193,7 +193,7 @@ describe("PlatformIngress", () => {
     await ingress.submit(baseRequest);
 
     expect(traceStore.persist).toHaveBeenCalledOnce();
-    const trace = vi.mocked(traceStore.persist).mock.calls[0][0];
+    const trace = vi.mocked(traceStore.persist).mock.calls[0]![0];
     expect(trace.outcome).toBe("completed");
     expect(trace.governanceOutcome).toBe("execute");
     expect(trace.intent).toBe("campaign.pause");
@@ -207,7 +207,7 @@ describe("PlatformIngress", () => {
     await ingress.submit(baseRequest);
 
     expect(traceStore.persist).toHaveBeenCalledOnce();
-    const trace = vi.mocked(traceStore.persist).mock.calls[0][0];
+    const trace = vi.mocked(traceStore.persist).mock.calls[0]![0];
     expect(trace.outcome).toBe("failed");
     expect(trace.governanceOutcome).toBe("deny");
   });

@@ -37,9 +37,10 @@ export function toEvaluationContext(
   workUnit: WorkUnit,
   registration: IntentRegistration,
 ): EvaluationContext {
-  const rawId =
-    registration.executor.mode === "cartridge" ? registration.executor.actionId : workUnit.intent;
-  const cartridgeId = deriveCartridgeId(rawId);
+  const cartridgeId =
+    registration.executor.mode === "cartridge"
+      ? deriveCartridgeId(registration.executor.actionId)
+      : workUnit.intent;
 
   return {
     actionType: workUnit.intent,

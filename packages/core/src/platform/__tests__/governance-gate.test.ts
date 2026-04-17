@@ -233,7 +233,7 @@ describe("GovernanceGate", () => {
     );
 
     // Verify the engine context received by evaluate has the cartridge risk input
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     expect(engineContext.riskInput).toEqual({
       baseRisk: "medium",
@@ -252,7 +252,7 @@ describe("GovernanceGate", () => {
 
     await gate.evaluate(makeWorkUnit(), registration);
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     expect(engineContext.riskInput).toEqual({
       baseRisk: "low",
@@ -273,7 +273,7 @@ describe("GovernanceGate", () => {
 
     await gate.evaluate(makeWorkUnit(), makeCartridgeRegistration());
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     expect(engineContext.riskInput.baseRisk).toBe("low");
   });
@@ -294,7 +294,7 @@ describe("GovernanceGate", () => {
 
     await gate.evaluate(makeWorkUnit(), makeCartridgeRegistration());
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     expect(engineContext.guardrails).toBe(guardrails);
   });
@@ -307,7 +307,7 @@ describe("GovernanceGate", () => {
 
     await gate.evaluate(makeWorkUnit(), makeRegistration());
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     expect(engineContext.systemRiskPosture).toBe("elevated");
   });
@@ -320,7 +320,7 @@ describe("GovernanceGate", () => {
 
     await gate.evaluate(makeWorkUnit(), makeRegistration());
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const engineContext = evaluateCall[2];
     // guarded maps to "normal"
     expect(engineContext.systemRiskPosture).toBe("normal");
@@ -336,13 +336,16 @@ describe("GovernanceGate", () => {
   });
 
   it("passes riskScoringConfig to evaluate when provided", async () => {
-    const riskScoringConfig = { volatilityMultiplier: 2 };
+    // Use a partial config cast — test only verifies passthrough, not engine behavior
+    const riskScoringConfig = {
+      volatilityMultiplier: 2,
+    } as unknown as GovernanceGateDeps["riskScoringConfig"];
     const deps = makeDeps({ riskScoringConfig });
     const gate = new GovernanceGate(deps);
 
     await gate.evaluate(makeWorkUnit(), makeRegistration());
 
-    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0];
+    const evaluateCall = (deps.evaluate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const config = evaluateCall[3];
     expect(config).toEqual({ riskScoringConfig });
   });

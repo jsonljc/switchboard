@@ -22,7 +22,7 @@ describe("ExecutionManager.executePreApproved", () => {
       if (savedEnvelope && savedEnvelope.id === id) {
         return savedEnvelope;
       }
-      return undefined;
+      return null;
     });
 
     // Register a cartridge so executeApproved can find it
@@ -56,7 +56,7 @@ describe("ExecutionManager.executePreApproved", () => {
     await manager.executePreApproved(baseParams);
 
     expect(savedEnvelope!.decisions).toHaveLength(1);
-    const decision = savedEnvelope!.decisions[0];
+    const decision = savedEnvelope!.decisions[0]!;
     expect(decision.finalDecision).toBe("allow");
     expect(decision.approvalRequired).toBe("none");
     expect(decision.explanation).toBe("Pre-approved by platform governance");
@@ -99,7 +99,7 @@ describe("ExecutionManager.executePreApproved", () => {
     // the decision trace is synthetic (pre-approved) with no checks.
     await manager.executePreApproved(baseParams);
 
-    const decision = savedEnvelope!.decisions[0];
+    const decision = savedEnvelope!.decisions[0]!;
     expect(decision.checks).toEqual([]);
     expect(decision.explanation).toBe("Pre-approved by platform governance");
   });
@@ -107,7 +107,7 @@ describe("ExecutionManager.executePreApproved", () => {
   it("sets proposal parameters with _principalId, _cartridgeId, _organizationId", async () => {
     await manager.executePreApproved(baseParams);
 
-    const proposal = savedEnvelope!.proposals[0];
+    const proposal = savedEnvelope!.proposals[0]!;
     expect(proposal.parameters["_principalId"]).toBe("user-1");
     expect(proposal.parameters["_cartridgeId"]).toBe("test-cartridge");
     expect(proposal.parameters["_organizationId"]).toBe("org-1");
@@ -130,7 +130,7 @@ describe("ExecutionManager.executePreApproved", () => {
   it("handles null organizationId", async () => {
     await manager.executePreApproved({ ...baseParams, organizationId: null });
 
-    const proposal = savedEnvelope!.proposals[0];
+    const proposal = savedEnvelope!.proposals[0]!;
     expect(proposal.parameters["_organizationId"]).toBeNull();
   });
 });
