@@ -12,7 +12,6 @@ COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
 COPY packages/agents/package.json packages/agents/
-COPY packages/create-switchboard-cartridge/package.json packages/create-switchboard-cartridge/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
