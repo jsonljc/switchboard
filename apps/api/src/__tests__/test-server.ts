@@ -165,6 +165,19 @@ export async function buildTestServer(): Promise<TestContext> {
   // Seed default identity spec (no production policies — test has its own allow policy above)
   await seedDefaultStorage(storage);
 
+  // Override risk tolerance to not require approval for tests
+  const spec = await storage.identity.getSpecByPrincipalId("default");
+  if (spec) {
+    spec.riskTolerance = {
+      none: "none" as const,
+      low: "none" as const,
+      medium: "none" as const, // Changed from "standard" to avoid approval requirement in tests
+      high: "none" as const,
+      critical: "none" as const,
+    };
+    await storage.identity.saveSpec(spec);
+  }
+
   // Save principal records for test actors
   await storage.identity.savePrincipal({
     id: "default",

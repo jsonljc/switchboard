@@ -89,59 +89,11 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         const { result, workUnit } = response;
 
         if ("approvalRequired" in response && response.approvalRequired) {
-          // Create a pending envelope for backward compatibility with GET/execute/undo endpoints
-          const proposal: import("@switchboard/schemas").ActionProposal = {
-            id: `prop_${workUnit.id}`,
-            actionType: workUnit.intent,
-            parameters: {
-              ...workUnit.parameters,
-              _principalId: workUnit.actor.id,
-              _organizationId: workUnit.organizationId,
-            },
-            evidence: "Platform ingress pending approval",
-            confidence: 1.0,
-            originatingMessageId: "",
-          };
-
-          const decision: import("@switchboard/schemas").DecisionTrace = {
-            actionId: proposal.id,
-            envelopeId: workUnit.id,
-            checks: [],
-            computedRiskScore: { rawScore: 0, category: "none", factors: [] },
-            finalDecision: "allow",
-            approvalRequired: "standard",
-            explanation: "Pending approval",
-            evaluatedAt: new Date(),
-          };
-
-          const now = new Date();
-          const envelope: import("@switchboard/schemas").ActionEnvelope = {
-            id: workUnit.id,
-            version: 1,
-            incomingMessage: null,
-            conversationId: null,
-            proposals: [proposal],
-            resolvedEntities: [],
-            plan: null,
-            decisions: [decision],
-            approvalRequests: [],
-            executionResults: [],
-            auditEntryIds: [],
-            status: "pending_approval",
-            createdAt: now,
-            updatedAt: now,
-            parentEnvelopeId: null,
-            traceId: workUnit.traceId,
-          };
-
-          await app.storageContext.envelopes.save(envelope);
-
-          return reply.code(201).send({
-            outcome: "PENDING_APPROVAL",
-            envelopeId: workUnit.id,
-            traceId: workUnit.traceId,
-            approvalId: result.approvalId,
-            approvalRequest: result.outputs,
+          // TODO: Implement approval creation in PlatformIngress path
+          // For now, return not implemented error
+          return reply.code(501).send({
+            error: "Approval workflow not yet implemented in PlatformIngress path",
+            statusCode: 501,
           });
         }
 
@@ -166,6 +118,61 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
             denied: true,
             explanation: result.summary,
           });
+        }
+
+        // Success path - create envelope for backward compatibility with GET endpoints
+        if (result.outcome === "completed") {
+          const proposal: import("@switchboard/schemas").ActionProposal = {
+            id: `prop_${workUnit.id}`,
+            actionType: workUnit.intent,
+            parameters: {
+              ...workUnit.parameters,
+              _principalId: workUnit.actor.id,
+              _organizationId: workUnit.organizationId,
+            },
+            evidence: result.summary,
+            confidence: 1.0,
+            originatingMessageId: "",
+          };
+
+          const executionResult: import("@switchboard/schemas").ExecutionResult = {
+            actionId: proposal.id,
+            envelopeId: workUnit.id,
+            success: true,
+            summary: result.summary,
+            externalRefs: (result.outputs.externalRefs as Record<string, string>) || {},
+            rollbackAvailable: false,
+            partialFailures: [],
+            durationMs: result.durationMs,
+            undoRecipe: null,
+            executedAt: new Date(),
+          };
+
+          const now = new Date();
+          const envelope: import("@switchboard/schemas").ActionEnvelope = {
+            id: workUnit.id,
+            version: 1,
+            incomingMessage: null,
+            conversationId: null,
+            proposals: [proposal],
+            resolvedEntities: [],
+            plan: null,
+            decisions: [],
+            approvalRequests: [],
+            executionResults: [executionResult],
+            auditEntryIds: [],
+            status: "executed",
+            createdAt: now,
+            updatedAt: now,
+            parentEnvelopeId: null,
+            traceId: workUnit.traceId,
+          };
+
+          try {
+            await app.storageContext.envelopes.save(envelope);
+          } catch (err) {
+            console.error("[propose] Failed to save envelope:", err);
+          }
         }
 
         return reply.code(201).send({
