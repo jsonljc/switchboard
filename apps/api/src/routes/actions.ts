@@ -1,11 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import {
-  inferCartridgeId,
-  matchesAny,
-  NeedsClarificationError,
-  NotFoundError,
-} from "@switchboard/core";
+import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
@@ -263,12 +258,30 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     "/batch",
     {
       schema: {
-        description: "Submit multiple action proposals in a single batch.",
+        description:
+          "Submit multiple action proposals as independent WorkUnits via PlatformIngress.",
         tags: ["Actions"],
         body: batchJsonSchema,
+        headers: {
+          type: "object",
+          properties: {
+            "Idempotency-Key": {
+              type: "string",
+              description: "Required batch-level key. Per-proposal keys derived as {key}:{index}.",
+            },
+          },
+        },
       },
     },
     async (request, reply) => {
+      const batchKey = request.headers["idempotency-key"];
+      if (!batchKey || typeof batchKey !== "string" || !batchKey.trim()) {
+        return reply.code(400).send({
+          error: "Idempotency-Key header is required for POST /api/actions/batch",
+          statusCode: 400,
+        });
+      }
+
       const parsed = BatchProposeBodySchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
@@ -293,23 +306,53 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
+      if (!organizationId) {
+        return reply.code(400).send({
+          error: "organizationId is required (set via API key metadata or request body)",
+          statusCode: 400,
+        });
+      }
+
       const results = [];
-      for (const proposal of body.proposals) {
-        const cartridgeId = body.cartridgeId ?? inferCartridgeId(proposal.actionType);
-        if (!cartridgeId) continue;
+      for (let i = 0; i < body.proposals.length; i++) {
+        const proposal = body.proposals[i];
+
+        const submitRequest: SubmitWorkRequest = {
+          intent: proposal.actionType,
+          parameters: proposal.parameters,
+          actor: { id: body.principalId, type: "user" as const },
+          organizationId,
+          trigger: "api" as const,
+          idempotencyKey: `${batchKey}:${i}`,
+        };
 
         try {
-          const result = await app.orchestrator.resolveAndPropose({
-            actionType: proposal.actionType,
-            parameters: proposal.parameters,
-            principalId: body.principalId,
-            organizationId: request.organizationIdFromAuth ?? body.organizationId ?? null,
-            cartridgeId,
-            entityRefs: [],
+          const response = await app.platformIngress.submit(submitRequest);
+
+          if (!response.ok) {
+            results.push({
+              index: i,
+              outcome: "ERROR",
+              error: response.error.message,
+            });
+            continue;
+          }
+
+          const { result, workUnit } = response;
+          results.push({
+            index: i,
+            outcome: result.outcome === "failed" ? "DENIED" : "EXECUTED",
+            envelopeId: workUnit.id,
+            traceId: workUnit.traceId,
+            summary: result.summary,
           });
-          results.push(result);
         } catch (err) {
-          results.push({ error: sanitizeErrorMessage(err, 500) });
+          results.push({
+            index: i,
+            outcome: "ERROR",
+            error: sanitizeErrorMessage(err, 500),
+          });
         }
       }
 
