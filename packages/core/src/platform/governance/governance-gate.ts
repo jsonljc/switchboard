@@ -82,9 +82,14 @@ export class GovernanceGate {
     workUnit: WorkUnit,
     registration: IntentRegistration,
   ): Promise<GovernanceDecision> {
-    // Derive cartridgeId from executor binding
-    const cartridgeId =
+    // Derive cartridgeId from executor binding (first segment of action ID)
+    const rawActionId =
       registration.executor.mode === "cartridge" ? registration.executor.actionId : undefined;
+    const cartridgeId = rawActionId
+      ? rawActionId.indexOf(".") > 0
+        ? rawActionId.slice(0, rawActionId.indexOf("."))
+        : rawActionId
+      : undefined;
 
     // Load identity, policies, cartridge, and governance profile in parallel
     const [identityResult, policies, cartridge, govProfile] = await Promise.all([

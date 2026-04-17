@@ -101,19 +101,22 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        // Governance deny (ingress-time)
-        if (result.outcome === "failed" && result.error?.code) {
-          // GovernanceGate sets reasonCode (e.g. "FORBIDDEN_BEHAVIOR", "GOVERNANCE_ERROR")
-          return reply.code(200).send({
-            outcome: "DENIED",
-            envelopeId: workUnit.id,
-            traceId: workUnit.traceId,
-            deniedExplanation: result.summary,
-          });
-        }
-
-        // Execution failure (execution-time)
+        // Governance deny (ingress-time) vs execution failure (execution-time)
         if (result.outcome === "failed") {
+          const isGovernanceDeny =
+            result.error?.code &&
+            result.error.code !== "CARTRIDGE_ERROR" &&
+            result.error.code !== "EXECUTION_ERROR";
+
+          if (isGovernanceDeny) {
+            return reply.code(200).send({
+              outcome: "DENIED",
+              envelopeId: workUnit.id,
+              traceId: workUnit.traceId,
+              deniedExplanation: result.summary,
+            });
+          }
+
           return reply.code(200).send({
             outcome: "FAILED",
             envelopeId: workUnit.id,
