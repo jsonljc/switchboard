@@ -1,3 +1,6 @@
+export { MockLLMClient } from "./types.js";
+export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./types.js";
+
 export {
   ClaudeLLMAdapter,
   type ClaudeLLMAdapterConfig,

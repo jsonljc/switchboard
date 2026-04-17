@@ -149,7 +149,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
         name: structure.template.name,
         sections: structure.template.sections,
       },
-      platform: ugcPlatforms[0],
+      platform: ugcPlatforms[0]!,
       ugcFormat: brief.ugcFormat,
     });
 
@@ -162,7 +162,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       creatorId: casting.creatorId,
       structureId: casting.structureId,
       motivator: "general",
-      platform: ugcPlatforms[0],
+      platform: ugcPlatforms[0]!,
       script: {
         text: scriptResult.text,
         language: scriptResult.language,

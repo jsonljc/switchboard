@@ -17,3 +17,9 @@ export type {
   ConversationLifecycleConfig,
   RecordMessageInput,
 } from "./conversation-lifecycle.js";
+export {
+  ContactMutex,
+  LoopDetector,
+  type ContactMutexConfig,
+  type LoopDetectorConfig,
+} from "./concurrency.js";

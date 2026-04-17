@@ -105,7 +105,7 @@ export function createWeeklyAuditCron(deps: CronDependencies) {
       triggers: [{ cron: "0 9 * * 1" }],
     },
     async ({ step }) => {
-      await executeWeeklyAudit(step as StepTools, deps);
+      await executeWeeklyAudit(step as unknown as StepTools, deps);
     },
   );
 }
@@ -119,7 +119,7 @@ export function createDailyCheckCron(deps: CronDependencies) {
       triggers: [{ cron: "0 8 * * *" }],
     },
     async ({ step }) => {
-      await executeDailyCheck(step as StepTools, deps);
+      await executeDailyCheck(step as unknown as StepTools, deps);
     },
   );
 }

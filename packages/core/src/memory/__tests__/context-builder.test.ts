@@ -114,10 +114,10 @@ describe("ContextBuilder", () => {
       query: "test",
     });
     // Verify priority order regardless of similarity
-    expect(result.retrievedChunks[0].sourceType).toBe("correction");
-    expect(result.retrievedChunks[1].sourceType).toBe("wizard");
-    expect(result.retrievedChunks[2].sourceType).toBe("learned");
-    expect(result.retrievedChunks[3].sourceType).toBe("document");
+    expect(result.retrievedChunks[0]!.sourceType).toBe("correction");
+    expect(result.retrievedChunks[1]!.sourceType).toBe("wizard");
+    expect(result.retrievedChunks[2]!.sourceType).toBe("learned");
+    expect(result.retrievedChunks[3]!.sourceType).toBe("document");
   });
 
   it("includes repeat customer summaries when contactId provided", async () => {

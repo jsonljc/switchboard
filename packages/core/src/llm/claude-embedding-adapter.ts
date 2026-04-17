@@ -1,11 +1,4 @@
-// ---------------------------------------------------------------------------
-// Claude Embedding Adapter — Claude API implementation of EmbeddingAdapter
-// ---------------------------------------------------------------------------
-// Uses Claude's embedding endpoint. Dimensions fixed at 1024.
-// The EmbeddingAdapter interface is defined in packages/core/.
-// ---------------------------------------------------------------------------
-
-import type { EmbeddingAdapter } from "@switchboard/core";
+import type { EmbeddingAdapter } from "../embedding-adapter.js";
 
 export interface EmbeddingClient {
   createEmbedding(params: { texts: string[]; model: string }): Promise<{ embeddings: number[][] }>;

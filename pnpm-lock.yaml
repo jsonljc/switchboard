@@ -78,9 +78,6 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.5
         version: 5.2.5
-      '@switchboard/agents':
-        specifier: workspace:^
-        version: link:../../packages/agents
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -145,9 +142,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.82.0
         version: 0.82.0(zod@3.25.76)
-      '@switchboard/agents':
-        specifier: workspace:*
-        version: link:../../packages/agents
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../../packages/cartridge-sdk
@@ -349,22 +343,6 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
-
-  packages/agents:
-    dependencies:
-      '@switchboard/core':
-        specifier: workspace:*
-        version: link:../core
-      '@switchboard/schemas':
-        specifier: workspace:*
-        version: link:../schemas
-    devDependencies:
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

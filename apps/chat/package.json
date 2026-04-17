@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
-    "@switchboard/agents": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/db": "workspace:*",

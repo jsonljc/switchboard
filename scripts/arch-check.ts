@@ -206,6 +206,41 @@ function main(): void {
   }
   console.error("");
 
+  // 5. Verify @switchboard/agents is fully decommissioned
+  const agentImports: string[] = [];
+  for (const base of ["packages", "apps"]) {
+    const baseDir = join(ROOT, base);
+    try {
+      const entries = readdirSync(baseDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name === "agents") continue;
+        const tsFiles = walkDir(join(baseDir, entry.name, "src"), ".ts");
+        for (const file of tsFiles) {
+          try {
+            const content = readFileSync(file, "utf-8");
+            if (content.includes("@switchboard/agents")) {
+              agentImports.push(relative(ROOT, file));
+            }
+          } catch {
+            // skip
+          }
+        }
+      }
+    } catch {
+      // skip
+    }
+  }
+  if (agentImports.length > 0) {
+    console.error("🔴 DECOMMISSIONED PACKAGE IMPORTS (@switchboard/agents):");
+    for (const f of agentImports) {
+      console.error(`   ${f}`);
+    }
+    hasErrors = true;
+  } else {
+    console.error("✅ No imports of decommissioned @switchboard/agents package");
+  }
+  console.error("");
+
   // Summary
   const totalIssues =
     allLongFiles.length + lowTestPkgs.length + anyPkgs.reduce((s, p) => s + p.anyCount, 0);

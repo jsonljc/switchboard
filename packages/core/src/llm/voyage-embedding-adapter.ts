@@ -1,11 +1,4 @@
-// ---------------------------------------------------------------------------
-// Voyage Embedding Adapter — Voyage AI implementation of EmbeddingAdapter
-// ---------------------------------------------------------------------------
-// Uses the Voyage AI embeddings API. Dimensions fixed at 1024.
-// The EmbeddingAdapter interface is defined in packages/core/.
-// ---------------------------------------------------------------------------
-
-import type { EmbeddingAdapter } from "@switchboard/core";
+import type { EmbeddingAdapter } from "../embedding-adapter.js";
 
 export interface VoyageEmbeddingAdapterConfig {
   apiKey: string;

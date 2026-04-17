@@ -36,7 +36,7 @@ export class ProviderPerformanceTracker {
         totalCost: 0,
       };
     }
-    const s = this.stats[record.provider];
+    const s = this.stats[record.provider]!;
     s.totalAttempts++;
     if (record.passed) s.passedAttempts++;
     s.totalLatencyMs += record.latencyMs;

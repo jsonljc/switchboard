@@ -21,7 +21,7 @@ import {
   ContextBuilder,
   KnowledgeRetriever,
   VoyageEmbeddingAdapter,
-} from "@switchboard/agents";
+} from "@switchboard/core";
 import type { EmbeddingAdapter } from "@switchboard/core";
 import {
   loadSkill,

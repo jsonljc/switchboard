@@ -11,7 +11,6 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
-COPY packages/agents/package.json packages/agents/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
@@ -47,9 +46,6 @@ COPY --from=build /app/packages/db/prisma/ packages/db/prisma/
 
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
-
-COPY --from=build /app/packages/agents/package.json packages/agents/package.json
-COPY --from=build /app/packages/agents/dist/ packages/agents/dist/
 
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/

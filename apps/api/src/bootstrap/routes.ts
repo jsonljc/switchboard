@@ -24,7 +24,6 @@ import { knowledgeRoutes } from "../routes/knowledge.js";
 import { knowledgeEntryRoutes } from "../routes/knowledge-entries.js";
 import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
-import { agentConversationRoutes } from "../routes/conversation.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { schedulerRoutes } from "../routes/scheduler.js";
 import { operatorRoutes } from "../routes/operator.js";
@@ -62,7 +61,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(knowledgeEntryRoutes, { prefix: "/api/knowledge-entries" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
-  await app.register(agentConversationRoutes, { prefix: "/api/conversation" });
   await app.register(workflowRoutes, { prefix: "/api/workflows" });
   await app.register(schedulerRoutes, { prefix: "/api/scheduler" });
   await app.register(operatorRoutes, { prefix: "/api/operator" });

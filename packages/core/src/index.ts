@@ -103,9 +103,8 @@ export type {
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
 
-// LLM Client Interface
-export { MockLLMClient } from "./llm/types.js";
-export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";
+// LLM Client Interface + Adapters (Claude, Voyage)
+export * from "./llm/index.js";
 
 // State Machine (generic)
 export { StateMachine } from "./state-machine/machine.js";
@@ -175,6 +174,22 @@ export type {
   KnowledgeSearchOptions,
   RetrievalResult,
 } from "./knowledge-store.js";
+
+// Knowledge (RAG retrieval, chunking, ingestion)
+export {
+  chunkText,
+  IngestionPipeline,
+  KnowledgeRetriever,
+  computeConfidence as computeRetrievalConfidence,
+  type ChunkOptions,
+  type TextChunk,
+  type IngestionInput,
+  type IngestionResult,
+  type IngestionPipelineConfig,
+  type RetrievalConfig,
+  type RetrieveOptions,
+  type ConfidenceInput as RetrievalConfidenceInput,
+} from "./knowledge/index.js";
 
 // LLM Adapter (conversational, agent-facing)
 export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
