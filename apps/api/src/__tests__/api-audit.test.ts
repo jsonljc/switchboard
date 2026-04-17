@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
 
-describe.skip("Audit API", () => {
+describe("Audit API", () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {

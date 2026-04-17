@@ -192,8 +192,18 @@ describe("Actions API", () => {
   });
 
   describe("POST /api/actions/:id/execute", () => {
-    it.skip("should execute a pending approval envelope", async () => {
-      // Default risk is high → pending approval
+    it("should execute a pending approval envelope", async () => {
+      // Override risk tolerance so medium-risk actions require approval
+      const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+      if (spec) {
+        spec.riskTolerance = {
+          ...spec.riskTolerance,
+          medium: "standard" as const,
+          high: "elevated" as const,
+        };
+        await app.storageContext.identity.saveSpec(spec);
+      }
+
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
@@ -230,8 +240,18 @@ describe("Actions API", () => {
       expect(body.result.success).toBe(true);
     });
 
-    it.skip("should return 400 when executing a non-approved envelope", async () => {
-      // Default risk is high → needs approval → status is pending_approval
+    it("should return 400 when executing a non-approved envelope", async () => {
+      // Override risk tolerance so medium-risk actions require approval
+      const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+      if (spec) {
+        spec.riskTolerance = {
+          ...spec.riskTolerance,
+          medium: "standard" as const,
+          high: "elevated" as const,
+        };
+        await app.storageContext.identity.saveSpec(spec);
+      }
+
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",

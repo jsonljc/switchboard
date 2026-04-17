@@ -2,12 +2,24 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
 
-describe.skip("Approvals API", () => {
+describe("Approvals API", () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
     const ctx: TestContext = await buildTestServer();
     app = ctx.app;
+
+    // Override risk tolerance so medium-risk actions require approval
+    const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+    if (spec) {
+      spec.riskTolerance = {
+        ...spec.riskTolerance,
+        medium: "standard" as const,
+        high: "elevated" as const,
+        critical: "mandatory" as const,
+      };
+      await app.storageContext.identity.saveSpec(spec);
+    }
   });
 
   afterEach(async () => {

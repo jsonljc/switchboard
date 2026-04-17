@@ -1,6 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";
+import {
+  matchesAny,
+  NeedsClarificationError,
+  NotFoundError,
+  computeBindingHash,
+  hashObject,
+  routeApproval,
+  createApprovalState,
+  resolveIdentity,
+} from "@switchboard/core";
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
@@ -89,11 +99,147 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         const { result, workUnit } = response;
 
         if ("approvalRequired" in response && response.approvalRequired) {
-          // TODO: Implement approval creation in PlatformIngress path
-          // For now, return not implemented error
-          return reply.code(501).send({
-            error: "Approval workflow not yet implemented in PlatformIngress path",
-            statusCode: 501,
+          const { workUnit } = response;
+
+          // Build a synthetic envelope so downstream GET/approve/execute endpoints work
+          const proposalId = `prop_${workUnit.id}`;
+          const now = new Date();
+          const proposal: import("@switchboard/schemas").ActionProposal = {
+            id: proposalId,
+            actionType: workUnit.intent,
+            parameters: {
+              ...workUnit.parameters,
+              _principalId: workUnit.actor.id,
+              _cartridgeId: body.cartridgeId ?? workUnit.intent.split(".")[0],
+              _organizationId: workUnit.organizationId,
+            },
+            evidence: `Proposed ${workUnit.intent}`,
+            confidence: 1.0,
+            originatingMessageId: "",
+          };
+
+          // Resolve identity + routing to build the approval request
+          const identitySpec = await app.storageContext.identity.getSpecByPrincipalId(
+            workUnit.actor.id,
+          );
+          if (!identitySpec) {
+            return reply.code(500).send({ error: "Identity spec not found for actor" });
+          }
+          const overlays = await app.storageContext.identity.listOverlaysBySpecId(identitySpec.id);
+          const cartridgeId = body.cartridgeId ?? workUnit.intent.split(".")[0];
+          const resolvedId = resolveIdentity(identitySpec, overlays, { cartridgeId });
+
+          // Get risk category from the cartridge
+          const cartridge = app.storageContext.cartridges.get(cartridgeId);
+          let riskCategory: import("@switchboard/schemas").RiskCategory = "medium";
+          if (cartridge) {
+            try {
+              const riskInput = await cartridge.getRiskInput(
+                workUnit.intent,
+                workUnit.parameters,
+                {},
+              );
+              riskCategory = riskInput.baseRisk;
+            } catch {
+              // Fall through with default
+            }
+          }
+
+          const routing = routeApproval(riskCategory, resolvedId, app.orchestrator.routingConfig);
+
+          const envelopeId = workUnit.id;
+          const bindingHash = computeBindingHash({
+            envelopeId,
+            envelopeVersion: 1,
+            actionId: proposalId,
+            parameters: workUnit.parameters,
+            decisionTraceHash: hashObject({ intent: workUnit.intent }),
+            contextSnapshotHash: hashObject({ actor: workUnit.actor.id }),
+          });
+
+          const approvalId = `appr_${randomUUID()}`;
+          const expiresAt = new Date(now.getTime() + routing.expiresInMs);
+
+          const approvalRequest: import("@switchboard/schemas").ApprovalRequest = {
+            id: approvalId,
+            actionId: proposalId,
+            envelopeId,
+            conversationId: null,
+            summary: `${workUnit.intent} (requested by ${workUnit.actor.id})`,
+            riskCategory,
+            bindingHash,
+            evidenceBundle: {},
+            suggestedButtons: [
+              { label: "Approve", action: "approve" },
+              { label: "Reject", action: "reject" },
+            ],
+            approvers: routing.approvers,
+            fallbackApprover: routing.fallbackApprover,
+            status: "pending",
+            respondedBy: null,
+            respondedAt: null,
+            patchValue: null,
+            expiresAt,
+            expiredBehavior: routing.expiredBehavior,
+            createdAt: now,
+            quorum: null,
+          };
+
+          const envelope: import("@switchboard/schemas").ActionEnvelope = {
+            id: envelopeId,
+            version: 1,
+            incomingMessage: null,
+            conversationId: null,
+            proposals: [proposal],
+            resolvedEntities: [],
+            plan: null,
+            decisions: [],
+            approvalRequests: [approvalRequest],
+            executionResults: [],
+            auditEntryIds: [],
+            status: "pending_approval",
+            createdAt: now,
+            updatedAt: now,
+            parentEnvelopeId: null,
+            traceId: workUnit.traceId,
+          };
+
+          try {
+            await app.storageContext.envelopes.save(envelope);
+            const approvalState = createApprovalState(expiresAt);
+            await app.storageContext.approvals.save({
+              request: approvalRequest,
+              state: approvalState,
+              envelopeId,
+              organizationId: workUnit.organizationId,
+            });
+
+            await app.auditLedger.record({
+              eventType: "action.proposed",
+              actorType: "user",
+              actorId: workUnit.actor.id,
+              entityType: "action",
+              entityId: proposalId,
+              riskCategory,
+              summary: `Action ${workUnit.intent} pending_approval`,
+              snapshot: {
+                actionType: workUnit.intent,
+                parameters: workUnit.parameters,
+                approvalRequired: true,
+              },
+              envelopeId,
+              organizationId: workUnit.organizationId,
+              traceId: workUnit.traceId,
+            });
+          } catch (err) {
+            console.error("[propose] Failed to save approval envelope:", err);
+          }
+
+          return reply.code(201).send({
+            outcome: "PENDING_APPROVAL",
+            envelopeId,
+            traceId: workUnit.traceId,
+            approvalRequest: { id: approvalId, bindingHash },
           });
         }
 
@@ -170,6 +316,24 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
           try {
             await app.storageContext.envelopes.save(envelope);
+
+            await app.auditLedger.record({
+              eventType: "action.proposed",
+              actorType: "user",
+              actorId: workUnit.actor.id,
+              entityType: "action",
+              entityId: proposal.id,
+              riskCategory: "low",
+              summary: `Action ${workUnit.intent} executed`,
+              snapshot: {
+                actionType: workUnit.intent,
+                parameters: workUnit.parameters,
+                decision: "allow",
+              },
+              envelopeId: workUnit.id,
+              organizationId: workUnit.organizationId,
+              traceId: workUnit.traceId,
+            });
           } catch (err) {
             console.error("[propose] Failed to save envelope:", err);
           }

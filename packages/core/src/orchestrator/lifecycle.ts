@@ -92,14 +92,21 @@ export class LifecycleOrchestrator {
   private proposePipeline: ProposePipeline;
   private approvalManager: ApprovalManager;
   private executionManager: ExecutionManager;
+  private _routingConfig: ApprovalRoutingConfig;
+
+  /** Approval routing configuration. Used by the actions route to create approval requests. */
+  get routingConfig(): ApprovalRoutingConfig {
+    return this._routingConfig;
+  }
 
   constructor(config: OrchestratorConfig) {
+    this._routingConfig = config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
     const ctx: SharedContext = {
       storage: config.storage,
       ledger: config.ledger,
       guardrailState: config.guardrailState,
       guardrailStateStore: config.guardrailStateStore ?? null,
-      routingConfig: config.routingConfig ?? DEFAULT_ROUTING_CONFIG,
+      routingConfig: this._routingConfig,
       riskScoringConfig: config.riskScoringConfig,
       competenceTracker: config.competenceTracker ?? null,
       trustAdapter: config.trustAdapter ?? null,
