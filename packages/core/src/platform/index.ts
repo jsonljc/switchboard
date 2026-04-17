@@ -84,3 +84,4 @@ export type {
 } from "./deployment-context.js";
 export type { DeploymentResolverResult, DeploymentResolver } from "./deployment-resolver.js";
 export { DeploymentInactiveError, toDeploymentContext } from "./deployment-resolver.js";
+export { PrismaDeploymentResolver } from "./prisma-deployment-resolver.js";
