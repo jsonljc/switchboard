@@ -76,3 +76,5 @@ export type {
   GovernanceLogEntry,
 } from "./governance.js";
 export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
+export { BuilderRegistry } from "./builder-registry.js";
+export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";
