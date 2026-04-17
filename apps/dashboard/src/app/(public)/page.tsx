@@ -74,22 +74,16 @@ export default async function HomePage() {
     })),
   );
 
-  const alexAgent = agents.find((a) => a.slug === "speed-to-lead") ?? null;
-
   return (
     <>
       {/* ── Hero ── */}
       <HomepageHero
-        previewAgent={
-          alexAgent
-            ? {
-                name: alexAgent.name,
-                description: alexAgent.description,
-                trustScore: alexAgent.trustScore,
-                slug: alexAgent.slug,
-              }
-            : null
-        }
+        previewAgents={previewWithStats.map(({ agent }) => ({
+          name: agent.name,
+          description: agent.description,
+          trustScore: agent.trustScore,
+          slug: agent.slug,
+        }))}
       />
 
       {/* ── Problem → Solution strip ── */}
