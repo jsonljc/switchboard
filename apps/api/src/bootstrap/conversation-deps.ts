@@ -5,11 +5,15 @@
 // Returns null when required config is missing, allowing degraded boot.
 // ---------------------------------------------------------------------------
 
-import { ClaudeLLMAdapter, ClaudeEmbeddingAdapter } from "@switchboard/agents";
-import type { LLMCompleteFn, EmbeddingClient } from "@switchboard/agents";
-import { KnowledgeRetriever } from "@switchboard/agents";
-import type { ConversationStore, LLMAdapter, EmbeddingAdapter } from "@switchboard/core";
-import type { KnowledgeStore } from "@switchboard/core";
+import { ClaudeLLMAdapter, ClaudeEmbeddingAdapter, KnowledgeRetriever } from "@switchboard/core";
+import type {
+  LLMCompleteFn,
+  EmbeddingClient,
+  ConversationStore,
+  LLMAdapter,
+  EmbeddingAdapter,
+  KnowledgeStore,
+} from "@switchboard/core";
 
 export interface ConversationDepsInput {
   anthropicApiKey?: string;

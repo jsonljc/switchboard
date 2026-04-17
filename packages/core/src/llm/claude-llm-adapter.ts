@@ -1,14 +1,5 @@
-// ---------------------------------------------------------------------------
-// Claude LLM Adapter — Claude API implementation of LLMAdapter
-// ---------------------------------------------------------------------------
-// Generates conversational replies with confidence scoring.
-// Confidence is the LLM self-reported score (v1 limitation — see design doc
-// Section 6 for known calibration weakness). The retrieval-based confidence
-// cap is applied in the retrieval layer, not here.
-// ---------------------------------------------------------------------------
-
-import type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "@switchboard/core";
-import type { Message } from "@switchboard/core";
+import type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "../llm-adapter.js";
+import type { Message } from "../conversation-store.js";
 
 export interface LLMCompleteFn {
   (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>): Promise<string>;
@@ -81,7 +72,6 @@ export class ClaudeLLMAdapter implements LLMAdapter {
         confidence: clampConfidence(parsed.confidence),
       };
     } catch {
-      // Malformed JSON — use raw text with 0 confidence (triggers escalation)
       return { reply: raw, confidence: 0 };
     }
   }

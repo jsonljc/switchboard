@@ -1,4 +1,5 @@
-import type { ConversationEndEvent, EmbeddingAdapter } from "@switchboard/core";
+import type { ConversationEndEvent } from "../channel-gateway/conversation-lifecycle.js";
+import type { EmbeddingAdapter } from "../embedding-adapter.js";
 import { computeConfidenceScore } from "@switchboard/schemas";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 

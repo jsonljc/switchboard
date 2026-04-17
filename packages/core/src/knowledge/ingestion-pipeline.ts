@@ -1,17 +1,5 @@
-// ---------------------------------------------------------------------------
-// Ingestion Pipeline — chunk + embed + store for RAG documents
-// ---------------------------------------------------------------------------
-// Callers extract text from PDF/Word/text before passing to this pipeline.
-// The pipeline handles: chunking -> embedding -> storage.
-// On re-ingestion, existing chunks for the documentId are deleted first.
-// ---------------------------------------------------------------------------
-
-import type {
-  EmbeddingAdapter,
-  KnowledgeStore,
-  KnowledgeChunk,
-  KnowledgeSourceType,
-} from "@switchboard/core";
+import type { EmbeddingAdapter } from "../embedding-adapter.js";
+import type { KnowledgeStore, KnowledgeChunk, KnowledgeSourceType } from "../knowledge-store.js";
 import { chunkText } from "./chunker.js";
 
 export interface IngestionInput {
@@ -58,10 +46,8 @@ export class IngestionPipeline {
       return { documentId: input.documentId, chunksCreated: 0 };
     }
 
-    // Delete existing chunks for this document (idempotent re-ingestion)
     await this.store.deleteByDocument(input.documentId);
 
-    // Chunk the text
     const textChunks = chunkText(input.content, {
       maxTokens: this.maxTokensPerChunk,
       overlapTokens: this.overlapTokens,
@@ -71,10 +57,8 @@ export class IngestionPipeline {
       return { documentId: input.documentId, chunksCreated: 0 };
     }
 
-    // Embed all chunks in a single batch call
     const embeddings = await this.embedding.embedBatch(textChunks.map((c) => c.content));
 
-    // Build KnowledgeChunk objects
     const chunks: KnowledgeChunk[] = textChunks.map((tc, i) => ({
       id: generateId(),
       organizationId: input.organizationId,
@@ -88,7 +72,6 @@ export class IngestionPipeline {
       metadata: input.metadata ?? {},
     }));
 
-    // Store all chunks
     await this.store.storeBatch(chunks);
 
     return { documentId: input.documentId, chunksCreated: chunks.length };

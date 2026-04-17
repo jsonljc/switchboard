@@ -20,7 +20,6 @@
     "@fastify/rate-limit": "^10.2.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
-    "@switchboard/agents": "workspace:^",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/db": "workspace:*",

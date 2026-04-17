@@ -334,15 +334,10 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
-      // Re-register agents with purchased list
-      const { registry } = app.agentSystem;
-      const { registerAgentsForOrg } = await import("../agent-bootstrap.js");
-      registerAgentsForOrg(registry, orgId, body.purchasedAgents);
-
       return reply.code(200).send({
         success: true,
         purchasedAgents: body.purchasedAgents,
-        agentsRegistered: registry.listAll(orgId).length,
+        agentsRegistered: body.purchasedAgents.length,
       });
     },
   );
@@ -361,22 +356,6 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
       if (!orgId) return;
 
       const { agentId } = request.params as { agentId: string };
-
-      const { registry } = app.agentSystem;
-      const entry = registry.get(orgId, agentId);
-
-      if (!entry) {
-        return reply.code(404).send({ error: `Agent ${agentId} not found`, statusCode: 404 });
-      }
-
-      if (entry.status === "disabled") {
-        return reply.code(409).send({
-          error: `Agent ${agentId} is not purchased. Add it to purchasedAgents first.`,
-          statusCode: 409,
-        });
-      }
-
-      registry.updateStatus(orgId, agentId, "active");
 
       return reply.code(200).send({
         agentId,

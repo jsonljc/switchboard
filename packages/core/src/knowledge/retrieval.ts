@@ -1,20 +1,6 @@
-// ---------------------------------------------------------------------------
-// Knowledge Retrieval — RAG retrieval with source-type boosting + confidence
-// ---------------------------------------------------------------------------
-// Retrieval flow per design doc Section 6:
-//   1. Embed query -> vector search -> top-k chunks
-//   2. Boost source types: correction (1.3x) > wizard (1.15x) > document (1.0x)
-//   3. Re-sort by boosted similarity
-//
-// Confidence scoring (dual-signal, v1):
-//   - Primary: retrieval similarity. If best < retrievalThreshold (0.7),
-//     confidence capped at 0.4 regardless of LLM self-report.
-//   - Secondary: LLM self-reported confidence (known calibration weakness).
-//   - Combined: min(retrievalConfidence, llmSelfReport)
-// ---------------------------------------------------------------------------
-
-import type { EmbeddingAdapter, KnowledgeStore, KnowledgeSourceType } from "@switchboard/core";
-import type { RetrievedChunk } from "@switchboard/core";
+import type { EmbeddingAdapter } from "../embedding-adapter.js";
+import type { KnowledgeStore, KnowledgeSourceType } from "../knowledge-store.js";
+import type { RetrievedChunk } from "../llm-adapter.js";
 
 const SOURCE_BOOST: Record<KnowledgeSourceType, number> = {
   correction: 1.3,
@@ -52,13 +38,11 @@ export function computeConfidence(input: ConfidenceInput): number {
     return 0;
   }
 
-  // Primary signal: retrieval similarity
   let retrievalConfidence = input.bestSimilarity;
   if (input.bestSimilarity < threshold) {
     retrievalConfidence = LOW_SIMILARITY_CAP;
   }
 
-  // Combined: min of both signals
   return Math.min(retrievalConfidence, input.llmSelfReport);
 }
 
@@ -87,7 +71,6 @@ export class KnowledgeRetriever {
       return [];
     }
 
-    // Apply source-type boosting and re-sort
     const boosted = results.map((r) => {
       const boost = SOURCE_BOOST[r.chunk.sourceType as KnowledgeSourceType] ?? 1.0;
       return {

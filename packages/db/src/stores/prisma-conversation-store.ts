@@ -1,8 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 // Local interfaces matching @switchboard/core ConversationStore shape.
-// We don't import from core to keep structural typing approach
-// consistent with PrismaDeliveryStore (avoids db→core layer violation).
+// Structural typing avoids db→core layer violation.
 
 type LifecycleStage = "lead" | "qualified" | "booked" | "treated" | "churned";
 
