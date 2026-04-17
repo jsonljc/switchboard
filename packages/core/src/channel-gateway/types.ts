@@ -6,6 +6,9 @@ import type { ModelRouter, ModelSlot } from "../model-router.js";
 import type { SkillDefinition, SkillExecutor, SkillHook } from "../skill-runtime/types.js";
 import type { ParameterBuilder, SkillStores } from "../skill-runtime/parameter-builder.js";
 import type { ContextResolverImpl } from "../skill-runtime/context-resolver.js";
+import type { DeploymentResolver } from "../platform/deployment-resolver.js";
+import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
+import type { SubmitWorkRequest } from "../platform/work-unit.js";
 
 export interface SkillRuntimeDeps {
   /** Directory containing .md skill files */
@@ -58,6 +61,10 @@ export interface ChannelGatewayConfig {
   }) => void;
   /** Optional skill runtime deps — when provided, deployments with skillSlug use skill-based handlers. */
   skillRuntime?: SkillRuntimeDeps;
+  /** Optional deployment resolver for converged execution path */
+  deploymentResolver?: DeploymentResolver;
+  /** Optional platform ingress for converged execution path. When both deploymentResolver and platformIngress are set, the gateway uses the converged path instead of the legacy SkillHandler/DefaultChatHandler path. */
+  platformIngress?: { submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> };
 }
 
 export interface DeploymentLookup {

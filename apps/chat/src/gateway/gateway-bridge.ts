@@ -38,6 +38,9 @@ import {
   ContextResolverImpl,
 } from "@switchboard/core/skill-runtime";
 import type { ParameterBuilder, SkillStores } from "@switchboard/core/skill-runtime";
+import { PrismaDeploymentResolver } from "@switchboard/core/platform";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
+import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { PrismaDeploymentLookup } from "./deployment-lookup.js";
 import { PrismaGatewayConversationStore } from "./gateway-conversation-store.js";
 import { TaskRecorder } from "./task-recorder.js";
@@ -56,7 +59,15 @@ function createEmbeddingAdapter(): EmbeddingAdapter {
   };
 }
 
-export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
+export interface GatewayBridgeOptions {
+  /** Optional platform ingress for converged execution path */
+  platformIngress?: { submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> };
+}
+
+export function createGatewayBridge(
+  prisma: PrismaClient,
+  options: GatewayBridgeOptions = {},
+): ChannelGateway {
   const taskStore = new PrismaAgentTaskStore(prisma);
 
   const taskRecorder = new TaskRecorder({
@@ -164,8 +175,13 @@ export function createGatewayBridge(prisma: PrismaClient): ChannelGateway {
     return new SkillExecutorImpl(new AnthropicToolCallingAdapter(client), toolsMap, modelRouter);
   };
 
+  // Converged execution path — activated when platformIngress is provided
+  const deploymentResolver = new PrismaDeploymentResolver(prisma);
+
   return new ChannelGateway({
     deploymentLookup: new PrismaDeploymentLookup(prisma),
+    deploymentResolver,
+    platformIngress: options.platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
     stateStore: new PrismaDeploymentStateStore(prisma),
     actionRequestStore: new PrismaActionRequestStore(prisma),
