@@ -161,38 +161,29 @@ export class RuntimeRegistry {
 
   async loadGatewayConnections(prisma: PrismaClient, gateway: ChannelGateway): Promise<void> {
     const connections = await prisma.deploymentConnection.findMany({
-      where: { type: "telegram", status: "active" },
+      where: { status: "active" },
     });
-
     for (const conn of connections) {
       try {
         const creds = decryptCredentials(conn.credentials);
-        const botToken = creds["botToken"] as string;
-        if (!botToken) {
-          console.error(
-            `[RuntimeRegistry] Gateway connection ${conn.id} missing botToken, skipping`,
+        const adapter = this.createAdapterForConnection(conn.type, creds);
+        if (!adapter) {
+          console.warn(
+            `[RuntimeRegistry] Unsupported gateway channel type: ${conn.type}, skipping ${conn.id}`,
           );
           continue;
         }
-        const webhookSecret = creds["webhookSecret"] as string | undefined;
-        const adapter = new TelegramAdapter(
-          botToken,
-          async () => ({ organizationId: "gateway" }),
-          webhookSecret,
-        );
-
         const webhookPath = `/webhook/managed/${conn.id}`;
         this.gatewayEntries.set(webhookPath, {
           gateway,
           adapter,
           deploymentConnectionId: conn.id,
-          channel: "telegram",
+          channel: conn.type,
         });
       } catch (err) {
         console.error(`[RuntimeRegistry] Failed to load gateway connection ${conn.id}:`, err);
       }
     }
-
     console.warn(`[RuntimeRegistry] Loaded ${this.gatewayEntries.size} gateway entries`);
   }
 
@@ -201,28 +192,57 @@ export class RuntimeRegistry {
   }
 
   async provisionGatewayConnection(
-    connection: { id: string; credentials: string },
+    connection: { id: string; type?: string; credentials: string },
     _prisma: PrismaClient,
     gateway: ChannelGateway,
   ): Promise<void> {
     const creds = decryptCredentials(connection.credentials);
-    const botToken = creds["botToken"] as string;
-    if (!botToken) {
-      throw new Error(`Gateway connection ${connection.id} missing botToken`);
-    }
-    const webhookSecret = creds["webhookSecret"] as string | undefined;
-    const adapter = new TelegramAdapter(
-      botToken,
-      async () => ({ organizationId: "gateway" }),
-      webhookSecret,
-    );
-
+    const type = connection.type ?? "telegram";
+    const adapter = this.createAdapterForConnection(type, creds);
+    if (!adapter) throw new Error(`Unsupported or misconfigured channel: ${type}`);
     const webhookPath = `/webhook/managed/${connection.id}`;
     this.gatewayEntries.set(webhookPath, {
       gateway,
       adapter,
       deploymentConnectionId: connection.id,
-      channel: "telegram",
+      channel: type,
     });
+  }
+
+  private createAdapterForConnection(
+    type: string,
+    creds: Record<string, unknown>,
+  ): ChannelAdapter | null {
+    if (type === "telegram") {
+      const botToken = creds["botToken"] as string;
+      if (!botToken) return null;
+      const webhookSecret = creds["webhookSecret"] as string | undefined;
+      return new TelegramAdapter(
+        botToken,
+        async () => ({ organizationId: "gateway" }),
+        webhookSecret,
+      );
+    }
+    if (type === "whatsapp") {
+      const token = creds["token"] as string;
+      const phoneNumberId = creds["phoneNumberId"] as string;
+      if (!token || !phoneNumberId) return null;
+      const appSecret = creds["appSecret"] as string | undefined;
+      const verifyToken = creds["verifyToken"] as string | undefined;
+      const wa = new WhatsAppAdapter({ token, phoneNumberId, appSecret, verifyToken });
+      return Object.assign(wa, {
+        resolveOrganizationId: async () => "gateway",
+      }) as ChannelAdapter;
+    }
+    if (type === "slack") {
+      const botToken = creds["botToken"] as string;
+      if (!botToken) return null;
+      const signingSecret = creds["signingSecret"] as string | undefined;
+      const slack = new SlackAdapter(botToken, signingSecret);
+      return Object.assign(slack, {
+        resolveOrganizationId: async () => "gateway",
+      }) as ChannelAdapter;
+    }
+    return null;
   }
 }
