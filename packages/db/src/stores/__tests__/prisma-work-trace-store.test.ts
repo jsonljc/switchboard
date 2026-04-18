@@ -73,7 +73,7 @@ describe("PrismaWorkTraceStore", () => {
     });
     await store.persist(trace);
 
-    const call = mockPrisma.workTrace.create.mock.calls[0][0];
+    const call = mockPrisma.workTrace.create.mock.calls[0]![0];
     expect(call.data.parentWorkUnitId).toBeNull();
     expect(call.data.executionStartedAt).toBeNull();
     expect(call.data.errorCode).toBeNull();
@@ -88,7 +88,7 @@ describe("PrismaWorkTraceStore", () => {
     });
     await store.persist(trace);
 
-    const call = mockPrisma.workTrace.create.mock.calls[0][0];
+    const call = mockPrisma.workTrace.create.mock.calls[0]![0];
     expect(call.data.errorCode).toBe("RATE_LIMIT");
     expect(call.data.errorMessage).toBe("Too many requests");
   });

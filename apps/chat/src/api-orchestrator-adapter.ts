@@ -285,6 +285,61 @@ export class ApiOrchestratorAdapter implements RuntimeOrchestrator {
     return data.result;
   }
 
+  async executePreApproved(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId: string | null;
+    cartridgeId: string;
+    traceId: string;
+    idempotencyKey?: string;
+    workUnitId?: string;
+  }): Promise<ExecuteResult> {
+    const idempotencyKey = params.idempotencyKey ?? `pre_${params.traceId}`;
+    const res = await this.fetchWithRetry(`${this.base()}/api/execute`, {
+      method: "POST",
+      headers: this.headers(idempotencyKey),
+      body: JSON.stringify({
+        actorId: params.principalId,
+        organizationId: params.organizationId,
+        action: {
+          actionType: params.actionType,
+          parameters: params.parameters,
+          sideEffect: true,
+        },
+        cartridgeId: params.cartridgeId,
+        traceId: params.traceId,
+        preApproved: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      return {
+        success: false,
+        summary: err.error ?? `Pre-approved execute failed: ${res.status}`,
+        externalRefs: {},
+        rollbackAvailable: false,
+        partialFailures: [],
+        durationMs: 0,
+        undoRecipe: null,
+      };
+    }
+
+    const data = (await res.json()) as { result?: ExecuteResult };
+    return (
+      data.result ?? {
+        success: true,
+        summary: "Executed",
+        externalRefs: {},
+        rollbackAvailable: false,
+        partialFailures: [],
+        durationMs: 0,
+        undoRecipe: null,
+      }
+    );
+  }
+
   async respondToApproval(params: {
     approvalId: string;
     action: "approve" | "reject" | "patch";

@@ -7,7 +7,12 @@ export class PrismaOutboxStore {
 
   async write(eventId: string, type: string, payload: Record<string, unknown>) {
     return this.prisma.outboxEvent.create({
-      data: { eventId, type, payload, status: "pending" },
+      data: {
+        eventId,
+        type,
+        payload: payload as Record<string, string | number | boolean | null>,
+        status: "pending",
+      },
     });
   }
 

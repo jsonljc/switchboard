@@ -36,9 +36,14 @@ const DEFAULT_ONBOARDING = {
 };
 
 export const onboardRoutes: FastifyPluginAsync = async (app) => {
-  const listingStore = new PrismaListingStore(app.prisma);
-  const deploymentStore = new PrismaDeploymentStore(app.prisma);
-  const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
+  if (!app.prisma) {
+    app.log.warn("Prisma not available — onboard routes disabled");
+    return;
+  }
+  const prisma = app.prisma;
+  const listingStore = new PrismaListingStore(prisma);
+  const deploymentStore = new PrismaDeploymentStore(prisma);
+  const connectionStore = new PrismaDeploymentConnectionStore(prisma);
 
   app.post("/onboard", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
@@ -68,7 +73,7 @@ export const onboardRoutes: FastifyPluginAsync = async (app) => {
     let resolved = false;
     while (!resolved) {
       const candidate = suffix === 1 ? slug : `${slug}-${suffix}`;
-      const existing = await app.prisma.agentDeployment.findUnique({
+      const existing = await prisma.agentDeployment.findUnique({
         where: { slug: candidate },
       });
       if (!existing) {

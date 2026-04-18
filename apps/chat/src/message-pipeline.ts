@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import crypto, { createHash } from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
@@ -128,14 +128,16 @@ export async function linkCrmContact(
       // Emit inquiry conversion event for ad attribution feedback
       if (deps.conversionBus && message.organizationId) {
         deps.conversionBus.emit({
+          eventId: crypto.randomUUID(),
           type: "inquiry",
           contactId: contact.id,
           organizationId: message.organizationId,
           value: 1,
           sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
           sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
-          timestamp: new Date(),
-          metadata: { channel: message.channel, source: "chat_auto_create" },
+          occurredAt: new Date(),
+          source: "chat_auto_create",
+          metadata: { channel: message.channel },
         });
       }
     }

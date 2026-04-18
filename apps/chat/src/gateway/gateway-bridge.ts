@@ -86,7 +86,7 @@ export function createGatewayBridge(
   });
 
   // Converged execution path
-  const deploymentResolver = new PrismaDeploymentResolver(prisma);
+  const deploymentResolver = new PrismaDeploymentResolver(prisma as never);
 
   // TODO(ingress-convergence): Wire PlatformIngress from chat app startup
   const platformIngress = options.platformIngress ?? {

@@ -59,7 +59,7 @@ export class PrismaConversionRecordStore {
         sourceCampaignId: event.sourceCampaignId ?? null,
         sourceChannel: event.sourceChannel ?? null,
         agentDeploymentId: event.agentDeploymentId ?? null,
-        metadata: event.metadata,
+        metadata: event.metadata as Record<string, string | number | boolean | null>,
         occurredAt: event.occurredAt,
       },
       update: {},
@@ -92,7 +92,12 @@ export class PrismaConversionRecordStore {
       _sum: { value: true },
     });
 
-    return groupByDimension(rows, "sourceCampaignId", "campaignId", dateRange) as CampaignFunnel[];
+    return groupByDimension(
+      rows,
+      "sourceCampaignId",
+      "campaignId",
+      dateRange,
+    ) as unknown as CampaignFunnel[];
   }
 
   async funnelByChannel(orgId: string, dateRange: DateRange): Promise<ChannelFunnel[]> {
@@ -107,7 +112,12 @@ export class PrismaConversionRecordStore {
       _sum: { value: true },
     });
 
-    return groupByDimension(rows, "sourceChannel", "channel", dateRange) as ChannelFunnel[];
+    return groupByDimension(
+      rows,
+      "sourceChannel",
+      "channel",
+      dateRange,
+    ) as unknown as ChannelFunnel[];
   }
 
   async funnelByAgent(orgId: string, dateRange: DateRange): Promise<AgentFunnel[]> {
@@ -156,10 +166,10 @@ function buildFunnelCounts(
   dateRange: DateRange,
 ): FunnelCounts {
   const funnel = emptyFunnel(dateRange);
+  const stageKeys = new Set(["inquiry", "qualified", "booked", "purchased", "completed"]);
   for (const row of rows) {
-    const stage = row.type as keyof Omit<FunnelCounts, "totalRevenue" | "period">;
-    if (stage in funnel && stage !== "totalRevenue" && stage !== "period") {
-      (funnel as Record<string, number>)[stage] = row._count._all;
+    if (stageKeys.has(row.type)) {
+      (funnel as unknown as Record<string, number>)[row.type] = row._count._all;
     }
     funnel.totalRevenue += row._sum.value ?? 0;
   }
@@ -171,8 +181,9 @@ function groupByDimension(
   sourceField: string,
   targetField: string,
   dateRange: DateRange,
-): Array<FunnelCounts & Record<string, string>> {
-  const grouped = new Map<string, FunnelCounts & Record<string, string>>();
+): Array<Record<string, unknown>> {
+  const stageKeys = new Set(["inquiry", "qualified", "booked", "purchased", "completed"]);
+  const grouped = new Map<string, Record<string, unknown> & FunnelCounts>();
 
   for (const row of rows) {
     const key = (row[sourceField] as string) ?? "unknown";
@@ -181,10 +192,10 @@ function groupByDimension(
     }
     const funnel = grouped.get(key)!;
     const stage = row.type as string;
-    if (stage in funnel && stage !== "totalRevenue" && stage !== "period") {
+    if (stageKeys.has(stage)) {
       const countObj = row._count as { _all: number };
       const sumObj = row._sum as { value: number | null };
-      (funnel as Record<string, number>)[stage] = countObj._all;
+      (funnel as unknown as Record<string, number>)[stage] = countObj._all;
       funnel.totalRevenue += sumObj.value ?? 0;
     }
   }

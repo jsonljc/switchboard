@@ -30,6 +30,7 @@ interface OpportunityStore {
   countByStage(
     orgId: string,
   ): Promise<Array<{ stage: OpportunityStage; count: number; totalValue: number }>>;
+  countByStage(orgId: string, stage: string): Promise<number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,9 +155,12 @@ export class PrismaOpportunityStore implements OpportunityStore {
 
   async countByStage(
     orgId: string,
+  ): Promise<Array<{ stage: OpportunityStage; count: number; totalValue: number }>>;
+  async countByStage(orgId: string, stage: string): Promise<number>;
+  async countByStage(
+    orgId: string,
     stage?: string,
   ): Promise<number | Array<{ stage: OpportunityStage; count: number; totalValue: number }>> {
-    // Single-stage count (for ReconciliationRunner)
     if (stage !== undefined) {
       return this.prisma.opportunity.count({
         where: { organizationId: orgId, stage },

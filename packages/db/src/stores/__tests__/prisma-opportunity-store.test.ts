@@ -315,7 +315,11 @@ describe("PrismaOpportunityStore", () => {
         { stage: "won", _count: { id: 2 }, _sum: { estimatedValue: null } },
       ]);
 
-      const result = await store.countByStage("org-1");
+      const result = (await store.countByStage("org-1")) as Array<{
+        stage: string;
+        count: number;
+        totalValue: number;
+      }>;
 
       expect(prisma.opportunity.groupBy).toHaveBeenCalledWith({
         by: ["stage"],

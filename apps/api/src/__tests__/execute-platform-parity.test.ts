@@ -157,6 +157,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
       rollbackAvailable: false,
       partialFailures: [],
       durationMs: 5,
+      undoRecipe: null,
     }));
 
     const res = await app.inject({
@@ -340,7 +341,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockTraceStore.persist).toHaveBeenCalledOnce();
-    const trace = traces[0];
+    const trace = traces[0]!;
     expect(trace.intent).toBe("digital-ads.campaign.pause");
     expect(trace.organizationId).toBe(ORG_ID);
     expect(trace.governanceOutcome).toBe("execute");
@@ -401,7 +402,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockTraceStore.persist).toHaveBeenCalledOnce();
-    const trace = traces[0];
+    const trace = traces[0]!;
     expect(trace.governanceOutcome).toBe("deny");
     expect(trace.outcome).toBe("failed");
     expect(trace.executionStartedAt).toBeUndefined();
