@@ -22,7 +22,7 @@ A WhatsApp lead talks to Alex. Alex qualifies. Alex queries available slots. Lea
 2. Wire real `PlatformIngress` into the chat app gateway bridge
 3. Route skill-backed deployments to `SkillMode` (deployment has `skillSlug` → intent resolves to skill mode)
 
-**Phase B — Wire Alex booking wedge:** 4. Register `createCalendarBookTool` in the tools map 5. Update Alex skill prompt for slots → select → book 6. Seed org business hours in `OrganizationConfig` 7. Fix deployment connection loading to include WhatsApp
+**Phase B — Wire Alex booking wedge:** 4. Fix deployment connection loading to include WhatsApp (hard blocker — without this, no WhatsApp deployment comes online) 5. Register `createCalendarBookTool` in the tools map 6. Update Alex skill prompt for slots → select → book (with deterministic selection + failure handling) 7. Seed org business hours in `OrganizationConfig`
 
 ---
 
@@ -82,15 +82,19 @@ modeRegistry.register(
 
 The exact store/adapter variable names depend on what's already in scope at that point in `app.ts`. The implementation task will read the file and adapt.
 
+**Startup contract:** Fail fast on invalid skill definitions. If the Alex skill cannot load (missing file, malformed frontmatter, undeclared tool), the API server must crash at startup rather than silently omitting the skill. A running server with no skill registrations is worse than a crashed server — it silently routes everything to CartridgeMode.
+
 ### A2. Route skill-backed deployments to SkillMode
 
-`PlatformIngress` dispatches work via `modeRegistry.dispatch(workUnit)`. The `ExecutionModeRegistry` needs to route based on the work unit's deployment. If the deployment has a `skillSlug`, route to `SkillMode`. Otherwise fall back to `CartridgeMode`.
+Ensure that execute requests for skill-backed deployments deterministically resolve to skill mode before `modeRegistry.dispatch()`.
 
-**Current routing:** `ExecutionModeRegistry` selects the mode by `modeName` on the intent registration. All cartridge intents register with `mode: "cartridge"`.
+**Current routing:** `ExecutionModeRegistry` selects the mode by `modeName` on the intent registration. All cartridge intents register with `mode: "cartridge"`. No skill intents are registered.
 
-**Change:** When registering skill-backed intents, register them with `mode: "skill"`. The `IntentRegistry` already supports this — we just need to register skill intents alongside cartridge intents.
+**The real question:** When a `SubmitWorkRequest` arrives at PlatformIngress (either from the chat gateway or the API execute route), does it carry enough deployment context for the intent resolver to know this is a skill-backed deployment? The `ChannelGateway` already builds intents as `${skillSlug}.respond` (e.g., `alex.respond`). The API execute route receives intent strings from callers.
 
-**New function:** `registerSkillIntents(intentRegistry, skillsBySlug)` — iterates skill definitions and registers an intent per skill slug (e.g., `alex.respond`) with `mode: "skill"`.
+**Change:** Register skill intents alongside cartridge intents with `mode: "skill"`. New function `registerSkillIntents(intentRegistry, skillsBySlug)` iterates skill definitions and registers `{slug}.respond` with `mode: "skill"`. This is the minimum routing rule — it does not require interpreting deployment metadata at dispatch time, just matching the intent string.
+
+**Debugging contract:** If a skill-backed execution does not reach SkillMode, the failure point is either (a) the intent string does not match a registered skill intent, or (b) the execute request never reaches PlatformIngress. Log the resolved intent and mode at dispatch time.
 
 ### A3. Wire PlatformIngress into chat app gateway bridge
 
@@ -120,7 +124,25 @@ The simplest path: create a thin `HttpPlatformIngress` that wraps the existing `
 
 ## Phase B: Wire Alex Booking Wedge
 
-### B4. Register createCalendarBookTool
+### B4. Fix deployment connection loading (hard blocker)
+
+**File:** `apps/chat/src/managed/runtime-registry.ts` (line ~163)
+
+Currently hardcoded to `type: "telegram"`. This means no WhatsApp deployment can come online through the gateway path, regardless of everything else in this spec.
+
+Change to load all active connections:
+
+```typescript
+const connections = await prisma.deploymentConnection.findMany({
+  where: { status: "active" },
+});
+```
+
+Then filter by channel type when creating the appropriate adapter. This is not a WhatsApp-specific tweak — it's a general fix to channel connection discovery.
+
+**This must be done first in Phase B.** Without it, the wedge cannot attach to any live WhatsApp deployment.
+
+### B5. Register createCalendarBookTool
 
 **File:** `packages/core/src/skill-runtime/tools/index.ts`
 
@@ -132,7 +154,7 @@ export { createCalendarBookTool } from "./calendar-book.js";
 
 The tool is already implemented. It just needs to be exported from the barrel and wired into the tools map (done in A1).
 
-### B5. Update Alex skill prompt
+### B6. Update Alex skill prompt
 
 **File:** `skills/alex.md`
 
@@ -145,7 +167,7 @@ tools:
   - calendar-book
 ```
 
-**Book phase change:** Replace the booking link delivery (lines 128-131) with tool-based booking:
+**Book phase change:** Replace the booking link delivery with tool-based booking:
 
 ```markdown
 **Phase 4: Book**
@@ -163,22 +185,29 @@ When the lead is ready to book:
    2. Monday 2:30 PM
    3. Tuesday 9:00 AM
       Which works best for you?"
-3. When the lead replies with a number or time reference, call `calendar-book.booking.create` with:
-   - orgId: from context
-   - contactId: from context
-   - service: the discussed service
-   - slotStart/slotEnd: from the selected slot
-   - calendarId: "primary"
-   - attendeeName: from lead profile
-   - attendeeEmail: from lead profile (if available)
-4. Confirm the booking naturally:
-   "You're all set! I've booked you in for [service] on [date] at [time].
-   You'll receive a calendar invite shortly."
+3. **Slot selection rules:**
+   - If reply is a single digit 1-5, treat as slot index
+   - If reply clearly names a specific offered time, match it
+   - If reply is ambiguous ("the later one", "morning"),
+     ask a disambiguation question — do NOT guess
+4. Call `calendar-book.booking.create` with the confirmed slot
+5. Confirm the booking naturally:
+   "You're all set! I've booked you in for [service] on [date]
+   at [time]. You'll receive a calendar invite shortly."
+
+**If slots.query or booking.create fails:**
+
+- Apologize briefly: "I wasn't able to book that just now."
+- Offer to have someone confirm a time shortly
+- Log a CRM activity noting the failed booking attempt
+- Do NOT retry silently or make up availability
 ```
 
 Remove the `{{PERSONA_CONFIG.bookingLink}}` references entirely.
 
-### B6. Seed org business hours
+### B7. Seed org business hours
+
+**Availability contract:** Business hours define the allowed candidate window. The Google Calendar FreeBusy API defines actual free/busy within that window. Slots are only offered where both conditions are met — business hours say "open" AND calendar says "free." Business hours alone are never sufficient to claim availability.
 
 **File:** `packages/db/prisma/schema.prisma` — add `businessHours` JSON field to `OrganizationConfig`:
 
@@ -206,27 +235,20 @@ businessHours: {
 
 **Where it's read:** The `GoogleCalendarAdapter` constructor takes `businessHours: BusinessHoursConfig`. When constructing the adapter (in A1's tool wiring), read from `OrganizationConfig.businessHours` for the deployment's org. Fall back to default Mon-Fri 9-5 SGT if not set.
 
-### B7. Fix deployment connection loading for WhatsApp
+## Observability (required for wedge debugging)
 
-**File:** `apps/chat/src/managed/runtime-registry.ts` (line ~163)
+Three log statements minimum — without these, debugging the first live conversations is guesswork:
 
-Currently:
+1. **Deployment resolved:** `deployment resolved to skillSlug=${slug}` — logged when `PrismaDeploymentResolver` resolves a deployment from a channel token
+2. **Mode selected:** `execution mode selected = skill` — logged when `ExecutionModeRegistry` dispatches to SkillMode
+3. **Tool calls:** `tool call: calendar-book.slots.query` / `tool call: calendar-book.booking.create` — logged by SkillExecutor when a tool_use block is processed
 
-```typescript
-const connections = await prisma.deploymentConnection.findMany({
-  where: { type: "telegram", status: "active" },
-});
-```
+These answer the 4 critical questions for any failed conversation:
 
-Change to accept the channel type as a parameter or load all active connections:
-
-```typescript
-const connections = await prisma.deploymentConnection.findMany({
-  where: { status: "active" },
-});
-```
-
-Then filter by channel type when creating the appropriate adapter. This is a general fix, not a WhatsApp-specific hack.
+- Did the message hit skill mode?
+- Did Alex call the tool?
+- What args were passed?
+- Did the booking succeed or fail?
 
 ---
 
@@ -251,18 +273,26 @@ Then filter by channel type when creating the appropriate adapter. This is a gen
 
 ### Phase B (Alex booking):
 
+- Modify: `apps/chat/src/managed/runtime-registry.ts` — load all channel types (hard blocker)
 - Modify: `packages/core/src/skill-runtime/tools/index.ts` — export createCalendarBookTool
-- Modify: `skills/alex.md` — add calendar-book tool, replace link with slot-based booking
+- Modify: `skills/alex.md` — add calendar-book tool, slot selection rules, failure handling
 - Modify: `packages/db/prisma/schema.prisma` — add businessHours to OrganizationConfig
 - Modify: `packages/db/prisma/seed-marketplace.ts` — seed demo org business hours
-- Modify: `apps/chat/src/managed/runtime-registry.ts` — load all channel types, not just Telegram
 
-## Dependency Order
+## Implementation Order
 
 ```
-A1 (SkillMode registration) → A2 (skill intent routing) → A3 (chat PlatformIngress wiring)
-                                                                    ↓
-B4 (export calendar tool) → B5 (Alex prompt) → B6 (business hours) → B7 (WhatsApp connections)
+B4 (WhatsApp connections — hard blocker, do first)
+  ↓
+A1 (SkillMode + tools + skills loaded at startup)
+  ↓
+A2 (skill intent routing — deterministic dispatch)
+  ↓
+A3 (chat delegates to API execution)
+  ↓
+B5 (export calendar tool) + B6 (Alex prompt) + B7 (business hours)
+  ↓
+end-to-end live test
 ```
 
-A1-A3 must complete before B4-B7 can be tested end-to-end, but B4-B7 can be implemented in parallel with A-phase code.
+B4 first because without WhatsApp deployment discovery, the wedge is dead. A1-A3 in sequence. B5-B7 in parallel after A-phase.
