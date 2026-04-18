@@ -1,38 +1,21 @@
-import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import type { Cartridge, CartridgeContext } from "@switchboard/schemas";
 import type { ExecutionMode, ExecutionContext } from "../execution-context.js";
 import type { ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionResult } from "../execution-result.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { ExecutionModeName } from "../types.js";
 
-export interface CartridgeOrchestrator {
-  executePreApproved(params: {
-    actionType: string;
-    parameters: Record<string, unknown>;
-    principalId: string;
-    organizationId: string | null;
-    cartridgeId: string;
-    traceId: string;
-    idempotencyKey?: string;
-    workUnitId?: string;
-  }): Promise<ExecuteResult>;
+export interface CartridgeRegistry {
+  get(cartridgeId: string): Cartridge | null;
 }
 
 export interface CartridgeModeConfig {
-  orchestrator: CartridgeOrchestrator;
-  intentRegistry: {
-    lookup(
-      intent: string,
-    ):
-      | { executor: { actionId?: string; mode?: string; skillSlug?: string; pipelineId?: string } }
-      | undefined;
+  cartridgeRegistry: CartridgeRegistry;
+  credentialResolver?: {
+    resolve(orgId: string, cartridgeId: string): Promise<Record<string, unknown>>;
   };
 }
 
-/**
- * Derives the cartridge ID from an action ID by taking everything before the first dot.
- * E.g. "digital-ads.campaign.pause" → "digital-ads"
- */
 function deriveCartridgeId(actionId: string): string {
   const dotIndex = actionId.indexOf(".");
   return dotIndex > 0 ? actionId.slice(0, dotIndex) : actionId;
@@ -51,23 +34,55 @@ export class CartridgeMode implements ExecutionMode {
     _constraints: ExecutionConstraints,
     context: ExecutionContext,
   ): Promise<ExecutionResult> {
-    const registration = this.config.intentRegistry.lookup(workUnit.intent);
-    const actionId = registration?.executor?.actionId ?? workUnit.intent;
-    const cartridgeId = deriveCartridgeId(actionId);
+    const cartridgeId = deriveCartridgeId(workUnit.intent);
+    const cartridge = this.config.cartridgeRegistry.get(cartridgeId);
+
+    if (!cartridge) {
+      return {
+        workUnitId: workUnit.id,
+        outcome: "failed",
+        summary: `Cartridge not found: ${cartridgeId}`,
+        outputs: {},
+        mode: "cartridge",
+        durationMs: 0,
+        traceId: context.traceId,
+        error: { code: "CARTRIDGE_NOT_FOUND", message: `Cartridge not found: ${cartridgeId}` },
+      };
+    }
+
+    let credentials: Record<string, unknown> = {};
+    if (this.config.credentialResolver && workUnit.organizationId) {
+      try {
+        credentials = await this.config.credentialResolver.resolve(
+          workUnit.organizationId,
+          cartridgeId,
+        );
+      } catch {
+        // Continue without credentials — cartridge may not need them
+      }
+    }
+
+    const cartridgeContext: CartridgeContext = {
+      principalId: workUnit.actor.id,
+      organizationId: workUnit.organizationId ?? null,
+      connectionCredentials: credentials,
+    };
 
     const startMs = Date.now();
     try {
-      const result = await this.config.orchestrator.executePreApproved({
-        actionType: actionId,
-        parameters: workUnit.parameters,
-        principalId: workUnit.actor.id,
-        organizationId: workUnit.organizationId ?? null,
-        cartridgeId,
-        traceId: workUnit.traceId,
-        idempotencyKey: workUnit.idempotencyKey,
-        workUnitId: workUnit.id,
-      });
+      const EXECUTION_TIMEOUT_MS = 30_000;
+      const executeFn = () =>
+        cartridge.execute(workUnit.intent, workUnit.parameters, cartridgeContext);
+      const timeoutFn = () =>
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(
+            () =>
+              reject(new Error(`Cartridge execution timed out after ${EXECUTION_TIMEOUT_MS}ms`)),
+            EXECUTION_TIMEOUT_MS,
+          ).unref(),
+        );
 
+      const result = await Promise.race([executeFn(), timeoutFn()]);
       const durationMs = Date.now() - startMs;
 
       if (!result.success) {

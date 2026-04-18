@@ -42,6 +42,48 @@
       }
     },
     {
+      "files": ["packages/creative-pipeline/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/core", "@switchboard/core/*"],
+                "message": "creative-pipeline cannot import from core."
+              },
+              {
+                "group": ["@switchboard/db", "@switchboard/db/*"],
+                "message": "creative-pipeline cannot import from db."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/ad-optimizer/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/core", "@switchboard/core/*"],
+                "message": "ad-optimizer cannot import from core."
+              },
+              {
+                "group": ["@switchboard/db", "@switchboard/db/*"],
+                "message": "ad-optimizer cannot import from db."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/cartridge-sdk/src/**/*.ts"],
       "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
@@ -127,6 +169,14 @@
                 "message": "core cannot import from db."
               },
               {
+                "group": ["@switchboard/creative-pipeline", "@switchboard/creative-pipeline/*"],
+                "message": "core cannot import from creative-pipeline."
+              },
+              {
+                "group": ["@switchboard/ad-optimizer", "@switchboard/ad-optimizer/*"],
+                "message": "core cannot import from ad-optimizer."
+              },
+              {
                 "group": ["@switchboard/api", "@switchboard/api/*"],
                 "message": "core cannot import from apps."
               },
@@ -172,6 +222,23 @@
                 "message": "Apps cannot import from other apps."
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/api/src/routes/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "MemberExpression[property.name='resolveAndPropose']",
+            "message": "Use PlatformIngress.submit() instead of orchestrator.resolveAndPropose(). See ingress-convergence design."
+          },
+          {
+            "selector": "CallExpression[callee.property.name='emit'][callee.object.property.name='conversionBus']",
+            "message": "Write to OutboxEvent table instead of calling conversionBus.emit() directly. Events must be durable."
           }
         ]
       }

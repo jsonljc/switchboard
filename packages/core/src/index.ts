@@ -30,9 +30,6 @@ export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-w
 // Audit (hashing, canonicalization, redaction, evidence, ledger)
 export * from "./audit/index.js";
 
-// Competence (tracker, thresholds)
-export * from "./competence/index.js";
-
 // Telemetry (tracing, metrics, LLM cost table)
 export * from "./telemetry/index.js";
 
@@ -71,9 +68,6 @@ export type { PolicyCache } from "./policy-cache.js";
 // Utilities (retry, circuit breaker, pagination, nested value)
 export * from "./utils/index.js";
 
-// Cross-Cartridge Enrichment
-export * from "./enrichment/index.js";
-
 // Data-Flow Plan Execution
 export * from "./data-flow/index.js";
 
@@ -96,12 +90,16 @@ export * from "./tool-registry/index.js";
 
 // Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";
+export { RedisStreamConversionBus } from "./events/redis-stream-conversion-bus.js";
 export type {
   ConversionBus,
   ConversionEvent,
   ConversionEventType,
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
+
+// Outbox Publisher (outbox → bus relay)
+export { OutboxPublisher } from "./events/outbox-publisher.js";
 
 // LLM Client Interface + Adapters (Claude, Voyage)
 export * from "./llm/index.js";

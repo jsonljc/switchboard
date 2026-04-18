@@ -11,6 +11,9 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/cartridge-sdk/package.json packages/cartridge-sdk/
+COPY packages/creative-pipeline/package.json packages/creative-pipeline/
+COPY packages/ad-optimizer/package.json packages/ad-optimizer/
+COPY packages/sdk/package.json packages/sdk/
 COPY apps/api/package.json apps/api/
 COPY apps/chat/package.json apps/chat/
 COPY apps/mcp-server/package.json apps/mcp-server/
@@ -46,6 +49,12 @@ COPY --from=build /app/packages/db/prisma/ packages/db/prisma/
 
 COPY --from=build /app/packages/cartridge-sdk/package.json packages/cartridge-sdk/package.json
 COPY --from=build /app/packages/cartridge-sdk/dist/ packages/cartridge-sdk/dist/
+
+COPY --from=build /app/packages/creative-pipeline/package.json packages/creative-pipeline/package.json
+COPY --from=build /app/packages/creative-pipeline/dist/ packages/creative-pipeline/dist/
+
+COPY --from=build /app/packages/ad-optimizer/package.json packages/ad-optimizer/package.json
+COPY --from=build /app/packages/ad-optimizer/dist/ packages/ad-optimizer/dist/
 
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/

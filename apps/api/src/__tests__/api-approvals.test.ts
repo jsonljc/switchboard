@@ -42,7 +42,7 @@ describe("Approvals API", () => {
     });
     const body = res.json();
     return {
-      envelopeId: body.envelopeId as string,
+      envelopeId: body.workUnitId as string,
       approvalRequest: body.approvalRequest as {
         id: string;
         bindingHash: string;
@@ -69,10 +69,10 @@ describe("Approvals API", () => {
       const body = res.json();
       expect(body.executionResult).toBeDefined();
       expect(body.executionResult.success).toBe(true);
-      expect(body.envelope.status).toBe("executed");
+      expect(body.approvalState.status).toBe("approved");
     });
 
-    it("should reject and mark envelope as denied", async () => {
+    it("should reject and mark approval as rejected", async () => {
       const { approvalRequest } = await proposeWithApproval();
 
       const res = await app.inject({
@@ -86,7 +86,7 @@ describe("Approvals API", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.envelope.status).toBe("denied");
+      expect(body.approvalState.status).toBe("rejected");
       expect(body.executionResult).toBeNull();
     });
 

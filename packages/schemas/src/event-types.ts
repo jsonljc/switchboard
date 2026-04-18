@@ -2,8 +2,14 @@
 // Event Types — shared event envelope definitions
 // ---------------------------------------------------------------------------
 
-import { randomUUID } from "node:crypto";
 import type { AttributionChain } from "./lifecycle.js";
+
+const uuid = (): string => {
+  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  return typeof c?.randomUUID === "function"
+    ? c.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 
 export interface EventSource {
   type: "agent" | "connector" | "webhook" | "manual" | "system";
@@ -39,14 +45,14 @@ export interface CreateEnvelopeInput<TPayload = unknown> {
 export function createEventEnvelope<TPayload = unknown>(
   input: CreateEnvelopeInput<TPayload>,
 ): RoutedEventEnvelope<TPayload> {
-  const eventId = randomUUID();
+  const eventId = uuid();
   return {
     eventId,
     organizationId: input.organizationId,
     eventType: input.eventType,
     occurredAt: new Date().toISOString(),
     source: input.source,
-    correlationId: input.correlationId ?? randomUUID(),
+    correlationId: input.correlationId ?? uuid(),
     causationId: input.causationId,
     idempotencyKey: input.idempotencyKey ?? eventId,
     attribution: input.attribution,

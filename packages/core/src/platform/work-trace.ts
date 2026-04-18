@@ -1,4 +1,6 @@
 import type { ExecutionModeName, WorkOutcome, Trigger, ExecutionError, Actor } from "./types.js";
+import type { ExecutionConstraints } from "./governance-types.js";
+import type { DeploymentContext } from "./deployment-context.js";
 
 export interface WorkTrace {
   workUnitId: string;
@@ -10,13 +12,26 @@ export interface WorkTrace {
   organizationId: string;
   actor: Actor;
   trigger: Trigger;
+
+  parameters?: Record<string, unknown>;
+  deploymentContext?: DeploymentContext;
+
   governanceOutcome: "execute" | "require_approval" | "deny";
   riskScore: number;
   matchedPolicies: string[];
+  governanceConstraints?: ExecutionConstraints;
+
+  approvalId?: string;
+  approvalOutcome?: "approved" | "rejected" | "patched" | "expired";
+  approvalRespondedBy?: string;
+  approvalRespondedAt?: string;
+
   outcome: WorkOutcome;
   durationMs: number;
-  approvalWaitMs?: number;
   error?: ExecutionError;
+  executionSummary?: string;
+  executionOutputs?: Record<string, unknown>;
+
   modeMetrics?: Record<string, unknown>;
   requestedAt: string;
   governanceCompletedAt: string;

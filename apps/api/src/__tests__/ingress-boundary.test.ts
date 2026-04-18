@@ -5,11 +5,35 @@ import { resolve } from "node:path";
 const ROUTES_DIR = resolve(import.meta.dirname, "../routes");
 
 /**
- * Routes that are exempt from the PlatformIngress boundary.
- * - simulate.ts: read-only dry-run, not a work submission
- * - approvals.ts: responds to existing work, not new ingress
+ * Orchestrator methods that must not be called from route files.
+ * All work submission and lifecycle operations go through PlatformIngress + PlatformLifecycle.
+ *
+ * Phase 2 migrated: respondToApproval, executeApproved, requestUndo, propose, emergency halt.
+ * Remaining legacy bridge: simulate (read-only, no lifecycle mutation — requires cartridge
+ * integration not yet available in GovernanceGate simulation mode).
  */
-const EXEMPT_ROUTES = new Set(["simulate.ts", "approvals.ts"]);
+const BLOCKED_METHODS = [
+  "resolveAndPropose",
+  "propose(",
+  "executePreApproved",
+  "respondToApproval",
+  "executeApproved",
+  "requestUndo",
+];
+
+/**
+ * Legacy exceptions — routes that still call the orchestrator directly.
+ * Phase 2 cleared all lifecycle exceptions. Only simulate remains.
+ */
+const LEGACY_EXCEPTIONS: Record<
+  string,
+  {
+    methods: string[];
+    reason: string;
+  }
+> = {};
+
+const FULLY_EXEMPT = new Set(["simulate.ts"]);
 
 describe("PlatformIngress boundary enforcement", () => {
   const routeFiles = readdirSync(ROUTES_DIR).filter(
@@ -21,12 +45,28 @@ describe("PlatformIngress boundary enforcement", () => {
   });
 
   for (const file of routeFiles) {
-    if (EXEMPT_ROUTES.has(file)) continue;
+    if (FULLY_EXEMPT.has(file)) continue;
 
-    it(`${file} does not call orchestrator.resolveAndPropose()`, () => {
+    const exception = LEGACY_EXCEPTIONS[file];
+
+    it(`${file} does not call blocked orchestrator methods`, () => {
       const source = readFileSync(resolve(ROUTES_DIR, file), "utf-8");
-      expect(source).not.toContain("orchestrator.resolveAndPropose");
-      expect(source).not.toContain("resolveAndPropose(");
+      for (const method of BLOCKED_METHODS) {
+        if (exception?.methods.some((m) => method.includes(m))) continue;
+        expect(source).not.toContain(`orchestrator.${method}`);
+      }
     });
   }
+
+  it("does not introduce new direct bus.emit() calls in routes", () => {
+    for (const file of routeFiles) {
+      const source = readFileSync(resolve(ROUTES_DIR, file), "utf-8");
+      expect(source).not.toContain("conversionBus.emit(");
+    }
+  });
+
+  it("has no legacy exceptions after Phase 2 migration", () => {
+    const exceptionCount = Object.keys(LEGACY_EXCEPTIONS).length;
+    expect(exceptionCount).toBe(0);
+  });
 });

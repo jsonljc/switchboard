@@ -508,14 +508,12 @@ describe("MCP Server", () => {
       }
     });
 
-    it("includes CRM and payments tools", () => {
+    it("includes core read and governance tools", () => {
       const allNames = new Set(toolDefinitions.map((t) => t.name));
-      // CRM tools
-      expect(allNames.has("search_contacts")).toBe(true);
-      expect(allNames.has("get_contact")).toBe(true);
-      // Payments tools
-      expect(allNames.has("create_invoice")).toBe(true);
-      expect(allNames.has("create_refund")).toBe(true);
+      expect(allNames.has("get_campaign")).toBe(true);
+      expect(allNames.has("search_campaigns")).toBe(true);
+      expect(allNames.has("get_audit_trail")).toBe(true);
+      expect(allNames.has("get_governance_status")).toBe(true);
     });
   });
 

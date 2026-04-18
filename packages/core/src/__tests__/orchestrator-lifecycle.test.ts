@@ -4,7 +4,6 @@ import { createInMemoryStorage } from "../storage/index.js";
 import { AuditLedger, InMemoryLedgerStorage } from "../audit/ledger.js";
 import { createGuardrailState } from "../engine/policy-engine.js";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
-import { CompetenceTracker } from "../competence/index.js";
 import { clearProposeCaches } from "../orchestrator/propose-helpers.js";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
@@ -224,119 +223,6 @@ describe("LifecycleOrchestrator — lifecycle, competence, delegation, risk, spe
 
       const chainResult = await ledger.verifyChain(allEntries);
       expect(chainResult.valid).toBe(true);
-    });
-  });
-
-  describe("Competence integration", () => {
-    let competenceOrchestrator: LifecycleOrchestrator;
-    let competenceTracker: CompetenceTracker;
-
-    beforeEach(async () => {
-      competenceTracker = new CompetenceTracker(storage.competence, ledger);
-      competenceOrchestrator = new LifecycleOrchestrator({
-        storage,
-        ledger,
-        guardrailState,
-        competenceTracker,
-      });
-    });
-
-    it("should earn trust through successful executions -> eventually auto-approved", async () => {
-      cartridge.onRiskInput(() => ({
-        baseRisk: "medium" as const,
-        exposure: { dollarsAtRisk: 100, blastRadius: 1 },
-        reversibility: "full" as const,
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      }));
-
-      for (let i = 0; i < 25; i++) {
-        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
-      }
-
-      const result = await competenceOrchestrator.propose({
-        actionType: "digital-ads.campaign.pause",
-        parameters: { campaignId: "camp_1" },
-        principalId: "user_1",
-        cartridgeId: "digital-ads",
-      });
-
-      expect(result.envelope.status).toBe("approved");
-      expect(result.decisionTrace.approvalRequired).toBe("none");
-
-      const competenceCheck = result.decisionTrace.checks.find(
-        (c) => c.checkCode === "COMPETENCE_TRUST",
-      );
-      expect(competenceCheck).toBeDefined();
-      expect(competenceCheck!.checkData["shouldTrust"]).toBe(true);
-    });
-
-    it("should reduce competence on failed execution", async () => {
-      for (let i = 0; i < 25; i++) {
-        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
-      }
-
-      const adj1 = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
-      expect(adj1!.shouldTrust).toBe(true);
-      const scoreBeforeFailures = adj1!.score;
-
-      for (let i = 0; i < 5; i++) {
-        await competenceTracker.recordFailure("user_1", "digital-ads.campaign.pause");
-      }
-
-      const adj2 = await competenceTracker.getAdjustment("user_1", "digital-ads.campaign.pause");
-      expect(adj2!.score).toBeLessThan(scoreBeforeFailures);
-      expect(adj2!.shouldTrust).toBe(false);
-    });
-
-    it("should record rollback against original action type on undo", async () => {
-      for (let i = 0; i < 15; i++) {
-        await competenceTracker.recordSuccess("user_1", "digital-ads.campaign.pause");
-      }
-
-      await storage.identity.saveSpec(
-        makeIdentitySpec({
-          trustBehaviors: ["digital-ads.campaign.pause", "digital-ads.campaign.resume"],
-        }),
-      );
-
-      const adjBefore = await competenceTracker.getAdjustment(
-        "user_1",
-        "digital-ads.campaign.pause",
-      );
-
-      const result = await competenceOrchestrator.propose({
-        actionType: "digital-ads.campaign.pause",
-        parameters: { campaignId: "camp_1" },
-        principalId: "user_1",
-        cartridgeId: "digital-ads",
-      });
-
-      await competenceOrchestrator.executeApproved(result.envelope.id);
-
-      await competenceOrchestrator.requestUndo(result.envelope.id);
-
-      const adjAfter = await competenceTracker.getAdjustment(
-        "user_1",
-        "digital-ads.campaign.pause",
-      );
-      expect(adjAfter!.record.rollbackCount).toBe(1);
-      expect(adjAfter!.score).toBeLessThan(adjBefore!.score + 10);
-    });
-
-    it("should work without competenceTracker (backward compat)", async () => {
-      const result = await orchestrator.propose({
-        actionType: "digital-ads.campaign.pause",
-        parameters: { campaignId: "camp_1" },
-        principalId: "user_1",
-        cartridgeId: "digital-ads",
-      });
-
-      expect(result.denied).toBe(false);
-      expect(result.envelope).toBeDefined();
-      const competenceCheck = result.decisionTrace.checks.find(
-        (c) => c.checkCode === "COMPETENCE_TRUST",
-      );
-      expect(competenceCheck).toBeUndefined();
     });
   });
 

@@ -58,6 +58,8 @@ declare module "fastify" {
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
     platformIngress: import("@switchboard/core/platform").PlatformIngress;
+    platformLifecycle: import("@switchboard/core/platform").PlatformLifecycle;
+    deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null;
     resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
@@ -163,8 +165,23 @@ export async function buildServer() {
   }
 
   // --- ConversionBus wiring ---
-  const { InMemoryConversionBus } = await import("@switchboard/core");
-  const conversionBus = new InMemoryConversionBus();
+  const { createConversionPipelineMetrics, setOutboxBacklogSampler } = await import("./metrics.js");
+  const conversionMetrics = createConversionPipelineMetrics();
+  const { bootstrapConversionBus } = await import("./bootstrap/conversion-bus-bootstrap.js");
+  const conversionBusHandle = await bootstrapConversionBus({
+    redis,
+    prisma: prismaClient,
+    logger: app.log,
+    metrics: conversionMetrics,
+  });
+  const conversionBus = conversionBusHandle.bus;
+  conversionBusHandle.start();
+
+  if (prismaClient) {
+    setOutboxBacklogSampler(async () => {
+      return prismaClient.outboxEvent.count({ where: { status: "pending" } });
+    });
+  }
 
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
@@ -350,151 +367,20 @@ export async function buildServer() {
   registerCartridgeIntents(intentRegistry, cartridgeManifests);
 
   const modeRegistry = new ExecutionModeRegistry();
-  modeRegistry.register(new CartridgeMode({ orchestrator, intentRegistry }));
+  modeRegistry.register(new CartridgeMode({ cartridgeRegistry: storage.cartridges }));
 
   // --- SkillMode registration (skill-backed deployments) ---
   try {
-    const {
-      loadSkill,
-      SkillExecutorImpl,
-      AnthropicToolCallingAdapter,
-      BuilderRegistry,
-      createCrmQueryTool,
-      createCrmWriteTool,
-      createCalendarBookTool,
-    } = await import("@switchboard/core/skill-runtime");
-    const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-    const {
-      PrismaContactStore,
-      PrismaOpportunityStore,
-      PrismaActivityLogStore,
-      PrismaBookingStore,
-    } = await import("@switchboard/db");
-
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
     }
-    if (!process.env["ANTHROPIC_API_KEY"]) {
-      throw new Error("SkillMode requires ANTHROPIC_API_KEY");
-    }
-
-    // 1. Load skill definitions
-    const skillsDir = new URL("../../../../skills", import.meta.url).pathname;
-    const alexSkill = loadSkill("alex", skillsDir);
-    const skillsBySlug = new Map([[alexSkill.slug, alexSkill]]);
-
-    // 2. Register skill intents
-    registerSkillIntents(intentRegistry, [alexSkill]);
-
-    // 3. Build stores
-    const contactStore = new PrismaContactStore(prismaClient);
-    const opportunityStore = new PrismaOpportunityStore(prismaClient);
-    const activityStore = new PrismaActivityLogStore(prismaClient);
-    const bookingStore = new PrismaBookingStore(prismaClient);
-
-    // 4. Build tools map
-    const toolsMap = new Map([
-      ["crm-query", createCrmQueryTool(contactStore, activityStore)],
-      ["crm-write", createCrmWriteTool(opportunityStore, activityStore)],
-      [
-        "calendar-book",
-        createCalendarBookTool({
-          calendarProvider: {
-            listAvailableSlots: async () => [],
-            createBooking: async () => {
-              throw new Error("Calendar provider not connected — provision a connection first");
-            },
-            cancelBooking: async () => {
-              throw new Error("Calendar provider not connected");
-            },
-            rescheduleBooking: async () => {
-              throw new Error("Calendar provider not connected");
-            },
-            getBooking: async () => null,
-            healthCheck: async () => ({
-              status: "disconnected" as const,
-              latencyMs: 0,
-              error: "No calendar connection provisioned",
-            }),
-          },
-          bookingStore,
-          opportunityStore: {
-            findActiveByContact: async (orgId: string, contactId: string) => {
-              const active = await opportunityStore.findActiveByContact(orgId, contactId);
-              return active.length > 0 ? { id: active[0]!.id } : null;
-            },
-            create: async (input: {
-              organizationId: string;
-              contactId: string;
-              service: string;
-            }) => {
-              const created = await opportunityStore.create({
-                organizationId: input.organizationId,
-                contactId: input.contactId,
-                serviceId: input.service,
-                serviceName: input.service,
-              });
-              return { id: created.id };
-            },
-          },
-          runTransaction: (
-            fn: (tx: {
-              booking: {
-                update(args: {
-                  where: { id: string };
-                  data: Record<string, unknown>;
-                }): Promise<unknown>;
-              };
-              outboxEvent: {
-                create(args: { data: Record<string, unknown> }): Promise<unknown>;
-              };
-            }) => Promise<unknown>,
-          ) =>
-            prismaClient.$transaction((tx) =>
-              fn({ booking: tx.booking, outboxEvent: tx.outboxEvent }),
-            ),
-        }),
-      ],
-    ]);
-
-    // 5. Create SkillExecutor
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
-    const adapter = new AnthropicToolCallingAdapter(anthropicClient);
-    const skillExecutor = new SkillExecutorImpl(adapter, toolsMap);
-
-    // 6. Create BuilderRegistry
-    const builderRegistry = new BuilderRegistry();
-
-    // 7. Register SkillMode
-    modeRegistry.register(
-      new SkillMode({
-        executor: skillExecutor,
-        skillsBySlug,
-        builderRegistry,
-        stores: {
-          opportunityStore: {
-            findActiveByContact: async (orgId: string, contactId: string) =>
-              opportunityStore.findActiveByContact(orgId, contactId),
-          },
-          contactStore: {
-            findById: async (orgId: string, contactId: string) =>
-              contactStore.findById(orgId, contactId),
-          },
-          activityStore: {
-            listByDeployment: async (
-              orgId: string,
-              deploymentId: string,
-              opts: { limit: number },
-            ) => activityStore.listByDeployment(orgId, deploymentId, opts),
-          },
-        },
-      }),
-    );
-
-    app.log.info(
-      `SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`,
-    );
+    const { bootstrapSkillMode } = await import("./bootstrap/skill-mode.js");
+    await bootstrapSkillMode({
+      prismaClient,
+      intentRegistry,
+      modeRegistry,
+      logger: app.log,
+    });
   } catch (err) {
     if (process.env.NODE_ENV === "production") {
       throw err;
@@ -525,10 +411,14 @@ export async function buildServer() {
   });
 
   let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
+  let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
   if (prismaClient) {
     const { PrismaWorkTraceStore } = await import("@switchboard/db");
     workTraceStore = new PrismaWorkTraceStore(prismaClient);
+    const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
+    deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
+  app.decorate("deploymentResolver", deploymentResolver);
 
   const platformIngress = new PlatformIngress({
     intentRegistry,
@@ -538,8 +428,33 @@ export async function buildServer() {
   });
   app.decorate("platformIngress", platformIngress);
 
-  // Resource cleanup on close — order: scheduler → Redis → Prisma
+  const { PlatformLifecycle } = await import("@switchboard/core/platform");
+  const platformLifecycle = new PlatformLifecycle({
+    approvalStore: storage.approvals,
+    envelopeStore: storage.envelopes,
+    identityStore: storage.identity,
+    modeRegistry,
+    traceStore: workTraceStore ?? {
+      persist: async () => {},
+      getByWorkUnitId: async () => null,
+      update: async () => {},
+    },
+    ledger,
+    trustAdapter: trustAdapter ?? null,
+    selfApprovalAllowed: !!process.env.ALLOW_SELF_APPROVAL,
+    approvalRateLimit: process.env.APPROVAL_RATE_LIMIT_MAX
+      ? {
+          maxApprovals: parseInt(process.env.APPROVAL_RATE_LIMIT_MAX, 10),
+          windowMs: parseInt(process.env.APPROVAL_RATE_LIMIT_WINDOW_MS ?? "60000", 10),
+        }
+      : null,
+  });
+  app.decorate("platformLifecycle", platformLifecycle);
+
+  // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
+    conversionBusHandle.stop();
+
     if (schedulerDeps) {
       await schedulerDeps.cleanup();
     }

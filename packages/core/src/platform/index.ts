@@ -43,6 +43,10 @@ export type {
   GovernanceGateInterface,
 } from "./platform-ingress.js";
 
+// Platform Lifecycle
+export { PlatformLifecycle } from "./platform-lifecycle.js";
+export type { PlatformLifecycleConfig, ApprovalResponseResult } from "./platform-lifecycle.js";
+
 // Registries
 export { IntentRegistry } from "./intent-registry.js";
 export { ExecutionModeRegistry } from "./execution-mode-registry.js";
