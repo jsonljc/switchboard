@@ -58,6 +58,9 @@ declare module "fastify" {
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
     platformIngress: import("@switchboard/core/platform").PlatformIngress;
+    resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
+    executionQueue: import("bullmq").Queue | null;
+    executionWorker: import("bullmq").Worker | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */

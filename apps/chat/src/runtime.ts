@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
@@ -309,11 +310,13 @@ export class ChatRuntime {
       // Emit inquiry event to ConversionBus for new lead bot conversations
       if (this.isLeadBot && this.conversionBus) {
         this.conversionBus.emit({
+          eventId: crypto.randomUUID(),
           type: "inquiry",
           contactId: threadId,
           organizationId: message.organizationId ?? "default",
           value: 0,
-          timestamp: new Date(),
+          occurredAt: new Date(),
+          source: "chat_runtime",
           metadata: { channel: message.channel },
         });
       }

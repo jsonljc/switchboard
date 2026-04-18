@@ -18,7 +18,8 @@ export class PrismaDispatchLogStore {
         platform: input.platform,
         status: input.status,
         errorMessage: input.errorMessage ?? null,
-        responsePayload: input.responsePayload ?? null,
+        responsePayload:
+          (input.responsePayload as Record<string, string | number | boolean | null>) ?? null,
       },
     });
   }

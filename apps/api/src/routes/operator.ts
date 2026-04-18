@@ -32,7 +32,10 @@ async function dispatchAndFinalize(
   channel: OperatorChannel,
 ): Promise<{ status: "completed" | "failed"; message: string; workflowIds: string[] }> {
   try {
-    const routerResult = await deps.router.dispatch(command);
+    const routerResult = await deps.router.dispatch({
+      ...command,
+      entities: command.entities.map((e) => ({ type: e.type, value: e.id ?? "" })),
+    });
 
     const status = routerResult.success ? "completed" : "failed";
     const completedAt = new Date();
@@ -126,7 +129,12 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
         entities: interpretResult.entities,
         parameters: interpretResult.parameters,
         parseConfidence: interpretResult.confidence,
-        guardrailResult,
+        guardrailResult: {
+          ...guardrailResult,
+          riskLevel: "low" as const,
+          requiresPreview: false,
+          ambiguityFlags: [],
+        },
         status: "parsed",
         workflowIds: [],
         resultSummary: null,
@@ -161,7 +169,7 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
           status: "awaiting_confirmation",
           message: deps.formatter.formatConfirmationPrompt(
             command.intent,
-            command.entities,
+            command.entities.map((e) => ({ type: e.type, value: e.id ?? "" })),
             channel,
           ),
           guardrailResult,

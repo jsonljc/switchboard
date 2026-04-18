@@ -21,7 +21,11 @@ export interface CartridgeOrchestrator {
 export interface CartridgeModeConfig {
   orchestrator: CartridgeOrchestrator;
   intentRegistry: {
-    lookup(intent: string): { executor: { actionId?: string } } | undefined;
+    lookup(
+      intent: string,
+    ):
+      | { executor: { actionId?: string; mode?: string; skillSlug?: string; pipelineId?: string } }
+      | undefined;
   };
 }
 

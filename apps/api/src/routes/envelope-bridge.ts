@@ -67,7 +67,7 @@ export async function createApprovalEnvelope(
     throw new Error("Identity spec not found for actor");
   }
   const overlays = await storageContext.identity.listOverlaysBySpecId(identitySpec.id);
-  const cartridgeId = body.cartridgeId ?? workUnit.intent.split(".")[0];
+  const cartridgeId = body.cartridgeId ?? workUnit.intent.split(".")[0] ?? workUnit.intent;
   const resolvedId = resolveIdentity(identitySpec, overlays, { cartridgeId });
 
   // Get risk category from the cartridge
@@ -105,7 +105,11 @@ export async function createApprovalEnvelope(
     summary: `${workUnit.intent} (requested by ${workUnit.actor.id})`,
     riskCategory,
     bindingHash,
-    evidenceBundle: {},
+    evidenceBundle: {
+      decisionTrace: null,
+      contextSnapshot: {},
+      identitySnapshot: {},
+    },
     suggestedButtons: [
       { label: "Approve", action: "approve" },
       { label: "Reject", action: "reject" },
@@ -223,21 +227,7 @@ export async function createExecutedEnvelope(
  * Extracted to a separate function since audit ledger is app-level and can't be passed directly.
  */
 export async function recordProposalAudit(params: {
-  auditLedger: {
-    record: (entry: {
-      eventType: string;
-      actorType: string;
-      actorId: string;
-      entityType: string;
-      entityId: string;
-      riskCategory: RiskCategory;
-      summary: string;
-      snapshot: Record<string, unknown>;
-      envelopeId: string;
-      organizationId: string;
-      traceId?: string;
-    }) => Promise<void>;
-  };
+  auditLedger: Pick<import("@switchboard/core").AuditLedger, "record">;
   eventType: "action.proposed";
   workUnit: WorkUnit;
   proposalId: string;

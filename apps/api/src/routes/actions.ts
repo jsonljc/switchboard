@@ -111,7 +111,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
               orchestrator: app.orchestrator,
             });
 
-            const cartridgeId = body.cartridgeId ?? workUnit.intent.split(".")[0];
+            const cartridgeId =
+              body.cartridgeId ?? workUnit.intent.split(".")[0] ?? workUnit.intent;
             const cartridge = app.storageContext.cartridges.get(cartridgeId);
             let riskCategory: import("@switchboard/schemas").RiskCategory = "medium";
             if (cartridge) {
@@ -396,7 +397,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
       const results = [];
       for (let i = 0; i < body.proposals.length; i++) {
-        const proposal = body.proposals[i];
+        const proposal = body.proposals[i]!;
 
         // TODO(ingress-convergence): Replace with DeploymentResolver lookup
         const submitRequest: SubmitWorkRequest = {
