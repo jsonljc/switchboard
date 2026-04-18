@@ -20,13 +20,15 @@ describe("wireCAPIDispatcher", () => {
     wireCAPIDispatcher(bus, { pixelId: "px-123", accessToken: "token-abc" });
 
     const event: ConversionEvent = {
+      eventId: "evt_test_1",
       type: "purchased",
       contactId: "c1",
       organizationId: "org-1",
       value: 388,
       sourceAdId: "ad-456",
       sourceCampaignId: "camp-789",
-      timestamp: new Date("2026-04-14T10:00:00Z"),
+      occurredAt: new Date("2026-04-14T10:00:00Z"),
+      source: "test",
       metadata: {},
     };
 
@@ -46,11 +48,13 @@ describe("wireCAPIDispatcher", () => {
     wireCAPIDispatcher(bus, { pixelId: "px-123", accessToken: "token-abc" });
 
     bus.emit({
+      eventId: "evt_test_2",
       type: "purchased",
       contactId: "c1",
       organizationId: "org-1",
       value: 100,
-      timestamp: new Date(),
+      occurredAt: new Date(),
+      source: "test",
       metadata: {},
     });
 
@@ -63,12 +67,14 @@ describe("wireCAPIDispatcher", () => {
     wireCAPIDispatcher(bus, { pixelId: "px-123", accessToken: "token-abc" });
 
     bus.emit({
+      eventId: "evt_test_3",
       type: "inquiry",
       contactId: "c1",
       organizationId: "org-1",
       value: 0,
       sourceAdId: "ad-1",
-      timestamp: new Date(),
+      occurredAt: new Date(),
+      source: "test",
       metadata: {},
     });
 

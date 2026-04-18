@@ -4,11 +4,13 @@ import type { ConversionEvent, ConversionEventHandler } from "../conversion-bus.
 
 function makeEvent(overrides?: Partial<ConversionEvent>): ConversionEvent {
   return {
+    eventId: "evt_test_1",
     type: "inquiry",
     contactId: "ct_1",
     organizationId: "org_1",
     value: 0,
-    timestamp: new Date(),
+    occurredAt: new Date(),
+    source: "test",
     metadata: {},
     ...overrides,
   };

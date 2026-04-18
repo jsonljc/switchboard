@@ -2,19 +2,24 @@
 // Conversion Event Bus — Internal pub/sub for CRM-to-ads feedback loop
 // ---------------------------------------------------------------------------
 
+import type { ConversionStage } from "@switchboard/schemas";
+
 /**
  * Conversion event types that flow through the feedback loop.
  * Ordered by funnel depth — each subsequent type represents deeper engagement.
+ * @deprecated Use ConversionStage from @switchboard/schemas instead.
  */
-export type ConversionEventType = "inquiry" | "qualified" | "booked" | "purchased" | "completed";
+export type ConversionEventType = ConversionStage;
 
 /**
  * A conversion event emitted when a meaningful business outcome occurs.
  * Bridges CRM/customer-engagement events to the Meta CAPI feedback loop.
  */
 export interface ConversionEvent {
+  /** Unique application-level event ID for deduplication */
+  eventId: string;
   /** Conversion type (funnel stage) */
-  type: ConversionEventType;
+  type: ConversionStage;
   /** CRM contact ID */
   contactId: string;
   /** Organization this event belongs to */
@@ -26,7 +31,13 @@ export interface ConversionEvent {
   /** Attribution: originating campaign ID */
   sourceCampaignId?: string;
   /** When the conversion occurred */
-  timestamp: Date;
+  occurredAt: Date;
+  /** Source system/component that emitted this event */
+  source: string;
+  /** ID of the triggering action/request (for causation tracking) */
+  causationId?: string;
+  /** ID linking related work across the system (for distributed tracing) */
+  workTraceId?: string;
   /** Arbitrary metadata (deal stage, appointment details, etc.) */
   metadata: Record<string, unknown>;
 }

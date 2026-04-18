@@ -70,13 +70,15 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
     // Emit ConversionEvent on the bus if available
     if (app.conversionBus) {
       const conversionEvent: ConversionEvent = {
+        eventId: `evt_rev_${event.id}`,
         type: "purchased",
         contactId,
         organizationId: orgId,
         value: amount,
         sourceAdId: sourceAdId ?? undefined,
         sourceCampaignId: sourceCampaignId ?? undefined,
-        timestamp: new Date(),
+        occurredAt: new Date(),
+        source: "revenue-api",
         metadata: { opportunityId: resolvedOpportunityId, currency, revenueType: type },
       };
       app.conversionBus.emit(conversionEvent);

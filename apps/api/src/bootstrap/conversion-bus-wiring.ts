@@ -15,7 +15,7 @@ export function wireCAPIDispatcher(
     try {
       await client.dispatchEvent({
         eventName,
-        eventTime: Math.floor(event.timestamp.getTime() / 1000),
+        eventTime: Math.floor(event.occurredAt.getTime() / 1000),
         userData: { fbclid: (event.metadata["fbclid"] as string) ?? null },
         customData: event.value ? { value: event.value, currency: "SGD" } : undefined,
       });
