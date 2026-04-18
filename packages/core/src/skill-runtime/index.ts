@@ -13,6 +13,7 @@ export { ParameterResolutionError, validateBuilderRegistration } from "./paramet
 export {
   createCrmQueryTool,
   createCrmWriteTool,
+  createCalendarBookTool,
   createPipelineHandoffTool,
   createWebScannerTool,
   createAdsAnalyticsTool,

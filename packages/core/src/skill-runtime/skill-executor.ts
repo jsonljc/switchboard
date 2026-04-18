@@ -193,6 +193,10 @@ export class SkillExecutorImpl implements SkillExecutor {
           );
         }
 
+        console.warn(
+          `[SkillExecutor] tool_call: ${toolUse.name} args=${JSON.stringify(toolUse.input).slice(0, 200)}`,
+        );
+
         const start = Date.now();
         const [toolId, ...opParts] = toolUse.name.split(".");
         const operation = opParts.join(".");
