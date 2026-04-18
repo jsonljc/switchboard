@@ -90,3 +90,4 @@ export { PrismaKnowledgeEntryStore } from "./stores/prisma-knowledge-entry-store
 export { PrismaWorkTraceStore } from "./stores/prisma-work-trace-store.js";
 export { PrismaBookingStore } from "./stores/prisma-booking-store.js";
 export { PrismaOutboxStore } from "./stores/prisma-outbox-store.js";
+export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-store.js";
