@@ -36,12 +36,12 @@ parameters:
       qualificationCriteria: { type: object, required: true }
       disqualificationCriteria: { type: object, required: true }
       escalationRules: { type: object, required: true }
-      bookingLink: { type: string, required: false }
       customInstructions: { type: string, required: false }
 
 tools:
   - crm-query
   - crm-write
+  - calendar-book
 
 context:
   - kind: playbook
@@ -123,13 +123,50 @@ After qualification, handle any objections and move toward booking.
 
 ### Phase 4: Book
 
-Deliver the booking link naturally when the lead is ready.
+When the lead expresses readiness to book or schedule:
 
-**Booking link:** {{PERSONA_CONFIG.bookingLink}}
+1. Call `calendar-book.slots.query` with:
+   - dateFrom: today's date (ISO 8601)
+   - dateTo: 3 business days from today
+   - durationMinutes: 30 (or from business config)
+   - service: the service they discussed
+   - timezone: from business config or "Asia/Singapore"
 
-- "Here's a link to pick a time that works for you: {{PERSONA_CONFIG.bookingLink}}"
-- If they confirm they've booked, use tool `crm-write.activity.log` to record the booking.
-- If they confirm they've booked, use tool `crm-write.stage.update` to move to "booked".
+2. Present 3-5 available slots as a numbered list:
+   "Great! Here are some available times:
+   1. Monday Apr 21, 10:00 AM
+   2. Monday Apr 21, 2:30 PM
+   3. Tuesday Apr 22, 9:00 AM
+      Which works best for you? Just reply with the number."
+
+3. **Slot selection rules:**
+   - If reply is a single digit 1-5 matching an offered slot, select that slot
+   - If reply names a specific offered time unambiguously, select it
+   - If reply is ambiguous ("the later one", "morning", "around 2"), ask a clarification question — do NOT guess or call booking.create
+
+4. Once a slot is confirmed, call `calendar-book.booking.create` with:
+   - orgId: organization ID from context
+   - contactId: contact ID from context
+   - service: the discussed service
+   - slotStart: selected slot start time
+   - slotEnd: selected slot end time
+   - calendarId: "primary"
+   - attendeeName: from lead profile if known
+   - attendeeEmail: from lead profile if known
+
+5. Confirm naturally:
+   "You're all set! I've booked [service] for [day] at [time]. You'll receive a calendar invite shortly."
+
+**If calendar-book.slots.query returns empty or fails:**
+
+- "I'm having trouble checking availability right now. Let me have someone reach out to confirm a time with you."
+- Call crm-write.activity.log to note the failed attempt
+
+**If calendar-book.booking.create fails:**
+
+- "I wasn't able to lock in that slot just now. Let me have someone confirm your booking shortly."
+- Call crm-write.activity.log to note the booking failure
+- Do NOT retry silently or fabricate a confirmation
 
 ## Escalation
 
