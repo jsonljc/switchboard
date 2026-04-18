@@ -84,7 +84,15 @@ async function main() {
     try {
       const { getDb } = await import("@switchboard/db");
       const prisma = getDb();
-      const gateway = createGatewayBridge(prisma);
+      const { HttpPlatformIngressAdapter } =
+        await import("./gateway/http-platform-ingress-adapter.js");
+      const apiUrl = process.env["SWITCHBOARD_API_URL"] ?? "http://localhost:3000";
+      const apiKey = process.env["SWITCHBOARD_API_KEY"];
+      const platformIngressAdapter = new HttpPlatformIngressAdapter(apiUrl, apiKey);
+
+      const gateway = createGatewayBridge(prisma, {
+        platformIngress: platformIngressAdapter,
+      });
 
       // Managed runtime registry
       registry = new RuntimeRegistry();
