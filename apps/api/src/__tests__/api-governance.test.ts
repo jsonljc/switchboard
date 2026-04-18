@@ -17,9 +17,8 @@ describe("Governance API", () => {
     get: vi.fn(),
   };
 
-  const mockOrchestrator = {
-    propose: vi.fn(),
-    executeApproved: vi.fn(),
+  const mockPlatformIngress = {
+    submit: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -29,7 +28,7 @@ describe("Governance API", () => {
 
     app.decorate("governanceProfileStore", mockGovernanceProfileStore);
     app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
-    app.decorate("orchestrator", mockOrchestrator as unknown as never);
+    app.decorate("platformIngress", mockPlatformIngress as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -176,11 +175,11 @@ describe("Governance API", () => {
       };
       mockCartridges.get.mockReturnValue(mockCartridge);
 
-      mockOrchestrator.propose.mockResolvedValue({
-        denied: false,
-        envelope: { id: "env_1" },
+      mockPlatformIngress.submit.mockResolvedValue({
+        ok: true,
+        result: { outcome: "completed", summary: "Campaign paused" },
+        workUnit: { id: "wu_1" },
       });
-      mockOrchestrator.executeApproved.mockResolvedValue(undefined);
 
       const res = await app.inject({
         method: "POST",
@@ -211,7 +210,7 @@ describe("Governance API", () => {
       };
       mockCartridges.get.mockReturnValue(mockCartridge);
 
-      mockOrchestrator.propose.mockRejectedValue(new Error("Orchestrator down"));
+      mockPlatformIngress.submit.mockRejectedValue(new Error("Platform ingress down"));
 
       const res = await app.inject({
         method: "POST",
@@ -225,7 +224,7 @@ describe("Governance API", () => {
       expect(body.campaignsPaused).toEqual([]);
       expect(body.failures).toHaveLength(1);
       expect(body.failures[0].campaignId).toBe("camp_fail");
-      expect(body.failures[0].error).toBe("Orchestrator down");
+      expect(body.failures[0].error).toBe("Platform ingress down");
     });
 
     it("succeeds even when cartridge is unavailable", async () => {
@@ -253,9 +252,10 @@ describe("Governance API", () => {
       };
       mockCartridges.get.mockReturnValue(mockCartridge);
 
-      mockOrchestrator.propose.mockResolvedValue({
-        denied: true,
-        envelope: { id: "env_denied" },
+      mockPlatformIngress.submit.mockResolvedValue({
+        ok: true,
+        result: { outcome: "failed", summary: "Denied by governance" },
+        workUnit: { id: "wu_denied" },
       });
 
       const res = await app.inject({
@@ -267,7 +267,6 @@ describe("Governance API", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.campaignsPaused).toEqual([]);
-      expect(mockOrchestrator.executeApproved).not.toHaveBeenCalled();
     });
 
     it("defaults reason to null when not provided", async () => {

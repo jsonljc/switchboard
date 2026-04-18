@@ -7,6 +7,9 @@ import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 const simulateJsonSchema = zodToJsonSchema(SimulateBodySchema, { target: "openApi3" });
 
 export const simulateRoutes: FastifyPluginAsync = async (app) => {
+  // Legacy bridge: simulate uses the old orchestrator because it requires
+  // cartridge-specific risk input and enrichment. Read-only, no lifecycle mutation.
+  // Exit condition: GovernanceGate supports simulation mode (Phase 7).
   // POST /api/simulate - Dry-run action evaluation
   app.post(
     "/",

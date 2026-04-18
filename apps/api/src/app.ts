@@ -58,6 +58,8 @@ declare module "fastify" {
     schedulerService: import("@switchboard/core").SchedulerService | null;
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
     platformIngress: import("@switchboard/core/platform").PlatformIngress;
+    platformLifecycle: import("@switchboard/core/platform").PlatformLifecycle;
+    deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null;
     resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
@@ -365,7 +367,7 @@ export async function buildServer() {
   registerCartridgeIntents(intentRegistry, cartridgeManifests);
 
   const modeRegistry = new ExecutionModeRegistry();
-  modeRegistry.register(new CartridgeMode({ orchestrator, intentRegistry }));
+  modeRegistry.register(new CartridgeMode({ cartridgeRegistry: storage.cartridges }));
 
   // --- SkillMode registration (skill-backed deployments) ---
   try {
@@ -409,10 +411,14 @@ export async function buildServer() {
   });
 
   let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
+  let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
   if (prismaClient) {
     const { PrismaWorkTraceStore } = await import("@switchboard/db");
     workTraceStore = new PrismaWorkTraceStore(prismaClient);
+    const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
+    deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
+  app.decorate("deploymentResolver", deploymentResolver);
 
   const platformIngress = new PlatformIngress({
     intentRegistry,
@@ -421,6 +427,29 @@ export async function buildServer() {
     traceStore: workTraceStore,
   });
   app.decorate("platformIngress", platformIngress);
+
+  const { PlatformLifecycle } = await import("@switchboard/core/platform");
+  const platformLifecycle = new PlatformLifecycle({
+    approvalStore: storage.approvals,
+    envelopeStore: storage.envelopes,
+    identityStore: storage.identity,
+    modeRegistry,
+    traceStore: workTraceStore ?? {
+      persist: async () => {},
+      getByWorkUnitId: async () => null,
+      update: async () => {},
+    },
+    ledger,
+    trustAdapter: trustAdapter ?? null,
+    selfApprovalAllowed: !!process.env.ALLOW_SELF_APPROVAL,
+    approvalRateLimit: process.env.APPROVAL_RATE_LIMIT_MAX
+      ? {
+          maxApprovals: parseInt(process.env.APPROVAL_RATE_LIMIT_MAX, 10),
+          windowMs: parseInt(process.env.APPROVAL_RATE_LIMIT_WINDOW_MS ?? "60000", 10),
+        }
+      : null,
+  });
+  app.decorate("platformLifecycle", platformLifecycle);
 
   // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {

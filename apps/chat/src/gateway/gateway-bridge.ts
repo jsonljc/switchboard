@@ -88,12 +88,10 @@ export function createGatewayBridge(
   // Converged execution path
   const deploymentResolver = new PrismaDeploymentResolver(prisma as never);
 
-  // TODO(ingress-convergence): Wire PlatformIngress from chat app startup
-  const platformIngress = options.platformIngress ?? {
-    submit: async () => {
-      throw new Error("PlatformIngress not configured — wire it in chat app main.ts");
-    },
-  };
+  if (!options.platformIngress) {
+    throw new Error("PlatformIngress is required — wire it in chat app main.ts");
+  }
+  const platformIngress = options.platformIngress;
 
   return new ChannelGateway({
     deploymentResolver,

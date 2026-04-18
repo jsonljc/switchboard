@@ -54,7 +54,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        const response = await app.orchestrator.respondToApproval({
+        const response = await app.platformLifecycle.respondToApproval({
           approvalId: id,
           action: body.action,
           respondedBy: body.respondedBy,

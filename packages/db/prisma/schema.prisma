@@ -1407,14 +1407,35 @@ model WorkTrace {
   actorId               String
   actorType             String
   trigger               String
+
+  // Lifecycle state — the canonical operational record
+  parameters            String?   @db.Text    // JSON: original action parameters
+  deploymentContext     String?   @db.Text    // JSON: DeploymentContext snapshot at submit
+
+  // Governance — decided once at submit, reused on continuation
   governanceOutcome     String
   riskScore             Float
   matchedPolicies       String    @db.Text
+  governanceConstraints String?   @db.Text    // JSON: ExecutionConstraints from GovernanceDecision
+
+  // Approval lifecycle — tracks the continuation from pending → approved/rejected
+  approvalId            String?
+  approvalOutcome       String?               // "approved" | "rejected" | "patched" | "expired"
+  approvalRespondedBy   String?
+  approvalRespondedAt   DateTime?
+
+  // Execution
   outcome               String
   durationMs            Int
   errorCode             String?
   errorMessage          String?
+  executionSummary      String?   @db.Text
+  executionOutputs      String?   @db.Text    // JSON: execution result outputs
+
+  // Observability
   modeMetrics           String?   @db.Text
+
+  // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime
   executionStartedAt    DateTime?
@@ -1423,6 +1444,7 @@ model WorkTrace {
   @@index([organizationId, intent])
   @@index([traceId])
   @@index([requestedAt])
+  @@index([approvalId])
 }
 
 // ---------------------------------------------------------------------------

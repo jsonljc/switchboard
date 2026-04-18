@@ -102,8 +102,8 @@ describe("Idempotency Middleware", () => {
 
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
-    // Different keys produce different envelopes
-    expect(first.json().envelopeId).not.toBe(second.json().envelopeId);
+    // Different keys produce different work units
+    expect(first.json().workUnitId).not.toBe(second.json().workUnitId);
   });
 
   it("MemoryBackend expires entries after TTL", async () => {

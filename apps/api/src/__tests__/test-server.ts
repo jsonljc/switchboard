@@ -28,14 +28,35 @@ import {
   GovernanceGate,
   CartridgeMode,
   PlatformIngress,
+  PlatformLifecycle,
   registerCartridgeIntents,
 } from "@switchboard/core/platform";
 import type {
   GovernanceCartridge,
   CartridgeManifestForRegistration,
-  CartridgeModeConfig,
+  WorkTrace,
+  WorkTraceStore,
 } from "@switchboard/core/platform";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
+
+class InMemoryWorkTraceStore implements WorkTraceStore {
+  private traces = new Map<string, WorkTrace>();
+
+  async persist(trace: WorkTrace): Promise<void> {
+    this.traces.set(trace.workUnitId, { ...trace });
+  }
+
+  async getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null> {
+    return this.traces.get(workUnitId) ?? null;
+  }
+
+  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void> {
+    const existing = this.traces.get(workUnitId);
+    if (existing) {
+      this.traces.set(workUnitId, { ...existing, ...fields });
+    }
+  }
+}
 
 // Re-declare Fastify augmentation for test context
 declare module "fastify" {
@@ -46,6 +67,7 @@ declare module "fastify" {
     policyCache: PolicyCache;
     executionService: ExecutionService;
     platformIngress: PlatformIngress;
+    platformLifecycle: PlatformLifecycle;
   }
 }
 
@@ -240,12 +262,7 @@ export async function buildTestServer(): Promise<TestContext> {
   registerCartridgeIntents(intentRegistry, cartridgeManifests);
 
   const modeRegistry = new ExecutionModeRegistry();
-  modeRegistry.register(
-    new CartridgeMode({
-      orchestrator,
-      intentRegistry: intentRegistry as unknown as CartridgeModeConfig["intentRegistry"],
-    }),
-  );
+  modeRegistry.register(new CartridgeMode({ cartridgeRegistry: storage.cartridges }));
 
   const platformGovernanceGate = new GovernanceGate({
     evaluate,
@@ -261,12 +278,28 @@ export async function buildTestServer(): Promise<TestContext> {
     getGovernanceProfile: async (_orgId) => governanceProfileStore.get(_orgId),
   });
 
+  const workTraceStore = new InMemoryWorkTraceStore();
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
     governanceGate: platformGovernanceGate,
+    traceStore: workTraceStore,
   });
   app.decorate("platformIngress", platformIngress);
+
+  const platformLifecycle = new PlatformLifecycle({
+    approvalStore: storage.approvals,
+    envelopeStore: storage.envelopes,
+    identityStore: storage.identity,
+    modeRegistry,
+    traceStore: workTraceStore,
+    ledger,
+    trustAdapter: null,
+    selfApprovalAllowed: false,
+    approvalRateLimit: null,
+  });
+  app.decorate("platformLifecycle", platformLifecycle);
 
   await app.register(idempotencyMiddleware);
 

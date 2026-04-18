@@ -5,11 +5,8 @@ import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
-import {
-  createApprovalEnvelope,
-  createExecutedEnvelope,
-  recordProposalAudit,
-} from "./envelope-bridge.js";
+import { createApprovalForWorkUnit } from "./approval-factory.js";
+import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
@@ -71,18 +68,18 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // TODO(ingress-convergence): Replace with DeploymentResolver lookup
+      const deployment = await resolveDeploymentForIntent(
+        app.deploymentResolver,
+        organizationId,
+        body.actionType,
+      );
+
       const submitRequest: SubmitWorkRequest = {
         intent: body.actionType,
         parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
         actor: { id: body.principalId, type: "user" as const },
         organizationId,
-        deployment: {
-          deploymentId: "unresolved",
-          skillSlug: body.actionType.split(".")[0] ?? "unknown",
-          trustLevel: "supervised" as const,
-          trustScore: 0,
-        },
+        deployment,
         trigger: "api" as const,
         idempotencyKey,
       };
@@ -104,44 +101,17 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           const { workUnit } = response;
 
           try {
-            const { envelopeId, approvalRequest } = await createApprovalEnvelope({
+            const { approvalId, bindingHash } = await createApprovalForWorkUnit({
               workUnit,
-              body,
               storageContext: app.storageContext,
-              orchestrator: app.orchestrator,
-            });
-
-            const cartridgeId =
-              body.cartridgeId ?? workUnit.intent.split(".")[0] ?? workUnit.intent;
-            const cartridge = app.storageContext.cartridges.get(cartridgeId);
-            let riskCategory: import("@switchboard/schemas").RiskCategory = "medium";
-            if (cartridge) {
-              try {
-                const riskInput = await cartridge.getRiskInput(
-                  workUnit.intent,
-                  workUnit.parameters,
-                  {},
-                );
-                riskCategory = riskInput.baseRisk;
-              } catch {
-                // Fall through with default
-              }
-            }
-
-            await recordProposalAudit({
-              auditLedger: app.auditLedger,
-              eventType: "action.proposed",
-              workUnit,
-              proposalId: `prop_${workUnit.id}`,
-              riskCategory,
-              approvalRequired: true,
+              routingConfig: app.orchestrator.routingConfig,
             });
 
             return reply.code(201).send({
               outcome: "PENDING_APPROVAL",
-              envelopeId,
+              workUnitId: workUnit.id,
               traceId: workUnit.traceId,
-              approvalRequest,
+              approvalRequest: { id: approvalId, bindingHash },
             });
           } catch (err) {
             console.error("[propose] Failed to persist approval state:", err);
@@ -160,7 +130,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           if (isExecutionFailure) {
             return reply.code(201).send({
               outcome: "FAILED",
-              envelopeId: workUnit.id,
+              workUnitId: workUnit.id,
               traceId: workUnit.traceId,
               error: result.error,
             });
@@ -168,43 +138,16 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
           return reply.code(201).send({
             outcome: "DENIED",
-            envelopeId: workUnit.id,
+            workUnitId: workUnit.id,
             traceId: workUnit.traceId,
             denied: true,
             explanation: result.summary,
           });
         }
 
-        // Success path - create envelope for backward compatibility with GET endpoints
-        if (result.outcome === "completed") {
-          try {
-            await createExecutedEnvelope({
-              workUnit,
-              result,
-              body,
-              storageContext: app.storageContext,
-            });
-
-            await recordProposalAudit({
-              auditLedger: app.auditLedger,
-              eventType: "action.proposed",
-              workUnit,
-              proposalId: `prop_${workUnit.id}`,
-              riskCategory: "low",
-              approvalRequired: false,
-            });
-          } catch (err) {
-            console.error("[propose] Failed to persist execution envelope:", err);
-            return reply.code(500).send({
-              error: "Failed to persist execution state",
-              statusCode: 500,
-            });
-          }
-        }
-
         return reply.code(201).send({
           outcome: "EXECUTED",
-          envelopeId: workUnit.id,
+          workUnitId: workUnit.id,
           traceId: workUnit.traceId,
           executionResult: result.outputs,
           denied: false,
@@ -257,12 +200,12 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // POST /api/actions/:id/execute - Execute an approved envelope
+  // POST /api/actions/:id/execute - Execute a previously approved work unit
   app.post(
     "/:id/execute",
     {
       schema: {
-        description: "Execute a previously approved action envelope.",
+        description: "Execute a previously approved work unit.",
         tags: ["Actions"],
         params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
       },
@@ -270,19 +213,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      const envelope = await app.storageContext.envelopes.getById(id);
-      if (!envelope) {
-        return reply.code(404).send({ error: "Envelope not found" });
-      }
-
-      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
-        | string
-        | null
-        | undefined;
-      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
-
       try {
-        const result = await app.orchestrator.executeApproved(id);
+        const result = await app.platformLifecycle.executeApproved(id);
         return reply.code(200).send({ result });
       } catch (err) {
         return reply.code(400).send({
@@ -318,13 +250,15 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
 
       try {
-        const result = await app.orchestrator.requestUndo(id);
+        const result = await app.platformLifecycle.requestUndo(id, app.platformIngress);
+        if (!result.undoSubmitted) {
+          return reply.code(400).send({
+            error: result.error ?? "Undo submission failed",
+          });
+        }
         return reply.code(201).send({
-          envelope: result.envelope,
-          decisionTrace: result.decisionTrace,
-          approvalRequest: result.approvalRequest,
-          denied: result.denied,
-          explanation: result.explanation,
+          undoSubmitted: true,
+          undoWorkUnitId: result.undoWorkUnitId,
         });
       } catch (err) {
         return reply.code(400).send({
@@ -399,18 +333,18 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       for (let i = 0; i < body.proposals.length; i++) {
         const proposal = body.proposals[i]!;
 
-        // TODO(ingress-convergence): Replace with DeploymentResolver lookup
+        const batchDeployment = await resolveDeploymentForIntent(
+          app.deploymentResolver,
+          organizationId,
+          proposal.actionType,
+        );
+
         const submitRequest: SubmitWorkRequest = {
           intent: proposal.actionType,
           parameters: proposal.parameters,
           actor: { id: body.principalId, type: "user" as const },
           organizationId,
-          deployment: {
-            deploymentId: "unresolved",
-            skillSlug: proposal.actionType.split(".")[0] ?? "unknown",
-            trustLevel: "supervised" as const,
-            trustScore: 0,
-          },
+          deployment: batchDeployment,
           trigger: "api" as const,
           idempotencyKey: `${batchKey}:${i}`,
         };

@@ -5,7 +5,6 @@ import type {
   ActionPlan,
   ActionProposal,
   ApprovalRequest,
-  CompetenceAdjustment,
 } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
 import type { PolicyEngineContext } from "../engine/policy-engine.js";
@@ -14,11 +13,7 @@ import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import type { EntityResolver } from "../engine/resolver.js";
 
 import { evaluate, simulate as policySimulate } from "../engine/policy-engine.js";
-import {
-  type ResolvedIdentity,
-  resolveIdentity,
-  applyCompetenceAdjustments,
-} from "../identity/spec.js";
+import { type ResolvedIdentity, resolveIdentity } from "../identity/spec.js";
 import { routeApproval } from "../approval/router.js";
 import { createApprovalState } from "../approval/state-machine.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
@@ -126,8 +121,7 @@ export class ProposePipeline {
     span: ReturnType<ReturnType<typeof getTracer>["startSpan"]>,
     proposeStart: number,
   ): Promise<ProposeResult> {
-    // 1-2. Resolve identity + competence adjustments
-    const { effectiveIdentity, competenceAdjustments } = await resolveEffectiveIdentity(
+    const { effectiveIdentity } = await resolveEffectiveIdentity(
       this.ctx,
       params.principalId,
       params.cartridgeId,
@@ -205,7 +199,6 @@ export class ProposePipeline {
       guardrailState: this.ctx.guardrailState,
       resolvedIdentity: effectiveIdentity,
       riskInput,
-      competenceAdjustments,
       compositeContext: await buildCompositeContext(
         this.ctx,
         params.principalId,
@@ -444,18 +437,7 @@ export class ProposePipeline {
       cartridgeId: params.cartridgeId,
     });
 
-    let competenceAdjustments: CompetenceAdjustment[] = [];
-    let effectiveIdentity = resolvedIdentity;
-    if (this.ctx.competenceTracker) {
-      const adj = await this.ctx.competenceTracker.getAdjustment(
-        params.principalId,
-        params.actionType,
-      );
-      if (adj) {
-        competenceAdjustments = [adj];
-        effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
-      }
-    }
+    const effectiveIdentity = resolvedIdentity;
 
     const cartridge = this.ctx.storage.cartridges.get(params.cartridgeId);
     if (!cartridge) {
@@ -508,7 +490,6 @@ export class ProposePipeline {
       guardrailState: this.ctx.guardrailState,
       resolvedIdentity: effectiveIdentity,
       riskInput,
-      competenceAdjustments,
     };
 
     return policySimulate(

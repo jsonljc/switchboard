@@ -192,7 +192,11 @@ describe("PlatformIngress", () => {
   });
 
   it("persists WorkTrace on successful execution", async () => {
-    const traceStore: WorkTraceStore = { persist: vi.fn().mockResolvedValue(undefined) };
+    const traceStore: WorkTraceStore = {
+      persist: vi.fn().mockResolvedValue(undefined),
+      getByWorkUnitId: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
     const config = createConfig({ traceStore });
     const ingress = new PlatformIngress(config);
 
@@ -206,7 +210,11 @@ describe("PlatformIngress", () => {
   });
 
   it("persists WorkTrace on governance deny", async () => {
-    const traceStore: WorkTraceStore = { persist: vi.fn().mockResolvedValue(undefined) };
+    const traceStore: WorkTraceStore = {
+      persist: vi.fn().mockResolvedValue(undefined),
+      getByWorkUnitId: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
     const config = createConfig({ decision: buildDenyDecision(), traceStore });
     const ingress = new PlatformIngress(config);
 

@@ -144,6 +144,13 @@ describe("Convergence E2E", () => {
       persist: vi.fn(async (trace: WorkTrace) => {
         traceStore.traces.push(trace);
       }),
+      getByWorkUnitId: vi.fn(async (id: string) => {
+        return traceStore.traces.find((t) => t.workUnitId === id) ?? null;
+      }),
+      update: vi.fn(async (id: string, fields: Partial<WorkTrace>) => {
+        const idx = traceStore.traces.findIndex((t) => t.workUnitId === id);
+        if (idx >= 0) traceStore.traces[idx] = { ...traceStore.traces[idx]!, ...fields };
+      }),
     };
 
     ingress = new PlatformIngress({

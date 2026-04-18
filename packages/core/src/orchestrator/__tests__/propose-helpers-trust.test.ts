@@ -34,7 +34,7 @@ function makeMinimalContext(overrides?: Partial<SharedContext>): SharedContext {
     guardrailState: {} as never,
     guardrailStateStore: null,
     routingConfig: {} as never,
-    competenceTracker: null,
+
     trustAdapter: null,
     riskPostureStore: null,
     governanceProfileStore: null,
@@ -44,7 +44,6 @@ function makeMinimalContext(overrides?: Partial<SharedContext>): SharedContext {
     approvalNotifier: null,
     selfApprovalAllowed: false,
     approvalRateLimit: null,
-    crossCartridgeEnricher: null,
     dataFlowExecutor: null,
     credentialResolver: null,
     circuitBreaker: null,
@@ -101,23 +100,13 @@ describe("resolveEffectiveIdentity with trustAdapter", () => {
       recordRejection: vi.fn(),
     } as unknown as TrustScoreAdapter;
 
-    const mockTracker = {
-      getAdjustment: vi.fn().mockResolvedValue({
-        actionType: "send_email",
-        score: 85,
-        shouldTrust: true,
-        shouldEscalate: false,
-      }),
-    };
-
     const ctx = makeMinimalContext({
       trustAdapter: mockAdapter,
-      competenceTracker: mockTracker as never,
     });
 
     await resolveEffectiveIdentity(ctx, "agent_1", "email-cartridge", "send_email");
 
-    // Trust adapter should receive the ALREADY competence-adjusted identity
+    // Trust adapter should receive the resolved identity
     const adjustIdentityCall = (mockAdapter.adjustIdentity as ReturnType<typeof vi.fn>).mock
       .calls[0];
     expect(adjustIdentityCall).toBeDefined();

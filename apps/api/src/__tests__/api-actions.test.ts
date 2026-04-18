@@ -15,7 +15,7 @@ describe("Actions API", () => {
   });
 
   describe("POST /api/actions/propose", () => {
-    it("should return 201 with outcome, envelopeId, and traceId", async () => {
+    it("should return 201 with outcome, workUnitId, and traceId", async () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
@@ -34,7 +34,7 @@ describe("Actions API", () => {
       expect(res.statusCode).toBe(201);
       const body = res.json();
       expect(body.outcome).toBeDefined();
-      expect(body.envelopeId).toBeDefined();
+      expect(body.workUnitId).toBeDefined();
       expect(body.traceId).toBeDefined();
     });
 
@@ -170,15 +170,16 @@ describe("Actions API", () => {
         },
       });
       const proposeBody = proposeRes.json();
-      const envelopeId = proposeBody.envelopeId;
+      const envelopeId = proposeBody.workUnitId;
 
+      // New flows use WorkTrace, not ActionEnvelope. GET /api/actions/:id returns
+      // legacy envelopes only — new submissions produce no envelope.
       const res = await app.inject({
         method: "GET",
         url: `/api/actions/${envelopeId}`,
       });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json().envelope.id).toBe(envelopeId);
+      expect(res.statusCode).toBe(404);
     });
 
     it("should return 404 for non-existent envelope", async () => {
@@ -192,8 +193,8 @@ describe("Actions API", () => {
   });
 
   describe("POST /api/actions/:id/execute", () => {
-    it("should execute a pending approval envelope", async () => {
-      // Override risk tolerance so medium-risk actions require approval
+    it("should execute after approval through the approval flow", async () => {
+      // Override risk tolerance so actions require approval
       const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
       if (spec) {
         spec.riskTolerance = {
@@ -207,9 +208,7 @@ describe("Actions API", () => {
       const proposeRes = await app.inject({
         method: "POST",
         url: "/api/actions/propose",
-        headers: {
-          "Idempotency-Key": "test-execute-1",
-        },
+        headers: { "Idempotency-Key": "test-execute-1" },
         payload: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
@@ -221,57 +220,29 @@ describe("Actions API", () => {
 
       const proposeBody = proposeRes.json();
       expect(proposeBody.outcome).toBe("PENDING_APPROVAL");
-      const envelopeId = proposeBody.envelopeId;
+      const approvalId = proposeBody.approvalRequest.id;
+      const bindingHash = proposeBody.approvalRequest.bindingHash;
 
-      // Approve the envelope first
-      const envelope = await app.storageContext.envelopes.getById(envelopeId);
-      if (envelope) {
-        await app.storageContext.envelopes.update(envelopeId, { status: "approved" });
-      }
-
-      // Now execute it
-      const res = await app.inject({
+      const approveRes = await app.inject({
         method: "POST",
-        url: `/api/actions/${envelopeId}/execute`,
+        url: `/api/approvals/${approvalId}/respond`,
+        payload: {
+          action: "approve",
+          respondedBy: "reviewer_1",
+          bindingHash,
+        },
       });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.result.success).toBe(true);
+      expect(approveRes.statusCode).toBe(200);
+      const body = approveRes.json();
+      expect(body.executionResult).toBeDefined();
+      expect(body.executionResult.success).toBe(true);
     });
 
-    it("should return 400 when executing a non-approved envelope", async () => {
-      // Override risk tolerance so medium-risk actions require approval
-      const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
-      if (spec) {
-        spec.riskTolerance = {
-          ...spec.riskTolerance,
-          medium: "standard" as const,
-          high: "elevated" as const,
-        };
-        await app.storageContext.identity.saveSpec(spec);
-      }
-
-      const proposeRes = await app.inject({
-        method: "POST",
-        url: "/api/actions/propose",
-        headers: {
-          "Idempotency-Key": "test-execute-2",
-        },
-        payload: {
-          actionType: "digital-ads.campaign.pause",
-          parameters: { campaignId: "camp_123" },
-          principalId: "default",
-          organizationId: "org_test",
-          cartridgeId: "digital-ads",
-        },
-      });
-
-      const envelopeId = proposeRes.json().envelopeId;
-
+    it("should return 400 when executing a non-approved work unit", async () => {
       const res = await app.inject({
         method: "POST",
-        url: `/api/actions/${envelopeId}/execute`,
+        url: "/api/actions/non-existent-id/execute",
       });
 
       expect(res.statusCode).toBe(400);
@@ -361,8 +332,8 @@ describe("Actions API", () => {
 
       expect(undoRes.statusCode).toBe(201);
       const body = undoRes.json();
-      expect(body.envelope).toBeDefined();
-      expect(body.envelope.parentEnvelopeId).toBe(envelopeId);
+      expect(body.undoSubmitted).toBe(true);
+      expect(body.undoWorkUnitId).toBeDefined();
     });
 
     it("should return 404 for non-existent envelope", async () => {

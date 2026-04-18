@@ -367,18 +367,6 @@ export class ExecutionManager {
       await this.flushGuardrailState(proposal, execCartridgeId);
     }
 
-    // Record competence outcome
-    if (this.ctx.competenceTracker) {
-      const principalId = proposal.parameters["_principalId"] as string | undefined;
-      if (principalId) {
-        if (executeResult.success) {
-          await this.ctx.competenceTracker.recordSuccess(principalId, proposal.actionType);
-        } else {
-          await this.ctx.competenceTracker.recordFailure(principalId, proposal.actionType);
-        }
-      }
-    }
-
     // Record audit entry
     await this.ctx.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
@@ -485,10 +473,6 @@ export class ExecutionManager {
     }
 
     const principalId = (originalProposal?.parameters["_principalId"] as string) ?? "system";
-
-    if (this.ctx.competenceTracker && originalProposal) {
-      await this.ctx.competenceTracker.recordRollback(principalId, originalProposal.actionType);
-    }
 
     await this.ctx.ledger.record({
       eventType: "action.undo_requested",

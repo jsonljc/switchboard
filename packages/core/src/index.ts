@@ -30,9 +30,6 @@ export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-w
 // Audit (hashing, canonicalization, redaction, evidence, ledger)
 export * from "./audit/index.js";
 
-// Competence (tracker, thresholds)
-export * from "./competence/index.js";
-
 // Telemetry (tracing, metrics, LLM cost table)
 export * from "./telemetry/index.js";
 
@@ -70,9 +67,6 @@ export type { PolicyCache } from "./policy-cache.js";
 
 // Utilities (retry, circuit breaker, pagination, nested value)
 export * from "./utils/index.js";
-
-// Cross-Cartridge Enrichment
-export * from "./enrichment/index.js";
 
 // Data-Flow Plan Execution
 export * from "./data-flow/index.js";

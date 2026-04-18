@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { CartridgeMode } from "../modes/cartridge-mode.js";
-import type { CartridgeOrchestrator, CartridgeModeConfig } from "../modes/cartridge-mode.js";
+import type { CartridgeModeConfig } from "../modes/cartridge-mode.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionContext } from "../execution-context.js";
@@ -61,36 +61,25 @@ function successResult(summary = "Campaign paused"): ExecuteResult {
   };
 }
 
-function failureResult(summary = "Cartridge failed"): ExecuteResult {
-  return {
-    success: false,
-    summary,
-    externalRefs: {},
-    rollbackAvailable: false,
-    partialFailures: [{ step: "execute", error: summary }],
-    durationMs: 50,
-    undoRecipe: null,
-  };
-}
-
 function makeConfig(
-  executeFn: CartridgeOrchestrator["executePreApproved"],
-  lookupResult?: { executor: { actionId: string } },
+  executeFn: (
+    actionType: string,
+    parameters: Record<string, unknown>,
+    context: Record<string, unknown>,
+  ) => Promise<ExecuteResult>,
 ): CartridgeModeConfig {
   return {
-    orchestrator: { executePreApproved: executeFn },
-    intentRegistry: {
-      lookup: vi.fn().mockReturnValue(
-        lookupResult ?? {
-          executor: { actionId: "digital-ads.campaign.pause" },
-        },
-      ),
+    cartridgeRegistry: {
+      get: vi.fn().mockReturnValue({
+        manifest: { id: "digital-ads", actions: [] },
+        execute: executeFn,
+      }),
     },
   };
 }
 
 describe("CartridgeMode", () => {
-  it("returns completed when executePreApproved succeeds", async () => {
+  it("returns completed when cartridge.execute succeeds", async () => {
     const exec = vi.fn().mockResolvedValue(successResult());
     const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
@@ -105,8 +94,12 @@ describe("CartridgeMode", () => {
     });
   });
 
-  it("returns failed when executePreApproved returns success=false", async () => {
-    const exec = vi.fn().mockResolvedValue(failureResult("Policy violation"));
+  it("returns failed when cartridge.execute returns success=false", async () => {
+    const exec = vi.fn().mockResolvedValue({
+      ...successResult(),
+      success: false,
+      summary: "Policy violation",
+    });
     const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
@@ -115,27 +108,19 @@ describe("CartridgeMode", () => {
     expect(result.error?.message).toBe("Policy violation");
   });
 
-  it("maps workUnit fields correctly to executePreApproved params", async () => {
+  it("calls cartridge.execute with correct parameters", async () => {
     const exec = vi.fn().mockResolvedValue(successResult());
     const mode = new CartridgeMode(makeConfig(exec));
-    const workUnit = makeWorkUnit({
-      idempotencyKey: "idem-1",
-    });
-    await mode.execute(workUnit, defaultConstraints, defaultContext);
+    await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
-    expect(exec).toHaveBeenCalledWith({
-      actionType: "digital-ads.campaign.pause",
-      parameters: { campaignId: "camp-42" },
-      principalId: "user-1",
-      organizationId: "org-1",
-      cartridgeId: "digital-ads",
-      traceId: "trace-abc",
-      idempotencyKey: "idem-1",
-      workUnitId: "wu-1",
-    });
+    expect(exec).toHaveBeenCalledWith(
+      "digital-ads.campaign.pause",
+      { campaignId: "camp-42" },
+      expect.objectContaining({ principalId: "user-1", organizationId: "org-1" }),
+    );
   });
 
-  it("returns failed on orchestrator error", async () => {
+  it("returns failed on cartridge error", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("Connection timeout"));
     const mode = new CartridgeMode(makeConfig(exec));
     const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
@@ -145,13 +130,14 @@ describe("CartridgeMode", () => {
     expect(result.error?.message).toBe("Connection timeout");
   });
 
-  it("passes null organizationId when workUnit has none", async () => {
-    const exec = vi.fn().mockResolvedValue(successResult());
-    const mode = new CartridgeMode(makeConfig(exec));
-    const workUnit = makeWorkUnit({ organizationId: undefined });
-    await mode.execute(workUnit, defaultConstraints, defaultContext);
+  it("returns failed when cartridge not found", async () => {
+    const mode = new CartridgeMode({
+      cartridgeRegistry: { get: vi.fn().mockReturnValue(null) },
+    });
+    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
 
-    expect(exec).toHaveBeenCalledWith(expect.objectContaining({ organizationId: null }));
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe("CARTRIDGE_NOT_FOUND");
   });
 
   it("passes through data field from ExecuteResult", async () => {
@@ -165,5 +151,18 @@ describe("CartridgeMode", () => {
       externalRefs: { campaignId: "camp-42" },
       data: { diagnostics: [1, 2] },
     });
+  });
+
+  it("does not create any ActionEnvelope", async () => {
+    const exec = vi.fn().mockResolvedValue(successResult());
+    const registryGet = vi.fn().mockReturnValue({
+      manifest: { id: "digital-ads", actions: [] },
+      execute: exec,
+    });
+    const mode = new CartridgeMode({ cartridgeRegistry: { get: registryGet } });
+    await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(registryGet).toHaveBeenCalledWith("digital-ads");
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });

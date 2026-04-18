@@ -4,6 +4,7 @@ import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard
 import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
+import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
 
@@ -66,18 +67,18 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // TODO(ingress-convergence): Replace with DeploymentResolver lookup
+      const deployment = await resolveDeploymentForIntent(
+        app.deploymentResolver,
+        organizationId,
+        body.action.actionType,
+      );
+
       const submitRequest: SubmitWorkRequest = {
         intent: body.action.actionType,
         parameters: body.action.parameters,
         actor: { id: body.actorId, type: "user" as const },
         organizationId,
-        deployment: {
-          deploymentId: "unresolved",
-          skillSlug: body.action.actionType.split(".")[0] ?? "unknown",
-          trustLevel: "supervised" as const,
-          trustScore: 0,
-        },
+        deployment,
         trigger: "api" as const,
         idempotencyKey,
         traceId: body.traceId,

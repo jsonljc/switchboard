@@ -1,6 +1,5 @@
 import type {
   CompositeRiskContext,
-  CompetenceAdjustment,
   GuardrailConfig,
   Policy,
   RiskInput,
@@ -9,11 +8,7 @@ import type { Cartridge } from "@switchboard/cartridge-sdk";
 import type { EvaluationContext } from "../engine/rule-evaluator.js";
 import { evaluateRule } from "../engine/rule-evaluator.js";
 import type { SpendLookup } from "../engine/policy-engine.js";
-import {
-  type ResolvedIdentity,
-  resolveIdentity,
-  applyCompetenceAdjustments,
-} from "../identity/spec.js";
+import { type ResolvedIdentity, resolveIdentity } from "../identity/spec.js";
 
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
@@ -249,7 +244,6 @@ export async function resolveEffectiveIdentity(
 ): Promise<{
   resolvedIdentity: ResolvedIdentity;
   effectiveIdentity: ResolvedIdentity;
-  competenceAdjustments: CompetenceAdjustment[];
 }> {
   const identitySpec = await ctx.storage.identity.getSpecByPrincipalId(principalId);
   if (!identitySpec) {
@@ -258,17 +252,9 @@ export async function resolveEffectiveIdentity(
   const overlays = await ctx.storage.identity.listOverlaysBySpecId(identitySpec.id);
   const resolvedIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
 
-  let competenceAdjustments: CompetenceAdjustment[] = [];
   let effectiveIdentity = resolvedIdentity;
-  if (ctx.competenceTracker) {
-    const adj = await ctx.competenceTracker.getAdjustment(principalId, actionType);
-    if (adj) {
-      competenceAdjustments = [adj];
-      effectiveIdentity = applyCompetenceAdjustments(resolvedIdentity, competenceAdjustments);
-    }
-  }
 
-  // Apply marketplace trust score adjustments (after competence)
+  // Apply marketplace trust score adjustments
   if (ctx.trustAdapter) {
     try {
       effectiveIdentity = await ctx.trustAdapter.adjustIdentity(
@@ -283,7 +269,7 @@ export async function resolveEffectiveIdentity(
     }
   }
 
-  return { resolvedIdentity, effectiveIdentity, competenceAdjustments };
+  return { resolvedIdentity, effectiveIdentity };
 }
 
 /**
@@ -311,26 +297,6 @@ export async function enrichAndGetRiskInput(
     console.warn(
       `[orchestrator] enrichContext failed, proceeding with empty context: ${err instanceof Error ? err.message : String(err)}`,
     );
-  }
-
-  if (ctx.crossCartridgeEnricher && organizationId) {
-    try {
-      const crossCartridgeContext = await ctx.crossCartridgeEnricher.enrich({
-        targetCartridgeId: cartridgeId,
-        actionType,
-        parameters,
-        organizationId,
-        principalId,
-      });
-      if (Object.keys(crossCartridgeContext).length > 0) {
-        enriched = { ...enriched, _crossCartridge: crossCartridgeContext };
-      }
-    } catch (err) {
-      contextDegraded = true;
-      console.warn(
-        `[orchestrator] cross-cartridge enrichment failed, proceeding without: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
   }
 
   if (contextDegraded) {

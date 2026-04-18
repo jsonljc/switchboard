@@ -15,6 +15,8 @@ export interface TraceInput {
 
 export interface WorkTraceStore {
   persist(trace: WorkTrace): Promise<void>;
+  getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null>;
+  update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void>;
 }
 
 export function buildWorkTrace(input: TraceInput): WorkTrace {
@@ -33,6 +35,11 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
   const requestedAt = workUnit.requestedAt;
   const durationMs = executionResult?.durationMs ?? 0;
 
+  let governanceConstraints: import("./governance-types.js").ExecutionConstraints | undefined;
+  if ("constraints" in governanceDecision) {
+    governanceConstraints = governanceDecision.constraints;
+  }
+
   return {
     workUnitId: workUnit.id,
     traceId: workUnit.traceId,
@@ -43,12 +50,19 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     organizationId: workUnit.organizationId,
     actor: workUnit.actor,
     trigger: workUnit.trigger,
+
+    parameters: workUnit.parameters,
+    deploymentContext: workUnit.deployment,
+    governanceConstraints,
+
     governanceOutcome: governanceDecision.outcome,
     riskScore: governanceDecision.riskScore,
     matchedPolicies: governanceDecision.matchedPolicies,
     outcome,
     durationMs,
     error: executionResult?.error,
+    executionSummary: executionResult?.summary,
+    executionOutputs: executionResult?.outputs,
     modeMetrics: input.modeMetrics,
     requestedAt,
     governanceCompletedAt: input.governanceCompletedAt,
