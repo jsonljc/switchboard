@@ -3,8 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { PrismaRevenueStore } from "@switchboard/db";
-import type { ConversionEvent } from "@switchboard/core";
+import { PrismaRevenueStore, PrismaOutboxStore } from "@switchboard/db";
 import { z } from "zod";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -67,21 +66,20 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
       sourceAdId: sourceAdId ?? null,
     });
 
-    // Emit ConversionEvent on the bus if available
-    if (app.conversionBus) {
-      const conversionEvent: ConversionEvent = {
-        eventId: `evt_rev_${event.id}`,
+    // Write conversion event to outbox for durable processing
+    if (app.prisma) {
+      const outboxStore = new PrismaOutboxStore(app.prisma);
+      await outboxStore.write(`evt_rev_${event.id}`, "purchased", {
         type: "purchased",
         contactId,
         organizationId: orgId,
         value: amount,
-        sourceAdId: sourceAdId ?? undefined,
-        sourceCampaignId: sourceCampaignId ?? undefined,
-        occurredAt: new Date(),
+        sourceAdId: sourceAdId ?? null,
+        sourceCampaignId: sourceCampaignId ?? null,
+        occurredAt: new Date().toISOString(),
         source: "revenue-api",
         metadata: { opportunityId: resolvedOpportunityId, currency, revenueType: type },
-      };
-      app.conversionBus.emit(conversionEvent);
+      });
     }
 
     return reply.code(201).send({ event });

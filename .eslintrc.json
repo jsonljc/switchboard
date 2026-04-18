@@ -175,6 +175,23 @@
           }
         ]
       }
+    },
+    {
+      "files": ["apps/api/src/routes/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "MemberExpression[property.name='resolveAndPropose']",
+            "message": "Use PlatformIngress.submit() instead of orchestrator.resolveAndPropose(). See ingress-convergence design."
+          },
+          {
+            "selector": "CallExpression[callee.property.name='emit'][callee.object.property.name='conversionBus']",
+            "message": "Write to OutboxEvent table instead of calling conversionBus.emit() directly. Events must be durable."
+          }
+        ]
+      }
     }
   ]
 }

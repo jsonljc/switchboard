@@ -163,8 +163,14 @@ export async function buildServer() {
   }
 
   // --- ConversionBus wiring ---
-  const { InMemoryConversionBus } = await import("@switchboard/core");
-  const conversionBus = new InMemoryConversionBus();
+  const { bootstrapConversionBus } = await import("./bootstrap/conversion-bus-bootstrap.js");
+  const conversionBusHandle = await bootstrapConversionBus({
+    redis,
+    prisma: prismaClient,
+    logger: app.log,
+  });
+  const conversionBus = conversionBusHandle.bus;
+  conversionBusHandle.start();
 
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;
@@ -538,8 +544,10 @@ export async function buildServer() {
   });
   app.decorate("platformIngress", platformIngress);
 
-  // Resource cleanup on close — order: scheduler → Redis → Prisma
+  // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
+    conversionBusHandle.stop();
+
     if (schedulerDeps) {
       await schedulerDeps.cleanup();
     }

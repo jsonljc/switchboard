@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
 import { parseLeadWebhook } from "@switchboard/core/ad-optimizer";
-import type { ConversionEvent } from "@switchboard/core";
 
 const VERIFY_TOKEN = process.env["META_WEBHOOK_VERIFY_TOKEN"] ?? "switchboard-verify";
 
@@ -113,20 +112,20 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
           app.log.error({ err, phone: "[redacted]" }, "Failed to send lead greeting template");
         }
 
-        // Emit inquiry event for CAPI Lead event
-        if (app.conversionBus) {
-          const conversionEvent: ConversionEvent = {
-            eventId: `evt_lead_${lead.leadId}`,
+        // Write inquiry event to outbox for durable processing
+        if (app.prisma) {
+          const { PrismaOutboxStore } = await import("@switchboard/db");
+          const outboxStore = new PrismaOutboxStore(app.prisma);
+          await outboxStore.write(`evt_lead_${lead.leadId}`, "inquiry", {
             type: "inquiry",
             contactId: lead.leadId,
             organizationId,
             value: 0,
             sourceAdId: lead.adId,
-            occurredAt: new Date(),
+            occurredAt: new Date().toISOString(),
             source: "meta-webhook",
             metadata: {},
-          };
-          app.conversionBus.emit(conversionEvent);
+          });
         }
       }
     }
