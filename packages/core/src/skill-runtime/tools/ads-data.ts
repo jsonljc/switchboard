@@ -1,6 +1,6 @@
 import type { SkillTool } from "../types.js";
 import type { GovernanceTier } from "../governance.js";
-import { parseLeadWebhook } from "../../ad-optimizer/meta-leads-ingester.js";
+import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
 interface AdsDataDeps {
   adsClient: {

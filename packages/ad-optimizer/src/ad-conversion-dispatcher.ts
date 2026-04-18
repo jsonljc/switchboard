@@ -1,4 +1,4 @@
-import type { ConversionEvent } from "../events/conversion-bus.js";
+import type { ConversionEvent } from "@switchboard/schemas";
 
 export interface DispatchResult {
   accepted: boolean;

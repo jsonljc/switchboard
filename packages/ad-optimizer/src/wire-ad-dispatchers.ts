@@ -1,4 +1,4 @@
-import type { ConversionBus } from "../events/conversion-bus.js";
+import type { ConversionBus } from "@switchboard/schemas";
 import type { AdConversionDispatcher } from "./ad-conversion-dispatcher.js";
 
 interface DispatchLogStoreSubset {

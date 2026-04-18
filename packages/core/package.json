@@ -90,10 +90,6 @@
       "types": "./dist/agent-runtime/index.d.ts",
       "import": "./dist/agent-runtime/index.js"
     },
-    "./ad-optimizer": {
-      "types": "./dist/ad-optimizer/index.d.ts",
-      "import": "./dist/ad-optimizer/index.js"
-    },
     "./skill-runtime": {
       "types": "./dist/skill-runtime/index.d.ts",
       "import": "./dist/skill-runtime/index.js"
@@ -122,6 +118,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@paralleldrive/cuid2": "^3.3.0",
+    "@switchboard/ad-optimizer": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MetaCAPIDispatcher } from "./meta-capi-dispatcher.js";
-import type { ConversionEvent } from "../events/conversion-bus.js";
+import type { ConversionEvent } from "@switchboard/schemas";
 
 function makeEvent(overrides?: Partial<ConversionEvent>): ConversionEvent {
   return {

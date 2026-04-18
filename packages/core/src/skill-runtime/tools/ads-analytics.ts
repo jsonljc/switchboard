@@ -2,13 +2,13 @@
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
 import type { SkillTool } from "../types.js";
 import type { GovernanceTier } from "../governance.js";
-import { diagnose } from "../../ad-optimizer/metric-diagnostician.js";
-import { comparePeriods, type MetricSet } from "../../ad-optimizer/period-comparator.js";
-import { analyzeFunnel, type FunnelInput } from "../../ad-optimizer/funnel-analyzer.js";
 import {
+  diagnose,
+  comparePeriods,
+  analyzeFunnel,
   LearningPhaseGuard,
-  type CampaignLearningInput,
-} from "../../ad-optimizer/learning-phase-guard.js";
+} from "@switchboard/ad-optimizer";
+import type { MetricSet, FunnelInput, CampaignLearningInput } from "@switchboard/ad-optimizer";
 
 const TIER: GovernanceTier = "read";
 const learningGuard = new LearningPhaseGuard();

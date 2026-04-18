@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AdConversionDispatcher, DispatchResult } from "./ad-conversion-dispatcher.js";
-import type { ConversionEvent } from "../events/conversion-bus.js";
+import type { ConversionEvent } from "@switchboard/schemas";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
 

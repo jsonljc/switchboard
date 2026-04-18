@@ -4,8 +4,8 @@ import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   listAdAccounts,
-} from "@switchboard/core/ad-optimizer";
-import type { FacebookOAuthConfig } from "@switchboard/core/ad-optimizer";
+} from "@switchboard/ad-optimizer";
+import type { FacebookOAuthConfig } from "@switchboard/ad-optimizer";
 import {
   PrismaDeploymentConnectionStore,
   encryptCredentials,

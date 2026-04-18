@@ -63,6 +63,27 @@
       }
     },
     {
+      "files": ["packages/ad-optimizer/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/core", "@switchboard/core/*"],
+                "message": "ad-optimizer cannot import from core."
+              },
+              {
+                "group": ["@switchboard/db", "@switchboard/db/*"],
+                "message": "ad-optimizer cannot import from db."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/cartridge-sdk/src/**/*.ts"],
       "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {

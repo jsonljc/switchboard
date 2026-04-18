@@ -22,8 +22,8 @@ import {
   createWeeklyAuditCron,
   createDailyCheckCron,
   MetaAdsClient,
-} from "@switchboard/core/ad-optimizer";
-import type { CronDependencies } from "@switchboard/core/ad-optimizer";
+} from "@switchboard/ad-optimizer";
+import type { CronDependencies } from "@switchboard/ad-optimizer";
 
 export async function registerInngest(app: FastifyInstance): Promise<void> {
   if (!app.prisma) {

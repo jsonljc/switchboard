@@ -1,5 +1,5 @@
 import type { AdConversionDispatcher, DispatchResult } from "./ad-conversion-dispatcher.js";
-import type { ConversionEvent } from "../events/conversion-bus.js";
+import type { ConversionEvent } from "@switchboard/schemas";
 import type { ConversionStage } from "@switchboard/schemas";
 
 interface GoogleOfflineConfig {

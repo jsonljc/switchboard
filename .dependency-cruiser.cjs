@@ -28,15 +28,27 @@ module.exports = {
       comment: "creative-pipeline may only import @switchboard/schemas.",
       from: { path: "^packages/creative-pipeline/src" },
       to: {
-        path: "^(packages/(core|db|cartridge-sdk)|apps)/",
+        path: "^(packages/(core|db|cartridge-sdk|ad-optimizer)|apps)/",
       },
     },
 
-    // ─── core may only import schemas and cartridge-sdk ───
+    // ─── ad-optimizer may only import schemas ───
+    {
+      name: "ad-optimizer-only-schemas",
+      severity: "error",
+      comment: "ad-optimizer may only import @switchboard/schemas.",
+      from: { path: "^packages/ad-optimizer/src" },
+      to: {
+        path: "^(packages/(core|db|cartridge-sdk|creative-pipeline)|apps)/",
+      },
+    },
+
+    // ─── core may only import schemas, cartridge-sdk, and ad-optimizer ───
     {
       name: "core-allowed-deps",
       severity: "error",
-      comment: "core may only import @switchboard/schemas and @switchboard/cartridge-sdk.",
+      comment:
+        "core may import schemas, cartridge-sdk, and ad-optimizer (for skill-runtime tools).",
       from: { path: "^packages/core/src" },
       to: {
         path: "^(packages/(db|creative-pipeline)|apps)/",

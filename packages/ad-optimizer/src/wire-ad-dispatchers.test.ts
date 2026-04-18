@@ -1,8 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
 import { wireAdDispatchers } from "./wire-ad-dispatchers.js";
-import { InMemoryConversionBus } from "../events/conversion-bus.js";
-import type { ConversionEvent } from "../events/conversion-bus.js";
+import type { ConversionEvent, ConversionBus, ConversionEventHandler } from "@switchboard/schemas";
 import type { AdConversionDispatcher } from "./ad-conversion-dispatcher.js";
+
+function createTestBus(): ConversionBus {
+  const handlers = new Map<string, Set<ConversionEventHandler>>();
+  return {
+    subscribe(type, handler) {
+      let set = handlers.get(type);
+      if (!set) {
+        set = new Set();
+        handlers.set(type, set);
+      }
+      set.add(handler);
+    },
+    unsubscribe(type, handler) {
+      handlers.get(type)?.delete(handler);
+    },
+    emit(event) {
+      for (const h of handlers.get(event.type) ?? []) h(event);
+      for (const h of handlers.get("*") ?? []) h(event);
+    },
+  };
+}
 
 function makeEvent(): ConversionEvent {
   return {
@@ -19,7 +39,7 @@ function makeEvent(): ConversionEvent {
 
 describe("wireAdDispatchers", () => {
   it("dispatches to matching dispatchers and logs results", async () => {
-    const bus = new InMemoryConversionBus();
+    const bus = createTestBus();
     const dispatcher: AdConversionDispatcher = {
       platform: "meta_capi",
       canDispatch: vi.fn().mockReturnValue(true),
@@ -39,7 +59,7 @@ describe("wireAdDispatchers", () => {
   });
 
   it("skips dispatchers that cannot dispatch", async () => {
-    const bus = new InMemoryConversionBus();
+    const bus = createTestBus();
     const dispatcher: AdConversionDispatcher = {
       platform: "google_offline",
       canDispatch: vi.fn().mockReturnValue(false),
@@ -57,7 +77,7 @@ describe("wireAdDispatchers", () => {
   });
 
   it("logs failure when dispatcher throws", async () => {
-    const bus = new InMemoryConversionBus();
+    const bus = createTestBus();
     const dispatcher: AdConversionDispatcher = {
       platform: "meta_capi",
       canDispatch: vi.fn().mockReturnValue(true),

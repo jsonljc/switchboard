@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { parseLeadWebhook } from "@switchboard/core/ad-optimizer";
+import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
 const VERIFY_TOKEN = process.env["META_WEBHOOK_VERIFY_TOKEN"] ?? "switchboard-verify";
 
