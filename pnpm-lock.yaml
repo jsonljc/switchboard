@@ -402,9 +402,6 @@ importers:
       '@paralleldrive/cuid2':
         specifier: ^3.3.0
         version: 3.3.0
-      '@switchboard/ad-optimizer':
-        specifier: workspace:*
-        version: link:../ad-optimizer
       '@switchboard/cartridge-sdk':
         specifier: workspace:*
         version: link:../cartridge-sdk

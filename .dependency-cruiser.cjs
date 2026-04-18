@@ -43,15 +43,14 @@ module.exports = {
       },
     },
 
-    // ─── core may only import schemas, cartridge-sdk, and ad-optimizer ───
+    // ─── core may only import schemas and cartridge-sdk ───
     {
       name: "core-allowed-deps",
       severity: "error",
-      comment:
-        "core may import schemas, cartridge-sdk, and ad-optimizer (for skill-runtime tools).",
+      comment: "core may only import @switchboard/schemas and @switchboard/cartridge-sdk.",
       from: { path: "^packages/core/src" },
       to: {
-        path: "^(packages/(db|creative-pipeline)|apps)/",
+        path: "^(packages/(db|creative-pipeline|ad-optimizer)|apps)/",
       },
     },
 

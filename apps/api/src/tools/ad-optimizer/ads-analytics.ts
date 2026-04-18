@@ -1,7 +1,5 @@
-// packages/core/src/skill-runtime/tools/ads-analytics.ts
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
-import type { SkillTool } from "../types.js";
-import type { GovernanceTier } from "../governance.js";
+import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
 import {
   diagnose,
   comparePeriods,

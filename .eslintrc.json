@@ -173,6 +173,10 @@
                 "message": "core cannot import from creative-pipeline."
               },
               {
+                "group": ["@switchboard/ad-optimizer", "@switchboard/ad-optimizer/*"],
+                "message": "core cannot import from ad-optimizer."
+              },
+              {
                 "group": ["@switchboard/api", "@switchboard/api/*"],
                 "message": "core cannot import from apps."
               },

@@ -1,5 +1,4 @@
-import type { SkillTool } from "../types.js";
-import type { GovernanceTier } from "../governance.js";
+import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
 interface AdsDataDeps {
