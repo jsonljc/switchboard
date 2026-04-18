@@ -85,8 +85,8 @@ describe("generateAvailableSlots", () => {
     });
 
     for (let i = 1; i < slots.length; i++) {
-      const prevEnd = new Date(slots[i - 1].end).getTime();
-      const currStart = new Date(slots[i].start).getTime();
+      const prevEnd = new Date(slots[i - 1]!.end).getTime();
+      const currStart = new Date(slots[i]!.start).getTime();
       const gapMinutes = (currStart - prevEnd) / 60_000;
       expect(gapMinutes).toBeGreaterThanOrEqual(15);
     }

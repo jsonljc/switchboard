@@ -142,6 +142,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
             service: input.service,
             attendeeName: input.attendeeName,
             attendeeEmail: input.attendeeEmail,
+            createdByType: "agent" as const,
           });
 
           // 3. On success: confirm booking + write outbox in one transaction

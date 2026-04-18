@@ -61,19 +61,19 @@ describe("createCalendarBookTool", () => {
   });
 
   it("slots.query has governance tier 'read'", () => {
-    expect(tool.operations["slots.query"].governanceTier).toBe("read");
+    expect(tool.operations["slots.query"]!.governanceTier).toBe("read");
   });
 
   it("booking.create has governance tier 'external_write'", () => {
-    expect(tool.operations["booking.create"].governanceTier).toBe("external_write");
+    expect(tool.operations["booking.create"]!.governanceTier).toBe("external_write");
   });
 
   it("slots.query is idempotent", () => {
-    expect(tool.operations["slots.query"].idempotent).toBe(true);
+    expect(tool.operations["slots.query"]!.idempotent).toBe(true);
   });
 
   it("booking.create is idempotent", () => {
-    expect(tool.operations["booking.create"].idempotent).toBe(true);
+    expect(tool.operations["booking.create"]!.idempotent).toBe(true);
   });
 
   it("slots.query delegates to calendarProvider", async () => {
@@ -87,7 +87,7 @@ describe("createCalendarBookTool", () => {
     ];
     calendarProvider.listAvailableSlots.mockResolvedValue(mockSlots);
 
-    const result = await tool.operations["slots.query"].execute({
+    const result = await tool.operations["slots.query"]!.execute({
       dateFrom: "2026-04-20T00:00:00+08:00",
       dateTo: "2026-04-20T23:59:59+08:00",
       durationMinutes: 30,
@@ -107,7 +107,7 @@ describe("createCalendarBookTool", () => {
       status: "confirmed",
     });
 
-    const result = await tool.operations["booking.create"].execute({
+    const result = await tool.operations["booking.create"]!.execute({
       orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
@@ -136,7 +136,7 @@ describe("createCalendarBookTool", () => {
     opportunityStore.create.mockResolvedValue({ id: "opp_new" });
     calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
 
-    await tool.operations["booking.create"].execute({
+    await tool.operations["booking.create"]!.execute({
       orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",

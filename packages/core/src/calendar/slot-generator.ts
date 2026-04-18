@@ -76,7 +76,8 @@ function getDayInTimezone(date: Date, tz: string): number {
 }
 
 function setTimeInTimezone(date: Date, time: string, tz: string): Date {
-  const [hours, minutes] = time.split(":").map(Number);
+  const hours = Number(time.split(":")[0]) || 0;
+  const minutes = Number(time.split(":")[1]) || 0;
   const localized = new Date(date.toLocaleString("en-US", { timeZone: tz }));
   localized.setHours(hours, minutes, 0, 0);
   const offset =

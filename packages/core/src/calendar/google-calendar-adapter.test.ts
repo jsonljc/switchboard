@@ -65,6 +65,7 @@ describe("GoogleCalendarAdapter", () => {
       service: "consultation",
       attendeeName: "Alice",
       attendeeEmail: "alice@example.com",
+      createdByType: "agent",
     });
 
     expect(result.calendarEventId).toBe("gcal_123");
