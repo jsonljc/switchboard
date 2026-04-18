@@ -30,6 +30,7 @@ export interface AgentFunnel extends FunnelCounts {
 
 export interface ConversionRecordStore {
   record(event: ConversionEvent): Promise<void>;
+  countByType(orgId: string, type: string, from: Date, to: Date): Promise<number>;
   funnelByOrg(orgId: string, dateRange: DateRange): Promise<FunnelCounts>;
   funnelByCampaign(orgId: string, dateRange: DateRange): Promise<CampaignFunnel[]>;
   funnelByChannel(orgId: string, dateRange: DateRange): Promise<ChannelFunnel[]>;

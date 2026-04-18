@@ -57,7 +57,7 @@ export interface ConversionBus {
   /** Unsubscribe a previously registered handler. */
   unsubscribe(type: ConversionEventType | "*", handler: ConversionEventHandler): void;
   /** Emit a conversion event. Handlers are invoked asynchronously. */
-  emit(event: ConversionEvent): void;
+  emit(event: ConversionEvent): void | Promise<void>;
 }
 
 /**

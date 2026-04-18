@@ -161,12 +161,12 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
                   type: "booked",
                   contactId: input.contactId,
                   organizationId: input.orgId,
-                  opportunityId,
                   value: 0,
                   occurredAt: new Date().toISOString(),
                   source: "calendar-book",
                   metadata: {
                     bookingId: booking.id,
+                    opportunityId,
                     service: input.service,
                     slotStart: input.slotStart,
                     slotEnd: input.slotEnd,

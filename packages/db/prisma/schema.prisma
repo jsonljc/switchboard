@@ -1450,6 +1450,7 @@ model Booking {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@unique([organizationId, contactId, service, startsAt])
   @@index([organizationId, startsAt])
   @@index([contactId])
   @@index([status])
