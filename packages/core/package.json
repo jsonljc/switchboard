@@ -34,10 +34,6 @@
       "types": "./dist/audit/index.d.ts",
       "import": "./dist/audit/index.js"
     },
-    "./competence": {
-      "types": "./dist/competence/index.d.ts",
-      "import": "./dist/competence/index.js"
-    },
     "./telemetry": {
       "types": "./dist/telemetry/index.d.ts",
       "import": "./dist/telemetry/index.js"
@@ -58,10 +54,6 @@
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"
     },
-    "./enrichment": {
-      "types": "./dist/enrichment/index.d.ts",
-      "import": "./dist/enrichment/index.js"
-    },
     "./data-flow": {
       "types": "./dist/data-flow/index.d.ts",
       "import": "./dist/data-flow/index.js"
@@ -77,10 +69,6 @@
     "./tool-registry": {
       "types": "./dist/tool-registry/index.d.ts",
       "import": "./dist/tool-registry/index.js"
-    },
-    "./agents": {
-      "types": "./dist/agents/index.d.ts",
-      "import": "./dist/agents/index.js"
     },
     "./sessions": {
       "types": "./dist/sessions/index.d.ts",
