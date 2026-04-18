@@ -1472,3 +1472,60 @@ model OutboxEvent {
   @@index([status, createdAt])
 }
 
+// ---------------------------------------------------------------------------
+// ConversionRecord — durable funnel event persistence for attribution
+// ---------------------------------------------------------------------------
+
+model ConversionRecord {
+  id                String   @id @default(uuid())
+  eventId           String   @unique
+  organizationId    String
+  contactId         String
+  type              String
+  value             Float    @default(0)
+  sourceAdId        String?
+  sourceCampaignId  String?
+  sourceChannel     String?
+  agentDeploymentId String?
+  metadata          Json     @default("{}")
+  occurredAt        DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId, type, occurredAt])
+  @@index([organizationId, sourceCampaignId])
+  @@index([contactId])
+}
+
+// ---------------------------------------------------------------------------
+// DispatchLog — ad platform delivery tracking
+// ---------------------------------------------------------------------------
+
+model DispatchLog {
+  id              String   @id @default(uuid())
+  eventId         String
+  platform        String
+  status          String
+  errorMessage    String?
+  responsePayload Json?
+  attemptedAt     DateTime @default(now())
+
+  @@index([eventId])
+  @@index([platform, status, attemptedAt])
+}
+
+// ---------------------------------------------------------------------------
+// ReconciliationReport — attribution pipeline health checks
+// ---------------------------------------------------------------------------
+
+model ReconciliationReport {
+  id              String   @id @default(uuid())
+  organizationId  String
+  dateRangeFrom   DateTime
+  dateRangeTo     DateTime
+  overallStatus   String
+  checks          Json
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
