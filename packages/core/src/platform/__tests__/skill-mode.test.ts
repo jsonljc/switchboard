@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { SkillMode } from "../modes/skill-mode.js";
+import { BuilderRegistry } from "../../skill-runtime/builder-registry.js";
+import type { BuilderContext } from "../../skill-runtime/builder-registry.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionContext } from "../execution-context.js";
@@ -34,6 +36,12 @@ function makeWorkUnit(overrides: Partial<WorkUnit> = {}): WorkUnit {
     actor: { id: "user-1", type: "user" },
     intent: "sales-pipeline.run",
     parameters: {},
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "sales-pipeline",
+      trustLevel: "guided",
+      trustScore: 42,
+    },
     resolvedMode: "skill",
     traceId: "trace-abc",
     trigger: "chat",
@@ -121,7 +129,15 @@ describe("SkillMode", () => {
   });
 
   it("returns failed outcome when skill not found", async () => {
-    const workUnit = makeWorkUnit({ intent: "unknown.run" });
+    const workUnit = makeWorkUnit({
+      intent: "unknown.run",
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "unknown",
+        trustLevel: "guided",
+        trustScore: 42,
+      },
+    });
     const result = await mode.execute(workUnit, defaultConstraints, defaultContext);
 
     expect(result.outcome).toBe("failed");
@@ -153,5 +169,108 @@ describe("SkillMode", () => {
     await mode.execute(workUnit, defaultConstraints, defaultContext);
 
     expect(executor.lastParams?.skill.slug).toBe("sales-pipeline");
+  });
+});
+
+describe("SkillMode with BuilderRegistry", () => {
+  let executor: MockExecutor;
+  let skill: SkillDefinition;
+  let builderRegistry: BuilderRegistry;
+
+  beforeEach(() => {
+    executor = new MockExecutor();
+    skill = makeSkill();
+    builderRegistry = new BuilderRegistry();
+  });
+
+  it("runs builder when registered and passes enriched parameters to executor", async () => {
+    builderRegistry.register("sales-pipeline", async (_ctx: BuilderContext) => ({
+      BUSINESS_NAME: "Test Co",
+      LEAD_PROFILE: { name: "Jane" },
+    }));
+
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({
+      executor,
+      skillsBySlug,
+      builderRegistry,
+      stores: {
+        opportunityStore: { findActiveByContact: vi.fn().mockResolvedValue([]) },
+        contactStore: { findById: vi.fn().mockResolvedValue(null) },
+        activityStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const workUnit = makeWorkUnit();
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters).toEqual({
+      BUSINESS_NAME: "Test Co",
+      LEAD_PROFILE: { name: "Jane" },
+    });
+  });
+
+  it("passes through workUnit.parameters when no builder is registered", async () => {
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({
+      executor,
+      skillsBySlug,
+      builderRegistry,
+      stores: {
+        opportunityStore: { findActiveByContact: vi.fn().mockResolvedValue([]) },
+        contactStore: { findById: vi.fn().mockResolvedValue(null) },
+        activityStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const workUnit = makeWorkUnit({ parameters: { raw: "data" } });
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.parameters).toEqual({ raw: "data" });
+  });
+
+  it("reads skillSlug from workUnit.deployment.skillSlug", async () => {
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({
+      executor,
+      skillsBySlug,
+      builderRegistry,
+      stores: {
+        opportunityStore: { findActiveByContact: vi.fn().mockResolvedValue([]) },
+        contactStore: { findById: vi.fn().mockResolvedValue(null) },
+        activityStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
+      },
+    });
+
+    const workUnit = makeWorkUnit({
+      intent: "completely-different.respond",
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "sales-pipeline",
+        trustLevel: "guided",
+        trustScore: 42,
+      },
+    });
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.skill.slug).toBe("sales-pipeline");
+  });
+
+  it("uses deployment context for deploymentId and trustScore", async () => {
+    const skillsBySlug = new Map<string, SkillDefinition>([[skill.slug, skill]]);
+    const mode = new SkillMode({ executor, skillsBySlug });
+
+    const workUnit = makeWorkUnit({
+      deployment: {
+        deploymentId: "dep-real",
+        skillSlug: "sales-pipeline",
+        trustLevel: "autonomous",
+        trustScore: 85,
+      },
+    });
+    await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(executor.lastParams?.deploymentId).toBe("dep-real");
+    expect(executor.lastParams?.trustScore).toBe(85);
   });
 });

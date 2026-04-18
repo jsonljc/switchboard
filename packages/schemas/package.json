@@ -133,6 +133,14 @@
     "./employee-events": {
       "types": "./dist/employee-events.d.ts",
       "import": "./dist/employee-events.js"
+    },
+    "./conversion": {
+      "types": "./dist/conversion.d.ts",
+      "import": "./dist/conversion.js"
+    },
+    "./calendar": {
+      "types": "./dist/calendar.d.ts",
+      "import": "./dist/calendar.js"
     }
   },
   "scripts": {

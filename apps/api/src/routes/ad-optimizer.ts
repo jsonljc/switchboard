@@ -116,12 +116,14 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
         // Emit inquiry event for CAPI Lead event
         if (app.conversionBus) {
           const conversionEvent: ConversionEvent = {
+            eventId: `evt_lead_${lead.leadId}`,
             type: "inquiry",
             contactId: lead.leadId,
             organizationId,
             value: 0,
             sourceAdId: lead.adId,
-            timestamp: new Date(),
+            occurredAt: new Date(),
+            source: "meta-webhook",
             metadata: {},
           };
           app.conversionBus.emit(conversionEvent);

@@ -14,6 +14,12 @@ function makeWorkUnit(overrides: Partial<WorkUnit> = {}): WorkUnit {
     actor: { id: "user-1", type: "user" },
     intent: "digital-ads.campaign.pause",
     parameters: { campaignId: "camp-42" },
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "test-skill",
+      trustLevel: "guided",
+      trustScore: 42,
+    },
     resolvedMode: "cartridge",
     traceId: "trace-abc",
     trigger: "chat",

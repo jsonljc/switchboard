@@ -4,6 +4,7 @@ export interface WorkTrace {
   workUnitId: string;
   traceId: string;
   parentWorkUnitId?: string;
+  deploymentId?: string;
   intent: string;
   mode: ExecutionModeName;
   organizationId: string;

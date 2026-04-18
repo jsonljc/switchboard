@@ -1,6 +1,5 @@
 export { loadSkill } from "./skill-loader.js";
 export { SkillExecutorImpl } from "./skill-executor.js";
-export { SkillHandler } from "./skill-handler.js";
 export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
@@ -76,3 +75,5 @@ export type {
   GovernanceLogEntry,
 } from "./governance.js";
 export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
+export { BuilderRegistry } from "./builder-registry.js";
+export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";

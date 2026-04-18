@@ -1,11 +1,13 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { ExecutionModeName, Actor, Trigger, Priority } from "./types.js";
+import type { DeploymentContext } from "./deployment-context.js";
 
 export interface SubmitWorkRequest {
   organizationId: string;
   actor: Actor;
   intent: string;
   parameters: Record<string, unknown>;
+  deployment: DeploymentContext;
   suggestedMode?: ExecutionModeName;
   idempotencyKey?: string;
   parentWorkUnitId?: string;
@@ -21,6 +23,7 @@ export interface WorkUnit {
   actor: Actor;
   intent: string;
   parameters: Record<string, unknown>;
+  deployment: DeploymentContext;
   suggestedMode?: ExecutionModeName;
   resolvedMode: ExecutionModeName;
   idempotencyKey?: string;
@@ -41,6 +44,7 @@ export function normalizeWorkUnit(
     actor: request.actor,
     intent: request.intent,
     parameters: request.parameters,
+    deployment: request.deployment,
     suggestedMode: request.suggestedMode,
     resolvedMode,
     idempotencyKey: request.idempotencyKey,

@@ -90,3 +90,6 @@ export * from "./knowledge.js";
 
 // Temporal Fact (entity-scoped temporal fact system)
 export * from "./temporal-fact.js";
+
+export * from "./conversion.js";
+export * from "./calendar.js";

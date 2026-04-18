@@ -55,7 +55,7 @@ describe("rankProviders", () => {
       { format: "lifestyle", identityConstraints: { strategy: "reference_conditioning" } },
       registry,
     );
-    expect(ranked[0].profile.provider).toBe("kling");
+    expect(ranked[0]!.profile.provider).toBe("kling");
   });
 
   it("ranks HeyGen higher for talking_head with audio-driven support", () => {

@@ -42,7 +42,14 @@ describe("analyzeFunnel", () => {
 
     expect(result.stages).toHaveLength(6);
 
-    const [impressions, clicks, lpv, leads, qualified, closed] = result.stages;
+    const [impressions, clicks, lpv, leads, qualified, closed] = result.stages as [
+      (typeof result.stages)[number],
+      (typeof result.stages)[number],
+      (typeof result.stages)[number],
+      (typeof result.stages)[number],
+      (typeof result.stages)[number],
+      (typeof result.stages)[number],
+    ];
 
     // Impressions stage
     expect(impressions.name).toBe("Impressions");

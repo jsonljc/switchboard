@@ -4,26 +4,14 @@ import type { ExecutionResult } from "../execution-result.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { SkillExecutor, SkillDefinition } from "../../skill-runtime/types.js";
 import type { ExecutionModeName } from "../types.js";
+import type { BuilderRegistry } from "../../skill-runtime/builder-registry.js";
+import type { SkillStores } from "../../skill-runtime/parameter-builder.js";
 
 export interface SkillModeConfig {
   executor: SkillExecutor;
   skillsBySlug: Map<string, SkillDefinition>;
-}
-
-/**
- * Resolves a skill slug from a work unit.
- * Tries `parameters.skillSlug` first, then derives from intent
- * (e.g. "sales-pipeline.run" -> "sales-pipeline").
- */
-function resolveSkillSlug(workUnit: WorkUnit): string | undefined {
-  if (typeof workUnit.parameters.skillSlug === "string") {
-    return workUnit.parameters.skillSlug;
-  }
-  if (workUnit.intent) {
-    const dotIndex = workUnit.intent.lastIndexOf(".");
-    return dotIndex > 0 ? workUnit.intent.slice(0, dotIndex) : workUnit.intent;
-  }
-  return undefined;
+  builderRegistry?: BuilderRegistry;
+  stores?: SkillStores;
 }
 
 export class SkillMode implements ExecutionMode {
@@ -39,7 +27,7 @@ export class SkillMode implements ExecutionMode {
     constraints: ExecutionConstraints,
     context: ExecutionContext,
   ): Promise<ExecutionResult> {
-    const slug = resolveSkillSlug(workUnit);
+    const slug = workUnit.deployment?.skillSlug ?? this.resolveSkillSlugLegacy(workUnit);
     if (!slug) {
       return this.failedResult(
         workUnit,
@@ -54,16 +42,17 @@ export class SkillMode implements ExecutionMode {
       return this.failedResult(workUnit, context, "SKILL_NOT_FOUND", `Skill not found: ${slug}`);
     }
 
-    // TODO: Pass governance-resolved constraints to executor (requires SkillExecutionParams extension)
     const startMs = Date.now();
     try {
+      const parameters = await this.resolveParameters(workUnit, skill);
+
       const result = await this.config.executor.execute({
         skill,
-        parameters: workUnit.parameters,
+        parameters,
         messages: [],
-        deploymentId: workUnit.organizationId,
+        deploymentId: workUnit.deployment?.deploymentId ?? workUnit.organizationId,
         orgId: workUnit.organizationId,
-        trustScore: 0,
+        trustScore: workUnit.deployment?.trustScore ?? 0,
         trustLevel: constraints.trustLevel,
       });
 
@@ -87,6 +76,40 @@ export class SkillMode implements ExecutionMode {
       const message = err instanceof Error ? err.message : String(err);
       return this.failedResult(workUnit, context, "EXECUTION_ERROR", message, durationMs);
     }
+  }
+
+  private async resolveParameters(
+    workUnit: WorkUnit,
+    _skill: SkillDefinition,
+  ): Promise<Record<string, unknown>> {
+    const { builderRegistry, stores } = this.config;
+    const slug = workUnit.deployment?.skillSlug;
+
+    if (!builderRegistry || !slug || !stores) {
+      return workUnit.parameters;
+    }
+
+    const builder = builderRegistry.get(slug);
+    if (!builder) {
+      return workUnit.parameters;
+    }
+
+    return builder({
+      workUnit,
+      deployment: workUnit.deployment,
+      stores,
+    });
+  }
+
+  private resolveSkillSlugLegacy(workUnit: WorkUnit): string | undefined {
+    if (typeof workUnit.parameters.skillSlug === "string") {
+      return workUnit.parameters.skillSlug;
+    }
+    if (workUnit.intent) {
+      const dotIndex = workUnit.intent.lastIndexOf(".");
+      return dotIndex > 0 ? workUnit.intent.slice(0, dotIndex) : workUnit.intent;
+    }
+    return undefined;
   }
 
   private failedResult(

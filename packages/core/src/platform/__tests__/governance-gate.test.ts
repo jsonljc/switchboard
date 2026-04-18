@@ -14,6 +14,12 @@ function makeWorkUnit(overrides?: Partial<WorkUnit>): WorkUnit {
     actor: { id: "user-1", type: "user" },
     intent: "crm.deal.update",
     parameters: { dealId: "d-1", stage: "closed" },
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "test-skill",
+      trustLevel: "guided",
+      trustScore: 42,
+    },
     resolvedMode: "skill",
     traceId: "trace-1",
     trigger: "chat",

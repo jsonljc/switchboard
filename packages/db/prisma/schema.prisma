@@ -1424,3 +1424,109 @@ model WorkTrace {
   @@index([requestedAt])
 }
 
+// ---------------------------------------------------------------------------
+// Booking — calendar bookings with provenance
+// ---------------------------------------------------------------------------
+
+model Booking {
+  id              String    @id @default(uuid())
+  organizationId  String
+  contactId       String
+  opportunityId   String?
+  calendarEventId String?
+  service         String
+  startsAt        DateTime
+  endsAt          DateTime
+  timezone        String    @default("Asia/Singapore")
+  status          String    @default("pending_confirmation")
+  attendeeName    String?
+  attendeeEmail   String?
+  connectionId    String?
+  createdByType   String    @default("agent")
+  sourceChannel   String?
+  workTraceId     String?
+  rescheduledAt   DateTime?
+  rescheduleCount Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, contactId, service, startsAt])
+  @@index([organizationId, startsAt])
+  @@index([contactId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// OutboxEvent — transactional outbox for guaranteed event publication
+// ---------------------------------------------------------------------------
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventId       String    @unique
+  type          String
+  payload       Json
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// ConversionRecord — durable funnel event persistence for attribution
+// ---------------------------------------------------------------------------
+
+model ConversionRecord {
+  id                String   @id @default(uuid())
+  eventId           String   @unique
+  organizationId    String
+  contactId         String
+  type              String
+  value             Float    @default(0)
+  sourceAdId        String?
+  sourceCampaignId  String?
+  sourceChannel     String?
+  agentDeploymentId String?
+  metadata          Json     @default("{}")
+  occurredAt        DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId, type, occurredAt])
+  @@index([organizationId, sourceCampaignId])
+  @@index([contactId])
+}
+
+// ---------------------------------------------------------------------------
+// DispatchLog — ad platform delivery tracking
+// ---------------------------------------------------------------------------
+
+model DispatchLog {
+  id              String   @id @default(uuid())
+  eventId         String
+  platform        String
+  status          String
+  errorMessage    String?
+  responsePayload Json?
+  attemptedAt     DateTime @default(now())
+
+  @@index([eventId])
+  @@index([platform, status, attemptedAt])
+}
+
+// ---------------------------------------------------------------------------
+// ReconciliationReport — attribution pipeline health checks
+// ---------------------------------------------------------------------------
+
+model ReconciliationReport {
+  id              String   @id @default(uuid())
+  organizationId  String
+  dateRangeFrom   DateTime
+  dateRangeTo     DateTime
+  overallStatus   String
+  checks          Json
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
