@@ -141,7 +141,11 @@ export class PrismaDeploymentResolver implements DeploymentResolver {
       throw new Error(`No deployment connection found for channel=${channel}`);
     }
 
-    return this.resolveByDeploymentId(conn.deploymentId);
+    const result = await this.resolveByDeploymentId(conn.deploymentId);
+    console.warn(
+      `[DeploymentResolver] resolved deployment=${result.deploymentId} skillSlug=${result.skillSlug} org=${result.organizationId}`,
+    );
+    return result;
   }
 
   private toResult(row: DeploymentRow): DeploymentResolverResult {

@@ -23,6 +23,9 @@ export class ExecutionModeRegistry {
     if (!mode) {
       throw new Error(`Unknown execution mode: ${modeName}`);
     }
+    console.warn(
+      `[ModeRegistry] dispatch mode=${modeName} intent=${workUnit.intent} org=${workUnit.organizationId}`,
+    );
     return mode.execute(workUnit, constraints, context);
   }
 

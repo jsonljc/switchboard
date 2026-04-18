@@ -49,7 +49,7 @@ describe("RedisStreamConversionBus", () => {
     );
 
     const serialized = JSON.parse(
-      (redis.xadd as ReturnType<typeof vi.fn>).mock.calls[0][6] as string,
+      (redis.xadd as ReturnType<typeof vi.fn>).mock.calls[0]?.[6] as string,
     );
     expect(serialized.eventId).toBe("evt_1");
     expect(serialized.type).toBe("booked");

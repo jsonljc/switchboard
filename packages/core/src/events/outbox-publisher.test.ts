@@ -117,7 +117,7 @@ describe("OutboxPublisher", () => {
 
     await publisher.publishBatch();
 
-    const emittedEvent = (bus.emit as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const emittedEvent = (bus.emit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(emittedEvent.occurredAt).toBeInstanceOf(Date);
     expect(emittedEvent.value).toBe(50);
     expect(emittedEvent.metadata.bookingId).toBe("bk_1");
