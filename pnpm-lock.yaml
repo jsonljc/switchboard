@@ -87,6 +87,9 @@ importers:
       '@switchboard/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@switchboard/creative-pipeline':
+        specifier: workspace:*
+        version: link:../../packages/creative-pipeline
       '@switchboard/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -398,6 +401,34 @@ importers:
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.5.0)(jsdom@25.0.1)
+
+  packages/creative-pipeline:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.82.0
+        version: 0.82.0(zod@3.25.76)
+      '@paralleldrive/cuid2':
+        specifier: ^3.3.0
+        version: 3.3.0
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      inngest:
+        specifier: ^4.2.0
+        version: 4.2.0(@opentelemetry/core@2.6.1(@opentelemetry/api@1.9.0))(express@5.2.1)(fastify@5.8.2)(hono@4.12.7)(next@15.5.14(@opentelemetry/api@1.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(zod@3.25.76)
+      openai:
+        specifier: ^6.34.0
+        version: 6.34.0(ws@8.19.0)(zod@3.25.76)
       zod:
         specifier: ^3.23.0
         version: 3.25.76

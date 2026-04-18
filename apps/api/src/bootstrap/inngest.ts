@@ -17,7 +17,7 @@ import {
   createModeDispatcher,
   createUgcJobRunner,
   KlingClient,
-} from "@switchboard/core/creative-pipeline";
+} from "@switchboard/creative-pipeline";
 import {
   createWeeklyAuditCron,
   createDailyCheckCron,

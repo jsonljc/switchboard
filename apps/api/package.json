@@ -23,6 +23,7 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
+    "@switchboard/creative-pipeline": "workspace:*",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "ajv": "^8.18.0",

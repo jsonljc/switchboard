@@ -21,6 +21,17 @@ module.exports = {
       },
     },
 
+    // ─── creative-pipeline may only import schemas ───
+    {
+      name: "creative-pipeline-only-schemas",
+      severity: "error",
+      comment: "creative-pipeline may only import @switchboard/schemas.",
+      from: { path: "^packages/creative-pipeline/src" },
+      to: {
+        path: "^(packages/(core|db|cartridge-sdk)|apps)/",
+      },
+    },
+
     // ─── core may only import schemas and cartridge-sdk ───
     {
       name: "core-allowed-deps",
@@ -28,7 +39,7 @@ module.exports = {
       comment: "core may only import @switchboard/schemas and @switchboard/cartridge-sdk.",
       from: { path: "^packages/core/src" },
       to: {
-        path: "^(packages/db|apps)/",
+        path: "^(packages/(db|creative-pipeline)|apps)/",
       },
     },
 

@@ -42,6 +42,27 @@
       }
     },
     {
+      "files": ["packages/creative-pipeline/src/**/*.ts"],
+      "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@switchboard/core", "@switchboard/core/*"],
+                "message": "creative-pipeline cannot import from core."
+              },
+              {
+                "group": ["@switchboard/db", "@switchboard/db/*"],
+                "message": "creative-pipeline cannot import from db."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/cartridge-sdk/src/**/*.ts"],
       "excludedFiles": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
       "rules": {
@@ -125,6 +146,10 @@
               {
                 "group": ["@switchboard/db", "@switchboard/db/*"],
                 "message": "core cannot import from db."
+              },
+              {
+                "group": ["@switchboard/creative-pipeline", "@switchboard/creative-pipeline/*"],
+                "message": "core cannot import from creative-pipeline."
               },
               {
                 "group": ["@switchboard/api", "@switchboard/api/*"],

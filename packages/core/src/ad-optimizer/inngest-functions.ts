@@ -1,5 +1,7 @@
 // packages/core/src/ad-optimizer/inngest-functions.ts
-import { inngestClient } from "../creative-pipeline/inngest-client.js";
+import { Inngest } from "inngest";
+
+const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
 import type { AdsClientInterface, CrmDataProvider, AuditConfig } from "./audit-runner.js";
 
