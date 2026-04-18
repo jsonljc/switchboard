@@ -5,7 +5,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaCreativeJobStore, PrismaAgentTaskStore } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
-import { inngestClient } from "@switchboard/core/creative-pipeline";
+import { inngestClient } from "@switchboard/creative-pipeline";
 import { z } from "zod";
 
 const SubmitBriefInput = z.object({
@@ -238,7 +238,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ estimates: null, reason: "Storyboard not yet complete" });
     }
 
-    const { estimateCost } = await import("@switchboard/core/creative-pipeline");
+    const { estimateCost } = await import("@switchboard/creative-pipeline");
     const scriptCount = scripts?.scripts?.length ?? 1;
     const estimates = estimateCost(
       storyboard as { storyboards: Array<{ scenes: Array<{ duration: number }> }> },

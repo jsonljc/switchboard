@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
 

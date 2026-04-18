@@ -1,5 +1,5 @@
 import type { ConversionBus } from "@switchboard/core";
-import { MetaCAPIClient } from "@switchboard/core/ad-optimizer";
+import { MetaCAPIClient } from "@switchboard/ad-optimizer";
 
 export function wireCAPIDispatcher(
   bus: ConversionBus,

@@ -96,12 +96,16 @@ export * from "./tool-registry/index.js";
 
 // Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";
+export { RedisStreamConversionBus } from "./events/redis-stream-conversion-bus.js";
 export type {
   ConversionBus,
   ConversionEvent,
   ConversionEventType,
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
+
+// Outbox Publisher (outbox → bus relay)
+export { OutboxPublisher } from "./events/outbox-publisher.js";
 
 // LLM Client Interface + Adapters (Claude, Voyage)
 export * from "./llm/index.js";

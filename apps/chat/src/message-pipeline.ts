@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import crypto, { createHash } from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";

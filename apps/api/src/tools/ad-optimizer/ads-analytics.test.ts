@@ -1,4 +1,3 @@
-// packages/core/src/skill-runtime/tools/ads-analytics.test.ts
 import { describe, it, expect } from "vitest";
 import { createAdsAnalyticsTool } from "./ads-analytics.js";
 
