@@ -163,14 +163,23 @@ export async function buildServer() {
   }
 
   // --- ConversionBus wiring ---
+  const { createConversionPipelineMetrics, setOutboxBacklogSampler } = await import("./metrics.js");
+  const conversionMetrics = createConversionPipelineMetrics();
   const { bootstrapConversionBus } = await import("./bootstrap/conversion-bus-bootstrap.js");
   const conversionBusHandle = await bootstrapConversionBus({
     redis,
     prisma: prismaClient,
     logger: app.log,
+    metrics: conversionMetrics,
   });
   const conversionBus = conversionBusHandle.bus;
   conversionBusHandle.start();
+
+  if (prismaClient) {
+    setOutboxBacklogSampler(async () => {
+      return prismaClient.outboxEvent.count({ where: { status: "pending" } });
+    });
+  }
 
   // --- Conversation deps (LLM + knowledge for agent handlers) ---
   let conversationDeps: import("./bootstrap/conversation-deps.js").ConversationDeps | null = null;

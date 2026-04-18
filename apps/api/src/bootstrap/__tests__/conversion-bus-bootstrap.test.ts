@@ -202,4 +202,75 @@ describe("bootstrapConversionBus", () => {
 
     vi.doUnmock("@switchboard/db");
   });
+
+  it("increments metrics on successful record write", async () => {
+    const recordFn = vi.fn().mockResolvedValue(undefined);
+    const metricsInc = vi.fn();
+    const fakeMetrics = {
+      outboxPublishSuccess: { inc: vi.fn() },
+      outboxPublishFailure: { inc: vi.fn() },
+      conversionRecordWriteSuccess: { inc: metricsInc },
+      conversionRecordWriteFailure: { inc: vi.fn() },
+    };
+
+    vi.doMock("@switchboard/db", () => ({
+      PrismaOutboxStore: class {
+        fetchPending = vi.fn().mockResolvedValue([]);
+        markPublished = vi.fn();
+        recordFailure = vi.fn();
+      },
+      PrismaConversionRecordStore: class {
+        record = recordFn;
+      },
+    }));
+
+    handle = await bootstrapConversionBus({
+      redis: null,
+      prisma: {} as never,
+      logger,
+      metrics: fakeMetrics as never,
+    });
+
+    handle.bus.emit(makeEvent({ type: "booked" }));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(metricsInc).toHaveBeenCalledWith({ event_type: "booked" });
+
+    vi.doUnmock("@switchboard/db");
+  });
+
+  it("increments failure metric when record write throws", async () => {
+    const failureInc = vi.fn();
+    const fakeMetrics = {
+      outboxPublishSuccess: { inc: vi.fn() },
+      outboxPublishFailure: { inc: vi.fn() },
+      conversionRecordWriteSuccess: { inc: vi.fn() },
+      conversionRecordWriteFailure: { inc: failureInc },
+    };
+
+    vi.doMock("@switchboard/db", () => ({
+      PrismaOutboxStore: class {
+        fetchPending = vi.fn().mockResolvedValue([]);
+        markPublished = vi.fn();
+        recordFailure = vi.fn();
+      },
+      PrismaConversionRecordStore: class {
+        record = vi.fn().mockRejectedValue(new Error("DB down"));
+      },
+    }));
+
+    handle = await bootstrapConversionBus({
+      redis: null,
+      prisma: {} as never,
+      logger,
+      metrics: fakeMetrics as never,
+    });
+
+    handle.bus.emit(makeEvent({ type: "inquiry" }));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(failureInc).toHaveBeenCalledWith({ event_type: "inquiry" });
+
+    vi.doUnmock("@switchboard/db");
+  });
 });
