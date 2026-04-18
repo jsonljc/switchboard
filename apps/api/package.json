@@ -15,6 +15,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.2.0",
