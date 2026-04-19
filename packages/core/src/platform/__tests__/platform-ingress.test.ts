@@ -244,4 +244,108 @@ describe("PlatformIngress", () => {
       expect(response.workUnit.organizationId).toBe("org-1");
     }
   });
+
+  describe("idempotency enforcement", () => {
+    it("returns existing result when idempotencyKey matches a prior trace", async () => {
+      const existingTrace: import("../../platform/work-trace.js").WorkTrace = {
+        workUnitId: "existing-wu-1",
+        traceId: "existing-trace-1",
+        intent: "campaign.pause",
+        mode: "skill",
+        organizationId: "org-1",
+        actor: { id: "user-1", type: "user" },
+        trigger: "chat",
+        idempotencyKey: "dedup-key-1",
+        parameters: { campaignId: "camp-123" },
+        deploymentContext: {
+          deploymentId: "dep-1",
+          skillSlug: "test-skill",
+          trustLevel: "guided",
+          trustScore: 42,
+        },
+        governanceOutcome: "execute",
+        riskScore: 0.2,
+        matchedPolicies: ["default-policy"],
+        outcome: "completed",
+        durationMs: 150,
+        executionSummary: "Already done",
+        executionOutputs: { result: true },
+        requestedAt: "2026-04-19T00:00:00.000Z",
+        governanceCompletedAt: "2026-04-19T00:00:01.000Z",
+      };
+
+      const traceStore: WorkTraceStore = {
+        persist: vi.fn().mockResolvedValue(undefined),
+        getByWorkUnitId: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue(undefined),
+        getByIdempotencyKey: vi.fn().mockResolvedValue(existingTrace),
+      };
+      const governanceGate: GovernanceGateInterface = {
+        evaluate: vi.fn().mockResolvedValue(buildExecuteDecision()),
+      };
+      const config = createConfig({ traceStore });
+      // Override the governance gate to track calls
+      (config as { governanceGate: GovernanceGateInterface }).governanceGate = governanceGate;
+      const ingress = new PlatformIngress(config);
+
+      const response = await ingress.submit({
+        ...baseRequest,
+        idempotencyKey: "dedup-key-1",
+      });
+
+      expect(response.ok).toBe(true);
+      if (response.ok) {
+        expect(response.result.workUnitId).toBe("existing-wu-1");
+        expect(response.result.outcome).toBe("completed");
+        expect(response.result.summary).toBe("Already done");
+        expect(response.workUnit.id).toBe("existing-wu-1");
+      }
+      expect(governanceGate.evaluate).not.toHaveBeenCalled();
+    });
+
+    it("proceeds normally when idempotencyKey is not set", async () => {
+      const traceStore: WorkTraceStore = {
+        persist: vi.fn().mockResolvedValue(undefined),
+        getByWorkUnitId: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue(undefined),
+        getByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      };
+      const mode = createMockMode();
+      const config = createConfig({ traceStore, mode });
+      const ingress = new PlatformIngress(config);
+
+      const response = await ingress.submit(baseRequest);
+
+      expect(traceStore.getByIdempotencyKey).not.toHaveBeenCalled();
+      expect(response.ok).toBe(true);
+      if (response.ok) {
+        expect(response.result.outcome).toBe("completed");
+      }
+      expect(mode.execute).toHaveBeenCalledOnce();
+    });
+
+    it("proceeds normally when idempotencyKey has no prior trace", async () => {
+      const traceStore: WorkTraceStore = {
+        persist: vi.fn().mockResolvedValue(undefined),
+        getByWorkUnitId: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue(undefined),
+        getByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      };
+      const mode = createMockMode();
+      const config = createConfig({ traceStore, mode });
+      const ingress = new PlatformIngress(config);
+
+      const response = await ingress.submit({
+        ...baseRequest,
+        idempotencyKey: "new-key",
+      });
+
+      expect(traceStore.getByIdempotencyKey).toHaveBeenCalledWith("new-key");
+      expect(response.ok).toBe(true);
+      if (response.ok) {
+        expect(response.result.outcome).toBe("completed");
+      }
+      expect(mode.execute).toHaveBeenCalledOnce();
+    });
+  });
 });
