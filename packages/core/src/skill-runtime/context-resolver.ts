@@ -137,7 +137,7 @@ export class ContextResolverImpl {
   }
 }
 
-function renderBusinessFacts(facts: BusinessFacts): string {
+export function renderBusinessFacts(facts: BusinessFacts): string {
   const lines: string[] = [];
   lines.push("## Business Facts (Operator-Approved — answer ONLY from these facts)");
   lines.push("");

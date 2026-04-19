@@ -30,13 +30,13 @@ function makeDeps() {
     notifier: {
       notify: vi.fn().mockResolvedValue(undefined),
     },
-    sessionContext: {
+    getSessionContext: () => ({
       sessionId: "sess_1",
       organizationId: "org_1",
       leadSnapshot: { channel: "whatsapp" },
       qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
       messages: [],
-    },
+    }),
   };
 }
 

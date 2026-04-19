@@ -12,7 +12,7 @@ interface EscalateToolDeps {
   assembler: { assemble(input: AssemblerInput): HandoffPackage };
   handoffStore: Pick<HandoffStore, "save" | "getBySessionId">;
   notifier: { notify(pkg: HandoffPackage): Promise<void> };
-  sessionContext: {
+  getSessionContext: () => {
     sessionId: string;
     organizationId: string;
     leadSnapshot: LeadSnapshot;
@@ -64,19 +64,20 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
         },
         execute: async (params: unknown) => {
           const input = params as EscalateInput;
+          const sessionContext = deps.getSessionContext();
 
-          const existing = await deps.handoffStore.getBySessionId(deps.sessionContext.sessionId);
+          const existing = await deps.handoffStore.getBySessionId(sessionContext.sessionId);
           if (existing && (existing.status === "pending" || existing.status === "assigned")) {
             return { handoffId: existing.id, status: "already_pending" };
           }
 
           const pkg = deps.assembler.assemble({
-            sessionId: deps.sessionContext.sessionId,
-            organizationId: deps.sessionContext.organizationId,
+            sessionId: sessionContext.sessionId,
+            organizationId: sessionContext.organizationId,
             reason: input.reason,
-            leadSnapshot: deps.sessionContext.leadSnapshot,
-            qualificationSnapshot: deps.sessionContext.qualificationSnapshot,
-            messages: deps.sessionContext.messages,
+            leadSnapshot: sessionContext.leadSnapshot,
+            qualificationSnapshot: sessionContext.qualificationSnapshot,
+            messages: sessionContext.messages,
           });
 
           await deps.handoffStore.save(pkg);

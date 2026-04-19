@@ -17,6 +17,9 @@ export interface SkillStores {
       opts: { limit: number },
     ): Promise<unknown>;
   };
+  businessFactsStore?: {
+    get(organizationId: string): Promise<unknown>;
+  };
 }
 
 /**

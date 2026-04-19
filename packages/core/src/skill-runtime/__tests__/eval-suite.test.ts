@@ -146,13 +146,13 @@ function createMockTools(): Map<string, SkillTool> {
       },
       handoffStore: { save: async () => {}, getBySessionId: async () => null },
       notifier: { notify: async () => {} },
-      sessionContext: {
+      getSessionContext: () => ({
         sessionId: "s",
         organizationId: "o",
         leadSnapshot: { channel: "whatsapp" },
         qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
         messages: [],
-      },
+      }),
     }),
   );
   tools.set("web-scanner", {

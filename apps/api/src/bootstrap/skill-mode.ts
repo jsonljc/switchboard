@@ -31,6 +31,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     PrismaActivityLogStore,
     PrismaBookingStore,
     PrismaHandoffStore,
+    PrismaBusinessFactsStore,
   } = await import("@switchboard/db");
   const { NoopNotifier } = await import("@switchboard/core/notifications");
 
@@ -48,6 +49,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const opportunityStore = new PrismaOpportunityStore(prismaClient);
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
+  const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
   const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
 
   const handoffStore = new PrismaHandoffStore(prismaClient);
@@ -132,13 +134,13 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
         assembler: handoffAssembler,
         handoffStore,
         notifier: handoffNotifier,
-        sessionContext: {
+        getSessionContext: () => ({
           sessionId: "",
           organizationId: "",
           leadSnapshot: { channel: "whatsapp" },
           qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
           messages: [],
-        },
+        }),
       }),
     ],
   ]);
@@ -168,6 +170,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
           listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>
             activityStore.listByDeployment(orgId, deploymentId, opts),
         },
+        businessFactsStore,
       },
     }),
   );
