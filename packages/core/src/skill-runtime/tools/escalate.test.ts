@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createEscalateTool } from "./escalate.js";
 import type { HandoffReason } from "../../handoff/types.js";
+import type { ToolExecutionContext } from "../types.js";
 
 function makeDeps() {
   return {
@@ -30,15 +31,15 @@ function makeDeps() {
     notifier: {
       notify: vi.fn().mockResolvedValue(undefined),
     },
-    getSessionContext: () => ({
-      sessionId: "sess_1",
-      organizationId: "org_1",
-      leadSnapshot: { channel: "whatsapp" },
-      qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
-      messages: [],
-    }),
   };
 }
+
+const testCtx: ToolExecutionContext = {
+  orgId: "org_1",
+  deploymentId: "dep_1",
+  sessionId: "sess_1",
+  messages: [{ role: "user", content: "Do you have parking?" }],
+};
 
 describe("escalate tool", () => {
   let deps: ReturnType<typeof makeDeps>;
@@ -60,17 +61,21 @@ describe("escalate tool", () => {
 
   it("creates a handoff package and notifies", async () => {
     const tool = createEscalateTool(deps);
-    const result = await tool.operations["handoff.create"]!.execute({
-      reason: "missing_knowledge",
-      summary: "Customer asked about parking, no data available",
-      customerSentiment: "neutral",
-    });
+    const result = await tool.operations["handoff.create"]!.execute(
+      {
+        reason: "missing_knowledge",
+        summary: "Customer asked about parking, no data available",
+        customerSentiment: "neutral",
+      },
+      testCtx,
+    );
 
     expect(deps.assembler.assemble).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "sess_1",
         organizationId: "org_1",
         reason: "missing_knowledge",
+        messages: [{ role: "user", text: "Do you have parking?" }],
       }),
     );
     expect(deps.handoffStore.save).toHaveBeenCalled();
@@ -84,10 +89,13 @@ describe("escalate tool", () => {
       status: "pending",
     });
     const tool = createEscalateTool(deps);
-    const result = await tool.operations["handoff.create"]!.execute({
-      reason: "missing_knowledge",
-      summary: "duplicate attempt",
-    });
+    const result = await tool.operations["handoff.create"]!.execute(
+      {
+        reason: "missing_knowledge",
+        summary: "duplicate attempt",
+      },
+      testCtx,
+    );
 
     expect(deps.assembler.assemble).not.toHaveBeenCalled();
     expect(deps.handoffStore.save).not.toHaveBeenCalled();

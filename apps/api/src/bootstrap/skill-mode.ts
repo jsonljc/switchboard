@@ -134,13 +134,6 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
         assembler: handoffAssembler,
         handoffStore,
         notifier: handoffNotifier,
-        getSessionContext: () => ({
-          sessionId: "",
-          organizationId: "",
-          leadSnapshot: { channel: "whatsapp" },
-          qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
-          messages: [],
-        }),
       }),
     ],
   ]);

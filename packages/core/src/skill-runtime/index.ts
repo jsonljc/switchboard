@@ -61,6 +61,7 @@ export type {
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,
+  ToolExecutionContext,
 } from "./types.js";
 export {
   SkillParseError,

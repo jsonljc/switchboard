@@ -132,6 +132,13 @@ export interface SkillExecutionTrace {
 // Tool Interface
 // ---------------------------------------------------------------------------
 
+export interface ToolExecutionContext {
+  orgId: string;
+  deploymentId: string;
+  sessionId?: string;
+  messages: Array<{ role: string; content: string }>;
+}
+
 export interface SkillTool {
   id: string;
   operations: Record<string, SkillToolOperation>;
@@ -143,7 +150,7 @@ export interface SkillToolOperation {
   governanceTier: GovernanceTier;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
-  execute(params: unknown): Promise<unknown>;
+  execute(params: unknown, ctx?: ToolExecutionContext): Promise<unknown>;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,24 +1,11 @@
-import type { SkillTool } from "../types.js";
+import type { SkillTool, ToolExecutionContext } from "../types.js";
 import type { AssemblerInput } from "../../handoff/package-assembler.js";
-import type {
-  HandoffPackage,
-  HandoffReason,
-  HandoffStore,
-  LeadSnapshot,
-  QualificationSnapshot,
-} from "../../handoff/types.js";
+import type { HandoffPackage, HandoffReason, HandoffStore } from "../../handoff/types.js";
 
 interface EscalateToolDeps {
   assembler: { assemble(input: AssemblerInput): HandoffPackage };
   handoffStore: Pick<HandoffStore, "save" | "getBySessionId">;
   notifier: { notify(pkg: HandoffPackage): Promise<void> };
-  getSessionContext: () => {
-    sessionId: string;
-    organizationId: string;
-    leadSnapshot: LeadSnapshot;
-    qualificationSnapshot: QualificationSnapshot;
-    messages: Array<{ role: string; text: string }>;
-  };
 }
 
 interface EscalateInput {
@@ -62,22 +49,25 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
           },
           required: ["reason", "summary"],
         },
-        execute: async (params: unknown) => {
+        execute: async (params: unknown, ctx?: ToolExecutionContext) => {
           const input = params as EscalateInput;
-          const sessionContext = deps.getSessionContext();
+          const sessionId = ctx?.sessionId ?? "";
+          const orgId = ctx?.orgId ?? "";
 
-          const existing = await deps.handoffStore.getBySessionId(sessionContext.sessionId);
+          const existing = await deps.handoffStore.getBySessionId(sessionId);
           if (existing && (existing.status === "pending" || existing.status === "assigned")) {
             return { handoffId: existing.id, status: "already_pending" };
           }
 
+          const messages = (ctx?.messages ?? []).map((m) => ({ role: m.role, text: m.content }));
+
           const pkg = deps.assembler.assemble({
-            sessionId: sessionContext.sessionId,
-            organizationId: sessionContext.organizationId,
+            sessionId,
+            organizationId: orgId,
             reason: input.reason,
-            leadSnapshot: sessionContext.leadSnapshot,
-            qualificationSnapshot: sessionContext.qualificationSnapshot,
-            messages: sessionContext.messages,
+            leadSnapshot: { channel: "whatsapp" },
+            qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
+            messages,
           });
 
           await deps.handoffStore.save(pkg);
