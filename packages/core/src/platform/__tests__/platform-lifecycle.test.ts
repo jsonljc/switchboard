@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { PlatformLifecycle } from "../platform-lifecycle.js";
+import { DEFAULT_ROUTING_CONFIG } from "../../approval/router.js";
 import { createApprovalState } from "../../approval/state-machine.js";
 import type { ApprovalState } from "../../approval/state-machine.js";
 import type {
@@ -858,6 +859,41 @@ describe("PlatformLifecycle", () => {
       expect(result.executionResult).not.toBeNull();
       expect(result.executionResult!.success).toBe(true);
       expect(stores.modeRegistry.dispatch).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. routingConfig ownership
+  // -----------------------------------------------------------------------
+  describe("routingConfig ownership", () => {
+    it("exposes routingConfig with default", () => {
+      const lc = new PlatformLifecycle({
+        approvalStore: stores.approvalStore,
+        envelopeStore: stores.envelopeStore,
+        identityStore: stores.identityStore,
+        modeRegistry: stores.modeRegistry,
+        traceStore: stores.traceStore,
+        ledger: stores.ledger,
+      });
+
+      expect(lc.routingConfig).toEqual(DEFAULT_ROUTING_CONFIG);
+    });
+
+    it("accepts custom routingConfig", () => {
+      const lc = new PlatformLifecycle({
+        approvalStore: stores.approvalStore,
+        envelopeStore: stores.envelopeStore,
+        identityStore: stores.identityStore,
+        modeRegistry: stores.modeRegistry,
+        traceStore: stores.traceStore,
+        ledger: stores.ledger,
+        routingConfig: {
+          ...DEFAULT_ROUTING_CONFIG,
+          defaultExpiryMs: 1000,
+        },
+      });
+
+      expect(lc.routingConfig.defaultExpiryMs).toBe(1000);
     });
   });
 });

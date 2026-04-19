@@ -446,6 +446,7 @@ export async function buildServer() {
           windowMs: parseInt(process.env.APPROVAL_RATE_LIMIT_WINDOW_MS ?? "60000", 10),
         }
       : null,
+    routingConfig: orchestrator.routingConfig,
   });
   app.decorate("platformLifecycle", platformLifecycle);
 

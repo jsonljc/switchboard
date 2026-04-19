@@ -2,6 +2,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type { RiskCategory, ActionEnvelope, ActionProposal, RiskInput } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
+import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
+import type { ApprovalRoutingConfig } from "../approval/router.js";
 import { transitionApproval, isExpired } from "../approval/state-machine.js";
 import { canApproveWithChain } from "../approval/delegation.js";
 import { applyPatch } from "../approval/patching.js";
@@ -57,6 +59,7 @@ export interface PlatformLifecycleConfig {
   cartridgeRegistry?: CartridgeRegistry;
   policyStore?: PolicyStore;
   guardrailState?: GuardrailState;
+  routingConfig?: ApprovalRoutingConfig;
 }
 
 export interface ApprovalResponseResult {
@@ -71,6 +74,10 @@ export class PlatformLifecycle {
 
   constructor(config: PlatformLifecycleConfig) {
     this.config = config;
+  }
+
+  get routingConfig(): ApprovalRoutingConfig {
+    return this.config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
   }
 
   async respondToApproval(params: {

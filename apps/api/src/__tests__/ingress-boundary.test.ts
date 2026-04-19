@@ -19,6 +19,7 @@ const BLOCKED_METHODS = [
   "respondToApproval",
   "executeApproved",
   "requestUndo",
+  "routingConfig",
 ];
 
 /**
