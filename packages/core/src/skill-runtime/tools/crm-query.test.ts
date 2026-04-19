@@ -22,7 +22,8 @@ describe("crm-query tool", () => {
       orgId: "org1",
     });
     expect(mockContactStore.findById).toHaveBeenCalledWith("org1", "c1");
-    expect(result).toEqual({ id: "c1", name: "Alice", phone: "+1234" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ id: "c1", name: "Alice", phone: "+1234" });
   });
 
   it("activity.list delegates to activityStore.listByDeployment", async () => {
@@ -32,7 +33,8 @@ describe("crm-query tool", () => {
       limit: 10,
     });
     expect(mockActivityStore.listByDeployment).toHaveBeenCalledWith("org1", "d1", { limit: 10 });
-    expect(result).toHaveLength(1);
+    expect(result.status).toBe("success");
+    expect((result.data as { activities: unknown[] }).activities).toHaveLength(1);
   });
 
   it("activity.list defaults limit to 20", async () => {

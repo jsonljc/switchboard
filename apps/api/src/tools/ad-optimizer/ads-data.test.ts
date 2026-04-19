@@ -63,8 +63,11 @@ describe("ads-data tool", () => {
         dateRange: { since: "2026-04-01", until: "2026-04-07" },
         fields: ["campaign_id", "spend"],
       });
-      expect((result as { insights: unknown[] }).insights).toHaveLength(1);
-      expect((result as { insights: { campaignId: string }[] }).insights[0]?.campaignId).toBe("c1");
+      expect(result.status).toBe("success");
+      expect((result.data as { insights: unknown[] }).insights).toHaveLength(1);
+      expect((result.data as { insights: { campaignId: string }[] }).insights[0]?.campaignId).toBe(
+        "c1",
+      );
     });
   });
 
@@ -72,8 +75,9 @@ describe("ads-data tool", () => {
     it("calls adsClient and returns summary", async () => {
       const result = await tool.operations["get-account-summary"]!.execute({});
       expect(mockAdsClient.getAccountSummary).toHaveBeenCalled();
-      expect((result as { accountId: string }).accountId).toBe("a1");
-      expect((result as { totalSpend: number }).totalSpend).toBe(1000);
+      expect(result.status).toBe("success");
+      expect((result.data as { accountId: string }).accountId).toBe("a1");
+      expect((result.data as { totalSpend: number }).totalSpend).toBe(1000);
     });
   });
 
@@ -86,7 +90,8 @@ describe("ads-data tool", () => {
       };
       const result = await tool.operations["send-conversion-event"]!.execute(eventParams);
       expect(mockCAPIClient.dispatchEvent).toHaveBeenCalledWith(eventParams);
-      expect((result as { eventsReceived: number }).eventsReceived).toBe(1);
+      expect(result.status).toBe("success");
+      expect((result.data as { eventsReceived: number }).eventsReceived).toBe(1);
     });
   });
 
@@ -115,9 +120,11 @@ describe("ads-data tool", () => {
         ],
       };
       const result = await tool.operations["parse-lead-webhook"]!.execute({ payload });
-      expect(Array.isArray(result)).toBe(true);
-      expect((result as { leadId: string }[]).length).toBe(1);
-      expect((result as { leadId: string }[])[0]?.leadId).toBe("123");
+      expect(result.status).toBe("success");
+      const leads = (result.data as { leads: { leadId: string }[] }).leads;
+      expect(Array.isArray(leads)).toBe(true);
+      expect(leads.length).toBe(1);
+      expect(leads[0]?.leadId).toBe("123");
     });
   });
 });

@@ -28,39 +28,35 @@ describe("web-scanner tool", () => {
       const result = await tool.operations["validate-url"]!.execute({
         url: "https://example.com",
       });
-      const r = result as { valid: boolean; validatedUrl: string };
-      expect(r.valid).toBe(true);
-      expect(r.validatedUrl).toBe("https://example.com/");
+      expect(result.status).toBe("success");
+      expect(result.data?.valid).toBe(true);
+      expect(result.data?.validatedUrl).toBe("https://example.com/");
     });
 
     it("rejects non-HTTP URLs", async () => {
       const result = await tool.operations["validate-url"]!.execute({ url: "ftp://example.com" });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).valid).toBe(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).error).toContain("scheme");
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("VALIDATION_FAILED");
+      expect(result.error?.message).toContain("scheme");
     });
 
     it("rejects empty string", async () => {
       const result = await tool.operations["validate-url"]!.execute({ url: "" });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).valid).toBe(false);
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("INVALID_INPUT");
     });
 
     it("rejects URLs with credentials", async () => {
       const result = await tool.operations["validate-url"]!.execute({
         url: "https://user:pass@example.com",
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).valid).toBe(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).error).toContain("credentials");
+      expect(result.status).toBe("error");
+      expect(result.error?.message).toContain("credentials");
     });
 
     it("rejects IP address hostnames", async () => {
       const result = await tool.operations["validate-url"]!.execute({ url: "https://127.0.0.1" });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).valid).toBe(false);
+      expect(result.status).toBe("error");
     });
   });
 
@@ -69,28 +65,26 @@ describe("web-scanner tool", () => {
       const result = await tool.operations["detect-platform"]!.execute({
         html: '<link rel="stylesheet" href="//cdn.shopify.com/s/files/1/theme.css">',
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).platform).toBe("shopify");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).confidence).toBe("regex-match");
+      expect(result.status).toBe("success");
+      expect(result.data?.platform).toBe("shopify");
+      expect(result.data?.confidence).toBe("regex-match");
     });
 
     it("detects WordPress", async () => {
       const result = await tool.operations["detect-platform"]!.execute({
         html: '<meta name="generator" content="WordPress 6.4">',
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).platform).toBe("wordpress");
+      expect(result.status).toBe("success");
+      expect(result.data?.platform).toBe("wordpress");
     });
 
     it("returns null for unrecognized HTML", async () => {
       const result = await tool.operations["detect-platform"]!.execute({
         html: "<html><body>Hello</body></html>",
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).platform).toBeNull();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((result as any).confidence).toBe("none");
+      expect(result.status).toBe("success");
+      expect(result.data?.platform).toBeNull();
+      expect(result.data?.confidence).toBe("none");
     });
   });
 
@@ -102,10 +96,10 @@ describe("web-scanner tool", () => {
         </script>
       </head><body></body></html>`;
       const result = await tool.operations["extract-business-info"]!.execute({ html });
-      const r = result as { structuredData: unknown[] };
-      expect(r.structuredData).toHaveLength(1);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((r.structuredData[0] as any).name).toBe("Test Biz");
+      expect(result.status).toBe("success");
+      const structuredData = result.data?.structuredData as unknown[];
+      expect(structuredData).toHaveLength(1);
+      expect((structuredData[0] as Record<string, unknown>).name).toBe("Test Biz");
     });
 
     it("extracts Open Graph meta tags", async () => {
@@ -114,17 +108,18 @@ describe("web-scanner tool", () => {
         <meta property="og:description" content="We do things">
       </head><body></body></html>`;
       const result = await tool.operations["extract-business-info"]!.execute({ html });
-      const r = result as { openGraph: Record<string, string> };
-      expect(r.openGraph["og:title"]).toBe("My Business");
+      expect(result.status).toBe("success");
+      const openGraph = result.data?.openGraph as Record<string, string>;
+      expect(openGraph["og:title"]).toBe("My Business");
     });
 
     it("returns empty results for plain HTML", async () => {
       const result = await tool.operations["extract-business-info"]!.execute({
         html: "<html><body>Hello</body></html>",
       });
-      const r = result as { structuredData: unknown[]; openGraph: Record<string, string> };
-      expect(r.structuredData).toHaveLength(0);
-      expect(Object.keys(r.openGraph)).toHaveLength(0);
+      expect(result.status).toBe("success");
+      expect(result.data?.structuredData as unknown[]).toHaveLength(0);
+      expect(Object.keys(result.data?.openGraph as Record<string, string>)).toHaveLength(0);
     });
   });
 });

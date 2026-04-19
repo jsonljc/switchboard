@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { GovernanceHook } from "../../hooks/governance-hook.js";
 import type { SkillTool, ToolCallContext } from "../../types.js";
+import { ok } from "../../tool-result.js";
 
 describe("GovernanceHook", () => {
   const createTools = () =>
@@ -14,7 +15,7 @@ describe("GovernanceHook", () => {
               description: "Get contact",
               inputSchema: { type: "object", properties: {} },
               effectCategory: "read" as const,
-              execute: async () => ({}),
+              execute: async () => ok(),
             },
           },
         },
@@ -28,7 +29,7 @@ describe("GovernanceHook", () => {
               description: "Delete contact",
               inputSchema: { type: "object", properties: {} },
               effectCategory: "irreversible" as const,
-              execute: async () => ({}),
+              execute: async () => ok(),
             },
           },
         },
@@ -42,7 +43,7 @@ describe("GovernanceHook", () => {
               description: "Send email",
               inputSchema: { type: "object", properties: {} },
               effectCategory: "external_send" as const,
-              execute: async () => ({}),
+              execute: async () => ok(),
             },
           },
         },

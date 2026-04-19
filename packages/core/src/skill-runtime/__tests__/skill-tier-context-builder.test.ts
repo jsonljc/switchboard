@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildTierContext } from "../skill-tier-context-builder.js";
 import type { SkillTool } from "../types.js";
+import { ok } from "../tool-result.js";
 
 describe("buildTierContext", () => {
   const readOnlyTools = new Map<string, SkillTool>([
@@ -13,7 +14,7 @@ describe("buildTierContext", () => {
             description: "Get contact",
             inputSchema: { type: "object", properties: {} },
             effectCategory: "read" as const,
-            execute: async () => ({}),
+            execute: async () => ok(),
           },
         },
       },
@@ -30,7 +31,7 @@ describe("buildTierContext", () => {
             description: "Create contact",
             inputSchema: { type: "object", properties: {} },
             effectCategory: "external_send" as const,
-            execute: async () => ({}),
+            execute: async () => ok(),
           },
         },
       },
@@ -47,7 +48,7 @@ describe("buildTierContext", () => {
             description: "Delete contact",
             inputSchema: { type: "object", properties: {} },
             effectCategory: "irreversible" as const,
-            execute: async () => ({}),
+            execute: async () => ok(),
           },
         },
       },

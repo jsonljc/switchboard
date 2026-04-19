@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SkillTool } from "../types.js";
+import { ok } from "../tool-result.js";
 import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
 
 interface BookingStoreSubset {
@@ -65,7 +66,8 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
         },
         execute: async (params: unknown) => {
           const query = params as SlotQuery;
-          return deps.calendarProvider.listAvailableSlots(query);
+          const slots = await deps.calendarProvider.listAvailableSlots(query);
+          return ok({ slots } as Record<string, unknown>);
         },
       },
       "booking.create": {
@@ -176,13 +178,16 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
             });
           });
 
-          return {
-            bookingId: booking.id,
-            calendarEventId: calendarResult.calendarEventId,
-            status: "confirmed",
-            startsAt: input.slotStart,
-            endsAt: input.slotEnd,
-          };
+          return ok(
+            {
+              bookingId: booking.id,
+              calendarEventId: calendarResult.calendarEventId,
+              status: "confirmed",
+              startsAt: input.slotStart,
+              endsAt: input.slotEnd,
+            },
+            { entityState: { bookingId: booking.id, status: "confirmed" } },
+          );
         },
       },
     },

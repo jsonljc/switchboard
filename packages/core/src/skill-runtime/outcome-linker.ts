@@ -14,12 +14,12 @@ export class OutcomeLinker {
     for (const call of toolCalls) {
       if (call.toolId === "crm-write" && call.operation === "stage.update") {
         const params = call.params as { opportunityId?: string };
-        const result = call.result as { stage?: string } | undefined;
-        if (params.opportunityId && result?.stage) {
+        const stage = call.result.entityState?.stage as string | undefined;
+        if (params.opportunityId && stage) {
           await this.traceStore.linkOutcome(traceId, {
             id: params.opportunityId,
             type: "opportunity",
-            result: `stage_${result.stage}`,
+            result: `stage_${stage}`,
           });
           return;
         }

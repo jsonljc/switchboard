@@ -12,7 +12,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: null,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({ action: "none" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ action: "none" });
   });
 
   it("returns no-action for lost stage", async () => {
@@ -22,7 +23,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: null,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({ action: "none" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ action: "none" });
   });
 
   it("detects dormancy when hours exceeded", async () => {
@@ -33,7 +35,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: staleDate,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({
       action: "go-dormant",
       toAgent: "nurture-specialist",
       reason: expect.stringContaining("No customer reply for"),
@@ -48,7 +51,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: recentDate,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({ action: "none" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ action: "none" });
   });
 
   it("hands off to sales-closer when stage is qualified", async () => {
@@ -58,7 +62,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: null,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({
       action: "handoff",
       toAgent: "sales-closer",
       reason: "Lead qualified, transitioning to Sales Closer",
@@ -72,7 +77,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: null,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({
       action: "handoff",
       toAgent: "nurture-specialist",
       reason: "Lead entered nurturing stage",
@@ -86,7 +92,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: new Date().toISOString(),
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({ action: "none" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ action: "none" });
   });
 
   it("does not trigger dormancy for nurture-specialist already assigned", async () => {
@@ -97,7 +104,8 @@ describe("pipeline-handoff.determine", () => {
       lastCustomerReplyAt: staleDate,
       dormancyThresholdHours: 24,
     });
-    expect(result).toEqual({ action: "none" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ action: "none" });
   });
 
   it("has correct inputSchema with enums", () => {

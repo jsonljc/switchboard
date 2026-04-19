@@ -1,4 +1,5 @@
 import type { SkillTool } from "../types.js";
+import { ok } from "../tool-result.js";
 
 interface OpportunityStoreSubset {
   updateStage(
@@ -57,7 +58,10 @@ export function createCrmWriteTool(
             opportunityId: string;
             stage: string;
           };
-          return opportunityStore.updateStage(orgId, opportunityId, stage);
+          const result = await opportunityStore.updateStage(orgId, opportunityId, stage);
+          return ok(result as Record<string, unknown>, {
+            entityState: { opportunityId, stage },
+          });
         },
       },
       "activity.log": {
@@ -85,6 +89,7 @@ export function createCrmWriteTool(
             description: string;
           };
           await activityStore.write(input);
+          return ok(undefined, { entityState: { eventType: input.eventType } });
         },
       },
     },

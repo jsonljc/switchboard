@@ -7,6 +7,7 @@ import {
   type GovernanceDecision,
 } from "./governance.js";
 import type { SkillToolOperation } from "./types.js";
+import { ok } from "./tool-result.js";
 
 function makeOp(
   tier: EffectCategory,
@@ -17,7 +18,7 @@ function makeOp(
     inputSchema: { type: "object", properties: {} },
     effectCategory: tier,
     governanceOverride: override,
-    execute: async () => ({}),
+    execute: async () => ok(),
   };
 }
 

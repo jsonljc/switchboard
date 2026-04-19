@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { SkillTool } from "../types.js";
+import { ok, fail } from "../tool-result.js";
 import type { GovernanceTier } from "../governance.js";
 import { validateScanUrl, assertPublicHostname } from "../../website-scanner/url-validator.js";
 import { fetchPages } from "../../website-scanner/page-fetcher.js";
@@ -25,15 +26,21 @@ export function createWebScannerTool(): SkillTool {
         execute: async (params: unknown) => {
           const { url } = params as { url: string };
           if (!url || typeof url !== "string") {
-            return { valid: false, validatedUrl: null, error: "URL is empty" };
+            return fail("INVALID_INPUT", "URL is empty", {
+              modelRemediation: "Provide a non-empty URL string",
+              retryable: false,
+            });
           }
           try {
             const validatedUrl = validateScanUrl(url);
             const hostname = new URL(validatedUrl).hostname;
             await assertPublicHostname(hostname);
-            return { valid: true, validatedUrl, error: null };
+            return ok({ valid: true, validatedUrl });
           } catch (err) {
-            return { valid: false, validatedUrl: null, error: (err as Error).message };
+            return fail("VALIDATION_FAILED", (err as Error).message, {
+              modelRemediation: "Check the URL format or try a different URL",
+              retryable: false,
+            });
           }
         },
       },
@@ -73,7 +80,7 @@ export function createWebScannerTool(): SkillTool {
           const fetchedPaths = new Set(fetched.map((p) => p.path));
           const failedPaths = pagePaths.filter((p) => !fetchedPaths.has(p));
 
-          return { pages, homepageHtml, fetchedCount: pages.length, failedPaths };
+          return ok({ pages, homepageHtml, fetchedCount: pages.length, failedPaths });
         },
       },
 
@@ -90,10 +97,10 @@ export function createWebScannerTool(): SkillTool {
         execute: async (params: unknown) => {
           const { html } = params as { html: string };
           const platform = detectPlatform(html);
-          return {
+          return ok({
             platform: platform ?? null,
             confidence: platform ? ("regex-match" as const) : ("none" as const),
-          };
+          });
         },
       },
 
@@ -133,7 +140,7 @@ export function createWebScannerTool(): SkillTool {
             if (name && content) meta[name] = content;
           });
 
-          return { structuredData, openGraph, meta };
+          return ok({ structuredData, openGraph, meta });
         },
       },
     },

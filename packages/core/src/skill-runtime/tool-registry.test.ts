@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { ToolRegistry } from "./tool-registry.js";
 import type { SkillTool, SkillDefinition } from "./types.js";
+import { ok } from "./tool-result.js";
 
 function makeTool(id: string, ops?: Record<string, { effectCategory: string }>): SkillTool {
   const operations: Record<string, any> = {};
@@ -11,7 +12,7 @@ function makeTool(id: string, ops?: Record<string, { effectCategory: string }>):
       description: `${name} op`,
       inputSchema: { type: "object", properties: {} },
       effectCategory: config.effectCategory,
-      execute: async () => ({}),
+      execute: async () => ok(),
     };
   }
   return { id, operations };
@@ -57,7 +58,7 @@ describe("ToolRegistry", () => {
           "do-thing": {
             description: "missing tier",
             inputSchema: { type: "object", properties: {} },
-            execute: async () => ({}),
+            execute: async () => ok(),
           } as any,
         },
       };

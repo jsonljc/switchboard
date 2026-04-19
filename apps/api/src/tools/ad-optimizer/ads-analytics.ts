@@ -1,5 +1,6 @@
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
 import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
+import { ok } from "@switchboard/core/skill-runtime";
 import {
   diagnose,
   comparePeriods,
@@ -29,7 +30,7 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const { deltas } = params as { deltas: MetricDelta[] };
-          return { diagnoses: diagnose(deltas) };
+          return ok({ diagnoses: diagnose(deltas) });
         },
       },
 
@@ -48,7 +49,7 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const { current, previous } = params as { current: MetricSet; previous: MetricSet };
-          return { deltas: comparePeriods(current, previous) };
+          return ok({ deltas: comparePeriods(current, previous) });
         },
       },
 
@@ -68,7 +69,8 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const input = params as FunnelInput;
-          return analyzeFunnel(input);
+          const result = analyzeFunnel(input);
+          return ok(result as Record<string, unknown>);
         },
       },
 
@@ -86,7 +88,8 @@ export function createAdsAnalyticsTool(): SkillTool {
             campaignId: string;
             input: CampaignLearningInput;
           };
-          return learningGuard.check(campaignId, input);
+          const result = learningGuard.check(campaignId, input);
+          return ok(result as Record<string, unknown>);
         },
       },
     },

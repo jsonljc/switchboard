@@ -6,6 +6,7 @@ import type {
   BatchContextContract,
 } from "./batch-types.js";
 import type { SkillDefinition, SkillExecutor, HookResult } from "./types.js";
+import { ok } from "./tool-result.js";
 
 const mockSkill: SkillDefinition = {
   name: "test-batch",
@@ -137,7 +138,7 @@ describe("BatchSkillHandler", () => {
           description: "write",
           effectCategory: "write" as const,
           inputSchema: {},
-          execute: vi.fn().mockResolvedValue({ success: true }),
+          execute: vi.fn().mockResolvedValue(ok({ success: true })),
         },
       },
     };

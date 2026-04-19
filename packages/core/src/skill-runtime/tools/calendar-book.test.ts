@@ -96,7 +96,8 @@ describe("createCalendarBookTool", () => {
     });
 
     expect(calendarProvider.listAvailableSlots).toHaveBeenCalled();
-    expect(result).toEqual(mockSlots);
+    expect(result.status).toBe("success");
+    expect(result.data?.slots).toEqual(mockSlots);
   });
 
   it("booking.create persists pending booking, calls calendar, then runs transaction", async () => {
@@ -127,7 +128,10 @@ describe("createCalendarBookTool", () => {
     );
     expect(calendarProvider.createBooking).toHaveBeenCalled();
     expect(runTransaction).toHaveBeenCalled();
-    expect((result as Record<string, unknown>).status).toBe("confirmed");
+    expect(result.status).toBe("success");
+    expect(result.data?.status).toBe("confirmed");
+    expect(result.entityState?.bookingId).toBe("bk_1");
+    expect(result.entityState?.status).toBe("confirmed");
   });
 
   it("booking.create creates opportunity if none exists for contact", async () => {

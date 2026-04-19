@@ -1,4 +1,5 @@
 import type { SkillTool } from "../types.js";
+import { ok } from "../tool-result.js";
 import type { OpportunityStage } from "@switchboard/schemas";
 
 type AgentRole = "speed-to-lead" | "sales-closer" | "nurture-specialist";
@@ -101,7 +102,10 @@ export function createPipelineHandoffTool(): SkillTool {
           },
           required: ["opportunityStage", "assignedAgent", "dormancyThresholdHours"],
         },
-        execute: async (params: unknown) => determine(params as HandoffInput),
+        execute: async (params: unknown) => {
+          const handoffResult = determine(params as HandoffInput);
+          return ok(handoffResult as Record<string, unknown>);
+        },
       },
     },
   };
