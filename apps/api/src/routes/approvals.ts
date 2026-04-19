@@ -172,11 +172,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         const { buildApprovalNotification } = await import("@switchboard/core");
         const notification = buildApprovalNotification(approval.request, trace);
 
-        // Use the orchestrator's notifier if configured
-        const orch = app.orchestrator as unknown as Record<string, unknown>;
-        if (orch["approvalNotifier"]) {
-          const notifier = orch["approvalNotifier"] as { notify: (n: unknown) => Promise<void> };
-          await notifier.notify(notification);
+        if (app.approvalNotifier) {
+          await app.approvalNotifier.notify(notification);
         }
       }
 
