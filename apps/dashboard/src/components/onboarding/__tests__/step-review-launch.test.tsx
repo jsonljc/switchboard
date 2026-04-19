@@ -28,7 +28,7 @@ describe("StepReviewLaunch", () => {
 
   it("lists all selected agents with tones", () => {
     render(<StepReviewLaunch {...defaultProps} />);
-    expect(screen.getByText("AI Creative")).toBeTruthy();
+    expect(screen.getByText("Creative Agent")).toBeTruthy();
     expect(screen.getByText(/Warm/)).toBeTruthy();
   });
 
