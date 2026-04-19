@@ -1,5 +1,7 @@
+import type { BusinessFacts } from "@switchboard/schemas";
 import type { ParameterBuilder } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
+import { renderBusinessFacts } from "../context-resolver.js";
 
 export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
   const contactId = config.contactId;
@@ -20,10 +22,19 @@ export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
 
   const leadProfile = await stores.contactStore.findById(config.orgId, contactId);
 
+  let BUSINESS_FACTS = "";
+  if (stores.businessFactsStore) {
+    const facts = (await stores.businessFactsStore.get(config.orgId)) as BusinessFacts | null;
+    if (facts) {
+      BUSINESS_FACTS = renderBusinessFacts(facts);
+    }
+  }
+
   return {
     BUSINESS_NAME: ctx.persona.businessName,
     OPPORTUNITY_ID: opportunity.id,
     LEAD_PROFILE: leadProfile,
+    BUSINESS_FACTS,
     PERSONA_CONFIG: {
       tone: ctx.persona.tone,
       qualificationCriteria: ctx.persona.qualificationCriteria,

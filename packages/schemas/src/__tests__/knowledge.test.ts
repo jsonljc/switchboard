@@ -13,6 +13,10 @@ describe("KnowledgeKindSchema", () => {
     expect(KnowledgeKindSchema.parse("knowledge")).toBe("knowledge");
   });
 
+  it("accepts business-facts kind", () => {
+    expect(KnowledgeKindSchema.parse("business-facts")).toBe("business-facts");
+  });
+
   it("rejects invalid kinds", () => {
     expect(() => KnowledgeKindSchema.parse("playbok")).toThrow();
     expect(() => KnowledgeKindSchema.parse("")).toThrow();

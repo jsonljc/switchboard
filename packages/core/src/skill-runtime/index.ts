@@ -14,8 +14,8 @@ export {
   createCrmQueryTool,
   createCrmWriteTool,
   createCalendarBookTool,
-  createPipelineHandoffTool,
   createWebScannerTool,
+  createEscalateTool,
 } from "./tools/index.js";
 export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BookingFailureInput, BookingFailureResult } from "./tools/booking-failure-handler.js";
@@ -28,7 +28,7 @@ export {
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
-export { ContextResolverImpl } from "./context-resolver.js";
+export { ContextResolverImpl, renderBusinessFacts } from "./context-resolver.js";
 
 // Batch execution
 export { BatchSkillHandler } from "./batch-skill-handler.js";
@@ -61,6 +61,7 @@ export type {
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,
+  ToolExecutionContext,
 } from "./types.js";
 export {
   SkillParseError,

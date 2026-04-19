@@ -8,6 +8,7 @@ import type {
   SkillHook,
   ResolvedModelProfile,
   SkillRuntimePolicy,
+  ToolExecutionContext,
 } from "./types.js";
 import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
@@ -221,7 +222,12 @@ export class SkillExecutorImpl implements SkillExecutor {
           result = { status, message: toolHookResult.reason };
           governanceOutcome = status === "pending_approval" ? "require-approval" : "denied";
         } else if (op) {
-          result = await op.execute(toolUse.input);
+          const toolExecCtx: ToolExecutionContext = {
+            orgId: params.orgId,
+            deploymentId: params.deploymentId,
+            messages: params.messages.map((m) => ({ role: m.role, content: m.content })),
+          };
+          result = await op.execute(toolUse.input, toolExecCtx);
           governanceOutcome = "auto-approved";
         } else {
           result = { error: `Unknown tool: ${toolUse.name}` };

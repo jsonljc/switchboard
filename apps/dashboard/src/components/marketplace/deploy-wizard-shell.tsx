@@ -3,6 +3,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
+import type { BusinessFacts } from "@switchboard/schemas";
 
 export interface WizardStepProps {
   data: WizardData;
@@ -44,6 +45,7 @@ export interface WizardData {
   connections: Record<string, ConnectionConfig>;
   testChatVerified?: boolean;
   scannedProfile?: Record<string, unknown>;
+  businessFacts?: BusinessFacts;
 }
 
 interface DeployWizardShellProps {

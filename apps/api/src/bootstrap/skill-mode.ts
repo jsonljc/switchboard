@@ -20,11 +20,21 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     createCrmQueryTool,
     createCrmWriteTool,
     createCalendarBookTool,
+    createEscalateTool,
     BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { PrismaContactStore, PrismaOpportunityStore, PrismaActivityLogStore, PrismaBookingStore } =
-    await import("@switchboard/db");
+  const { HandoffPackageAssembler, HandoffNotifier } = await import("@switchboard/core");
+  const {
+    PrismaContactStore,
+    PrismaOpportunityStore,
+    PrismaActivityLogStore,
+    PrismaBookingStore,
+    PrismaHandoffStore,
+    PrismaBusinessFactsStore,
+  } = await import("@switchboard/db");
+  const { NoopNotifier, TelegramApprovalNotifier } =
+    await import("@switchboard/core/notifications");
 
   if (!process.env["ANTHROPIC_API_KEY"]) {
     throw new Error("SkillMode requires ANTHROPIC_API_KEY");
@@ -40,8 +50,28 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const opportunityStore = new PrismaOpportunityStore(prismaClient);
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
-
+  const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
   const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
+
+  const handoffStore = new PrismaHandoffStore(prismaClient);
+  const handoffAssembler = new HandoffPackageAssembler();
+
+  const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
+  const escalationChatId = process.env["ESCALATION_CHAT_ID"];
+  const approvalNotifier = telegramToken
+    ? new TelegramApprovalNotifier(telegramToken)
+    : new NoopNotifier();
+  const escalationApprovers = escalationChatId ? [escalationChatId] : [];
+
+  if (!telegramToken) {
+    logger.info("Escalation: no TELEGRAM_BOT_TOKEN — handoff notifications disabled");
+  } else if (!escalationChatId) {
+    logger.info("Escalation: no ESCALATION_CHAT_ID — handoff records saved but no one notified");
+  } else {
+    logger.info(`Escalation: Telegram notifications enabled for chat ${escalationChatId}`);
+  }
+
+  const handoffNotifier = new HandoffNotifier(approvalNotifier, escalationApprovers);
 
   const failureHandler = new BookingFailureHandler({
     runTransaction: (fn) =>
@@ -115,6 +145,14 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
         failureHandler,
       }),
     ],
+    [
+      "escalate",
+      createEscalateTool({
+        assembler: handoffAssembler,
+        handoffStore,
+        notifier: handoffNotifier,
+      }),
+    ],
   ]);
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
@@ -142,6 +180,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
           listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>
             activityStore.listByDeployment(orgId, deploymentId, opts),
         },
+        businessFactsStore,
       },
     }),
   );

@@ -429,6 +429,20 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ deployments: MarketplaceDeployment[] }>(`/api/marketplace/deployments`);
   }
 
+  async getBusinessFacts(deploymentId: string) {
+    return this.request<{ config: unknown }>(`/api/marketplace/deployments/${deploymentId}/config`);
+  }
+
+  async upsertBusinessFacts(deploymentId: string, facts: Record<string, unknown>) {
+    return this.request<{ success: boolean }>(
+      `/api/marketplace/deployments/${deploymentId}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify(facts),
+      },
+    );
+  }
+
   async createTask(data: {
     deploymentId: string;
     listingId: string;

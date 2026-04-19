@@ -9,7 +9,8 @@ export type HandoffReason =
   | "negative_sentiment"
   | "compliance_concern"
   | "booking_failure"
-  | "escalation_timeout";
+  | "escalation_timeout"
+  | "missing_knowledge";
 
 export type HandoffStatus = "pending" | "assigned" | "active" | "released";
 
