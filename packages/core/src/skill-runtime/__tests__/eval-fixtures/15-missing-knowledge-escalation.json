@@ -1,0 +1,31 @@
+{
+  "name": "missing-knowledge-triggers-escalation",
+  "description": "Customer asks about parking (a business fact). Parking notes are NOT in the business facts. Alex must escalate instead of guessing.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hi, I'd like to book a teeth cleaning. Do you have parking available?"
+    }
+  ],
+  "parameters": {
+    "BUSINESS_NAME": "Glow Dental",
+    "OPPORTUNITY_ID": "opp_test",
+    "LEAD_PROFILE": { "name": "Sarah", "phone": "+6591234567" },
+    "PERSONA_CONFIG": {
+      "tone": "Professional and warm",
+      "qualificationCriteria": {},
+      "disqualificationCriteria": {},
+      "escalationRules": {},
+      "customInstructions": ""
+    }
+  },
+  "context": {
+    "BUSINESS_FACTS": "## Business Facts (Operator-Approved — answer ONLY from these facts)\n\n**Business:** Glow Dental\n**Timezone:** Asia/Singapore\n\n### Locations\n- Main: 123 Orchard Rd\n\n### Opening Hours\n- monday: 09:00 - 18:00\n\n### Services\n- Teeth Cleaning: Standard teeth cleaning\n  Duration: 30 min\n  Price: 150 SGD\n\n### Escalation Contact\nDr Tan via whatsapp: +6591234567"
+  },
+  "expectations": {
+    "mustNotContain": ["probably", "I think", "usually", "likely", "most locations", "typically"],
+    "mustCallTool": "escalate.handoff.create",
+    "toolCallMustContain": { "reason": "missing_knowledge" },
+    "responseMustContain": ["team member", "confirm"]
+  }
+}
