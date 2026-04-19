@@ -20,11 +20,19 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     createCrmQueryTool,
     createCrmWriteTool,
     createCalendarBookTool,
+    createEscalateTool,
     BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { PrismaContactStore, PrismaOpportunityStore, PrismaActivityLogStore, PrismaBookingStore } =
-    await import("@switchboard/db");
+  const { HandoffPackageAssembler, HandoffNotifier } = await import("@switchboard/core");
+  const {
+    PrismaContactStore,
+    PrismaOpportunityStore,
+    PrismaActivityLogStore,
+    PrismaBookingStore,
+    PrismaHandoffStore,
+  } = await import("@switchboard/db");
+  const { NoopNotifier } = await import("@switchboard/core/notifications");
 
   if (!process.env["ANTHROPIC_API_KEY"]) {
     throw new Error("SkillMode requires ANTHROPIC_API_KEY");
@@ -41,6 +49,10 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
   const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
+
+  const handoffStore = new PrismaHandoffStore(prismaClient);
+  const handoffAssembler = new HandoffPackageAssembler();
+  const handoffNotifier = new HandoffNotifier(new NoopNotifier());
 
   const failureHandler = new BookingFailureHandler({
     runTransaction: (fn) =>
@@ -112,6 +124,21 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
             fn({ booking: tx.booking, outboxEvent: tx.outboxEvent }),
           ),
         failureHandler,
+      }),
+    ],
+    [
+      "escalate",
+      createEscalateTool({
+        assembler: handoffAssembler,
+        handoffStore,
+        notifier: handoffNotifier,
+        sessionContext: {
+          sessionId: "",
+          organizationId: "",
+          leadSnapshot: { channel: "whatsapp" },
+          qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
+          messages: [],
+        },
       }),
     ],
   ]);
