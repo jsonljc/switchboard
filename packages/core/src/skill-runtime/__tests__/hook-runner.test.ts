@@ -27,7 +27,7 @@ const toolCtx: ToolCallContext = {
   toolId: "crm-write",
   operation: "stage.update",
   params: {},
-  governanceTier: "internal_write",
+  governanceTier: "write",
   trustLevel: "guided",
 };
 

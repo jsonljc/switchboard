@@ -69,7 +69,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
       "send-conversion-event": {
         description:
           "Send a conversion event to Meta CAPI. External write — requires governance approval.",
-        governanceTier: "external_write" as GovernanceTier,
+        governanceTier: "external_send" as GovernanceTier,
         idempotent: false,
         inputSchema: {
           type: "object",

@@ -67,7 +67,7 @@ describe("validateBatchSkillResult", () => {
           tool: "ads-data",
           operation: "send-conversion-event",
           params: {},
-          governanceTier: "external_write",
+          governanceTier: "external_send",
         },
       ],
       summary: "No recs, one write.",

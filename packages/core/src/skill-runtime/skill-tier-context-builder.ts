@@ -15,7 +15,10 @@ export function buildTierContext(input: TierContextInput): TierContext {
     const tool = input.tools.get(toolId);
     if (!tool) return false;
     return Object.values(tool.operations).some(
-      (op) => op.governanceTier === "external_write" || op.governanceTier === "destructive",
+      (op) =>
+        op.governanceTier === "external_send" ||
+        op.governanceTier === "external_mutation" ||
+        op.governanceTier === "irreversible",
     );
   });
 

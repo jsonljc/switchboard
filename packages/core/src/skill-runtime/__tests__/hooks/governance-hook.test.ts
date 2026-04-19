@@ -27,7 +27,7 @@ describe("GovernanceHook", () => {
             "contact.delete": {
               description: "Delete contact",
               inputSchema: { type: "object", properties: {} },
-              governanceTier: "destructive" as const,
+              governanceTier: "irreversible" as const,
               execute: async () => ({}),
             },
           },
@@ -41,7 +41,7 @@ describe("GovernanceHook", () => {
             send: {
               description: "Send email",
               inputSchema: { type: "object", properties: {} },
-              governanceTier: "external_write" as const,
+              governanceTier: "external_send" as const,
               execute: async () => ({}),
             },
           },
@@ -94,10 +94,10 @@ describe("GovernanceHook", () => {
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(1);
     expect(logs[0]!.decision).toBe("deny");
-    expect(logs[0]!.tier).toBe("destructive");
+    expect(logs[0]!.tier).toBe("irreversible");
   });
 
-  it("requires approval for external_write at guided trust", async () => {
+  it("requires approval for external_send at guided trust", async () => {
     const hook = new GovernanceHook(createTools());
     const ctx = createContext("email-sender", "send", "guided");
 
@@ -110,7 +110,7 @@ describe("GovernanceHook", () => {
     const logs = hook.getGovernanceLogs();
     expect(logs).toHaveLength(1);
     expect(logs[0]!.decision).toBe("require-approval");
-    expect(logs[0]!.tier).toBe("external_write");
+    expect(logs[0]!.tier).toBe("external_send");
   });
 
   it("accumulates governance logs across multiple calls", async () => {

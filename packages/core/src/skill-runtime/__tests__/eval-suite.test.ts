@@ -111,13 +111,13 @@ function createMockTools(): Map<string, SkillTool> {
       "stage.update": {
         description: "Update stage",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "internal_write" as const,
+        governanceTier: "write" as const,
         execute: async (params: unknown) => ({ ...(params as object), updated: true }),
       },
       "activity.log": {
         description: "Log activity",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "internal_write" as const,
+        governanceTier: "write" as const,
         execute: async () => undefined,
       },
     },

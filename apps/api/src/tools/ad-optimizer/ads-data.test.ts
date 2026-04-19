@@ -50,7 +50,7 @@ describe("ads-data tool", () => {
   });
 
   it("send-conversion-event has external_write tier", () => {
-    expect(tool.operations["send-conversion-event"]!.governanceTier).toBe("external_write");
+    expect(tool.operations["send-conversion-event"]!.governanceTier).toBe("external_send");
   });
 
   describe("get-campaign-insights", () => {

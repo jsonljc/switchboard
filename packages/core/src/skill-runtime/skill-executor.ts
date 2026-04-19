@@ -169,8 +169,9 @@ export class SkillExecutorImpl implements SkillExecutor {
               const tool = this.tools.get(tc.toolId);
               const opDef = tool?.operations[tc.operation];
               return (
-                opDef?.governanceTier === "internal_write" ||
-                opDef?.governanceTier === "external_write"
+                opDef?.governanceTier === "write" ||
+                opDef?.governanceTier === "external_send" ||
+                opDef?.governanceTier === "external_mutation"
               );
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
