@@ -7,6 +7,7 @@ import type {
 } from "./governance.js";
 import type { ContextRequirement } from "@switchboard/schemas";
 import type { ModelSlot } from "../model-router.js";
+import type { ToolResult } from "./tool-result.js";
 
 // ---------------------------------------------------------------------------
 // Model Routing (SP6 Phase 1)
@@ -85,7 +86,7 @@ export interface ToolCallRecord {
   toolId: string;
   operation: string;
   params: unknown;
-  result: unknown;
+  result: ToolResult;
   durationMs: number;
   governanceDecision: GovernanceOutcome;
 }
@@ -143,7 +144,7 @@ export interface SkillToolOperation {
   effectCategory: GovernanceTier;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
-  execute(params: unknown): Promise<unknown>;
+  execute(params: unknown): Promise<ToolResult>;
 }
 
 // ---------------------------------------------------------------------------

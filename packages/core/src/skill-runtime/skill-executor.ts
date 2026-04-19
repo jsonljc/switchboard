@@ -13,6 +13,8 @@ import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
+import { denied, pendingApproval, fail } from "./tool-result.js";
+import type { ToolResult } from "./tool-result.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
@@ -213,19 +215,31 @@ export class SkillExecutorImpl implements SkillExecutor {
         };
         const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);
 
-        let result: unknown;
+        let result: ToolResult;
         let governanceOutcome: string;
 
         if (!toolHookResult.proceed) {
-          const status =
-            toolHookResult.decision === "pending_approval" ? "pending_approval" : "denied";
-          result = { status, message: toolHookResult.reason };
-          governanceOutcome = status === "pending_approval" ? "require-approval" : "denied";
+          if (toolHookResult.decision === "pending_approval") {
+            result = pendingApproval(toolHookResult.reason ?? "Requires approval");
+            governanceOutcome = "require-approval";
+          } else {
+            result = denied(toolHookResult.reason ?? "Denied by policy");
+            governanceOutcome = "denied";
+          }
         } else if (op) {
           result = await op.execute(toolUse.input);
           governanceOutcome = "auto-approved";
         } else {
-          result = { error: `Unknown tool: ${toolUse.name}` };
+          const availableTools = params.skill.tools
+            .flatMap((tid) => {
+              const t = this.tools.get(tid);
+              return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
+            })
+            .join(", ");
+          result = fail("TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
+            modelRemediation: `Available tools for this skill: ${availableTools}`,
+            retryable: false,
+          });
           governanceOutcome = "auto-approved";
         }
 
