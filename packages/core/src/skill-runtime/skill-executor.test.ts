@@ -100,7 +100,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do something",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
+          effectCategory: "read" as const,
           execute: vi.fn().mockResolvedValue({ done: true }),
         },
       },
@@ -150,7 +150,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
+          effectCategory: "read" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },
@@ -189,7 +189,7 @@ describe("SkillExecutorImpl", () => {
         "stage.update": {
           description: "update stage",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "write" as const,
+          effectCategory: "write" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },
@@ -240,7 +240,7 @@ describe("SkillExecutorImpl", () => {
         delete: {
           description: "delete something",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "irreversible" as const,
+          effectCategory: "irreversible" as const,
           execute: vi.fn().mockResolvedValue({ deleted: true }),
         },
       },
@@ -291,7 +291,7 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
+          effectCategory: "read" as const,
           execute: vi.fn().mockResolvedValue({ ok: true }),
         },
       },
@@ -393,7 +393,7 @@ describe("SkillExecutorImpl", () => {
         "stage.update": {
           description: "update stage",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "write" as any,
+          effectCategory: "write" as any,
           execute: vi.fn().mockResolvedValue({ stage: "qualified" }),
         },
       },

@@ -24,7 +24,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
     operations: {
       "get-campaign-insights": {
         description: "Fetch campaign performance insights from Meta Ads API for a date range.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as GovernanceTier,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -57,7 +57,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
 
       "get-account-summary": {
         description: "Fetch account-level summary metrics from Meta Ads API.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as GovernanceTier,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -69,7 +69,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
       "send-conversion-event": {
         description:
           "Send a conversion event to Meta CAPI. External write — requires governance approval.",
-        governanceTier: "external_send" as GovernanceTier,
+        effectCategory: "external_send" as GovernanceTier,
         idempotent: false,
         inputSchema: {
           type: "object",
@@ -92,7 +92,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
 
       "parse-lead-webhook": {
         description: "Parse a Meta lead webhook payload into structured lead data.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as GovernanceTier,
         idempotent: true,
         inputSchema: {
           type: "object",

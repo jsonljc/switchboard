@@ -15,7 +15,7 @@ function makeOp(
   return {
     description: "test",
     inputSchema: { type: "object", properties: {} },
-    governanceTier: tier,
+    effectCategory: tier,
     governanceOverride: override,
     execute: async () => ({}),
   };

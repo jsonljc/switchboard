@@ -13,7 +13,7 @@ describe("GovernanceHook", () => {
             "contact.get": {
               description: "Get contact",
               inputSchema: { type: "object", properties: {} },
-              governanceTier: "read" as const,
+              effectCategory: "read" as const,
               execute: async () => ({}),
             },
           },
@@ -27,7 +27,7 @@ describe("GovernanceHook", () => {
             "contact.delete": {
               description: "Delete contact",
               inputSchema: { type: "object", properties: {} },
-              governanceTier: "irreversible" as const,
+              effectCategory: "irreversible" as const,
               execute: async () => ({}),
             },
           },
@@ -41,7 +41,7 @@ describe("GovernanceHook", () => {
             send: {
               description: "Send email",
               inputSchema: { type: "object", properties: {} },
-              governanceTier: "external_send" as const,
+              effectCategory: "external_send" as const,
               execute: async () => ({}),
             },
           },
@@ -61,7 +61,7 @@ describe("GovernanceHook", () => {
       toolId,
       operation,
       params: {},
-      governanceTier: op?.governanceTier ?? "read",
+      effectCategory: op?.effectCategory ?? "read",
       trustLevel,
     };
   };

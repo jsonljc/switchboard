@@ -61,11 +61,11 @@ describe("createCalendarBookTool", () => {
   });
 
   it("slots.query has governance tier 'read'", () => {
-    expect(tool.operations["slots.query"]!.governanceTier).toBe("read");
+    expect(tool.operations["slots.query"]!.effectCategory).toBe("read");
   });
 
   it("booking.create has governance tier 'external_write'", () => {
-    expect(tool.operations["booking.create"]!.governanceTier).toBe("external_mutation");
+    expect(tool.operations["booking.create"]!.effectCategory).toBe("external_mutation");
   });
 
   it("slots.query is idempotent", () => {

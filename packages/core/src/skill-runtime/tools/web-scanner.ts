@@ -15,7 +15,7 @@ export function createWebScannerTool(): SkillTool {
     operations: {
       "validate-url": {
         description: "Validate and normalize a URL. Checks scheme, credentials, and private IP.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -41,7 +41,7 @@ export function createWebScannerTool(): SkillTool {
       "fetch-pages": {
         description:
           "Fetch homepage + key pages, strip HTML to text. Returns homepageHtml for platform detection.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -80,7 +80,7 @@ export function createWebScannerTool(): SkillTool {
       "detect-platform": {
         description:
           "Detect website platform from HTML signatures. Returns hint — LLM makes final judgment.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -99,7 +99,7 @@ export function createWebScannerTool(): SkillTool {
 
       "extract-business-info": {
         description: "Parse structured data (JSON-LD, Open Graph, meta tags) from HTML.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",

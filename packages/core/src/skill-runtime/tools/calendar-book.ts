@@ -50,7 +50,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
     operations: {
       "slots.query": {
         description: "Query available calendar slots for a date range.",
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -71,7 +71,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
       "booking.create": {
         description:
           "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
-        governanceTier: "external_mutation" as const,
+        effectCategory: "external_mutation" as const,
         idempotent: true,
         inputSchema: {
           type: "object",

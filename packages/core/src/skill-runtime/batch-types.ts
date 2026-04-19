@@ -35,7 +35,7 @@ export interface BatchProposedWrite {
   tool: string;
   operation: string;
   params: unknown;
-  governanceTier: GovernanceTier;
+  effectCategory: GovernanceTier;
 }
 
 export interface BatchSkillResult {

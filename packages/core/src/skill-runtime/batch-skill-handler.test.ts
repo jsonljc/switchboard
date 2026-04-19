@@ -135,7 +135,7 @@ describe("BatchSkillHandler", () => {
       operations: {
         "do-write": {
           description: "write",
-          governanceTier: "write" as const,
+          effectCategory: "write" as const,
           inputSchema: {},
           execute: vi.fn().mockResolvedValue({ success: true }),
         },
@@ -150,7 +150,7 @@ describe("BatchSkillHandler", () => {
           tool: "test-tool",
           operation: "do-write",
           params: { x: 1 },
-          governanceTier: "write",
+          effectCategory: "write",
         },
       ],
       summary: "One write.",
@@ -185,7 +185,7 @@ describe("BatchSkillHandler", () => {
       operations: {
         destroy: {
           description: "destroy",
-          governanceTier: "irreversible" as const,
+          effectCategory: "irreversible" as const,
           inputSchema: {},
           execute: vi.fn(),
         },
@@ -196,7 +196,7 @@ describe("BatchSkillHandler", () => {
     const resultJson = JSON.stringify({
       recommendations: [],
       proposedWrites: [
-        { tool: "dangerous", operation: "destroy", params: {}, governanceTier: "irreversible" },
+        { tool: "dangerous", operation: "destroy", params: {}, effectCategory: "irreversible" },
       ],
       summary: "Denied write.",
     });

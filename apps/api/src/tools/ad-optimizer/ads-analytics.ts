@@ -18,7 +18,7 @@ export function createAdsAnalyticsTool(): SkillTool {
       diagnose: {
         description:
           "Diagnose campaign health issues from metric deltas. Returns pattern-based diagnoses.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -36,7 +36,7 @@ export function createAdsAnalyticsTool(): SkillTool {
       "compare-periods": {
         description:
           "Compare current vs previous period metrics. Returns deltas with direction and significance.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -55,7 +55,7 @@ export function createAdsAnalyticsTool(): SkillTool {
       "analyze-funnel": {
         description:
           "Analyze conversion funnel from impressions to close. Returns stages with leakage point.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -74,7 +74,7 @@ export function createAdsAnalyticsTool(): SkillTool {
 
       "check-learning-phase": {
         description: "Check if a campaign is in Meta's learning phase.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",

@@ -94,13 +94,13 @@ function createMockTools(): Map<string, SkillTool> {
       "contact.get": {
         description: "Get contact",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({ id: "c1", name: "Test Lead", stage: "new" }),
       },
       "activity.list": {
         description: "List activities",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => [],
       },
     },
@@ -111,13 +111,13 @@ function createMockTools(): Map<string, SkillTool> {
       "stage.update": {
         description: "Update stage",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "write" as const,
+        effectCategory: "write" as const,
         execute: async (params: unknown) => ({ ...(params as object), updated: true }),
       },
       "activity.log": {
         description: "Log activity",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "write" as const,
+        effectCategory: "write" as const,
         execute: async () => undefined,
       },
     },
@@ -129,7 +129,7 @@ function createMockTools(): Map<string, SkillTool> {
       "validate-url": {
         description: "Validate URL",
         inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async (params: unknown) => {
           const { url } = params as { url: string };
           try {
@@ -147,7 +147,7 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { baseUrl: { type: "string" } },
           required: ["baseUrl"],
         },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({
           pages: [
             { path: "/", text: "Homepage content", status: "ok" },
@@ -165,7 +165,7 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { html: { type: "string" } },
           required: ["html"],
         },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({ platform: null, confidence: "none" }),
       },
       "extract-business-info": {
@@ -175,7 +175,7 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { html: { type: "string" } },
           required: ["html"],
         },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({ structuredData: [], openGraph: {}, meta: {} }),
       },
     },
@@ -186,19 +186,19 @@ function createMockTools(): Map<string, SkillTool> {
       diagnose: {
         description: "Diagnose performance issues",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({ diagnoses: [] }),
       },
       "compare-periods": {
         description: "Compare current vs previous period metrics",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({ deltas: [] }),
       },
       "analyze-funnel": {
         description: "Analyze conversion funnel",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({
           stages: [],
           leakagePoint: "Clicks",
@@ -208,7 +208,7 @@ function createMockTools(): Map<string, SkillTool> {
       "check-learning-phase": {
         description: "Check if campaign is in learning phase",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async () => ({
           campaignId: "c1",
           inLearning: false,

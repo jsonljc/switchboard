@@ -169,9 +169,9 @@ export class SkillExecutorImpl implements SkillExecutor {
               const tool = this.tools.get(tc.toolId);
               const opDef = tool?.operations[tc.operation];
               return (
-                opDef?.governanceTier === "write" ||
-                opDef?.governanceTier === "external_send" ||
-                opDef?.governanceTier === "external_mutation"
+                opDef?.effectCategory === "write" ||
+                opDef?.effectCategory === "external_send" ||
+                opDef?.effectCategory === "external_mutation"
               );
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
@@ -208,7 +208,7 @@ export class SkillExecutorImpl implements SkillExecutor {
           toolId: toolId!,
           operation,
           params: toolUse.input,
-          governanceTier: op?.governanceTier ?? ("read" as const),
+          effectCategory: op?.effectCategory ?? ("read" as const),
           trustLevel: params.trustLevel,
         };
         const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);

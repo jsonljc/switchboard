@@ -17,9 +17,9 @@ describe("web-scanner tool", () => {
     ]);
   });
 
-  it("all operations have governanceTier read", () => {
+  it("all operations have effectCategory read", () => {
     for (const op of Object.values(tool.operations)) {
-      expect(op.governanceTier).toBe("read");
+      expect(op.effectCategory).toBe("read");
     }
   });
 

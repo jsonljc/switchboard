@@ -61,7 +61,7 @@ export function getToolGovernanceDecision(
   if (op.governanceOverride?.[trustLevel]) {
     return op.governanceOverride[trustLevel]!;
   }
-  return GOVERNANCE_POLICY[op.governanceTier][trustLevel];
+  return GOVERNANCE_POLICY[op.effectCategory][trustLevel];
 }
 
 export function mapDecisionToOutcome(decision: GovernanceDecision): GovernanceOutcome {

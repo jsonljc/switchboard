@@ -12,7 +12,7 @@ describe("buildTierContext", () => {
           "contact.get": {
             description: "Get contact",
             inputSchema: { type: "object", properties: {} },
-            governanceTier: "read" as const,
+            effectCategory: "read" as const,
             execute: async () => ({}),
           },
         },
@@ -29,7 +29,7 @@ describe("buildTierContext", () => {
           "contact.create": {
             description: "Create contact",
             inputSchema: { type: "object", properties: {} },
-            governanceTier: "external_send" as const,
+            effectCategory: "external_send" as const,
             execute: async () => ({}),
           },
         },
@@ -46,7 +46,7 @@ describe("buildTierContext", () => {
           "contact.delete": {
             description: "Delete contact",
             inputSchema: { type: "object", properties: {} },
-            governanceTier: "irreversible" as const,
+            effectCategory: "irreversible" as const,
             execute: async () => ({}),
           },
         },

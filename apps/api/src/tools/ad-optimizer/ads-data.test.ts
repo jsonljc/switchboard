@@ -44,13 +44,13 @@ describe("ads-data tool", () => {
   });
 
   it("read operations have read tier", () => {
-    expect(tool.operations["get-campaign-insights"]!.governanceTier).toBe("read");
-    expect(tool.operations["get-account-summary"]!.governanceTier).toBe("read");
-    expect(tool.operations["parse-lead-webhook"]!.governanceTier).toBe("read");
+    expect(tool.operations["get-campaign-insights"]!.effectCategory).toBe("read");
+    expect(tool.operations["get-account-summary"]!.effectCategory).toBe("read");
+    expect(tool.operations["parse-lead-webhook"]!.effectCategory).toBe("read");
   });
 
   it("send-conversion-event has external_write tier", () => {
-    expect(tool.operations["send-conversion-event"]!.governanceTier).toBe("external_send");
+    expect(tool.operations["send-conversion-event"]!.effectCategory).toBe("external_send");
   });
 
   describe("get-campaign-insights", () => {

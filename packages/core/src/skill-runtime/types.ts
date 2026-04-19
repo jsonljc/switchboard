@@ -140,7 +140,7 @@ export interface SkillTool {
 export interface SkillToolOperation {
   description: string;
   inputSchema: Record<string, unknown>;
-  governanceTier: GovernanceTier;
+  effectCategory: GovernanceTier;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
   execute(params: unknown): Promise<unknown>;
@@ -186,7 +186,7 @@ export interface ToolCallContext {
   toolId: string;
   operation: string;
   params: unknown;
-  governanceTier: GovernanceTier;
+  effectCategory: GovernanceTier;
   trustLevel: "supervised" | "guided" | "autonomous";
 }
 

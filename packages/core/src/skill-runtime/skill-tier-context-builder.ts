@@ -16,9 +16,9 @@ export function buildTierContext(input: TierContextInput): TierContext {
     if (!tool) return false;
     return Object.values(tool.operations).some(
       (op) =>
-        op.governanceTier === "external_send" ||
-        op.governanceTier === "external_mutation" ||
-        op.governanceTier === "irreversible",
+        op.effectCategory === "external_send" ||
+        op.effectCategory === "external_mutation" ||
+        op.effectCategory === "irreversible",
     );
   });
 
