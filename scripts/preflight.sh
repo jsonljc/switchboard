@@ -149,7 +149,7 @@ step_start
 if $PNPM build > /dev/null 2>&1; then
   ok "Build succeeded"
 else
-  fail "Build failed"
+  fail "Build failed (dashboard font fetch requires network)"
 fi
 
 step_end
