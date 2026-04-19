@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
+import type { CalendarProvider } from "@switchboard/schemas";
 
 interface SkillModeBootstrapDeps {
   prismaClient: PrismaClient;
@@ -39,30 +40,15 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
 
+  const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
+
   const toolsMap = new Map([
     ["crm-query", createCrmQueryTool(contactStore, activityStore)],
     ["crm-write", createCrmWriteTool(opportunityStore, activityStore)],
     [
       "calendar-book",
       createCalendarBookTool({
-        calendarProvider: {
-          listAvailableSlots: async () => [],
-          createBooking: async () => {
-            throw new Error("Calendar provider not connected — provision a connection first");
-          },
-          cancelBooking: async () => {
-            throw new Error("Calendar provider not connected");
-          },
-          rescheduleBooking: async () => {
-            throw new Error("Calendar provider not connected");
-          },
-          getBooking: async () => null,
-          healthCheck: async () => ({
-            status: "disconnected" as const,
-            latencyMs: 0,
-            error: "No calendar connection provisioned",
-          }),
-        },
+        calendarProvider,
         bookingStore,
         opportunityStore: {
           findActiveByContact: async (orgId: string, contactId: string) => {
@@ -129,4 +115,62 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   );
 
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
+}
+
+const STUB_CALENDAR_PROVIDER: CalendarProvider = {
+  listAvailableSlots: async () => [],
+  createBooking: async () => {
+    throw new Error("Calendar provider not connected — set GOOGLE_CALENDAR_CREDENTIALS");
+  },
+  cancelBooking: async () => {
+    throw new Error("Calendar provider not connected");
+  },
+  rescheduleBooking: async () => {
+    throw new Error("Calendar provider not connected");
+  },
+  getBooking: async () => null,
+  healthCheck: async () => ({
+    status: "disconnected" as const,
+    latencyMs: 0,
+    error: "No calendar connection provisioned",
+  }),
+};
+
+async function resolveCalendarProvider(
+  prismaClient: PrismaClient,
+  logger: { info(msg: string): void; error(msg: string): void },
+): Promise<CalendarProvider> {
+  const credentials = process.env["GOOGLE_CALENDAR_CREDENTIALS"];
+  const calendarId = process.env["GOOGLE_CALENDAR_ID"];
+
+  if (!credentials || !calendarId) {
+    logger.info("Calendar: no GOOGLE_CALENDAR_CREDENTIALS or GOOGLE_CALENDAR_ID — using stub");
+    return STUB_CALENDAR_PROVIDER;
+  }
+
+  try {
+    // Read business hours from the first org config that has them
+    let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
+    const orgConfig = await prismaClient.organizationConfig.findFirst({
+      select: { businessHours: true },
+    });
+    if (orgConfig?.businessHours && typeof orgConfig.businessHours === "object") {
+      businessHours = orgConfig.businessHours as import("@switchboard/schemas").BusinessHoursConfig;
+    }
+
+    const { createGoogleCalendarProvider } = await import("./google-calendar-factory.js");
+    const provider = await createGoogleCalendarProvider({
+      credentials,
+      calendarId,
+      businessHours,
+    });
+
+    const health = await provider.healthCheck();
+    logger.info(`Calendar: Google Calendar connected (${health.status}, ${health.latencyMs}ms)`);
+    return provider;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`Calendar: failed to initialize Google Calendar — falling back to stub: ${msg}`);
+    return STUB_CALENDAR_PROVIDER;
+  }
 }
