@@ -47,7 +47,7 @@ describe("Skill Runtime Wiring", () => {
     expect(gateway.handleIncoming).toBeDefined();
   });
 
-  it("creates gateway without platformIngress (stub fallback)", () => {
+  it("throws when platformIngress is not provided", () => {
     const mockPrisma = {
       agentTask: {},
       interactionSummary: {},
@@ -57,9 +57,6 @@ describe("Skill Runtime Wiring", () => {
       deploymentConnection: {},
     } as unknown as PrismaClient;
 
-    // Should not throw during construction
-    const gateway = createGatewayBridge(mockPrisma);
-
-    expect(gateway.constructor.name).toBe("ChannelGateway");
+    expect(() => createGatewayBridge(mockPrisma)).toThrow("PlatformIngress is required");
   });
 });
