@@ -6,7 +6,10 @@ import type { HandoffPackage } from "./types.js";
 import type { ApprovalNotifier } from "../notifications/index.js";
 
 export class HandoffNotifier {
-  constructor(private notifier: ApprovalNotifier) {}
+  constructor(
+    private notifier: ApprovalNotifier,
+    private defaultApprovers: string[] = [],
+  ) {}
 
   async notify(pkg: HandoffPackage): Promise<void> {
     const message = this.formatMessage(pkg);
@@ -18,7 +21,7 @@ export class HandoffNotifier {
       explanation: `Handoff requested: ${pkg.reason.replace(/_/g, " ")}`,
       bindingHash: "",
       expiresAt: pkg.slaDeadlineAt,
-      approvers: [],
+      approvers: this.defaultApprovers,
       evidenceBundle: { reason: pkg.reason, leadId: pkg.leadSnapshot.leadId },
     });
   }

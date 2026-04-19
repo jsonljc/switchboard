@@ -33,7 +33,8 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     PrismaHandoffStore,
     PrismaBusinessFactsStore,
   } = await import("@switchboard/db");
-  const { NoopNotifier } = await import("@switchboard/core/notifications");
+  const { NoopNotifier, TelegramApprovalNotifier } =
+    await import("@switchboard/core/notifications");
 
   if (!process.env["ANTHROPIC_API_KEY"]) {
     throw new Error("SkillMode requires ANTHROPIC_API_KEY");
@@ -54,7 +55,23 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
 
   const handoffStore = new PrismaHandoffStore(prismaClient);
   const handoffAssembler = new HandoffPackageAssembler();
-  const handoffNotifier = new HandoffNotifier(new NoopNotifier());
+
+  const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
+  const escalationChatId = process.env["ESCALATION_CHAT_ID"];
+  const approvalNotifier = telegramToken
+    ? new TelegramApprovalNotifier(telegramToken)
+    : new NoopNotifier();
+  const escalationApprovers = escalationChatId ? [escalationChatId] : [];
+
+  if (!telegramToken) {
+    logger.info("Escalation: no TELEGRAM_BOT_TOKEN — handoff notifications disabled");
+  } else if (!escalationChatId) {
+    logger.info("Escalation: no ESCALATION_CHAT_ID — handoff records saved but no one notified");
+  } else {
+    logger.info(`Escalation: Telegram notifications enabled for chat ${escalationChatId}`);
+  }
+
+  const handoffNotifier = new HandoffNotifier(approvalNotifier, escalationApprovers);
 
   const failureHandler = new BookingFailureHandler({
     runTransaction: (fn) =>
