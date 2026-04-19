@@ -65,7 +65,7 @@ describe("createCalendarBookTool", () => {
   });
 
   it("booking.create has governance tier 'external_write'", () => {
-    expect(tool.operations["booking.create"]!.governanceTier).toBe("external_send");
+    expect(tool.operations["booking.create"]!.governanceTier).toBe("external_mutation");
   });
 
   it("slots.query is idempotent", () => {

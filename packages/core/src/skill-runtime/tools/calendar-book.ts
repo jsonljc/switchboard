@@ -71,7 +71,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
       "booking.create": {
         description:
           "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
-        governanceTier: "external_send" as const,
+        governanceTier: "external_mutation" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
