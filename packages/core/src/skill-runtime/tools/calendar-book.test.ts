@@ -11,6 +11,7 @@ function makeCalendarProvider() {
 function makeBookingStore() {
   return {
     create: vi.fn(),
+    findBySlot: vi.fn(),
   };
 }
 
@@ -38,7 +39,14 @@ function makeRunTransaction() {
 
 function makeFailureHandler() {
   return {
-    handle: vi.fn(),
+    handle: vi.fn().mockResolvedValue({
+      bookingId: "bk_1",
+      status: "failed",
+      failureType: "provider_error",
+      retryable: false,
+      escalationId: "esc_1",
+      message: "Calendar booking failed. This has been escalated for review.",
+    }),
   };
 }
 
@@ -156,6 +164,88 @@ describe("createCalendarBookTool", () => {
 
     expect(opportunityStore.create).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org_1", contactId: "ct_1" }),
+    );
+  });
+
+  it("returns existing booking ID on duplicate", async () => {
+    const p2002Error = Object.assign(new Error("Unique constraint"), { code: "P2002" });
+    bookingStore.create.mockRejectedValue(p2002Error);
+    bookingStore.findBySlot.mockResolvedValue({ id: "bk_existing" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+
+    const result = (await tool.operations["booking.create"]!.execute({
+      orgId: "org_1",
+      contactId: "ct_1",
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("duplicate");
+    expect(result.existingBookingId).toBe("bk_existing");
+    expect(result.failureType).toBe("duplicate_booking");
+    expect(calendarProvider.createBooking).not.toHaveBeenCalled();
+  });
+
+  it("delegates to failure handler when calendar provider throws", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockRejectedValue(new Error("503 Service Unavailable"));
+
+    const result = (await tool.operations["booking.create"]!.execute({
+      orgId: "org_1",
+      contactId: "ct_1",
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("failed");
+    expect(result.escalationId).toBe("esc_1");
+    expect(failureHandler.handle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingId: "bk_1",
+        failureType: "provider_error",
+        retryable: false,
+      }),
+    );
+  });
+
+  it("delegates to failure handler when confirm transaction fails", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_123" });
+    runTransaction.mockRejectedValue(new Error("DB connection lost"));
+
+    failureHandler.handle.mockResolvedValue({
+      bookingId: "bk_1",
+      status: "failed",
+      failureType: "confirmation_failed",
+      retryable: true,
+      escalationId: "esc_2",
+      message:
+        "I couldn't complete the booking just now. I've flagged this for a human to follow up.",
+    });
+
+    const result = (await tool.operations["booking.create"]!.execute({
+      orgId: "org_1",
+      contactId: "ct_1",
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("failed");
+    expect(result.failureType).toBe("confirmation_failed");
+    expect(result.retryable).toBe(true);
+    expect(failureHandler.handle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failureType: "confirmation_failed",
+        retryable: true,
+      }),
     );
   });
 });
