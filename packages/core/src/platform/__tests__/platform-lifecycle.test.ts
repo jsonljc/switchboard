@@ -54,6 +54,14 @@ function makeApprovalRequest(overrides: Partial<ApprovalRequest> = {}): Approval
     ],
     approvers: overrides.approvers ?? ["approver-1"],
     fallbackApprover: overrides.fallbackApprover ?? null,
+    status: overrides.status ?? "pending",
+    respondedBy: overrides.respondedBy ?? null,
+    respondedAt: overrides.respondedAt ?? null,
+    patchValue: overrides.patchValue ?? null,
+    expiresAt: overrides.expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
+    expiredBehavior: overrides.expiredBehavior ?? "deny",
+    createdAt: overrides.createdAt ?? new Date(),
+    quorum: overrides.quorum ?? null,
   };
 }
 

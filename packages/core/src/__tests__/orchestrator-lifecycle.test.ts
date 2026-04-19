@@ -8,7 +8,6 @@ import { clearProposeCaches } from "../orchestrator/propose-helpers.js";
 import type { IdentitySpec } from "@switchboard/schemas";
 import type { StorageContext } from "../storage/interfaces.js";
 import type { GuardrailState } from "../engine/policy-engine.js";
-import type { ApprovalRoutingConfig } from "../approval/router.js";
 
 function makeIdentitySpec(overrides?: Partial<IdentitySpec>): IdentitySpec {
   const now = new Date();
@@ -171,155 +170,9 @@ describe("LifecycleOrchestrator — lifecycle, competence, delegation, risk, spe
     });
   });
 
-  describe("Full lifecycle", () => {
-    it("should complete propose -> approve -> execute -> undo -> approve undo -> execute undo", async () => {
-      cartridge.onRiskInput(() => ({
-        baseRisk: "high" as const,
-        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
-        reversibility: "full" as const,
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      }));
-
-      // Step 1: Propose
-      const proposeResult = await orchestrator.propose({
-        actionType: "digital-ads.campaign.pause",
-        parameters: { campaignId: "camp_1" },
-        principalId: "user_1",
-        cartridgeId: "digital-ads",
-      });
-      expect(proposeResult.envelope.status).toBe("pending_approval");
-      expect(proposeResult.approvalRequest).not.toBeNull();
-
-      // Step 2: Approve (which auto-executes)
-      const approvalResponse = await orchestrator.respondToApproval({
-        approvalId: proposeResult.approvalRequest!.id,
-        action: "approve",
-        respondedBy: "admin_1",
-        bindingHash: proposeResult.approvalRequest!.bindingHash,
-      });
-      expect(approvalResponse.approvalState.status).toBe("approved");
-      expect(approvalResponse.executionResult?.success).toBe(true);
-      expect(approvalResponse.envelope.status).toBe("executed");
-
-      // Step 3: Request undo
-      const undoResult = await orchestrator.requestUndo(proposeResult.envelope.id);
-      expect(undoResult.envelope.parentEnvelopeId).toBe(proposeResult.envelope.id);
-
-      // Step 4: The undo also needs approval (medium risk)
-      if (undoResult.approvalRequest) {
-        // Step 5: Approve undo
-        const undoApproval = await orchestrator.respondToApproval({
-          approvalId: undoResult.approvalRequest.id,
-          action: "approve",
-          respondedBy: "admin_1",
-          bindingHash: undoResult.approvalRequest.bindingHash,
-        });
-        expect(undoApproval.executionResult?.success).toBe(true);
-      }
-
-      // Verify audit chain
-      const allEntries = ledgerStorage.getAll();
-      expect(allEntries.length).toBeGreaterThanOrEqual(4);
-
-      const chainResult = await ledger.verifyChain(allEntries);
-      expect(chainResult.valid).toBe(true);
-    });
-  });
-
-  describe("Delegation chain (end-to-end)", () => {
-    it("should allow approval via 2-hop delegation chain", async () => {
-      cartridge.onRiskInput(() => ({
-        baseRisk: "high" as const,
-        exposure: { dollarsAtRisk: 500, blastRadius: 1 },
-        reversibility: "full" as const,
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      }));
-
-      const routingConfig: ApprovalRoutingConfig = {
-        defaultApprovers: ["admin_1"],
-        defaultFallbackApprover: null,
-        defaultExpiryMs: 24 * 60 * 60 * 1000,
-        defaultExpiredBehavior: "deny",
-        elevatedExpiryMs: 12 * 60 * 60 * 1000,
-        mandatoryExpiryMs: 4 * 60 * 60 * 1000,
-        denyWhenNoApprovers: true,
-      };
-
-      const chainOrchestrator = new LifecycleOrchestrator({
-        storage,
-        ledger,
-        guardrailState,
-        routingConfig,
-      });
-
-      await storage.identity.savePrincipal({
-        id: "admin_1",
-        type: "user",
-        name: "Admin",
-        organizationId: null,
-        roles: ["approver"],
-      });
-
-      await storage.identity.savePrincipal({
-        id: "mid_1",
-        type: "user",
-        name: "Mid-level",
-        organizationId: null,
-        roles: ["approver"],
-      });
-
-      await storage.identity.savePrincipal({
-        id: "delegate_1",
-        type: "user",
-        name: "Delegate",
-        organizationId: null,
-        roles: ["approver"],
-      });
-
-      await storage.identity.saveDelegationRule({
-        id: "chain_d1",
-        grantor: "admin_1",
-        grantee: "mid_1",
-        scope: "*",
-        expiresAt: null,
-        maxChainDepth: 5,
-      });
-
-      await storage.identity.saveDelegationRule({
-        id: "chain_d2",
-        grantor: "mid_1",
-        grantee: "delegate_1",
-        scope: "*",
-        expiresAt: null,
-        maxChainDepth: 5,
-      });
-
-      const proposeResult = await chainOrchestrator.propose({
-        actionType: "digital-ads.campaign.pause",
-        parameters: { campaignId: "camp_1" },
-        principalId: "user_1",
-        cartridgeId: "digital-ads",
-      });
-
-      expect(proposeResult.approvalRequest).not.toBeNull();
-
-      const response = await chainOrchestrator.respondToApproval({
-        approvalId: proposeResult.approvalRequest!.id,
-        action: "approve",
-        respondedBy: "delegate_1",
-        bindingHash: proposeResult.approvalRequest!.bindingHash,
-      });
-
-      expect(response.approvalState.status).toBe("approved");
-      expect(response.executionResult?.success).toBe(true);
-
-      const entries = await ledger.query({ eventType: "delegation.chain_resolved" as const });
-      expect(entries.length).toBeGreaterThanOrEqual(1);
-      const chainEntry = entries[0];
-      expect(chainEntry?.snapshot["depth"]).toBe(2);
-      expect(chainEntry?.snapshot["chain"]).toEqual(["delegate_1", "mid_1", "admin_1"]);
-    });
-  });
+  // Full lifecycle (propose -> approve -> execute -> undo) and delegation chain
+  // tests have moved to platform-lifecycle.test.ts — PlatformLifecycle is the sole
+  // approval owner.
 
   describe("Composite risk (end-to-end)", () => {
     it("agent with many recent actions gets higher risk score on next propose", async () => {

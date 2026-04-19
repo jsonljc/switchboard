@@ -24,7 +24,6 @@ import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import type { SharedContext } from "./shared-context.js";
 import { ProposePipeline } from "./propose-pipeline.js";
-import { ApprovalManager } from "./approval-manager.js";
 import { ExecutionManager } from "./execution-manager.js";
 
 export interface OrchestratorConfig {
@@ -41,10 +40,6 @@ export interface OrchestratorConfig {
   /** Optional policy cache (keyed by cartridgeId + org); invalidate on policy CRUD. */
   policyCache?: PolicyCache;
   approvalNotifier?: ApprovalNotifier;
-  /** When true, allows a principal to approve their own proposals. Default: false. */
-  selfApprovalAllowed?: boolean;
-  /** Maximum approval responses per principal in a sliding window. */
-  approvalRateLimit?: { maxApprovals: number; windowMs: number };
   /** Data-flow executor for multi-step plans with binding resolution. */
   dataFlowExecutor?: DataFlowExecutor;
   /** Credential resolver for org-scoped connection credentials at execution time. */
@@ -74,12 +69,12 @@ export interface ApprovalResponse {
 /**
  * LifecycleOrchestrator — thin coordinator delegating to:
  *  - ProposePipeline  (propose, proposePlan, simulate, resolveAndPropose)
- *  - ApprovalManager  (respondToApproval)
  *  - ExecutionManager  (executeApproved, executePlan, requestUndo)
+ *
+ * Approval responses are handled by PlatformLifecycle (the sole approval owner).
  */
 export class LifecycleOrchestrator {
   private proposePipeline: ProposePipeline;
-  private approvalManager: ApprovalManager;
   private executionManager: ExecutionManager;
   private _routingConfig: ApprovalRoutingConfig;
 
@@ -102,8 +97,6 @@ export class LifecycleOrchestrator {
       governanceProfileStore: config.governanceProfileStore ?? null,
       policyCache: config.policyCache ?? null,
       approvalNotifier: config.approvalNotifier ?? null,
-      selfApprovalAllowed: config.selfApprovalAllowed ?? false,
-      approvalRateLimit: config.approvalRateLimit ?? null,
       dataFlowExecutor: config.dataFlowExecutor ?? null,
       credentialResolver: config.credentialResolver ?? null,
       circuitBreaker: config.circuitBreaker ?? null,
@@ -111,7 +104,6 @@ export class LifecycleOrchestrator {
     };
 
     this.proposePipeline = new ProposePipeline(ctx);
-    this.approvalManager = new ApprovalManager(ctx);
     this.executionManager = new ExecutionManager(ctx, config.circuitBreaker ?? null);
   }
 
@@ -151,7 +143,11 @@ export class LifecycleOrchestrator {
     );
   }
 
-  async respondToApproval(params: {
+  /**
+   * @deprecated Approval responses go through PlatformLifecycle.
+   * This stub satisfies the RuntimeOrchestrator interface contract.
+   */
+  async respondToApproval(_params: {
     approvalId: string;
     action: "approve" | "reject" | "patch";
     respondedBy: string;
@@ -159,9 +155,7 @@ export class LifecycleOrchestrator {
     patchValue?: Record<string, unknown>;
     approvalHash?: string;
   }): Promise<ApprovalResponse> {
-    return this.approvalManager.respondToApproval(params, (envelopeId) =>
-      this.executionManager.executeApproved(envelopeId),
-    );
+    throw new Error("Approval responses go through the API server's PlatformLifecycle");
   }
 
   async executePreApproved(params: {

@@ -189,7 +189,6 @@ describe("ChatRuntime Integration", () => {
       storage,
       ledger,
       guardrailState,
-      selfApprovalAllowed: true,
       routingConfig: {
         defaultApprovers: ["user_1"],
         defaultFallbackApprover: null,

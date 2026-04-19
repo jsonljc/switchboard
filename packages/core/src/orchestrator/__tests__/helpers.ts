@@ -74,8 +74,6 @@ export function makeSharedContext(overrides?: Partial<SharedContext>): SharedCon
     governanceProfileStore: null,
     policyCache: null,
     approvalNotifier: null,
-    selfApprovalAllowed: false,
-    approvalRateLimit: null,
     crossCartridgeEnricher: null,
     dataFlowExecutor: null,
     credentialResolver: null,

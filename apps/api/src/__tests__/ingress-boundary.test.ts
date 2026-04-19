@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { resolve, join } from "node:path";
 
 const ROUTES_DIR = resolve(import.meta.dirname, "../routes");
 
@@ -76,5 +76,53 @@ describe("PlatformIngress boundary enforcement", () => {
       const source = readFileSync(resolve(ROUTES_DIR, file), "utf-8");
       expect(source).not.toContain("ApprovalManager");
     }
+  });
+
+  it("ApprovalManager source file does not exist", () => {
+    const approvalManagerPath = resolve(
+      import.meta.dirname,
+      "../../../../packages/core/src/orchestrator/approval-manager.ts",
+    );
+    expect(existsSync(approvalManagerPath)).toBe(false);
+  });
+
+  it("no core package source file references deleted ApprovalManager", () => {
+    const roots = [resolve(import.meta.dirname, "../../../../packages/core/src")];
+    // ApprovalManager was deleted — block imports and class references
+    const banned = ["ApprovalManager"];
+    const violations: string[] = [];
+
+    function scanDir(dir: string): void {
+      try {
+        const dirEntries = readdirSync(dir, { withFileTypes: true });
+        for (const d of dirEntries) {
+          const fullPath = join(dir, d.name);
+          if (d.isDirectory() && d.name !== "node_modules" && d.name !== ".turbo") {
+            scanDir(fullPath);
+          } else if (
+            d.isFile() &&
+            fullPath.endsWith(".ts") &&
+            !fullPath.includes("__tests__") &&
+            !fullPath.endsWith(".test.ts") &&
+            !fullPath.endsWith(".d.ts")
+          ) {
+            const source = readFileSync(fullPath, "utf-8");
+            for (const pattern of banned) {
+              if (source.includes(pattern)) {
+                violations.push(`${fullPath} contains "${pattern}"`);
+              }
+            }
+          }
+        }
+      } catch {
+        return;
+      }
+    }
+
+    for (const root of roots) {
+      scanDir(root);
+    }
+
+    expect(violations).toEqual([]);
   });
 });

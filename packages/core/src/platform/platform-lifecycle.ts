@@ -607,8 +607,8 @@ export class PlatformLifecycle {
 
   /**
    * Re-evaluate governance on patched proposal parameters (safety shim 2A-i).
-   * Ported from ApprovalManager.reEvaluatePatchedProposal to close the safety
-   * gap where patched parameters could bypass policy checks.
+   * Ported from the old approval manager's reEvaluatePatchedProposal to close
+   * the safety gap where patched parameters could bypass policy checks.
    *
    * Returns `true` if the patched proposal was denied by policy.
    */

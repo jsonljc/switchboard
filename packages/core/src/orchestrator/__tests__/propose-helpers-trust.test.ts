@@ -40,8 +40,6 @@ function makeMinimalContext(overrides?: Partial<SharedContext>): SharedContext {
     governanceProfileStore: null,
     policyCache: null,
     approvalNotifier: null,
-    selfApprovalAllowed: false,
-    approvalRateLimit: null,
     dataFlowExecutor: null,
     credentialResolver: null,
     circuitBreaker: null,

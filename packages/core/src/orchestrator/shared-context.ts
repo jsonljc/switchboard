@@ -15,9 +15,9 @@ import type { IdempotencyGuard } from "../idempotency/guard.js";
 import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 
 /**
- * Shared dependencies and configuration passed to ProposePipeline,
- * ApprovalManager, and ExecutionManager. Constructed once by
- * LifecycleOrchestrator and passed by reference.
+ * Shared dependencies and configuration passed to ProposePipeline
+ * and ExecutionManager. Constructed once by LifecycleOrchestrator
+ * and passed by reference.
  */
 export interface SharedContext {
   storage: StorageContext;
@@ -31,8 +31,6 @@ export interface SharedContext {
   governanceProfileStore: GovernanceProfileStore | null;
   policyCache: PolicyCache | null;
   approvalNotifier: ApprovalNotifier | null;
-  selfApprovalAllowed: boolean;
-  approvalRateLimit: { maxApprovals: number; windowMs: number } | null;
   dataFlowExecutor: DataFlowExecutor | null;
   credentialResolver: ConnectionCredentialResolver | null;
   circuitBreaker: CartridgeCircuitBreakerWrapper | null;
