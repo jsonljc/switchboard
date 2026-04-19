@@ -17,7 +17,7 @@ const DEV_SESSION: DashboardSession = {
 };
 
 export async function getServerSession(): Promise<DashboardSession | null> {
-  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+  if (process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true" && process.env.NODE_ENV !== "production") {
     return DEV_SESSION;
   }
   const session = await auth();
