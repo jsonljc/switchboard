@@ -76,7 +76,7 @@ The old `ApprovalManager.reEvaluatePatchedProposal()` (lines 408-509 of `approva
 
 Port the inline re-evaluation logic as-is into `PlatformLifecycle.respondToApproval()` for the `"patch"` action case. This uses the same approach as the old code: load cartridge, call `enrichContext()`, `getRiskInput()`, `getGuardrails()`, load policies, call `evaluate()`. If re-evaluation denies, update the WorkTrace and return denial.
 
-> **Note:** This is a temporary parity shim (approach 2A-i). The inline governance reimplementation does not follow the "governance runs once" invariant spirit. Post-PR3, evaluate whether to collapse this behind `GovernanceGateInterface.reEvaluate()`. No new call sites may depend on the inline governance path beyond this parity preservation.
+> **Note:** The inline patched re-evaluation logic is a temporary parity shim (approach 2A-i). The inline governance reimplementation does not follow the "governance runs once" invariant spirit. Post-PR3, evaluate whether to collapse this behind `GovernanceGateInterface.reEvaluate()`. No new call sites, abstractions, or helper functions may be added that increase its reuse. Its scope must remain limited to `PlatformLifecycle.respondToApproval()` patch handling.
 
 #### Delete: plan approval
 
@@ -183,6 +183,7 @@ CI must fail if:
 - Any file imports `ApprovalManager` class
 - Any file imports from `orchestrator/approval-manager.ts`
 - Any route or queue file references `orchestrator.respondToApproval`, `orchestrator.executeApproved`, or `orchestrator.routingConfig`
+- Any file references `respondToApproval`, `executeApproved`, or `routingConfig` through `LifecycleOrchestrator` (repo-wide, not just routes/queue)
 
 ---
 
@@ -192,19 +193,19 @@ CI must fail if:
 
 ### Reachability verification (completed)
 
-| Module                                      | Imported by production code?                                                                                                                                                                              | Verdict                                                        |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `runtime.ts` (ChatRuntime)                  | No — only test files                                                                                                                                                                                      | Delete                                                         |
-| `bootstrap.ts` (createChatRuntime)          | No — only test files                                                                                                                                                                                      | Delete                                                         |
-| `managed-runtime.ts` (createManagedRuntime) | No — only re-exported by bootstrap.ts                                                                                                                                                                     | Delete                                                         |
-| `api-orchestrator-adapter.ts`               | No — only bootstrap.ts and managed-runtime.ts                                                                                                                                                             | Delete                                                         |
-| `message-pipeline.ts`                       | No — only runtime.ts                                                                                                                                                                                      | Delete                                                         |
-| `runtime-helpers.ts`                        | No — only runtime.ts and message-pipeline.ts                                                                                                                                                              | Delete                                                         |
-| `handlers/` directory (6 files)             | No — only message-pipeline.ts and runtime.ts                                                                                                                                                              | Delete                                                         |
-| `middleware/dialogue-middleware.ts`         | No — only runtime.ts                                                                                                                                                                                      | Delete                                                         |
-| `composer/` directory (5 files)             | No — only reachable through dead tree. `llm-conversation-engine.ts` imports `response-generator.ts` but has zero importers itself                                                                         | Delete                                                         |
-| `conversation/llm-conversation-engine.ts`   | No — only its own test file                                                                                                                                                                               | Delete                                                         |
-| `interpreter/` directory                    | Yes — `conversation/llm-conversation-engine.ts` is dead, but `composer/response-generator.ts` uses `injection-detector.js`. However, composer is dead too. Check if any other live file uses interpreter. | **Keep** — used by test infrastructure; verify before deleting |
+| Module                                      | Imported by production code?                                                                                                                                                                              | Verdict                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `runtime.ts` (ChatRuntime)                  | No — only test files                                                                                                                                                                                      | Delete                                                                                                          |
+| `bootstrap.ts` (createChatRuntime)          | No — only test files                                                                                                                                                                                      | Delete                                                                                                          |
+| `managed-runtime.ts` (createManagedRuntime) | No — only re-exported by bootstrap.ts                                                                                                                                                                     | Delete                                                                                                          |
+| `api-orchestrator-adapter.ts`               | No — only bootstrap.ts and managed-runtime.ts                                                                                                                                                             | Delete                                                                                                          |
+| `message-pipeline.ts`                       | No — only runtime.ts                                                                                                                                                                                      | Delete                                                                                                          |
+| `runtime-helpers.ts`                        | No — only runtime.ts and message-pipeline.ts                                                                                                                                                              | Delete                                                                                                          |
+| `handlers/` directory (6 files)             | No — only message-pipeline.ts and runtime.ts                                                                                                                                                              | Delete                                                                                                          |
+| `middleware/dialogue-middleware.ts`         | No — only runtime.ts                                                                                                                                                                                      | Delete                                                                                                          |
+| `composer/` directory (5 files)             | No — only reachable through dead tree. `llm-conversation-engine.ts` imports `response-generator.ts` but has zero importers itself                                                                         | Delete                                                                                                          |
+| `conversation/llm-conversation-engine.ts`   | No — only its own test file                                                                                                                                                                               | Delete                                                                                                          |
+| `interpreter/` directory                    | Yes — `conversation/llm-conversation-engine.ts` is dead, but `composer/response-generator.ts` uses `injection-detector.js`. However, composer is dead too. Check if any other live file uses interpreter. | **Keep** — explicitly out of P0 deletion scope unless a full live-path reachability check proves zero importers |
 
 > **Precondition:** Do not delete any file until imports are proven unreachable from `ChannelGateway`, `gateway-bridge.ts`, `main.ts`, or any live gateway path. When in doubt, keep the file and flag it for follow-up.
 
@@ -229,15 +230,15 @@ CI must fail if:
 
 Each deleted test is classified as either permanently deleted (behavior no longer exists) or requiring replacement (behavior still exists at another layer).
 
-| Test file                        | Behavior tested                                              | Classification                                                                                                                          |
-| -------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `runtime-integration.test.ts`    | Full vertical: message → propose → approve → execute → audit | **Replace** — this vertical exists in the API path; covered by `convergence-e2e.test.ts` and `api-execute.test.ts`. No new test needed. |
-| `kill-switch.test.ts`            | Emergency halt via chat command                              | **Delete permanently** — kill-switch is a ChatRuntime cockpit command, not a gateway behavior                                           |
-| `crm-auto-create.test.ts`        | CRM contact auto-linking on first conversation               | **Delete permanently** — CRM linking was a ChatRuntime-specific pipeline step                                                           |
-| `whatsapp-compliance.test.ts`    | WhatsApp 24h messaging window enforcement                    | **Replace** — rewrite against `ChannelGateway` or the WhatsApp adapter directly. This is a real channel safety rule.                    |
-| `cockpit-commands.test.ts`       | Operator cockpit commands (pause/resume/status)              | **Delete permanently** — cockpit commands were ChatRuntime handler-context dependent                                                    |
-| `api-orchestrator-retry.test.ts` | HTTP retry logic in ApiOrchestratorAdapter                   | **Delete permanently** — adapter being deleted                                                                                          |
-| `humanize.test.ts`               | ResponseHumanizer text transforms                            | **Delete permanently** — composer being deleted                                                                                         |
+| Test file                        | Behavior tested                                              | Classification                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `runtime-integration.test.ts`    | Full vertical: message → propose → approve → execute → audit | **Delete** — behavior already covered by `convergence-e2e.test.ts` and `api-execute.test.ts` at the platform layer   |
+| `kill-switch.test.ts`            | Emergency halt via chat command                              | **Delete permanently** — kill-switch is a ChatRuntime cockpit command, not a gateway behavior                        |
+| `crm-auto-create.test.ts`        | CRM contact auto-linking on first conversation               | **Delete permanently** — CRM linking was a ChatRuntime-specific pipeline step                                        |
+| `whatsapp-compliance.test.ts`    | WhatsApp 24h messaging window enforcement                    | **Replace** — rewrite against `ChannelGateway` or the WhatsApp adapter directly. This is a real channel safety rule. |
+| `cockpit-commands.test.ts`       | Operator cockpit commands (pause/resume/status)              | **Delete permanently** — cockpit commands were ChatRuntime handler-context dependent                                 |
+| `api-orchestrator-retry.test.ts` | HTTP retry logic in ApiOrchestratorAdapter                   | **Delete permanently** — adapter being deleted                                                                       |
+| `humanize.test.ts`               | ResponseHumanizer text transforms                            | **Delete permanently** — composer being deleted                                                                      |
 
 ### Regression guard (required acceptance criteria)
 
@@ -260,6 +261,17 @@ Chat runtime:   ChannelGateway + adapters (sole path)
 Dashboard auth: Dev bypass blocked in production
 Old orchestrator: simulate() only (Phase 7 exit condition)
 ```
+
+## Non-Goals (out of scope for P0)
+
+- Moving `ExecuteResult` off `cartridge-sdk` (P1)
+- Removing `simulate()` from old orchestrator (Phase 7)
+- Broader governance interface cleanup (post-PR3 evaluation)
+- Deleting `interpreter/` directory unless proven dead during implementation
+- Raising test coverage thresholds (P2)
+- Adding `SECURITY.md` (P2)
+
+---
 
 ## Acceptance Criteria Summary
 
