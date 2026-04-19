@@ -23,8 +23,13 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { PrismaContactStore, PrismaOpportunityStore, PrismaActivityLogStore, PrismaBookingStore } =
-    await import("@switchboard/db");
+  const {
+    PrismaContactStore,
+    PrismaOpportunityStore,
+    PrismaActivityLogStore,
+    PrismaBookingStore,
+    PrismaBusinessFactsStore,
+  } = await import("@switchboard/db");
 
   if (!process.env["ANTHROPIC_API_KEY"]) {
     throw new Error("SkillMode requires ANTHROPIC_API_KEY");
@@ -40,6 +45,8 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const opportunityStore = new PrismaOpportunityStore(prismaClient);
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
+  // Business facts store instantiated for future ContextResolver integration
+  const _businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
 
   const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
 
