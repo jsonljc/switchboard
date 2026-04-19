@@ -14,8 +14,8 @@ export {
   createCrmQueryTool,
   createCrmWriteTool,
   createCalendarBookTool,
-  createPipelineHandoffTool,
   createWebScannerTool,
+  createEscalateTool,
 } from "./tools/index.js";
 export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BookingFailureInput, BookingFailureResult } from "./tools/booking-failure-handler.js";

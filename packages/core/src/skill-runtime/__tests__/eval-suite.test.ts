@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
-import { createPipelineHandoffTool } from "../tools/pipeline-handoff.js";
+import { createEscalateTool } from "../tools/escalate.js";
 import type { ToolCallingAdapter } from "../tool-calling-adapter.js";
 import type { SkillTool, SkillExecutionParams } from "../types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "../types.js";
@@ -122,7 +122,39 @@ function createMockTools(): Map<string, SkillTool> {
       },
     },
   });
-  tools.set("pipeline-handoff", createPipelineHandoffTool());
+  tools.set(
+    "escalate",
+    createEscalateTool({
+      assembler: {
+        assemble: () => ({
+          id: "h_1",
+          sessionId: "s",
+          organizationId: "o",
+          reason: "missing_knowledge" as const,
+          status: "pending" as const,
+          leadSnapshot: { channel: "whatsapp" },
+          qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
+          conversationSummary: {
+            turnCount: 0,
+            keyTopics: [],
+            objectionHistory: [],
+            sentiment: "neutral",
+          },
+          slaDeadlineAt: new Date(),
+          createdAt: new Date(),
+        }),
+      },
+      handoffStore: { save: async () => {}, getBySessionId: async () => null },
+      notifier: { notify: async () => {} },
+      sessionContext: {
+        sessionId: "s",
+        organizationId: "o",
+        leadSnapshot: { channel: "whatsapp" },
+        qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
+        messages: [],
+      },
+    }),
+  );
   tools.set("web-scanner", {
     id: "web-scanner",
     operations: {

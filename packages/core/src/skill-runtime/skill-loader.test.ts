@@ -353,7 +353,7 @@ describe("loadSkill - real files", () => {
     const skill = loadSkill("sales-pipeline", join(repoRoot, "skills"));
     expect(skill.slug).toBe("sales-pipeline");
     expect(skill.parameters).toHaveLength(5);
-    expect(skill.tools).toEqual(["crm-query", "crm-write", "pipeline-handoff"]);
+    expect(skill.tools).toEqual(["crm-query", "crm-write"]);
     expect(skill.body).toContain("Speed-to-Lead");
     expect(skill.body).toContain("Sales Closer");
     expect(skill.body).toContain("Nurture Specialist");
