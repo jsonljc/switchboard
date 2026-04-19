@@ -277,7 +277,7 @@ export class PlatformLifecycle {
     await ledger.record({
       eventType: "action.undo_requested",
       actorType: "system",
-      actorId: "orchestrator",
+      actorId: "platform",
       entityType: "action",
       entityId: envelopeId,
       riskCategory: (envelope.decisions[0]?.computedRiskScore?.category as RiskCategory) ?? "none",
@@ -692,7 +692,7 @@ export class PlatformLifecycle {
       await ledger.record({
         eventType: "action.denied",
         actorType: "system",
-        actorId: "orchestrator",
+        actorId: "platform",
         entityType: "action",
         entityId: proposal.id,
         riskCategory: reEvalTrace.computedRiskScore.category,
