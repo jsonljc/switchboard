@@ -281,7 +281,7 @@ All of these are required, not optional:
 2. Patched approval parameters are re-evaluated by governance before execution
 3. Plan approval code is deleted
 4. Queue execution mode code is deleted
-5. `PlatformLifecycle` has comprehensive test coverage (parity + correctness)
+5. `PlatformLifecycle` has the required parity and correctness tests defined in this spec, and all pass in CI
 6. No route/queue file calls orchestrator for approval-related behavior
 7. `routingConfig` is owned by `PlatformLifecycle`
 8. `ApprovalManager` class does not exist
