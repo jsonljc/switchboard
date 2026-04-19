@@ -72,7 +72,21 @@
 
     /* ─── Typography ─── */
     --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-    --font-display: "Cormorant Garamond", "Playfair Display", ui-serif, Georgia, serif;
+    --font-display: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+
+    /* ─── Public website: Stone & Weight design tokens ─── */
+    --sw-base: #F5F3F0;
+    --sw-surface: #EDEAE5;
+    --sw-surface-raised: #F9F8F6;
+    --sw-border: #DDD9D3;
+    --sw-border-strong: #C8C3BC;
+    --sw-text-primary: #1A1714;
+    --sw-text-secondary: #6B6560;
+    --sw-text-muted: #9C958F;
+    --sw-accent: #A07850;
+    --sw-dark-surface: #1E1C1A;
+    --sw-dark-text: #EDE8E1;
+    --sw-dark-muted: #7A736C;
 
     /* ─── Spacing (editorial) ─── */
     --space-page-y: 2.5rem;

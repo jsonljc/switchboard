@@ -6,6 +6,10 @@ dist
 .env
 .env.local
 .env.*.local
+
+# Personal Claude context bridge (second brain → Switchboard)
+CLAUDE.local.md
+
 coverage
 .DS_Store
 cartridge-audit-prompt.md

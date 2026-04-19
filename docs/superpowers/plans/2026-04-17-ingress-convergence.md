@@ -838,18 +838,16 @@ function makeMockPrisma(deploymentRow: ReturnType<typeof makeDeploymentRow> | nu
       findFirst: vi.fn().mockResolvedValue(deploymentRow),
     },
     deploymentConnection: {
-      findFirst: vi
-        .fn()
-        .mockResolvedValue(
-          deploymentRow
-            ? {
-                id: "conn-1",
-                deploymentId: deploymentRow.id,
-                channel: "telegram",
-                token: "tok-123",
-              }
-            : null,
-        ),
+      findFirst: vi.fn().mockResolvedValue(
+        deploymentRow
+          ? {
+              id: "conn-1",
+              deploymentId: deploymentRow.id,
+              channel: "telegram",
+              token: "tok-123",
+            }
+          : null,
+      ),
     },
   } as any;
 }

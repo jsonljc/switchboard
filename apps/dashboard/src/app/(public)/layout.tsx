@@ -20,7 +20,10 @@ export default async function PublicLayout({ children }: { children: React.React
   const isAuthenticated = session !== null;
 
   return (
-    <div className="light min-h-screen flex flex-col bg-background">
+    <div
+      className="light min-h-screen flex flex-col"
+      style={{ background: "var(--sw-base)", fontFamily: "var(--font-display)" }}
+    >
       <LandingNav isAuthenticated={isAuthenticated} />
       <main className="flex-1">{children}</main>
       <LandingFooter />

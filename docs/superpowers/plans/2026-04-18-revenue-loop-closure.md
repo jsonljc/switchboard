@@ -958,9 +958,7 @@ import { generateAvailableSlots } from "./slot-generator.js";
 
 interface GoogleCalendarClient {
   freebusy: {
-    query(
-      params: unknown,
-    ): Promise<{
+    query(params: unknown): Promise<{
       data: { calendars: Record<string, { busy: Array<{ start: string; end: string }> }> };
     }>;
   };

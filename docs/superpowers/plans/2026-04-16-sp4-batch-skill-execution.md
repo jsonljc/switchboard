@@ -1140,15 +1140,13 @@ const mockStores = {
   },
   crmDataProvider: {
     getFunnelData: vi.fn().mockResolvedValue({ leads: 10, qualified: 5, closed: 2, revenue: 1000 }),
-    getBenchmarks: vi
-      .fn()
-      .mockResolvedValue({
-        ctr: 2,
-        landingPageViewRate: 0.8,
-        leadRate: 0.05,
-        qualificationRate: 0.3,
-        closeRate: 0.2,
-      }),
+    getBenchmarks: vi.fn().mockResolvedValue({
+      ctr: 2,
+      landingPageViewRate: 0.8,
+      leadRate: 0.05,
+      qualificationRate: 0.3,
+      closeRate: 0.2,
+    }),
   },
   deploymentStore: {
     findById: vi.fn().mockResolvedValue({
