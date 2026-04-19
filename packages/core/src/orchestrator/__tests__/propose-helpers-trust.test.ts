@@ -39,8 +39,6 @@ function makeMinimalContext(overrides?: Partial<SharedContext>): SharedContext {
     riskPostureStore: null,
     governanceProfileStore: null,
     policyCache: null,
-    executionMode: "inline" as const,
-    onEnqueue: null,
     approvalNotifier: null,
     selfApprovalAllowed: false,
     approvalRateLimit: null,

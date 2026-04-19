@@ -27,10 +27,6 @@ import { ProposePipeline } from "./propose-pipeline.js";
 import { ApprovalManager } from "./approval-manager.js";
 import { ExecutionManager } from "./execution-manager.js";
 
-export type ExecutionMode = "inline" | "queue";
-
-export type EnqueueCallback = (envelopeId: string) => Promise<void>;
-
 export interface OrchestratorConfig {
   storage: StorageContext;
   ledger: AuditLedger;
@@ -44,8 +40,6 @@ export interface OrchestratorConfig {
   governanceProfileStore?: GovernanceProfileStore;
   /** Optional policy cache (keyed by cartridgeId + org); invalidate on policy CRUD. */
   policyCache?: PolicyCache;
-  executionMode?: ExecutionMode;
-  onEnqueue?: EnqueueCallback;
   approvalNotifier?: ApprovalNotifier;
   /** When true, allows a principal to approve their own proposals. Default: false. */
   selfApprovalAllowed?: boolean;
@@ -80,7 +74,7 @@ export interface ApprovalResponse {
 /**
  * LifecycleOrchestrator — thin coordinator delegating to:
  *  - ProposePipeline  (propose, proposePlan, simulate, resolveAndPropose)
- *  - ApprovalManager  (respondToApproval, respondToPlanApproval)
+ *  - ApprovalManager  (respondToApproval)
  *  - ExecutionManager  (executeApproved, executePlan, requestUndo)
  */
 export class LifecycleOrchestrator {
@@ -107,8 +101,6 @@ export class LifecycleOrchestrator {
       riskPostureStore: config.riskPostureStore ?? null,
       governanceProfileStore: config.governanceProfileStore ?? null,
       policyCache: config.policyCache ?? null,
-      executionMode: config.executionMode ?? "inline",
-      onEnqueue: config.onEnqueue ?? null,
       approvalNotifier: config.approvalNotifier ?? null,
       selfApprovalAllowed: config.selfApprovalAllowed ?? false,
       approvalRateLimit: config.approvalRateLimit ?? null,
@@ -155,20 +147,6 @@ export class LifecycleOrchestrator {
     planEnvelope?: ActionEnvelope;
   }> {
     return this.proposePipeline.proposePlan(plan, proposals, (envelopeId) =>
-      this.executionManager.executeApproved(envelopeId),
-    );
-  }
-
-  async respondToPlanApproval(params: {
-    approvalId: string;
-    action: "approve" | "reject";
-    respondedBy: string;
-    bindingHash: string;
-  }): Promise<{
-    planEnvelope: ActionEnvelope;
-    executionResults: ExecuteResult[];
-  }> {
-    return this.approvalManager.respondToPlanApproval(params, (envelopeId) =>
       this.executionManager.executeApproved(envelopeId),
     );
   }

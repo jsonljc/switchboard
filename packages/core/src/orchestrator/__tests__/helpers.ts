@@ -73,8 +73,6 @@ export function makeSharedContext(overrides?: Partial<SharedContext>): SharedCon
     riskPostureStore: null,
     governanceProfileStore: null,
     policyCache: null,
-    executionMode: "inline",
-    onEnqueue: null,
     approvalNotifier: null,
     selfApprovalAllowed: false,
     approvalRateLimit: null,

@@ -69,4 +69,11 @@ describe("PlatformIngress boundary enforcement", () => {
     const exceptionCount = Object.keys(LEGACY_EXCEPTIONS).length;
     expect(exceptionCount).toBe(0);
   });
+
+  it("does not import ApprovalManager in any route file", () => {
+    for (const file of routeFiles) {
+      const source = readFileSync(resolve(ROUTES_DIR, file), "utf-8");
+      expect(source).not.toContain("ApprovalManager");
+    }
+  });
 });

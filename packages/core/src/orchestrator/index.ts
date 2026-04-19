@@ -1,11 +1,5 @@
 export { LifecycleOrchestrator, inferCartridgeId } from "./lifecycle.js";
-export type {
-  OrchestratorConfig,
-  ProposeResult,
-  ApprovalResponse,
-  ExecutionMode,
-  EnqueueCallback,
-} from "./lifecycle.js";
+export type { OrchestratorConfig, ProposeResult, ApprovalResponse } from "./lifecycle.js";
 export type { RuntimeOrchestrator } from "./runtime-orchestrator.js";
 export { ProposePipeline } from "./propose-pipeline.js";
 export { ApprovalManager } from "./approval-manager.js";

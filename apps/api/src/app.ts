@@ -312,7 +312,6 @@ export async function buildServer() {
   }
 
   // --- Build orchestrator ---
-  const executionMode = redisUrl ? ("queue" as const) : ("inline" as const);
   const orchestrator = new LifecycleOrchestrator({
     storage,
     ledger,
@@ -320,7 +319,6 @@ export async function buildServer() {
     guardrailStateStore,
     policyCache,
     governanceProfileStore,
-    executionMode,
     approvalNotifier,
     trustAdapter,
     credentialResolver: prismaClient

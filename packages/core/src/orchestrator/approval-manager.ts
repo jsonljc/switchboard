@@ -1,3 +1,5 @@
+// DEPRECATED: All new approval logic must go in PlatformLifecycle.
+// Changes to this file must strictly reduce surface area or support deletion.
 import { timingSafeEqual } from "node:crypto";
 import type { ActionEnvelope, RiskCategory } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
@@ -12,7 +14,6 @@ import { resolveIdentity } from "../identity/spec.js";
 import type { SharedContext } from "./shared-context.js";
 import { buildCartridgeContext } from "./shared-context.js";
 import type { ApprovalResponse } from "./lifecycle.js";
-import { respondToPlanApproval } from "./plan-approval-manager.js";
 
 export class ApprovalManager {
   private approvalResponseTimes = new Map<string, number[]>();
@@ -286,12 +287,7 @@ export class ApprovalManager {
         }
       }
 
-      if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
-        await this.ctx.onEnqueue(envelope.id);
-        return null;
-      } else {
-        return await executeApproved(envelope.id);
-      }
+      return await executeApproved(envelope.id);
     } else {
       await this.ctx.ledger.record({
         eventType: "action.partially_approved",
@@ -397,12 +393,7 @@ export class ApprovalManager {
       traceId: envelope.traceId,
     });
 
-    if (this.ctx.executionMode === "queue" && this.ctx.onEnqueue) {
-      await this.ctx.onEnqueue(envelope.id);
-      return null;
-    } else {
-      return await executeApproved(envelope.id);
-    }
+    return await executeApproved(envelope.id);
   }
 
   private async reEvaluatePatchedProposal(
@@ -506,20 +497,5 @@ export class ApprovalManager {
       return true;
     }
     return false;
-  }
-
-  async respondToPlanApproval(
-    params: {
-      approvalId: string;
-      action: "approve" | "reject";
-      respondedBy: string;
-      bindingHash: string;
-    },
-    executeApproved: (envelopeId: string) => Promise<ExecuteResult>,
-  ): Promise<{
-    planEnvelope: ActionEnvelope;
-    executionResults: ExecuteResult[];
-  }> {
-    return respondToPlanApproval(this.ctx, params, executeApproved);
   }
 }
