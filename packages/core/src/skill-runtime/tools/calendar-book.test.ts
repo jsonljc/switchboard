@@ -45,7 +45,8 @@ function makeFailureHandler() {
       failureType: "provider_error",
       retryable: false,
       escalationId: "esc_1",
-      message: "Calendar booking failed. This has been escalated for review.",
+      message:
+        "I couldn't complete the booking just now. I've flagged this for a human to follow up.",
     }),
   };
 }
