@@ -6,12 +6,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     const client = await getApiClient();
-    const deployment = await client.getDeployment(id);
-    if (!deployment) {
-      return NextResponse.json({ error: "Deployment not found" }, { status: 404 });
-    }
-    const facts = await client.getBusinessFacts(deployment.organizationId);
-    return NextResponse.json({ facts });
+    const data = await client.getBusinessFacts(id);
+    return NextResponse.json({ facts: data.config ?? null });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json(
@@ -24,12 +20,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const client = await getApiClient();
-    const deployment = await client.getDeployment(id);
-    if (!deployment) {
-      return NextResponse.json({ error: "Deployment not found" }, { status: 404 });
-    }
-
     const body = await request.json();
     const parsed = BusinessFactsSchema.safeParse(body);
     if (!parsed.success) {
@@ -39,7 +29,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    await client.upsertBusinessFacts(deployment.organizationId, parsed.data);
+    const client = await getApiClient();
+    await client.upsertBusinessFacts(id, parsed.data);
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Request failed";
