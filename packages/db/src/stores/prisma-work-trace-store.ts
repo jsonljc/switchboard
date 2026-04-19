@@ -43,6 +43,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         requestedAt: new Date(trace.requestedAt),
         governanceCompletedAt: new Date(trace.governanceCompletedAt),
         executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
+        idempotencyKey: trace.idempotencyKey ?? null,
         completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
       },
     });
@@ -51,7 +52,18 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
   async getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null> {
     const row = await this.prisma.workTrace.findUnique({ where: { workUnitId } });
     if (!row) return null;
+    return this.mapRowToTrace(row);
+  }
 
+  async getByIdempotencyKey(key: string): Promise<WorkTrace | null> {
+    const row = await this.prisma.workTrace.findUnique({ where: { idempotencyKey: key } });
+    if (!row) return null;
+    return this.mapRowToTrace(row);
+  }
+
+  private mapRowToTrace(
+    row: NonNullable<Awaited<ReturnType<typeof this.prisma.workTrace.findUnique>>>,
+  ): WorkTrace {
     return {
       workUnitId: row.workUnitId,
       traceId: row.traceId,
@@ -62,6 +74,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       organizationId: row.organizationId,
       actor: { id: row.actorId, type: row.actorType as WorkTrace["actor"]["type"] },
       trigger: row.trigger as WorkTrace["trigger"],
+      idempotencyKey: row.idempotencyKey ?? undefined,
 
       parameters: row.parameters
         ? (JSON.parse(row.parameters) as Record<string, unknown>)

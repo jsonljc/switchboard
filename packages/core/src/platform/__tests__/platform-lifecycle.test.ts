@@ -191,6 +191,7 @@ function createMockStores() {
         traces.set(id, { ...existing, ...fields });
       }
     }),
+    getByIdempotencyKey: vi.fn().mockResolvedValue(null),
   };
 
   const identityStore = {

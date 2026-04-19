@@ -196,6 +196,7 @@ describe("PlatformIngress", () => {
       persist: vi.fn().mockResolvedValue(undefined),
       getByWorkUnitId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue(undefined),
+      getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
     const config = createConfig({ traceStore });
     const ingress = new PlatformIngress(config);
@@ -214,6 +215,7 @@ describe("PlatformIngress", () => {
       persist: vi.fn().mockResolvedValue(undefined),
       getByWorkUnitId: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue(undefined),
+      getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
     const config = createConfig({ decision: buildDenyDecision(), traceStore });
     const ingress = new PlatformIngress(config);

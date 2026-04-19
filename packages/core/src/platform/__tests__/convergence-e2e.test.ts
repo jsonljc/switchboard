@@ -151,6 +151,7 @@ describe("Convergence E2E", () => {
         const idx = traceStore.traces.findIndex((t) => t.workUnitId === id);
         if (idx >= 0) traceStore.traces[idx] = { ...traceStore.traces[idx]!, ...fields };
       }),
+      getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
 
     ingress = new PlatformIngress({

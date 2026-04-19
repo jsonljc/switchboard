@@ -437,6 +437,7 @@ export async function buildServer() {
       persist: async () => {},
       getByWorkUnitId: async () => null,
       update: async () => {},
+      getByIdempotencyKey: async () => null,
     },
     ledger,
     trustAdapter: trustAdapter ?? null,

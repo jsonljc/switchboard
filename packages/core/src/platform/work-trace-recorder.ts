@@ -17,6 +17,7 @@ export interface WorkTraceStore {
   persist(trace: WorkTrace): Promise<void>;
   getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null>;
   update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void>;
+  getByIdempotencyKey(key: string): Promise<WorkTrace | null>;
 }
 
 export function buildWorkTrace(input: TraceInput): WorkTrace {
@@ -50,6 +51,7 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     organizationId: workUnit.organizationId,
     actor: workUnit.actor,
     trigger: workUnit.trigger,
+    idempotencyKey: workUnit.idempotencyKey,
 
     parameters: workUnit.parameters,
     deploymentContext: workUnit.deployment,
