@@ -36,11 +36,18 @@ function makeRunTransaction() {
   );
 }
 
+function makeFailureHandler() {
+  return {
+    handle: vi.fn(),
+  };
+}
+
 describe("createCalendarBookTool", () => {
   let calendarProvider: ReturnType<typeof makeCalendarProvider>;
   let bookingStore: ReturnType<typeof makeBookingStore>;
   let opportunityStore: ReturnType<typeof makeOpportunityStore>;
   let runTransaction: ReturnType<typeof makeRunTransaction>;
+  let failureHandler: ReturnType<typeof makeFailureHandler>;
   let tool: ReturnType<typeof createCalendarBookTool>;
 
   beforeEach(() => {
@@ -48,11 +55,13 @@ describe("createCalendarBookTool", () => {
     bookingStore = makeBookingStore();
     opportunityStore = makeOpportunityStore();
     runTransaction = makeRunTransaction();
+    failureHandler = makeFailureHandler();
     tool = createCalendarBookTool({
       calendarProvider: calendarProvider as never,
       bookingStore: bookingStore as never,
       opportunityStore: opportunityStore as never,
       runTransaction: runTransaction as never,
+      failureHandler: failureHandler as never,
     });
   });
 
