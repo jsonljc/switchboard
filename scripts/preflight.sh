@@ -20,9 +20,9 @@ TOTAL=0
 WARNINGS=()
 START_TIME=$(date +%s)
 
-ok()   { echo -e "  ${GREEN}PASS${NC} $1"; ((PASS++)); ((TOTAL++)); }
-fail() { echo -e "  ${RED}FAIL${NC} $1"; ((FAIL++)); ((TOTAL++)); }
-warn() { echo -e "  ${YELLOW}WARN${NC} $1"; ((WARN++)); WARNINGS+=("$1"); }
+ok()   { echo -e "  ${GREEN}PASS${NC} $1"; PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1)); }
+fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); }
+warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); WARNINGS+=("$1"); }
 
 step_start() { STEP_START=$(date +%s); }
 step_end() {
@@ -30,6 +30,13 @@ step_end() {
   echo -e "  ${BOLD}(${elapsed}s)${NC}"
   echo ""
 }
+
+# Resolve pnpm — use global if available, otherwise npx
+if command -v pnpm &>/dev/null; then
+  PNPM="pnpm"
+else
+  PNPM="npx pnpm@9.15.4"
+fi
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
@@ -41,56 +48,56 @@ echo ""
 echo -e "${BOLD}--- Environment Validation ---${NC}"
 step_start
 
-# Source .env if present
+# Source .env if present (line-by-line to handle unquoted special chars)
 if [[ -f .env ]]; then
-  set -a
-  source .env
-  set +a
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip comments and blank lines
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    # Only export lines that look like VAR=value (non-empty value)
+    if [[ "$line" =~ ^([A-Za-z_][A-Za-z_0-9]*)=(.+)$ ]]; then
+      export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+    fi
+  done < .env
   echo -e "  Loaded .env file"
 else
   echo -e "  ${YELLOW}No .env file found — using current environment${NC}"
 fi
 
 # Hard fail: platform cannot operate securely without these
-for var in DATABASE_URL CREDENTIALS_ENCRYPTION_KEY SESSION_TOKEN_SECRET; do
-  val="${!var:-}"
+check_required() {
+  local var="$1"
+  local val="${!var:-}"
   if [[ -n "$val" ]]; then
     ok "$var is set"
   else
     fail "$var is not set (required for secure operation)"
   fi
-done
+}
+
+check_required DATABASE_URL
+check_required CREDENTIALS_ENCRYPTION_KEY
+check_required SESSION_TOKEN_SECRET
 
 # Feature-required: platform boots but key capabilities disabled
-declare -A FEATURE_VARS=(
-  ["ANTHROPIC_API_KEY"]="skill execution disabled"
-  ["INNGEST_EVENT_KEY"]="creative pipeline disabled"
-  ["VOYAGE_API_KEY"]="real embeddings disabled (zero-vector stubs used)"
-)
-for var in "${!FEATURE_VARS[@]}"; do
-  val="${!var:-}"
+check_warn() {
+  local var="$1" msg="$2"
+  local val="${!var:-}"
   if [[ -n "$val" ]]; then
     ok "$var is set"
   else
-    warn "$var not set (${FEATURE_VARS[$var]})"
+    warn "$var not set ($msg)"
   fi
-done
+}
+
+check_warn ANTHROPIC_API_KEY "skill execution disabled"
+check_warn INNGEST_EVENT_KEY "creative pipeline disabled"
+check_warn VOYAGE_API_KEY "real embeddings disabled (zero-vector stubs used)"
 
 # Optional integrations: specific channels/services disabled
-declare -A OPTIONAL_VARS=(
-  ["GOOGLE_CALENDAR_CREDENTIALS"]="Alex booking disabled"
-  ["GOOGLE_CALENDAR_ID"]="Alex booking disabled"
-  ["WHATSAPP_TOKEN"]="WhatsApp channel disabled"
-  ["TELEGRAM_BOT_TOKEN"]="Telegram channel disabled"
-)
-for var in "${!OPTIONAL_VARS[@]}"; do
-  val="${!var:-}"
-  if [[ -n "$val" ]]; then
-    ok "$var is set"
-  else
-    warn "$var not set (${OPTIONAL_VARS[$var]})"
-  fi
-done
+check_warn GOOGLE_CALENDAR_CREDENTIALS "Alex booking disabled"
+check_warn GOOGLE_CALENDAR_ID "Alex booking disabled"
+check_warn WHATSAPP_TOKEN "WhatsApp channel disabled"
+check_warn TELEGRAM_BOT_TOKEN "Telegram channel disabled"
 
 step_end
 
@@ -106,17 +113,28 @@ echo -e "${BOLD}--- Prisma Client Generation & Drift Check ---${NC}"
 step_start
 
 PRISMA_SCHEMA="packages/db/prisma/schema.prisma"
-if [[ -f "$PRISMA_SCHEMA" ]]; then
-  BEFORE_HASH=$(find node_modules/.prisma packages/db/node_modules/.prisma -type f 2>/dev/null | sort | xargs cat 2>/dev/null | shasum | cut -d' ' -f1)
-  pnpm db:generate > /dev/null 2>&1
-  AFTER_HASH=$(find node_modules/.prisma packages/db/node_modules/.prisma -type f 2>/dev/null | sort | xargs cat 2>/dev/null | shasum | cut -d' ' -f1)
-
-  if [[ "$BEFORE_HASH" != "$AFTER_HASH" ]]; then
-    warn "Prisma client was stale — now regenerated. Commit updated client before launch."
-    echo -e "  ${YELLOW}→ The schema has drifted from the generated client.${NC}"
-    echo -e "  ${YELLOW}→ This is fine for local repair, but commit before deploying.${NC}"
+prisma_hash() {
+  local files
+  files=$(find node_modules/.prisma packages/db/node_modules/.prisma -type f 2>/dev/null | sort) || true
+  if [[ -n "$files" ]]; then
+    echo "$files" | xargs cat 2>/dev/null | shasum | cut -d' ' -f1
   else
-    ok "Prisma client is current (no drift)"
+    echo "empty"
+  fi
+}
+if [[ -f "$PRISMA_SCHEMA" ]]; then
+  BEFORE_HASH=$(prisma_hash)
+  if $PNPM db:generate > /dev/null 2>&1; then
+    AFTER_HASH=$(prisma_hash)
+    if [[ "$BEFORE_HASH" != "$AFTER_HASH" ]]; then
+      warn "Prisma client was stale — now regenerated. Commit updated client before launch."
+      echo -e "  ${YELLOW}→ The schema has drifted from the generated client.${NC}"
+      echo -e "  ${YELLOW}→ This is fine for local repair, but commit before deploying.${NC}"
+    else
+      ok "Prisma client is current (no drift)"
+    fi
+  else
+    fail "Prisma client generation failed"
   fi
 else
   fail "Prisma schema not found at $PRISMA_SCHEMA"
@@ -128,10 +146,10 @@ step_end
 echo -e "${BOLD}--- Build ---${NC}"
 step_start
 
-if pnpm build > /dev/null 2>&1; then
-  ok "pnpm build succeeded"
+if $PNPM build > /dev/null 2>&1; then
+  ok "Build succeeded"
 else
-  fail "pnpm build failed"
+  fail "Build failed"
 fi
 
 step_end
@@ -140,10 +158,10 @@ step_end
 echo -e "${BOLD}--- Typecheck ---${NC}"
 step_start
 
-if pnpm typecheck > /dev/null 2>&1; then
-  ok "pnpm typecheck passed"
+if $PNPM typecheck > /dev/null 2>&1; then
+  ok "Typecheck passed"
 else
-  fail "pnpm typecheck failed"
+  fail "Typecheck failed"
 fi
 
 step_end
@@ -152,10 +170,10 @@ step_end
 echo -e "${BOLD}--- Tests ---${NC}"
 step_start
 
-if pnpm test > /dev/null 2>&1; then
-  ok "pnpm test passed"
+if $PNPM test > /dev/null 2>&1; then
+  ok "Tests passed"
 else
-  fail "pnpm test failed"
+  fail "Tests failed"
 fi
 
 step_end
@@ -164,7 +182,7 @@ step_end
 echo -e "${BOLD}--- Architecture Check ---${NC}"
 step_start
 
-if pnpm arch:check 2> /dev/null; then
+if $PNPM arch:check > /dev/null 2>&1; then
   ok "Architecture check passed"
 else
   fail "Architecture check failed"
