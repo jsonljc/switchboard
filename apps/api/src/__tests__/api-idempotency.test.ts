@@ -20,6 +20,7 @@ describe("Idempotency Middleware", () => {
     parameters: { campaignId: "camp_123" },
     principalId: "default",
     cartridgeId: "digital-ads",
+    organizationId: "default",
   };
 
   it("returns cached response for duplicate POST with same Idempotency-Key", async () => {
@@ -71,8 +72,8 @@ describe("Idempotency Middleware", () => {
       payload: proposePayload,
     });
 
-    expect(first.statusCode).toBe(201);
-    const firstBody = first.json();
+    // Without Idempotency-Key header, the propose endpoint now returns 400
+    expect(first.statusCode).toBe(400);
 
     const second = await app.inject({
       method: "POST",
@@ -80,9 +81,8 @@ describe("Idempotency Middleware", () => {
       payload: proposePayload,
     });
 
-    // Both get fresh 201 responses with different envelope IDs
-    expect(second.statusCode).toBe(201);
-    expect(second.json().envelope.id).not.toBe(firstBody.envelope.id);
+    // Both get fresh 400 responses
+    expect(second.statusCode).toBe(400);
   });
 
   it("different keys get independent responses", async () => {
@@ -102,8 +102,8 @@ describe("Idempotency Middleware", () => {
 
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
-    // Different keys produce different envelopes
-    expect(first.json().envelope.id).not.toBe(second.json().envelope.id);
+    // Different keys produce different work units
+    expect(first.json().workUnitId).not.toBe(second.json().workUnitId);
   });
 
   it("MemoryBackend expires entries after TTL", async () => {

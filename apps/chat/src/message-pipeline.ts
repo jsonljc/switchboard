@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+/* eslint-disable max-lines */
+import crypto, { createHash } from "node:crypto";
 import type { ChannelAdapter } from "./adapters/adapter.js";
 import type { Interpreter } from "./interpreter/interpreter.js";
 import type { InterpreterRegistry } from "./interpreter/registry.js";
@@ -34,6 +35,11 @@ import {
   handleAutonomyCommand,
   handleAutonomyStatusCommand,
 } from "./handlers/cockpit-commands.js";
+import {
+  handleSoldCommand,
+  handleSoldConfirmation,
+  checkPendingSale,
+} from "./handlers/sold-command.js";
 import { isOptOutKeyword, isOptInKeyword } from "./runtime-helpers.js";
 
 /** Parsed incoming message structure expected from ChannelAdapter. */
@@ -123,14 +129,16 @@ export async function linkCrmContact(
       // Emit inquiry conversion event for ad attribution feedback
       if (deps.conversionBus && message.organizationId) {
         deps.conversionBus.emit({
+          eventId: crypto.randomUUID(),
           type: "inquiry",
           contactId: contact.id,
           organizationId: message.organizationId,
           value: 1,
           sourceAdId: message.metadata?.["sourceAdId"] as string | undefined,
           sourceCampaignId: message.metadata?.["sourceCampaignId"] as string | undefined,
-          timestamp: new Date(),
-          metadata: { channel: message.channel, source: "chat_auto_create" },
+          occurredAt: new Date(),
+          source: "chat_auto_create",
+          metadata: { channel: message.channel },
         });
       }
     }
@@ -277,6 +285,34 @@ export async function handleCommands(
   threadId: string,
   rawPayload: unknown,
 ): Promise<boolean> {
+  // Check for pending sale confirmation (only intercept Y/yes/N/no)
+  const pending = checkPendingSale(threadId);
+  if (pending && /^(y(es)?|no?)$/i.test(message.text.trim())) {
+    const ctx = deps.buildHandlerContext();
+    const handled = await handleSoldConfirmation(
+      ctx,
+      threadId,
+      message.principalId,
+      message.organizationId,
+      message.text,
+    );
+    if (handled) return true;
+  }
+
+  // Handle /sold command
+  const soldMatch = message.text.trim().match(/^\/?sold\s+(.+)$/i);
+  if (soldMatch) {
+    const ctx = deps.buildHandlerContext();
+    await handleSoldCommand(
+      ctx,
+      threadId,
+      message.principalId,
+      message.organizationId,
+      soldMatch[1]!,
+    );
+    return true;
+  }
+
   const ctx = deps.buildHandlerContext();
 
   // Handle help command

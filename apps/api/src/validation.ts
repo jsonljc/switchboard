@@ -39,6 +39,7 @@ export const BatchProposeBodySchema = z.object({
   principalId: z.string().min(1).max(500),
   organizationId: z.string().max(500).optional(),
   cartridgeId: z.string().max(500).optional(),
+  batchCorrelationId: z.string().max(500).optional(),
 });
 
 // ── Execute (unified runtime endpoint) ────────────────────────────────

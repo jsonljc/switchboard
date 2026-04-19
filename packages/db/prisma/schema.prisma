@@ -200,12 +200,15 @@ model Connection {
   scopes          String[]
   refreshStrategy String   @default("auto")
   status          String   @default("connected")
-  lastHealthCheck DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  lastHealthCheck      DateTime?
+  externalAccountId    String?   // Meta page/ad account ID for webhook matching
+  greetingTemplateName String?   // WhatsApp template name for lead greeting
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@unique([serviceId, organizationId])
   @@index([organizationId])
+  @@index([externalAccountId])
 }
 
 model IdempotencyRecord {
@@ -332,6 +335,7 @@ model OrganizationConfig {
   managedChannels      String[] @default([])
   provisioningStatus   String   @default("pending")
   purchasedAgents      String[] @default([])
+  businessHours        Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]
@@ -414,25 +418,6 @@ model FailedMessage {
   @@index([createdAt])
 }
 
-// ── Agent Delivery Tracking ──
-
-model AgentDeliveryAttempt {
-  id             String    @id @default(uuid())
-  eventId        String
-  destinationId  String
-  status         String    @default("pending") // pending, dispatched, succeeded, failed, retrying, dead_letter, skipped
-  attempts       Int       @default(0)
-  lastAttemptAt  DateTime?
-  error          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@unique([eventId, destinationId])
-  @@index([status])
-  @@index([eventId])
-  @@index([createdAt])
-}
-
 
 // ── AI Agent System: Business Config Persistence ──
 
@@ -501,6 +486,7 @@ model KnowledgeChunk {
   id              String   @id @default(uuid())
   organizationId  String
   agentId         String
+  deploymentId    String?
   documentId      String
   content         String
   sourceType      String   // "correction" | "wizard" | "document"
@@ -509,10 +495,119 @@ model KnowledgeChunk {
   metadata        Json     @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  draftStatus    String?
+  draftExpiresAt DateTime?
 
   @@index([organizationId, agentId])
+  @@index([organizationId, deploymentId])
   @@index([documentId])
   @@index([sourceType])
+}
+
+model InteractionSummary {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  channelType     String
+  contactId       String?
+  summary         String
+  outcome         String   @default("info_request")
+  extractedFacts  Json     @default("[]")
+  questionsAsked  Json     @default("[]")
+  duration        Int
+  messageCount    Int
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, deploymentId])
+  @@index([createdAt])
+}
+
+model DeploymentMemory {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  category        String
+  content         String
+  confidence      Float    @default(0.5)
+  sourceCount     Int      @default(1)
+  lastSeenAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, deploymentId, category, content])
+  @@index([organizationId, deploymentId])
+  @@index([confidence])
+}
+
+// ---------------------------------------------------------------------------
+// Three-Channel Communication
+// ---------------------------------------------------------------------------
+
+model AgentEvent {
+  id              String    @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  eventType       String
+  payload         Json
+  status          String    @default("pending")
+  retryCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([organizationId, deploymentId])
+}
+
+model ActivityLog {
+  id              String   @id @default(uuid())
+  organizationId  String
+  deploymentId    String
+  eventType       String
+  description     String
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, deploymentId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Execution Traces (SP3)
+// ---------------------------------------------------------------------------
+
+model ExecutionTrace {
+  id                   String    @id @default(cuid())
+  deploymentId         String
+  organizationId       String
+  skillSlug            String
+  skillVersion         String
+
+  trigger              String    @default("chat_message")
+  sessionId            String
+  inputParametersHash  String
+
+  toolCalls            Json      @default("[]")
+  governanceDecisions  Json      @default("[]")
+  tokenUsage           Json      @default("{}")
+  durationMs           Int
+  turnCount            Int
+
+  status               String
+  error                String?
+  responseSummary      String
+
+  linkedOutcomeId      String?
+  linkedOutcomeType    String?
+  linkedOutcomeResult  String?
+
+  writeCount           Int       @default(0)
+
+  createdAt            DateTime  @default(now())
+
+  @@index([deploymentId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status])
+  @@index([sessionId])
 }
 
 // ---------------------------------------------------------------------------
@@ -730,6 +825,12 @@ model AgentDeployment {
   governanceSettings  Json     @default("{}")
   outputDestination   Json?
   connectionIds       String[] @default([])
+  skillSlug           String?  // When set, use skill executor instead of TypeScript handler
+  circuitBreakerThreshold  Int?
+  maxWritesPerHour          Int?
+  allowedModelTiers       String[] @default([])
+  trustLevel              String   @default("observe")
+  spendApprovalThreshold  Float    @default(50)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -888,19 +989,99 @@ model CreativeJob {
   pastPerformance     Json?
   generateReferenceImages  Boolean  @default(false)
 
-  // Pipeline state
+  // Pipeline state (polished)
   currentStage    String   @default("trends")
   stageOutputs    Json     @default("{}")
   stoppedAt       String?
   productionTier  String?
 
+  // Pipeline mode
+  mode                    String   @default("polished")
+
+  // UGC pipeline state (nullable — only populated when mode = "ugc")
+  ugcPhase                String?
+  ugcPhaseOutputs         Json?
+  ugcPhaseOutputsVersion  String?  @default("v1")
+  ugcConfig               Json?
+  ugcFailure              Json?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   task AgentTask @relation(fields: [taskId], references: [id])
+  assets AssetRecord[]
 
   @@index([organizationId])
   @@index([deploymentId])
+  @@index([mode])
+}
+
+model CreatorIdentity {
+  id                  String   @id @default(cuid())
+  deploymentId        String
+  name                String
+
+  identityRefIds      String[]
+  heroImageAssetId    String
+  identityDescription String
+
+  identityObjects     Json?
+
+  voice               Json
+  personality         Json
+  appearanceRules     Json
+
+  environmentSet      String[]
+
+  approved            Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  bibleVersion        String   @default("1.0")
+  previousVersionId   String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  assets              AssetRecord[]
+
+  @@index([deploymentId])
+}
+
+model AssetRecord {
+  id                  String   @id @default(cuid())
+  jobId               String
+  job                 CreativeJob @relation(fields: [jobId], references: [id])
+  specId              String
+  creatorId           String?
+  creator             CreatorIdentity? @relation(fields: [creatorId], references: [id])
+
+  provider            String
+  modelId             String
+  modelVersion        String?
+  seed                Int?
+
+  inputHashes         Json
+  outputs             Json
+
+  qaMetrics           Json?
+  qaHistory           Json?
+
+  identityDriftScore  Float?
+  baselineAssetId     String?
+
+  latencyMs           Int?
+  costEstimate        Float?
+  attemptNumber       Int?
+
+  approvalState       String   @default("pending")
+  lockedDerivativeOf  String?
+
+  createdAt           DateTime @default(now())
+
+  @@unique([specId, attemptNumber, provider])
+  @@index([jobId])
+  @@index([specId])
+  @@index([creatorId])
+  @@index([approvalState])
 }
 
 model LlmUsageLog {
@@ -1182,5 +1363,193 @@ model OwnerTask {
 
   @@index([organizationId, status])
   @@index([organizationId, priority])
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge Entry — org-scoped, versioned curated knowledge
+// ---------------------------------------------------------------------------
+
+enum KnowledgeKind {
+  playbook
+  policy
+  knowledge
+}
+
+model KnowledgeEntry {
+  id             String        @id @default(cuid())
+  organizationId String
+  kind           KnowledgeKind
+  scope          String
+  title          String
+  content        String        @db.Text
+  version        Int           @default(1)
+  active         Boolean       @default(true)
+  priority       Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, kind, scope, version])
+  @@index([organizationId, kind, scope, active])
+}
+
+// ---------------------------------------------------------------------------
+// WorkTrace — unified telemetry record for every platform work unit
+// ---------------------------------------------------------------------------
+
+model WorkTrace {
+  id                    String    @id @default(cuid())
+  workUnitId            String    @unique
+  traceId               String
+  parentWorkUnitId      String?
+  intent                String
+  mode                  String
+  organizationId        String
+  actorId               String
+  actorType             String
+  trigger               String
+
+  // Lifecycle state — the canonical operational record
+  parameters            String?   @db.Text    // JSON: original action parameters
+  deploymentContext     String?   @db.Text    // JSON: DeploymentContext snapshot at submit
+
+  // Governance — decided once at submit, reused on continuation
+  governanceOutcome     String
+  riskScore             Float
+  matchedPolicies       String    @db.Text
+  governanceConstraints String?   @db.Text    // JSON: ExecutionConstraints from GovernanceDecision
+
+  // Approval lifecycle — tracks the continuation from pending → approved/rejected
+  approvalId            String?
+  approvalOutcome       String?               // "approved" | "rejected" | "patched" | "expired"
+  approvalRespondedBy   String?
+  approvalRespondedAt   DateTime?
+
+  // Execution
+  outcome               String
+  durationMs            Int
+  errorCode             String?
+  errorMessage          String?
+  executionSummary      String?   @db.Text
+  executionOutputs      String?   @db.Text    // JSON: execution result outputs
+
+  // Observability
+  modeMetrics           String?   @db.Text
+
+  // Timestamps
+  requestedAt           DateTime
+  governanceCompletedAt DateTime
+  executionStartedAt    DateTime?
+  completedAt           DateTime?
+
+  @@index([organizationId, intent])
+  @@index([traceId])
+  @@index([requestedAt])
+  @@index([approvalId])
+}
+
+// ---------------------------------------------------------------------------
+// Booking — calendar bookings with provenance
+// ---------------------------------------------------------------------------
+
+model Booking {
+  id              String    @id @default(uuid())
+  organizationId  String
+  contactId       String
+  opportunityId   String?
+  calendarEventId String?
+  service         String
+  startsAt        DateTime
+  endsAt          DateTime
+  timezone        String    @default("Asia/Singapore")
+  status          String    @default("pending_confirmation")
+  attendeeName    String?
+  attendeeEmail   String?
+  connectionId    String?
+  createdByType   String    @default("agent")
+  sourceChannel   String?
+  workTraceId     String?
+  rescheduledAt   DateTime?
+  rescheduleCount Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([organizationId, contactId, service, startsAt])
+  @@index([organizationId, startsAt])
+  @@index([contactId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// OutboxEvent — transactional outbox for guaranteed event publication
+// ---------------------------------------------------------------------------
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  eventId       String    @unique
+  type          String
+  payload       Json
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// ConversionRecord — durable funnel event persistence for attribution
+// ---------------------------------------------------------------------------
+
+model ConversionRecord {
+  id                String   @id @default(uuid())
+  eventId           String   @unique
+  organizationId    String
+  contactId         String
+  type              String
+  value             Float    @default(0)
+  sourceAdId        String?
+  sourceCampaignId  String?
+  sourceChannel     String?
+  agentDeploymentId String?
+  metadata          Json     @default("{}")
+  occurredAt        DateTime
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId, type, occurredAt])
+  @@index([organizationId, sourceCampaignId])
+  @@index([contactId])
+}
+
+// ---------------------------------------------------------------------------
+// DispatchLog — ad platform delivery tracking
+// ---------------------------------------------------------------------------
+
+model DispatchLog {
+  id              String   @id @default(uuid())
+  eventId         String
+  platform        String
+  status          String
+  errorMessage    String?
+  responsePayload Json?
+  attemptedAt     DateTime @default(now())
+
+  @@index([eventId])
+  @@index([platform, status, attemptedAt])
+}
+
+// ---------------------------------------------------------------------------
+// ReconciliationReport — attribution pipeline health checks
+// ---------------------------------------------------------------------------
+
+model ReconciliationReport {
+  id              String   @id @default(uuid())
+  organizationId  String
+  dateRangeFrom   DateTime
+  dateRangeTo     DateTime
+  overallStatus   String
+  checks          Json
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, createdAt])
 }
 

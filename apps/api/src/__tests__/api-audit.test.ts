@@ -14,24 +14,49 @@ describe("Audit API", () => {
     await app.close();
   });
 
-  /** Helper: propose an action to generate audit entries */
-  async function proposeAction() {
-    const res = await app.inject({
+  async function proposeWithApprovalAndRespond() {
+    const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+    if (spec) {
+      spec.riskTolerance = {
+        ...spec.riskTolerance,
+        medium: "standard" as const,
+        high: "elevated" as const,
+      };
+      await app.storageContext.identity.saveSpec(spec);
+    }
+
+    const proposeRes = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
+      headers: { "Idempotency-Key": `test-audit-${Date.now()}-${Math.random()}` },
       payload: {
         actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_123" },
         principalId: "default",
         cartridgeId: "digital-ads",
+        organizationId: "default",
       },
     });
-    return res.json();
+
+    const body = proposeRes.json();
+    if (body.outcome === "PENDING_APPROVAL" && body.approvalRequest) {
+      await app.inject({
+        method: "POST",
+        url: `/api/approvals/${body.approvalRequest.id}/respond`,
+        payload: {
+          action: "approve",
+          respondedBy: "reviewer_1",
+          bindingHash: body.approvalRequest.bindingHash,
+        },
+      });
+    }
+
+    return body;
   }
 
   describe("GET /api/audit", () => {
-    it("should return audit entries after a proposal", async () => {
-      await proposeAction();
+    it("should return audit entries after approval lifecycle", async () => {
+      await proposeWithApprovalAndRespond();
 
       const res = await app.inject({
         method: "GET",
@@ -45,25 +70,25 @@ describe("Audit API", () => {
     });
 
     it("should filter by eventType", async () => {
-      await proposeAction();
+      await proposeWithApprovalAndRespond();
 
       const res = await app.inject({
         method: "GET",
-        url: "/api/audit?eventType=action.proposed",
+        url: "/api/audit?eventType=action.approved",
       });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
       for (const entry of body.entries) {
-        expect(entry.eventType).toBe("action.proposed");
+        expect(entry.eventType).toBe("action.approved");
       }
     });
   });
 
   describe("GET /api/audit/verify", () => {
     it("should verify chain integrity as valid after normal operations", async () => {
-      await proposeAction();
-      await proposeAction();
+      await proposeWithApprovalAndRespond();
+      await proposeWithApprovalAndRespond();
 
       const res = await app.inject({
         method: "GET",
@@ -79,9 +104,8 @@ describe("Audit API", () => {
 
   describe("GET /api/audit/:id", () => {
     it("should return a specific audit entry", async () => {
-      await proposeAction();
+      await proposeWithApprovalAndRespond();
 
-      // Get all entries first
       const listRes = await app.inject({
         method: "GET",
         url: "/api/audit",

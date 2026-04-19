@@ -85,12 +85,19 @@ export const queryKeys = {
     trust: (id: string) => ["marketplace", "trust", id] as const,
     trustProgression: (id: string) => ["marketplace", "trust-progression", id] as const,
     deployments: () => ["marketplace", "deployments"] as const,
+    faqDrafts: (deploymentId: string) => ["marketplace", "faq-drafts", deploymentId] as const,
+    traces: (deploymentId: string) => ["marketplace", "traces", deploymentId] as const,
+    trace: (traceId: string) => ["marketplace", "trace", traceId] as const,
   },
   creativeJobs: {
     all: ["creativeJobs"] as const,
     list: (deploymentId: string) => ["creativeJobs", "list", deploymentId] as const,
     detail: (id: string) => ["creativeJobs", "detail", id] as const,
     estimate: (id: string) => ["creativeJobs", "estimate", id] as const,
+  },
+  adOptimizer: {
+    all: ["adOptimizer"] as const,
+    audit: (deploymentId: string) => ["adOptimizer", "audit", deploymentId] as const,
   },
   tasks: {
     all: ["tasks"] as const,

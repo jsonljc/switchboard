@@ -1,0 +1,71 @@
+{
+  "name": "No pricing page available results in unclear positioning",
+  "parameters": {
+    "TARGET_URL": "https://no-pricing.com",
+    "BUSINESS_NAME": "No Pricing Inc",
+    "PERSONA_CONFIG": {
+      "tone": "professional",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Profile https://no-pricing.com" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-1",
+          "name": "web-scanner.validate-url",
+          "input": { "url": "https://no-pricing.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-2",
+          "name": "web-scanner.fetch-pages",
+          "input": { "baseUrl": "https://no-pricing.com" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-3",
+          "name": "web-scanner.detect-platform",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-4",
+          "name": "web-scanner.extract-business-info",
+          "input": { "html": "<html>...</html>" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"profile_summary\":\"No Pricing Inc provides enterprise services.\",\"business_model\":\"service\",\"price_positioning\":\"unclear\",\"primary_cta\":\"contact\",\"lead_intent_type\":\"exploratory\",\"platform\":\"wordpress\",\"platform_confidence\":\"high\",\"confidence\":\"medium\",\"data_completeness\":\"medium\",\"missing_fields\":[\"pricing\"]}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "web-scanner.fetch-pages" },
+    { "type": "response_contains", "substring": "price_positioning" }
+  ]
+}

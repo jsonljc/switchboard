@@ -13,6 +13,9 @@ export const CreativeJobStage = z.enum([
 ]);
 export type CreativeJobStage = z.infer<typeof CreativeJobStage>;
 
+export const CreativeJobMode = z.enum(["polished", "ugc"]);
+export type CreativeJobMode = z.infer<typeof CreativeJobMode>;
+
 export const CreativePlatform = z.enum(["meta", "youtube", "tiktok"]);
 export type CreativePlatform = z.infer<typeof CreativePlatform>;
 
@@ -209,6 +212,12 @@ export const CreativeJobSchema = z.object({
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),
+  mode: CreativeJobMode.default("polished"),
+  ugcPhase: z.string().nullable().optional(),
+  ugcPhaseOutputs: z.record(z.unknown()).nullable().optional(),
+  ugcPhaseOutputsVersion: z.string().nullable().optional(),
+  ugcConfig: z.record(z.unknown()).nullable().optional(),
+  ugcFailure: z.record(z.unknown()).nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

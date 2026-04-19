@@ -30,9 +30,6 @@ export { CartridgeCircuitBreakerWrapper } from "./orchestrator/circuit-breaker-w
 // Audit (hashing, canonicalization, redaction, evidence, ledger)
 export * from "./audit/index.js";
 
-// Competence (tracker, thresholds)
-export * from "./competence/index.js";
-
 // Telemetry (tracing, metrics, LLM cost table)
 export * from "./telemetry/index.js";
 
@@ -71,9 +68,6 @@ export type { PolicyCache } from "./policy-cache.js";
 // Utilities (retry, circuit breaker, pagination, nested value)
 export * from "./utils/index.js";
 
-// Cross-Cartridge Enrichment
-export * from "./enrichment/index.js";
-
 // Data-Flow Plan Execution
 export * from "./data-flow/index.js";
 
@@ -96,6 +90,7 @@ export * from "./tool-registry/index.js";
 
 // Event Bus (conversion feedback loop)
 export { InMemoryConversionBus } from "./events/conversion-bus.js";
+export { RedisStreamConversionBus } from "./events/redis-stream-conversion-bus.js";
 export type {
   ConversionBus,
   ConversionEvent,
@@ -103,9 +98,11 @@ export type {
   ConversionEventHandler,
 } from "./events/conversion-bus.js";
 
-// LLM Client Interface
-export { MockLLMClient } from "./llm/types.js";
-export type { LLMClient, LLMMessage, LLMCompletionOptions, SchemaValidator } from "./llm/types.js";
+// Outbox Publisher (outbox → bus relay)
+export { OutboxPublisher } from "./events/outbox-publisher.js";
+
+// LLM Client Interface + Adapters (Claude, Voyage)
+export * from "./llm/index.js";
 
 // State Machine (generic)
 export { StateMachine } from "./state-machine/machine.js";
@@ -176,8 +173,28 @@ export type {
   RetrievalResult,
 } from "./knowledge-store.js";
 
+// Knowledge (RAG retrieval, chunking, ingestion)
+export {
+  chunkText,
+  IngestionPipeline,
+  KnowledgeRetriever,
+  computeConfidence as computeRetrievalConfidence,
+  type ChunkOptions,
+  type TextChunk,
+  type IngestionInput,
+  type IngestionResult,
+  type IngestionPipelineConfig,
+  type RetrievalConfig,
+  type RetrieveOptions,
+  type ConfidenceInput as RetrievalConfidenceInput,
+} from "./knowledge/index.js";
+
 // LLM Adapter (conversational, agent-facing)
 export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "./llm-adapter.js";
+
+// Model Router (slot-based model selection)
+export { ModelRouter } from "./model-router.js";
+export type { ModelSlot, ModelConfig, ResolveOptions, TierContext } from "./model-router.js";
 
 // Sessions (session runtime)
 export * from "./sessions/index.js";
@@ -216,3 +233,6 @@ export type { ContextLoaderInput, ContextLoader } from "./context-loader.js";
 export { NullContextLoader } from "./context-loader.js";
 export { ContextAssembler } from "./context-assembler.js";
 export { effortToSlotAndOptions, effortForTaskType, TASK_TYPE_EFFORT_MAP } from "./model-router.js";
+
+// Memory (scoped store interfaces for three-channel privacy)
+export * from "./memory/index.js";

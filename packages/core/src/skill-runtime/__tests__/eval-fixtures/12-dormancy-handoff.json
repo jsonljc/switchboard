@@ -1,0 +1,49 @@
+{
+  "name": "Dormancy handoff triggered by stale timestamp",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "checking in on this lead" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call-handoff-1",
+          "name": "pipeline-handoff.determine",
+          "input": {
+            "opportunityStage": "interested",
+            "assignedAgent": "speed-to-lead",
+            "lastCustomerReplyAt": "2025-01-01T00:00:00Z",
+            "dormancyThresholdHours": 48
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "This lead has been dormant and should be moved to nurture. The handoff to the nurture specialist has been initiated."
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "pipeline-handoff.determine" },
+    { "type": "response_contains", "substring": "nurture" }
+  ]
+}

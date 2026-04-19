@@ -12,13 +12,11 @@ import type { ApprovalRoutingConfig } from "../approval/router.js";
 import type { RiskScoringConfig } from "../engine/risk-scorer.js";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { SimulationResult } from "../engine/simulator.js";
-import type { CompetenceTracker } from "../competence/tracker.js";
 import type { GuardrailStateStore } from "../guardrail-state/store.js";
 import type { RiskPostureStore } from "../engine/risk-posture.js";
 import type { GovernanceProfileStore } from "../governance/profile.js";
 import type { PolicyCache } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
-import type { CrossCartridgeEnricher } from "../enrichment/types.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
@@ -40,7 +38,6 @@ export interface OrchestratorConfig {
   guardrailStateStore?: GuardrailStateStore;
   routingConfig?: ApprovalRoutingConfig;
   riskScoringConfig?: RiskScoringConfig;
-  competenceTracker?: CompetenceTracker;
   trustAdapter?: TrustScoreAdapter | null;
   riskPostureStore?: RiskPostureStore;
   /** When set, per-org governance profile overrides system risk posture for propose. */
@@ -54,8 +51,6 @@ export interface OrchestratorConfig {
   selfApprovalAllowed?: boolean;
   /** Maximum approval responses per principal in a sliding window. */
   approvalRateLimit?: { maxApprovals: number; windowMs: number };
-  /** Cross-cartridge context enricher — injects data from other cartridges into governance context. */
-  crossCartridgeEnricher?: CrossCartridgeEnricher;
   /** Data-flow executor for multi-step plans with binding resolution. */
   dataFlowExecutor?: DataFlowExecutor;
   /** Credential resolver for org-scoped connection credentials at execution time. */
@@ -92,16 +87,22 @@ export class LifecycleOrchestrator {
   private proposePipeline: ProposePipeline;
   private approvalManager: ApprovalManager;
   private executionManager: ExecutionManager;
+  private _routingConfig: ApprovalRoutingConfig;
+
+  /** Approval routing configuration. Used by the actions route to create approval requests. */
+  get routingConfig(): ApprovalRoutingConfig {
+    return this._routingConfig;
+  }
 
   constructor(config: OrchestratorConfig) {
+    this._routingConfig = config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
     const ctx: SharedContext = {
       storage: config.storage,
       ledger: config.ledger,
       guardrailState: config.guardrailState,
       guardrailStateStore: config.guardrailStateStore ?? null,
-      routingConfig: config.routingConfig ?? DEFAULT_ROUTING_CONFIG,
+      routingConfig: this._routingConfig,
       riskScoringConfig: config.riskScoringConfig,
-      competenceTracker: config.competenceTracker ?? null,
       trustAdapter: config.trustAdapter ?? null,
       riskPostureStore: config.riskPostureStore ?? null,
       governanceProfileStore: config.governanceProfileStore ?? null,
@@ -111,7 +112,6 @@ export class LifecycleOrchestrator {
       approvalNotifier: config.approvalNotifier ?? null,
       selfApprovalAllowed: config.selfApprovalAllowed ?? false,
       approvalRateLimit: config.approvalRateLimit ?? null,
-      crossCartridgeEnricher: config.crossCartridgeEnricher ?? null,
       dataFlowExecutor: config.dataFlowExecutor ?? null,
       credentialResolver: config.credentialResolver ?? null,
       circuitBreaker: config.circuitBreaker ?? null,
@@ -184,6 +184,19 @@ export class LifecycleOrchestrator {
     return this.approvalManager.respondToApproval(params, (envelopeId) =>
       this.executionManager.executeApproved(envelopeId),
     );
+  }
+
+  async executePreApproved(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId: string | null;
+    cartridgeId: string;
+    traceId: string;
+    idempotencyKey?: string;
+    workUnitId?: string;
+  }): Promise<ExecuteResult> {
+    return this.executionManager.executePreApproved(params);
   }
 
   async executeApproved(envelopeId: string): Promise<ExecuteResult> {

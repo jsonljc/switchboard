@@ -21,9 +21,9 @@ import { conversationsRoutes } from "../routes/conversations.js";
 import { agentsRoutes } from "../routes/agents.js";
 import { setupRoutes } from "../routes/setup.js";
 import { knowledgeRoutes } from "../routes/knowledge.js";
+import { knowledgeEntryRoutes } from "../routes/knowledge-entries.js";
 import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
-import { agentConversationRoutes } from "../routes/conversation.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { schedulerRoutes } from "../routes/scheduler.js";
 import { operatorRoutes } from "../routes/operator.js";
@@ -32,6 +32,12 @@ import { marketplacePersonaRoutes } from "../routes/marketplace-persona.js";
 import { creativePipelineRoutes } from "../routes/creative-pipeline.js";
 import { onboardRoutes } from "../routes/onboard.js";
 import { storefrontRoutes } from "../routes/storefront.js";
+import { deploymentMemoryRoutes } from "../routes/deployment-memory.js";
+import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
+import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
+import { revenueRoutes } from "../routes/revenue.js";
+import { roiRoutes } from "../routes/roi.js";
+import { ingressRoutes } from "../routes/ingress.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -45,6 +51,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(simulateRoutes, { prefix: "/api/simulate" });
   await app.register(healthRoutes, { prefix: "/api/health" });
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
+  await app.register(facebookOAuthRoutes, { prefix: "/api/connections" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
   await app.register(competenceRoutes, { prefix: "/api/competence" });
@@ -53,9 +60,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });
   await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
+  await app.register(knowledgeEntryRoutes, { prefix: "/api/knowledge-entries" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
   await app.register(sessionRoutes, { prefix: "/api/sessions" });
-  await app.register(agentConversationRoutes, { prefix: "/api/conversation" });
   await app.register(workflowRoutes, { prefix: "/api/workflows" });
   await app.register(schedulerRoutes, { prefix: "/api/scheduler" });
   await app.register(operatorRoutes, { prefix: "/api/operator" });
@@ -64,4 +71,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
   await app.register(onboardRoutes, { prefix: "/api/marketplace" });
   await app.register(storefrontRoutes, { prefix: "/api/storefront" });
+  await app.register(deploymentMemoryRoutes, { prefix: "/api/marketplace" });
+  await app.register(adOptimizerRoutes, { prefix: "/api/marketplace" });
+  await app.register(revenueRoutes, { prefix: "/api" });
+  await app.register(roiRoutes, { prefix: "/api" });
+  await app.register(ingressRoutes, { prefix: "/api" });
 }

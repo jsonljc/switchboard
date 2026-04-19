@@ -49,7 +49,6 @@ export { deriveAgentStates } from "./storage/agent-state-deriver.js";
 export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
-export { PrismaDeliveryStore } from "./stores/prisma-delivery-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
 export {
   PrismaSessionStore,
@@ -75,3 +74,23 @@ export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.j
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
+export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summary-store.js";
+export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
+export { PrismaEventStore } from "./stores/prisma-event-store.js";
+export type { EmitEventInput } from "./stores/prisma-event-store.js";
+export { PrismaActivityLogStore } from "./stores/prisma-activity-log-store.js";
+export type { WriteActivityLogInput } from "./stores/prisma-activity-log-store.js";
+export { PrismaCustomerMemoryStore } from "./stores/prisma-customer-memory-store.js";
+export { PrismaOwnerMemoryStore } from "./stores/prisma-owner-memory-store.js";
+export { PrismaAggregateMemoryStore } from "./stores/prisma-aggregate-memory-store.js";
+export { PrismaCreatorIdentityStore } from "./stores/prisma-creator-identity-store.js";
+export { PrismaAssetRecordStore } from "./stores/prisma-asset-record-store.js";
+export { PrismaExecutionTraceStore } from "./stores/prisma-execution-trace-store.js";
+export { PrismaKnowledgeEntryStore } from "./stores/prisma-knowledge-entry-store.js";
+export { PrismaWorkTraceStore } from "./stores/prisma-work-trace-store.js";
+export { PrismaBookingStore } from "./stores/prisma-booking-store.js";
+export { PrismaOutboxStore } from "./stores/prisma-outbox-store.js";
+export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-store.js";
+export { PrismaDispatchLogStore } from "./stores/prisma-dispatch-log-store.js";
+export { PrismaReconciliationStore } from "./stores/prisma-reconciliation-store.js";
+export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";

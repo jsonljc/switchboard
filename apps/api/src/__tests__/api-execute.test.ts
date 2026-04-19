@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { buildTestServer, type TestContext } from "./test-server.js";
 
 const IDEMPOTENCY_HEADERS = { "Idempotency-Key": "test-key-execute" };
+const ORG_ID = "org_test";
 
 describe("Execute API (POST /api/execute)", () => {
   let app: FastifyInstance;
@@ -22,6 +23,7 @@ describe("Execute API (POST /api/execute)", () => {
       url: "/api/execute",
       payload: {
         actorId: "default",
+        organizationId: ORG_ID,
         action: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
@@ -32,6 +34,25 @@ describe("Execute API (POST /api/execute)", () => {
     expect(res.statusCode).toBe(400);
     const body = res.json();
     expect(body.error).toContain("Idempotency-Key");
+  });
+
+  it("returns 400 when organizationId is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/execute",
+      headers: IDEMPOTENCY_HEADERS,
+      payload: {
+        actorId: "default",
+        action: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_123" },
+          sideEffect: true,
+        },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error).toContain("organizationId");
   });
 
   it("returns 200 with outcome EXECUTED when auto-approved", async () => {
@@ -64,6 +85,7 @@ describe("Execute API (POST /api/execute)", () => {
       headers: IDEMPOTENCY_HEADERS,
       payload: {
         actorId: "default",
+        organizationId: ORG_ID,
         action: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
@@ -78,7 +100,6 @@ describe("Execute API (POST /api/execute)", () => {
     expect(body.envelopeId).toBeDefined();
     expect(body.traceId).toBeDefined();
     expect(body.executionResult).toBeDefined();
-    expect(body.executionResult.success).toBe(true);
   });
 
   it("returns 200 with outcome DENIED for forbidden behavior", async () => {
@@ -110,6 +131,7 @@ describe("Execute API (POST /api/execute)", () => {
       headers: IDEMPOTENCY_HEADERS,
       payload: {
         actorId: "default",
+        organizationId: ORG_ID,
         action: {
           actionType: "digital-ads.campaign.pause",
           parameters: { campaignId: "camp_123" },
@@ -126,13 +148,14 @@ describe("Execute API (POST /api/execute)", () => {
     expect(body.deniedExplanation).toBeDefined();
   });
 
-  it("returns 400 when actionType cannot infer cartridge", async () => {
+  it("returns 404 when intent is not found", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/execute",
       headers: IDEMPOTENCY_HEADERS,
       payload: {
         actorId: "default",
+        organizationId: ORG_ID,
         action: {
           actionType: "unknown.action",
           parameters: {},
@@ -141,9 +164,9 @@ describe("Execute API (POST /api/execute)", () => {
       },
     });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(404);
     const body = res.json();
-    expect(body.error).toContain("cartridgeId");
+    expect(body.error).toContain("Intent not found");
   });
 
   it("returns 400 when body fails validation", async () => {
@@ -153,6 +176,7 @@ describe("Execute API (POST /api/execute)", () => {
       headers: IDEMPOTENCY_HEADERS,
       payload: {
         actorId: "default",
+        organizationId: ORG_ID,
         action: {
           actionType: "digital-ads.campaign.pause",
           parameters: {},

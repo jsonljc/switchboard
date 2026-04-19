@@ -15,10 +15,11 @@
     "cli:register-webhook": "tsx src/cli/register-webhook.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
-    "@switchboard/cartridge-sdk": "workspace:*",
     "fastify": "^5.8.2",
     "ioredis": "^5.10.0",
     "zod": "^3.23.0"

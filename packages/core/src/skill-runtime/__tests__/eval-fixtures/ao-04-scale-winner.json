@@ -1,0 +1,132 @@
+{
+  "name": "Campaign performing well under target - scale opportunity",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "Campaign 1",
+          "spend": 1500,
+          "impressions": 100000,
+          "clicks": 2000,
+          "leads": 100,
+          "cpm": 15,
+          "ctr": 2.0,
+          "cpc": 0.75,
+          "cpl": 15,
+          "cpa": 60,
+          "roas": 5.0,
+          "frequency": 1.1
+        }
+      ],
+      "aggregated": {
+        "cpm": 15,
+        "ctr": 2.0,
+        "cpc": 0.75,
+        "cpl": 15,
+        "cpa": 60,
+        "roas": 5.0,
+        "frequency": 1.1
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 16,
+        "ctr": 1.9,
+        "cpc": 0.8,
+        "cpl": 16,
+        "cpa": 64,
+        "roas": 4.8,
+        "frequency": 1.0
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_999",
+      "totalSpend": 1500,
+      "totalLeads": 100
+    },
+    "CRM_FUNNEL": {
+      "leads": 100,
+      "qualified": 50,
+      "closed": 25,
+      "revenue": 30000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 15,
+              "ctr": 2.0,
+              "cpc": 0.75,
+              "cpl": 15,
+              "cpa": 60,
+              "roas": 5.0,
+              "frequency": 1.1
+            },
+            "previous": {
+              "cpm": 16,
+              "ctr": 1.9,
+              "cpc": 0.8,
+              "cpl": 16,
+              "cpa": 64,
+              "roas": 4.8,
+              "frequency": 1.0
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "ads-analytics.diagnose",
+          "input": {
+            "deltas": {
+              "cpm": -1,
+              "ctr": 0.1,
+              "cpc": -0.05,
+              "cpl": -1,
+              "cpa": -4,
+              "roas": 0.2,
+              "frequency": 0.1
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [{\"type\": \"scale\", \"action\": \"Increase budget for Campaign 1 by 20-30% to capture more volume at this efficient CPA.\", \"confidence\": \"high\", \"reasoning\": \"CPA ($60) is 40% below target ($100) with ROAS of 5.0 (67% above target). Metrics improving vs previous period. Strong candidate for scaling.\"}], \"proposedWrites\": [], \"summary\": \"Campaign 1 is a clear winner performing well below target CPA with strong ROAS. Scale opportunity identified.\", \"confidence\": \"high\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "tool_called", "toolName": "ads-analytics.diagnose" },
+    { "type": "response_contains", "substring": "scale" }
+  ]
+}

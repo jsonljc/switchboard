@@ -57,4 +57,5 @@ export interface AgentContext {
   task?: AgentTask;
   handoffPayload?: HandoffPayload;
   trust: { score: number; level: "supervised" | "guided" | "autonomous" };
+  deployment?: { inputConfig?: Record<string, unknown> };
 }

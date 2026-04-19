@@ -1,0 +1,137 @@
+{
+  "name": "Funnel leakage detected requiring investigation",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "Campaign 1",
+          "spend": 2000,
+          "impressions": 60000,
+          "clicks": 1200,
+          "leads": 60,
+          "cpm": 33.33,
+          "ctr": 2.0,
+          "cpc": 1.67,
+          "cpl": 33.33,
+          "cpa": 120,
+          "roas": 2.5,
+          "frequency": 1.5
+        }
+      ],
+      "aggregated": {
+        "cpm": 33.33,
+        "ctr": 2.0,
+        "cpc": 1.67,
+        "cpl": 33.33,
+        "cpa": 120,
+        "roas": 2.5,
+        "frequency": 1.5
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 30,
+        "ctr": 2.1,
+        "cpc": 1.5,
+        "cpl": 30,
+        "cpa": 100,
+        "roas": 3.0,
+        "frequency": 1.4
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_555",
+      "totalSpend": 2000,
+      "totalLeads": 60
+    },
+    "CRM_FUNNEL": {
+      "leads": 60,
+      "qualified": 15,
+      "closed": 5,
+      "revenue": 5000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 33.33,
+              "ctr": 2.0,
+              "cpc": 1.67,
+              "cpl": 33.33,
+              "cpa": 120,
+              "roas": 2.5,
+              "frequency": 1.5
+            },
+            "previous": {
+              "cpm": 30,
+              "ctr": 2.1,
+              "cpc": 1.5,
+              "cpl": 30,
+              "cpa": 100,
+              "roas": 3.0,
+              "frequency": 1.4
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "ads-analytics.analyze-funnel",
+          "input": {
+            "campaignInsights": {
+              "campaigns": [],
+              "aggregated": {}
+            },
+            "crmFunnel": {
+              "leads": 60,
+              "qualified": 15,
+              "closed": 5,
+              "revenue": 5000
+            },
+            "benchmarks": {
+              "leadToQualified": 0.5,
+              "qualifiedToClosed": 0.4
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [{\"type\": \"hold\", \"action\": \"Investigate lead qualification process. Funnel shows 25% lead-to-qualified rate vs 50% benchmark.\", \"confidence\": \"medium\", \"reasoning\": \"Funnel analysis shows significant leakage at the lead qualification stage. This suggests either lead quality issues or internal process problems that need investigation before making campaign changes.\"}], \"proposedWrites\": [], \"summary\": \"Campaign metrics slightly degraded but main issue is funnel leakage at qualification stage. Hold campaign changes pending internal process review.\", \"confidence\": \"medium\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "tool_called", "toolName": "ads-analytics.analyze-funnel" },
+    { "type": "response_contains", "substring": "leakage" }
+  ]
+}

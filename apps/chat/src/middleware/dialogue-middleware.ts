@@ -103,7 +103,8 @@ export class DialogueMiddleware {
       })),
       channel: conversation.channel,
       leadContext: {
-        serviceInterest: conversation.leadProfile?.serviceInterest ?? undefined,
+        serviceInterest:
+          (conversation.leadProfile?.serviceInterest as string | undefined) ?? undefined,
         previousTurnCount: conversation.messages.filter((m) => m.role === "user").length,
       },
       localisationConfig: profile?.localisation

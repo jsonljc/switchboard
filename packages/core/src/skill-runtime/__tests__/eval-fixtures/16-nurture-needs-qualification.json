@@ -1,0 +1,48 @@
+{
+  "name": "Nurture lead with changed situation moves back to interested",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "nurturing",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "My situation has completely changed" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Thanks for letting me know! Since things have changed, let me re-start the process so we can find the right fit for your new situation."
+        },
+        {
+          "type": "tool_use",
+          "id": "call-requalify-1",
+          "name": "crm-write.stage.update",
+          "input": { "opportunityId": "opp-test-1", "newStage": "interested" }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "I've updated your profile. Let's start fresh — could you tell me about what's changed and what you're looking for now?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "crm-write.stage.update" },
+    { "type": "response_contains", "substring": "changed" }
+  ]
+}

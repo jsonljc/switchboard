@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
 
@@ -84,6 +85,28 @@ export interface TrustScoreBreakdown {
     consecutiveApprovals: number;
     lastActivityAt: string;
   }>;
+}
+
+export interface DraftFAQ {
+  id: string;
+  content: string;
+  sourceType: string;
+  draftStatus: string | null;
+  draftExpiresAt: string | null;
+  createdAt: string;
+}
+
+export interface ExecutionTraceSummary {
+  id: string;
+  skillSlug: string;
+  status: string;
+  durationMs: number;
+  turnCount: number;
+  writeCount: number;
+  responseSummary: string;
+  linkedOutcomeType?: string;
+  linkedOutcomeResult?: string;
+  createdAt: string;
 }
 
 export class SwitchboardClient extends SwitchboardClientBase {
@@ -406,6 +429,20 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ deployments: MarketplaceDeployment[] }>(`/api/marketplace/deployments`);
   }
 
+  async getBusinessFacts(deploymentId: string) {
+    return this.request<{ config: unknown }>(`/api/marketplace/deployments/${deploymentId}/config`);
+  }
+
+  async upsertBusinessFacts(deploymentId: string, facts: Record<string, unknown>) {
+    return this.request<{ success: boolean }>(
+      `/api/marketplace/deployments/${deploymentId}/config`,
+      {
+        method: "PUT",
+        body: JSON.stringify(facts),
+      },
+    );
+  }
+
   async createTask(data: {
     deploymentId: string;
     listingId: string;
@@ -501,6 +538,28 @@ export class SwitchboardClient extends SwitchboardClientBase {
     );
   }
 
+  // ── FAQ Drafts ──
+
+  async listDraftFAQs(orgId: string, deploymentId: string) {
+    return this.request<{ data: DraftFAQ[] }>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts`,
+    );
+  }
+
+  async approveDraftFAQ(orgId: string, deploymentId: string, faqId: string) {
+    return this.request<{ success: boolean }>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts/${faqId}/approve`,
+      { method: "POST" },
+    );
+  }
+
+  async rejectDraftFAQ(orgId: string, deploymentId: string, faqId: string) {
+    return this.request<void>(
+      `/api/marketplace/${orgId}/deployments/${deploymentId}/faq-drafts/${faqId}/reject`,
+      { method: "POST" },
+    );
+  }
+
   // ── Deployment Connections ──
 
   async createWidgetToken(deploymentId: string) {
@@ -593,6 +652,16 @@ export class SwitchboardClient extends SwitchboardClientBase {
         method: "POST",
         body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
       },
+    );
+  }
+
+  async listTraces(deploymentId: string, opts?: { limit?: number; cursor?: string }) {
+    const params = new URLSearchParams();
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.cursor) params.set("cursor", opts.cursor);
+    const qs = params.toString();
+    return this.request<{ traces: ExecutionTraceSummary[]; nextCursor?: string }>(
+      `/api/marketplace/deployments/${deploymentId}/traces${qs ? `?${qs}` : ""}`,
     );
   }
 }

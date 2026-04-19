@@ -124,7 +124,11 @@ export class LLMConversationEngine {
     return parts.join("\n");
   }
 
-  async generate(ctx: LLMConversationContext, orgId?: string): Promise<LLMConversationResult> {
+  async generate(
+    ctx: LLMConversationContext,
+    orgId?: string,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
+  ): Promise<LLMConversationResult> {
     if (!this.config.apiKey) {
       return this.fallback(ctx);
     }
@@ -140,7 +144,7 @@ export class LLMConversationEngine {
     try {
       const systemPrompt = this.buildSystemPrompt(ctx);
       const userPrompt = this.buildUserPrompt(ctx);
-      const result = await this.callAnthropic(systemPrompt, userPrompt);
+      const result = await this.callAnthropic(systemPrompt, userPrompt, modelOverride);
 
       // Output injection check
       const injectionCheck = detectPromptInjectionInOutput(result.text);
@@ -174,6 +178,7 @@ export class LLMConversationEngine {
   private async callAnthropic(
     system: string,
     user: string,
+    modelOverride?: { model: string; maxTokens?: number; temperature?: number },
   ): Promise<{ text: string; usage?: { promptTokens: number; completionTokens: number } }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -188,11 +193,11 @@ export class LLMConversationEngine {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: this.config.model,
-          max_tokens: this.config.maxTokens ?? 200,
+          model: modelOverride?.model ?? this.config.model,
+          max_tokens: modelOverride?.maxTokens ?? this.config.maxTokens ?? 200,
           system,
           messages: [{ role: "user", content: user }],
-          temperature: this.config.temperature ?? 0.6,
+          temperature: modelOverride?.temperature ?? this.config.temperature ?? 0.6,
         }),
         signal: controller.signal,
       });

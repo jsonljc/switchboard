@@ -6,14 +6,18 @@ import {
   DeployWizardShell,
   type WizardStep,
   type WizardData,
+  type WizardStepProps,
 } from "@/components/marketplace/deploy-wizard-shell";
 import { ScanStep } from "@/components/marketplace/scan-step";
 import { ReviewPersonaStep } from "@/components/marketplace/review-persona-step";
 import { ConnectionStep } from "@/components/marketplace/connection-step";
 import { TestChatStep } from "@/components/marketplace/test-chat-step";
 import { WebsiteScanReview } from "@/components/marketplace/website-scan-review";
+import { BusinessFactsForm } from "@/components/marketplace/business-facts-form";
 import { OperatorCharacter } from "@/components/character/operator-character";
 import type { RoleFocus } from "@/components/character/operator-character";
+import { BusinessFactsSchema } from "@switchboard/schemas";
+import type { BusinessFacts } from "@switchboard/schemas";
 
 interface ConnectionRequirement {
   type: string;
@@ -39,6 +43,71 @@ interface DeployWizardClientProps {
   roleFocus: RoleFocus;
   connections: ConnectionRequirement[];
   setupSchema?: SetupSchema | null;
+}
+
+function BusinessFactsStep({ data, onUpdate, onNext }: WizardStepProps) {
+  const [_isSaving, setIsSaving] = useState(false);
+
+  const handleSave = useCallback(
+    (facts: BusinessFacts) => {
+      const result = BusinessFactsSchema.safeParse(facts);
+      if (!result.success) return;
+      setIsSaving(true);
+      onUpdate({ businessFacts: result.data });
+      setIsSaving(false);
+      onNext();
+    },
+    [onUpdate, onNext],
+  );
+
+  const prefilled = data.scannedProfile ? prefillFromScan(data.scannedProfile) : undefined;
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-2">Business Facts</h3>
+      <p className="text-sm text-muted-foreground mb-6">
+        These facts determine what Alex can answer. Missing facts will trigger escalation to your
+        team.
+      </p>
+      <BusinessFactsForm initialFacts={data.businessFacts ?? prefilled} onSave={handleSave} />
+    </div>
+  );
+}
+
+function prefillFromScan(scanned: Record<string, unknown>): Partial<BusinessFacts> {
+  const result: Partial<BusinessFacts> = {};
+  if (typeof scanned["businessName"] === "string") {
+    result.businessName = scanned["businessName"];
+  }
+  if (Array.isArray(scanned["products"])) {
+    result.services = (
+      scanned["products"] as Array<{ name: string; description: string; price?: string }>
+    ).map((p) => ({ name: p.name, description: p.description, price: p.price, currency: "SGD" }));
+  }
+  if (scanned["location"] && typeof scanned["location"] === "object") {
+    const loc = scanned["location"] as { address?: string; city?: string };
+    result.locations = [
+      { name: "Main", address: [loc.address, loc.city].filter(Boolean).join(", ") },
+    ];
+  }
+  if (scanned["hours"] && typeof scanned["hours"] === "object") {
+    const hours = scanned["hours"] as Record<string, string>;
+    result.openingHours = Object.fromEntries(
+      Object.entries(hours).map(([day, val]) => {
+        const match = val.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+        return [
+          day,
+          match
+            ? { open: match[1]!, close: match[2]!, closed: false }
+            : { open: "09:00", close: "18:00", closed: false },
+        ];
+      }),
+    );
+  }
+  if (Array.isArray(scanned["faqs"])) {
+    result.additionalFaqs = scanned["faqs"] as Array<{ question: string; answer: string }>;
+  }
+  return result;
 }
 
 export function DeployWizardClient({
@@ -75,14 +144,20 @@ export function DeployWizardClient({
     startDeploy(async () => {
       try {
         const data = wizardDataRef.current;
+        if (!data.businessFacts) {
+          setError("Business facts are required before deploying.");
+          return;
+        }
         const res = await fetch("/api/dashboard/marketplace/onboard", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             listingId,
-            businessName: data.persona?.businessName ?? "My Business",
+            businessName:
+              data.persona?.businessName ?? data.businessFacts?.businessName ?? "My Business",
             setupAnswers: data.persona ?? {},
             scannedProfile: data.scannedProfile ?? null,
+            businessFacts: data.businessFacts,
           }),
         });
         if (!res.ok) {
@@ -110,6 +185,12 @@ export function DeployWizardClient({
         component: WebsiteScanReview as unknown as WizardStep["component"],
       });
     }
+
+    allSteps.push({
+      id: "business-facts",
+      label: "Business facts",
+      component: BusinessFactsStep as unknown as WizardStep["component"],
+    });
 
     allSteps.push({ id: "review", label: "Review & customize", component: ReviewPersonaStep });
 

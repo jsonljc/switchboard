@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
+import { seedKnowledge } from "./seed-knowledge.js";
 
 const prisma = new PrismaClient();
 
@@ -573,6 +574,10 @@ async function main() {
   // ── Marketplace Demo Data ──
   console.log("\n--- Marketplace Demo Data ---");
   await seedDemoData(prisma);
+
+  // ── Knowledge Entries ──
+  console.log("\n--- Knowledge Entries ---");
+  await seedKnowledge(prisma);
 }
 
 main()

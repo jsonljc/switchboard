@@ -136,7 +136,6 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const store = app.governanceProfileStore;
       await store.set(orgId, "locked");
 
-      // Pause active campaigns
       const paused: string[] = [];
       const failures: Array<{ campaignId: string; error: string }> = [];
 
@@ -144,22 +143,26 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         const cartridge = app.storageContext.cartridges.get("digital-ads");
         if (isEmergencyHaltCapable(cartridge)) {
           const campaigns = await cartridge.searchCampaigns("");
+          const actorId = request.principalIdFromAuth ?? "system";
+
           for (const campaign of campaigns) {
             if (campaign.status === "ACTIVE") {
               try {
-                const actorId = request.principalIdFromAuth ?? "system";
-                const proposeResult = await app.orchestrator.propose({
-                  actionType: "digital-ads.campaign.pause",
+                const response = await app.platformIngress.submit({
+                  intent: "digital-ads.campaign.pause",
                   parameters: { campaignId: campaign.id },
-                  principalId: actorId,
+                  actor: { id: actorId, type: "user" as const },
                   organizationId: orgId,
-                  cartridgeId: "digital-ads",
-                  message: `Emergency halt: ${body.reason ?? "no reason provided"}`,
-                  emergencyOverride: true,
+                  deployment: {
+                    deploymentId: "emergency-halt",
+                    skillSlug: "digital-ads",
+                    trustLevel: "autonomous" as const,
+                    trustScore: 100,
+                  },
+                  trigger: "api" as const,
                 });
 
-                if (!proposeResult.denied) {
-                  await app.orchestrator.executeApproved(proposeResult.envelope.id);
+                if (response.ok && response.result.outcome === "completed") {
                   paused.push(campaign.id);
                 }
               } catch (err) {

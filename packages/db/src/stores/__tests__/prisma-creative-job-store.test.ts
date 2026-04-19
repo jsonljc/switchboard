@@ -171,6 +171,7 @@ describe("PrismaCreativeJobStore", () => {
         currentStage: "hooks",
         stageOutputs: { trends: { angles: [] } },
       };
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
       prisma.creativeJob.update.mockResolvedValue(updated);
 
       const result = await store.updateStage("cj_1", "hooks", { trends: { angles: [] } });
@@ -213,6 +214,146 @@ describe("PrismaCreativeJobStore", () => {
         data: { productionTier: "pro" },
       });
       expect(result).toEqual(mockJob);
+    });
+  });
+
+  describe("createUgc", () => {
+    it("creates a UGC job with mode='ugc' and initial ugcPhase", async () => {
+      const input = {
+        taskId: "task_1",
+        organizationId: "org_1",
+        deploymentId: "dep_1",
+        productDescription: "AI scheduling tool",
+        targetAudience: "Small business owners",
+        platforms: ["meta"],
+        brandVoice: null,
+        productImages: [],
+        references: [],
+        pastPerformance: null,
+        generateReferenceImages: false,
+        ugcConfig: { brief: { creatorPoolIds: ["c1"], ugcFormat: "talking_head" } },
+      };
+
+      const expected = {
+        id: "cj_ugc_1",
+        ...input,
+        mode: "ugc",
+        ugcPhase: "planning",
+        ugcPhaseOutputs: {},
+        ugcPhaseOutputsVersion: "v1",
+        ugcConfig: input.ugcConfig,
+        ugcFailure: null,
+        currentStage: "trends",
+        stageOutputs: {},
+        stoppedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      prisma.creativeJob.create.mockResolvedValue(expected);
+
+      const result = await store.createUgc(input);
+
+      expect(prisma.creativeJob.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          mode: "ugc",
+          ugcPhase: "planning",
+          ugcConfig: input.ugcConfig,
+        }),
+      });
+      expect(result.mode).toBe("ugc");
+    });
+  });
+
+  describe("updateUgcPhase", () => {
+    it("updates ugcPhase and ugcPhaseOutputs", async () => {
+      const updated = {
+        id: "cj_1",
+        mode: "ugc",
+        ugcPhase: "scripting",
+        ugcPhaseOutputs: { planning: { structures: [] } },
+      };
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.update.mockResolvedValue(updated);
+
+      const result = await store.updateUgcPhase("cj_1", "scripting", {
+        planning: { structures: [] },
+      });
+
+      expect(result.ugcPhase).toBe("scripting");
+    });
+
+    it("rejects update on polished-mode job", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+
+      await expect(store.updateUgcPhase("cj_1", "scripting", {})).rejects.toThrow(
+        "Cannot update UGC phase on a polished-mode job",
+      );
+    });
+  });
+
+  describe("failUgc", () => {
+    it("sets ugcFailure on the job", async () => {
+      const error = {
+        kind: "terminal",
+        phase: "planning",
+        code: "NO_ELIGIBLE_CREATORS",
+        message: "No creators",
+      };
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.update.mockResolvedValue({ id: "cj_1", ugcFailure: error });
+
+      const result = await store.failUgc("cj_1", "planning", error);
+
+      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
+        where: { id: "cj_1" },
+        data: expect.objectContaining({
+          ugcFailure: error,
+          ugcPhase: "planning",
+        }),
+      });
+      expect(result.ugcFailure).toEqual(error);
+    });
+
+    it("rejects failUgc on polished-mode job", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+
+      await expect(
+        store.failUgc("cj_1", "planning", {
+          kind: "terminal",
+          phase: "planning",
+          code: "X",
+          message: "X",
+        }),
+      ).rejects.toThrow("Cannot update UGC phase on a polished-mode job");
+    });
+  });
+
+  describe("stopUgc", () => {
+    it("stops a UGC job at the given phase", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+      prisma.creativeJob.update.mockResolvedValue({
+        id: "cj_1",
+        stoppedAt: "scripting",
+        ugcPhase: "scripting",
+      });
+
+      const result = await store.stopUgc("cj_1", "scripting");
+
+      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
+        where: { id: "cj_1" },
+        data: { stoppedAt: "scripting", ugcPhase: "scripting" },
+      });
+      expect(result.stoppedAt).toBe("scripting");
+    });
+  });
+
+  describe("mode invariant on updateStage", () => {
+    it("rejects updateStage on ugc-mode job", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+
+      await expect(store.updateStage("cj_1", "hooks", {})).rejects.toThrow(
+        "Cannot update polished stage on a UGC-mode job",
+      );
     });
   });
 });

@@ -1,0 +1,159 @@
+{
+  "name": "Healthy account with no issues detected",
+  "parameters": {
+    "CAMPAIGN_INSIGHTS": {
+      "campaigns": [
+        {
+          "id": "c1",
+          "name": "Campaign 1",
+          "spend": 1000,
+          "impressions": 50000,
+          "clicks": 1000,
+          "leads": 50,
+          "cpm": 20,
+          "ctr": 2.0,
+          "cpc": 1.0,
+          "cpl": 20,
+          "cpa": 80,
+          "roas": 4.0,
+          "frequency": 1.5
+        }
+      ],
+      "aggregated": {
+        "cpm": 20,
+        "ctr": 2.0,
+        "cpc": 1.0,
+        "cpl": 20,
+        "cpa": 80,
+        "roas": 4.0,
+        "frequency": 1.5
+      }
+    },
+    "PREVIOUS_INSIGHTS": {
+      "aggregated": {
+        "cpm": 19,
+        "ctr": 2.1,
+        "cpc": 0.95,
+        "cpl": 19,
+        "cpa": 78,
+        "roas": 4.1,
+        "frequency": 1.4
+      }
+    },
+    "ACCOUNT_SUMMARY": {
+      "accountId": "act_123",
+      "totalSpend": 1000,
+      "totalLeads": 50
+    },
+    "CRM_FUNNEL": {
+      "leads": 50,
+      "qualified": 25,
+      "closed": 10,
+      "revenue": 8000
+    },
+    "BENCHMARKS": {
+      "leadToQualified": 0.5,
+      "qualifiedToClosed": 0.4
+    },
+    "DEPLOYMENT_CONFIG": {
+      "targetCPA": 100,
+      "targetROAS": 3.0,
+      "monthlyBudget": 10000
+    }
+  },
+  "messages": [{ "role": "user", "content": "Execute batch: weekly_audit" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t1",
+          "name": "ads-analytics.compare-periods",
+          "input": {
+            "current": {
+              "cpm": 20,
+              "ctr": 2.0,
+              "cpc": 1.0,
+              "cpl": 20,
+              "cpa": 80,
+              "roas": 4.0,
+              "frequency": 1.5
+            },
+            "previous": {
+              "cpm": 19,
+              "ctr": 2.1,
+              "cpc": 0.95,
+              "cpl": 19,
+              "cpa": 78,
+              "roas": 4.1,
+              "frequency": 1.4
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t2",
+          "name": "ads-analytics.diagnose",
+          "input": {
+            "deltas": {
+              "cpm": 1,
+              "ctr": -0.1,
+              "cpc": 0.05,
+              "cpl": 1,
+              "cpa": 2,
+              "roas": -0.1,
+              "frequency": 0.1
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "t3",
+          "name": "ads-analytics.analyze-funnel",
+          "input": {
+            "campaignInsights": {
+              "campaigns": [],
+              "aggregated": {}
+            },
+            "crmFunnel": {
+              "leads": 50,
+              "qualified": 25,
+              "closed": 10,
+              "revenue": 8000
+            },
+            "benchmarks": {
+              "leadToQualified": 0.5,
+              "qualifiedToClosed": 0.4
+            }
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"recommendations\": [], \"proposedWrites\": [], \"summary\": \"All campaigns are performing well within target CPA and ROAS. No issues detected. Metrics are stable compared to previous period.\", \"confidence\": \"high\"}"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "ads-analytics.compare-periods" },
+    { "type": "tool_called", "toolName": "ads-analytics.diagnose" },
+    { "type": "tool_called", "toolName": "ads-analytics.analyze-funnel" },
+    { "type": "response_contains", "substring": "recommendations" }
+  ]
+}

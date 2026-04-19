@@ -26,6 +26,19 @@ interface CreativeJobFilters {
 export class PrismaCreativeJobStore {
   constructor(private prisma: PrismaDbClient) {}
 
+  // ── Mode invariant helper ──
+
+  private async assertMode(id: string, expectedMode: "polished" | "ugc"): Promise<void> {
+    const job = await this.prisma.creativeJob.findUnique({ where: { id }, select: { mode: true } });
+    if (!job) throw new Error(`Creative job not found: ${id}`);
+    if (expectedMode === "ugc" && job.mode !== "ugc") {
+      throw new Error("Cannot update UGC phase on a polished-mode job");
+    }
+    if (expectedMode === "polished" && job.mode === "ugc") {
+      throw new Error("Cannot update polished stage on a UGC-mode job");
+    }
+  }
+
   async create(input: CreateCreativeJobInput): Promise<CreativeJob> {
     return this.prisma.creativeJob.create({
       data: {
@@ -76,6 +89,7 @@ export class PrismaCreativeJobStore {
     stage: string,
     stageOutputs: Record<string, unknown>,
   ): Promise<CreativeJob> {
+    await this.assertMode(id, "polished");
     return this.prisma.creativeJob.update({
       where: { id },
       data: {
@@ -96,6 +110,69 @@ export class PrismaCreativeJobStore {
     return this.prisma.creativeJob.update({
       where: { id },
       data: { productionTier: tier },
+    }) as unknown as CreativeJob;
+  }
+
+  // ── UGC methods ──
+
+  async createUgc(
+    input: CreateCreativeJobInput & { ugcConfig: Record<string, unknown> },
+  ): Promise<CreativeJob> {
+    return this.prisma.creativeJob.create({
+      data: {
+        taskId: input.taskId,
+        organizationId: input.organizationId,
+        deploymentId: input.deploymentId,
+        productDescription: input.productDescription,
+        targetAudience: input.targetAudience,
+        platforms: input.platforms,
+        brandVoice: input.brandVoice,
+        productImages: input.productImages,
+        references: input.references,
+        pastPerformance: input.pastPerformance
+          ? (input.pastPerformance as object)
+          : Prisma.JsonNull,
+        generateReferenceImages: input.generateReferenceImages,
+        mode: "ugc",
+        ugcPhase: "planning",
+        ugcPhaseOutputs: {},
+        ugcPhaseOutputsVersion: "v1",
+        ugcConfig: input.ugcConfig as object,
+      },
+    }) as unknown as CreativeJob;
+  }
+
+  async updateUgcPhase(
+    id: string,
+    phase: string,
+    phaseOutputs: Record<string, unknown>,
+  ): Promise<CreativeJob> {
+    await this.assertMode(id, "ugc");
+    return this.prisma.creativeJob.update({
+      where: { id },
+      data: {
+        ugcPhase: phase,
+        ugcPhaseOutputs: phaseOutputs as object,
+      },
+    }) as unknown as CreativeJob;
+  }
+
+  async failUgc(id: string, phase: string, error: Record<string, unknown>): Promise<CreativeJob> {
+    await this.assertMode(id, "ugc");
+    return this.prisma.creativeJob.update({
+      where: { id },
+      data: {
+        ugcPhase: phase,
+        ugcFailure: error as object,
+      },
+    }) as unknown as CreativeJob;
+  }
+
+  async stopUgc(id: string, phase: string): Promise<CreativeJob> {
+    await this.assertMode(id, "ugc");
+    return this.prisma.creativeJob.update({
+      where: { id },
+      data: { stoppedAt: phase, ugcPhase: phase },
     }) as unknown as CreativeJob;
   }
 }

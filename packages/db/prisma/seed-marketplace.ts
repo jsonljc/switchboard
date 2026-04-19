@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
+/* eslint-disable max-lines */
 import type { PrismaClient } from "@prisma/client";
 import { DEMO_CONVERSATIONS } from "./fixtures/demo-conversations.js";
+import { seedDemoKnowledge } from "./fixtures/demo-knowledge.js";
 
 const SALES_PIPELINE_AGENTS = [
   {
@@ -9,7 +11,41 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Responds to inbound leads within 60 seconds. Qualifies through natural conversation.",
     taskCategories: ["lead-qualification"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "leads" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "leads",
+      family: "sales_pipeline",
+      publicChannels: true,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: true,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
   {
     name: "Sales Closer",
@@ -17,7 +53,47 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Takes qualified leads and closes them. Handles objections, builds urgency, confirms decisions.",
     taskCategories: ["sales-closing"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "growth" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "growth",
+      family: "sales_pipeline",
+      publicChannels: true,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: true,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "bookingLink",
+                type: "url",
+                label: "Booking Link",
+                required: true,
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
   {
     name: "Nurture Specialist",
@@ -25,7 +101,41 @@ const SALES_PIPELINE_AGENTS = [
     description:
       "Re-engages cold leads through scheduled follow-ups. Varies approach across cadence.",
     taskCategories: ["lead-nurturing"],
-    metadata: { bundleSlug: "sales-pipeline-bundle", roleFocus: "care" },
+    metadata: {
+      bundleSlug: "sales-pipeline-bundle",
+      roleFocus: "care",
+      family: "sales_pipeline",
+      publicChannels: false,
+      setupSchema: {
+        onboarding: {
+          websiteScan: true,
+          publicChannels: false,
+          privateChannel: false,
+          integrations: [],
+        },
+        steps: [
+          {
+            id: "basics",
+            title: "Agent Setup",
+            fields: [
+              {
+                key: "tone",
+                type: "select",
+                label: "Conversation Tone",
+                required: true,
+                options: ["friendly", "professional", "casual"],
+              },
+              {
+                key: "customInstructions",
+                type: "textarea",
+                label: "Custom Instructions",
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    },
   },
 ];
 
@@ -37,34 +147,187 @@ const SALES_PIPELINE_BUNDLE = {
   taskCategories: ["lead-qualification", "sales-closing", "lead-nurturing"],
 };
 
-const FUTURE_FAMILIES = [
-  {
-    name: "Performance Creative Director",
-    slug: "performance-creative-director",
-    description:
-      "Full creative pipeline — from trend analysis and hooks to scripts, storyboards, and produced video ads. Stop at any stage.",
-    taskCategories: ["creative_strategy", "hooks", "scripts", "storyboard", "production"],
-    metadata: {
-      isBundle: false,
-      family: "creative",
-      stages: ["trends", "hooks", "scripts", "storyboard", "production"],
+const AD_OPTIMIZER = {
+  name: "Ad Optimizer",
+  slug: "ad-optimizer",
+  description:
+    "Media strategist that diagnoses funnel leakage, compares period-over-period metrics, and recommends campaign actions. Connects to Meta Ads via OAuth. Builds draft campaigns but never publishes — human clicks publish.",
+  taskCategories: ["audit", "recommendation", "draft_creation"],
+  metadata: {
+    isBundle: false,
+    family: "paid_media",
+    setupSchema: {
+      onboarding: {
+        websiteScan: false,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: ["meta-ads"],
+      },
+      steps: [
+        {
+          id: "ad-config",
+          title: "Ad Account Settings",
+          fields: [
+            { key: "monthlyBudget", type: "text", label: "Monthly Ad Budget ($)", required: true },
+            {
+              key: "targetCPA",
+              type: "text",
+              label: "Target Cost Per Acquisition ($)",
+              required: false,
+            },
+            { key: "targetROAS", type: "text", label: "Target ROAS (e.g., 3.0)", required: false },
+            {
+              key: "auditFrequency",
+              type: "select",
+              label: "Audit Frequency",
+              required: true,
+              options: ["weekly", "daily"],
+              default: "weekly",
+            },
+            {
+              key: "pixelId",
+              type: "text",
+              label: "Meta Pixel ID (for CAPI)",
+              required: false,
+              hint: "Found in Events Manager → Data Sources",
+            },
+          ],
+        },
+      ],
     },
   },
-  {
-    name: "Trading",
-    slug: "trading-family",
-    description: "Market analysis, alerts, execution. Coming soon.",
-    taskCategories: [] as string[],
-    metadata: { isBundle: true, family: "trading" },
+};
+
+const PERFORMANCE_CREATIVE_DIRECTOR = {
+  name: "Performance Creative Director",
+  slug: "performance-creative-director",
+  description:
+    "Full creative pipeline — from trend analysis and hooks to scripts, storyboards, and produced video ads. Stop at any stage.",
+  taskCategories: ["creative_strategy", "hooks", "scripts", "storyboard", "production"],
+  metadata: {
+    isBundle: false,
+    family: "paid_media",
+    stages: ["trends", "hooks", "scripts", "storyboard", "production"],
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Creative Setup",
+          fields: [
+            {
+              key: "targetAudience",
+              type: "textarea",
+              label: "Target Audience",
+              required: false,
+              prefillFrom: "scannedProfile.description",
+            },
+            {
+              key: "platforms",
+              type: "select",
+              label: "Ad Platforms",
+              required: true,
+              options: ["meta", "youtube", "tiktok"],
+            },
+            {
+              key: "brandVoice",
+              type: "textarea",
+              label: "Brand Voice",
+              required: false,
+              prefillFrom: "scannedProfile.brandLanguage",
+            },
+          ],
+        },
+      ],
+    },
   },
-  {
-    name: "Finance",
-    slug: "finance-family",
-    description: "Bookkeeping, invoicing, expenses. Coming soon.",
-    taskCategories: [] as string[],
-    metadata: { isBundle: true, family: "finance" },
+};
+
+const WEBSITE_PROFILER = {
+  name: "Website Profiler",
+  slug: "website-profiler",
+  description:
+    "Scans a business website and extracts a structured profile — platform, contact info, services, pricing signals, and brand language. Results feed into other agents.",
+  taskCategories: ["website-analysis"],
+  metadata: {
+    isBundle: false,
+    family: "onboarding",
+    setupSchema: {
+      onboarding: {
+        websiteScan: false,
+        publicChannels: false,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Profiler Setup",
+          fields: [
+            {
+              key: "targetUrl",
+              type: "url",
+              label: "Website URL to scan",
+              required: true,
+            },
+          ],
+        },
+      ],
+    },
   },
-];
+};
+
+const ALEX_CONVERSION_AGENT = {
+  name: "Alex — Frontline Conversion Agent",
+  slug: "alex-conversion",
+  description:
+    "Responds to inbound leads instantly, qualifies through natural conversation, handles objections, and books appointments.",
+  taskCategories: ["lead-qualification", "sales-closing", "booking"],
+  metadata: {
+    family: "sales_pipeline",
+    publicChannels: true,
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: true,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Agent Setup",
+          fields: [
+            {
+              key: "tone",
+              type: "select",
+              label: "Conversation Tone",
+              required: true,
+              options: ["friendly", "professional", "casual"],
+            },
+            {
+              key: "bookingLink",
+              type: "url",
+              label: "Booking Link",
+              required: true,
+            },
+            {
+              key: "customInstructions",
+              type: "textarea",
+              label: "Custom Instructions",
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
 
 export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
   const agentIds: string[] = [];
@@ -92,12 +355,53 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     console.warn(`  Seeded listing: ${agent.name} (${listing.id})`);
   }
 
+  const bundleMetadata = {
+    isBundle: true,
+    family: "sales_pipeline",
+    bundleListingIds: agentIds,
+    setupSchema: {
+      onboarding: {
+        websiteScan: true,
+        publicChannels: true,
+        privateChannel: false,
+        integrations: [],
+      },
+      steps: [
+        {
+          id: "basics",
+          title: "Bundle Setup",
+          fields: [
+            {
+              key: "tone",
+              type: "select",
+              label: "Conversation Tone",
+              required: true,
+              options: ["friendly", "professional", "casual"],
+            },
+            {
+              key: "bookingLink",
+              type: "url",
+              label: "Booking Link",
+              required: true,
+            },
+            {
+              key: "customInstructions",
+              type: "textarea",
+              label: "Custom Instructions",
+              required: false,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
   const bundle = await prisma.agentListing.upsert({
     where: { slug: SALES_PIPELINE_BUNDLE.slug },
     update: {
       name: SALES_PIPELINE_BUNDLE.name,
       description: SALES_PIPELINE_BUNDLE.description,
-      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
+      metadata: bundleMetadata,
     },
     create: {
       ...SALES_PIPELINE_BUNDLE,
@@ -107,7 +411,7 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
       autonomyLevel: "supervised",
       priceTier: "free",
       priceMonthly: 0,
-      metadata: { isBundle: true, family: "sales", bundleListingIds: agentIds },
+      metadata: bundleMetadata,
     },
   });
   console.warn(`  Seeded bundle: ${SALES_PIPELINE_BUNDLE.name} (${bundle.id})`);
@@ -117,22 +421,98 @@ export async function seedMarketplace(prisma: PrismaClient): Promise<void> {
     where: { slug: "creative-family" },
   });
 
-  for (const family of FUTURE_FAMILIES) {
-    const listing = await prisma.agentListing.upsert({
-      where: { slug: family.slug },
-      update: { name: family.name, description: family.description, metadata: family.metadata },
-      create: {
-        ...family,
-        type: "switchboard_native",
-        status: "pending_review",
-        trustScore: 0,
-        autonomyLevel: "supervised",
-        priceTier: "free",
-        priceMonthly: 0,
-      },
-    });
-    console.warn(`  Seeded placeholder: ${family.name} (${listing.id})`);
-  }
+  // Remove old trading/finance placeholders that have no backing code
+  await prisma.agentListing.deleteMany({
+    where: { slug: { in: ["trading-family", "finance-family"] } },
+  });
+
+  // Seed Performance Creative Director as a listed agent
+  const pcd = await prisma.agentListing.upsert({
+    where: { slug: PERFORMANCE_CREATIVE_DIRECTOR.slug },
+    update: {
+      name: PERFORMANCE_CREATIVE_DIRECTOR.name,
+      description: PERFORMANCE_CREATIVE_DIRECTOR.description,
+      taskCategories: PERFORMANCE_CREATIVE_DIRECTOR.taskCategories,
+      metadata: PERFORMANCE_CREATIVE_DIRECTOR.metadata,
+      status: "listed",
+    },
+    create: {
+      ...PERFORMANCE_CREATIVE_DIRECTOR,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${PERFORMANCE_CREATIVE_DIRECTOR.name} (${pcd.id})`);
+
+  // Seed Ad Optimizer as a listed agent
+  const adOptimizer = await prisma.agentListing.upsert({
+    where: { slug: AD_OPTIMIZER.slug },
+    update: {
+      name: AD_OPTIMIZER.name,
+      description: AD_OPTIMIZER.description,
+      taskCategories: AD_OPTIMIZER.taskCategories,
+      metadata: AD_OPTIMIZER.metadata,
+      status: "listed",
+    },
+    create: {
+      ...AD_OPTIMIZER,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${AD_OPTIMIZER.name} (${adOptimizer.id})`);
+
+  // Seed Website Profiler as a listed agent
+  const profiler = await prisma.agentListing.upsert({
+    where: { slug: WEBSITE_PROFILER.slug },
+    update: {
+      name: WEBSITE_PROFILER.name,
+      description: WEBSITE_PROFILER.description,
+      taskCategories: WEBSITE_PROFILER.taskCategories,
+      metadata: WEBSITE_PROFILER.metadata,
+      status: "listed",
+    },
+    create: {
+      ...WEBSITE_PROFILER,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${WEBSITE_PROFILER.name} (${profiler.id})`);
+
+  // Seed Alex Conversion Agent as a listed agent
+  const alex = await prisma.agentListing.upsert({
+    where: { slug: ALEX_CONVERSION_AGENT.slug },
+    update: {
+      name: ALEX_CONVERSION_AGENT.name,
+      description: ALEX_CONVERSION_AGENT.description,
+      taskCategories: ALEX_CONVERSION_AGENT.taskCategories,
+      metadata: ALEX_CONVERSION_AGENT.metadata,
+      status: "listed",
+    },
+    create: {
+      ...ALEX_CONVERSION_AGENT,
+      type: "switchboard_native",
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      priceMonthly: 0,
+    },
+  });
+  console.warn(`  Seeded listing: ${ALEX_CONVERSION_AGENT.name} (${alex.id})`);
 }
 
 /**
@@ -151,6 +531,19 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       governanceProfile: "guarded",
       onboardingComplete: true,
       provisioningStatus: "active",
+      businessHours: {
+        timezone: "Asia/Singapore",
+        days: [
+          { day: 1, open: "09:00", close: "17:00" },
+          { day: 2, open: "09:00", close: "17:00" },
+          { day: 3, open: "09:00", close: "17:00" },
+          { day: 4, open: "09:00", close: "17:00" },
+          { day: 5, open: "09:00", close: "17:00" },
+        ],
+        defaultDurationMinutes: 30,
+        bufferMinutes: 15,
+        slotIncrementMinutes: 30,
+      },
     },
     create: {
       id: ORG_ID,
@@ -159,20 +552,33 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       governanceProfile: "guarded",
       onboardingComplete: true,
       provisioningStatus: "active",
+      businessHours: {
+        timezone: "Asia/Singapore",
+        days: [
+          { day: 1, open: "09:00", close: "17:00" },
+          { day: 2, open: "09:00", close: "17:00" },
+          { day: 3, open: "09:00", close: "17:00" },
+          { day: 4, open: "09:00", close: "17:00" },
+          { day: 5, open: "09:00", close: "17:00" },
+        ],
+        defaultDurationMinutes: 30,
+        bufferMinutes: 15,
+        slotIncrementMinutes: 30,
+      },
     },
   });
   console.warn(`  Created demo org: ${ORG_ID}`);
 
-  // 2. Get all sales pipeline agent listings
+  // 2. Get all sales pipeline agent listings + Alex
   const listings = await prisma.agentListing.findMany({
     where: {
-      slug: { in: ["speed-to-lead", "sales-closer", "nurture-specialist"] },
+      slug: { in: ["speed-to-lead", "sales-closer", "nurture-specialist", "alex-conversion"] },
     },
   });
 
   const listingMap = new Map(listings.map((l) => [l.slug, l]));
 
-  // 3. Create deployments for all 3 agents
+  // 3. Create deployments for all 3 sales pipeline agents
   const deployments: { slug: string; id: string; listingId: string }[] = [];
   for (const agent of SALES_PIPELINE_AGENTS) {
     const listing = listingMap.get(agent.slug);
@@ -190,7 +596,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       },
       update: {
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
@@ -198,7 +609,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
         organizationId: ORG_ID,
         listingId: listing.id,
         status: "active",
-        inputConfig: {},
+        skillSlug: "sales-pipeline",
+        inputConfig: {
+          businessName: "Austin Bakery Co",
+          tone: "friendly",
+          bookingLink: "https://cal.com/austin-bakery",
+        },
         governanceSettings: {},
         connectionIds: [],
       },
@@ -207,15 +623,160 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     console.warn(`  Created deployment: ${agent.name} (${deployment.id})`);
   }
 
+  // 4. Create Alex deployment with skillSlug
+  const alexListing = listingMap.get("alex-conversion");
+  if (alexListing) {
+    const alexDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: alexListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "alex",
+        inputConfig: {
+          businessName: "Glow Aesthetics",
+          businessType: "aesthetics_clinic",
+          tone: "friendly",
+          bookingLink: "https://cal.com/glow-aesthetics",
+          qualificationCriteria: {
+            ageRequirement: "21+",
+            noContraindications: true,
+          },
+          disqualificationCriteria: {
+            underage: true,
+            activeInfection: true,
+          },
+          escalationRules: {
+            medicalQuestions: true,
+            pricingNegotiation: true,
+            complaints: true,
+          },
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: alexListing.id,
+        status: "active",
+        skillSlug: "alex",
+        inputConfig: {
+          businessName: "Glow Aesthetics",
+          businessType: "aesthetics_clinic",
+          tone: "friendly",
+          bookingLink: "https://cal.com/glow-aesthetics",
+          qualificationCriteria: {
+            ageRequirement: "21+",
+            noContraindications: true,
+          },
+          disqualificationCriteria: {
+            underage: true,
+            activeInfection: true,
+          },
+          escalationRules: {
+            medicalQuestions: true,
+            pricingNegotiation: true,
+            complaints: true,
+          },
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    deployments.push({
+      slug: "alex-conversion",
+      id: alexDeployment.id,
+      listingId: alexListing.id,
+    });
+    console.warn(`  Created deployment: ${ALEX_CONVERSION_AGENT.name} (${alexDeployment.id})`);
+  }
+
+  // 5. Create website profiler deployment
+  const profilerListing = await prisma.agentListing.findUnique({
+    where: { slug: "website-profiler" },
+  });
+  if (profilerListing) {
+    const profilerDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: profilerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: profilerListing.id,
+        status: "active",
+        skillSlug: "website-profiler",
+        inputConfig: {},
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${WEBSITE_PROFILER.name} (${profilerDeployment.id})`);
+  }
+
+  // 6. Create ad optimizer deployment
+  const adOptimizerListing = await prisma.agentListing.findUnique({
+    where: { slug: "ad-optimizer" },
+  });
+  if (adOptimizerListing) {
+    const adOptDeployment = await prisma.agentDeployment.upsert({
+      where: {
+        organizationId_listingId: {
+          organizationId: ORG_ID,
+          listingId: adOptimizerListing.id,
+        },
+      },
+      update: {
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+      create: {
+        organizationId: ORG_ID,
+        listingId: adOptimizerListing.id,
+        status: "active",
+        skillSlug: "ad-optimizer",
+        inputConfig: {
+          monthlyBudget: "3000",
+          targetCPA: "30",
+          targetROAS: "2.5",
+          auditFrequency: "weekly",
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      },
+    });
+    console.warn(`  Created deployment: ${AD_OPTIMIZER.name} (${adOptDeployment.id})`);
+  }
+
   const deploymentMap = new Map(deployments.map((d) => [d.slug, d]));
 
-  // 4. Delete existing demo tasks for clean re-seed
+  // 5. Delete existing demo tasks for clean re-seed
   const deleteResult = await prisma.agentTask.deleteMany({
     where: { organizationId: ORG_ID },
   });
   console.warn(`  Deleted ${deleteResult.count} existing demo tasks`);
 
-  // 5. Track trust score progression per listing per category
+  // 6. Track trust score progression per listing per category
   interface TrustScoreState {
     score: number;
     totalApprovals: number;
@@ -261,7 +822,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     state.score = Math.max(0, Math.min(100, state.score));
   }
 
-  // 6. Create tasks from DEMO_CONVERSATIONS
+  // 7. Create tasks from DEMO_CONVERSATIONS
   let taskCount = 0;
   for (const conv of DEMO_CONVERSATIONS) {
     const deployment = deploymentMap.get(conv.agentSlug);
@@ -315,7 +876,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   }
   console.warn(`  Created ${taskCount} demo tasks from fixtures`);
 
-  // 7. Create/update TrustScoreRecord entries
+  // 8. Create/update TrustScoreRecord entries
   for (const [key, state] of trustScores.entries()) {
     const parts = key.split(":");
     const listingId = parts[0];
@@ -352,7 +913,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   }
   console.warn(`  Created/updated ${trustScores.size} trust score records`);
 
-  // 8. Update listing trustScore and autonomyLevel based on aggregate scores
+  // 9. Update listing trustScore and autonomyLevel based on aggregate scores
   for (const deployment of deployments) {
     const listing = listingMap.get(deployment.slug);
     if (!listing) continue;
@@ -405,4 +966,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       `  Updated listing ${deployment.slug}: trustScore=${avgScore.toFixed(1)}, autonomy=${autonomyLevel}, tier=${priceTier}`,
     );
   }
+
+  // 10. Seed demo business knowledge for Glow Aesthetics
+  await seedDemoKnowledge(prisma, ORG_ID);
 }

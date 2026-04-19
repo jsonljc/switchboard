@@ -1,26 +1,43 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { inferCartridgeId, matchesAny } from "@switchboard/core";
+import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";
+import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { createApprovalForWorkUnit } from "./approval-factory.js";
+import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
 
 export const actionsRoutes: FastifyPluginAsync = async (app) => {
-  // POST /api/actions/propose - Create a new action proposal via envelope
+  // POST /api/actions/propose - Create a new action proposal via PlatformIngress
   app.post(
     "/propose",
     {
       schema: {
         description:
-          "Create a new action proposal. Evaluates policies, risk scoring, and approval requirements.",
+          "Create a new action proposal through PlatformIngress. Requires Idempotency-Key header.",
         tags: ["Actions"],
         body: proposeJsonSchema,
+        headers: {
+          type: "object",
+          properties: {
+            "Idempotency-Key": { type: "string", description: "Required for replay protection" },
+          },
+        },
       },
     },
     async (request, reply) => {
+      const idempotencyKey = request.headers["idempotency-key"];
+      if (!idempotencyKey || typeof idempotencyKey !== "string" || !idempotencyKey.trim()) {
+        return reply.code(400).send({
+          error: "Idempotency-Key header is required for POST /api/actions/propose",
+          statusCode: 400,
+        });
+      }
+
       const parsed = ProposeBodySchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
@@ -43,44 +60,111 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
-      if (!cartridgeId) {
-        return reply.code(400).send({ error: "Cannot infer cartridgeId from actionType" });
+      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
+      if (!organizationId) {
+        return reply.code(400).send({
+          error: "organizationId is required (set via API key metadata or request body)",
+          statusCode: 400,
+        });
       }
 
-      try {
-        const result = await app.orchestrator.resolveAndPropose({
-          actionType: body.actionType,
-          parameters: body.parameters,
-          principalId: body.principalId,
-          organizationId: request.organizationIdFromAuth ?? body.organizationId ?? null,
-          cartridgeId,
-          entityRefs: body.entityRefs ?? [],
-          message: body.message,
-        });
+      const deployment = await resolveDeploymentForIntent(
+        app.deploymentResolver,
+        organizationId,
+        body.actionType,
+      );
 
-        if ("needsClarification" in result) {
-          return reply.code(422).send({
-            status: "needs_clarification",
-            question: result.question,
+      const submitRequest: SubmitWorkRequest = {
+        intent: body.actionType,
+        parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
+        actor: { id: body.principalId, type: "user" as const },
+        organizationId,
+        deployment,
+        trigger: "api" as const,
+        idempotencyKey,
+      };
+
+      try {
+        const response = await app.platformIngress.submit(submitRequest);
+
+        if (!response.ok) {
+          const status = response.error.type === "intent_not_found" ? 404 : 400;
+          return reply.code(status).send({
+            error: response.error.message,
+            statusCode: status,
           });
         }
 
-        if ("notFound" in result) {
-          return reply.code(404).send({
-            status: "not_found",
-            explanation: result.explanation,
+        const { result, workUnit } = response;
+
+        if ("approvalRequired" in response && response.approvalRequired) {
+          const { workUnit } = response;
+
+          try {
+            const { approvalId, bindingHash } = await createApprovalForWorkUnit({
+              workUnit,
+              storageContext: app.storageContext,
+              routingConfig: app.orchestrator.routingConfig,
+            });
+
+            return reply.code(201).send({
+              outcome: "PENDING_APPROVAL",
+              workUnitId: workUnit.id,
+              traceId: workUnit.traceId,
+              approvalRequest: { id: approvalId, bindingHash },
+            });
+          } catch (err) {
+            console.error("[propose] Failed to persist approval state:", err);
+            return reply.code(500).send({
+              error: "Failed to persist approval state",
+              statusCode: 500,
+            });
+          }
+        }
+
+        const EXECUTION_ERROR_CODES = ["CARTRIDGE_ERROR", "EXECUTION_ERROR", "GOVERNANCE_ERROR"];
+        if (result.outcome === "failed") {
+          const isExecutionFailure =
+            !result.error?.code || EXECUTION_ERROR_CODES.includes(result.error.code);
+
+          if (isExecutionFailure) {
+            return reply.code(201).send({
+              outcome: "FAILED",
+              workUnitId: workUnit.id,
+              traceId: workUnit.traceId,
+              error: result.error,
+            });
+          }
+
+          return reply.code(201).send({
+            outcome: "DENIED",
+            workUnitId: workUnit.id,
+            traceId: workUnit.traceId,
+            denied: true,
+            explanation: result.summary,
           });
         }
 
         return reply.code(201).send({
-          envelope: result.envelope,
-          decisionTrace: result.decisionTrace,
-          approvalRequest: result.approvalRequest,
-          denied: result.denied,
-          explanation: result.explanation,
+          outcome: "EXECUTED",
+          workUnitId: workUnit.id,
+          traceId: workUnit.traceId,
+          executionResult: result.outputs,
+          denied: false,
         });
       } catch (err) {
+        if (err instanceof NeedsClarificationError) {
+          return reply.code(422).send({
+            status: "needs_clarification",
+            question: err.question,
+          });
+        }
+        if (err instanceof NotFoundError) {
+          return reply.code(404).send({
+            status: "not_found",
+            explanation: err.explanation,
+          });
+        }
         return reply.code(500).send({
           error: sanitizeErrorMessage(err, 500),
         });
@@ -116,12 +200,12 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // POST /api/actions/:id/execute - Execute an approved envelope
+  // POST /api/actions/:id/execute - Execute a previously approved work unit
   app.post(
     "/:id/execute",
     {
       schema: {
-        description: "Execute a previously approved action envelope.",
+        description: "Execute a previously approved work unit.",
         tags: ["Actions"],
         params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
       },
@@ -129,19 +213,8 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      const envelope = await app.storageContext.envelopes.getById(id);
-      if (!envelope) {
-        return reply.code(404).send({ error: "Envelope not found" });
-      }
-
-      const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
-        | string
-        | null
-        | undefined;
-      if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
-
       try {
-        const result = await app.orchestrator.executeApproved(id);
+        const result = await app.platformLifecycle.executeApproved(id);
         return reply.code(200).send({ result });
       } catch (err) {
         return reply.code(400).send({
@@ -177,13 +250,15 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertOrgAccess(request, envelopeOrgId, reply)) return;
 
       try {
-        const result = await app.orchestrator.requestUndo(id);
+        const result = await app.platformLifecycle.requestUndo(id, app.platformIngress);
+        if (!result.undoSubmitted) {
+          return reply.code(400).send({
+            error: result.error ?? "Undo submission failed",
+          });
+        }
         return reply.code(201).send({
-          envelope: result.envelope,
-          decisionTrace: result.decisionTrace,
-          approvalRequest: result.approvalRequest,
-          denied: result.denied,
-          explanation: result.explanation,
+          undoSubmitted: true,
+          undoWorkUnitId: result.undoWorkUnitId,
         });
       } catch (err) {
         return reply.code(400).send({
@@ -198,12 +273,30 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
     "/batch",
     {
       schema: {
-        description: "Submit multiple action proposals in a single batch.",
+        description:
+          "Submit multiple action proposals as independent WorkUnits via PlatformIngress.",
         tags: ["Actions"],
         body: batchJsonSchema,
+        headers: {
+          type: "object",
+          properties: {
+            "Idempotency-Key": {
+              type: "string",
+              description: "Required batch-level key. Per-proposal keys derived as {key}:{index}.",
+            },
+          },
+        },
       },
     },
     async (request, reply) => {
+      const batchKey = request.headers["idempotency-key"];
+      if (!batchKey || typeof batchKey !== "string" || !batchKey.trim()) {
+        return reply.code(400).send({
+          error: "Idempotency-Key header is required for POST /api/actions/batch",
+          statusCode: 400,
+        });
+      }
+
       const parsed = BatchProposeBodySchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
@@ -228,23 +321,72 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      const organizationId = request.organizationIdFromAuth ?? body.organizationId ?? null;
+      if (!organizationId) {
+        return reply.code(400).send({
+          error: "organizationId is required (set via API key metadata or request body)",
+          statusCode: 400,
+        });
+      }
+
       const results = [];
-      for (const proposal of body.proposals) {
-        const cartridgeId = body.cartridgeId ?? inferCartridgeId(proposal.actionType);
-        if (!cartridgeId) continue;
+      for (let i = 0; i < body.proposals.length; i++) {
+        const proposal = body.proposals[i]!;
+
+        const batchDeployment = await resolveDeploymentForIntent(
+          app.deploymentResolver,
+          organizationId,
+          proposal.actionType,
+        );
+
+        const submitRequest: SubmitWorkRequest = {
+          intent: proposal.actionType,
+          parameters: proposal.parameters,
+          actor: { id: body.principalId, type: "user" as const },
+          organizationId,
+          deployment: batchDeployment,
+          trigger: "api" as const,
+          idempotencyKey: `${batchKey}:${i}`,
+        };
 
         try {
-          const result = await app.orchestrator.resolveAndPropose({
-            actionType: proposal.actionType,
-            parameters: proposal.parameters,
-            principalId: body.principalId,
-            organizationId: request.organizationIdFromAuth ?? body.organizationId ?? null,
-            cartridgeId,
-            entityRefs: [],
+          const response = await app.platformIngress.submit(submitRequest);
+
+          if (!response.ok) {
+            results.push({
+              index: i,
+              outcome: "ERROR",
+              error: response.error.message,
+            });
+            continue;
+          }
+
+          const { result, workUnit } = response;
+
+          // Check if approval is required
+          if ("approvalRequired" in response && response.approvalRequired) {
+            results.push({
+              index: i,
+              outcome: "PENDING_APPROVAL",
+              envelopeId: workUnit.id,
+              traceId: workUnit.traceId,
+            });
+            continue;
+          }
+
+          results.push({
+            index: i,
+            outcome: result.outcome === "failed" ? "DENIED" : "EXECUTED",
+            envelopeId: workUnit.id,
+            traceId: workUnit.traceId,
+            summary: result.summary,
           });
-          results.push(result);
         } catch (err) {
-          results.push({ error: sanitizeErrorMessage(err, 500) });
+          results.push({
+            index: i,
+            outcome: "ERROR",
+            error: sanitizeErrorMessage(err, 500),
+          });
         }
       }
 

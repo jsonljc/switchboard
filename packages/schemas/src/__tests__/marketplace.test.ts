@@ -5,6 +5,7 @@ import {
   AgentTaskSchema,
   TrustScoreRecordSchema,
   AgentType,
+  AgentFamily,
   AutonomyLevel,
   PriceTier,
   AgentTaskStatus,
@@ -18,6 +19,7 @@ import {
   OnboardingConfigSchema,
   SetupSchema,
   SetupFieldSchema,
+  BusinessFactsSchema,
 } from "../marketplace.js";
 
 describe("Marketplace schemas", () => {
@@ -137,6 +139,18 @@ describe("Marketplace schemas", () => {
         "failed",
         "cancelled",
       ]);
+    });
+  });
+
+  describe("AgentFamily", () => {
+    it("accepts valid family values", () => {
+      expect(AgentFamily.parse("sales_pipeline")).toBe("sales_pipeline");
+      expect(AgentFamily.parse("paid_media")).toBe("paid_media");
+      expect(AgentFamily.parse("organic_growth")).toBe("organic_growth");
+      expect(AgentFamily.parse("customer_experience")).toBe("customer_experience");
+    });
+    it("rejects invalid family", () => {
+      expect(() => AgentFamily.parse("invalid")).toThrow();
     });
   });
 
@@ -291,8 +305,8 @@ describe("Marketplace schemas", () => {
       };
       const result = SetupSchema.parse(schema);
       expect(result.steps).toHaveLength(1);
-      expect(result.steps[0].fields).toHaveLength(2);
-      expect(result.onboarding.publicChannels).toBe(true);
+      expect(result.steps[0]?.fields).toHaveLength(2);
+      expect(result.onboarding?.publicChannels).toBe(true);
     });
 
     it("rejects invalid field type", () => {
@@ -350,6 +364,97 @@ describe("Marketplace schemas", () => {
           platformDetected: "invalid-platform",
         }),
       ).toThrow();
+    });
+  });
+
+  describe("BusinessFactsSchema", () => {
+    const validFacts = {
+      businessName: "Glow Dental",
+      timezone: "Asia/Singapore",
+      locations: [{ name: "Main", address: "123 Orchard Rd" }],
+      openingHours: {
+        monday: { open: "09:00", close: "18:00" },
+        tuesday: { open: "09:00", close: "18:00" },
+        sunday: { open: "09:00", close: "18:00", closed: true },
+      },
+      services: [{ name: "Teeth Cleaning", description: "Standard cleaning" }],
+      escalationContact: { name: "Dr Tan", channel: "whatsapp" as const, address: "+6591234567" },
+    };
+
+    it("validates a complete set of business facts", () => {
+      const result = BusinessFactsSchema.safeParse(validFacts);
+      expect(result.success).toBe(true);
+    });
+
+    it("applies defaults for timezone and additionalFaqs", () => {
+      const minimal = {
+        businessName: "Test Biz",
+        locations: [{ name: "HQ", address: "1 Main St" }],
+        openingHours: { monday: { open: "09:00", close: "17:00" } },
+        services: [{ name: "Consult", description: "Initial consultation" }],
+        escalationContact: { name: "Owner", channel: "email" as const, address: "a@b.com" },
+      };
+      const result = BusinessFactsSchema.parse(minimal);
+      expect(result.timezone).toBe("Asia/Singapore");
+      expect(result.additionalFaqs).toEqual([]);
+    });
+
+    it("rejects when locations is empty", () => {
+      const bad = { ...validFacts, locations: [] };
+      const result = BusinessFactsSchema.safeParse(bad);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects when services is empty", () => {
+      const bad = { ...validFacts, services: [] };
+      const result = BusinessFactsSchema.safeParse(bad);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects when escalationContact is missing", () => {
+      const { escalationContact: _, ...bad } = validFacts;
+      const result = BusinessFactsSchema.safeParse(bad);
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts optional bookingPolicies", () => {
+      const withPolicies = {
+        ...validFacts,
+        bookingPolicies: {
+          cancellationPolicy: "24 hours notice required",
+          prepInstructions: "Brush your teeth before arriving",
+        },
+      };
+      const result = BusinessFactsSchema.safeParse(withPolicies);
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts optional additionalFaqs", () => {
+      const withFaqs = {
+        ...validFacts,
+        additionalFaqs: [
+          { question: "Do you have parking?", answer: "Yes, basement parking available" },
+        ],
+      };
+      const result = BusinessFactsSchema.safeParse(withFaqs);
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts optional service fields", () => {
+      const withOptional = {
+        ...validFacts,
+        services: [
+          {
+            name: "Teeth Cleaning",
+            description: "Standard cleaning",
+            durationMinutes: 30,
+            price: "150",
+            currency: "SGD",
+          },
+        ],
+      };
+      const result = BusinessFactsSchema.safeParse(withOptional);
+      expect(result.success).toBe(true);
     });
   });
 });

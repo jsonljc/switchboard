@@ -29,6 +29,17 @@ export interface RuntimeOrchestrator {
     | { notFound: true; explanation: string }
   >;
 
+  executePreApproved(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId: string | null;
+    cartridgeId: string;
+    traceId: string;
+    idempotencyKey?: string;
+    workUnitId?: string;
+  }): Promise<ExecuteResult>;
+
   executeApproved(envelopeId: string): Promise<ExecuteResult>;
 
   respondToApproval(params: {

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import type { ReplySink } from "@switchboard/core";
-import { createChatRuntime } from "./runtime.js";
+import { ChannelGateway } from "@switchboard/core";
 import { checkIngressRateLimit } from "./adapters/security.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
 import { startHealthChecker } from "./managed/health-checker.js";
@@ -12,6 +12,11 @@ import { registerWidgetMessagesEndpoint } from "./endpoints/widget-messages.js";
 import { registerWidgetEventsEndpoint } from "./endpoints/widget-events.js";
 import { registerWidgetEmbedEndpoint } from "./endpoints/widget-embed.js";
 import { createGatewayBridge } from "./gateway/gateway-bridge.js";
+import { TelegramAdapter } from "./adapters/telegram.js";
+import { HttpPlatformIngressAdapter } from "./gateway/http-platform-ingress-adapter.js";
+import { StaticDeploymentResolver } from "./single-tenant/static-deployment-resolver.js";
+import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
+import { FailedMessageStore } from "./dlq/failed-message-store.js";
 
 async function main() {
   // Pre-boot validation — fail fast with clear error messages
@@ -44,7 +49,27 @@ async function main() {
     },
   );
 
-  const { runtime, cleanup, failedMessageStore } = await createChatRuntime();
+  // Platform ingress adapter — all chat traffic routes through the API server
+  const apiUrl = process.env["SWITCHBOARD_API_URL"] ?? "http://localhost:3000";
+  const apiKey = process.env["SWITCHBOARD_API_KEY"];
+  const platformIngressAdapter = new HttpPlatformIngressAdapter(apiUrl, apiKey);
+
+  // Single-tenant setup: ChannelGateway with static deployment
+  const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
+  const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
+  const singleTenantAdapter = new TelegramAdapter(botToken, undefined, webhookSecret);
+  const singleTenantGateway = new ChannelGateway({
+    deploymentResolver: new StaticDeploymentResolver({}),
+    platformIngress: platformIngressAdapter,
+    conversationStore: new InMemoryGatewayConversationStore(),
+  });
+
+  // DLQ store
+  let failedMessageStore: FailedMessageStore | null = null;
+  if (process.env["DATABASE_URL"]) {
+    const { getDb } = await import("@switchboard/db");
+    failedMessageStore = new FailedMessageStore(getDb());
+  }
 
   // Initialize Redis-backed security store if Redis is available
   if (process.env["REDIS_URL"]) {
@@ -79,24 +104,26 @@ async function main() {
   let registry: RuntimeRegistry | null = null;
   let stopHealthChecker: (() => void) | null = null;
   let sseManager: SseSessionManager | null = null;
+  let managedGateway: import("@switchboard/core").ChannelGateway | null = null;
 
   if (process.env["DATABASE_URL"]) {
     try {
       const { getDb } = await import("@switchboard/db");
       const prisma = getDb();
-      const gateway = createGatewayBridge(prisma);
 
-      // Managed runtime registry
+      managedGateway = createGatewayBridge(prisma, {
+        platformIngress: platformIngressAdapter,
+      });
+
       registry = new RuntimeRegistry();
-      if (failedMessageStore) registry.setFailedMessageStore(failedMessageStore);
-      await registry.loadAll(prisma);
-      await registry.loadGatewayConnections(prisma, gateway);
+      await registry.loadAll(prisma, managedGateway);
+      await registry.loadGatewayConnections(prisma, managedGateway);
       app.log.info(`Loaded ${registry.size} managed runtimes from database`);
       stopHealthChecker = startHealthChecker(prisma);
 
       // Widget endpoints
       sseManager = new SseSessionManager();
-      registerWidgetMessagesEndpoint(app, gateway, sseManager);
+      registerWidgetMessagesEndpoint(app, managedGateway, sseManager);
       registerWidgetEventsEndpoint(app, sseManager);
       registerWidgetEmbedEndpoint(app);
       app.log.info("Widget endpoints registered");
@@ -125,27 +152,23 @@ async function main() {
     };
   });
 
-  // Telegram webhook endpoint (single-tenant, backward-compatible)
+  // Telegram webhook endpoint (single-tenant) — uses ChannelGateway + PlatformIngress
   app.post("/webhook/telegram", async (request, reply) => {
-    // Verify request via adapter's verifyRequest() (timing-safe comparison)
-    const adapter = runtime.getAdapter();
-    if (adapter.verifyRequest) {
+    if (singleTenantAdapter.verifyRequest) {
       const rawBody = JSON.stringify(request.body);
       const headers = request.headers as Record<string, string | undefined>;
-      if (!adapter.verifyRequest(rawBody, headers)) {
+      if (!singleTenantAdapter.verifyRequest(rawBody, headers)) {
         app.log.warn("Webhook request failed signature verification");
         return reply.code(401).send({ error: "Invalid signature" });
       }
     }
 
-    // Rate limit by source IP
     const sourceIp = request.ip;
     if (!(await checkIngressRateLimit(sourceIp, rateLimitConfig))) {
       app.log.warn({ ip: sourceIp }, "Webhook rate limit exceeded");
-      return reply.code(200).send({ ok: true }); // 200 to avoid Telegram retries
+      return reply.code(200).send({ ok: true });
     }
 
-    // Dedup — prevent duplicate processing on Telegram webhook retries
     const payload = request.body as Record<string, unknown>;
     const msg = payload["message"] as Record<string, unknown> | undefined;
     const cb = payload["callback_query"] as Record<string, unknown> | undefined;
@@ -159,7 +182,20 @@ async function main() {
     }
 
     try {
-      await runtime.handleIncomingMessage(request.body);
+      const incoming = singleTenantAdapter.parseIncomingMessage(request.body);
+      if (!incoming) {
+        return reply.code(200).send({ ok: true });
+      }
+
+      const threadId = incoming.threadId ?? incoming.principalId;
+      const replySink: ReplySink = {
+        send: async (text) => singleTenantAdapter.sendTextReply(threadId, text),
+      };
+
+      await singleTenantGateway.handleIncoming(
+        { channel: "telegram", token: "single-tenant", sessionId: threadId, text: incoming.text },
+        replySink,
+      );
       return reply.code(200).send({ ok: true });
     } catch (err) {
       app.log.error(err, "Error handling webhook");
@@ -172,7 +208,7 @@ async function main() {
           errorStack: err instanceof Error ? err.stack : undefined,
         })
         .catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
-      return reply.code(200).send({ ok: true }); // Always 200 for Telegram
+      return reply.code(200).send({ ok: true });
     }
   });
 
@@ -184,16 +220,15 @@ async function main() {
 
     const { webhookId } = request.params as { webhookId: string };
     const webhookPath = `/webhook/managed/${webhookId}`;
-    const entry = registry.getByWebhookPath(webhookPath);
+    const entry = registry.getGatewayByWebhookPath(webhookPath);
 
     if (!entry) {
       return reply.code(404).send("Not found");
     }
 
-    const managedAdapter = entry.runtime.getAdapter();
-    if (managedAdapter.handleVerification) {
+    if (entry.adapter.handleVerification) {
       const query = request.query as Record<string, string | undefined>;
-      const result = managedAdapter.handleVerification(query);
+      const result = entry.adapter.handleVerification(query);
       return reply.code(result.status).send(result.body);
     }
 
@@ -210,103 +245,63 @@ async function main() {
     const webhookPath = `/webhook/managed/${webhookId}`;
 
     // Check gateway entries first (DeploymentConnection-based routing)
+    // All managed channels route through gateway entries (unified in Phase 6)
     const gatewayEntry = registry.getGatewayByWebhookPath(webhookPath);
-    if (gatewayEntry) {
-      if (gatewayEntry.adapter.verifyRequest) {
-        const rawBody = JSON.stringify(request.body);
-        const headers = request.headers as Record<string, string | undefined>;
-        if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
-          return reply.code(401).send({ error: "Invalid signature" });
-        }
-      }
-
-      const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
-      if (!incoming) {
-        return reply.code(200).send({ ok: true });
-      }
-
-      const threadId = incoming.threadId ?? incoming.principalId;
-      const replySink: ReplySink = {
-        send: async (text) => gatewayEntry.adapter.sendTextReply(threadId, text),
-      };
-
-      const channelMessage = {
-        channel: "telegram",
-        token: gatewayEntry.deploymentConnectionId,
-        sessionId: threadId,
-        text: incoming.text,
-      };
-
-      try {
-        await gatewayEntry.gateway.handleIncoming(channelMessage, replySink);
-      } catch (err) {
-        app.log.error(err, "Gateway webhook processing error");
-      }
-      return reply.code(200).send({ ok: true }); // Always 200 to prevent Telegram retries
-    }
-
-    const entry = registry.getByWebhookPath(webhookPath);
-
-    if (!entry) {
-      app.log.warn({ webhookPath }, "No managed runtime found for webhook path");
+    if (!gatewayEntry) {
+      app.log.warn({ webhookPath }, "No gateway entry found for webhook path");
       return reply.code(200).send({ ok: true });
     }
 
+    // Handle Slack URL verification
     const payload = request.body as Record<string, unknown>;
-
-    // Handle Slack URL verification challenge
-    if (entry.channel === "slack" && payload["type"] === "url_verification") {
+    if (gatewayEntry.channel === "slack" && payload["type"] === "url_verification") {
       return reply.code(200).send({ challenge: payload["challenge"] });
     }
 
-    // Verify request signature
-    const managedAdapter = entry.runtime.getAdapter();
-    if (managedAdapter.verifyRequest) {
+    if (gatewayEntry.adapter.verifyRequest) {
       const rawBody =
         ((request as unknown as Record<string, unknown>).rawBody as string) ??
         JSON.stringify(request.body);
       const headers = request.headers as Record<string, string | undefined>;
-      if (!managedAdapter.verifyRequest(rawBody, headers)) {
-        app.log.warn({ webhookPath }, "Managed webhook request failed signature verification");
+      if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
         return reply.code(401).send({ error: "Invalid signature" });
       }
     }
 
-    // Rate limit by source IP
-    const sourceIp = request.ip;
-    if (!(await checkIngressRateLimit(sourceIp, rateLimitConfig))) {
-      app.log.warn({ ip: sourceIp, webhookPath }, "Managed webhook rate limit exceeded");
+    const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
+    if (!incoming) {
       return reply.code(200).send({ ok: true });
     }
 
-    // Dedup — prevent duplicate webhook deliveries (Redis-backed, 24h TTL)
-    const messageId = managedAdapter.extractMessageId(request.body);
-    if (messageId) {
-      const isNew = await checkDedup(`managed_${webhookId}`, messageId);
-      if (!isNew) {
-        app.log.warn({ messageId, webhookPath }, "Duplicate managed webhook message, skipping");
-        return reply.code(200).send({ ok: true });
-      }
-    }
+    const threadId = incoming.threadId ?? incoming.principalId;
+    const replySink: ReplySink = {
+      send: async (text) => gatewayEntry.adapter.sendTextReply(threadId, text),
+    };
 
     try {
-      await entry.runtime.handleIncomingMessage(request.body);
-      return reply.code(200).send({ ok: true });
+      await gatewayEntry.gateway.handleIncoming(
+        {
+          channel: gatewayEntry.channel,
+          token: gatewayEntry.deploymentConnectionId,
+          sessionId: threadId,
+          text: incoming.text,
+        },
+        replySink,
+      );
     } catch (err) {
-      app.log.error(err, "Error handling managed webhook");
+      app.log.error(err, "Gateway webhook processing error");
       failedMessageStore
         ?.record({
-          channel: entry.channel,
+          channel: gatewayEntry.channel,
           webhookPath,
-          organizationId: entry.orgId,
           rawPayload: request.body as Record<string, unknown>,
           stage: "unknown",
           errorMessage: err instanceof Error ? err.message : String(err),
           errorStack: err instanceof Error ? err.stack : undefined,
         })
         .catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
-      return reply.code(200).send({ ok: true }); // Always 200 to prevent platform retries
     }
+    return reply.code(200).send({ ok: true });
   });
 
   // --- Internal provision-notify endpoint ---
@@ -347,7 +342,10 @@ async function main() {
         return reply.code(404).send({ error: "ManagedChannel not found" });
       }
 
-      await registry.provision(channel, prisma);
+      if (!managedGateway) {
+        return reply.code(503).send({ error: "Gateway not initialized" });
+      }
+      await registry.provision(channel, prisma, managedGateway);
       app.log.info({ managedChannelId, channel: channel.channel }, "Provisioned managed runtime");
       return reply.code(200).send({ ok: true });
     } catch (err) {
@@ -362,7 +360,6 @@ async function main() {
   // Graceful shutdown — drain connections on SIGTERM/SIGINT
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down gracefully`);
-    cleanup();
     if (stopHealthChecker) stopHealthChecker();
     await app.close();
     process.exit(0);

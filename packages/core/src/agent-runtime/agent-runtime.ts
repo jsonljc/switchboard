@@ -13,6 +13,7 @@ export interface AgentRuntimeConfig {
   trustScore: number;
   trustLevel: "supervised" | "guided" | "autonomous";
   persona: AgentPersona;
+  deploymentInputConfig?: Record<string, unknown>;
   stateStore: AgentStateStoreInterface;
   actionRequestStore: ActionRequestStore;
   llmAdapter: LLMAdapter;
@@ -34,6 +35,7 @@ export class AgentRuntime {
       trustScore: config.trustScore,
       trustLevel: config.trustLevel,
       persona: config.persona,
+      deploymentInputConfig: config.deploymentInputConfig,
       stateStore: config.stateStore,
       actionRequestStore: config.actionRequestStore,
       llmAdapter: config.llmAdapter,

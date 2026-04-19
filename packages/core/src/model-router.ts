@@ -1,6 +1,6 @@
 import type { Effort } from "./context-budget.js";
 
-export type ModelSlot = "default" | "premium" | "embedding";
+export type ModelSlot = "default" | "premium" | "critical" | "embedding";
 
 export interface ModelConfig {
   slot: ModelSlot;
@@ -18,7 +18,23 @@ export interface ResolveOptions {
   timeoutMs?: number;
 }
 
+export interface TierContext {
+  messageIndex: number;
+  toolCount: number;
+  hasHighRiskTools: boolean;
+  previousTurnUsedTools: boolean;
+  previousTurnEscalated: boolean;
+  modelFloor?: ModelSlot;
+}
+
 const DEFAULT_TIMEOUT_MS = 8000;
+
+const SLOT_RANK: Record<ModelSlot, number> = {
+  default: 0,
+  premium: 1,
+  critical: 2,
+  embedding: -1,
+};
 
 const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot" | "timeoutMs">> = {
   default: {
@@ -32,6 +48,12 @@ const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot" | "timeou
     modelId: "claude-sonnet-4-6",
     maxTokens: 2048,
     temperature: 0.5,
+  },
+  critical: {
+    slot: "critical",
+    modelId: "claude-opus-4-6",
+    maxTokens: 4096,
+    temperature: 0.3,
   },
   embedding: {
     slot: "embedding",
@@ -68,6 +90,27 @@ export class ModelRouter {
       timeoutMs: timeoutMs ?? DEFAULT_TIMEOUT_MS,
       fallbackSlot,
     };
+  }
+
+  resolveTier(context: TierContext): ModelSlot {
+    let slot: ModelSlot;
+    if (context.messageIndex === 0)
+      slot = "default"; // Rule 1: greetings
+    else if (context.toolCount === 0)
+      slot = "default"; // Rule 2: conversational
+    else if (context.previousTurnEscalated)
+      slot = "critical"; // Rule 3: escalation
+    else if (context.previousTurnUsedTools)
+      slot = "premium"; // Rule 4: tool follow-up
+    else if (context.hasHighRiskTools)
+      slot = "premium"; // Rule 5: high risk
+    else slot = "default"; // Rule 6: default
+    return this.applyFloor(slot, context.modelFloor);
+  }
+
+  private applyFloor(slot: ModelSlot, floor?: ModelSlot): ModelSlot {
+    if (!floor) return slot;
+    return (SLOT_RANK[floor] ?? 0) > (SLOT_RANK[slot] ?? 0) ? floor : slot;
   }
 }
 

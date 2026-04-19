@@ -5,6 +5,14 @@ import { z } from "zod";
 export const AgentType = z.enum(["open_source", "third_party", "switchboard_native"]);
 export type AgentType = z.infer<typeof AgentType>;
 
+export const AgentFamily = z.enum([
+  "sales_pipeline",
+  "paid_media",
+  "organic_growth",
+  "customer_experience",
+]);
+export type AgentFamily = z.infer<typeof AgentFamily>;
+
 export const AgentListingStatus = z.enum(["pending_review", "listed", "suspended", "deprecated"]);
 export type AgentListingStatus = z.infer<typeof AgentListingStatus>;
 
@@ -236,3 +244,63 @@ export const SetupSchema = z.object({
 });
 
 export type SetupSchemaType = z.infer<typeof SetupSchema>;
+
+// ── Business Facts (Operator-Approved Structured Knowledge) ──
+
+export const BusinessFactsSchema = z.object({
+  businessName: z.string().min(1),
+  timezone: z.string().default("Asia/Singapore"),
+  locations: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        address: z.string().min(1),
+        parkingNotes: z.string().optional(),
+        accessNotes: z.string().optional(),
+      }),
+    )
+    .min(1),
+  openingHours: z.record(
+    z.string(),
+    z.object({
+      open: z.string(),
+      close: z.string(),
+      closed: z.boolean().default(false),
+    }),
+  ),
+  services: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        description: z.string().min(1),
+        durationMinutes: z.number().int().positive().optional(),
+        price: z.string().optional(),
+        currency: z.string().default("SGD"),
+      }),
+    )
+    .min(1),
+  bookingPolicies: z
+    .object({
+      cancellationPolicy: z.string().optional(),
+      reschedulePolicy: z.string().optional(),
+      noShowPolicy: z.string().optional(),
+      advanceBookingDays: z.number().int().positive().optional(),
+      prepInstructions: z.string().optional(),
+    })
+    .optional(),
+  escalationContact: z.object({
+    name: z.string().min(1),
+    channel: z.enum(["whatsapp", "telegram", "email", "sms"]),
+    address: z.string().min(1),
+  }),
+  additionalFaqs: z
+    .array(
+      z.object({
+        question: z.string().min(1),
+        answer: z.string().min(1),
+      }),
+    )
+    .default([]),
+});
+
+export type BusinessFacts = z.infer<typeof BusinessFactsSchema>;

@@ -34,10 +34,6 @@
       "types": "./dist/audit/index.d.ts",
       "import": "./dist/audit/index.js"
     },
-    "./competence": {
-      "types": "./dist/competence/index.d.ts",
-      "import": "./dist/competence/index.js"
-    },
     "./telemetry": {
       "types": "./dist/telemetry/index.d.ts",
       "import": "./dist/telemetry/index.js"
@@ -58,17 +54,9 @@
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"
     },
-    "./enrichment": {
-      "types": "./dist/enrichment/index.d.ts",
-      "import": "./dist/enrichment/index.js"
-    },
     "./data-flow": {
       "types": "./dist/data-flow/index.d.ts",
       "import": "./dist/data-flow/index.js"
-    },
-    "./smb": {
-      "types": "./dist/smb/index.d.ts",
-      "import": "./dist/smb/index.js"
     },
     "./capability": {
       "types": "./dist/capability/index.d.ts",
@@ -78,21 +66,9 @@
       "types": "./dist/planning/index.d.ts",
       "import": "./dist/planning/index.js"
     },
-    "./skin": {
-      "types": "./dist/skin/index.d.ts",
-      "import": "./dist/skin/index.js"
-    },
-    "./profile": {
-      "types": "./dist/profile/index.d.ts",
-      "import": "./dist/profile/index.js"
-    },
     "./tool-registry": {
       "types": "./dist/tool-registry/index.d.ts",
       "import": "./dist/tool-registry/index.js"
-    },
-    "./agents": {
-      "types": "./dist/agents/index.d.ts",
-      "import": "./dist/agents/index.js"
     },
     "./sessions": {
       "types": "./dist/sessions/index.d.ts",
@@ -102,9 +78,25 @@
       "types": "./dist/agent-runtime/index.d.ts",
       "import": "./dist/agent-runtime/index.js"
     },
-    "./creative-pipeline": {
-      "types": "./dist/creative-pipeline/index.d.ts",
-      "import": "./dist/creative-pipeline/index.js"
+    "./skill-runtime": {
+      "types": "./dist/skill-runtime/index.d.ts",
+      "import": "./dist/skill-runtime/index.js"
+    },
+    "./platform": {
+      "types": "./dist/platform/index.d.ts",
+      "import": "./dist/platform/index.js"
+    },
+    "./knowledge": {
+      "types": "./dist/knowledge/index.d.ts",
+      "import": "./dist/knowledge/index.js"
+    },
+    "./llm": {
+      "types": "./dist/llm/index.d.ts",
+      "import": "./dist/llm/index.js"
+    },
+    "./calendar": {
+      "types": "./dist/calendar/index.d.ts",
+      "import": "./dist/calendar/index.js"
     }
   },
   "scripts": {
@@ -117,11 +109,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@paralleldrive/cuid2": "^3.3.0",
     "@switchboard/cartridge-sdk": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "@switchboard/sdk": "workspace:*",
+    "cheerio": "^1.2.0",
     "inngest": "^4.2.0",
     "openai": "^6.34.0",
+    "yaml": "^2.8.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {

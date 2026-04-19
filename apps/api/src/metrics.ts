@@ -108,6 +108,63 @@ export function createPromMetrics(): SwitchboardMetrics {
   };
 }
 
+// --- Conversion pipeline metrics ---
+
+export interface ConversionPipelineMetrics {
+  outboxPublishSuccess: Counter;
+  outboxPublishFailure: Counter;
+  conversionRecordWriteSuccess: Counter;
+  conversionRecordWriteFailure: Counter;
+}
+
+const CONVERSION_LABELS = ["event_type"];
+
+export function createConversionPipelineMetrics(): ConversionPipelineMetrics {
+  return {
+    outboxPublishSuccess: new PromCounter(
+      "switchboard_outbox_publish_success_total",
+      "Outbox events successfully published to bus",
+      CONVERSION_LABELS,
+    ),
+    outboxPublishFailure: new PromCounter(
+      "switchboard_outbox_publish_failure_total",
+      "Outbox events that failed to publish",
+      CONVERSION_LABELS,
+    ),
+    conversionRecordWriteSuccess: new PromCounter(
+      "switchboard_conversion_record_write_success_total",
+      "Conversion records successfully persisted",
+      CONVERSION_LABELS,
+    ),
+    conversionRecordWriteFailure: new PromCounter(
+      "switchboard_conversion_record_write_failure_total",
+      "Conversion record write failures",
+      CONVERSION_LABELS,
+    ),
+  };
+}
+
+// Outbox backlog gauge — set by the outbox publisher bootstrap
+let outboxBacklogSampler: (() => Promise<number>) | null = null;
+
+const outboxBacklogGauge = new client.Gauge({
+  name: "switchboard_outbox_backlog_size",
+  help: "Number of pending outbox events",
+  registers: [register],
+  async collect() {
+    if (outboxBacklogSampler) {
+      this.set(await outboxBacklogSampler());
+    }
+  },
+});
+
+// Suppress unused-variable lint — the gauge self-registers with the registry
+void outboxBacklogGauge;
+
+export function setOutboxBacklogSampler(sampler: () => Promise<number>): void {
+  outboxBacklogSampler = sampler;
+}
+
 export async function metricsRoute(_request: FastifyRequest, reply: FastifyReply) {
   const metrics = await register.metrics();
   return reply.type(register.contentType).send(metrics);

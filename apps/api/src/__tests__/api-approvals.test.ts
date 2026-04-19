@@ -8,6 +8,18 @@ describe("Approvals API", () => {
   beforeEach(async () => {
     const ctx: TestContext = await buildTestServer();
     app = ctx.app;
+
+    // Override risk tolerance so medium-risk actions require approval
+    const spec = await app.storageContext.identity.getSpecByPrincipalId("default");
+    if (spec) {
+      spec.riskTolerance = {
+        ...spec.riskTolerance,
+        medium: "standard" as const,
+        high: "elevated" as const,
+        critical: "mandatory" as const,
+      };
+      await app.storageContext.identity.saveSpec(spec);
+    }
   });
 
   afterEach(async () => {
@@ -19,16 +31,18 @@ describe("Approvals API", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/actions/propose",
+      headers: { "Idempotency-Key": `test-approval-${Date.now()}-${Math.random()}` },
       payload: {
         actionType: "digital-ads.campaign.pause",
         parameters: { campaignId: "camp_123" },
         principalId: "default",
         cartridgeId: "digital-ads",
+        organizationId: "default",
       },
     });
     const body = res.json();
     return {
-      envelopeId: body.envelope.id as string,
+      envelopeId: body.workUnitId as string,
       approvalRequest: body.approvalRequest as {
         id: string;
         bindingHash: string;
@@ -55,10 +69,10 @@ describe("Approvals API", () => {
       const body = res.json();
       expect(body.executionResult).toBeDefined();
       expect(body.executionResult.success).toBe(true);
-      expect(body.envelope.status).toBe("executed");
+      expect(body.approvalState.status).toBe("approved");
     });
 
-    it("should reject and mark envelope as denied", async () => {
+    it("should reject and mark approval as rejected", async () => {
       const { approvalRequest } = await proposeWithApproval();
 
       const res = await app.inject({
@@ -72,7 +86,7 @@ describe("Approvals API", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.envelope.status).toBe("denied");
+      expect(body.approvalState.status).toBe("rejected");
       expect(body.executionResult).toBeNull();
     });
 

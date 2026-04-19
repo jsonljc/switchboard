@@ -1,0 +1,33 @@
+{
+  "name": "Qualification flow without stage transition",
+  "parameters": {
+    "BUSINESS_NAME": "TestBiz",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp-test-1",
+    "LEAD_PROFILE": { "name": "Test Lead", "phone": "+1234567890" },
+    "PERSONA_CONFIG": {
+      "tone": "friendly and professional",
+      "qualificationCriteria": { "budget": "has budget", "timeline": "within 3 months" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_question": true, "complex_requirement": true },
+      "bookingLink": "https://calendly.com/testbiz",
+      "customInstructions": ""
+    }
+  },
+  "messages": [{ "role": "user", "content": "Yes I have a budget of $5000" }],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Great, a $5000 budget gives you several options with TestBiz. To make sure we recommend the right solution, could you tell me about your timeline? Are you looking to get started within the next few months?"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "response_contains", "substring": "$5000" },
+    { "type": "tool_not_called", "toolName": "crm-write.stage.update" }
+  ]
+}

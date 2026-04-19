@@ -66,3 +66,31 @@ export * from "./agent-persona.js";
 
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
+
+// UGC v2 — Creative Pipeline
+export * from "./ugc-job.js";
+export * from "./creator-identity.js";
+export * from "./asset-record.js";
+export * from "./identity-strategy.js";
+export * from "./provider-capabilities.js";
+export * from "./realism-score.js";
+export * from "./funnel-friction.js";
+
+// Deployment Memory (three-tier agent memory system)
+export * from "./deployment-memory.js";
+
+// Three-Channel Communication (trust levels, notification tiers, agent events, activity log)
+export * from "./three-channel.js";
+
+// Ad Optimizer (campaign insights, funnel analysis, audit reports)
+export * from "./ad-optimizer.js";
+
+// Knowledge entries (curated playbooks, policies, domain guidance)
+export * from "./knowledge.js";
+
+// Temporal Fact (entity-scoped temporal fact system)
+export * from "./temporal-fact.js";
+
+export * from "./conversion.js";
+export * from "./calendar.js";
+export * from "./crm.js";

@@ -10,35 +10,38 @@
 
 > Stable. Loaded every session. Everything below this heading is L1.
 
-AI Agent Marketplace with trust-based pricing (TypeScript monorepo, pnpm + Turborepo). For deep architecture details see `docs/ARCHITECTURE.md`.
+Governed operating system for revenue actions (TypeScript monorepo, pnpm + Turborepo). For architectural rules see `docs/DOCTRINE.md`. For deep architecture details see `docs/ARCHITECTURE.md`.
 
 ---
 
 ## Codebase Map
 
 ```
-packages/schemas/         — Zod schemas & shared types (no internal deps)
-packages/cartridge-sdk/   — Cartridge interface, builders, test harness
-packages/core/            — Orchestrator, policy engine, governance logic
-packages/db/              — Prisma ORM, store implementations, credential encryption
+packages/schemas/            — Zod schemas & shared types (no internal deps)
+packages/sdk/                — Agent manifest, handler interface, test harness
+packages/cartridge-sdk/      — Legacy cartridge interface (pending removal — see docs/DOCTRINE.md)
+packages/creative-pipeline/  — Creative content pipeline (async jobs via Inngest)
+packages/ad-optimizer/       — Ad platform integration + optimization
+packages/core/               — Platform ingress, governance, skill runtime, orchestration
+packages/db/                 — Prisma ORM, store implementations, credential encryption
 
-apps/api/          — Fastify REST API — marketplace + governance endpoints (port 3000)
+apps/api/          — Fastify REST API — platform ingress + governance endpoints (port 3000)
 apps/chat/         — Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
-apps/dashboard/    — Next.js marketplace UI + task review queue (port 3002)
+apps/dashboard/    — Next.js marketplace UI + operator controls (port 3002)
 apps/mcp-server/   — MCP server for LLM tool use
-
-cartridges/        — Domain-specific action cartridges (legacy, being replaced by marketplace agents)
 ```
 
 ### Dependency Layers (enforced by ESLint + dependency-cruiser)
 
 ```
-Layer 1: schemas         → No @switchboard/* imports
-Layer 2: cartridge-sdk   → schemas only
-Layer 3: core            → schemas + cartridge-sdk
-Layer 4: db              → schemas + core (NEVER cartridges)
-Layer 5: cartridges/*    → schemas + cartridge-sdk + core (NEVER db/apps/other cartridges)
-Layer 6: apps/*          → May import anything
+Layer 1: schemas             → No @switchboard/* imports
+Layer 2: cartridge-sdk       → schemas only
+Layer 2: sdk                 → schemas only
+Layer 2: creative-pipeline   → schemas only
+Layer 2: ad-optimizer        → schemas only
+Layer 3: core                → schemas + cartridge-sdk + sdk (NOT db, creative-pipeline, ad-optimizer)
+Layer 4: db                  → schemas + core (NOT cartridge-sdk)
+Layer 5: apps/*              → May import anything
 ```
 
 Circular dependencies are forbidden and enforced in CI.
@@ -80,9 +83,6 @@ pnpm db:seed                      # Seed database
 - Global thresholds: statements 55%, branches 50%, functions 52%, lines 55%
 - Elevated thresholds (per-package `vitest.config.ts`):
   - `core`: 65/65/70/65
-  - `payments`: 70/70/75/70
-  - `customer-engagement`: 60/60/70/60
-  - `crm`: 50/50/55/50
 
 ---
 
@@ -112,20 +112,21 @@ chore: update dependencies
 - Proper layer placement
 - No `any`, `.js` extensions on all relative imports
 
-### New Cartridge Checklist
+### Cartridges (Legacy)
 
-- Does NOT import from `@switchboard/db`, `apps/*`, or other cartridges
-- Has `manifest.ts` and `defaults/guardrails.ts`
-- Has at least one test file
-- Registered in at least one app
-- Added to Dockerfile (`COPY` in base + production stages)
-- Added to `.eslintrc.json` blocklists (cross-cartridge + db overrides)
+Cartridges are a retired concept. No cartridge implementations exist. `CartridgeMode` remains as a legacy execution bridge. Do not create new cartridges. See `docs/DOCTRINE.md` for canonical vocabulary.
 
 ### Refactoring Principles
 
-- No premature abstractions — check `cartridge-sdk`, `core`, `schemas` for existing utils first
+- No premature abstractions — check `sdk`, `core`, `schemas` for existing utils first
 - No grab-bag `utils.ts` — every file has a single clear responsibility
 - If a refactor creates >3 new files, justify why
+
+### Platform Ingress Boundary
+
+All governed work enters through `PlatformIngress.submit()`. App-layer code must not call orchestrator methods directly for work submission. Enforced by static analysis test (`apps/api/src/__tests__/ingress-boundary.test.ts`).
+
+Remaining legacy orchestrator calls (approval response, undo, simulate, emergency halt) are tracked in `docs/DOCTRINE.md` Legacy Bridge Registry with explicit exit conditions.
 
 ### Barrel Files
 

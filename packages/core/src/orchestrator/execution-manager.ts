@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type {
   ActionProposal,
   ActionEnvelope,
+  DecisionTrace,
   RiskCategory,
   UndoRecipe,
 } from "@switchboard/schemas";
@@ -22,6 +24,69 @@ export class ExecutionManager {
     private ctx: SharedContext,
     private circuitBreaker: CartridgeCircuitBreakerWrapper | null = null,
   ) {}
+
+  async executePreApproved(params: {
+    actionType: string;
+    parameters: Record<string, unknown>;
+    principalId: string;
+    organizationId: string | null;
+    cartridgeId: string;
+    traceId: string;
+    idempotencyKey?: string;
+    workUnitId?: string;
+  }): Promise<ExecuteResult> {
+    const proposalId = `prop_${randomUUID()}`;
+    const envelopeId = params.workUnitId ?? `env_${randomUUID()}`;
+
+    const proposal: ActionProposal = {
+      id: proposalId,
+      actionType: params.actionType,
+      parameters: {
+        ...params.parameters,
+        _principalId: params.principalId,
+        _cartridgeId: params.cartridgeId,
+        _organizationId: params.organizationId,
+      },
+      evidence: `Pre-approved ${params.actionType}`,
+      confidence: 1.0,
+      originatingMessageId: "",
+    };
+
+    const decision: DecisionTrace = {
+      actionId: proposalId,
+      envelopeId,
+      checks: [],
+      computedRiskScore: { rawScore: 0, category: "none", factors: [] },
+      finalDecision: "allow",
+      approvalRequired: "none",
+      explanation: "Pre-approved by platform governance",
+      evaluatedAt: new Date(),
+    };
+
+    const now = new Date();
+    const envelope: ActionEnvelope = {
+      id: envelopeId,
+      version: 1,
+      incomingMessage: null,
+      conversationId: null,
+      proposals: [proposal],
+      resolvedEntities: [],
+      plan: null,
+      decisions: [decision],
+      approvalRequests: [],
+      executionResults: [],
+      auditEntryIds: [],
+      status: "approved",
+      createdAt: now,
+      updatedAt: now,
+      parentEnvelopeId: null,
+      traceId: params.traceId,
+    };
+
+    await this.ctx.storage.envelopes.save(envelope);
+
+    return this.executeApproved(envelopeId);
+  }
 
   async executeApproved(envelopeId: string): Promise<ExecuteResult> {
     const execSpan = getTracer().startSpan("orchestrator.executeApproved", {
@@ -302,18 +367,6 @@ export class ExecutionManager {
       await this.flushGuardrailState(proposal, execCartridgeId);
     }
 
-    // Record competence outcome
-    if (this.ctx.competenceTracker) {
-      const principalId = proposal.parameters["_principalId"] as string | undefined;
-      if (principalId) {
-        if (executeResult.success) {
-          await this.ctx.competenceTracker.recordSuccess(principalId, proposal.actionType);
-        } else {
-          await this.ctx.competenceTracker.recordFailure(principalId, proposal.actionType);
-        }
-      }
-    }
-
     // Record audit entry
     await this.ctx.ledger.record({
       eventType: executeResult.success ? "action.executed" : "action.failed",
@@ -420,10 +473,6 @@ export class ExecutionManager {
     }
 
     const principalId = (originalProposal?.parameters["_principalId"] as string) ?? "system";
-
-    if (this.ctx.competenceTracker && originalProposal) {
-      await this.ctx.competenceTracker.recordRollback(principalId, originalProposal.actionType);
-    }
 
     await this.ctx.ledger.record({
       eventType: "action.undo_requested",
