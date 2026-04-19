@@ -43,13 +43,9 @@ ExecutionMode dispatches work
 WorkTrace persisted  →  canonical lifecycle record
 ```
 
-### Trust Score Mechanics
+### What's Live
 
-- **Starting score**: 0 (blank slate, no implied credibility)
-- **Approval**: +3 points + streak bonus (up to +5 for consecutive approvals)
-- **Rejection**: −10 points, streak resets to 0
-- **Autonomy levels**: supervised (0-29) → guided (30-54) → autonomous (55+)
-- **Price tiers**: free (0-29) → basic (30-54) → pro (55-79) → elite (80-100)
+Alex is the first revenue wedge — a WhatsApp-native booking assistant that converts inbound leads to calendar meetings. The deployed path: WhatsApp → PlatformIngress/governance → Alex skill execution → Google Calendar booking → attribution/outcome recording. Everything flows through the governed control plane with idempotency, audit trail, and human override.
 
 ## Project Structure
 
@@ -131,9 +127,9 @@ All business actions enter through `PlatformIngress`. Requires `Idempotency-Key`
 
 Approval workflows, policy management, identity resolution, tamper-evident audit trail.
 
-### Marketplace (`/api/marketplace`)
+### Skills & Deployment (`/api/marketplace`)
 
-Skill discovery and deployment. Trust score tracking. Operator deployment management.
+Skill registration and deployment surfaces. Execution and governance state. Provisioning and runtime management.
 
 See Swagger UI at `/docs` for full endpoint documentation.
 

@@ -20,6 +20,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     createCrmQueryTool,
     createCrmWriteTool,
     createCalendarBookTool,
+    BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
   const { PrismaContactStore, PrismaOpportunityStore, PrismaActivityLogStore, PrismaBookingStore } =
@@ -41,6 +42,36 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const bookingStore = new PrismaBookingStore(prismaClient);
 
   const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
+
+  const failureHandler = new BookingFailureHandler({
+    runTransaction: (fn) =>
+      prismaClient.$transaction((tx) =>
+        fn({
+          booking: tx.booking,
+          escalationRecord: tx.escalationRecord,
+          outboxEvent: tx.outboxEvent,
+        }),
+      ),
+    bookingStore: {
+      findById: async (bookingId: string) => {
+        const b = await bookingStore.findById(bookingId);
+        return b ? { id: b.id, status: b.status } : null;
+      },
+    },
+    escalationLookup: {
+      findByBookingId: async (bookingId: string) => {
+        const records = await prismaClient.escalationRecord.findMany({
+          where: {
+            reason: "booking_failure",
+            metadata: { path: ["bookingId"], equals: bookingId },
+          },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        });
+        return records.length > 0 ? { id: records[0]!.id } : null;
+      },
+    },
+  });
 
   const toolsMap = new Map([
     ["crm-query", createCrmQueryTool(contactStore, activityStore)],
@@ -81,6 +112,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
           prismaClient.$transaction((tx) =>
             fn({ booking: tx.booking, outboxEvent: tx.outboxEvent }),
           ),
+        failureHandler,
       }),
     ],
   ]);

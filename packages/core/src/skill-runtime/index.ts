@@ -17,6 +17,8 @@ export {
   createPipelineHandoffTool,
   createWebScannerTool,
 } from "./tools/index.js";
+export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
+export type { BookingFailureInput, BookingFailureResult } from "./tools/booking-failure-handler.js";
 export {
   alexBuilder,
   salesPipelineBuilder,
