@@ -126,8 +126,12 @@ export function HomepageHero() {
             </div>
           </FadeIn>
 
-          {/* Right column: conversation demo */}
-          <div id="conversation-demo" className="flex justify-center md:justify-end">
+          {/* Right column: conversation demo — top padding matches label height so phone aligns with h1 */}
+          <div
+            id="conversation-demo"
+            className="flex justify-center md:justify-end"
+            style={{ paddingTop: "2.75rem" }}
+          >
             <ConversationDemo />
           </div>
         </div>
