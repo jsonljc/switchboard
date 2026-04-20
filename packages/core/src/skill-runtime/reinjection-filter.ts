@@ -88,7 +88,7 @@ function compactArrays(
   }
 
   if (didCompact) {
-    const totalAvailable = Object.values(data).reduce((sum, v) => {
+    const totalAvailable = Object.values(data).reduce<number>((sum, v) => {
       return sum + (Array.isArray(v) ? v.length : 0);
     }, 0);
     out["_compaction"] = {

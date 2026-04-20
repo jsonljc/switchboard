@@ -58,10 +58,11 @@ describe("Error Taxonomy", () => {
     it("every taxonomy code has a default remediation entry", () => {
       for (const category of ERROR_CATEGORIES) {
         for (const code of TAXONOMY_CODES[category]) {
-          expect(DEFAULT_REMEDIATIONS[code]).toBeDefined();
-          expect(DEFAULT_REMEDIATIONS[code].modelRemediation).toBeTruthy();
-          expect(DEFAULT_REMEDIATIONS[code].operatorRemediation).toBeTruthy();
-          expect(typeof DEFAULT_REMEDIATIONS[code].retryable).toBe("boolean");
+          const remediation = DEFAULT_REMEDIATIONS[code];
+          expect(remediation).toBeDefined();
+          expect(remediation!.modelRemediation).toBeTruthy();
+          expect(remediation!.operatorRemediation).toBeTruthy();
+          expect(typeof remediation!.retryable).toBe("boolean");
         }
       }
     });
