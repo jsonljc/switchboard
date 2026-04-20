@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
-import type { Playbook, ScanResult } from "@switchboard/schemas";
+import type { Playbook, ScanResult, DashboardOverview } from "@switchboard/schemas";
 
 // Marketplace types
 export interface MarketplaceListing {
@@ -692,5 +692,11 @@ export class SwitchboardClient extends SwitchboardClientBase {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  // ── Dashboard ──
+
+  async getDashboardOverview(): Promise<DashboardOverview> {
+    return this.request<DashboardOverview>("/dashboard/overview");
   }
 }
