@@ -320,6 +320,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
       persist: vi.fn(async (trace: WorkTrace) => {
         traces.push(trace);
       }),
+      getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (app.platformIngress as any).config.traceStore = mockTraceStore;
@@ -381,6 +382,7 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
       persist: vi.fn(async (trace: WorkTrace) => {
         traces.push(trace);
       }),
+      getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (app.platformIngress as any).config.traceStore = mockTraceStore;
