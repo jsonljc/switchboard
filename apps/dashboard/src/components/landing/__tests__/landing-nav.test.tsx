@@ -3,14 +3,46 @@ import { render, screen } from "@testing-library/react";
 import { LandingNav } from "../landing-nav";
 
 describe("LandingNav", () => {
-  it("renders wordmark and sign in link when not authenticated", () => {
+  it("renders wordmark", () => {
     render(<LandingNav isAuthenticated={false} />);
     expect(screen.getByText("Switchboard")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/login");
   });
 
-  it("renders dashboard link when authenticated", () => {
+  it("shows How it works and Pricing links", () => {
+    render(<LandingNav isAuthenticated={false} />);
+    expect(screen.getByRole("link", { name: /how it works/i, hidden: true })).toHaveAttribute(
+      "href",
+      "/how-it-works",
+    );
+    expect(screen.getByRole("link", { name: /pricing/i, hidden: true })).toHaveAttribute(
+      "href",
+      "/pricing",
+    );
+  });
+
+  it("does not show Agents link", () => {
+    render(<LandingNav isAuthenticated={false} />);
+    expect(screen.queryByRole("link", { name: /^agents$/i, hidden: true })).not.toBeInTheDocument();
+  });
+
+  it("shows sign in when not authenticated", () => {
+    render(<LandingNav isAuthenticated={false} />);
+    expect(screen.getByRole("link", { name: /sign in/i, hidden: true })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+  });
+
+  it("shows dashboard link when authenticated", () => {
     render(<LandingNav isAuthenticated={true} />);
-    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /dashboard/i, hidden: true })).toBeInTheDocument();
+  });
+
+  it("shows Get started CTA", () => {
+    render(<LandingNav isAuthenticated={false} />);
+    expect(screen.getByRole("link", { name: /get early access/i, hidden: true })).toHaveAttribute(
+      "href",
+      "/get-started",
+    );
   });
 });

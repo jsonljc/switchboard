@@ -6,7 +6,7 @@ describe("LandingFooter", () => {
   it("renders wordmark and builder link", () => {
     render(<LandingFooter />);
     expect(screen.getByText("Switchboard")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /build agents/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /build an agent/i })).toHaveAttribute(
       "href",
       "mailto:builders@switchboard.ai",
     );

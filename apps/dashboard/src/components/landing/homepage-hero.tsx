@@ -1,57 +1,49 @@
+"use client";
+
 import Link from "next/link";
 import { FadeIn } from "@/components/ui/fade-in";
-import { HeroCardCluster } from "@/components/landing/hero-card-cluster";
+import { ConversationDemo } from "@/components/landing/conversation-demo";
 
-interface PreviewAgent {
-  name: string;
-  description: string;
-  trustScore: number;
-  slug: string;
-}
-
-interface HomepageHeroProps {
-  previewAgents: PreviewAgent[];
-}
-
-export function HomepageHero({ previewAgents }: HomepageHeroProps) {
+export function HomepageHero() {
   return (
     <section style={{ background: "#F5F3F0", minHeight: "92vh" }}>
       <div
         className="page-width"
         style={{
-          display: "flex",
-          alignItems: "center",
           minHeight: "92vh",
           paddingTop: "8rem",
           paddingBottom: "5rem",
         }}
       >
+        {/* Label above the grid so it doesn't offset headline vs phone */}
+        <FadeIn>
+          <p
+            style={{
+              marginBottom: "1.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
+          >
+            AI booking agents for service businesses
+          </p>
+        </FadeIn>
+
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1fr",
             gap: "3rem",
-            alignItems: "center",
+            alignItems: "start",
             width: "100%",
           }}
           className="md:grid-cols-[1fr_auto] md:gap-16 lg:gap-24"
         >
-          {/* ── Left column ── */}
+          {/* Left column — headline + copy + CTAs */}
           <FadeIn>
             <div>
-              <p
-                style={{
-                  marginBottom: "1.5rem",
-                  fontSize: "0.6875rem",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: "#9C958F",
-                }}
-              >
-                AI Agent Marketplace
-              </p>
-
               <h1
                 style={{
                   fontSize: "clamp(3rem, 5.5vw, 5.5rem)",
@@ -62,9 +54,8 @@ export function HomepageHero({ previewAgents }: HomepageHeroProps) {
                   margin: 0,
                 }}
               >
-                Your AI sales team.
-                <br />
-                Ready in minutes.
+                Never miss
+                <br />a lead again.
               </h1>
 
               <p
@@ -76,8 +67,19 @@ export function HomepageHero({ previewAgents }: HomepageHeroProps) {
                   maxWidth: "44ch",
                 }}
               >
-                Browse AI agents built for growth. Deploy to WhatsApp, Telegram, or your website.
-                They qualify leads, book calls, and earn your trust over time.
+                Reply in seconds, qualify leads, and book appointments on WhatsApp, Telegram, or
+                your website.
+              </p>
+              <p
+                style={{
+                  marginTop: "0.375rem",
+                  fontSize: "0.9375rem",
+                  fontWeight: 600,
+                  color: "#6B6560",
+                  fontStyle: "italic",
+                }}
+              >
+                While you sleep.
               </p>
 
               <div
@@ -89,8 +91,8 @@ export function HomepageHero({ previewAgents }: HomepageHeroProps) {
                   flexWrap: "wrap",
                 }}
               >
-                <Link
-                  href="/get-started"
+                <a
+                  href="#conversation-demo"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -104,10 +106,10 @@ export function HomepageHero({ previewAgents }: HomepageHeroProps) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Get early access
-                </Link>
+                  See Alex in action →
+                </a>
                 <Link
-                  href="/agents"
+                  href="/how-it-works"
                   style={{
                     fontSize: "0.9375rem",
                     fontWeight: 600,
@@ -115,19 +117,19 @@ export function HomepageHero({ previewAgents }: HomepageHeroProps) {
                     textDecoration: "none",
                   }}
                 >
-                  Browse agents →
+                  How it works
                 </Link>
               </div>
 
               <p style={{ marginTop: "2rem", fontSize: "0.8125rem", color: "#9C958F" }}>
-                Join 200+ businesses on the early access list
+                Setup in minutes. Starts supervised. Stays in your control.
               </p>
             </div>
           </FadeIn>
 
-          {/* ── Right column: card cluster (desktop only) ── */}
-          <div className="hidden md:flex" style={{ justifyContent: "flex-end" }}>
-            <HeroCardCluster agents={previewAgents} />
+          {/* Right column: conversation demo — top-aligned with h1 */}
+          <div id="conversation-demo" className="flex justify-center md:justify-end">
+            <ConversationDemo />
           </div>
         </div>
       </div>

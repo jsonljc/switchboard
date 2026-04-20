@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getListingBySlug } from "@/lib/demo-data";
 import { AgentMark, SLUG_TO_AGENT } from "@/components/character/agent-mark";
-import { AGENT_CONTENT, FALLBACK_CONTENT } from "./agent-content.js";
+import { AGENT_CONTENT, FALLBACK_CONTENT } from "./agent-content";
 
 // ── Trust tier lookup ──
 
