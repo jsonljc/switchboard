@@ -10,39 +10,40 @@ export function HomepageHero() {
       <div
         className="page-width"
         style={{
-          display: "flex",
-          alignItems: "flex-start",
           minHeight: "92vh",
           paddingTop: "8rem",
           paddingBottom: "5rem",
         }}
       >
+        {/* Label above the grid so it doesn't offset headline vs phone */}
+        <FadeIn>
+          <p
+            style={{
+              marginBottom: "1.5rem",
+              fontSize: "0.6875rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "#9C958F",
+            }}
+          >
+            AI booking agents for service businesses
+          </p>
+        </FadeIn>
+
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1fr",
             gap: "3rem",
-            alignItems: "center",
+            alignItems: "start",
             width: "100%",
           }}
           className="md:grid-cols-[1fr_auto] md:gap-16 lg:gap-24"
         >
-          {/* Left column */}
+          {/* Left column — headline + copy + CTAs */}
           <FadeIn>
             <div>
-              <p
-                style={{
-                  marginBottom: "1.5rem",
-                  fontSize: "0.6875rem",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: "#9C958F",
-                }}
-              >
-                AI booking agents for service businesses
-              </p>
-
               <h1
                 style={{
                   fontSize: "clamp(3rem, 5.5vw, 5.5rem)",
@@ -126,7 +127,7 @@ export function HomepageHero() {
             </div>
           </FadeIn>
 
-          {/* Right column: conversation demo */}
+          {/* Right column: conversation demo — top-aligned with h1 */}
           <div id="conversation-demo" className="flex justify-center md:justify-end">
             <ConversationDemo />
           </div>
