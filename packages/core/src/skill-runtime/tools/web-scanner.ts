@@ -26,10 +26,7 @@ export function createWebScannerTool(): SkillTool {
         execute: async (params: unknown) => {
           const { url } = params as { url: string };
           if (!url || typeof url !== "string") {
-            return fail("INVALID_INPUT", "URL is empty", {
-              modelRemediation: "Provide a non-empty URL string",
-              retryable: false,
-            });
+            return fail("execution", "INVALID_INPUT", "URL is empty");
           }
           try {
             const validatedUrl = validateScanUrl(url);
@@ -37,10 +34,7 @@ export function createWebScannerTool(): SkillTool {
             await assertPublicHostname(hostname);
             return ok({ valid: true, validatedUrl });
           } catch (err) {
-            return fail("VALIDATION_FAILED", (err as Error).message, {
-              modelRemediation: "Check the URL format or try a different URL",
-              retryable: false,
-            });
+            return fail("execution", "INVALID_INPUT", (err as Error).message);
           }
         },
       },

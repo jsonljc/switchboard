@@ -36,7 +36,7 @@ describe("web-scanner tool", () => {
     it("rejects non-HTTP URLs", async () => {
       const result = await tool.operations["validate-url"]!.execute({ url: "ftp://example.com" });
       expect(result.status).toBe("error");
-      expect(result.error?.code).toBe("VALIDATION_FAILED");
+      expect(result.error?.code).toBe("INVALID_INPUT");
       expect(result.error?.message).toContain("scheme");
     });
 

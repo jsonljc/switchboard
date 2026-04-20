@@ -28,6 +28,15 @@ export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
 export { ok, fail, denied, pendingApproval } from "./tool-result.js";
 export type { ToolResult } from "./tool-result.js";
+export {
+  structuredError,
+  isValidTaxonomyCode,
+  getCategoryForCode,
+  TAXONOMY_CODES,
+  ERROR_CATEGORIES,
+  DEFAULT_REMEDIATIONS,
+} from "./error-taxonomy.js";
+export type { ErrorCategory, StructuredError } from "./error-taxonomy.js";
 export { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
 export type {
   ResultClass,

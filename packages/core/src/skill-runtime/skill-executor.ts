@@ -245,7 +245,7 @@ export class SkillExecutorImpl implements SkillExecutor {
               return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
             })
             .join(", ");
-          result = fail("TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
+          result = fail("execution", "TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
             modelRemediation: `Available tools for this skill: ${availableTools}`,
             retryable: false,
           });
