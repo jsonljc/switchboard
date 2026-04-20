@@ -4,16 +4,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DevPanel } from "../dev/dev-panel";
 import { useOrgConfig } from "@/hooks/use-org-config";
-import { useViewPreference } from "@/hooks/use-view-preference";
 import { OwnerShell } from "@/components/layout/owner-shell";
-import { StaffShell } from "@/components/layout/staff-shell";
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { view } = useViewPreference();
 
   const hideChrome = CHROME_HIDDEN_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
@@ -40,11 +37,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const Shell = view === "owner" ? OwnerShell : StaffShell;
-
   return (
     <>
-      <Shell>{children}</Shell>
+      <OwnerShell>{children}</OwnerShell>
       <DevPanel />
     </>
   );
