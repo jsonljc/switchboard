@@ -18,9 +18,14 @@ export interface TranslatedActivity {
   createdAt: string;
 }
 
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-/;
+
 function resolveActor(entry: RawAuditEntry): string {
   if (entry.actorType === "owner" || entry.actorType === "operator") return "You";
   if (entry.actorType === "agent") {
+    if (!entry.actorId || UUID_PATTERN.test(entry.actorId) || entry.actorId.includes("_")) {
+      return "Alex";
+    }
     return entry.actorId.charAt(0).toUpperCase() + entry.actorId.slice(1);
   }
   return "System";

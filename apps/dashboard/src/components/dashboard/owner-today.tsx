@@ -154,9 +154,7 @@ export function OwnerToday() {
     { name: "Completed", count: overview.funnel.completed },
   ];
 
-  const totalApprovals =
-    overview.approvals.length +
-    (overview.stats.pendingApprovals > 3 ? overview.stats.pendingApprovals - 3 : 0);
+  const totalApprovals = overview.stats.pendingApprovals;
 
   return (
     <div

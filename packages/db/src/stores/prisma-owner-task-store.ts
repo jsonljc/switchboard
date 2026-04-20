@@ -154,13 +154,21 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
       priority: string;
     }> & { openCount: number; overdueCount: number }
   > {
-    const rows = await this.prisma.ownerTask.findMany({
-      where: { organizationId: orgId, status: "pending" },
-      orderBy: { createdAt: "asc" },
-      take: limit,
-    });
+    const now = new Date();
+    const pendingWhere = { organizationId: orgId, status: "pending" as const };
 
-    // Use the same priority sorting as findPending()
+    const [rows, totalOpen, totalOverdue] = await Promise.all([
+      this.prisma.ownerTask.findMany({
+        where: pendingWhere,
+        orderBy: { createdAt: "asc" },
+        take: limit,
+      }),
+      this.prisma.ownerTask.count({ where: pendingWhere }),
+      this.prisma.ownerTask.count({
+        where: { ...pendingWhere, dueAt: { lt: now } },
+      }),
+    ]);
+
     rows.sort((a, b) => {
       const pa = PRIORITY_RANK[a.priority] ?? 0;
       const pb = PRIORITY_RANK[b.priority] ?? 0;
@@ -168,7 +176,6 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
 
-    const now = new Date();
     const mapped = rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -179,8 +186,8 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
     }));
 
     const result = mapped as typeof mapped & { openCount: number; overdueCount: number };
-    result.openCount = rows.length;
-    result.overdueCount = mapped.filter((t) => t.isOverdue).length;
+    result.openCount = totalOpen;
+    result.overdueCount = totalOverdue;
     return result;
   }
 }

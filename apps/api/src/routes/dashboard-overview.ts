@@ -187,7 +187,7 @@ export async function buildDashboardOverview(
       operatorName,
     },
     stats: {
-      pendingApprovals: approvals.length,
+      pendingApprovals: pendingApprovals.filter((a) => a.state.status === "pending").length,
       newInquiriesToday: inquiriesToday,
       newInquiriesYesterday: inquiriesYesterday,
       qualifiedLeads: funnel.qualified,
@@ -271,7 +271,12 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       },
     };
 
-    const overview = await buildDashboardOverview(orgId, stores);
-    return reply.send(overview);
+    try {
+      const overview = await buildDashboardOverview(orgId, stores);
+      return reply.send(overview);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Dashboard query failed";
+      return reply.code(500).send({ error: message });
+    }
   });
 };
