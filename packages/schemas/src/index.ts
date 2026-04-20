@@ -97,3 +97,6 @@ export * from "./crm.js";
 
 // Playbook (structured onboarding playbook)
 export * from "./playbook.js";
+
+// Website scan (lightweight homepage extraction)
+export * from "./website-scan.js";

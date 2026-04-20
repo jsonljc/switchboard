@@ -39,6 +39,7 @@ import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
 import { playbookRoutes } from "../routes/playbook.js";
+import websiteScanRoutes from "../routes/website-scan.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -78,4 +79,5 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
   await app.register(playbookRoutes);
+  await app.register(websiteScanRoutes);
 }

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
-import type { Playbook } from "@switchboard/schemas";
+import type { Playbook, ScanResult } from "@switchboard/schemas";
 
 // Marketplace types
 export interface MarketplaceListing {
@@ -680,5 +680,14 @@ export class SwitchboardClient extends SwitchboardClientBase {
       method: "PATCH",
       body: JSON.stringify(body),
     });
+  }
+
+  // ── Website Scan ──
+
+  async scanWebsite(body: {
+    url: string;
+    sourceType?: string;
+  }): Promise<{ result: ScanResult; error?: string }> {
+    return this.post("/api/website-scan", body);
   }
 }

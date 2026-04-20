@@ -111,4 +111,7 @@ export const queryKeys = {
     all: ["playbook"] as const,
     current: () => [...queryKeys.playbook.all, "current"] as const,
   },
+  scan: {
+    all: ["scan"] as const,
+  },
 };
