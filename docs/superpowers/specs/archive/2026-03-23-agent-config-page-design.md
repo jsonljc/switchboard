@@ -28,7 +28,7 @@ Founders should be able to personalize each agent's personality and behavior fro
 
 **Route:** `/team/[agentId]`
 
-**Entry point:** Clicking any agent card on the `/team` page navigates to `/team/[agentId]`. This **replaces** the existing `AgentDetailSheet` slide-over panel — the sheet component is removed. The card's `onClick` handler changes from `setSelectedAgent(agent)` to `router.push(\`/team/${agent.id}\`)`. The `selectedAgent` state and `AgentDetailSheet` import are removed from the team page.
+**Entry point:** Clicking any agent card on the `/team` page navigates to `/team/[agentId]`. This **replaces** the existing `AgentDetailSheet` slide-over panel — the sheet component is removed. The card's `onClick` handler changes from `setSelectedAgent(agent)` to `router.push(\`/team/${agent.id}\`)`. The `selectedAgent`state and`AgentDetailSheet` import are removed from the team page.
 
 **Back navigation:** Back arrow + breadcrumb ("Team / Agent Name") at the top of the config page returns to `/team`.
 
@@ -69,6 +69,7 @@ Editable text input. Defaults to the agent's current `displayName` from the rost
 ### 5.2 Tone Picker
 
 Three radio options (same as onboarding):
+
 - **Warm & Professional** — friendly, reassuring
 - **Casual & Conversational** — relaxed, approachable
 - **Direct & Efficient** — brief, to the point
@@ -98,6 +99,7 @@ Current activity status dot + label (idle/working/analyzing/waiting).
 ### 6.4 Quick Stats
 
 Simple counts sourced from `AgentStateEntry.metrics` (typed as `Record<string, unknown>`). Expected keys:
+
 - `activeConversations: number` — for lead-facing agents (responder, strategist, booker)
 - `actionsToday: number` — count of actions taken today
 - `lastActiveAt: string` — ISO timestamp of last activity
@@ -119,6 +121,7 @@ Keep it to **one trait per agent** (two max for the agents that matter most). Av
 ### 7.1 Responder (Lead Responder)
 
 **How thorough?** — How deeply to qualify leads before handing off.
+
 - "Speed run" -> `qualificationThreshold: 25` (fewer questions, faster handoff)
 - "Balanced" -> `qualificationThreshold: 40` (default)
 - "Deep dive" -> `qualificationThreshold: 60` (more questions, budget/timeline probing)
@@ -128,6 +131,7 @@ Keep it to **one trait per agent** (two max for the agents that matter most). Av
 ### 7.2 Strategist (Sales Closer)
 
 **Follow-up style** — How persistently to chase leads.
+
 - "Gentle" -> `followUpDays: [2, 5, 10]` (spaced out, low pressure)
 - "Steady" -> `followUpDays: [1, 3, 7]` (default)
 - "Relentless" -> `followUpDays: [1, 2, 4]` (frequent, high urgency)
@@ -137,6 +141,7 @@ Keep it to **one trait per agent** (two max for the agents that matter most). Av
 ### 7.3 Optimizer (Ad Optimizer)
 
 **Spend authority** — How much can the agent change before asking you.
+
 - "Check with me first" -> `approvalThreshold: 50`
 - "I trust your judgment" -> `approvalThreshold: 200`
 - "Go for it" -> `approvalThreshold: 500`
@@ -229,6 +234,7 @@ No new hooks, no new API endpoints, no new backend changes.
 ## 12. Mobile Layout
 
 On screens < md breakpoint:
+
 1. Agent identity (icon, name, status) — compact header
 2. Personality section — full width
 3. Behavior section — full width
