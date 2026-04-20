@@ -699,4 +699,12 @@ export class SwitchboardClient extends SwitchboardClientBase {
   async getDashboardOverview(): Promise<DashboardOverview> {
     return this.request<DashboardOverview>("/dashboard/overview");
   }
+
+  async updateTask(taskId: string, body: Record<string, unknown>) {
+    return this.request(`/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
 }
