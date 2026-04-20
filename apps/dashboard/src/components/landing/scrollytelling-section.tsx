@@ -109,81 +109,73 @@ export function ScrollytellingSection() {
   return (
     <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
       <div className="page-width">
-        {/* Mobile: sticky phone at top */}
+        {/* Single sticky phone — works on both mobile and desktop */}
         <div
-          className="lg:hidden"
+          className="lg:float-right lg:ml-16"
           style={{
             position: "sticky",
             top: "5rem",
             zIndex: 10,
             display: "flex",
             justifyContent: "center",
-            paddingBottom: "2rem",
+            marginBottom: "2rem",
           }}
         >
           <PhoneFrame activeStep={activeStep} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto]" style={{ gap: "4rem" }}>
-          {/* Left: scrolling steps */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8rem" }}>
-            {STEPS.map((step, i) => (
-              <div key={step.label}>
-                <div
-                  ref={(el) => {
-                    stepRefs.current[i] = el;
+        {/* Scrolling steps */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "8rem",
+          }}
+        >
+          {STEPS.map((step, i) => (
+            <div key={step.label}>
+              <div
+                ref={(el) => {
+                  stepRefs.current[i] = el;
+                }}
+                style={{ minHeight: "16rem" }}
+              >
+                <p
+                  style={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: "#A07850",
+                    marginBottom: "1rem",
                   }}
-                  style={{ minHeight: "16rem" }}
                 >
-                  <p
-                    style={{
-                      fontSize: "0.6875rem",
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      color: "#A07850",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    {step.label}
-                  </p>
-                  <h3
-                    style={{
-                      fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-                      fontWeight: 700,
-                      letterSpacing: "-0.02em",
-                      color: "#1A1714",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    {step.heading}
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      lineHeight: 1.65,
-                      color: "#6B6560",
-                      maxWidth: "40ch",
-                    }}
-                  >
-                    {step.body}
-                  </p>
-                </div>
+                  {step.label}
+                </p>
+                <h3
+                  style={{
+                    fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
+                    fontWeight: 700,
+                    letterSpacing: "-0.02em",
+                    color: "#1A1714",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  {step.heading}
+                </h3>
+                <p
+                  style={{
+                    fontSize: "1rem",
+                    lineHeight: 1.65,
+                    color: "#6B6560",
+                    maxWidth: "40ch",
+                  }}
+                >
+                  {step.body}
+                </p>
               </div>
-            ))}
-          </div>
-
-          {/* Right: sticky phone (desktop only) */}
-          <div
-            className="hidden lg:block"
-            style={{
-              position: "sticky",
-              top: "8rem",
-              alignSelf: "start",
-            }}
-          >
-            <PhoneFrame activeStep={activeStep} />
-          </div>
+            </div>
+          ))}
         </div>
 
         {/* Closing line */}

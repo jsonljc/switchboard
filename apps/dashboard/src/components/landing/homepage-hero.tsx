@@ -11,7 +11,7 @@ export function HomepageHero() {
         className="page-width"
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           minHeight: "92vh",
           paddingTop: "8rem",
           paddingBottom: "5rem",
