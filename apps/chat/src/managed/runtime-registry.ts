@@ -6,7 +6,7 @@ import { SlackAdapter } from "../adapters/slack.js";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 import { PrismaConnectionStore, decryptCredentials } from "@switchboard/db";
 
-interface GatewayEntry {
+export interface GatewayEntry {
   gateway: ChannelGateway;
   adapter: ChannelAdapter;
   deploymentConnectionId: string;
