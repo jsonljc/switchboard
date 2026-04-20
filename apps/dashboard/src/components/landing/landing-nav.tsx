@@ -9,7 +9,6 @@ interface LandingNavProps {
 }
 
 const NAV_LINKS = [
-  { href: "/agents", label: "Agents" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
 ];
