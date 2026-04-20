@@ -34,6 +34,17 @@ interface OwnerTaskStore {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const PRIORITY_RANK: Record<string, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+// ---------------------------------------------------------------------------
 // Prisma Store Implementation
 // ---------------------------------------------------------------------------
 
@@ -81,15 +92,8 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
     });
 
     // Sort by priority properly (Prisma sorts alphabetically, we need custom order)
-    const priorityOrder: Record<string, number> = {
-      urgent: 4,
-      high: 3,
-      medium: 2,
-      low: 1,
-    };
-
     const sorted = rows.sort((a, b) => {
-      const priorityDiff = (priorityOrder[b.priority] ?? 0) - (priorityOrder[a.priority] ?? 0);
+      const priorityDiff = (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0);
       if (priorityDiff !== 0) return priorityDiff;
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
@@ -135,6 +139,49 @@ export class PrismaOwnerTaskStore implements OwnerTaskStore {
     });
 
     return result.count;
+  }
+
+  async listOpen(
+    orgId: string,
+    limit = 10,
+  ): Promise<
+    Array<{
+      id: string;
+      title: string;
+      dueAt: Date | null;
+      isOverdue: boolean;
+      status: string;
+      priority: string;
+    }> & { openCount: number; overdueCount: number }
+  > {
+    const rows = await this.prisma.ownerTask.findMany({
+      where: { organizationId: orgId, status: "pending" },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    });
+
+    // Use the same priority sorting as findPending()
+    rows.sort((a, b) => {
+      const pa = PRIORITY_RANK[a.priority] ?? 0;
+      const pb = PRIORITY_RANK[b.priority] ?? 0;
+      if (pb !== pa) return pb - pa;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+
+    const now = new Date();
+    const mapped = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      dueAt: r.dueAt,
+      isOverdue: r.dueAt !== null && r.dueAt < now,
+      status: r.status,
+      priority: r.priority,
+    }));
+
+    const result = mapped as typeof mapped & { openCount: number; overdueCount: number };
+    result.openCount = rows.length;
+    result.overdueCount = mapped.filter((t) => t.isOverdue).length;
+    return result;
   }
 }
 
