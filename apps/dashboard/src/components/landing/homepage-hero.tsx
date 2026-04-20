@@ -22,7 +22,7 @@ export function HomepageHero() {
             display: "grid",
             gridTemplateColumns: "1fr",
             gap: "3rem",
-            alignItems: "start",
+            alignItems: "center",
             width: "100%",
           }}
           className="md:grid-cols-[1fr_auto] md:gap-16 lg:gap-24"
@@ -126,12 +126,8 @@ export function HomepageHero() {
             </div>
           </FadeIn>
 
-          {/* Right column: conversation demo — top padding matches label height so phone aligns with h1 */}
-          <div
-            id="conversation-demo"
-            className="flex justify-center md:justify-end"
-            style={{ paddingTop: "2.75rem" }}
-          >
+          {/* Right column: conversation demo */}
+          <div id="conversation-demo" className="flex justify-center md:justify-end">
             <ConversationDemo />
           </div>
         </div>
