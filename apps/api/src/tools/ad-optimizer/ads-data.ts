@@ -1,4 +1,5 @@
-import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
+import type { SkillTool, EffectCategory } from "@switchboard/core/skill-runtime";
+import { ok } from "@switchboard/core/skill-runtime";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
 interface AdsDataDeps {
@@ -24,7 +25,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
     operations: {
       "get-campaign-insights": {
         description: "Fetch campaign performance insights from Meta Ads API for a date range.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -51,25 +52,28 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
             fields: string[];
           };
           const insights = await deps.adsClient.getCampaignInsights({ dateRange, fields });
-          return { insights };
+          return ok({ insights });
         },
       },
 
       "get-account-summary": {
         description: "Fetch account-level summary metrics from Meta Ads API.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",
           properties: {},
         },
-        execute: async () => deps.adsClient.getAccountSummary(),
+        execute: async () => {
+          const summary = await deps.adsClient.getAccountSummary();
+          return ok(summary as Record<string, unknown>);
+        },
       },
 
       "send-conversion-event": {
         description:
           "Send a conversion event to Meta CAPI. External write — requires governance approval.",
-        governanceTier: "external_write" as GovernanceTier,
+        effectCategory: "external_mutation" as EffectCategory,
         idempotent: false,
         inputSchema: {
           type: "object",
@@ -87,12 +91,15 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
           },
           required: ["eventName", "eventTime"],
         },
-        execute: async (params: unknown) => deps.capiClient.dispatchEvent(params),
+        execute: async (params: unknown) => {
+          const result = await deps.capiClient.dispatchEvent(params);
+          return ok(result as Record<string, unknown>);
+        },
       },
 
       "parse-lead-webhook": {
         description: "Parse a Meta lead webhook payload into structured lead data.",
-        governanceTier: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -106,7 +113,8 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
         },
         execute: async (params: unknown) => {
           const { payload } = params as { payload: unknown };
-          return parseLeadWebhook(payload);
+          const leads = parseLeadWebhook(payload);
+          return ok({ leads } as Record<string, unknown>);
         },
       },
     },

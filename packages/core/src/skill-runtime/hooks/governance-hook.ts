@@ -20,7 +20,7 @@ export class GovernanceHook implements SkillHook {
     if (op) {
       this.logs.push({
         operationId: `${ctx.toolId}.${ctx.operation}`,
-        tier: op.governanceTier,
+        tier: op.effectCategory,
         trustLevel: ctx.trustLevel,
         decision,
         overridden: !!op.governanceOverride?.[ctx.trustLevel],

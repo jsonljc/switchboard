@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { ToolRegistry } from "./tool-registry.js";
 import type { SkillTool, SkillDefinition } from "./types.js";
+import { ok } from "./tool-result.js";
 
-function makeTool(id: string, ops?: Record<string, { governanceTier: string }>): SkillTool {
+function makeTool(id: string, ops?: Record<string, { effectCategory: string }>): SkillTool {
   const operations: Record<string, any> = {};
   for (const [name, config] of Object.entries(
-    ops ?? { "default-op": { governanceTier: "read" } },
+    ops ?? { "default-op": { effectCategory: "read" } },
   )) {
     operations[name] = {
       description: `${name} op`,
       inputSchema: { type: "object", properties: {} },
-      governanceTier: config.governanceTier,
-      execute: async () => ({}),
+      effectCategory: config.effectCategory,
+      execute: async () => ok(),
     };
   }
   return { id, operations };
@@ -49,7 +50,7 @@ describe("ToolRegistry", () => {
       );
     });
 
-    it("throws when operation missing governanceTier", () => {
+    it("throws when operation missing effectCategory", () => {
       const registry = new ToolRegistry();
       const tool: SkillTool = {
         id: "bad-tool",
@@ -57,11 +58,11 @@ describe("ToolRegistry", () => {
           "do-thing": {
             description: "missing tier",
             inputSchema: { type: "object", properties: {} },
-            execute: async () => ({}),
+            execute: async () => ok(),
           } as any,
         },
       };
-      expect(() => registry.register(tool)).toThrow("missing governanceTier");
+      expect(() => registry.register(tool)).toThrow("missing effectCategory");
     });
   });
 

@@ -23,11 +23,13 @@ describe("crm-write tool", () => {
       stage: "qualified",
     });
     expect(mockOpportunityStore.updateStage).toHaveBeenCalledWith("org1", "o1", "qualified");
-    expect(result).toEqual({ id: "o1", stage: "qualified" });
+    expect(result.status).toBe("success");
+    expect(result.data).toEqual({ id: "o1", stage: "qualified" });
+    expect(result.entityState).toEqual({ opportunityId: "o1", stage: "qualified" });
   });
 
   it("activity.log delegates to activityStore.write", async () => {
-    await tool.operations["activity.log"]!.execute({
+    const result = await tool.operations["activity.log"]!.execute({
       organizationId: "org1",
       deploymentId: "d1",
       eventType: "opt-out",
@@ -39,6 +41,8 @@ describe("crm-write tool", () => {
       eventType: "opt-out",
       description: "Customer opted out",
     });
+    expect(result.status).toBe("success");
+    expect(result.entityState).toEqual({ eventType: "opt-out" });
   });
 
   it("stage.update has enum constraint in inputSchema", () => {

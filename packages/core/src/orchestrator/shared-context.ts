@@ -10,15 +10,14 @@ import type { PolicyCache } from "../policy-cache.js";
 import type { ApprovalNotifier } from "../notifications/notifier.js";
 import type { DataFlowExecutor } from "../data-flow/executor.js";
 import type { ConnectionCredentialResolver } from "../credentials/resolver.js";
-import type { ExecutionMode, EnqueueCallback } from "./lifecycle.js";
 import type { CartridgeCircuitBreakerWrapper } from "./circuit-breaker-wrapper.js";
 import type { IdempotencyGuard } from "../idempotency/guard.js";
 import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
 
 /**
- * Shared dependencies and configuration passed to ProposePipeline,
- * ApprovalManager, and ExecutionManager. Constructed once by
- * LifecycleOrchestrator and passed by reference.
+ * Shared dependencies and configuration passed to ProposePipeline
+ * and ExecutionManager. Constructed once by LifecycleOrchestrator
+ * and passed by reference.
  */
 export interface SharedContext {
   storage: StorageContext;
@@ -31,11 +30,7 @@ export interface SharedContext {
   riskPostureStore: RiskPostureStore | null;
   governanceProfileStore: GovernanceProfileStore | null;
   policyCache: PolicyCache | null;
-  executionMode: ExecutionMode;
-  onEnqueue: EnqueueCallback | null;
   approvalNotifier: ApprovalNotifier | null;
-  selfApprovalAllowed: boolean;
-  approvalRateLimit: { maxApprovals: number; windowMs: number } | null;
   dataFlowExecutor: DataFlowExecutor | null;
   credentialResolver: ConnectionCredentialResolver | null;
   circuitBreaker: CartridgeCircuitBreakerWrapper | null;

@@ -17,9 +17,9 @@ describe("ads-analytics tool", () => {
     ]);
   });
 
-  it("all operations have governanceTier read", () => {
+  it("all operations have effectCategory read", () => {
     for (const op of Object.values(tool.operations)) {
-      expect(op.governanceTier).toBe("read");
+      expect(op.effectCategory).toBe("read");
     }
   });
 
@@ -51,10 +51,9 @@ describe("ads-analytics tool", () => {
           significant: false,
         },
       ];
-      const result = (await tool.operations["diagnose"]!.execute({ deltas })) as {
-        diagnoses: unknown[];
-      };
-      expect(result.diagnoses).toContainEqual(
+      const result = await tool.operations["diagnose"]!.execute({ deltas });
+      expect(result.status).toBe("success");
+      expect(result.data?.diagnoses as unknown[]).toContainEqual(
         expect.objectContaining({ pattern: "creative_fatigue" }),
       );
     });
@@ -78,10 +77,9 @@ describe("ads-analytics tool", () => {
           significant: false,
         },
       ];
-      const result = (await tool.operations["diagnose"]!.execute({ deltas })) as {
-        diagnoses: unknown[];
-      };
-      expect(result.diagnoses).toHaveLength(0);
+      const result = await tool.operations["diagnose"]!.execute({ deltas });
+      expect(result.status).toBe("success");
+      expect(result.data?.diagnoses as unknown[]).toHaveLength(0);
     });
   });
 
@@ -89,17 +87,18 @@ describe("ads-analytics tool", () => {
     it("computes deltas for all 7 metrics", async () => {
       const current = { cpm: 10, ctr: 2, cpc: 5, cpl: 50, cpa: 100, roas: 3, frequency: 2 };
       const previous = { cpm: 8, ctr: 2.5, cpc: 4, cpl: 40, cpa: 80, roas: 3.5, frequency: 1.5 };
-      const result = (await tool.operations["compare-periods"]!.execute({
+      const result = await tool.operations["compare-periods"]!.execute({
         current,
         previous,
-      })) as { deltas: unknown[] };
-      expect(result.deltas).toHaveLength(7);
+      });
+      expect(result.status).toBe("success");
+      expect(result.data?.deltas as unknown[]).toHaveLength(7);
     });
   });
 
   describe("analyze-funnel", () => {
     it("identifies leakage point", async () => {
-      const result = (await tool.operations["analyze-funnel"]!.execute({
+      const result = await tool.operations["analyze-funnel"]!.execute({
         insights: [
           {
             campaignId: "c1",
@@ -121,14 +120,15 @@ describe("ads-analytics tool", () => {
           qualificationRate: 0.3,
           closeRate: 0.2,
         },
-      })) as { leakagePoint: string };
-      expect(result.leakagePoint).toBeDefined();
+      });
+      expect(result.status).toBe("success");
+      expect(result.data?.leakagePoint).toBeDefined();
     });
   });
 
   describe("check-learning-phase", () => {
     it("detects campaign in learning", async () => {
-      const result = (await tool.operations["check-learning-phase"]!.execute({
+      const result = await tool.operations["check-learning-phase"]!.execute({
         campaignId: "c1",
         input: {
           effectiveStatus: "ACTIVE",
@@ -136,12 +136,13 @@ describe("ads-analytics tool", () => {
           lastModifiedDays: 2,
           optimizationEvents: 10,
         },
-      })) as { inLearning: boolean };
-      expect(result.inLearning).toBe(true);
+      });
+      expect(result.status).toBe("success");
+      expect(result.data?.inLearning).toBe(true);
     });
 
     it("detects campaign not in learning", async () => {
-      const result = (await tool.operations["check-learning-phase"]!.execute({
+      const result = await tool.operations["check-learning-phase"]!.execute({
         campaignId: "c1",
         input: {
           effectiveStatus: "ACTIVE",
@@ -149,8 +150,9 @@ describe("ads-analytics tool", () => {
           lastModifiedDays: 14,
           optimizationEvents: 100,
         },
-      })) as { inLearning: boolean };
-      expect(result.inLearning).toBe(false);
+      });
+      expect(result.status).toBe("success");
+      expect(result.data?.inLearning).toBe(false);
     });
   });
 });

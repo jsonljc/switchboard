@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SkillTool } from "../types.js";
+import type { ToolResult } from "../tool-result.js";
+import { ok, fail } from "../tool-result.js";
 import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 
@@ -67,7 +69,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
     operations: {
       "slots.query": {
         description: "Query available calendar slots for a date range.",
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -82,13 +84,14 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
         },
         execute: async (params: unknown) => {
           const query = params as SlotQuery;
-          return deps.calendarProvider.listAvailableSlots(query);
+          const slots = await deps.calendarProvider.listAvailableSlots(query);
+          return ok({ slots } as Record<string, unknown>);
         },
       },
       "booking.create": {
         description:
           "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
-        governanceTier: "external_write" as const,
+        effectCategory: "external_mutation" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -104,7 +107,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           },
           required: ["orgId", "contactId", "service", "slotStart", "slotEnd", "calendarId"],
         },
-        execute: async (params: unknown) => {
+        execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as {
             orgId: string;
             contactId: string;
@@ -154,12 +157,17 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
                 input.service,
                 new Date(input.slotStart),
               );
-              return {
-                existingBookingId: existingBooking?.id ?? null,
-                status: "duplicate",
-                failureType: "duplicate_booking",
-                message: "This time slot is already booked for this contact.",
-              };
+              return fail(
+                "DUPLICATE_BOOKING",
+                "This time slot is already booked for this contact.",
+                {
+                  data: {
+                    existingBookingId: existingBooking?.id ?? null,
+                    status: "duplicate",
+                    failureType: "duplicate_booking",
+                  },
+                },
+              );
             }
             throw err;
           }
@@ -183,7 +191,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
               createdByType: "agent" as const,
             });
           } catch (error) {
-            return deps.failureHandler.handle({
+            const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId: input.orgId,
               contactId: input.contactId,
@@ -192,6 +200,9 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
               error,
               failureType: "provider_error",
               retryable: false,
+            });
+            return fail("BOOKING_FAILURE", failResult.message, {
+              data: failResult as unknown as Record<string, unknown>,
             });
           }
 
@@ -230,7 +241,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
               });
             });
           } catch (error) {
-            return deps.failureHandler.handle({
+            const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId: input.orgId,
               contactId: input.contactId,
@@ -240,15 +251,21 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
               failureType: "confirmation_failed",
               retryable: true,
             });
+            return fail("BOOKING_FAILURE", failResult.message, {
+              data: failResult as unknown as Record<string, unknown>,
+            });
           }
 
-          return {
-            bookingId: booking.id,
-            calendarEventId: calendarResult.calendarEventId,
-            status: "confirmed",
-            startsAt: input.slotStart,
-            endsAt: input.slotEnd,
-          };
+          return ok(
+            {
+              bookingId: booking.id,
+              calendarEventId: calendarResult.calendarEventId,
+              status: "confirmed",
+              startsAt: input.slotStart,
+              endsAt: input.slotEnd,
+            },
+            { entityState: { bookingId: booking.id, status: "confirmed" } },
+          );
         },
       },
     },

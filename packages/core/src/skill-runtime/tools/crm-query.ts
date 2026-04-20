@@ -1,4 +1,5 @@
 import type { SkillTool } from "../types.js";
+import { ok } from "../tool-result.js";
 
 interface ContactStoreSubset {
   findById(orgId: string, contactId: string): Promise<unknown>;
@@ -17,7 +18,7 @@ export function createCrmQueryTool(
     operations: {
       "contact.get": {
         description: "Get a contact by ID. Returns name, phone, email, stage, source.",
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -29,12 +30,13 @@ export function createCrmQueryTool(
         },
         execute: async (params: unknown) => {
           const { contactId, orgId } = params as { contactId: string; orgId: string };
-          return contactStore.findById(orgId, contactId);
+          const contact = await contactStore.findById(orgId, contactId);
+          return ok(contact as Record<string, unknown>);
         },
       },
       "activity.list": {
         description: "List recent activity logs for a deployment.",
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -51,7 +53,10 @@ export function createCrmQueryTool(
             deploymentId: string;
             limit?: number;
           };
-          return activityStore.listByDeployment(orgId, deploymentId, { limit: limit ?? 20 });
+          const activities = await activityStore.listByDeployment(orgId, deploymentId, {
+            limit: limit ?? 20,
+          });
+          return ok({ activities } as Record<string, unknown>);
         },
       },
     },

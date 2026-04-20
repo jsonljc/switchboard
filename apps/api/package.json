@@ -23,6 +23,7 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@switchboard/ad-optimizer": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
+    "@switchboard/ad-optimizer": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/creative-pipeline": "workspace:*",
     "@switchboard/db": "workspace:*",

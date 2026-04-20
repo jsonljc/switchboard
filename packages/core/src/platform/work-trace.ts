@@ -12,6 +12,7 @@ export interface WorkTrace {
   organizationId: string;
   actor: Actor;
   trigger: Trigger;
+  idempotencyKey?: string;
 
   parameters?: Record<string, unknown>;
   deploymentContext?: DeploymentContext;

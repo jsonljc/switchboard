@@ -8,12 +8,15 @@ import type {
   SkillHook,
   ResolvedModelProfile,
   SkillRuntimePolicy,
-  ToolExecutionContext,
 } from "./types.js";
 import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
+import { denied, pendingApproval, fail, ok } from "./tool-result.js";
+import type { ToolResult } from "./tool-result.js";
+import { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
+import type { SkillToolOperation } from "./types.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
@@ -24,6 +27,13 @@ import {
   runBeforeToolCallHooks,
   runAfterToolCallHooks,
 } from "./hook-runner.js";
+
+const FALLBACK_READ_OP: SkillToolOperation = {
+  description: "",
+  inputSchema: {},
+  effectCategory: "read",
+  execute: async () => ok(),
+};
 
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
@@ -170,8 +180,9 @@ export class SkillExecutorImpl implements SkillExecutor {
               const tool = this.tools.get(tc.toolId);
               const opDef = tool?.operations[tc.operation];
               return (
-                opDef?.governanceTier === "internal_write" ||
-                opDef?.governanceTier === "external_write"
+                opDef?.effectCategory === "write" ||
+                opDef?.effectCategory === "external_send" ||
+                opDef?.effectCategory === "external_mutation"
               );
             }).length,
             governanceDecisions: governanceHook?.getGovernanceLogs() ?? [],
@@ -208,29 +219,36 @@ export class SkillExecutorImpl implements SkillExecutor {
           toolId: toolId!,
           operation,
           params: toolUse.input,
-          governanceTier: op?.governanceTier ?? ("read" as const),
+          effectCategory: op?.effectCategory ?? ("read" as const),
           trustLevel: params.trustLevel,
         };
         const toolHookResult = await runBeforeToolCallHooks(this.hooks, toolCtx);
 
-        let result: unknown;
+        let result: ToolResult;
         let governanceOutcome: string;
 
         if (!toolHookResult.proceed) {
-          const status =
-            toolHookResult.decision === "pending_approval" ? "pending_approval" : "denied";
-          result = { status, message: toolHookResult.reason };
-          governanceOutcome = status === "pending_approval" ? "require-approval" : "denied";
+          if (toolHookResult.decision === "pending_approval") {
+            result = pendingApproval(toolHookResult.reason ?? "Requires approval");
+            governanceOutcome = "require-approval";
+          } else {
+            result = denied(toolHookResult.reason ?? "Denied by policy");
+            governanceOutcome = "denied";
+          }
         } else if (op) {
-          const toolExecCtx: ToolExecutionContext = {
-            orgId: params.orgId,
-            deploymentId: params.deploymentId,
-            messages: params.messages.map((m) => ({ role: m.role, content: m.content })),
-          };
-          result = await op.execute(toolUse.input, toolExecCtx);
+          result = await op.execute(toolUse.input);
           governanceOutcome = "auto-approved";
         } else {
-          result = { error: `Unknown tool: ${toolUse.name}` };
+          const availableTools = params.skill.tools
+            .flatMap((tid) => {
+              const t = this.tools.get(tid);
+              return t ? Object.keys(t.operations).map((opN) => `${tid}.${opN}`) : [];
+            })
+            .join(", ");
+          result = fail("execution", "TOOL_NOT_FOUND", `Unknown tool: ${toolUse.name}`, {
+            modelRemediation: `Available tools for this skill: ${availableTools}`,
+            retryable: false,
+          });
           governanceOutcome = "auto-approved";
         }
 
@@ -245,10 +263,15 @@ export class SkillExecutorImpl implements SkillExecutor {
           governanceDecision: governanceOutcome as ToolCallRecord["governanceDecision"],
         });
 
+        const decision = filterForReinjection(
+          result,
+          op ?? FALLBACK_READ_OP,
+          DEFAULT_REINJECTION_POLICY,
+        );
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: JSON.stringify(result),
+          content: decision.content,
         });
       }
 

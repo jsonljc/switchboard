@@ -1,5 +1,6 @@
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
-import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
+import type { SkillTool, EffectCategory } from "@switchboard/core/skill-runtime";
+import { ok } from "@switchboard/core/skill-runtime";
 import {
   diagnose,
   comparePeriods,
@@ -8,7 +9,7 @@ import {
 } from "@switchboard/ad-optimizer";
 import type { MetricSet, FunnelInput, CampaignLearningInput } from "@switchboard/ad-optimizer";
 
-const TIER: GovernanceTier = "read";
+const TIER: EffectCategory = "read";
 const learningGuard = new LearningPhaseGuard();
 
 export function createAdsAnalyticsTool(): SkillTool {
@@ -18,7 +19,7 @@ export function createAdsAnalyticsTool(): SkillTool {
       diagnose: {
         description:
           "Diagnose campaign health issues from metric deltas. Returns pattern-based diagnoses.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -29,14 +30,14 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const { deltas } = params as { deltas: MetricDelta[] };
-          return { diagnoses: diagnose(deltas) };
+          return ok({ diagnoses: diagnose(deltas) });
         },
       },
 
       "compare-periods": {
         description:
           "Compare current vs previous period metrics. Returns deltas with direction and significance.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -48,14 +49,14 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const { current, previous } = params as { current: MetricSet; previous: MetricSet };
-          return { deltas: comparePeriods(current, previous) };
+          return ok({ deltas: comparePeriods(current, previous) });
         },
       },
 
       "analyze-funnel": {
         description:
           "Analyze conversion funnel from impressions to close. Returns stages with leakage point.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -68,13 +69,14 @@ export function createAdsAnalyticsTool(): SkillTool {
         },
         execute: async (params: unknown) => {
           const input = params as FunnelInput;
-          return analyzeFunnel(input);
+          const result = analyzeFunnel(input);
+          return ok(result as Record<string, unknown>);
         },
       },
 
       "check-learning-phase": {
         description: "Check if a campaign is in Meta's learning phase.",
-        governanceTier: TIER,
+        effectCategory: TIER,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -86,7 +88,8 @@ export function createAdsAnalyticsTool(): SkillTool {
             campaignId: string;
             input: CampaignLearningInput;
           };
-          return learningGuard.check(campaignId, input);
+          const result = learningGuard.check(campaignId, input);
+          return ok(result as Record<string, unknown>);
         },
       },
     },

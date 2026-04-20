@@ -79,11 +79,11 @@ describe("createCalendarBookTool", () => {
   });
 
   it("slots.query has governance tier 'read'", () => {
-    expect(tool.operations["slots.query"]!.governanceTier).toBe("read");
+    expect(tool.operations["slots.query"]!.effectCategory).toBe("read");
   });
 
   it("booking.create has governance tier 'external_write'", () => {
-    expect(tool.operations["booking.create"]!.governanceTier).toBe("external_write");
+    expect(tool.operations["booking.create"]!.effectCategory).toBe("external_mutation");
   });
 
   it("slots.query is idempotent", () => {
@@ -114,7 +114,8 @@ describe("createCalendarBookTool", () => {
     });
 
     expect(calendarProvider.listAvailableSlots).toHaveBeenCalled();
-    expect(result).toEqual(mockSlots);
+    expect(result.status).toBe("success");
+    expect(result.data?.slots).toEqual(mockSlots);
   });
 
   it("booking.create persists pending booking, calls calendar, then runs transaction", async () => {
@@ -145,7 +146,10 @@ describe("createCalendarBookTool", () => {
     );
     expect(calendarProvider.createBooking).toHaveBeenCalled();
     expect(runTransaction).toHaveBeenCalled();
-    expect((result as Record<string, unknown>).status).toBe("confirmed");
+    expect(result.status).toBe("success");
+    expect(result.data?.status).toBe("confirmed");
+    expect(result.entityState?.bookingId).toBe("bk_1");
+    expect(result.entityState?.status).toBe("confirmed");
   });
 
   it("booking.create creates opportunity if none exists for contact", async () => {
@@ -174,18 +178,19 @@ describe("createCalendarBookTool", () => {
     bookingStore.findBySlot.mockResolvedValue({ id: "bk_existing" });
     opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
 
-    const result = (await tool.operations["booking.create"]!.execute({
+    const result = await tool.operations["booking.create"]!.execute({
       orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
       calendarId: "primary",
-    })) as Record<string, unknown>;
+    });
 
-    expect(result.status).toBe("duplicate");
-    expect(result.existingBookingId).toBe("bk_existing");
-    expect(result.failureType).toBe("duplicate_booking");
+    expect(result.status).toBe("error");
+    expect(result.data?.status).toBe("duplicate");
+    expect(result.data?.existingBookingId).toBe("bk_existing");
+    expect(result.data?.failureType).toBe("duplicate_booking");
     expect(calendarProvider.createBooking).not.toHaveBeenCalled();
   });
 
@@ -194,17 +199,17 @@ describe("createCalendarBookTool", () => {
     opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
     calendarProvider.createBooking.mockRejectedValue(new Error("503 Service Unavailable"));
 
-    const result = (await tool.operations["booking.create"]!.execute({
+    const result = await tool.operations["booking.create"]!.execute({
       orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
       calendarId: "primary",
-    })) as Record<string, unknown>;
+    });
 
-    expect(result.status).toBe("failed");
-    expect(result.escalationId).toBe("esc_1");
+    expect(result.status).toBe("error");
+    expect(result.data?.escalationId).toBe("esc_1");
     expect(failureHandler.handle).toHaveBeenCalledWith(
       expect.objectContaining({
         bookingId: "bk_1",
@@ -230,18 +235,18 @@ describe("createCalendarBookTool", () => {
         "I couldn't complete the booking just now. I've flagged this for a human to follow up.",
     });
 
-    const result = (await tool.operations["booking.create"]!.execute({
+    const result = await tool.operations["booking.create"]!.execute({
       orgId: "org_1",
       contactId: "ct_1",
       service: "consultation",
       slotStart: "2026-04-20T10:00:00+08:00",
       slotEnd: "2026-04-20T10:30:00+08:00",
       calendarId: "primary",
-    })) as Record<string, unknown>;
+    });
 
-    expect(result.status).toBe("failed");
-    expect(result.failureType).toBe("confirmation_failed");
-    expect(result.retryable).toBe(true);
+    expect(result.status).toBe("error");
+    expect(result.data?.failureType).toBe("confirmation_failed");
+    expect(result.data?.retryable).toBe(true);
     expect(failureHandler.handle).toHaveBeenCalledWith(
       expect.objectContaining({
         failureType: "confirmation_failed",

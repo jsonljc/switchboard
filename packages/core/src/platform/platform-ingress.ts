@@ -35,6 +35,41 @@ export class PlatformIngress {
   async submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> {
     const { intentRegistry, modeRegistry, governanceGate, traceStore } = this.config;
 
+    // 0. Idempotency check — return existing result if key matches prior trace
+    if (request.idempotencyKey && traceStore) {
+      const existingTrace = await traceStore.getByIdempotencyKey(request.idempotencyKey);
+      if (existingTrace) {
+        const result: ExecutionResult = {
+          workUnitId: existingTrace.workUnitId,
+          outcome: existingTrace.outcome,
+          summary: existingTrace.executionSummary ?? "Duplicate request — returning prior result",
+          outputs: existingTrace.executionOutputs ?? {},
+          mode: existingTrace.mode,
+          durationMs: existingTrace.durationMs,
+          traceId: existingTrace.traceId,
+          error: existingTrace.error,
+        };
+        return {
+          ok: true as const,
+          result,
+          workUnit: {
+            id: existingTrace.workUnitId,
+            requestedAt: existingTrace.requestedAt,
+            organizationId: existingTrace.organizationId,
+            actor: existingTrace.actor,
+            intent: existingTrace.intent,
+            parameters: existingTrace.parameters ?? {},
+            deployment: existingTrace.deploymentContext!,
+            resolvedMode: existingTrace.mode,
+            traceId: existingTrace.traceId,
+            trigger: existingTrace.trigger,
+            priority: "normal" as const,
+            idempotencyKey: existingTrace.idempotencyKey,
+          },
+        };
+      }
+    }
+
     // 1. Lookup intent
     const registration = intentRegistry.lookup(request.intent);
     if (!registration) {

@@ -1,5 +1,5 @@
 import type {
-  GovernanceTier,
+  EffectCategory,
   GovernanceOutcome,
   TrustLevel,
   GovernanceDecision,
@@ -7,6 +7,7 @@ import type {
 } from "./governance.js";
 import type { ContextRequirement } from "@switchboard/schemas";
 import type { ModelSlot } from "../model-router.js";
+import type { ToolResult } from "./tool-result.js";
 
 // ---------------------------------------------------------------------------
 // Model Routing (SP6 Phase 1)
@@ -85,7 +86,7 @@ export interface ToolCallRecord {
   toolId: string;
   operation: string;
   params: unknown;
-  result: unknown;
+  result: ToolResult;
   durationMs: number;
   governanceDecision: GovernanceOutcome;
 }
@@ -132,13 +133,6 @@ export interface SkillExecutionTrace {
 // Tool Interface
 // ---------------------------------------------------------------------------
 
-export interface ToolExecutionContext {
-  orgId: string;
-  deploymentId: string;
-  sessionId?: string;
-  messages: Array<{ role: string; content: string }>;
-}
-
 export interface SkillTool {
   id: string;
   operations: Record<string, SkillToolOperation>;
@@ -147,10 +141,13 @@ export interface SkillTool {
 export interface SkillToolOperation {
   description: string;
   inputSchema: Record<string, unknown>;
-  governanceTier: GovernanceTier;
+  effectCategory: EffectCategory;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
-  execute(params: unknown, ctx?: ToolExecutionContext): Promise<unknown>;
+  resultClass?: import("./reinjection-filter.js").ResultClass;
+  summarizeForModel?: boolean;
+  retrieval?: boolean;
+  execute(params: unknown): Promise<ToolResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +190,7 @@ export interface ToolCallContext {
   toolId: string;
   operation: string;
   params: unknown;
-  governanceTier: GovernanceTier;
+  effectCategory: EffectCategory;
   trustLevel: "supervised" | "guided" | "autonomous";
 }
 

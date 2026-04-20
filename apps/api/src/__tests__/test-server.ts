@@ -56,6 +56,13 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
       this.traces.set(workUnitId, { ...existing, ...fields });
     }
   }
+
+  async getByIdempotencyKey(key: string): Promise<WorkTrace | null> {
+    for (const trace of this.traces.values()) {
+      if (trace.idempotencyKey === key) return trace;
+    }
+    return null;
+  }
 }
 
 // Re-declare Fastify augmentation for test context

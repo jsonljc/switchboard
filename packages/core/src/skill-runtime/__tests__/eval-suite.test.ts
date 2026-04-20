@@ -9,6 +9,7 @@ import { createEscalateTool } from "../tools/escalate.js";
 import type { ToolCallingAdapter } from "../tool-calling-adapter.js";
 import type { SkillTool, SkillExecutionParams } from "../types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "../types.js";
+import { ok } from "../tool-result.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "eval-fixtures");
@@ -94,14 +95,14 @@ function createMockTools(): Map<string, SkillTool> {
       "contact.get": {
         description: "Get contact",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => ({ id: "c1", name: "Test Lead", stage: "new" }),
+        effectCategory: "read" as const,
+        execute: async () => ok({ id: "c1", name: "Test Lead", stage: "new" }),
       },
       "activity.list": {
         description: "List activities",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => [],
+        effectCategory: "read" as const,
+        execute: async () => ok({ activities: [] }),
       },
     },
   });
@@ -111,14 +112,14 @@ function createMockTools(): Map<string, SkillTool> {
       "stage.update": {
         description: "Update stage",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "internal_write" as const,
-        execute: async (params: unknown) => ({ ...(params as object), updated: true }),
+        effectCategory: "write" as const,
+        execute: async (params: unknown) => ok({ ...(params as object), updated: true }),
       },
       "activity.log": {
         description: "Log activity",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "internal_write" as const,
-        execute: async () => undefined,
+        effectCategory: "write" as const,
+        execute: async () => ok(),
       },
     },
   });
@@ -146,6 +147,9 @@ function createMockTools(): Map<string, SkillTool> {
       },
       handoffStore: { save: async () => {}, getBySessionId: async () => null },
       notifier: { notify: async () => {} },
+      sessionId: "test-session",
+      orgId: "test-org",
+      messages: [],
     }),
   );
   tools.set("web-scanner", {
@@ -154,14 +158,14 @@ function createMockTools(): Map<string, SkillTool> {
       "validate-url": {
         description: "Validate URL",
         inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
-        governanceTier: "read" as const,
+        effectCategory: "read" as const,
         execute: async (params: unknown) => {
           const { url } = params as { url: string };
           try {
             new URL(url);
-            return { valid: true, validatedUrl: url, error: null };
+            return ok({ valid: true, validatedUrl: url });
           } catch {
-            return { valid: false, validatedUrl: null, error: "Invalid URL format" };
+            return ok({ valid: false, validatedUrl: null, error: "Invalid URL format" });
           }
         },
       },
@@ -172,16 +176,17 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { baseUrl: { type: "string" } },
           required: ["baseUrl"],
         },
-        governanceTier: "read" as const,
-        execute: async () => ({
-          pages: [
-            { path: "/", text: "Homepage content", status: "ok" },
-            { path: "/about", text: "About us content", status: "ok" },
-          ],
-          homepageHtml: "<html><head></head><body>Homepage</body></html>",
-          fetchedCount: 2,
-          failedPaths: [],
-        }),
+        effectCategory: "read" as const,
+        execute: async () =>
+          ok({
+            pages: [
+              { path: "/", text: "Homepage content", status: "ok" },
+              { path: "/about", text: "About us content", status: "ok" },
+            ],
+            homepageHtml: "<html><head></head><body>Homepage</body></html>",
+            fetchedCount: 2,
+            failedPaths: [],
+          }),
       },
       "detect-platform": {
         description: "Detect platform",
@@ -190,8 +195,8 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { html: { type: "string" } },
           required: ["html"],
         },
-        governanceTier: "read" as const,
-        execute: async () => ({ platform: null, confidence: "none" }),
+        effectCategory: "read" as const,
+        execute: async () => ok({ platform: null, confidence: "none" }),
       },
       "extract-business-info": {
         description: "Extract business info",
@@ -200,8 +205,8 @@ function createMockTools(): Map<string, SkillTool> {
           properties: { html: { type: "string" } },
           required: ["html"],
         },
-        governanceTier: "read" as const,
-        execute: async () => ({ structuredData: [], openGraph: {}, meta: {} }),
+        effectCategory: "read" as const,
+        execute: async () => ok({ structuredData: [], openGraph: {}, meta: {} }),
       },
     },
   });
@@ -211,37 +216,39 @@ function createMockTools(): Map<string, SkillTool> {
       diagnose: {
         description: "Diagnose performance issues",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => ({ diagnoses: [] }),
+        effectCategory: "read" as const,
+        execute: async () => ok({ diagnoses: [] }),
       },
       "compare-periods": {
         description: "Compare current vs previous period metrics",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => ({ deltas: [] }),
+        effectCategory: "read" as const,
+        execute: async () => ok({ deltas: [] }),
       },
       "analyze-funnel": {
         description: "Analyze conversion funnel",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => ({
-          stages: [],
-          leakagePoint: "Clicks",
-          leakageMagnitude: 0,
-        }),
+        effectCategory: "read" as const,
+        execute: async () =>
+          ok({
+            stages: [],
+            leakagePoint: "Clicks",
+            leakageMagnitude: 0,
+          }),
       },
       "check-learning-phase": {
         description: "Check if campaign is in learning phase",
         inputSchema: { type: "object", properties: {} },
-        governanceTier: "read" as const,
-        execute: async () => ({
-          campaignId: "c1",
-          inLearning: false,
-          daysSinceChange: 14,
-          eventsAccumulated: 100,
-          eventsRequired: 50,
-          estimatedExitDate: null,
-        }),
+        effectCategory: "read" as const,
+        execute: async () =>
+          ok({
+            campaignId: "c1",
+            inLearning: false,
+            daysSinceChange: 14,
+            eventsAccumulated: 100,
+            eventsRequired: 50,
+            estimatedExitDate: null,
+          }),
       },
     },
   });

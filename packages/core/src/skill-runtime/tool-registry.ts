@@ -8,8 +8,8 @@ export class ToolRegistry {
       throw new Error(`Duplicate tool registration: ${tool.id}`);
     }
     for (const [opName, op] of Object.entries(tool.operations)) {
-      if (!op.governanceTier) {
-        throw new Error(`Operation ${tool.id}.${opName} missing governanceTier`);
+      if (!op.effectCategory) {
+        throw new Error(`Operation ${tool.id}.${opName} missing effectCategory`);
       }
     }
     this.tools.set(tool.id, tool);

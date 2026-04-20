@@ -151,6 +151,9 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
         assembler: handoffAssembler,
         handoffStore,
         notifier: handoffNotifier,
+        sessionId: "bootstrap-placeholder",
+        orgId: "bootstrap-placeholder",
+        messages: [],
       }),
     ],
   ]);

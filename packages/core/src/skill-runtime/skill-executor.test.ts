@@ -4,6 +4,7 @@ import type { ToolCallingAdapter } from "./tool-calling-adapter.js";
 import type { SkillDefinition, SkillTool } from "./types.js";
 import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
+import { ok } from "./tool-result.js";
 
 const mockSkill: SkillDefinition = {
   name: "test",
@@ -100,8 +101,8 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do something",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
-          execute: vi.fn().mockResolvedValue({ done: true }),
+          effectCategory: "read" as const,
+          execute: vi.fn().mockResolvedValue(ok({ done: true })),
         },
       },
     };
@@ -150,8 +151,8 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
-          execute: vi.fn().mockResolvedValue({ ok: true }),
+          effectCategory: "read" as const,
+          execute: vi.fn().mockResolvedValue(ok({ ok: true })),
         },
       },
     };
@@ -189,8 +190,8 @@ describe("SkillExecutorImpl", () => {
         "stage.update": {
           description: "update stage",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "internal_write" as const,
-          execute: vi.fn().mockResolvedValue({ ok: true }),
+          effectCategory: "write" as const,
+          execute: vi.fn().mockResolvedValue(ok({ ok: true })),
         },
       },
     };
@@ -240,8 +241,8 @@ describe("SkillExecutorImpl", () => {
         delete: {
           description: "delete something",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "destructive" as const,
-          execute: vi.fn().mockResolvedValue({ deleted: true }),
+          effectCategory: "irreversible" as const,
+          execute: vi.fn().mockResolvedValue(ok({ deleted: true })),
         },
       },
     };
@@ -291,8 +292,8 @@ describe("SkillExecutorImpl", () => {
         do: {
           description: "do",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "read" as const,
-          execute: vi.fn().mockResolvedValue({ ok: true }),
+          effectCategory: "read" as const,
+          execute: vi.fn().mockResolvedValue(ok({ ok: true })),
         },
       },
     };
@@ -393,8 +394,8 @@ describe("SkillExecutorImpl", () => {
         "stage.update": {
           description: "update stage",
           inputSchema: { type: "object", properties: {} },
-          governanceTier: "internal_write" as any,
-          execute: vi.fn().mockResolvedValue({ stage: "qualified" }),
+          effectCategory: "write" as any,
+          execute: vi.fn().mockResolvedValue(ok({ stage: "qualified" })),
         },
       },
     };
@@ -439,6 +440,6 @@ describe("SkillExecutorImpl", () => {
 
     expect(result.trace.writeCount).toBe(1);
     expect(result.trace.governanceDecisions).toHaveLength(1);
-    expect(result.trace.governanceDecisions[0]!.tier).toBe("internal_write");
+    expect(result.trace.governanceDecisions[0]!.tier).toBe("write");
   });
 });

@@ -17,8 +17,6 @@ export {
   createWebScannerTool,
   createEscalateTool,
 } from "./tools/index.js";
-export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
-export type { BookingFailureInput, BookingFailureResult } from "./tools/booking-failure-handler.js";
 export {
   alexBuilder,
   salesPipelineBuilder,
@@ -28,7 +26,25 @@ export {
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
-export { ContextResolverImpl, renderBusinessFacts } from "./context-resolver.js";
+export { ok, fail, denied, pendingApproval } from "./tool-result.js";
+export type { ToolResult } from "./tool-result.js";
+export {
+  structuredError,
+  isValidTaxonomyCode,
+  getCategoryForCode,
+  TAXONOMY_CODES,
+  ERROR_CATEGORIES,
+  DEFAULT_REMEDIATIONS,
+} from "./error-taxonomy.js";
+export type { ErrorCategory, StructuredError } from "./error-taxonomy.js";
+export { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
+export type {
+  ResultClass,
+  ReinjectionPolicy,
+  ReinjectionMeta,
+  ReinjectionDecision,
+} from "./reinjection-filter.js";
+export { ContextResolverImpl } from "./context-resolver.js";
 
 // Batch execution
 export { BatchSkillHandler } from "./batch-skill-handler.js";
@@ -61,7 +77,6 @@ export type {
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,
-  ToolExecutionContext,
 } from "./types.js";
 export {
   SkillParseError,
@@ -70,6 +85,7 @@ export {
   SkillExecutionBudgetError,
 } from "./types.js";
 export type {
+  EffectCategory,
   GovernanceTier,
   TrustLevel,
   GovernanceDecision,
@@ -78,4 +94,5 @@ export type {
 } from "./governance.js";
 export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 export { BuilderRegistry } from "./builder-registry.js";
+export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";

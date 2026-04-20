@@ -172,6 +172,113 @@ describe("ContextResolverImpl", () => {
     expect(result.variables).toEqual({});
     expect(result.metadata).toEqual([]);
   });
+
+  it("sorts entries by priority descending", async () => {
+    const store = mockStore([
+      {
+        kind: "playbook",
+        scope: "test",
+        content: "Low priority",
+        priority: 1,
+        updatedAt: new Date("2026-01-01"),
+      },
+      {
+        kind: "playbook",
+        scope: "test",
+        content: "High priority",
+        priority: 10,
+        updatedAt: new Date("2026-01-01"),
+      },
+    ]);
+    const resolver = new ContextResolverImpl(store);
+
+    const result = await resolver.resolve("org_test", [
+      { kind: "playbook", scope: "test", injectAs: "RESULT", required: true },
+    ]);
+
+    expect(result.variables.RESULT).toBe("High priority\n---\nLow priority");
+  });
+
+  it("breaks priority ties by recency (newer first)", async () => {
+    const store = mockStore([
+      {
+        kind: "playbook",
+        scope: "test",
+        content: "Older entry",
+        priority: 5,
+        updatedAt: new Date("2026-01-01"),
+      },
+      {
+        kind: "playbook",
+        scope: "test",
+        content: "Newer entry",
+        priority: 5,
+        updatedAt: new Date("2026-04-01"),
+      },
+    ]);
+    const resolver = new ContextResolverImpl(store);
+
+    const result = await resolver.resolve("org_test", [
+      { kind: "playbook", scope: "test", injectAs: "RESULT", required: true },
+    ]);
+
+    expect(result.variables.RESULT).toBe("Newer entry\n---\nOlder entry");
+  });
+
+  it("truncates at entry boundaries when exceeding maxCharsPerRequirement", async () => {
+    const longContent = "A".repeat(3000);
+    const shortContent = "B".repeat(2000);
+    const store = mockStore([
+      {
+        kind: "playbook",
+        scope: "test",
+        content: longContent,
+        priority: 10,
+        updatedAt: new Date("2026-01-01"),
+      },
+      {
+        kind: "playbook",
+        scope: "test",
+        content: shortContent,
+        priority: 5,
+        updatedAt: new Date("2026-01-01"),
+      },
+    ]);
+    const resolver = new ContextResolverImpl(store, { maxCharsPerRequirement: 4000 });
+
+    const result = await resolver.resolve("org_test", [
+      { kind: "playbook", scope: "test", injectAs: "RESULT", required: true },
+    ]);
+
+    expect(result.variables.RESULT).toContain(longContent);
+    expect(result.variables.RESULT).not.toContain(shortContent);
+    expect(result.variables.RESULT).toContain("[... truncated;");
+    const meta = result.metadata[0]!;
+    expect(meta.wasTruncated).toBe(true);
+    expect(meta.originalChars).toBeGreaterThan(4000);
+  });
+
+  it("does not truncate when under cap", async () => {
+    const content = "Short content";
+    const store = mockStore([
+      {
+        kind: "playbook",
+        scope: "test",
+        content,
+        priority: 5,
+        updatedAt: new Date("2026-01-01"),
+      },
+    ]);
+    const resolver = new ContextResolverImpl(store, { maxCharsPerRequirement: 4000 });
+
+    const result = await resolver.resolve("org_test", [
+      { kind: "playbook", scope: "test", injectAs: "RESULT", required: true },
+    ]);
+
+    const meta = result.metadata[0]!;
+    expect(meta.wasTruncated).toBe(false);
+    expect(meta.originalChars).toBe(content.length);
+  });
 });
 
 function makeFacts(): BusinessFacts {

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createEscalateTool } from "./escalate.js";
 import type { HandoffReason } from "../../handoff/types.js";
-import type { ToolExecutionContext } from "../types.js";
 
 function makeDeps() {
   return {
@@ -31,15 +30,11 @@ function makeDeps() {
     notifier: {
       notify: vi.fn().mockResolvedValue(undefined),
     },
+    sessionId: "sess_1",
+    orgId: "org_1",
+    messages: [{ role: "user", content: "Do you have parking?" }],
   };
 }
-
-const testCtx: ToolExecutionContext = {
-  orgId: "org_1",
-  deploymentId: "dep_1",
-  sessionId: "sess_1",
-  messages: [{ role: "user", content: "Do you have parking?" }],
-};
 
 describe("escalate tool", () => {
   let deps: ReturnType<typeof makeDeps>;
@@ -53,22 +48,19 @@ describe("escalate tool", () => {
     expect(tool.id).toBe("escalate");
   });
 
-  it("has handoff.create operation with governanceTier internal_write", () => {
+  it("has handoff.create operation with effectCategory internal_write", () => {
     const tool = createEscalateTool(deps);
     expect(tool.operations["handoff.create"]).toBeDefined();
-    expect(tool.operations["handoff.create"]!.governanceTier).toBe("internal_write");
+    expect(tool.operations["handoff.create"]!.effectCategory).toBe("write");
   });
 
   it("creates a handoff package and notifies", async () => {
     const tool = createEscalateTool(deps);
-    const result = await tool.operations["handoff.create"]!.execute(
-      {
-        reason: "missing_knowledge",
-        summary: "Customer asked about parking, no data available",
-        customerSentiment: "neutral",
-      },
-      testCtx,
-    );
+    const result = await tool.operations["handoff.create"]!.execute({
+      reason: "missing_knowledge",
+      summary: "Customer asked about parking, no data available",
+      customerSentiment: "neutral",
+    });
 
     expect(deps.assembler.assemble).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -80,7 +72,12 @@ describe("escalate tool", () => {
     );
     expect(deps.handoffStore.save).toHaveBeenCalled();
     expect(deps.notifier.notify).toHaveBeenCalled();
-    expect(result).toEqual({ handoffId: "handoff_123", status: "pending" });
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "success",
+        data: { handoffId: "handoff_123", status: "pending" },
+      }),
+    );
   });
 
   it("returns existing handoff if one is pending for same session (duplicate guard)", async () => {
@@ -89,16 +86,18 @@ describe("escalate tool", () => {
       status: "pending",
     });
     const tool = createEscalateTool(deps);
-    const result = await tool.operations["handoff.create"]!.execute(
-      {
-        reason: "missing_knowledge",
-        summary: "duplicate attempt",
-      },
-      testCtx,
-    );
+    const result = await tool.operations["handoff.create"]!.execute({
+      reason: "missing_knowledge",
+      summary: "duplicate attempt",
+    });
 
     expect(deps.assembler.assemble).not.toHaveBeenCalled();
     expect(deps.handoffStore.save).not.toHaveBeenCalled();
-    expect(result).toEqual({ handoffId: "handoff_existing", status: "already_pending" });
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "success",
+        data: { handoffId: "handoff_existing", status: "already_pending" },
+      }),
+    );
   });
 });

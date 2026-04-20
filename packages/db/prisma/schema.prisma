@@ -1407,6 +1407,7 @@ model WorkTrace {
   actorId               String
   actorType             String
   trigger               String
+  idempotencyKey        String?   @unique
 
   // Lifecycle state — the canonical operational record
   parameters            String?   @db.Text    // JSON: original action parameters

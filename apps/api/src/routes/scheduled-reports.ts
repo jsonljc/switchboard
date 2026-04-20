@@ -130,7 +130,7 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
       const actionId = resolveDiagnoseAction(cartridgeId, report.reportType);
 
-      const executeCapable = cartridge as {
+      const executeCapable = cartridge as unknown as {
         execute?: (id: string, p: unknown) => Promise<{ data: unknown }>;
       };
       if (typeof executeCapable.execute !== "function") {

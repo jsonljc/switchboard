@@ -1,4 +1,6 @@
-import type { SkillTool, ToolExecutionContext } from "../types.js";
+import type { SkillTool } from "../types.js";
+import type { ToolResult } from "../tool-result.js";
+import { ok } from "../tool-result.js";
 import type { AssemblerInput } from "../../handoff/package-assembler.js";
 import type { HandoffPackage, HandoffReason, HandoffStore } from "../../handoff/types.js";
 
@@ -6,6 +8,9 @@ interface EscalateToolDeps {
   assembler: { assemble(input: AssemblerInput): HandoffPackage };
   handoffStore: Pick<HandoffStore, "save" | "getBySessionId">;
   notifier: { notify(pkg: HandoffPackage): Promise<void> };
+  sessionId: string;
+  orgId: string;
+  messages: Array<{ role: string; content: string }>;
 }
 
 interface EscalateInput {
@@ -21,7 +26,7 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
       "handoff.create": {
         description:
           "Escalate the conversation to a human team member. Use when the customer's question is outside your scope, when business knowledge is missing, or when the customer is frustrated.",
-        governanceTier: "internal_write" as const,
+        effectCategory: "write" as const,
         idempotent: false,
         inputSchema: {
           type: "object",
@@ -49,17 +54,20 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
           },
           required: ["reason", "summary"],
         },
-        execute: async (params: unknown, ctx?: ToolExecutionContext) => {
+        execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as EscalateInput;
-          const sessionId = ctx?.sessionId ?? "";
-          const orgId = ctx?.orgId ?? "";
+          const sessionId = deps.sessionId;
+          const orgId = deps.orgId;
 
           const existing = await deps.handoffStore.getBySessionId(sessionId);
           if (existing && (existing.status === "pending" || existing.status === "assigned")) {
-            return { handoffId: existing.id, status: "already_pending" };
+            return ok({ handoffId: existing.id, status: "already_pending" });
           }
 
-          const messages = (ctx?.messages ?? []).map((m) => ({ role: m.role, text: m.content }));
+          const messages = deps.messages.map((m: { role: string; content: string }) => ({
+            role: m.role,
+            text: m.content,
+          }));
 
           const pkg = deps.assembler.assemble({
             sessionId,
@@ -73,7 +81,7 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
           await deps.handoffStore.save(pkg);
           await deps.notifier.notify(pkg);
 
-          return { handoffId: pkg.id, status: "pending" };
+          return ok({ handoffId: pkg.id, status: "pending" });
         },
       },
     },

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { OutcomeLinker } from "./outcome-linker.js";
 import type { ToolCallRecord } from "./types.js";
+import { ok } from "./tool-result.js";
 
 function makeStore() {
   return { linkOutcome: vi.fn().mockResolvedValue(undefined) } as any;
@@ -11,7 +12,7 @@ function makeToolCall(overrides: Partial<ToolCallRecord> = {}): ToolCallRecord {
     toolId: "crm-query",
     operation: "contact.get",
     params: {},
-    result: {},
+    result: ok(),
     durationMs: 10,
     governanceDecision: "auto-approved",
     ...overrides,
@@ -27,7 +28,10 @@ describe("OutcomeLinker", () => {
         toolId: "crm-write",
         operation: "stage.update",
         params: { opportunityId: "opp-1" },
-        result: { stage: "qualified" },
+        result: ok(
+          { id: "opp-1", stage: "qualified" },
+          { entityState: { opportunityId: "opp-1", stage: "qualified" } },
+        ),
       }),
     ]);
     expect(store.linkOutcome).toHaveBeenCalledWith("trace-1", {
@@ -45,7 +49,7 @@ describe("OutcomeLinker", () => {
         toolId: "crm-write",
         operation: "activity.log",
         params: { eventType: "opt-out" },
-        result: {},
+        result: ok(undefined, { entityState: { eventType: "opt-out" } }),
       }),
     ]);
     expect(store.linkOutcome).toHaveBeenCalledWith("trace-1", {
@@ -63,13 +67,16 @@ describe("OutcomeLinker", () => {
         toolId: "crm-write",
         operation: "stage.update",
         params: { opportunityId: "opp-1" },
-        result: { stage: "quoted" },
+        result: ok(
+          { id: "opp-1", stage: "quoted" },
+          { entityState: { opportunityId: "opp-1", stage: "quoted" } },
+        ),
       }),
       makeToolCall({
         toolId: "crm-write",
         operation: "activity.log",
         params: { eventType: "opt-out" },
-        result: {},
+        result: ok(undefined, { entityState: { eventType: "opt-out" } }),
       }),
     ]);
     expect(store.linkOutcome).toHaveBeenCalledTimes(1);
@@ -104,7 +111,7 @@ describe("OutcomeLinker", () => {
         toolId: "crm-write",
         operation: "stage.update",
         params: {},
-        result: { stage: "qualified" },
+        result: ok({ stage: "qualified" }, { entityState: { stage: "qualified" } }),
       }),
     ]);
     expect(store.linkOutcome).not.toHaveBeenCalled();
