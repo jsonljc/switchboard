@@ -69,4 +69,37 @@ export class PrismaBookingStore {
       data: { status: "failed" },
     });
   }
+
+  async listByDate(
+    orgId: string,
+    date: Date,
+    limit = 10,
+  ): Promise<
+    Array<{
+      id: string;
+      startsAt: Date;
+      service: string;
+      status: string;
+      sourceChannel: string | null;
+      contact: { name: string | null };
+    }>
+  > {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    return this.prisma.booking.findMany({
+      where: {
+        organizationId: orgId,
+        startsAt: { gte: dayStart, lte: dayEnd },
+        status: { notIn: ["cancelled", "failed"] },
+      },
+      orderBy: { startsAt: "asc" },
+      take: limit,
+      include: {
+        contact: { select: { name: true } },
+      },
+    });
+  }
 }
