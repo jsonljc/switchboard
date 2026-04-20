@@ -11,6 +11,8 @@ import { StatCards } from "@/components/dashboard/stat-cards";
 import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
 import { CONSEQUENCE } from "@/lib/approval-constants";
 import { useToast } from "@/components/ui/use-toast";
+import { FirstRunBanner } from "@/components/dashboard/first-run-banner";
+import { useFirstRun } from "@/hooks/use-first-run";
 
 export function OwnerToday() {
   const { data: session } = useSession();
@@ -19,6 +21,7 @@ export function OwnerToday() {
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { isFirstRun, dismissBanner } = useFirstRun();
 
   const operatorName =
     rosterData?.roster?.find((a) => a.agentRole === "primary_operator")?.displayName ??
@@ -78,6 +81,8 @@ export function OwnerToday() {
   return (
     <div className="space-y-8">
       <p className="text-[20px] font-semibold text-foreground">{greeting}.</p>
+
+      {isFirstRun && <FirstRunBanner onDismiss={dismissBanner} />}
 
       <StatCards
         stats={[{ label: "Pending approvals", value: approvalsData?.approvals?.length ?? 0 }]}

@@ -7,6 +7,7 @@ import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
 import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
 import { TestCenter } from "@/components/onboarding/test-center";
+import { GoLive } from "@/components/onboarding/go-live";
 import type { Playbook } from "@switchboard/schemas";
 
 export default function OnboardingPage() {
@@ -82,14 +83,13 @@ export default function OnboardingPage() {
       );
     case 4:
       return (
-        <div
-          className="flex min-h-screen items-center justify-center"
-          style={{ backgroundColor: "var(--sw-base)" }}
-        >
-          <p className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-            Go Live — coming in Phase 5
-          </p>
-        </div>
+        <GoLive
+          playbook={playbook}
+          onLaunch={() => updatePlaybook.mutate({ playbook, step: 4 })}
+          onBack={() => handleUpdatePlaybook({ step: 2 })}
+          connectedChannels={[]}
+          scenariosTested={0}
+        />
       );
     default:
       return null;

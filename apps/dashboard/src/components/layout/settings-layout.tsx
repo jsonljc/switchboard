@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useViewPreference } from "@/hooks/use-view-preference";
 
 const SIDEBAR_ITEMS = [
+  { href: "/settings/playbook", label: "Your Playbook", icon: BookOpen },
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },
@@ -19,8 +20,7 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { setView } = useViewPreference();
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <div className="flex gap-10 min-h-[calc(100vh-120px)]">
