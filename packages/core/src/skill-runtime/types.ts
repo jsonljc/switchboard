@@ -144,6 +144,9 @@ export interface SkillToolOperation {
   effectCategory: EffectCategory;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
+  resultClass?: import("./reinjection-filter.js").ResultClass;
+  summarizeForModel?: boolean;
+  retrieval?: boolean;
   execute(params: unknown): Promise<ToolResult>;
 }
 
