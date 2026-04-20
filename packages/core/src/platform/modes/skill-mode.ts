@@ -48,10 +48,9 @@ export class SkillMode implements ExecutionMode {
         | { messages?: Array<{ role: string; content: string }> }
         | undefined;
       const rawMessages = conversationParam?.messages ?? [];
-      const messages = rawMessages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }));
+      const messages = rawMessages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const parameters = await this.resolveParameters(workUnit, skill);
 
