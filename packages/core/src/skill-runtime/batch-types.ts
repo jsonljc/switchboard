@@ -1,4 +1,4 @@
-import type { GovernanceTier } from "./governance.js";
+import type { EffectCategory } from "./governance.js";
 
 // ── Context Contract ──
 
@@ -35,7 +35,7 @@ export interface BatchProposedWrite {
   tool: string;
   operation: string;
   params: unknown;
-  effectCategory: GovernanceTier;
+  effectCategory: EffectCategory;
 }
 
 export interface BatchSkillResult {

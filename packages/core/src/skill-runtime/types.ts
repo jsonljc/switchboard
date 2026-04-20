@@ -1,5 +1,5 @@
 import type {
-  GovernanceTier,
+  EffectCategory,
   GovernanceOutcome,
   TrustLevel,
   GovernanceDecision,
@@ -141,7 +141,7 @@ export interface SkillTool {
 export interface SkillToolOperation {
   description: string;
   inputSchema: Record<string, unknown>;
-  effectCategory: GovernanceTier;
+  effectCategory: EffectCategory;
   governanceOverride?: Partial<Record<TrustLevel, GovernanceDecision>>;
   idempotent?: boolean;
   execute(params: unknown): Promise<ToolResult>;
@@ -187,7 +187,7 @@ export interface ToolCallContext {
   toolId: string;
   operation: string;
   params: unknown;
-  effectCategory: GovernanceTier;
+  effectCategory: EffectCategory;
   trustLevel: "supervised" | "guided" | "autonomous";
 }
 

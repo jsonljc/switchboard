@@ -1,5 +1,5 @@
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
-import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
+import type { SkillTool, EffectCategory } from "@switchboard/core/skill-runtime";
 import { ok } from "@switchboard/core/skill-runtime";
 import {
   diagnose,
@@ -9,7 +9,7 @@ import {
 } from "@switchboard/ad-optimizer";
 import type { MetricSet, FunnelInput, CampaignLearningInput } from "@switchboard/ad-optimizer";
 
-const TIER: GovernanceTier = "read";
+const TIER: EffectCategory = "read";
 const learningGuard = new LearningPhaseGuard();
 
 export function createAdsAnalyticsTool(): SkillTool {

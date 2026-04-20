@@ -1,12 +1,12 @@
 import * as cheerio from "cheerio";
 import type { SkillTool } from "../types.js";
 import { ok, fail } from "../tool-result.js";
-import type { GovernanceTier } from "../governance.js";
+import type { EffectCategory } from "../governance.js";
 import { validateScanUrl, assertPublicHostname } from "../../website-scanner/url-validator.js";
 import { fetchPages } from "../../website-scanner/page-fetcher.js";
 import { detectPlatform } from "../../website-scanner/platform-detector.js";
 
-const TIER: GovernanceTier = "read";
+const TIER: EffectCategory = "read";
 const DEFAULT_PATHS = ["/", "/about", "/pricing", "/faq", "/contact", "/services"];
 const MAX_HOMEPAGE_HTML = 50_000;
 

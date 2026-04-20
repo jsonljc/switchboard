@@ -234,6 +234,11 @@ type EffectCategory =
   | "external_mutation" // mutates external system (CRM, ad platform, calendar)
   | "irreversible"; // cannot be undone (e.g., payment capture, contract send)
 
+// NOTE: external_send and external_mutation have identical governance policies today
+// (both require approval for supervised+guided, auto-approve for autonomous).
+// This is intentional — the semantic distinction exists for audit trails and future
+// policy differentiation, not for current gating. Phase 2+ may diverge them.
+
 // SkillToolOperation — tighten existing interface
 interface SkillToolOperation {
   description: string;
@@ -248,7 +253,7 @@ interface SkillToolOperation {
 // ToolResult — structured result envelope (new)
 interface ToolResult {
   status: "success" | "error" | "denied" | "pending_approval";
-  data?: Record<string, unknown>; // operation-specific output (validated against outputSchema if present)
+  data?: Record<string, unknown>; // operation-specific output — must be a flat object, not an array or primitive. Wrap arrays as { items: [...] }.
   error?: {
     code: string; // machine-readable error code
     message: string; // human-readable summary

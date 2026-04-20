@@ -5,48 +5,68 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   async persist(trace: WorkTrace): Promise<void> {
-    await this.prisma.workTrace.create({
-      data: {
-        workUnitId: trace.workUnitId,
-        traceId: trace.traceId,
-        parentWorkUnitId: trace.parentWorkUnitId ?? null,
-        intent: trace.intent,
-        mode: trace.mode,
-        organizationId: trace.organizationId,
-        actorId: trace.actor.id,
-        actorType: trace.actor.type,
-        trigger: trace.trigger,
+    try {
+      await this.prisma.workTrace.create({
+        data: {
+          workUnitId: trace.workUnitId,
+          traceId: trace.traceId,
+          parentWorkUnitId: trace.parentWorkUnitId ?? null,
+          intent: trace.intent,
+          mode: trace.mode,
+          organizationId: trace.organizationId,
+          actorId: trace.actor.id,
+          actorType: trace.actor.type,
+          trigger: trace.trigger,
 
-        parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
-        deploymentContext: trace.deploymentContext ? JSON.stringify(trace.deploymentContext) : null,
+          parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
+          deploymentContext: trace.deploymentContext
+            ? JSON.stringify(trace.deploymentContext)
+            : null,
 
-        governanceOutcome: trace.governanceOutcome,
-        riskScore: trace.riskScore,
-        matchedPolicies: JSON.stringify(trace.matchedPolicies),
-        governanceConstraints: trace.governanceConstraints
-          ? JSON.stringify(trace.governanceConstraints)
-          : null,
+          governanceOutcome: trace.governanceOutcome,
+          riskScore: trace.riskScore,
+          matchedPolicies: JSON.stringify(trace.matchedPolicies),
+          governanceConstraints: trace.governanceConstraints
+            ? JSON.stringify(trace.governanceConstraints)
+            : null,
 
-        approvalId: trace.approvalId ?? null,
-        approvalOutcome: trace.approvalOutcome ?? null,
-        approvalRespondedBy: trace.approvalRespondedBy ?? null,
-        approvalRespondedAt: trace.approvalRespondedAt ? new Date(trace.approvalRespondedAt) : null,
+          approvalId: trace.approvalId ?? null,
+          approvalOutcome: trace.approvalOutcome ?? null,
+          approvalRespondedBy: trace.approvalRespondedBy ?? null,
+          approvalRespondedAt: trace.approvalRespondedAt
+            ? new Date(trace.approvalRespondedAt)
+            : null,
 
-        outcome: trace.outcome,
-        durationMs: trace.durationMs,
-        errorCode: trace.error?.code ?? null,
-        errorMessage: trace.error?.message ?? null,
-        executionSummary: trace.executionSummary ?? null,
-        executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
+          outcome: trace.outcome,
+          durationMs: trace.durationMs,
+          errorCode: trace.error?.code ?? null,
+          errorMessage: trace.error?.message ?? null,
+          executionSummary: trace.executionSummary ?? null,
+          executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
 
-        modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
-        requestedAt: new Date(trace.requestedAt),
-        governanceCompletedAt: new Date(trace.governanceCompletedAt),
-        executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
-        idempotencyKey: trace.idempotencyKey ?? null,
-        completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
-      },
-    });
+          modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
+          requestedAt: new Date(trace.requestedAt),
+          governanceCompletedAt: new Date(trace.governanceCompletedAt),
+          executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
+          idempotencyKey: trace.idempotencyKey ?? null,
+          completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
+        },
+      });
+    } catch (err: unknown) {
+      if (this.isUniqueConstraintError(err) && trace.idempotencyKey) {
+        return;
+      }
+      throw err;
+    }
+  }
+
+  private isUniqueConstraintError(err: unknown): boolean {
+    return (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code: string }).code === "P2002"
+    );
   }
 
   async getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null> {

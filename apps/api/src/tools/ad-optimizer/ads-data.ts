@@ -1,4 +1,4 @@
-import type { SkillTool, GovernanceTier } from "@switchboard/core/skill-runtime";
+import type { SkillTool, EffectCategory } from "@switchboard/core/skill-runtime";
 import { ok } from "@switchboard/core/skill-runtime";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
@@ -25,7 +25,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
     operations: {
       "get-campaign-insights": {
         description: "Fetch campaign performance insights from Meta Ads API for a date range.",
-        effectCategory: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -58,7 +58,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
 
       "get-account-summary": {
         description: "Fetch account-level summary metrics from Meta Ads API.",
-        effectCategory: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",
@@ -73,7 +73,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
       "send-conversion-event": {
         description:
           "Send a conversion event to Meta CAPI. External write — requires governance approval.",
-        effectCategory: "external_send" as GovernanceTier,
+        effectCategory: "external_mutation" as EffectCategory,
         idempotent: false,
         inputSchema: {
           type: "object",
@@ -99,7 +99,7 @@ export function createAdsDataTool(deps: AdsDataDeps): SkillTool {
 
       "parse-lead-webhook": {
         description: "Parse a Meta lead webhook payload into structured lead data.",
-        effectCategory: "read" as GovernanceTier,
+        effectCategory: "read" as EffectCategory,
         idempotent: true,
         inputSchema: {
           type: "object",

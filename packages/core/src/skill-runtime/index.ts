@@ -69,6 +69,7 @@ export {
   SkillExecutionBudgetError,
 } from "./types.js";
 export type {
+  EffectCategory,
   GovernanceTier,
   TrustLevel,
   GovernanceDecision,
