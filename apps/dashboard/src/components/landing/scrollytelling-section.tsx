@@ -30,7 +30,7 @@ function PhoneFrame({ activeStep }: { activeStep: number }) {
   return (
     <div
       style={{
-        width: "280px",
+        width: "min(280px, 60vw)",
         aspectRatio: "9 / 16",
         background: "#FFFFFF",
         borderRadius: "2rem",
@@ -109,73 +109,75 @@ export function ScrollytellingSection() {
   return (
     <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
       <div className="page-width">
-        {/* Single sticky phone — works on both mobile and desktop */}
-        <div
-          className="lg:float-right lg:ml-16"
-          style={{
-            position: "sticky",
-            top: "5rem",
-            zIndex: 10,
-            display: "flex",
-            justifyContent: "center",
-            marginBottom: "2rem",
-          }}
-        >
-          <PhoneFrame activeStep={activeStep} />
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto]" style={{ gap: "4rem" }}>
+          {/* Phone column — comes first in DOM for mobile, reorders via CSS on desktop */}
+          <div
+            className="order-first lg:order-last lg:col-start-2 lg:row-start-1"
+            style={{
+              position: "sticky",
+              top: "5rem",
+              zIndex: 10,
+              display: "flex",
+              justifyContent: "center",
+              alignSelf: "start",
+              background: "#F5F3F0",
+              paddingBottom: "1.5rem",
+              paddingTop: "0.5rem",
+            }}
+          >
+            <PhoneFrame activeStep={activeStep} />
+          </div>
 
-        {/* Scrolling steps */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "8rem",
-          }}
-        >
-          {STEPS.map((step, i) => (
-            <div key={step.label}>
-              <div
-                ref={(el) => {
-                  stepRefs.current[i] = el;
-                }}
-                style={{ minHeight: "16rem" }}
-              >
-                <p
-                  style={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    color: "#A07850",
-                    marginBottom: "1rem",
+          {/* Steps column */}
+          <div
+            className="order-last lg:order-first lg:col-start-1 lg:row-start-1"
+            style={{ display: "flex", flexDirection: "column", gap: "8rem" }}
+          >
+            {STEPS.map((step, i) => (
+              <div key={step.label}>
+                <div
+                  ref={(el) => {
+                    stepRefs.current[i] = el;
                   }}
+                  style={{ minHeight: "16rem" }}
                 >
-                  {step.label}
-                </p>
-                <h3
-                  style={{
-                    fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
-                    fontWeight: 700,
-                    letterSpacing: "-0.02em",
-                    color: "#1A1714",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {step.heading}
-                </h3>
-                <p
-                  style={{
-                    fontSize: "1rem",
-                    lineHeight: 1.65,
-                    color: "#6B6560",
-                    maxWidth: "40ch",
-                  }}
-                >
-                  {step.body}
-                </p>
+                  <p
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "#A07850",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    {step.label}
+                  </p>
+                  <h3
+                    style={{
+                      fontSize: "clamp(1.6rem, 2.5vw, 2.2rem)",
+                      fontWeight: 700,
+                      letterSpacing: "-0.02em",
+                      color: "#1A1714",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    {step.heading}
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "1rem",
+                      lineHeight: 1.65,
+                      color: "#6B6560",
+                      maxWidth: "40ch",
+                    }}
+                  >
+                    {step.body}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Closing line */}
