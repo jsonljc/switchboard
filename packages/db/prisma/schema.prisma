@@ -336,6 +336,9 @@ model OrganizationConfig {
   provisioningStatus   String   @default("pending")
   purchasedAgents      String[] @default([])
   businessHours        Json?
+  onboardingPlaybook   Json?
+  onboardingStep       Int      @default(1)
+  firstRunPhase        Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]
