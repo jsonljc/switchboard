@@ -6,10 +6,10 @@ export function LandingFooter() {
       <div className="page-width" style={{ paddingTop: "3rem", paddingBottom: "3rem" }}>
         <div
           style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "2rem" }}
-          className="sm:grid-cols-4"
+          className="sm:grid-cols-3"
         >
           {/* Brand */}
-          <div style={{ gridColumn: "span 2" }} className="sm:col-span-1">
+          <div>
             <span
               style={{
                 fontFamily: "var(--font-display)",
@@ -51,7 +51,6 @@ export function LandingFooter() {
               {[
                 { href: "/how-it-works", label: "How it works" },
                 { href: "/pricing", label: "Pricing" },
-                { href: "/get-started", label: "Get started" },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
@@ -84,17 +83,6 @@ export function LandingFooter() {
               Company
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <a
-                href="mailto:builders@switchboard.ai"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "0.875rem",
-                  color: "#6B6560",
-                  textDecoration: "none",
-                }}
-              >
-                Build an agent
-              </a>
               <a
                 href="mailto:hello@switchboard.ai"
                 style={{
