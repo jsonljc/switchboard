@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
 import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
+import { TestCenter } from "@/components/onboarding/test-center";
 import type { Playbook } from "@switchboard/schemas";
 
 export default function OnboardingPage() {
@@ -71,14 +72,13 @@ export default function OnboardingPage() {
       );
     case 3:
       return (
-        <div
-          className="flex min-h-screen items-center justify-center"
-          style={{ backgroundColor: "var(--sw-base)" }}
-        >
-          <p className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-            Test Center — coming in Phase 4
-          </p>
-        </div>
+        <TestCenter
+          prompts={[]}
+          onSendPrompt={() => {}}
+          onAdvance={() => handleUpdatePlaybook({ step: 4 })}
+          responses={[]}
+          isSimulating={false}
+        />
       );
     case 4:
       return (
