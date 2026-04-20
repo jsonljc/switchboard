@@ -39,6 +39,7 @@ import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
 import { playbookRoutes } from "../routes/playbook.js";
+import { dashboardOverviewRoutes } from "../routes/dashboard-overview.js";
 import websiteScanRoutes from "../routes/website-scan.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -78,6 +79,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
+  await app.register(dashboardOverviewRoutes, { prefix: "/api" });
   // playbook and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);
   await app.register(websiteScanRoutes);
