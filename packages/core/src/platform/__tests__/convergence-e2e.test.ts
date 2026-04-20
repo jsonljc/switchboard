@@ -268,4 +268,27 @@ describe("Convergence E2E", () => {
       }
     });
   });
+
+  it("passes conversation messages from parameters to executor", async () => {
+    const dep = makeDeploymentResult("alex");
+    const request: SubmitWorkRequest = {
+      organizationId: dep.organizationId,
+      actor: { id: "user-1", type: "user" },
+      intent: "alex.respond",
+      parameters: {
+        message: "Hi there",
+        conversation: {
+          messages: [{ role: "user", content: "Hi there" }],
+          sessionId: "sess-1",
+        },
+        persona: dep.persona,
+      },
+      deployment: toDeploymentContext(dep),
+      trigger: "chat",
+    };
+
+    const response = await ingress.submit(request);
+    expect(response.ok).toBe(true);
+    expect(executor.lastParams?.messages).toEqual([{ role: "user", content: "Hi there" }]);
+  });
 });
