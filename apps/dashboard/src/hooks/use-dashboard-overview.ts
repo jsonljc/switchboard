@@ -15,5 +15,6 @@ export function useDashboardOverview() {
     queryKey: queryKeys.dashboard.overview(),
     queryFn: fetchOverview,
     refetchInterval: 60_000,
+    retry: 1,
   });
 }

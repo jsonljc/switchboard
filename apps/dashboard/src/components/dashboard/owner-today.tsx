@@ -22,7 +22,7 @@ import { CONSEQUENCE } from "@/lib/approval-constants";
 
 export function OwnerToday() {
   const { data: session } = useSession();
-  const { data: overview, isLoading } = useDashboardOverview();
+  const { data: overview, isLoading, isError } = useDashboardOverview();
   const { isFirstRun, dismissBanner } = useFirstRun();
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
@@ -82,6 +82,49 @@ export function OwnerToday() {
     });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
   };
+
+  if (isError) {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
+    return (
+      <div
+        style={{
+          maxWidth: "64rem",
+          margin: "0 auto",
+          padding: "48px",
+          background: "var(--sw-base)",
+          minHeight: "100vh",
+        }}
+        className="px-6 md:px-12"
+      >
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "24px",
+            fontWeight: 600,
+            color: "var(--sw-text-primary)",
+            margin: 0,
+          }}
+        >
+          {greeting}
+        </h1>
+        <div
+          style={{
+            marginTop: "48px",
+            background: "var(--sw-surface-raised)",
+            border: "1px solid var(--sw-border)",
+            borderRadius: "12px",
+            padding: "24px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
+            Unable to load dashboard data. Check that the API server is running.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !overview) {
     return (
