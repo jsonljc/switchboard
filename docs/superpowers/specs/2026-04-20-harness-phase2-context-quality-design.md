@@ -37,7 +37,7 @@ Phase 2 story: **better inputs, safer reinjection, cleaner failure semantics.**
 
 1. Each knowledge group is sorted by `priority` descending, then `updatedAt` descending.
 2. Concatenated content is truncated at `maxCharsPerRequirement` (default 4000).
-3. If truncation occurs, an overflow marker is appended: `\n[... N more entries available, total M chars]`.
+3. If truncation occurs, an overflow marker is appended: `\n[... truncated; N additional entries omitted; original length M chars]`.
 
 ### Data Model
 
@@ -134,9 +134,9 @@ The inference heuristic is best-effort for Phase 2. Explicit declaration is the 
 ### Decision Flow
 
 1. Classify the result (explicit or inferred).
-2. If `scalar` → **pass** (status-only results are always small enough).
+2. If `scalar` → **pass** (status-only results are expected to be small and pass by default).
 3. If `tabular` or `retrieval: true` — check array lengths against `maxRetrievalResults`. If over limit → **compact**: trim arrays to limit, append `{ truncated: true, totalAvailable: N, narrowingHint: "Too many results. Narrow by adding filters." }`.
-4. Serialize result to JSON. Compute size.
+4. Serialize result to JSON. Compute size. (If compaction occurred in step 3, size is computed on the compacted payload.)
 5. If size ≤ `maxToolResultChars` → **pass**.
 6. If size > 4× `maxToolResultChars` → **omit**: return metadata stub only: `[tool result omitted due to size ({originalSize} chars); full result available in trace {traceId}]`.
 7. If `summarizeForModel: true` on the operation → **truncate** with field preservation: keep `status`, `error`, `entityState`, `nextActions` from the `ToolResult`; truncate `data` to fit within cap. This field list is frozen for Phase 2.
@@ -244,7 +244,7 @@ interface StructuredError {
 
 ### What Phase 2 Delivers
 
-1. **Type definition** — `StructuredError`, `ErrorCategory`, code string constants.
+1. **Type definition** — `StructuredError`, `ErrorCategory`, code string constants. The code constants listed above are the frozen allowed set for Phase 2. Adding a new code requires explicit justification and spec amendment.
 2. **Builder helper** — `structuredError(category, code, message, opts)` that constructs a `StructuredError` with defaults for remediation text.
 3. **Default remediation map** — a lookup from `(category, code)` → default `modelRemediation` + `operatorRemediation` strings. Tool authors can override, but every code has a sensible default.
 4. **Migration of existing errors** — audit all existing `fail()` calls across tool factories and map their ad-hoc codes to taxonomy codes. "Closest match" is migration glue only — each mapping must be reviewed, and any genuinely novel error type that does not fit should be flagged as a gap for the next taxonomy revision, not silently crammed into a bad bucket.
@@ -304,4 +304,4 @@ After Phase 2 ships, `docs/DOCTRINE.md` should be updated with:
 - [ ] Reinjection filter exists between tool execution and conversation append in `SkillExecutorImpl`
 - [ ] `ContextResolver` sorts knowledge entries by priority desc, truncates at char cap
 - [ ] Error taxonomy covers all existing error codes with model and operator remediation
-- [ ] Error taxonomy and success taxonomy are added as doctrine appendix
+- [ ] Error taxonomy is added as doctrine appendix (success taxonomy deferred)
