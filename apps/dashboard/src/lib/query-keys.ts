@@ -107,4 +107,15 @@ export const queryKeys = {
     all: ["persona"] as const,
     mine: () => [...queryKeys.persona.all, "mine"] as const,
   },
+  playbook: {
+    all: ["playbook"] as const,
+    current: () => [...queryKeys.playbook.all, "current"] as const,
+  },
+  scan: {
+    all: ["scan"] as const,
+  },
+  dashboard: {
+    all: ["dashboard"] as const,
+    overview: () => ["dashboard", "overview"] as const,
+  },
 };

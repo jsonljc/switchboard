@@ -94,3 +94,12 @@ export * from "./temporal-fact.js";
 export * from "./conversion.js";
 export * from "./calendar.js";
 export * from "./crm.js";
+
+// Playbook (structured onboarding playbook)
+export * from "./playbook.js";
+
+// Website scan (lightweight homepage extraction)
+export * from "./website-scan.js";
+
+// Dashboard aggregate (operator dashboard overview)
+export { DashboardOverviewSchema, type DashboardOverview } from "./dashboard.js";

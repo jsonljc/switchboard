@@ -7,10 +7,10 @@ export type ViewPreference = "owner" | "staff";
 const STORAGE_KEY = "switchboard.view-preference";
 
 function readPreference(): ViewPreference {
-  if (typeof window === "undefined") return "staff";
+  if (typeof window === "undefined") return "owner";
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "owner" || stored === "staff") return stored;
-  return "staff";
+  return "owner";
 }
 
 export function useViewPreference() {

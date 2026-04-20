@@ -1,31 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useAgentRoster } from "@/hooks/use-agents";
-import { useApprovals } from "@/hooks/use-approvals";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
-import { queryKeys } from "@/lib/query-keys";
-import { StatCards } from "@/components/dashboard/stat-cards";
-import { TodayActivityFeed } from "@/components/mission-control/today-activity-feed";
-import { CONSEQUENCE } from "@/lib/approval-constants";
 import { useToast } from "@/components/ui/use-toast";
+import { queryKeys } from "@/lib/query-keys";
+import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
+import { useFirstRun } from "@/hooks/use-first-run";
+import { FirstRunBanner } from "@/components/dashboard/first-run-banner";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { StatCardGrid } from "@/components/dashboard/stat-card-grid";
+import { SectionLabel } from "@/components/dashboard/section-label";
+import { ActionCard } from "@/components/dashboard/action-card";
+import { BookingPreview } from "@/components/dashboard/booking-preview";
+import { FunnelStrip } from "@/components/dashboard/funnel-strip";
+import { RevenueSummary } from "@/components/dashboard/revenue-summary";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { OwnerTaskList } from "@/components/dashboard/owner-task-list";
+import { CONSEQUENCE } from "@/lib/approval-constants";
 
 export function OwnerToday() {
   const { data: session } = useSession();
-  const { data: rosterData } = useAgentRoster();
-  const { data: approvalsData } = useApprovals();
+  const { data: overview, isLoading, isError } = useDashboardOverview();
+  const { isFirstRun, dismissBanner } = useFirstRun();
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
-
-  const operatorName =
-    rosterData?.roster?.find((a) => a.agentRole === "primary_operator")?.displayName ??
-    "Your assistant";
-
-  const topApproval = approvalsData?.approvals?.[0];
-  const remainingApprovals = (approvalsData?.approvals?.length ?? 0) - 1;
 
   const respondMutation = useMutation({
     mutationFn: async ({
@@ -68,90 +69,264 @@ export function OwnerToday() {
     },
     onSettled: () => {
       setRespondingId(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
     },
   });
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const handleTaskComplete = async (taskId: string) => {
+    await fetch("/api/dashboard/tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, status: "completed" }),
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+  };
+
+  if (isError) {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
+    return (
+      <div
+        style={{
+          maxWidth: "64rem",
+          margin: "0 auto",
+          padding: "48px",
+          background: "var(--sw-base)",
+          minHeight: "100vh",
+        }}
+        className="px-6 md:px-12"
+      >
+        <h1
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "24px",
+            fontWeight: 600,
+            color: "var(--sw-text-primary)",
+            margin: 0,
+          }}
+        >
+          {greeting}
+        </h1>
+        <div
+          style={{
+            marginTop: "48px",
+            background: "var(--sw-surface-raised)",
+            border: "1px solid var(--sw-border)",
+            borderRadius: "12px",
+            padding: "24px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
+            Unable to load dashboard data. Check that the API server is running.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !overview) {
+    return (
+      <div style={{ maxWidth: "64rem", margin: "0 auto", padding: "48px" }}>
+        <div
+          style={{
+            height: "32px",
+            background: "var(--sw-surface)",
+            borderRadius: "8px",
+            width: "200px",
+            marginBottom: "48px",
+          }}
+        />
+        <div
+          style={{ display: "grid", gap: "16px" }}
+          className="grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                height: "96px",
+                background: "var(--sw-surface-raised)",
+                border: "1px solid var(--sw-border)",
+                borderRadius: "12px",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const stats = [
+    { label: "Pending approvals", value: overview.stats.pendingApprovals },
+    {
+      label: "New inquiries",
+      value: overview.stats.newInquiriesToday,
+      delta:
+        overview.stats.newInquiriesYesterday > 0
+          ? {
+              direction: (overview.stats.newInquiriesToday >= overview.stats.newInquiriesYesterday
+                ? "up"
+                : "down") as "up" | "down",
+              text: `${Math.abs(overview.stats.newInquiriesToday - overview.stats.newInquiriesYesterday)} vs yesterday`,
+            }
+          : undefined,
+    },
+    { label: "Qualified leads", value: overview.stats.qualifiedLeads },
+    { label: "Bookings today", value: overview.stats.bookingsToday },
+    {
+      label: "Revenue (7d)",
+      value: `$${overview.stats.revenue7d.total.toLocaleString()}`,
+    },
+    {
+      label: "Open tasks",
+      value: overview.stats.openTasks,
+      badge:
+        overview.stats.overdueTasks > 0
+          ? { text: `${overview.stats.overdueTasks} overdue`, variant: "overdue" as const }
+          : undefined,
+    },
+  ];
+
+  const funnelStages = [
+    { name: "Inquiry", count: overview.funnel.inquiry },
+    { name: "Qualified", count: overview.funnel.qualified },
+    { name: "Booked", count: overview.funnel.booked },
+    { name: "Purchased", count: overview.funnel.purchased },
+    { name: "Completed", count: overview.funnel.completed },
+  ];
+
+  const totalApprovals = overview.stats.pendingApprovals;
 
   return (
-    <div className="space-y-8">
-      <p className="text-[20px] font-semibold text-foreground">{greeting}.</p>
+    <div
+      style={{
+        maxWidth: "64rem",
+        margin: "0 auto",
+        padding: "48px",
+        background: "var(--sw-base)",
+        minHeight: "100vh",
+      }}
+      className="px-6 md:px-12"
+    >
+      {/* Header */}
+      <DashboardHeader overview={overview} />
 
-      <StatCards
-        stats={[{ label: "Pending approvals", value: approvalsData?.approvals?.length ?? 0 }]}
-      />
-
-      {topApproval && (
-        <section>
-          <h2 className="section-label mb-3">Needs you</h2>
-          <div className="rounded-xl border border-border bg-surface p-5 space-y-3">
-            <p className="text-[14.5px] text-foreground leading-relaxed">{topApproval.summary}</p>
-            <p className="text-[12.5px] text-muted-foreground italic leading-snug">
-              {CONSEQUENCE[topApproval.riskCategory] ?? CONSEQUENCE.medium}
-            </p>
-            <div className="flex items-center gap-2 pt-0.5">
-              <button
-                onClick={() => {
-                  setRespondingId(topApproval.id);
-                  respondMutation.mutate({
-                    approvalId: topApproval.id,
-                    action: "approve",
-                    bindingHash: topApproval.bindingHash,
-                  });
-                }}
-                disabled={respondingId === topApproval.id}
-                className="px-4 py-2 rounded-lg text-[13px] font-medium bg-positive text-positive-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {respondingId === topApproval.id && respondMutation.isPending
-                  ? "Approving..."
-                  : "Approve"}
-              </button>
-              <button
-                onClick={() => {
-                  setRespondingId(topApproval.id);
-                  respondMutation.mutate({
-                    approvalId: topApproval.id,
-                    action: "reject",
-                    bindingHash: topApproval.bindingHash,
-                  });
-                }}
-                disabled={respondingId === topApproval.id}
-                className="px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-              >
-                {respondingId === topApproval.id && respondMutation.isPending
-                  ? "Declining..."
-                  : "Not now"}
-              </button>
-              {remainingApprovals > 0 && (
-                <Link
-                  href="/decide"
-                  className="ml-auto text-[12px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {remainingApprovals} more →
-                </Link>
-              )}
-            </div>
-          </div>
-        </section>
+      {/* First Run Banner */}
+      {isFirstRun && (
+        <div style={{ marginTop: "32px" }}>
+          <FirstRunBanner onDismiss={dismissBanner} />
+        </div>
       )}
 
-      {!topApproval && (
-        <section>
-          <div className="rounded-xl border border-border/60 bg-surface-raised px-6 py-6 text-center">
-            <p className="text-[14px] text-foreground font-medium">You&apos;re all caught up.</p>
-            <p className="text-[13px] text-muted-foreground mt-1">
-              {operatorName} will reach out when something needs you.
-            </p>
-          </div>
-        </section>
-      )}
+      {/* Stat Cards */}
+      <div style={{ marginTop: "48px" }}>
+        <StatCardGrid stats={stats} />
+      </div>
 
-      <section>
-        <h2 className="section-label mb-3">What happened</h2>
-        <TodayActivityFeed />
-      </section>
+      {/* Action Zone */}
+      <div
+        style={{ marginTop: "48px", display: "grid", gap: "24px" }}
+        className="grid-cols-1 lg:grid-cols-[1fr_1fr]"
+      >
+        {/* Needs Your Attention */}
+        <div>
+          <SectionLabel>Needs Your Attention</SectionLabel>
+          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            {overview.approvals.length === 0 ? (
+              <div
+                style={{
+                  background: "var(--sw-surface-raised)",
+                  border: "1px solid var(--sw-border)",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
+                  All caught up
+                </p>
+              </div>
+            ) : (
+              <>
+                {overview.approvals.map((approval) => (
+                  <ActionCard
+                    key={approval.id}
+                    summary={approval.summary}
+                    context={CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
+                    createdAt={approval.createdAt}
+                    actions={[
+                      {
+                        label: respondingId === approval.id ? "Approving..." : "Approve",
+                        variant: "primary",
+                        onClick: () => {
+                          setRespondingId(approval.id);
+                          respondMutation.mutate({
+                            approvalId: approval.id,
+                            action: "approve",
+                            bindingHash: approval.bindingHash,
+                          });
+                        },
+                        loading: respondingId === approval.id && respondMutation.isPending,
+                        disabled: respondingId === approval.id,
+                      },
+                      {
+                        label: respondingId === approval.id ? "Declining..." : "Not now",
+                        variant: "secondary",
+                        onClick: () => {
+                          setRespondingId(approval.id);
+                          respondMutation.mutate({
+                            approvalId: approval.id,
+                            action: "reject",
+                            bindingHash: approval.bindingHash,
+                          });
+                        },
+                        loading: respondingId === approval.id && respondMutation.isPending,
+                        disabled: respondingId === approval.id,
+                      },
+                    ]}
+                  />
+                ))}
+                {totalApprovals > 3 && (
+                  <Link
+                    href="/decide"
+                    style={{ fontSize: "14px", color: "var(--sw-accent)", textDecoration: "none" }}
+                  >
+                    View all {totalApprovals} →
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Today's Bookings */}
+        <BookingPreview bookings={overview.bookings} />
+      </div>
+
+      {/* Funnel Snapshot */}
+      <div style={{ marginTop: "48px" }}>
+        <FunnelStrip stages={funnelStages} />
+      </div>
+
+      {/* Revenue + Tasks row */}
+      <div
+        style={{ marginTop: "48px", display: "grid", gap: "24px" }}
+        className={overview.tasks.length > 0 ? "grid-cols-1 lg:grid-cols-[1fr_1fr]" : ""}
+      >
+        <RevenueSummary
+          total={overview.revenue.total}
+          count={overview.revenue.count}
+          topSource={overview.revenue.topSource}
+        />
+        <OwnerTaskList tasks={overview.tasks} onComplete={handleTaskComplete} />
+      </div>
+
+      {/* Activity Feed */}
+      <div style={{ marginTop: "48px" }}>
+        <ActivityFeed events={overview.activity} />
+      </div>
     </div>
   );
 }

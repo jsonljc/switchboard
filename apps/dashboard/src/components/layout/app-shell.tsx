@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!orgLoading && !onboardingComplete && !isSetupPath && !isLoginPath) {
-      router.replace("/setup");
+      router.replace("/onboarding");
     }
   }, [orgLoading, onboardingComplete, isSetupPath, isLoginPath, router]);
 

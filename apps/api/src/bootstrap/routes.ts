@@ -38,6 +38,10 @@ import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
+import { playbookRoutes } from "../routes/playbook.js";
+import { dashboardOverviewRoutes } from "../routes/dashboard-overview.js";
+import websiteScanRoutes from "../routes/website-scan.js";
+import { ownerTaskRoutes } from "../routes/owner-tasks.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -76,4 +80,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
+  await app.register(dashboardOverviewRoutes, { prefix: "/api" });
+  await app.register(ownerTaskRoutes, { prefix: "/api" });
+  // playbook and website-scan routes define their own full paths including /api prefix
+  await app.register(playbookRoutes);
+  await app.register(websiteScanRoutes);
 }

@@ -147,6 +147,44 @@ export class PrismaConversionRecordStore {
       },
     });
   }
+
+  async activePipelineCounts(orgId: string): Promise<{
+    inquiry: number;
+    qualified: number;
+    booked: number;
+    purchased: number;
+    completed: number;
+  }> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const terminalStages = ["completed", "lost"];
+
+    const groups = await this.prisma.conversionRecord.groupBy({
+      by: ["type"],
+      where: {
+        organizationId: orgId,
+        OR: [
+          { type: { notIn: terminalStages } },
+          { type: { in: terminalStages }, occurredAt: { gte: thirtyDaysAgo } },
+        ],
+      },
+      _count: { _all: true },
+    });
+
+    const counts: Record<string, number> = {};
+    for (const g of groups) {
+      counts[g.type] = g._count._all;
+    }
+
+    return {
+      inquiry: counts["inquiry"] ?? 0,
+      qualified: counts["qualified"] ?? 0,
+      booked: counts["booked"] ?? 0,
+      purchased: counts["purchased"] ?? 0,
+      completed: counts["completed"] ?? 0,
+    };
+  }
 }
 
 function emptyFunnel(dateRange: DateRange): FunnelCounts {

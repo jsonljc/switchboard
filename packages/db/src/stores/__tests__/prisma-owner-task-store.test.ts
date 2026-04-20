@@ -11,6 +11,7 @@ function makeMockPrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: vi.fn().mockResolvedValue(0),
     },
   };
 }
@@ -281,6 +282,85 @@ describe("PrismaOwnerTaskStore", () => {
 
       const call = prisma.ownerTask.updateMany.mock.calls[0]?.[0];
       expect(call?.where.status).toBe("pending");
+    });
+  });
+
+  describe("listOpen", () => {
+    it("returns pending tasks with isOverdue flag", async () => {
+      const yesterday = new Date(Date.now() - 86_400_000);
+      const tomorrow = new Date(Date.now() + 86_400_000);
+
+      prisma.ownerTask.findMany.mockResolvedValue([
+        makeTask({ id: "t1", title: "Follow up", priority: "high", dueAt: yesterday }),
+        makeTask({ id: "t2", title: "Review pricing", priority: "medium", dueAt: tomorrow }),
+        makeTask({ id: "t3", title: "No due date", priority: "low", dueAt: null }),
+      ]);
+      prisma.ownerTask.count.mockResolvedValue(3);
+
+      const result = await store.listOpen("org-1");
+
+      expect(result).toHaveLength(3);
+      expect(result[0]!.isOverdue).toBe(true);
+      expect(result[1]!.isOverdue).toBe(false);
+      expect(result[2]!.isOverdue).toBe(false);
+    });
+
+    it("respects limit parameter", async () => {
+      prisma.ownerTask.findMany.mockResolvedValue([]);
+      prisma.ownerTask.count.mockResolvedValue(0);
+      await store.listOpen("org-1", 5);
+
+      const call = prisma.ownerTask.findMany.mock.calls[0]?.[0];
+      expect(call?.take).toBe(5);
+    });
+
+    it("provides openCount and overdueCount from separate count queries", async () => {
+      const yesterday = new Date(Date.now() - 86_400_000);
+      prisma.ownerTask.findMany.mockResolvedValue([
+        makeTask({ id: "t1", title: "Overdue", priority: "high", dueAt: yesterday }),
+        makeTask({ id: "t2", title: "Not overdue", priority: "medium", dueAt: null }),
+      ]);
+      prisma.ownerTask.count.mockResolvedValueOnce(20).mockResolvedValueOnce(5);
+
+      const result = await store.listOpen("org-1");
+      expect(result.openCount).toBe(20);
+      expect(result.overdueCount).toBe(5);
+    });
+
+    it("sorts tasks by priority then creation date", async () => {
+      const tasks = [
+        makeTask({ id: "low", priority: "low", createdAt: new Date("2026-03-25T08:00:00Z") }),
+        makeTask({ id: "urgent", priority: "urgent", createdAt: new Date("2026-03-25T10:00:00Z") }),
+        makeTask({ id: "medium", priority: "medium", createdAt: new Date("2026-03-25T09:00:00Z") }),
+        makeTask({ id: "high", priority: "high", createdAt: new Date("2026-03-25T11:00:00Z") }),
+      ];
+      prisma.ownerTask.findMany.mockResolvedValue(tasks);
+      prisma.ownerTask.count.mockResolvedValue(4);
+
+      const result = await store.listOpen("org-1");
+
+      // Should be sorted: urgent, high, medium, low
+      expect(result[0]!.id).toBe("urgent");
+      expect(result[1]!.id).toBe("high");
+      expect(result[2]!.id).toBe("medium");
+      expect(result[3]!.id).toBe("low");
+    });
+
+    it("returns correct data shape for each task", async () => {
+      const task = makeTask({ id: "t1", title: "Test Task", priority: "high", dueAt: null });
+      prisma.ownerTask.findMany.mockResolvedValue([task]);
+      prisma.ownerTask.count.mockResolvedValue(1);
+
+      const result = await store.listOpen("org-1");
+
+      expect(result[0]).toMatchObject({
+        id: "t1",
+        title: "Test Task",
+        dueAt: null,
+        isOverdue: false,
+        status: "pending",
+        priority: "high",
+      });
     });
   });
 });
