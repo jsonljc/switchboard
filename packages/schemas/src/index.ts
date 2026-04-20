@@ -94,3 +94,6 @@ export * from "./temporal-fact.js";
 export * from "./conversion.js";
 export * from "./calendar.js";
 export * from "./crm.js";
+
+// Playbook (structured onboarding playbook)
+export * from "./playbook.js";
