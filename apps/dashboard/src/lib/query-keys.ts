@@ -107,4 +107,8 @@ export const queryKeys = {
     all: ["persona"] as const,
     mine: () => [...queryKeys.persona.all, "mine"] as const,
   },
+  playbook: {
+    all: ["playbook"] as const,
+    current: () => [...queryKeys.playbook.all, "current"] as const,
+  },
 };

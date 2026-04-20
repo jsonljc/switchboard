@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import { SwitchboardClientBase } from "./api-client-base";
 import type { AgentRosterEntry, AgentStateEntry } from "./api-client-types";
+import type { Playbook } from "@switchboard/schemas";
 
 // Marketplace types
 export interface MarketplaceListing {
@@ -663,5 +664,21 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<{ traces: ExecutionTraceSummary[]; nextCursor?: string }>(
       `/api/marketplace/deployments/${deploymentId}/traces${qs ? `?${qs}` : ""}`,
     );
+  }
+
+  // ── Playbook ──
+
+  async getPlaybook(): Promise<{ playbook: Playbook; step: number; complete: boolean }> {
+    return this.request("/api/playbook");
+  }
+
+  async updatePlaybook(body: {
+    playbook?: Playbook;
+    step?: number;
+  }): Promise<{ playbook: Playbook; step: number }> {
+    return this.request("/api/playbook", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
   }
 }
