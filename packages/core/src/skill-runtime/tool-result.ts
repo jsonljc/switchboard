@@ -1,3 +1,5 @@
+import { ERROR_CATEGORIES, DEFAULT_REMEDIATIONS } from "./error-taxonomy.js";
+
 export interface ToolResult {
   status: "success" | "error" | "denied" | "pending_approval";
   data?: Record<string, unknown>;
@@ -25,8 +27,16 @@ export function ok(
 }
 
 export function fail(
-  code: string,
-  message: string,
+  categoryOrCode: string,
+  codeOrMessage: string,
+  messageOrOpts?:
+    | string
+    | {
+        modelRemediation?: string;
+        operatorRemediation?: string;
+        retryable?: boolean;
+        data?: Record<string, unknown>;
+      },
   opts?: {
     modelRemediation?: string;
     operatorRemediation?: string;
@@ -34,15 +44,46 @@ export function fail(
     data?: Record<string, unknown>;
   },
 ): ToolResult {
+  const isCategory = (ERROR_CATEGORIES as readonly string[]).includes(categoryOrCode);
+
+  if (isCategory && typeof messageOrOpts === "string") {
+    // Category-aware form: fail(category, code, message, opts?)
+    const code = codeOrMessage;
+    const message = messageOrOpts;
+    const defaults = DEFAULT_REMEDIATIONS[code];
+    return {
+      status: "error",
+      data: opts?.data,
+      error: {
+        code,
+        message,
+        modelRemediation: opts?.modelRemediation ?? defaults?.modelRemediation,
+        operatorRemediation: opts?.operatorRemediation ?? defaults?.operatorRemediation,
+        retryable: opts?.retryable ?? defaults?.retryable ?? false,
+      },
+    };
+  }
+
+  // Legacy form: fail(code, message, opts?)
+  const code = categoryOrCode;
+  const message = codeOrMessage;
+  const legacyOpts = messageOrOpts as
+    | {
+        modelRemediation?: string;
+        operatorRemediation?: string;
+        retryable?: boolean;
+        data?: Record<string, unknown>;
+      }
+    | undefined;
   return {
     status: "error",
-    data: opts?.data,
+    data: legacyOpts?.data,
     error: {
       code,
       message,
-      modelRemediation: opts?.modelRemediation,
-      operatorRemediation: opts?.operatorRemediation,
-      retryable: opts?.retryable ?? false,
+      modelRemediation: legacyOpts?.modelRemediation,
+      operatorRemediation: legacyOpts?.operatorRemediation,
+      retryable: legacyOpts?.retryable ?? false,
     },
   };
 }

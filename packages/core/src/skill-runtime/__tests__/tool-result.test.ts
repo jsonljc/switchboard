@@ -58,4 +58,52 @@ describe("ToolResult helpers", () => {
     expect(result.error?.message).toBe("Requires human approval");
     expect(result.error?.retryable).toBe(false);
   });
+
+  describe("fail() category-aware overload", () => {
+    it("uses taxonomy defaults when category is provided", () => {
+      const result = fail("execution", "TOOL_NOT_FOUND", "Unknown tool: foo.bar");
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("TOOL_NOT_FOUND");
+      expect(result.error?.message).toBe("Unknown tool: foo.bar");
+      expect(result.error?.modelRemediation).toBe(
+        "Tool not found. Check available tools for this skill.",
+      );
+      expect(result.error?.operatorRemediation).toBe("Tool ID does not match any registered tool.");
+      expect(result.error?.retryable).toBe(false);
+    });
+
+    it("allows custom overrides with category form", () => {
+      const result = fail("governance", "DENIED_BY_POLICY", "Blocked", {
+        modelRemediation: "Custom model fix",
+        retryable: true,
+      });
+      expect(result.error?.modelRemediation).toBe("Custom model fix");
+      expect(result.error?.retryable).toBe(true);
+      // operatorRemediation falls back to default
+      expect(result.error?.operatorRemediation).toBe(
+        "Policy denied the action. Check governance rules.",
+      );
+    });
+
+    it("without category still works (backward compat)", () => {
+      const result = fail("SOME_CODE", "Something failed");
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("SOME_CODE");
+      expect(result.error?.message).toBe("Something failed");
+      expect(result.error?.modelRemediation).toBeUndefined();
+      expect(result.error?.retryable).toBe(false);
+    });
+
+    it("backward compat with opts", () => {
+      const result = fail("MY_CODE", "Broke", {
+        modelRemediation: "Fix it",
+        retryable: true,
+        data: { detail: "x" },
+      });
+      expect(result.error?.code).toBe("MY_CODE");
+      expect(result.error?.modelRemediation).toBe("Fix it");
+      expect(result.error?.retryable).toBe(true);
+      expect(result.data).toEqual({ detail: "x" });
+    });
+  });
 });
