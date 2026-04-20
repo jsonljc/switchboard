@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { SkillTool } from "../types.js";
-import { ok } from "../tool-result.js";
+import type { ToolResult } from "../tool-result.js";
+import { ok, fail } from "../tool-result.js";
 import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
+import type { BookingFailureHandler } from "./booking-failure-handler.js";
 
 interface BookingStoreSubset {
   create(input: {
@@ -18,6 +20,12 @@ interface BookingStoreSubset {
     sourceChannel?: string | null;
     workTraceId?: string | null;
   }): Promise<{ id: string }>;
+  findBySlot(
+    orgId: string,
+    contactId: string,
+    service: string,
+    startsAt: Date,
+  ): Promise<{ id: string } | null>;
 }
 
 interface OpportunityStoreSubset {
@@ -38,11 +46,21 @@ type TransactionFn = (
   }) => Promise<unknown>,
 ) => Promise<unknown>;
 
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
+}
+
 interface CalendarBookToolDeps {
   calendarProvider: CalendarProvider;
   bookingStore: BookingStoreSubset;
   opportunityStore: OpportunityStoreSubset;
   runTransaction: TransactionFn;
+  failureHandler: BookingFailureHandler;
 }
 
 export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
@@ -89,7 +107,7 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
           },
           required: ["orgId", "contactId", "service", "slotStart", "slotEnd", "calendarId"],
         },
-        execute: async (params: unknown) => {
+        execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as {
             orgId: string;
             contactId: string;
@@ -118,65 +136,125 @@ export function createCalendarBookTool(deps: CalendarBookToolDeps): SkillTool {
             opportunityId = created.id;
           }
 
-          // 1. Persist booking as pending
-          const booking = await deps.bookingStore.create({
-            organizationId: input.orgId,
-            contactId: input.contactId,
-            opportunityId,
-            service: input.service,
-            startsAt: new Date(input.slotStart),
-            endsAt: new Date(input.slotEnd),
-            attendeeName: input.attendeeName ?? null,
-            attendeeEmail: input.attendeeEmail ?? null,
-          });
-
-          // 2. Call calendar provider
-          const calendarResult = await deps.calendarProvider.createBooking({
-            contactId: input.contactId,
-            organizationId: input.orgId,
-            opportunityId,
-            slot: {
-              start: input.slotStart,
-              end: input.slotEnd,
-              calendarId: input.calendarId,
-              available: true,
-            },
-            service: input.service,
-            attendeeName: input.attendeeName,
-            attendeeEmail: input.attendeeEmail,
-            createdByType: "agent" as const,
-          });
-
-          // 3. On success: confirm booking + write outbox in one transaction
-          const eventId = randomUUID();
-          await deps.runTransaction(async (tx) => {
-            await tx.booking.update({
-              where: { id: booking.id },
-              data: { status: "confirmed", calendarEventId: calendarResult.calendarEventId },
+          // 1. Persist booking as pending (with duplicate guard)
+          let booking: { id: string };
+          try {
+            booking = await deps.bookingStore.create({
+              organizationId: input.orgId,
+              contactId: input.contactId,
+              opportunityId,
+              service: input.service,
+              startsAt: new Date(input.slotStart),
+              endsAt: new Date(input.slotEnd),
+              attendeeName: input.attendeeName ?? null,
+              attendeeEmail: input.attendeeEmail ?? null,
             });
-            await tx.outboxEvent.create({
-              data: {
-                eventId,
-                type: "booked",
-                status: "pending",
-                payload: {
-                  type: "booked",
-                  contactId: input.contactId,
-                  organizationId: input.orgId,
-                  value: 0,
-                  occurredAt: new Date().toISOString(),
-                  source: "calendar-book",
-                  metadata: {
-                    bookingId: booking.id,
-                    opportunityId,
-                    service: input.service,
-                    slotStart: input.slotStart,
-                    slotEnd: input.slotEnd,
+          } catch (err) {
+            if (isPrismaUniqueConstraintError(err)) {
+              const existingBooking = await deps.bookingStore.findBySlot(
+                input.orgId,
+                input.contactId,
+                input.service,
+                new Date(input.slotStart),
+              );
+              return fail(
+                "DUPLICATE_BOOKING",
+                "This time slot is already booked for this contact.",
+                {
+                  data: {
+                    existingBookingId: existingBooking?.id ?? null,
+                    status: "duplicate",
+                    failureType: "duplicate_booking",
                   },
                 },
+              );
+            }
+            throw err;
+          }
+
+          // 2. Call calendar provider
+          let calendarResult: { calendarEventId?: string | null };
+          try {
+            calendarResult = await deps.calendarProvider.createBooking({
+              contactId: input.contactId,
+              organizationId: input.orgId,
+              opportunityId,
+              slot: {
+                start: input.slotStart,
+                end: input.slotEnd,
+                calendarId: input.calendarId,
+                available: true,
               },
+              service: input.service,
+              attendeeName: input.attendeeName,
+              attendeeEmail: input.attendeeEmail,
+              createdByType: "agent" as const,
             });
-          });
+          } catch (error) {
+            const failResult = await deps.failureHandler.handle({
+              bookingId: booking.id,
+              orgId: input.orgId,
+              contactId: input.contactId,
+              service: input.service,
+              provider: "google_calendar",
+              error,
+              failureType: "provider_error",
+              retryable: false,
+            });
+            return fail("BOOKING_FAILURE", failResult.message, {
+              data: failResult as unknown as Record<string, unknown>,
+            });
+          }
+
+          // 3. On success: confirm booking + write outbox in one transaction
+          try {
+            const eventId = randomUUID();
+            await deps.runTransaction(async (tx) => {
+              await tx.booking.update({
+                where: { id: booking.id },
+                data: {
+                  status: "confirmed",
+                  calendarEventId: calendarResult.calendarEventId,
+                },
+              });
+              await tx.outboxEvent.create({
+                data: {
+                  eventId,
+                  type: "booked",
+                  status: "pending",
+                  payload: {
+                    type: "booked",
+                    contactId: input.contactId,
+                    organizationId: input.orgId,
+                    value: 0,
+                    occurredAt: new Date().toISOString(),
+                    source: "calendar-book",
+                    metadata: {
+                      bookingId: booking.id,
+                      opportunityId,
+                      service: input.service,
+                      slotStart: input.slotStart,
+                      slotEnd: input.slotEnd,
+                    },
+                  },
+                },
+              });
+            });
+          } catch (error) {
+            const failResult = await deps.failureHandler.handle({
+              bookingId: booking.id,
+              orgId: input.orgId,
+              contactId: input.contactId,
+              service: input.service,
+              provider: "google_calendar",
+              error,
+              failureType: "confirmation_failed",
+              retryable: true,
+            });
+            return fail("BOOKING_FAILURE", failResult.message, {
+              data: failResult as unknown as Record<string, unknown>,
+            });
+          }
 
           return ok(
             {

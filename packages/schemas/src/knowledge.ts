@@ -4,7 +4,7 @@ import { z } from "zod";
 // Knowledge Entry — org-scoped, versioned curated knowledge
 // ---------------------------------------------------------------------------
 
-export const KnowledgeKindSchema = z.enum(["playbook", "policy", "knowledge"]);
+export const KnowledgeKindSchema = z.enum(["playbook", "policy", "knowledge", "business-facts"]);
 export type KnowledgeKind = z.infer<typeof KnowledgeKindSchema>;
 
 const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/;

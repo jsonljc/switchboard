@@ -56,4 +56,17 @@ export class PrismaBookingStore {
       where: { organizationId: orgId, status: "confirmed" },
     });
   }
+
+  async findBySlot(orgId: string, contactId: string, service: string, startsAt: Date) {
+    return this.prisma.booking.findFirst({
+      where: { organizationId: orgId, contactId, service, startsAt },
+    });
+  }
+
+  async markFailed(bookingId: string) {
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: "failed" },
+    });
+  }
 }

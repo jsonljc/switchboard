@@ -1,4 +1,4 @@
-import type { ContextRequirement, KnowledgeKind } from "@switchboard/schemas";
+import type { ContextRequirement, KnowledgeKind, BusinessFacts } from "@switchboard/schemas";
 import { ContextResolutionError } from "./types.js";
 
 export interface ContextResolutionConfig {
@@ -8,6 +8,61 @@ export interface ContextResolutionConfig {
 export const DEFAULT_CONTEXT_CONFIG: ContextResolutionConfig = {
   maxCharsPerRequirement: 4000,
 };
+
+export interface BusinessFactsStoreForResolver {
+  get(orgId: string): Promise<BusinessFacts | null>;
+}
+
+export function renderBusinessFacts(facts: BusinessFacts): string {
+  const lines: string[] = [];
+  lines.push(`Business: ${facts.businessName}`);
+  lines.push(`Timezone: ${facts.timezone}`);
+
+  for (const loc of facts.locations) {
+    lines.push(`Location: ${loc.name} — ${loc.address}`);
+    if (loc.parkingNotes) lines.push(`  Parking: ${loc.parkingNotes}`);
+    if (loc.accessNotes) lines.push(`  Access: ${loc.accessNotes}`);
+  }
+
+  lines.push("Hours:");
+  for (const [day, hours] of Object.entries(facts.openingHours)) {
+    if (hours.closed) {
+      lines.push(`  ${day}: closed`);
+    } else {
+      lines.push(`  ${day}: ${hours.open}–${hours.close}`);
+    }
+  }
+
+  lines.push("Services:");
+  for (const svc of facts.services) {
+    let line = `  ${svc.name}: ${svc.description}`;
+    if (svc.durationMinutes) line += ` (${svc.durationMinutes} min)`;
+    if (svc.price) line += ` — ${svc.price} ${svc.currency}`;
+    lines.push(line);
+  }
+
+  if (facts.bookingPolicies) {
+    const bp = facts.bookingPolicies;
+    if (bp.cancellationPolicy) lines.push(`Cancellation: ${bp.cancellationPolicy}`);
+    if (bp.reschedulePolicy) lines.push(`Reschedule: ${bp.reschedulePolicy}`);
+    if (bp.noShowPolicy) lines.push(`No-show: ${bp.noShowPolicy}`);
+    if (bp.prepInstructions) lines.push(`Prep: ${bp.prepInstructions}`);
+  }
+
+  lines.push(
+    `Escalation: ${facts.escalationContact.name} (${facts.escalationContact.channel}: ${facts.escalationContact.address})`,
+  );
+
+  if (facts.additionalFaqs.length > 0) {
+    lines.push("FAQs:");
+    for (const faq of facts.additionalFaqs) {
+      lines.push(`  Q: ${faq.question}`);
+      lines.push(`  A: ${faq.answer}`);
+    }
+  }
+
+  return lines.join("\n");
+}
 
 export interface ContextResolutionMeta {
   injectAs: string;
@@ -41,12 +96,27 @@ export interface KnowledgeEntryStoreForResolver {
 
 export class ContextResolverImpl {
   private config: ContextResolutionConfig;
+  private businessFactsStore: BusinessFactsStoreForResolver | null;
 
   constructor(
     private store: KnowledgeEntryStoreForResolver,
-    config?: Partial<ContextResolutionConfig>,
+    configOrFactsStore?: Partial<ContextResolutionConfig> | BusinessFactsStoreForResolver,
+    businessFactsStore?: BusinessFactsStoreForResolver,
   ) {
-    this.config = { ...DEFAULT_CONTEXT_CONFIG, ...config };
+    // Disambiguate second param: if it has a 'get' function it's a BusinessFactsStore
+    if (
+      configOrFactsStore &&
+      typeof (configOrFactsStore as BusinessFactsStoreForResolver).get === "function"
+    ) {
+      this.config = { ...DEFAULT_CONTEXT_CONFIG };
+      this.businessFactsStore = configOrFactsStore as BusinessFactsStoreForResolver;
+    } else {
+      this.config = {
+        ...DEFAULT_CONTEXT_CONFIG,
+        ...(configOrFactsStore as Partial<ContextResolutionConfig> | undefined),
+      };
+      this.businessFactsStore = businessFactsStore ?? null;
+    }
   }
 
   async resolve(orgId: string, requirements: ContextRequirement[]): Promise<ResolvedContext> {
@@ -54,7 +124,52 @@ export class ContextResolverImpl {
       return { variables: {}, metadata: [] };
     }
 
-    const filters = requirements.map((r) => ({ kind: r.kind, scope: r.scope }));
+    // Separate business-facts requirements from knowledge-entry requirements
+    const businessFactsReqs = requirements.filter((r) => r.kind === "business-facts");
+    const knowledgeReqs = requirements.filter((r) => r.kind !== "business-facts");
+
+    const variables: Record<string, string> = {};
+    const metadata: ContextResolutionMeta[] = [];
+
+    // Handle business-facts via dedicated store
+    for (const req of businessFactsReqs) {
+      if (this.businessFactsStore) {
+        const facts = await this.businessFactsStore.get(orgId);
+        if (facts) {
+          const rendered = renderBusinessFacts(facts);
+          variables[req.injectAs] = rendered;
+          metadata.push({
+            injectAs: req.injectAs,
+            kind: req.kind,
+            scope: req.scope,
+            entriesFound: 1,
+            totalChars: rendered.length,
+            wasTruncated: false,
+            originalChars: rendered.length,
+          });
+        } else if (req.required) {
+          throw new ContextResolutionError(req.kind, req.scope);
+        } else {
+          metadata.push({
+            injectAs: req.injectAs,
+            kind: req.kind,
+            scope: req.scope,
+            entriesFound: 0,
+            totalChars: 0,
+            wasTruncated: false,
+            originalChars: 0,
+          });
+        }
+      } else if (req.required) {
+        throw new ContextResolutionError(req.kind, req.scope);
+      }
+    }
+
+    if (knowledgeReqs.length === 0) {
+      return { variables, metadata };
+    }
+
+    const filters = knowledgeReqs.map((r) => ({ kind: r.kind, scope: r.scope }));
     const entries = await this.store.findActive(orgId, filters);
 
     const grouped = new Map<string, KnowledgeEntryRow[]>();
@@ -65,10 +180,7 @@ export class ContextResolverImpl {
       grouped.set(key, group);
     }
 
-    const variables: Record<string, string> = {};
-    const metadata: ContextResolutionMeta[] = [];
-
-    for (const req of requirements) {
+    for (const req of knowledgeReqs) {
       const key = `${req.kind}::${req.scope}`;
       const group = grouped.get(key) ?? [];
 

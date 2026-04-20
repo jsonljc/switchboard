@@ -47,7 +47,6 @@ parameters:
 tools:
   - crm-query
   - crm-write
-  - pipeline-handoff
 
 context:
   - kind: playbook

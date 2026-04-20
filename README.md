@@ -1,102 +1,79 @@
 # Switchboard
 
-AI Agent Marketplace with trust-based pricing. An open platform where anyone can list AI agents — open-source, third-party, or native. Agents start free with no reputation. As users approve or reject their work, trust scores rise or fall, driving autonomy levels and pricing tiers automatically. Governance is the moat: every agent runs through Switchboard's policy engine, risk scoring, and approval pipeline.
+Governed operating system for revenue actions. Every business action — ad optimization, creative production, calendar booking, CRM updates — flows through a single control plane with governance, lifecycle management, persistence, and human override as first-class concerns.
+
+## Repo Truth
+
+Switchboard is **not** a collection of smart agents. It is an operating spine with one control plane (`PlatformIngress`), one lifecycle owner (`PlatformLifecycle`), one persistence truth (`WorkTrace`), and strict governance (`GovernanceGate`). Skills are business-facing capabilities. Channels are ingress surfaces. Governance, idempotency, auditability, and recovery are architectural. See [`docs/DOCTRINE.md`](docs/DOCTRINE.md) for the full architectural doctrine.
 
 ## How It Works
 
 ```
-Agent listed on marketplace (trust score: 50, tier: free)
+Channel (Telegram / WhatsApp / Slack / API / MCP)
     │
     ▼
-Founder deploys agent (configure → connect → governance)
+DeploymentResolver  →  resolve org + skill + trust context
     │
     ▼
-Agent receives task → produces output
+PlatformIngress.submit()  →  normalize WorkUnit, enforce idempotency
     │
     ▼
 ┌─────────────────────────────────┐
-│  Governance Pipeline            │
+│  GovernanceGate.evaluate()      │
 │  ├ Identity resolution          │
-│  ├ Risk scoring                 │
 │  ├ Policy evaluation            │
+│  ├ Risk scoring                 │
 │  └ Approval routing             │
 └────────────┬────────────────────┘
              │
        ┌─────┴─────┐
        ▼           ▼
-    AUTO-ALLOW   NEEDS REVIEW
+    EXECUTE    REQUIRE APPROVAL
        │           │
-       │     ┌─────┴─────┐
-       │     ▼           ▼
-       │   APPROVE    REJECT
-       │     │           │
-       │     │     Trust score ↓
-       │     │     (−10 pts, streak reset)
-       │     │
-       │   Trust score ↑
-       │   (+3 pts + streak bonus)
-       ▼
-    Output delivered
+       │     Human reviews
+       │     (approve / reject → trust score update)
        │
        ▼
-Trust score → Autonomy level → Price tier
-  <40: supervised     free
-  40-69: guided       basic/pro
-  ≥70: autonomous     elite
+ExecutionMode dispatches work
+  ├ SkillMode    — LLM tool-calling with auditable tools
+  ├ PipelineMode — async jobs via Inngest
+  └ CartridgeMode — legacy deterministic (bridge only)
+       │
+       ▼
+WorkTrace persisted  →  canonical lifecycle record
 ```
 
-### Trust Score Mechanics
+### What's Live
 
-- **Starting score**: 50 (every new agent)
-- **Approval**: +3 points + streak bonus (up to +5 for consecutive approvals)
-- **Rejection**: −10 points, streak resets to 0
-- **Autonomy levels**: supervised (<40) → guided (40-69) → autonomous (≥70)
-- **Price tiers**: free (<30) → basic (30-54) → pro (55-79) → elite (≥80)
-
-Agents with high trust earn more autonomy (less human oversight) and can charge more. Agents that get rejected lose trust and require more supervision.
+Alex is the first revenue wedge — a WhatsApp-native booking assistant that converts inbound leads to calendar meetings. The deployed path: WhatsApp → PlatformIngress/governance → Alex skill execution → Google Calendar booking → attribution/outcome recording. Everything flows through the governed control plane with idempotency, audit trail, and human override.
 
 ## Project Structure
 
 ```
-switchboard/
-├── packages/
-│   ├── schemas          # Zod types — marketplace, governance, sessions, workflows
-│   ├── core             # Policy engine, risk scorer, orchestrator, TrustScoreEngine, audit
-│   ├── cartridge-sdk    # SDK for building action cartridges
-│   ├── db               # Prisma schema, marketplace stores, credential encryption
-│   └── agents           # Agent runtime — EventLoop, LLM infra, escalation, concurrency
-├── apps/
-│   ├── api              # Fastify REST API (marketplace + governance endpoints)
-│   ├── chat             # Multi-channel chat (Telegram, WhatsApp, Slack)
-│   ├── dashboard        # Next.js marketplace UI + task review queue
-│   └── mcp-server       # MCP server for LLM tool use
-├── Dockerfile           # Multi-stage build (api, chat, dashboard, mcp-server)
-└── docker-compose.yml   # Full stack: api, chat, postgres, redis
+packages/
+├── schemas/            # Zod schemas & shared types (no internal deps)
+├── sdk/                # Agent manifest, handler interface, test harness
+├── cartridge-sdk/      # Legacy cartridge interface (bridge only)
+├── creative-pipeline/  # Creative content pipeline (async jobs via Inngest)
+├── ad-optimizer/       # Ad platform integration + optimization
+├── core/               # Platform ingress, governance, skill runtime, orchestration
+└── db/                 # Prisma ORM, store implementations, credential encryption
+
+apps/
+├── api/          # Fastify REST API — platform ingress + governance (port 3000)
+├── chat/         # Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
+├── dashboard/    # Next.js operator UI + deployment controls (port 3002)
+└── mcp-server/   # MCP server for LLM tool use
 ```
 
-### Key Marketplace Models
-
-| Model              | Purpose                                                                |
-| ------------------ | ---------------------------------------------------------------------- |
-| `AgentListing`     | Global catalog — name, type, trust score, autonomy level, price tier   |
-| `AgentDeployment`  | Org's instance of a listing — config, governance settings, connections |
-| `AgentTask`        | Unit of work — input, output, approve/reject status                    |
-| `TrustScoreRecord` | Per-listing per-category — score, approvals, rejections, streak        |
-
-### Package Dependencies
+### Dependency Layers
 
 ```
-schemas
-   │
-   ├──► cartridge-sdk
-   │        │
-   │        └──► core (+ TrustScoreEngine, marketplace)
-   │              │
-   │              ├──► api (marketplace routes, governance)
-   │              ├──► chat
-   │              └──► mcp-server
-   │
-   └──► db (marketplace stores) ──► api, dashboard
+Layer 1: schemas                                    → no internal deps
+Layer 2: sdk, cartridge-sdk, creative-pipeline, ad-optimizer → schemas only
+Layer 3: core                                       → schemas + sdk + cartridge-sdk
+Layer 4: db                                         → schemas + core
+Layer 5: apps/*                                     → may import anything
 ```
 
 ## Quick Start
@@ -120,13 +97,11 @@ pnpm typecheck
 ### Development
 
 ```bash
-# Start all services in watch mode
-pnpm dev
+pnpm dev                                      # all services in watch mode
 
-# Or individually
-pnpm --filter @switchboard/api dev        # http://localhost:3000
-pnpm --filter @switchboard/dashboard dev  # http://localhost:3002
-pnpm --filter @switchboard/chat dev       # http://localhost:3001
+pnpm --filter @switchboard/api dev            # http://localhost:3000
+pnpm --filter @switchboard/dashboard dev      # http://localhost:3002
+pnpm --filter @switchboard/chat dev           # http://localhost:3001
 ```
 
 ### Docker
@@ -135,53 +110,40 @@ pnpm --filter @switchboard/chat dev       # http://localhost:3001
 cp .env.example .env
 docker compose up
 
-# Or build individual targets
+# Individual targets
 docker build --target api -t switchboard-api .
+docker build --target chat -t switchboard-chat .
+docker build --target mcp-server -t switchboard-mcp .
 docker build --target dashboard -t switchboard-dashboard .
 ```
 
-## API Endpoints
+## API
 
-### Marketplace (`/api/marketplace`)
+### Governed Execution (`/api/execute`, `/api/actions`)
 
-| Method     | Path                                   | Description                                    |
-| ---------- | -------------------------------------- | ---------------------------------------------- |
-| `GET`      | `/api/marketplace/listings`            | Browse agent listings (filter by status, type) |
-| `GET`      | `/api/marketplace/listings/:id`        | Agent detail                                   |
-| `POST`     | `/api/marketplace/listings`            | Create a listing                               |
-| `GET`      | `/api/marketplace/listings/:id/trust`  | Trust score breakdown per category             |
-| `POST`     | `/api/marketplace/listings/:id/deploy` | Deploy agent to org                            |
-| `GET`      | `/api/marketplace/deployments`         | List org's active deployments                  |
-| `GET/POST` | `/api/marketplace/tasks`               | List/create tasks                              |
-| `POST`     | `/api/marketplace/tasks/:id/submit`    | Submit agent output                            |
-| `POST`     | `/api/marketplace/tasks/:id/review`    | Approve/reject → updates trust score           |
+All business actions enter through `PlatformIngress`. Requires `Idempotency-Key` header.
 
-### Governance (`/api/actions`, `/api/approvals`, `/api/policies`, `/api/identity`, `/api/audit`)
+### Governance (`/api/approvals`, `/api/policies`, `/api/identity`, `/api/audit`)
 
-Full governance API for action proposals, approval workflows, policy management, identity resolution, and tamper-evident audit trail. See Swagger UI at `/docs`.
+Approval workflows, policy management, identity resolution, tamper-evident audit trail.
+
+### Skills & Deployment (`/api/marketplace`)
+
+Skill registration and deployment surfaces. Execution and governance state. Provisioning and runtime management.
+
+See Swagger UI at `/docs` for full endpoint documentation.
 
 ## Environment Variables
 
-See [`.env.example`](.env.example) for all available options:
-
-| Variable                     | Description                                          |
-| ---------------------------- | ---------------------------------------------------- |
-| `DATABASE_URL`               | PostgreSQL connection string                         |
-| `REDIS_URL`                  | Redis connection string                              |
-| `ANTHROPIC_API_KEY`          | Claude API key for LLM operations                    |
-| `CREDENTIALS_ENCRYPTION_KEY` | Encryption key for stored credentials (min 32 chars) |
-| `STRIPE_SECRET_KEY`          | Stripe API key for payment processing                |
-| `NEXTAUTH_SECRET`            | NextAuth.js session encryption                       |
-| `NEXTAUTH_URL`               | Dashboard canonical URL                              |
+See [`.env.example`](.env.example) for all available options.
 
 ## Testing
 
 ```bash
-pnpm test                                    # All tests
-pnpm --filter @switchboard/core test         # Core + TrustScoreEngine
-pnpm --filter @switchboard/schemas test      # Schema validation
-pnpm --filter @switchboard/db test           # Store tests
-pnpm test -- --coverage                      # With coverage
+pnpm test                                    # all tests
+pnpm --filter @switchboard/core test         # core + governance
+pnpm --filter @switchboard/api test          # API routes
+pnpm test -- --coverage                      # with coverage
 ```
 
 ## License

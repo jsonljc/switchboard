@@ -26,6 +26,10 @@ import type { SharedContext } from "./shared-context.js";
 import { ProposePipeline } from "./propose-pipeline.js";
 import { ExecutionManager } from "./execution-manager.js";
 
+export type ExecutionMode = "inline" | "queue";
+
+export type EnqueueCallback = (envelopeId: string) => Promise<void>;
+
 export interface OrchestratorConfig {
   storage: StorageContext;
   ledger: AuditLedger;

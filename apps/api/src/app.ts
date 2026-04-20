@@ -59,7 +59,6 @@ declare module "fastify" {
     operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
     platformIngress: import("@switchboard/core/platform").PlatformIngress;
     platformLifecycle: import("@switchboard/core/platform").PlatformLifecycle;
-    approvalNotifier: ApprovalNotifier | null;
     deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null;
     resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
     executionQueue: import("bullmq").Queue | null;
@@ -448,10 +447,8 @@ export async function buildServer() {
           windowMs: parseInt(process.env.APPROVAL_RATE_LIMIT_WINDOW_MS ?? "60000", 10),
         }
       : null,
-    routingConfig: orchestrator.routingConfig,
   });
   app.decorate("platformLifecycle", platformLifecycle);
-  app.decorate("approvalNotifier", approvalNotifier ?? null);
 
   // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {

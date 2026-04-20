@@ -7,6 +7,7 @@ function makePrisma() {
       create: vi.fn(),
       update: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
     },
@@ -76,5 +77,38 @@ describe("PrismaBookingStore", () => {
     (prisma.booking.count as ReturnType<typeof vi.fn>).mockResolvedValue(5);
     const count = await store.countConfirmed("org_1");
     expect(count).toBe(5);
+  });
+
+  it("finds a booking by slot fields", async () => {
+    const startsAt = new Date("2026-04-20T10:00:00Z");
+    (prisma.booking.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "bk_1",
+      status: "confirmed",
+    });
+
+    const result = await store.findBySlot("org_1", "ct_1", "consultation", startsAt);
+    expect(result?.id).toBe("bk_1");
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_1",
+        contactId: "ct_1",
+        service: "consultation",
+        startsAt,
+      },
+    });
+  });
+
+  it("marks a booking as failed", async () => {
+    (prisma.booking.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "bk_1",
+      status: "failed",
+    });
+
+    const result = await store.markFailed("bk_1");
+    expect(result.status).toBe("failed");
+    expect(prisma.booking.update).toHaveBeenCalledWith({
+      where: { id: "bk_1" },
+      data: { status: "failed" },
+    });
   });
 });

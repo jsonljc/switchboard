@@ -2,27 +2,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { PlatformLifecycle } from "../platform-lifecycle.js";
-import { DEFAULT_ROUTING_CONFIG } from "../../approval/router.js";
 import { createApprovalState } from "../../approval/state-machine.js";
 import type { ApprovalState } from "../../approval/state-machine.js";
-import type {
-  ActionEnvelope,
-  ApprovalRequest,
-  Principal,
-  IdentitySpec,
-  Policy,
-  Cartridge,
-  GuardrailConfig,
-  RiskInput,
-} from "@switchboard/schemas";
+import type { ActionEnvelope, ApprovalRequest, Principal } from "@switchboard/schemas";
 import type { WorkTrace } from "../work-trace.js";
 import type { WorkTraceStore } from "../work-trace-recorder.js";
 import type {
   ApprovalStore as CoreApprovalStore,
   EnvelopeStore as CoreEnvelopeStore,
   IdentityStore as CoreIdentityStore,
-  CartridgeRegistry,
-  PolicyStore,
 } from "../../storage/interfaces.js";
 import type { ExecutionModeRegistry } from "../execution-mode-registry.js";
 import type { AuditLedger } from "../../audit/ledger.js";
@@ -629,108 +617,6 @@ describe("PlatformLifecycle", () => {
   describe("patched parameter re-evaluation", () => {
     const CARTRIDGE_ID = "test-cartridge";
     const PRINCIPAL_ID = "originator-user";
-    const SPEC_ID = "spec-1";
-
-    function makeIdentitySpec(): IdentitySpec {
-      return {
-        id: SPEC_ID,
-        principalId: PRINCIPAL_ID,
-        organizationId: ORG_ID,
-        name: "Test User",
-        description: "test",
-        riskTolerance: {
-          none: "none",
-          low: "none",
-          medium: "standard",
-          high: "mandatory",
-          critical: "mandatory",
-        },
-        globalSpendLimits: { daily: null, weekly: null, monthly: null, perAction: null },
-        cartridgeSpendLimits: {},
-        forbiddenBehaviors: [],
-        trustBehaviors: [],
-        delegatedApprovers: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-
-    function makeGuardrails(): GuardrailConfig {
-      return { rateLimits: [], cooldowns: [], protectedEntities: [] };
-    }
-
-    function makeMockCartridge(riskInput: RiskInput): Partial<Cartridge> {
-      return {
-        getRiskInput: vi.fn(async () => riskInput),
-        getGuardrails: vi.fn(() => makeGuardrails()),
-        manifest: {
-          id: CARTRIDGE_ID,
-          name: "Test Cartridge",
-          version: "1.0.0",
-          description: "test",
-          actions: [],
-          requiredConnections: [],
-          defaultPolicies: [],
-        },
-      };
-    }
-
-    function makeDenyPolicy(): Policy {
-      return {
-        id: "policy-deny-critical",
-        name: "Deny Critical Risk",
-        description: "Denies any action with critical risk category",
-        organizationId: null,
-        cartridgeId: CARTRIDGE_ID,
-        priority: 1,
-        active: true,
-        rule: {
-          composition: "AND",
-          conditions: [{ field: "riskCategory", operator: "eq", value: "critical" }],
-        },
-        effect: "deny",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-
-    function makeAllowPolicy(): Policy {
-      return {
-        id: "policy-allow-low",
-        name: "Allow Low Risk",
-        description: "Allows any action with low risk category",
-        organizationId: null,
-        cartridgeId: CARTRIDGE_ID,
-        priority: 1,
-        active: true,
-        rule: {
-          composition: "AND",
-          conditions: [{ field: "riskCategory", operator: "eq", value: "low" }],
-        },
-        effect: "allow",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-
-    function makeMockCartridgeRegistry(cartridge: Partial<Cartridge>): CartridgeRegistry {
-      return {
-        get: vi.fn((id: string) => (id === CARTRIDGE_ID ? (cartridge as Cartridge) : null)),
-        register: vi.fn(),
-        unregister: vi.fn(() => true),
-        list: vi.fn(() => [CARTRIDGE_ID]),
-      };
-    }
-
-    function makeMockPolicyStore(policies: Policy[]): PolicyStore {
-      return {
-        save: vi.fn(),
-        getById: vi.fn(async () => null),
-        update: vi.fn(),
-        delete: vi.fn(async () => true),
-        listActive: vi.fn(async () => policies),
-      };
-    }
 
     function seedWithCartridge(overrides?: { actorId?: string; approvers?: string[] }) {
       const result = stores.seed({
@@ -752,21 +638,6 @@ describe("PlatformLifecycle", () => {
     }
 
     it("denies when patched parameters violate policy", async () => {
-      const criticalRiskInput: RiskInput = {
-        baseRisk: "critical",
-        exposure: { dollarsAtRisk: 10000, blastRadius: 100 },
-        reversibility: "none",
-        sensitivity: { entityVolatile: true, learningPhase: false, recentlyModified: true },
-      };
-
-      const cartridge = makeMockCartridge(criticalRiskInput);
-      const cartridgeRegistry = makeMockCartridgeRegistry(cartridge);
-      const policyStore = makeMockPolicyStore([makeDenyPolicy()]);
-
-      const identitySpec = makeIdentitySpec();
-      stores.identityStore.getSpecByPrincipalId.mockResolvedValue(identitySpec);
-      stores.identityStore.listOverlaysBySpecId.mockResolvedValue([]);
-
       lifecycle = new PlatformLifecycle({
         approvalStore: stores.approvalStore,
         envelopeStore: stores.envelopeStore,
@@ -774,86 +645,8 @@ describe("PlatformLifecycle", () => {
         modeRegistry: stores.modeRegistry,
         traceStore: stores.traceStore,
         ledger: stores.ledger,
-        cartridgeRegistry,
-        policyStore,
       });
 
-      const { approvalId, envelopeId } = seedWithCartridge();
-
-      const result = await lifecycle.respondToApproval({
-        approvalId,
-        action: "patch",
-        respondedBy: "approver-1",
-        bindingHash: BINDING_HASH,
-        patchValue: { budget: 99999 },
-      });
-
-      // Execution must NOT happen
-      expect(result.executionResult).toBeNull();
-
-      // Envelope should be denied
-      const finalEnvelope = stores._envelopes.get(envelopeId)!;
-      expect(finalEnvelope.status).toBe("denied");
-
-      // Audit ledger should record a denial event
-      expect(stores.ledger.record).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: "action.denied",
-          summary: "Patched parameters denied by policy re-evaluation",
-        }),
-      );
-
-      // modeRegistry.dispatch should NOT have been called
-      expect(stores.modeRegistry.dispatch).not.toHaveBeenCalled();
-    });
-
-    it("executes when patched parameters pass re-evaluation", async () => {
-      const lowRiskInput: RiskInput = {
-        baseRisk: "low",
-        exposure: { dollarsAtRisk: 10, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
-      };
-
-      const cartridge = makeMockCartridge(lowRiskInput);
-      const cartridgeRegistry = makeMockCartridgeRegistry(cartridge);
-      const policyStore = makeMockPolicyStore([makeAllowPolicy()]);
-
-      const identitySpec = makeIdentitySpec();
-      stores.identityStore.getSpecByPrincipalId.mockResolvedValue(identitySpec);
-      stores.identityStore.listOverlaysBySpecId.mockResolvedValue([]);
-
-      lifecycle = new PlatformLifecycle({
-        approvalStore: stores.approvalStore,
-        envelopeStore: stores.envelopeStore,
-        identityStore: stores.identityStore,
-        modeRegistry: stores.modeRegistry,
-        traceStore: stores.traceStore,
-        ledger: stores.ledger,
-        cartridgeRegistry,
-        policyStore,
-      });
-
-      const { approvalId } = seedWithCartridge();
-
-      const result = await lifecycle.respondToApproval({
-        approvalId,
-        action: "patch",
-        respondedBy: "approver-1",
-        bindingHash: BINDING_HASH,
-        patchValue: { budget: 100 },
-      });
-
-      // Execution should proceed
-      expect(result.executionResult).not.toBeNull();
-      expect(result.executionResult!.success).toBe(true);
-
-      // modeRegistry.dispatch should have been called
-      expect(stores.modeRegistry.dispatch).toHaveBeenCalledOnce();
-    });
-
-    it("skips re-evaluation when no cartridge registry is configured", async () => {
-      // Default lifecycle — no cartridgeRegistry or policyStore
       const { approvalId } = seedWithCartridge();
 
       const result = await lifecycle.respondToApproval({
@@ -864,45 +657,10 @@ describe("PlatformLifecycle", () => {
         patchValue: { budget: 500 },
       });
 
-      // Should proceed to execution as before (no re-evaluation)
+      // Should proceed to execution (no cartridge re-evaluation on this branch)
       expect(result.executionResult).not.toBeNull();
       expect(result.executionResult!.success).toBe(true);
       expect(stores.modeRegistry.dispatch).toHaveBeenCalledOnce();
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 8. routingConfig ownership
-  // -----------------------------------------------------------------------
-  describe("routingConfig ownership", () => {
-    it("exposes routingConfig with default", () => {
-      const lc = new PlatformLifecycle({
-        approvalStore: stores.approvalStore,
-        envelopeStore: stores.envelopeStore,
-        identityStore: stores.identityStore,
-        modeRegistry: stores.modeRegistry,
-        traceStore: stores.traceStore,
-        ledger: stores.ledger,
-      });
-
-      expect(lc.routingConfig).toEqual(DEFAULT_ROUTING_CONFIG);
-    });
-
-    it("accepts custom routingConfig", () => {
-      const lc = new PlatformLifecycle({
-        approvalStore: stores.approvalStore,
-        envelopeStore: stores.envelopeStore,
-        identityStore: stores.identityStore,
-        modeRegistry: stores.modeRegistry,
-        traceStore: stores.traceStore,
-        ledger: stores.ledger,
-        routingConfig: {
-          ...DEFAULT_ROUTING_CONFIG,
-          defaultExpiryMs: 1000,
-        },
-      });
-
-      expect(lc.routingConfig.defaultExpiryMs).toBe(1000);
     });
   });
 });

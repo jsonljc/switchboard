@@ -220,5 +220,19 @@ export * from "./channel-gateway/index.js";
 // Website Scanner (URL validation, platform detection, page fetching)
 export { WebsiteScanner, validateScanUrl, detectPlatform } from "./website-scanner/index.js";
 
+// Context Budget (layered context discipline — Phase 2a)
+export type {
+  Effort,
+  ContextMemory,
+  ContextTask,
+  ContextBudget,
+  ContextBudgetLimits,
+} from "./context-budget.js";
+export { DEFAULT_CONTEXT_BUDGET_LIMITS } from "./context-budget.js";
+export type { ContextLoaderInput, ContextLoader } from "./context-loader.js";
+export { NullContextLoader } from "./context-loader.js";
+export { ContextAssembler } from "./context-assembler.js";
+export { effortToSlotAndOptions, effortForTaskType, TASK_TYPE_EFFORT_MAP } from "./model-router.js";
+
 // Memory (scoped store interfaces for three-channel privacy)
 export * from "./memory/index.js";

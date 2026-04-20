@@ -57,7 +57,7 @@ Every action lifecycle — submission, governance, execution, approval, completi
 
 `WorkTrace` is the canonical durable record for every governed action. One WorkTrace per WorkUnit. No synthetic envelopes, no parallel persistence models.
 
-**Current gap:** `actions.ts` creates synthetic `ActionEnvelope` records via `envelope-bridge.ts` for backward compatibility. This bridge must be removed once approval lifecycle migrates to the platform layer.
+**Current state:** `envelope-bridge.ts` deleted in Phase 3. WorkTrace is written on every PlatformIngress submission. Envelopes remain only for the legacy approval lifecycle managed by `ApprovalManager`.
 
 ### 4. Governance runs once
 
@@ -65,7 +65,7 @@ Every action is evaluated by `GovernanceGate.evaluate()` exactly once. Execution
 
 ### 5. Deployment context is resolved once, at ingress
 
-`DeploymentContext` is resolved by `DeploymentResolver` at the ingress boundary. Routes must not manually construct deployment context from request parameters. The `TODO(ingress-convergence)` markers in `execute.ts`, `actions.ts`, and `gateway-bridge.ts` track this migration.
+`DeploymentContext` is resolved by `DeploymentResolver` at the ingress boundary. Routes must not manually construct deployment context from request parameters. All API routes use `resolveDeploymentForIntent()` which delegates to `DeploymentResolver`.
 
 ### 6. Idempotency at ingress
 
@@ -92,7 +92,7 @@ Tools exposed to skill execution are product surfaces. Each tool must:
 
 Chat channels (Telegram, WhatsApp, Slack, web widget) are ingress surfaces. They resolve a deployment context and submit work through `PlatformIngress`. They do not run alternative execution architectures.
 
-**Current gap:** Single-tenant `ChatRuntime` in `apps/chat` uses the old orchestrator path. Must be migrated to PlatformIngress via the same adapter used by multi-tenant `ChannelGateway`.
+**Current state:** Multi-tenant `ChannelGateway` and single-tenant path (with `SWITCHBOARD_API_URL`) both route through PlatformIngress. Chat local mode (no `SWITCHBOARD_API_URL`) still uses the old `ChatRuntime` + `LifecycleOrchestrator` path — contained to local development.
 
 ---
 
@@ -100,22 +100,22 @@ Chat channels (Telegram, WhatsApp, Slack, web widget) are ingress surfaces. They
 
 These components exist only to support the migration from the old runtime to the unified platform layer. Each has an exit condition.
 
-| Component                       | Location                                                    | Exit Condition                                                                                      |
-| ------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `LifecycleOrchestrator`         | `core/src/orchestrator/lifecycle.ts`                        | Remove when approval response, undo, simulate, and emergency halt are handled by the platform layer |
-| `ExecutionService`              | `core/src/execution-service.ts`                             | Remove when MCP server uses PlatformIngress directly                                                |
-| `CartridgeMode`                 | `core/src/platform/modes/cartridge-mode.ts`                 | Phase 4: no longer creates envelopes. Remove when no IntentRegistration uses `mode: "cartridge"`    |
-| ~~`envelope-bridge.ts`~~        | ~~`apps/api/src/routes/`~~                                  | **Deleted in Phase 3**                                                                              |
-| `ProposePipeline`               | `core/src/orchestrator/propose-pipeline.ts`                 | Remove with LifecycleOrchestrator                                                                   |
-| `ApprovalManager`               | `core/src/orchestrator/approval-manager.ts`                 | Remove when platform layer owns approval lifecycle                                                  |
-| `ExecutionManager`              | `core/src/orchestrator/execution-manager.ts`                | Remove with LifecycleOrchestrator                                                                   |
-| `RuntimeOrchestrator` interface | `core/src/orchestrator/runtime-orchestrator.ts`             | Remove with LifecycleOrchestrator                                                                   |
-| ~~`ApiOrchestratorAdapter`~~    | ~~`apps/chat/src/api-orchestrator-adapter.ts`~~             | **Dead code after Phase 6** — single-tenant uses ChannelGateway                                     |
-| ~~`ChatRuntime`~~               | ~~`apps/chat/src/runtime.ts`~~                              | **Dead code after Phase 6** — all channels use ChannelGateway + PlatformIngress                     |
-| `cartridge-sdk` package         | `packages/cartridge-sdk/`                                   | Remove when CartridgeMode is removed                                                                |
-| `data-flow/`                    | `core/src/data-flow/`                                       | Delete now — no cartridges to flow between                                                          |
-| `enrichment/`                   | `core/src/enrichment/`                                      | Delete now — no cartridges to enrich                                                                |
-| `ApprovalRecord.envelopeId`     | `db/prisma/schema.prisma`, `core/src/storage/interfaces.ts` | Semantic debt: field stores workUnitId but is named envelopeId. Rename in a dedicated migration PR. |
+| Component                       | Location                                                    | Exit Condition                                                                                           |
+| ------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `LifecycleOrchestrator`         | `core/src/orchestrator/lifecycle.ts`                        | Remove when approval response, undo, simulate, and emergency halt are handled by the platform layer      |
+| `ExecutionService`              | `core/src/execution-service.ts`                             | Remove when MCP server uses PlatformIngress directly                                                     |
+| `CartridgeMode`                 | `core/src/platform/modes/cartridge-mode.ts`                 | Phase 4: no longer creates envelopes. Remove when no IntentRegistration uses `mode: "cartridge"`         |
+| ~~`envelope-bridge.ts`~~        | ~~`apps/api/src/routes/`~~                                  | **Deleted in Phase 3**                                                                                   |
+| `ProposePipeline`               | `core/src/orchestrator/propose-pipeline.ts`                 | Remove with LifecycleOrchestrator                                                                        |
+| `ApprovalManager`               | `core/src/orchestrator/approval-manager.ts`                 | Remove when platform layer owns approval lifecycle                                                       |
+| `ExecutionManager`              | `core/src/orchestrator/execution-manager.ts`                | Remove with LifecycleOrchestrator                                                                        |
+| `RuntimeOrchestrator` interface | `core/src/orchestrator/runtime-orchestrator.ts`             | Remove with LifecycleOrchestrator                                                                        |
+| `ApiOrchestratorAdapter`        | `apps/chat/src/api-orchestrator-adapter.ts`                 | Active — adapts chat orchestrator calls to API HTTP requests. Remove when chat local mode is retired     |
+| `ChatRuntime`                   | `apps/chat/src/runtime.ts`                                  | Active — used by chat local mode (no `SWITCHBOARD_API_URL`). Remove when local mode is retired           |
+| `cartridge-sdk` package         | `packages/cartridge-sdk/`                                   | Remove when CartridgeMode is removed                                                                     |
+| `data-flow/`                    | `core/src/data-flow/`                                       | Active — `DataFlowExecutor` consumed by ChatRuntime via core barrel. Delete after ChatRuntime retirement |
+| ~~`enrichment/`~~               | ~~`core/src/enrichment/`~~                                  | **Deleted in Phase 5**                                                                                   |
+| `ApprovalRecord.envelopeId`     | `db/prisma/schema.prisma`, `core/src/storage/interfaces.ts` | Semantic debt: field stores workUnitId but is named envelopeId. Rename in a dedicated migration PR.      |
 
 ---
 

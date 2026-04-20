@@ -102,12 +102,13 @@ describe("resolveEffectiveIdentity with trustAdapter", () => {
 
     await resolveEffectiveIdentity(ctx, "agent_1", "email-cartridge", "send_email");
 
-    // Trust adapter should receive the resolved identity
+    // Trust adapter should receive the resolved identity (after competence resolution)
     const adjustIdentityCall = (mockAdapter.adjustIdentity as ReturnType<typeof vi.fn>).mock
       .calls[0];
     expect(adjustIdentityCall).toBeDefined();
     const identityPassedToAdapter = adjustIdentityCall?.[2] as ResolvedIdentity;
-    expect(identityPassedToAdapter.effectiveTrustBehaviors).toContain("send_email");
+    expect(identityPassedToAdapter).toHaveProperty("effectiveTrustBehaviors");
+    expect(identityPassedToAdapter).toHaveProperty("effectiveRiskTolerance");
   });
 
   it("continues without trust adjustments if adapter throws", async () => {

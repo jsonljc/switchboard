@@ -121,7 +121,7 @@ export function createBatchExecutor(inngestClient: InngestClient, runtime: Batch
     {
       id: "skill-runtime-batch-executor",
       triggers: [{ event: "skill-runtime/batch.requested" }],
-      concurrency: { limit: 5 },  // max 5 concurrent batch executions
+      concurrency: { limit: 5 }, // max 5 concurrent batch executions
     },
     async ({ event, step }) => {
       await step.run("execute-batch-skill", () =>
@@ -143,8 +143,8 @@ type BatchEvents = {
   "skill-runtime/batch.requested": {
     deploymentId: string;
     skillSlug: string;
-    trigger: string;        // "weekly_audit" | "daily_check" | "manual"
-    scheduleName: string;    // for trace attribution
+    trigger: string; // "weekly_audit" | "daily_check" | "manual"
+    scheduleName: string; // for trace attribution
   };
   "skill-runtime/batch.completed": {
     deploymentId: string;
@@ -166,15 +166,15 @@ type BatchEvents = {
 
 Parallel to `SkillHandler` (chat). Same runtime philosophy, different trigger/context/output model.
 
-| Dimension | Chat (SkillHandler) | Batch (BatchSkillHandler) |
-|---|---|---|
-| Trigger | User message | Inngest event |
-| Context source | Conversation messages + persona | Typed context contract (campaign state, spend windows, etc.) |
-| Parameter builder | `ParameterBuilder` | `BatchParameterBuilder` |
-| Output | `ctx.chat.send(text)` | `BatchSkillResult` (recommendations + proposed writes) |
-| Trace trigger type | `"chat_message"` | `"batch_job"` |
-| Interaction model | Conversational | Fire-and-forget |
-| Write execution | Inline (tool calls during LLM loop) | Post-execution (handler routes proposed writes through governance) |
+| Dimension          | Chat (SkillHandler)                 | Batch (BatchSkillHandler)                                          |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------------ |
+| Trigger            | User message                        | Inngest event                                                      |
+| Context source     | Conversation messages + persona     | Typed context contract (campaign state, spend windows, etc.)       |
+| Parameter builder  | `ParameterBuilder`                  | `BatchParameterBuilder`                                            |
+| Output             | `ctx.chat.send(text)`               | `BatchSkillResult` (recommendations + proposed writes)             |
+| Trace trigger type | `"chat_message"`                    | `"batch_job"`                                                      |
+| Interaction model  | Conversational                      | Fire-and-forget                                                    |
+| Write execution    | Inline (tool calls during LLM loop) | Post-execution (handler routes proposed writes through governance) |
 
 ### BatchParameterBuilder
 
@@ -199,7 +199,7 @@ interface BatchContextRequirement {
   key: string;
   source: "ads" | "crm" | "deployment" | "benchmark";
   freshnessSeconds?: number;
-  scope?: string;  // e.g. "current_period", "previous_period", "last_30d"
+  scope?: string; // e.g. "current_period", "previous_period", "last_30d"
 }
 
 interface BatchContextContract {
@@ -227,7 +227,7 @@ required:
     source: ads
   - key: deployment_config
     source: deployment
-    freshnessSeconds: 0  # always fresh
+    freshnessSeconds: 0 # always fresh
 ```
 
 The `scope` field handles recurring patterns like current vs previous period without pushing that distinction into magic key names.
@@ -239,8 +239,8 @@ Batch skills produce operational results, not chat prose.
 ```typescript
 interface BatchSkillResult {
   recommendations: Array<{
-    type: string;          // e.g. "budget_reallocation", "pause_campaign", "scale_winner"
-    action: string;        // human-readable action description
+    type: string; // e.g. "budget_reallocation", "pause_campaign", "scale_winner"
+    action: string; // human-readable action description
     confidence: "high" | "medium" | "low";
     reasoning: string;
   }>;
@@ -250,8 +250,8 @@ interface BatchSkillResult {
     params: unknown;
     governanceTier: GovernanceTier;
   }>;
-  summary: string;         // one-paragraph execution summary for the trace
-  nextRunHint?: string;    // e.g. "run again in 24h", "escalate to human"
+  summary: string; // one-paragraph execution summary for the trace
+  nextRunHint?: string; // e.g. "run again in 24h", "escalate to human"
 }
 ```
 
@@ -292,39 +292,39 @@ Batch executions inherit SP3 safety gates:
 
 ### Latent vs Deterministic Split
 
-| Current File | Lines | Classification | SP4 Destination |
-|---|---|---|---|
-| `audit-runner.ts` | 180 | Process (orchestration) | `skills/ad-optimizer.md` body |
-| `recommendation-engine.ts` | 95 | Latent (LLM judgment) | `skills/ad-optimizer.md` body |
-| `metric-diagnostician.ts` | 85 | Deterministic | `ads-analytics.diagnose` tool operation |
-| `period-comparator.ts` | 55 | Deterministic | `ads-analytics.compare-periods` tool operation |
-| `funnel-analyzer.ts` | 70 | Deterministic | `ads-analytics.analyze-funnel` tool operation |
-| `learning-phase-guard.ts` | 60 | Deterministic | `ads-analytics.check-learning-phase` tool operation |
-| `meta-ads-client.ts` | 120 | Deterministic (external) | `ads-data.get-insights` tool (read tier) |
-| `meta-capi-client.ts` | 45 | Deterministic (external) | `ads-data.send-event` tool (external_write tier) |
-| `inngest-functions.ts` | 100 | Infrastructure | Thin dispatcher (stays in core, rewritten) |
-| `meta-leads-ingester.ts` | 40 | Deterministic | `ads-data.parse-lead-webhook` tool (read tier) |
-| `facebook-oauth.ts` | 90 | Infrastructure | Stays in core (auth, not domain logic) |
+| Current File               | Lines | Classification           | SP4 Destination                                     |
+| -------------------------- | ----- | ------------------------ | --------------------------------------------------- |
+| `audit-runner.ts`          | 180   | Process (orchestration)  | `skills/ad-optimizer.md` body                       |
+| `recommendation-engine.ts` | 95    | Latent (LLM judgment)    | `skills/ad-optimizer.md` body                       |
+| `metric-diagnostician.ts`  | 85    | Deterministic            | `ads-analytics.diagnose` tool operation             |
+| `period-comparator.ts`     | 55    | Deterministic            | `ads-analytics.compare-periods` tool operation      |
+| `funnel-analyzer.ts`       | 70    | Deterministic            | `ads-analytics.analyze-funnel` tool operation       |
+| `learning-phase-guard.ts`  | 60    | Deterministic            | `ads-analytics.check-learning-phase` tool operation |
+| `meta-ads-client.ts`       | 120   | Deterministic (external) | `ads-data.get-insights` tool (read tier)            |
+| `meta-capi-client.ts`      | 45    | Deterministic (external) | `ads-data.send-event` tool (external_write tier)    |
+| `inngest-functions.ts`     | 100   | Infrastructure           | Thin dispatcher (stays in core, rewritten)          |
+| `meta-leads-ingester.ts`   | 40    | Deterministic            | `ads-data.parse-lead-webhook` tool (read tier)      |
+| `facebook-oauth.ts`        | 90    | Infrastructure           | Stays in core (auth, not domain logic)              |
 
 ### Tools
 
 **`ads-analytics`** (tier: `read`)
 
-| Operation | Wraps | Idempotent |
-|---|---|---|
-| `diagnose` | `metric-diagnostician.ts` → `diagnose()` | Yes |
-| `compare-periods` | `period-comparator.ts` → `comparePeriods()` | Yes |
-| `analyze-funnel` | `funnel-analyzer.ts` → `analyzeFunnel()` | Yes |
-| `check-learning-phase` | `learning-phase-guard.ts` → `LearningPhaseGuard` | Yes |
+| Operation              | Wraps                                            | Idempotent |
+| ---------------------- | ------------------------------------------------ | ---------- |
+| `diagnose`             | `metric-diagnostician.ts` → `diagnose()`         | Yes        |
+| `compare-periods`      | `period-comparator.ts` → `comparePeriods()`      | Yes        |
+| `analyze-funnel`       | `funnel-analyzer.ts` → `analyzeFunnel()`         | Yes        |
+| `check-learning-phase` | `learning-phase-guard.ts` → `LearningPhaseGuard` | Yes        |
 
 **`ads-data`** (mixed tiers)
 
-| Operation | Wraps | Tier | Idempotent |
-|---|---|---|---|
-| `get-campaign-insights` | `meta-ads-client.ts` → `getCampaignInsights()` | read | Yes |
-| `get-account-summary` | `meta-ads-client.ts` → `getAccountSummary()` | read | Yes |
-| `send-conversion-event` | `meta-capi-client.ts` → `sendEvent()` | external_write | No |
-| `parse-lead-webhook` | `meta-leads-ingester.ts` → `parseLeadWebhook()` | read | Yes |
+| Operation               | Wraps                                           | Tier           | Idempotent |
+| ----------------------- | ----------------------------------------------- | -------------- | ---------- |
+| `get-campaign-insights` | `meta-ads-client.ts` → `getCampaignInsights()`  | read           | Yes        |
+| `get-account-summary`   | `meta-ads-client.ts` → `getAccountSummary()`    | read           | Yes        |
+| `send-conversion-event` | `meta-capi-client.ts` → `sendEvent()`           | external_write | No         |
+| `parse-lead-webhook`    | `meta-leads-ingester.ts` → `parseLeadWebhook()` | read           | Yes        |
 
 ### Skill File: `skills/ad-optimizer.md`
 
@@ -375,6 +375,7 @@ output:
 ```
 
 Skill body defines the audit process:
+
 1. Compare current vs previous period via `ads-analytics.compare-periods`
 2. Diagnose anomalies via `ads-analytics.diagnose`
 3. Analyze funnel health via `ads-analytics.analyze-funnel`
@@ -399,60 +400,60 @@ Parity is validated by running both paths (legacy `AuditRunner.run()` and new sk
 
 ### New Files
 
-| File | Purpose |
-|---|---|
-| `packages/core/src/skill-runtime/batch-skill-handler.ts` | `BatchSkillHandler` — batch execution equivalent of `SkillHandler` |
-| `packages/core/src/skill-runtime/batch-skill-handler.test.ts` | Tests |
-| `packages/core/src/skill-runtime/batch-parameter-builder.ts` | `BatchParameterBuilder` type + `BatchContextContract` + `BatchContextRequirement` |
-| `packages/core/src/skill-runtime/batch-parameter-builder.test.ts` | Tests |
-| `packages/core/src/skill-runtime/builders/ad-optimizer.ts` | Ad-optimizer `BatchParameterBuilder` |
-| `packages/core/src/skill-runtime/builders/ad-optimizer.test.ts` | Tests |
-| `packages/core/src/skill-runtime/tools/ads-analytics.ts` | Wraps diagnostician, comparator, funnel analyzer, learning guard |
-| `packages/core/src/skill-runtime/tools/ads-analytics.test.ts` | Tests |
-| `packages/core/src/skill-runtime/tools/ads-data.ts` | Wraps meta-ads-client, meta-capi-client, leads ingester |
-| `packages/core/src/skill-runtime/tools/ads-data.test.ts` | Tests |
-| `skills/ad-optimizer.md` | Ad-optimizer skill file |
-| `packages/core/src/skill-runtime/__tests__/eval-fixtures/ao-*.json` | Eval fixtures |
+| File                                                                | Purpose                                                                           |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `packages/core/src/skill-runtime/batch-skill-handler.ts`            | `BatchSkillHandler` — batch execution equivalent of `SkillHandler`                |
+| `packages/core/src/skill-runtime/batch-skill-handler.test.ts`       | Tests                                                                             |
+| `packages/core/src/skill-runtime/batch-parameter-builder.ts`        | `BatchParameterBuilder` type + `BatchContextContract` + `BatchContextRequirement` |
+| `packages/core/src/skill-runtime/batch-parameter-builder.test.ts`   | Tests                                                                             |
+| `packages/core/src/skill-runtime/builders/ad-optimizer.ts`          | Ad-optimizer `BatchParameterBuilder`                                              |
+| `packages/core/src/skill-runtime/builders/ad-optimizer.test.ts`     | Tests                                                                             |
+| `packages/core/src/skill-runtime/tools/ads-analytics.ts`            | Wraps diagnostician, comparator, funnel analyzer, learning guard                  |
+| `packages/core/src/skill-runtime/tools/ads-analytics.test.ts`       | Tests                                                                             |
+| `packages/core/src/skill-runtime/tools/ads-data.ts`                 | Wraps meta-ads-client, meta-capi-client, leads ingester                           |
+| `packages/core/src/skill-runtime/tools/ads-data.test.ts`            | Tests                                                                             |
+| `skills/ad-optimizer.md`                                            | Ad-optimizer skill file                                                           |
+| `packages/core/src/skill-runtime/__tests__/eval-fixtures/ao-*.json` | Eval fixtures                                                                     |
 
 ### Modified Files
 
-| File | Change |
-|---|---|
-| `packages/core/src/ad-optimizer/inngest-functions.ts` | Replace monolithic loops with thin dispatchers |
-| `packages/core/src/skill-runtime/types.ts` | Add `BatchSkillResult`, `BatchContextContract`, `BatchContextRequirement` types |
-| `packages/core/src/skill-runtime/index.ts` | Export new batch modules |
-| `apps/api/src/bootstrap/` | Wire batch executor Inngest function |
+| File                                                  | Change                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `packages/core/src/ad-optimizer/inngest-functions.ts` | Replace monolithic loops with thin dispatchers                                  |
+| `packages/core/src/skill-runtime/types.ts`            | Add `BatchSkillResult`, `BatchContextContract`, `BatchContextRequirement` types |
+| `packages/core/src/skill-runtime/index.ts`            | Export new batch modules                                                        |
+| `apps/api/src/bootstrap/`                             | Wire batch executor Inngest function                                            |
 
 ### Files NOT Changed (stay as-is until parity confirmed)
 
-| File | Reason |
-|---|---|
-| `audit-runner.ts` | Kept for parity comparison until migration validated |
-| `recommendation-engine.ts` | Domain logic moves to skill body, but keep for reference |
-| `metric-diagnostician.ts` | Wrapped by tool, original preserved |
-| All other ad-optimizer files | Wrapped, not deleted |
+| File                         | Reason                                                   |
+| ---------------------------- | -------------------------------------------------------- |
+| `audit-runner.ts`            | Kept for parity comparison until migration validated     |
+| `recommendation-engine.ts`   | Domain logic moves to skill body, but keep for reference |
+| `metric-diagnostician.ts`    | Wrapped by tool, original preserved                      |
+| All other ad-optimizer files | Wrapped, not deleted                                     |
 
 ---
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| Batch LLM recommendations differ from deterministic engine | Parity eval compares categories/coverage, not exact wording. Both paths run against same mock data. |
-| Context contract too rigid for future batch skills | Contract is per-skill, not global. New skills define their own requirements. |
-| Batch execution blows token budget (large campaign data) | BatchParameterBuilder summarizes/truncates data before passing to skill. Token budget enforcement from SP1 applies. |
-| Proposed writes pile up in approval queue | Blast radius limiter caps writes per window. Dashboard shows pending approvals. |
-| Inngest concurrency limits throttle batch runs | Start with limit=5, tune based on observed latency. Each deployment run is independent. |
-| Circuit breaker trips too aggressively for batch | Batch failures are often transient (API timeouts). Consider separate batch-specific thresholds (e.g., 3 failures not 5). |
+| Risk                                                       | Mitigation                                                                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Batch LLM recommendations differ from deterministic engine | Parity eval compares categories/coverage, not exact wording. Both paths run against same mock data.                      |
+| Context contract too rigid for future batch skills         | Contract is per-skill, not global. New skills define their own requirements.                                             |
+| Batch execution blows token budget (large campaign data)   | BatchParameterBuilder summarizes/truncates data before passing to skill. Token budget enforcement from SP1 applies.      |
+| Proposed writes pile up in approval queue                  | Blast radius limiter caps writes per window. Dashboard shows pending approvals.                                          |
+| Inngest concurrency limits throttle batch runs             | Start with limit=5, tune based on observed latency. Each deployment run is independent.                                  |
+| Circuit breaker trips too aggressively for batch           | Batch failures are often transient (API timeouts). Consider separate batch-specific thresholds (e.g., 3 failures not 5). |
 
 ---
 
 ## What Comes After SP4
 
-| Future Work | Depends On |
-|---|---|
-| **Creative pipeline batch migration** | SP4 pattern proven with ad-optimizer |
-| **Cross-skill trace correlation** | SP3 traces + SP4 batch traces both persisted |
-| **Automated write execution** | Governance tier system + trust score maturity |
-| **Batch scheduling UI** | Dashboard extension for manual trigger / schedule config |
-| **Runtime output schema enforcement** | Declared schemas from SP2 + SP4 structured outputs |
+| Future Work                           | Depends On                                               |
+| ------------------------------------- | -------------------------------------------------------- |
+| **Creative pipeline batch migration** | SP4 pattern proven with ad-optimizer                     |
+| **Cross-skill trace correlation**     | SP3 traces + SP4 batch traces both persisted             |
+| **Automated write execution**         | Governance tier system + trust score maturity            |
+| **Batch scheduling UI**               | Dashboard extension for manual trigger / schedule config |
+| **Runtime output schema enforcement** | Declared schemas from SP2 + SP4 structured outputs       |

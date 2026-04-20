@@ -1,19 +1,12 @@
-/* eslint-disable max-lines */
 import { timingSafeEqual } from "node:crypto";
-import type { RiskCategory, ActionEnvelope, ActionProposal, RiskInput } from "@switchboard/schemas";
+import type { RiskCategory, ActionEnvelope } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
-import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
-import type { ApprovalRoutingConfig } from "../approval/router.js";
 import { transitionApproval, isExpired } from "../approval/state-machine.js";
 import { canApproveWithChain } from "../approval/delegation.js";
 import { applyPatch } from "../approval/patching.js";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { TrustScoreAdapter } from "../marketplace/trust-adapter.js";
-import { evaluate } from "../engine/policy-engine.js";
-import type { PolicyEngineContext, GuardrailState } from "../engine/policy-engine.js";
-import type { EvaluationContext } from "../engine/rule-evaluator.js";
-import { resolveIdentity } from "../identity/spec.js";
 
 import type { ExecutionModeRegistry } from "./execution-mode-registry.js";
 import type { ExecutionConstraints } from "./governance-types.js";
@@ -29,8 +22,6 @@ import type {
   ApprovalStore as CoreApprovalStore,
   EnvelopeStore as CoreEnvelopeStore,
   IdentityStore as CoreIdentityStore,
-  CartridgeRegistry,
-  PolicyStore,
 } from "../storage/interfaces.js";
 
 type ApprovalStore = CoreApprovalStore;
@@ -56,10 +47,6 @@ export interface PlatformLifecycleConfig {
   trustAdapter?: TrustScoreAdapter | null;
   selfApprovalAllowed?: boolean;
   approvalRateLimit?: { maxApprovals: number; windowMs: number } | null;
-  cartridgeRegistry?: CartridgeRegistry;
-  policyStore?: PolicyStore;
-  guardrailState?: GuardrailState;
-  routingConfig?: ApprovalRoutingConfig;
 }
 
 export interface ApprovalResponseResult {
@@ -74,10 +61,6 @@ export class PlatformLifecycle {
 
   constructor(config: PlatformLifecycleConfig) {
     this.config = config;
-  }
-
-  get routingConfig(): ApprovalRoutingConfig {
-    return this.config.routingConfig ?? DEFAULT_ROUTING_CONFIG;
   }
 
   async respondToApproval(params: {
@@ -177,26 +160,6 @@ export class PlatformLifecycle {
           envelope.proposals[0].parameters,
           params.patchValue,
         );
-
-        // Re-evaluate governance on patched parameters (safety shim 2A-i)
-        const denied = await this.reEvaluatePatchedProposal(
-          envelope.proposals[0],
-          envelope,
-          params.approvalId,
-        );
-        if (denied) {
-          await this.updateWorkTraceApproval(workUnitId, {
-            approvalId: params.approvalId,
-            approvalOutcome: "rejected",
-            approvalRespondedBy: params.respondedBy,
-            approvalRespondedAt: respondedAt,
-            outcome: "failed",
-            completedAt: respondedAt,
-          });
-          const updatedEnvelope = (await envelopeStore.getById(envelope.id)) ?? envelope;
-          return { envelope: updatedEnvelope, approvalState: newState, executionResult: null };
-        }
-
         await envelopeStore.update(envelope.id, {
           status: "approved",
           proposals: envelope.proposals,
@@ -277,7 +240,7 @@ export class PlatformLifecycle {
     await ledger.record({
       eventType: "action.undo_requested",
       actorType: "system",
-      actorId: "platform",
+      actorId: "orchestrator",
       entityType: "action",
       entityId: envelopeId,
       riskCategory: (envelope.decisions[0]?.computedRiskScore?.category as RiskCategory) ?? "none",
@@ -603,108 +566,5 @@ export class PlatformLifecycle {
     } catch {
       // Best-effort — trace may not exist for legacy envelopes
     }
-  }
-
-  /**
-   * Re-evaluate governance on patched proposal parameters (safety shim 2A-i).
-   * Ported from the old approval manager's reEvaluatePatchedProposal to close
-   * the safety gap where patched parameters could bypass policy checks.
-   *
-   * Returns `true` if the patched proposal was denied by policy.
-   */
-  private async reEvaluatePatchedProposal(
-    proposal: ActionProposal,
-    envelope: ActionEnvelope,
-    approvalId: string,
-  ): Promise<boolean> {
-    const { cartridgeRegistry, policyStore, identityStore, envelopeStore, ledger } = this.config;
-
-    // Skip re-evaluation when stores are not configured (default path)
-    if (!cartridgeRegistry || !policyStore) return false;
-
-    const principalId = (proposal.parameters["_principalId"] as string) ?? "";
-    const cartridgeId = (proposal.parameters["_cartridgeId"] as string) ?? "";
-    const patchOrgId = (proposal.parameters["_organizationId"] as string) ?? null;
-
-    const identitySpec = await identityStore.getSpecByPrincipalId(principalId);
-    if (!identitySpec) return false;
-
-    const overlays = await identityStore.listOverlaysBySpecId(identitySpec.id);
-    const reEvalIdentity = resolveIdentity(identitySpec, overlays, { cartridgeId });
-
-    const cartridge = cartridgeRegistry.get(cartridgeId);
-    if (!cartridge) return false;
-
-    let riskInput: RiskInput;
-    try {
-      riskInput = await cartridge.getRiskInput(proposal.actionType, proposal.parameters, {
-        principalId,
-      });
-    } catch (err) {
-      console.warn(
-        `[platform-lifecycle] getRiskInput failed during patch re-evaluation: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      riskInput = {
-        baseRisk: "medium",
-        exposure: { dollarsAtRisk: 0, blastRadius: 1 },
-        reversibility: "full",
-        sensitivity: {
-          entityVolatile: false,
-          learningPhase: false,
-          recentlyModified: false,
-        },
-      };
-    }
-
-    const guardrails = cartridge.getGuardrails();
-    const policies = await policyStore.listActive({ cartridgeId });
-
-    const reEvalContext: EvaluationContext = {
-      actionType: proposal.actionType,
-      parameters: proposal.parameters,
-      cartridgeId,
-      principalId,
-      organizationId: patchOrgId,
-      riskCategory: riskInput.baseRisk,
-      metadata: { envelopeId: envelope.id },
-    };
-
-    const guardrailState = this.config.guardrailState ?? {
-      actionCounts: new Map(),
-      lastActionTimes: new Map(),
-    };
-
-    const reEngineContext: PolicyEngineContext = {
-      policies,
-      guardrails,
-      guardrailState,
-      resolvedIdentity: reEvalIdentity,
-      riskInput,
-    };
-
-    const reEvalTrace = evaluate(proposal, reEvalContext, reEngineContext);
-    if (reEvalTrace.finalDecision === "deny") {
-      envelope.status = "denied";
-      await envelopeStore.update(envelope.id, {
-        status: "denied",
-        proposals: envelope.proposals,
-      });
-      await ledger.record({
-        eventType: "action.denied",
-        actorType: "system",
-        actorId: "platform",
-        entityType: "action",
-        entityId: proposal.id,
-        riskCategory: reEvalTrace.computedRiskScore.category,
-        summary: `Patched parameters denied by policy re-evaluation`,
-        snapshot: {
-          approvalId,
-          reason: reEvalTrace.explanation,
-        },
-        envelopeId: envelope.id,
-      });
-      return true;
-    }
-    return false;
   }
 }

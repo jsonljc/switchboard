@@ -1,0 +1,54 @@
+{
+  "name": "missing-knowledge-triggers-escalation",
+  "description": "Customer asks about parking (a business fact). Parking notes are NOT in the business facts. Alex must escalate instead of guessing.",
+  "parameters": {
+    "BUSINESS_NAME": "Glow Dental",
+    "PIPELINE_STAGE": "interested",
+    "OPPORTUNITY_ID": "opp_test",
+    "LEAD_PROFILE": { "name": "Sarah", "phone": "+6591234567" },
+    "PERSONA_CONFIG": {
+      "tone": "Professional and warm",
+      "qualificationCriteria": { "service_interest": "has service interest" },
+      "disqualificationCriteria": { "location": "outside service area" },
+      "escalationRules": { "pricing_exception": true, "complex_requirement": true },
+      "bookingLink": null,
+      "customInstructions": ""
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hi, I'd like to book a teeth cleaning. Do you have parking available?"
+    }
+  ],
+  "mockResponses": [
+    {
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_1",
+          "name": "escalate.handoff.create",
+          "input": {
+            "reason": "missing_knowledge",
+            "summary": "Customer asked about parking availability which is not in the business facts"
+          }
+        }
+      ],
+      "stop_reason": "tool_use"
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "I'm not certain about parking details. Let me get a team member to confirm that for you. In the meantime, I can help you find a time for your teeth cleaning!"
+        }
+      ],
+      "stop_reason": "end_turn"
+    }
+  ],
+  "assertions": [
+    { "type": "tool_called", "toolName": "escalate.handoff.create" },
+    { "type": "response_contains", "substring": "team member" },
+    { "type": "response_not_contains", "substring": "probably" }
+  ]
+}

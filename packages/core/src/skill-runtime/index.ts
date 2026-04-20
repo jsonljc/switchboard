@@ -14,8 +14,8 @@ export {
   createCrmQueryTool,
   createCrmWriteTool,
   createCalendarBookTool,
-  createPipelineHandoffTool,
   createWebScannerTool,
+  createEscalateTool,
 } from "./tools/index.js";
 export {
   alexBuilder,
@@ -94,4 +94,5 @@ export type {
 } from "./governance.js";
 export type { ParameterBuilder, SkillStores } from "./parameter-builder.js";
 export { BuilderRegistry } from "./builder-registry.js";
+export { BookingFailureHandler } from "./tools/booking-failure-handler.js";
 export type { BuilderContext, RegisteredBuilder } from "./builder-registry.js";

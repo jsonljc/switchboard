@@ -2120,13 +2120,11 @@ describe("SkillHandler", () => {
       findById: vi.fn().mockResolvedValue({ id: "c1", name: "Alice" }),
     };
     const mockExecutor = {
-      execute: vi
-        .fn()
-        .mockResolvedValue({
-          response: "Hello!",
-          toolCalls: [],
-          tokenUsage: { input: 0, output: 0 },
-        }),
+      execute: vi.fn().mockResolvedValue({
+        response: "Hello!",
+        toolCalls: [],
+        tokenUsage: { input: 0, output: 0 },
+      }),
     };
 
     const handler = new SkillHandler(

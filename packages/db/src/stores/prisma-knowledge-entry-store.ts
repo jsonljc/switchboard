@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import type { KnowledgeKind as PrismaKnowledgeKind } from "@prisma/client";
 import type { KnowledgeKind } from "@switchboard/schemas";
 
 interface KnowledgeEntryCreateInput {
@@ -29,7 +30,7 @@ export class PrismaKnowledgeEntryStore {
     if (filters.length === 0) return [];
 
     const orConditions = filters.map((f) => ({
-      kind: f.kind,
+      kind: f.kind as PrismaKnowledgeKind,
       scope: f.scope,
     }));
 
@@ -47,7 +48,7 @@ export class PrismaKnowledgeEntryStore {
     return this.prisma.knowledgeEntry.create({
       data: {
         organizationId: input.organizationId,
-        kind: input.kind,
+        kind: input.kind as PrismaKnowledgeKind,
         scope: input.scope,
         title: input.title,
         content: input.content,
@@ -110,7 +111,7 @@ export class PrismaKnowledgeEntryStore {
     return this.prisma.knowledgeEntry.findMany({
       where: {
         organizationId: orgId,
-        ...(filters?.kind ? { kind: filters.kind } : {}),
+        ...(filters?.kind ? { kind: filters.kind as PrismaKnowledgeKind } : {}),
         ...(filters?.scope ? { scope: filters.scope } : {}),
         ...(filters?.active !== undefined ? { active: filters.active } : {}),
       },
