@@ -100,3 +100,6 @@ export * from "./playbook.js";
 
 // Website scan (lightweight homepage extraction)
 export * from "./website-scan.js";
+
+// Dashboard aggregate (operator dashboard overview)
+export { DashboardOverviewSchema, type DashboardOverview } from "./dashboard.js";
