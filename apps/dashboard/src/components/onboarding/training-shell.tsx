@@ -39,6 +39,7 @@ export function TrainingShell({
   const [isTyping, setIsTyping] = useState(false);
   const [highlightedSection, setHighlightedSection] = useState<string>();
   const [engine] = useState(() => new InterviewEngine(playbook, category ?? undefined));
+  const [mobileTab, setMobileTab] = useState<"chat" | "playbook">("chat");
 
   const ready = isPlaybookReady(playbook);
   const readinessLabel = getReadinessLabel(playbook);
@@ -124,7 +125,8 @@ export function TrainingShell({
         </span>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* Desktop: split panels */}
+      <div className="hidden flex-1 overflow-hidden md:flex">
         <div className="w-[45%] border-r" style={{ borderColor: "var(--sw-border)" }}>
           <AlexChat messages={messages} onSendMessage={handleSendMessage} isTyping={isTyping} />
         </div>
@@ -138,6 +140,72 @@ export function TrainingShell({
             onAddService={handleAddService}
             highlightedSection={highlightedSection}
           />
+        </div>
+      </div>
+
+      {/* Mobile: tabbed view */}
+      <div className="flex flex-1 flex-col md:hidden">
+        {/* Tab bar */}
+        <div
+          className="flex items-center justify-between border-b px-6 py-3"
+          style={{ borderColor: "var(--sw-border)" }}
+        >
+          <div className="flex gap-4">
+            <button
+              onClick={() => setMobileTab("chat")}
+              className="relative pb-1 text-[14px] font-medium"
+              style={{
+                color: mobileTab === "chat" ? "var(--sw-text-primary)" : "var(--sw-text-muted)",
+              }}
+            >
+              Chat with Alex
+              {mobileTab === "chat" && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-[2px]"
+                  style={{ backgroundColor: "var(--sw-accent)" }}
+                />
+              )}
+            </button>
+            <button
+              onClick={() => setMobileTab("playbook")}
+              className="relative pb-1 text-[14px] font-medium"
+              style={{
+                color: mobileTab === "playbook" ? "var(--sw-text-primary)" : "var(--sw-text-muted)",
+              }}
+            >
+              Your Playbook
+              {mobileTab === "playbook" && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-[2px]"
+                  style={{ backgroundColor: "var(--sw-accent)" }}
+                />
+              )}
+            </button>
+          </div>
+          <button
+            onClick={() => setMobileTab("playbook")}
+            className="text-[12px]"
+            style={{ color: ready ? "var(--sw-ready)" : "var(--sw-text-secondary)" }}
+          >
+            {readinessLabel}
+          </button>
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 overflow-hidden">
+          {mobileTab === "chat" ? (
+            <AlexChat messages={messages} onSendMessage={handleSendMessage} isTyping={isTyping} />
+          ) : (
+            <PlaybookPanel
+              playbook={playbook}
+              businessName={playbook.businessIdentity.name}
+              onUpdateSection={handleUpdateSection}
+              onUpdateService={handleUpdateService}
+              onDeleteService={handleDeleteService}
+              onAddService={handleAddService}
+              highlightedSection={highlightedSection}
+            />
+          )}
         </div>
       </div>
 

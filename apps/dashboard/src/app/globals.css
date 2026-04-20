@@ -104,6 +104,14 @@
     --duration-slow: 600ms;
     --duration-very-slow: 900ms;
 
+    /* ─── Onboarding motion ─── */
+    --transition-structural: 400ms ease-out;
+    --transition-feedback: 200ms ease-out;
+    --transition-trust: 600ms ease-in-out;
+
+    /* ─── Onboarding ready green ─── */
+    --sw-ready: hsl(145, 45%, 42%);
+
     /* ─── Character color system ─── */
     --char-body: hsl(30 8% 42%);
     --char-aura: hsl(30 8% 55%);
@@ -295,5 +303,13 @@
   }
   .animate-fade-in {
     animation: fade-in 0.5s var(--ease-enter) forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-tier2,
+  .onboarding-tier3 {
+    transition: none !important;
+    animation: none !important;
   }
 }

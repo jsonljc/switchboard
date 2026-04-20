@@ -34,6 +34,7 @@ export function TestCenter({
   const [customInput, setCustomInput] = useState("");
   const [fixingResponseId, setFixingResponseId] = useState<string>();
   const [expandedAnnotation, setExpandedAnnotation] = useState<string>();
+  const [promptsCollapsed, setPromptsCollapsed] = useState(false);
 
   const testedIds = new Set(responses.map((r) => r.promptId));
   const testedCount = testedIds.size;
@@ -46,6 +47,7 @@ export function TestCenter({
   const handlePromptClick = (prompt: TestPrompt) => {
     setActivePromptId(prompt.id);
     onSendPrompt(prompt);
+    setPromptsCollapsed(true);
   };
 
   return (
@@ -73,7 +75,9 @@ export function TestCenter({
 
       <div className="flex flex-1 overflow-hidden px-6 pb-6">
         {/* Left: prompts */}
-        <div className="w-[40%] overflow-y-auto pr-6">
+        <div
+          className={`w-[40%] overflow-y-auto pr-6 ${promptsCollapsed ? "hidden md:block" : ""}`}
+        >
           {Object.entries(groupedPrompts).map(([category, categoryPrompts]) => (
             <div key={category} className="mb-6">
               <p
@@ -116,9 +120,18 @@ export function TestCenter({
 
         {/* Right: chat */}
         <div
-          className="relative w-[60%] overflow-y-auto rounded-xl border p-6"
+          className={`relative overflow-y-auto rounded-xl border p-6 ${promptsCollapsed ? "w-full md:w-[60%]" : "w-[60%]"}`}
           style={{ backgroundColor: "var(--sw-surface-raised)", borderColor: "var(--sw-border)" }}
         >
+          {promptsCollapsed && (
+            <button
+              onClick={() => setPromptsCollapsed(false)}
+              className="mb-4 text-[14px] md:hidden"
+              style={{ color: "var(--sw-text-secondary)" }}
+            >
+              ← Show scenarios
+            </button>
+          )}
           {responses.length === 0 && !isSimulating ? (
             <div className="flex h-full flex-col items-center justify-center">
               <AgentMark agent="alex" size="md" />
