@@ -28,6 +28,13 @@ export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
 export { OutcomeLinker } from "./outcome-linker.js";
 export { ok, fail, denied, pendingApproval } from "./tool-result.js";
 export type { ToolResult } from "./tool-result.js";
+export { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
+export type {
+  ResultClass,
+  ReinjectionPolicy,
+  ReinjectionMeta,
+  ReinjectionDecision,
+} from "./reinjection-filter.js";
 export { ContextResolverImpl } from "./context-resolver.js";
 
 // Batch execution

@@ -13,8 +13,10 @@ import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints } from "./governance-injector.js";
-import { denied, pendingApproval, fail } from "./tool-result.js";
+import { denied, pendingApproval, fail, ok } from "./tool-result.js";
 import type { ToolResult } from "./tool-result.js";
+import { filterForReinjection, DEFAULT_REINJECTION_POLICY } from "./reinjection-filter.js";
+import type { SkillToolOperation } from "./types.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelRouter } from "../model-router.js";
 import { buildTierContext } from "./skill-tier-context-builder.js";
@@ -25,6 +27,13 @@ import {
   runBeforeToolCallHooks,
   runAfterToolCallHooks,
 } from "./hook-runner.js";
+
+const FALLBACK_READ_OP: SkillToolOperation = {
+  description: "",
+  inputSchema: {},
+  effectCategory: "read",
+  execute: async () => ok(),
+};
 
 export class SkillExecutorImpl implements SkillExecutor {
   constructor(
@@ -254,10 +263,15 @@ export class SkillExecutorImpl implements SkillExecutor {
           governanceDecision: governanceOutcome as ToolCallRecord["governanceDecision"],
         });
 
+        const decision = filterForReinjection(
+          result,
+          op ?? FALLBACK_READ_OP,
+          DEFAULT_REINJECTION_POLICY,
+        );
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: JSON.stringify(result),
+          content: decision.content,
         });
       }
 
