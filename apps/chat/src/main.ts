@@ -17,6 +17,7 @@ import { HttpPlatformIngressAdapter } from "./gateway/http-platform-ingress-adap
 import { StaticDeploymentResolver } from "./single-tenant/static-deployment-resolver.js";
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
+import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
 
 async function main() {
   // Pre-boot validation — fail fast with clear error messages
@@ -212,97 +213,10 @@ async function main() {
     }
   });
 
-  // --- WhatsApp webhook verification (GET) ---
-  app.get("/webhook/managed/:webhookId", async (request, reply) => {
-    if (!registry) {
-      return reply.code(404).send({ error: "Managed channels not configured" });
-    }
-
-    const { webhookId } = request.params as { webhookId: string };
-    const webhookPath = `/webhook/managed/${webhookId}`;
-    const entry = registry.getGatewayByWebhookPath(webhookPath);
-
-    if (!entry) {
-      return reply.code(404).send("Not found");
-    }
-
-    if (entry.adapter.handleVerification) {
-      const query = request.query as Record<string, string | undefined>;
-      const result = entry.adapter.handleVerification(query);
-      return reply.code(result.status).send(result.body);
-    }
-
-    return reply.code(200).send("OK");
-  });
-
-  // --- Managed channel webhook endpoint (multi-tenant) ---
-  app.post("/webhook/managed/:webhookId", async (request, reply) => {
-    if (!registry) {
-      return reply.code(404).send({ error: "Managed channels not configured" });
-    }
-
-    const { webhookId } = request.params as { webhookId: string };
-    const webhookPath = `/webhook/managed/${webhookId}`;
-
-    // Check gateway entries first (DeploymentConnection-based routing)
-    // All managed channels route through gateway entries (unified in Phase 6)
-    const gatewayEntry = registry.getGatewayByWebhookPath(webhookPath);
-    if (!gatewayEntry) {
-      app.log.warn({ webhookPath }, "No gateway entry found for webhook path");
-      return reply.code(200).send({ ok: true });
-    }
-
-    // Handle Slack URL verification
-    const payload = request.body as Record<string, unknown>;
-    if (gatewayEntry.channel === "slack" && payload["type"] === "url_verification") {
-      return reply.code(200).send({ challenge: payload["challenge"] });
-    }
-
-    if (gatewayEntry.adapter.verifyRequest) {
-      const rawBody =
-        ((request as unknown as Record<string, unknown>).rawBody as string) ??
-        JSON.stringify(request.body);
-      const headers = request.headers as Record<string, string | undefined>;
-      if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
-        return reply.code(401).send({ error: "Invalid signature" });
-      }
-    }
-
-    const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
-    if (!incoming) {
-      return reply.code(200).send({ ok: true });
-    }
-
-    const threadId = incoming.threadId ?? incoming.principalId;
-    const replySink: ReplySink = {
-      send: async (text) => gatewayEntry.adapter.sendTextReply(threadId, text),
-    };
-
-    try {
-      await gatewayEntry.gateway.handleIncoming(
-        {
-          channel: gatewayEntry.channel,
-          token: gatewayEntry.deploymentConnectionId,
-          sessionId: threadId,
-          text: incoming.text,
-        },
-        replySink,
-      );
-    } catch (err) {
-      app.log.error(err, "Gateway webhook processing error");
-      failedMessageStore
-        ?.record({
-          channel: gatewayEntry.channel,
-          webhookPath,
-          rawPayload: request.body as Record<string, unknown>,
-          stage: "unknown",
-          errorMessage: err instanceof Error ? err.message : String(err),
-          errorStack: err instanceof Error ? err.stack : undefined,
-        })
-        .catch((dlqErr) => app.log.error(dlqErr, "DLQ record error"));
-    }
-    return reply.code(200).send({ ok: true });
-  });
+  // --- Managed channel webhook routes (GET verification + POST messages) ---
+  if (registry) {
+    registerManagedWebhookRoutes(app, { registry, failedMessageStore });
+  }
 
   // --- Internal provision-notify endpoint ---
   app.post("/internal/provision-notify", async (request, reply) => {
