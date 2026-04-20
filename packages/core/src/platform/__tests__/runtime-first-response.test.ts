@@ -185,7 +185,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Runtime First Response", () => 
     const mockTools = createMockTools();
     const wrappedTools = new Map<string, SkillTool>();
     for (const [id, tool] of mockTools.entries()) {
-      const wrappedOps: Record<string, any> = {};
+      const wrappedOps: SkillTool["operations"] = {};
       for (const [opName, op] of Object.entries(tool.operations)) {
         wrappedOps[opName] = {
           ...op,
