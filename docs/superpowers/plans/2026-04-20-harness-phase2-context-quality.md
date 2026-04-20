@@ -1519,6 +1519,7 @@ From the spec:
 - [ ] Reinjection filter exists between tool execution and conversation append in `SkillExecutorImpl`
 - [ ] `ContextResolver` sorts knowledge entries by priority desc, truncates at char cap
 - [ ] Error taxonomy covers all existing error codes with model and operator remediation
-- [ ] Error taxonomy is added as doctrine appendix (success taxonomy deferred)
+- [ ] Error taxonomy is added as a doctrine appendix
+- [ ] Reinjection filter invariant ("No unbounded tool result reinjection") is added to doctrine
 
-The doctrine update (last item) should be done after all code is merged — it is a documentation task, not a code task.
+The doctrine updates (last two items) should be done after all code is merged — they are documentation tasks, not code tasks.
