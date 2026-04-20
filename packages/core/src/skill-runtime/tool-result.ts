@@ -1,4 +1,5 @@
 import { ERROR_CATEGORIES, DEFAULT_REMEDIATIONS } from "./error-taxonomy.js";
+import type { ErrorCategory } from "./error-taxonomy.js";
 
 export interface ToolResult {
   status: "success" | "error" | "denied" | "pending_approval";
@@ -26,23 +27,25 @@ export function ok(
   };
 }
 
+interface FailOpts {
+  modelRemediation?: string;
+  operatorRemediation?: string;
+  retryable?: boolean;
+  data?: Record<string, unknown>;
+}
+
+export function fail(code: string, message: string, opts?: FailOpts): ToolResult;
+export function fail(
+  category: ErrorCategory,
+  code: string,
+  message: string,
+  opts?: FailOpts,
+): ToolResult;
 export function fail(
   categoryOrCode: string,
   codeOrMessage: string,
-  messageOrOpts?:
-    | string
-    | {
-        modelRemediation?: string;
-        operatorRemediation?: string;
-        retryable?: boolean;
-        data?: Record<string, unknown>;
-      },
-  opts?: {
-    modelRemediation?: string;
-    operatorRemediation?: string;
-    retryable?: boolean;
-    data?: Record<string, unknown>;
-  },
+  messageOrOpts?: string | FailOpts,
+  opts?: FailOpts,
 ): ToolResult {
   const isCategory = (ERROR_CATEGORIES as readonly string[]).includes(categoryOrCode);
 
@@ -67,14 +70,7 @@ export function fail(
   // Legacy form: fail(code, message, opts?)
   const code = categoryOrCode;
   const message = codeOrMessage;
-  const legacyOpts = messageOrOpts as
-    | {
-        modelRemediation?: string;
-        operatorRemediation?: string;
-        retryable?: boolean;
-        data?: Record<string, unknown>;
-      }
-    | undefined;
+  const legacyOpts = messageOrOpts as FailOpts | undefined;
   return {
     status: "error",
     data: legacyOpts?.data,

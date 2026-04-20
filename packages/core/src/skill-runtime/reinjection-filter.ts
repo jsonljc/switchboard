@@ -76,11 +76,13 @@ function compactArrays(
   maxItems: number,
 ): { compacted: Record<string, unknown>; didCompact: boolean } {
   let didCompact = false;
+  let compactedTotal = 0;
   const out: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value) && value.length > maxItems) {
       didCompact = true;
+      compactedTotal += value.length;
       out[key] = (value as unknown[]).slice(0, maxItems);
     } else {
       out[key] = value;
@@ -88,12 +90,9 @@ function compactArrays(
   }
 
   if (didCompact) {
-    const totalAvailable = Object.values(data).reduce<number>((sum, v) => {
-      return sum + (Array.isArray(v) ? v.length : 0);
-    }, 0);
     out["_compaction"] = {
       truncated: true,
-      totalAvailable,
+      totalAvailable: compactedTotal,
       narrowingHint: "Too many results. Narrow by adding filters.",
     };
   }
