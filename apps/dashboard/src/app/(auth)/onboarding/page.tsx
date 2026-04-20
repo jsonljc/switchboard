@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
 import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
+import { TrainingShell } from "@/components/onboarding/training-shell";
 import type { Playbook } from "@switchboard/schemas";
 
 export default function OnboardingPage() {
@@ -60,14 +61,13 @@ export default function OnboardingPage() {
       );
     case 2:
       return (
-        <div
-          className="flex min-h-screen items-center justify-center"
-          style={{ backgroundColor: "var(--sw-base)" }}
-        >
-          <p className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-            Training — coming in Phase 2
-          </p>
-        </div>
+        <TrainingShell
+          playbook={playbook}
+          onUpdatePlaybook={(updated) => handleUpdatePlaybook({ playbook: updated })}
+          onAdvance={() => handleUpdatePlaybook({ step: 3 })}
+          scanUrl={_scanUrl}
+          category={_category}
+        />
       );
     case 3:
       return (
