@@ -78,6 +78,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
+  // playbook and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);
   await app.register(websiteScanRoutes);
 }

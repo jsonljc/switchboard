@@ -46,7 +46,7 @@ export function PlaybookView() {
               services: [
                 ...playbook.services,
                 {
-                  id: `svc-${Date.now()}`,
+                  id: crypto.randomUUID(),
                   name: "",
                   bookingBehavior: "ask_first" as const,
                   status: "missing" as const,

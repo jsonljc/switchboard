@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { ScanRequestSchema, type ScanResult } from "@switchboard/schemas";
+import { ScanRequestSchema, ScanResultSchema } from "@switchboard/schemas";
 import Anthropic from "@anthropic-ai/sdk";
 
 const EXTRACTION_PROMPT = `You are extracting structured business information from a website page.
@@ -49,6 +49,13 @@ const websiteScanRoutes: FastifyPluginAsync = async (app) => {
         .trim()
         .slice(0, 8000);
 
+      if (textContent.length < 200) {
+        return reply.send({
+          result: { services: [], contactMethods: [], faqHints: [] },
+          warning: "The page content was very short — some information may be missing",
+        });
+      }
+
       const anthropic = new Anthropic();
       const message = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -63,12 +70,17 @@ const websiteScanRoutes: FastifyPluginAsync = async (app) => {
       });
 
       const content = message.content[0];
-      if (content.type !== "text") {
+      if (!content || content.type !== "text") {
         return reply.send({ result: { services: [], contactMethods: [], faqHints: [] } });
       }
 
-      const extracted: ScanResult = JSON.parse(content.text);
-      return reply.send({ result: extracted });
+      const parsed = ScanResultSchema.safeParse(JSON.parse(content.text));
+      if (!parsed.success) {
+        app.log.warn({ validation: parsed.error }, "Scan result failed validation");
+        return reply.send({ result: { services: [], contactMethods: [], faqHints: [] } });
+      }
+
+      return reply.send({ result: parsed.data });
     } catch (err) {
       app.log.warn({ err, url }, "Website scan failed");
       return reply.send({

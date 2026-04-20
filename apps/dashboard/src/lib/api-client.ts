@@ -688,6 +688,9 @@ export class SwitchboardClient extends SwitchboardClientBase {
     url: string;
     sourceType?: string;
   }): Promise<{ result: ScanResult; error?: string }> {
-    return this.post("/api/website-scan", body);
+    return this.request("/api/website-scan", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 }

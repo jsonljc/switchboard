@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
+import { useUpdateOrgConfig } from "@/hooks/use-org-config";
 import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
 import { TestCenter } from "@/components/onboarding/test-center";
@@ -15,8 +16,9 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { data: playbookData, isLoading } = usePlaybook();
   const updatePlaybook = useUpdatePlaybook();
-  const [_scanUrl, setScanUrl] = useState<string | null>(null);
-  const [_category, setCategory] = useState<string | null>(null);
+  const updateOrgConfig = useUpdateOrgConfig();
+  const [scanUrl, setScanUrl] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -67,8 +69,8 @@ export default function OnboardingPage() {
           playbook={playbook}
           onUpdatePlaybook={(updated) => handleUpdatePlaybook({ playbook: updated })}
           onAdvance={() => handleUpdatePlaybook({ step: 3 })}
-          scanUrl={_scanUrl}
-          category={_category}
+          scanUrl={scanUrl}
+          category={category}
         />
       );
     case 3:
@@ -85,7 +87,10 @@ export default function OnboardingPage() {
       return (
         <GoLive
           playbook={playbook}
-          onLaunch={() => updatePlaybook.mutate({ playbook, step: 4 })}
+          onLaunch={() => {
+            updatePlaybook.mutate({ playbook, step: 4 });
+            updateOrgConfig.mutate({ onboardingComplete: true });
+          }}
           onBack={() => handleUpdatePlaybook({ step: 2 })}
           connectedChannels={[]}
           scenariosTested={0}
