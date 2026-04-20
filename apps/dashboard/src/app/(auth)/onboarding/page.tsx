@@ -9,22 +9,31 @@ import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
 import { TestCenter } from "@/components/onboarding/test-center";
 import { GoLive } from "@/components/onboarding/go-live";
-import type { Playbook } from "@switchboard/schemas";
+import { createEmptyPlaybook, type Playbook } from "@switchboard/schemas";
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { data: playbookData, isLoading } = usePlaybook();
+  const { data: playbookData, isLoading, isError } = usePlaybook();
   const updatePlaybook = useUpdatePlaybook();
   const updateOrgConfig = useUpdateOrgConfig();
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [localStep, setLocalStep] = useState(1);
+  const [localPlaybook, setLocalPlaybook] = useState<Playbook>(() => createEmptyPlaybook());
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  if (status === "loading" || isLoading) {
+  useEffect(() => {
+    if (playbookData) {
+      setLocalStep(playbookData.step);
+      setLocalPlaybook(playbookData.playbook);
+    }
+  }, [playbookData]);
+
+  if (status === "loading" || (isLoading && !isError)) {
     return (
       <div
         className="flex min-h-screen items-center justify-center"
@@ -37,12 +46,14 @@ export default function OnboardingPage() {
     );
   }
 
-  if (!session || !playbookData) return null;
+  if (!session) return null;
 
-  const step = playbookData.step;
-  const playbook = playbookData.playbook;
+  const step = playbookData?.step ?? localStep;
+  const playbook = playbookData?.playbook ?? localPlaybook;
 
   const handleUpdatePlaybook = (updates: Partial<{ playbook: Playbook; step: number }>) => {
+    if (updates.step !== undefined) setLocalStep(updates.step);
+    if (updates.playbook) setLocalPlaybook(updates.playbook);
     updatePlaybook.mutate({
       playbook: updates.playbook ?? playbook,
       step: updates.step,
