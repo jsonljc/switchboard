@@ -104,12 +104,17 @@ function createMockTools(): Map<string, SkillTool> {
   tools.set("calendar-book", {
     id: "calendar-book",
     operations: {
-      schedule: {
-        description: "Book a calendar appointment",
+      "slots.query": {
+        description: "Query available booking slots",
+        inputSchema: { type: "object", properties: {} },
+        effectCategory: "read" as const,
+        execute: async () => ok({ slots: [] }),
+      },
+      "booking.create": {
+        description: "Create a booking",
         inputSchema: { type: "object", properties: {} },
         effectCategory: "write" as const,
-        execute: async () =>
-          ok({ appointmentId: "apt_123", scheduledAt: new Date().toISOString() }),
+        execute: async () => ok({ bookingId: "b1", confirmed: true }),
       },
     },
   });
@@ -129,12 +134,10 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Alex Skill Behavior (Cross-Vert
   const adapter = new AnthropicToolCallingAdapter(
     new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
   );
-  const tools = createMockTools();
-  const executor = new SkillExecutorImpl(adapter, tools);
-
   for (const fixture of VERTICALS) {
     describe(`Vertical: ${fixture.businessName}`, () => {
       it("answers known fact from business context", async () => {
+        const executor = new SkillExecutorImpl(adapter, createMockTools());
         const params: SkillExecutionParams = {
           skill,
           parameters: {
@@ -182,6 +185,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Alex Skill Behavior (Cross-Vert
       }, 30_000);
 
       it("safely handles unknown fact", async () => {
+        const executor = new SkillExecutorImpl(adapter, createMockTools());
         const params: SkillExecutionParams = {
           skill,
           parameters: {
