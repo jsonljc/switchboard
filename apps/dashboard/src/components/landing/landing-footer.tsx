@@ -49,10 +49,9 @@ export function LandingFooter() {
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {[
-                { href: "/agents", label: "Browse agents" },
                 { href: "/how-it-works", label: "How it works" },
                 { href: "/pricing", label: "Pricing" },
-                { href: "/get-started", label: "Get early access" },
+                { href: "/get-started", label: "Get started" },
               ].map(({ href, label }) => (
                 <Link
                   key={href}
