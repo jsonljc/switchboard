@@ -107,7 +107,7 @@ describe("WhatsApp wiring — managed webhook", () => {
     expect(response.json()).toEqual({ ok: true });
 
     expect(handleIncoming).toHaveBeenCalledOnce();
-    const [msg] = handleIncoming.mock.calls[0];
+    const [msg] = handleIncoming.mock.calls[0]!;
     expect(msg).toMatchObject({
       channel: "whatsapp",
       sessionId: SENDER_PHONE,
