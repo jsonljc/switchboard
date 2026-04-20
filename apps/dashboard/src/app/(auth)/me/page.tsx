@@ -5,7 +5,6 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { useAgentRoster } from "@/hooks/use-agents";
-import { useViewPreference } from "@/hooks/use-view-preference";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AGENT_ICONS } from "@/components/team/agent-icons";
 import { cn } from "@/lib/utils";
@@ -15,7 +14,6 @@ import { STATUS_DOT, STATUS_LABEL } from "@/lib/agent-status";
 export default function MePage() {
   const { status } = useSession();
   const { data: rosterData, isLoading } = useAgentRoster();
-  const { setView } = useViewPreference();
   const { theme, setTheme } = useTheme();
 
   if (status === "unauthenticated") redirect("/login");
@@ -40,7 +38,6 @@ export default function MePage() {
     <div className="space-y-8">
       <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Me</h1>
 
-      {/* Identity summary */}
       {primaryOperator && (
         <section className="rounded-xl border border-border/60 bg-surface p-5 space-y-3">
           <h2 className="section-label">Your assistant</h2>
@@ -49,7 +46,6 @@ export default function MePage() {
         </section>
       )}
 
-      {/* Team status */}
       {specialists.length > 0 && (
         <section>
           <h2 className="section-label mb-3">Team status</h2>
@@ -78,18 +74,7 @@ export default function MePage() {
         </section>
       )}
 
-      {/* Quick actions */}
       <section className="space-y-2">
-        <button
-          onClick={() => setView("staff")}
-          className="w-full text-left px-4 py-3.5 rounded-lg text-[15px] text-foreground hover:bg-surface border border-border/40 transition-colors"
-        >
-          Staff view →
-          <span className="block text-[12px] text-muted-foreground mt-0.5">
-            Full dashboard access
-          </span>
-        </button>
-
         <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           className="w-full text-left px-4 py-3.5 rounded-lg text-[15px] text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
@@ -105,7 +90,6 @@ export default function MePage() {
         </button>
       </section>
 
-      {/* Settings */}
       <section>
         <h2 className="section-label mb-3">Settings</h2>
         <div className="space-y-2">
