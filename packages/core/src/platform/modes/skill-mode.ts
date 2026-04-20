@@ -44,12 +44,20 @@ export class SkillMode implements ExecutionMode {
 
     const startMs = Date.now();
     try {
+      const conversationParam = workUnit.parameters.conversation as
+        | { messages?: Array<{ role: string; content: string }> }
+        | undefined;
+      const rawMessages = conversationParam?.messages ?? [];
+      const messages = rawMessages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
       const parameters = await this.resolveParameters(workUnit, skill);
 
       const result = await this.config.executor.execute({
         skill,
         parameters,
-        messages: [],
+        messages,
         deploymentId: workUnit.deployment?.deploymentId ?? workUnit.organizationId,
         orgId: workUnit.organizationId,
         trustScore: workUnit.deployment?.trustScore ?? 0,
