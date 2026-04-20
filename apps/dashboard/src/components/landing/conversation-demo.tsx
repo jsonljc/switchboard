@@ -102,12 +102,15 @@ export function ConversationDemo() {
       <div
         style={{
           width: "100%",
-          maxWidth: "340px",
+          maxWidth: "300px",
+          aspectRatio: "9 / 16",
           background: "#FFFFFF",
           borderRadius: "2rem",
           border: "1px solid #DDD9D3",
           boxShadow: "0 8px 32px rgba(26,23,20,0.08)",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Header */}
@@ -162,7 +165,7 @@ export function ConversationDemo() {
         <div
           ref={containerRef}
           style={{
-            height: "320px",
+            flex: 1,
             overflowY: "auto",
             padding: "1rem",
             display: "flex",

@@ -22,7 +22,7 @@ export function HomepageHero() {
             display: "grid",
             gridTemplateColumns: "1fr",
             gap: "3rem",
-            alignItems: "center",
+            alignItems: "start",
             width: "100%",
           }}
           className="md:grid-cols-[1fr_auto] md:gap-16 lg:gap-24"

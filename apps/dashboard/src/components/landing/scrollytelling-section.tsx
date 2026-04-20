@@ -31,11 +31,14 @@ function PhoneFrame({ activeStep }: { activeStep: number }) {
     <div
       style={{
         width: "280px",
+        aspectRatio: "9 / 16",
         background: "#FFFFFF",
         borderRadius: "2rem",
         border: "1px solid #DDD9D3",
         boxShadow: "0 8px 32px rgba(26,23,20,0.08)",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <div
@@ -52,7 +55,7 @@ function PhoneFrame({ activeStep }: { activeStep: number }) {
         </p>
       </div>
 
-      <div style={{ minHeight: "320px" }}>
+      <div style={{ flex: 1, overflow: "hidden" }}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeStep}
@@ -106,6 +109,21 @@ export function ScrollytellingSection() {
   return (
     <section style={{ background: "#F5F3F0", paddingTop: "5rem", paddingBottom: "5rem" }}>
       <div className="page-width">
+        {/* Mobile: sticky phone at top */}
+        <div
+          className="lg:hidden"
+          style={{
+            position: "sticky",
+            top: "5rem",
+            zIndex: 10,
+            display: "flex",
+            justifyContent: "center",
+            paddingBottom: "2rem",
+          }}
+        >
+          <PhoneFrame activeStep={activeStep} />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto]" style={{ gap: "4rem" }}>
           {/* Left: scrolling steps */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8rem" }}>
@@ -150,14 +168,6 @@ export function ScrollytellingSection() {
                   >
                     {step.body}
                   </p>
-                </div>
-
-                {/* Mobile: inline phone */}
-                <div
-                  className="lg:hidden"
-                  style={{ marginTop: "2rem", display: "flex", justifyContent: "center" }}
-                >
-                  <PhoneFrame activeStep={i} />
                 </div>
               </div>
             ))}
