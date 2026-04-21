@@ -10,9 +10,10 @@ interface ActivityItem {
 }
 interface ActivityFeedProps {
   events: ActivityItem[];
+  animate?: boolean;
 }
 
-export function ActivityFeed({ events }: ActivityFeedProps) {
+export function ActivityFeed({ events, animate: _animate }: ActivityFeedProps) {
   return (
     <div>
       <SectionLabel>Recent Activity</SectionLabel>
