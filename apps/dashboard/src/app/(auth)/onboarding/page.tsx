@@ -82,6 +82,7 @@ export default function OnboardingPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Launch failed");
       }
+      updatePlaybook.mutate({ playbook, step: 4 });
     } catch (err) {
       setConnectError(err instanceof Error ? err.message : "Launch failed");
       throw err;

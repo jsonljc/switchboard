@@ -86,6 +86,7 @@ export function ChannelConnectCard({
   const [fields, setFields] = useState<Record<string, string>>({});
 
   const channelFields = CHANNEL_FIELDS[channel] ?? [];
+  const allFieldsFilled = channelFields.every((f) => (fields[f.key] ?? "").trim().length > 0);
 
   return (
     <div className="border-b last:border-b-0" style={{ borderColor: "var(--sw-border)" }}>
@@ -155,7 +156,7 @@ export function ChannelConnectCard({
                 onConnect(fields);
                 setExpanded(false);
               }}
-              disabled={isConnecting}
+              disabled={isConnecting || !allFieldsFilled}
               className="h-[48px] rounded-lg px-6 text-[16px]"
               style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
             >
