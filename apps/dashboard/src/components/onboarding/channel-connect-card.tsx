@@ -12,6 +12,7 @@ interface ChannelConnectCardProps {
   isConnected: boolean;
   comingSoon: boolean;
   onConnect: (credentials: Record<string, string>) => void;
+  isConnecting?: boolean;
 }
 
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -79,6 +80,7 @@ export function ChannelConnectCard({
   isConnected,
   comingSoon,
   onConnect,
+  isConnecting,
 }: ChannelConnectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -133,12 +135,14 @@ export function ChannelConnectCard({
             {channelFields.map((field) => (
               <div key={field.key}>
                 <label
+                  htmlFor={`${channel}-${field.key}`}
                   className="mb-1 block text-[14px]"
                   style={{ color: "var(--sw-text-secondary)" }}
                 >
                   {field.label}
                 </label>
                 <Input
+                  id={`${channel}-${field.key}`}
                   type={field.type}
                   value={fields[field.key] ?? ""}
                   onChange={(e) => setFields({ ...fields, [field.key]: e.target.value })}
@@ -151,10 +155,11 @@ export function ChannelConnectCard({
                 onConnect(fields);
                 setExpanded(false);
               }}
+              disabled={isConnecting}
               className="h-[48px] rounded-lg px-6 text-[16px]"
               style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
             >
-              Connect
+              {isConnecting ? "Connecting..." : "Connect"}
             </Button>
           </div>
         </div>

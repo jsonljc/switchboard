@@ -8,10 +8,14 @@ import type { Playbook } from "@switchboard/schemas";
 
 interface GoLiveProps {
   playbook: Playbook;
-  onLaunch: () => void;
+  onLaunch: () => Promise<void>;
   onBack: () => void;
   connectedChannels: string[];
   scenariosTested: number;
+  onConnectChannel: (channel: string, credentials: Record<string, string>) => void;
+  onLaunchComplete: () => void;
+  isConnecting: boolean;
+  connectError?: string;
 }
 
 export function GoLive({
@@ -20,8 +24,13 @@ export function GoLive({
   onBack,
   connectedChannels,
   scenariosTested,
+  onConnectChannel,
+  onLaunchComplete,
+  isConnecting,
+  connectError,
 }: GoLiveProps) {
   const [launched, setLaunched] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
   const hasChannel = connectedChannels.length > 0;
   const serviceCount = playbook.services.length;
   const recommended = playbook.channels.recommended ?? "whatsapp";
@@ -92,7 +101,10 @@ export function GoLive({
         className="flex min-h-screen items-center justify-center"
         style={{ backgroundColor: "var(--sw-base)" }}
       >
-        <LaunchSequence channel={connectedChannels[0] ?? "WhatsApp"} onComplete={() => {}} />
+        <LaunchSequence
+          channel={connectedChannels[0] ?? "WhatsApp"}
+          onComplete={onLaunchComplete}
+        />
       </div>
     );
   }
@@ -148,7 +160,8 @@ export function GoLive({
                 recommended={recommended === "whatsapp"}
                 isConnected={connectedChannels.includes("whatsapp")}
                 comingSoon={false}
-                onConnect={() => {}}
+                onConnect={(creds) => onConnectChannel("whatsapp", creds)}
+                isConnecting={isConnecting}
               />
               <ChannelConnectCard
                 channel="telegram"
@@ -157,7 +170,8 @@ export function GoLive({
                 recommended={recommended === "telegram"}
                 isConnected={connectedChannels.includes("telegram")}
                 comingSoon={false}
-                onConnect={() => {}}
+                onConnect={(creds) => onConnectChannel("telegram", creds)}
+                isConnecting={isConnecting}
               />
               <ChannelConnectCard
                 channel="webchat"
@@ -166,9 +180,14 @@ export function GoLive({
                 recommended={false}
                 isConnected={false}
                 comingSoon={true}
-                onConnect={() => {}}
+                onConnect={(creds) => onConnectChannel("webchat", creds)}
               />
             </div>
+            {connectError && (
+              <p className="mt-2 text-[14px]" style={{ color: "hsl(0, 70%, 50%)" }}>
+                {connectError}
+              </p>
+            )}
           </div>
 
           <div className="mb-8 text-left">
@@ -206,20 +225,25 @@ export function GoLive({
           )}
 
           <button
-            onClick={() => {
-              setLaunched(true);
-              onLaunch();
+            onClick={async () => {
+              setIsLaunching(true);
+              try {
+                await onLaunch();
+                setLaunched(true);
+              } catch {
+                setIsLaunching(false);
+              }
             }}
-            disabled={!hasChannel}
+            disabled={!hasChannel || isLaunching}
             className="h-[52px] min-w-[200px] rounded-lg text-[16px] font-semibold transition-all duration-200"
             style={{
               backgroundColor: "var(--sw-accent)",
               color: "white",
-              opacity: hasChannel ? 1 : 0.35,
-              cursor: hasChannel ? "pointer" : "default",
+              opacity: hasChannel && !isLaunching ? 1 : 0.35,
+              cursor: hasChannel && !isLaunching ? "pointer" : "default",
             }}
           >
-            Launch Alex
+            {isLaunching ? "Launching..." : "Launch Alex"}
           </button>
           {!hasChannel && (
             <p className="mt-2 text-[14px]" style={{ color: "var(--sw-text-muted)" }}>
