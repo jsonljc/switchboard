@@ -1,8 +1,24 @@
-import type { FastifyPluginAsync } from "fastify";
+import { createHash } from "node:crypto";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import Redis from "ioredis";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CacheEntry {
+  statusCode: number;
+  body: string;
+  fingerprint: string;
+}
+
+function computeFingerprint(request: FastifyRequest): string {
+  const method = request.method;
+  const route = request.routerPath ?? request.routeOptions.url ?? request.url;
+  const bodyHash = createHash("sha256")
+    .update(JSON.stringify(request.body ?? null))
+    .digest("hex");
+  return `${method}:${route}:${bodyHash}`;
+}
 
 export interface IdempotencyBackend {
   get(key: string): Promise<string | null>;
@@ -65,10 +81,18 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
     }
 
     const cached = await backend.get(idempotencyKey);
-    if (cached) {
-      const entry = JSON.parse(cached) as { statusCode: number; body: string };
-      return reply.code(entry.statusCode).send(JSON.parse(entry.body));
+    if (!cached) return;
+
+    const entry = JSON.parse(cached) as CacheEntry;
+    const currentFingerprint = computeFingerprint(request);
+
+    if (entry.fingerprint !== currentFingerprint) {
+      return reply.code(409).send({
+        error: "Idempotency-Key reused with different request",
+      });
     }
+
+    return reply.code(entry.statusCode).send(JSON.parse(entry.body));
   });
 
   app.addHook("onSend", async (request, reply, payload) => {
@@ -78,8 +102,12 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
     if (!idempotencyKey) return payload;
 
     if (typeof payload === "string") {
-      const entry = JSON.stringify({ statusCode: reply.statusCode, body: payload });
-      await backend.set(idempotencyKey, entry, WINDOW_MS);
+      const entry: CacheEntry = {
+        statusCode: reply.statusCode,
+        body: payload,
+        fingerprint: computeFingerprint(request),
+      };
+      await backend.set(idempotencyKey, JSON.stringify(entry), WINDOW_MS);
     }
 
     return payload;
