@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { OwnerTaskRow } from "./owner-task-row";
 import { SectionLabel } from "./section-label";
 
@@ -26,11 +28,13 @@ export function OwnerTaskList({ tasks, onComplete }: OwnerTaskListProps) {
           overflow: "hidden",
         }}
       >
-        {tasks.map((task, i) => (
+        {tasks.slice(0, 5).map((task, i) => (
           <div
             key={task.id}
             style={
-              i < tasks.length - 1 ? { borderBottom: "1px solid var(--sw-border)" } : undefined
+              i < Math.min(tasks.length, 5) - 1
+                ? { borderBottom: "1px solid var(--sw-border)" }
+                : undefined
             }
           >
             <OwnerTaskRow
@@ -43,6 +47,20 @@ export function OwnerTaskList({ tasks, onComplete }: OwnerTaskListProps) {
           </div>
         ))}
       </div>
+      {tasks.length > 5 && (
+        <Link
+          href="/tasks"
+          style={{
+            display: "inline-block",
+            marginTop: "12px",
+            fontSize: "14px",
+            color: "var(--sw-accent)",
+            textDecoration: "none",
+          }}
+        >
+          View all {tasks.length} →
+        </Link>
+      )}
     </div>
   );
 }
