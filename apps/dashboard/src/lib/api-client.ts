@@ -683,6 +683,16 @@ export class SwitchboardClient extends SwitchboardClientBase {
     });
   }
 
+  async simulateChat(body: {
+    playbook: Playbook;
+    userMessage: string;
+  }): Promise<{ alexMessage: string; annotations: string[] }> {
+    return this.request("/api/simulate-chat", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
   // ── Dashboard ──
 
   async getDashboardOverview(orgId: string): Promise<DashboardOverview> {
