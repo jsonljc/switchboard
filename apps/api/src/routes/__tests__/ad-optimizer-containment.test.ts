@@ -2,19 +2,6 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adOptimizerRoutes } from "../ad-optimizer.js";
 
-vi.mock("@switchboard/ad-optimizer", () => ({
-  parseLeadWebhook: (body: { entry?: Array<{ id?: string; changes?: unknown[] }> }) => {
-    const entries = body?.entry ?? [];
-    return entries.map((e) => ({
-      leadId: `lead_${e.id}`,
-      adId: "ad_1",
-      name: "Test Lead",
-      phone: "+15550001",
-      email: "test@example.com",
-    }));
-  },
-}));
-
 describe("adOptimizerRoutes containment", () => {
   let app: Awaited<ReturnType<typeof Fastify>>;
   const submit = vi.fn();
@@ -76,11 +63,22 @@ describe("adOptimizerRoutes containment", () => {
     });
   });
 
-  it("returns early when no leads are parsed", async () => {
-    vi.doMock("@switchboard/ad-optimizer", () => ({
-      parseLeadWebhook: () => [],
-    }));
+  it("returns 200 even when ingress rejects the work", async () => {
+    submit.mockResolvedValue({
+      ok: false,
+      error: { type: "intent_not_found", intent: "meta.lead.intake", message: "Not found" },
+    });
 
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/marketplace/leads/webhook",
+      payload: { entry: [{ id: "page_1" }] },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns early when no entry ID is present", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/marketplace/leads/webhook",
@@ -88,6 +86,7 @@ describe("adOptimizerRoutes containment", () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it("preserves GET verification endpoint", async () => {

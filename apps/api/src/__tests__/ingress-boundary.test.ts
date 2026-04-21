@@ -84,5 +84,6 @@ describe("PlatformIngress boundary enforcement", () => {
     expect(source).not.toContain("PrismaContactStore");
     expect(source).not.toContain("PrismaOutboxStore");
     expect(source).not.toContain("sendWhatsAppTemplate(");
+    expect(source).not.toContain("parseLeadWebhook");
   });
 });

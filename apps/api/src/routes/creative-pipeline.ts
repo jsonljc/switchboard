@@ -3,10 +3,34 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import { PrismaCreativeJobStore } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
 import { z } from "zod";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
+
+const ERROR_STATUS_MAP: Record<string, number> = {
+  CREATIVE_JOB_NOT_FOUND: 404,
+  CREATIVE_JOB_NOT_AWAITING_APPROVAL: 409,
+  intent_not_found: 400,
+  trigger_not_allowed: 403,
+};
+
+function mapResponseToReply(
+  response: SubmitWorkResponse,
+  reply: { code(n: number): { send(b: unknown): unknown } },
+  successCode = 200,
+): unknown {
+  if (!response.ok) {
+    const status = ERROR_STATUS_MAP[response.error.type] ?? 400;
+    return reply.code(status).send({ error: response.error.message });
+  }
+  if (response.result.outcome === "failed" && response.result.error) {
+    const status = ERROR_STATUS_MAP[response.result.error.code] ?? 400;
+    return reply.code(status).send({ error: response.result.error.message });
+  }
+  return reply.code(successCode).send(response.result.outputs);
+}
 
 const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
@@ -55,11 +79,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       traceId: request.traceId,
     });
 
-    if (!response.ok) {
-      return reply.code(400).send({ error: response.error.message });
-    }
-
-    return reply.code(201).send(response.result.outputs);
+    return mapResponseToReply(response, reply, 201);
   });
 
   // GET /creative-jobs — list jobs for org
@@ -139,11 +159,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
       traceId: request.traceId,
     });
 
-    if (!response.ok) {
-      return reply.code(400).send({ error: response.error.message });
-    }
-
-    return reply.send(response.result.outputs);
+    return mapResponseToReply(response, reply);
   });
 
   // GET /creative-jobs/:id/estimate — cost estimate per tier

@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from "fastify";
-import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 const VERIFY_TOKEN = process.env["META_WEBHOOK_VERIFY_TOKEN"] ?? "switchboard-verify";
@@ -24,16 +23,12 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Meta Leads webhook receiver (POST) — thin adapter into PlatformIngress
+  // Meta expects 200 on all webhook POST responses; non-2xx triggers retries/disabling.
   app.post("/leads/webhook", async (request, reply) => {
-    const leads = parseLeadWebhook(request.body);
-    if (leads.length === 0) {
-      return reply.code(200).send({ received: 0, created: 0 });
-    }
-
     const payload = request.body as { entry?: Array<{ id?: string }> };
     const entryId = payload.entry?.[0]?.id;
     if (!entryId || !app.prisma) {
-      return reply.code(200).send({ received: leads.length, created: 0 });
+      return reply.code(200).send({ received: 0, created: 0 });
     }
 
     const connection = await app.prisma.connection.findFirst({
@@ -41,7 +36,7 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!connection?.organizationId) {
-      return reply.code(200).send({ received: leads.length, created: 0 });
+      return reply.code(200).send({ received: 0, created: 0 });
     }
 
     const greetingTemplateName =
@@ -54,23 +49,29 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
       "meta.lead.intake",
     );
 
-    const response = await app.platformIngress.submit({
-      organizationId: connection.organizationId,
-      actor: { id: `meta:${entryId}`, type: "service" },
-      intent: "meta.lead.intake",
-      parameters: {
-        payload: request.body as Record<string, unknown>,
-        greetingTemplateName,
-      },
-      deployment,
-      trigger: "internal",
-      traceId: request.traceId,
-    });
+    try {
+      const response = await app.platformIngress.submit({
+        organizationId: connection.organizationId,
+        actor: { id: `meta:${entryId}`, type: "service" },
+        intent: "meta.lead.intake",
+        parameters: {
+          payload: request.body as Record<string, unknown>,
+          greetingTemplateName,
+        },
+        deployment,
+        trigger: "internal",
+        traceId: request.traceId,
+      });
 
-    if (!response.ok) {
-      return reply.code(400).send({ error: response.error.message });
+      if (!response.ok) {
+        app.log.error({ error: response.error, entryId }, "Meta lead intake rejected by ingress");
+        return reply.code(200).send({ received: 0, created: 0, error: response.error.message });
+      }
+
+      return reply.code(200).send(response.result.outputs);
+    } catch (err) {
+      app.log.error({ err, entryId }, "Meta lead intake failed");
+      return reply.code(200).send({ received: 0, created: 0 });
     }
-
-    return reply.code(200).send(response.result.outputs);
   });
 };

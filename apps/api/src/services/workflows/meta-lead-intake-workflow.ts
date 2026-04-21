@@ -40,6 +40,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
 
       const leads = parseLeadWebhook(input.payload);
       let created = 0;
+      const childFailures: Array<{ intent: string; leadId: string; error: string }> = [];
 
       for (const lead of leads) {
         if (!lead.phone) continue;
@@ -68,7 +69,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
         });
         created++;
 
-        await services.submitChildWork({
+        const greetingResult = await services.submitChildWork({
           intent: "meta.lead.greeting.send",
           organizationId: workUnit.organizationId,
           actor: workUnit.actor,
@@ -79,8 +80,15 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
             templateName: input.greetingTemplateName,
           },
         });
+        if (!greetingResult.ok) {
+          childFailures.push({
+            intent: "meta.lead.greeting.send",
+            leadId: lead.leadId,
+            error: greetingResult.error.message,
+          });
+        }
 
-        await services.submitChildWork({
+        const inquiryResult = await services.submitChildWork({
           intent: "meta.lead.inquiry.record",
           organizationId: workUnit.organizationId,
           actor: workUnit.actor,
@@ -91,12 +99,30 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
             adId: lead.adId ?? null,
           },
         });
+        if (!inquiryResult.ok) {
+          childFailures.push({
+            intent: "meta.lead.inquiry.record",
+            leadId: lead.leadId,
+            error: inquiryResult.error.message,
+          });
+        }
       }
 
+      const hasFailures = childFailures.length > 0;
       return {
-        outcome: "completed",
-        summary: `Processed ${leads.length} leads`,
-        outputs: { received: leads.length, created },
+        outcome: hasFailures ? "failed" : "completed",
+        summary: hasFailures
+          ? `Processed ${leads.length} leads (${childFailures.length} child failures)`
+          : `Processed ${leads.length} leads`,
+        outputs: { received: leads.length, created, ...(hasFailures ? { childFailures } : {}) },
+        ...(hasFailures
+          ? {
+              error: {
+                code: "PARTIAL_CHILD_FAILURE",
+                message: `${childFailures.length} child work items failed`,
+              },
+            }
+          : {}),
       };
     },
   };
