@@ -9,7 +9,8 @@ import type {
 export type ExecutorBinding =
   | { mode: "skill"; skillSlug: string }
   | { mode: "pipeline"; pipelineId: string }
-  | { mode: "cartridge"; actionId: string };
+  | { mode: "cartridge"; actionId: string }
+  | { mode: "workflow"; workflowId: string };
 
 export interface IntentRegistration {
   intent: string;

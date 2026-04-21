@@ -4,3 +4,11 @@ export { CartridgeMode } from "./cartridge-mode.js";
 export type { CartridgeModeConfig } from "./cartridge-mode.js";
 export { PipelineMode } from "./pipeline-mode.js";
 export type { PipelineModeConfig, PipelineEventSender } from "./pipeline-mode.js";
+export { WorkflowMode } from "./workflow-mode.js";
+export type {
+  WorkflowModeConfig,
+  WorkflowHandler,
+  WorkflowHandlerResult,
+  WorkflowRuntimeServices,
+  ChildWorkRequest,
+} from "./workflow-mode.js";
