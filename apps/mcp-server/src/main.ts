@@ -21,7 +21,17 @@ import {
   createApiLedger,
 } from "./adapters/api-governance-adapter.js";
 
+export function buildMutationModeGuard(): void {
+  const apiUrl = process.env["SWITCHBOARD_API_URL"];
+  const allowInMemory = process.env["ALLOW_IN_MEMORY_MCP"] === "true";
+
+  if (process.env.NODE_ENV === "production" && !apiUrl && !allowInMemory) {
+    throw new Error("Production MCP mutation requires SWITCHBOARD_API_URL");
+  }
+}
+
 async function main() {
+  buildMutationModeGuard();
   const apiUrl = process.env["SWITCHBOARD_API_URL"];
   const apiKey = process.env["SWITCHBOARD_API_KEY"];
 
@@ -143,7 +153,10 @@ async function main() {
   await server.start();
 }
 
-main().catch((err) => {
-  console.error("Fatal error starting MCP server:", err);
-  process.exit(1);
-});
+/* c8 ignore next 4 -- entry-point guard */
+if (process.env["VITEST"] === undefined) {
+  main().catch((err) => {
+    console.error("Fatal error starting MCP server:", err);
+    process.exit(1);
+  });
+}
