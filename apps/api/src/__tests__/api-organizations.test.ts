@@ -168,4 +168,158 @@ describe("Organizations API — Config", () => {
       expect(res.statusCode).toBe(403);
     });
   });
+
+  describe("GET /api/organizations/:orgId/channels", () => {
+    it("returns channels for the org", async () => {
+      const channels = [
+        {
+          id: "ch_1",
+          organizationId: "org_test",
+          channel: "telegram",
+          botUsername: "mybot",
+          webhookPath: "/webhooks/tg/abc",
+          webhookRegistered: true,
+          status: "active",
+          statusDetail: null,
+          lastHealthCheck: new Date("2026-04-20"),
+          createdAt: new Date("2026-04-19"),
+          updatedAt: new Date("2026-04-19"),
+        },
+      ];
+      mockPrisma.managedChannel.findMany.mockResolvedValue(channels);
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/organizations/org_test/channels",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.channels).toHaveLength(1);
+      expect(body.channels[0].channel).toBe("telegram");
+      expect(body.channels[0].lastHealthCheck).toBe("2026-04-20T00:00:00.000Z");
+    });
+
+    it("returns empty array when no channels exist", async () => {
+      mockPrisma.managedChannel.findMany.mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/organizations/org_test/channels",
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().channels).toEqual([]);
+    });
+
+    it("returns 403 for wrong org", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/organizations/org_other/channels",
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe("POST /api/organizations/:orgId/provision", () => {
+    it("creates connection and channel rows in transaction", async () => {
+      const createdChannel = {
+        id: "ch_1",
+        organizationId: "org_test",
+        channel: "telegram",
+        connectionId: "conn_1",
+        botUsername: null,
+        webhookPath: expect.any(String),
+        webhookRegistered: false,
+        status: "active",
+        statusDetail: null,
+        lastHealthCheck: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        return fn(mockPrisma);
+      });
+      mockPrisma.connection = { create: vi.fn().mockResolvedValue({ id: "conn_1" }) } as never;
+      (mockPrisma as unknown as Record<string, unknown>).managedChannel = {
+        ...mockPrisma.managedChannel,
+        create: vi.fn().mockResolvedValue(createdChannel),
+      };
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "telegram", botToken: "123:ABC" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.channels).toHaveLength(1);
+    });
+
+    it("returns 403 for wrong org", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_other/provision",
+        payload: { channels: [{ channel: "telegram", botToken: "123:ABC" }] },
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe("DELETE /api/organizations/:orgId/channels/:channelId", () => {
+    it("deletes channel owned by the org", async () => {
+      mockPrisma.managedChannel.findUnique.mockResolvedValue({
+        id: "ch_1",
+        organizationId: "org_test",
+      });
+      mockPrisma.managedChannel.delete.mockResolvedValue({ id: "ch_1" });
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/organizations/org_test/channels/ch_1",
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().deleted).toBe(true);
+    });
+
+    it("returns 403 for wrong org param", async () => {
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/organizations/org_other/channels/ch_1",
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("returns 404 when channel belongs to different org", async () => {
+      mockPrisma.managedChannel.findUnique.mockResolvedValue({
+        id: "ch_1",
+        organizationId: "org_other",
+      });
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/organizations/org_test/channels/ch_1",
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it("returns 404 when channel does not exist", async () => {
+      mockPrisma.managedChannel.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/organizations/org_test/channels/ch_999",
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });
