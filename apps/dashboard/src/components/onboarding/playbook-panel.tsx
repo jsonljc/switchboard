@@ -76,7 +76,7 @@ export function PlaybookPanel({
         </h2>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-12">
         {/* Business Identity */}
         <PlaybookSection
           title="Business Identity"
