@@ -102,7 +102,7 @@ export function OwnerToday() {
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "28px",
+            fontSize: "24px",
             fontWeight: 600,
             color: "var(--sw-text-primary)",
             margin: 0,
@@ -232,7 +232,7 @@ export function OwnerToday() {
                 strokeLinejoin="round"
               />
             </svg>
-            <p style={{ fontSize: "15px", color: "var(--sw-text-secondary)", margin: 0 }}>
+            <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
               All caught up
             </p>
           </div>
