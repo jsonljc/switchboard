@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { ScanRequestSchema, ScanResultSchema } from "@switchboard/schemas";
 import Anthropic from "@anthropic-ai/sdk";
+import { assertSafeUrl, SSRFError } from "../utils/ssrf-guard.js";
 
 const EXTRACTION_PROMPT = `You are extracting structured business information from a website page.
 Return a JSON object with these fields (omit any you can't determine):
@@ -26,6 +27,15 @@ const websiteScanRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const { url } = parsed.data;
+
+    try {
+      await assertSafeUrl(url);
+    } catch (err) {
+      if (err instanceof SSRFError) {
+        return reply.code(400).send({ error: err.message });
+      }
+      throw err;
+    }
 
     try {
       const response = await fetch(url, {
