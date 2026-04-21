@@ -12,9 +12,13 @@ const GREETING_TEXT = {
 
 type SignalEntry = { count: number; label: string };
 
-function buildSummary(stats: DashboardOverview["stats"]): string {
+function buildSummary(
+  stats: DashboardOverview["stats"],
+  period: "morning" | "afternoon" | "evening",
+): string {
   const signals: SignalEntry[] = [
     { count: stats.pendingApprovals, label: "approval" },
+    { count: (stats as Record<string, number>).activeEscalations ?? 0, label: "escalation" },
     { count: stats.bookingsToday, label: "booking" },
     { count: stats.newInquiriesToday, label: "new inquiry" },
     { count: stats.overdueTasks, label: "overdue task" },
@@ -26,7 +30,7 @@ function buildSummary(stats: DashboardOverview["stats"]): string {
     .map((s) => `${s.count} ${s.label}${s.count !== 1 ? "s" : ""}`)
     .join(" · ");
 
-  return active || "All clear this morning.";
+  return active || `All clear this ${period}.`;
 }
 
 export function DashboardHeader({ overview }: DashboardHeaderProps) {
@@ -53,7 +57,7 @@ export function DashboardHeader({ overview }: DashboardHeaderProps) {
         <time style={{ fontSize: "13px", color: "var(--sw-text-muted)" }}>{today}</time>
       </div>
       <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", marginTop: "8px" }}>
-        {buildSummary(overview.stats)}
+        {buildSummary(overview.stats, overview.greeting.period)}
       </p>
     </div>
   );
