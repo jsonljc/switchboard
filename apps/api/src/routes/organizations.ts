@@ -1,7 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
+import { encryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
-const FORBIDDEN_UPDATE_FIELDS = new Set(["id", "managedChannels", "provisioningStatus"]);
+const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
+  "name",
+  "runtimeType",
+  "runtimeConfig",
+  "governanceProfile",
+  "onboardingComplete",
+]);
 
 export const organizationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/organizations/:orgId/config
@@ -69,17 +76,25 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const body = request.body as Record<string, unknown>;
-      const forbiddenKeys = Object.keys(body).filter((k) => FORBIDDEN_UPDATE_FIELDS.has(k));
-      if (forbiddenKeys.length > 0) {
+      const data: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(body)) {
+        if (ALLOWED_CONFIG_UPDATE_FIELDS.has(key)) {
+          data[key] = value;
+        }
+      }
+
+      if (Object.keys(data).length === 0) {
         return reply.code(400).send({
-          error: `Cannot update server-derived fields: ${forbiddenKeys.join(", ")}`,
+          error:
+            "No valid update fields provided. Allowed: " +
+            [...ALLOWED_CONFIG_UPDATE_FIELDS].join(", "),
           statusCode: 400,
         });
       }
 
       const config = await app.prisma.organizationConfig.update({
         where: { id: orgId },
-        data: body,
+        data,
       });
 
       return reply.send({ config });
@@ -169,70 +184,69 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "channels array is required", statusCode: 400 });
       }
 
-      const results = await app.prisma.$transaction(async (tx) => {
-        const created = [];
-        for (const ch of channels) {
-          try {
-            const connection = await tx.connection.create({
-              data: {
-                id: `conn_${crypto.randomUUID().slice(0, 8)}`,
-                organizationId: orgId,
-                serviceId: ch.channel,
-                serviceName: ch.channel,
-                authType: "bot_token",
-                credentials: {
-                  botToken: ch.botToken,
-                  webhookSecret: ch.webhookSecret,
-                  signingSecret: ch.signingSecret,
-                  token: ch.token,
-                  phoneNumberId: ch.phoneNumberId,
-                  appSecret: ch.appSecret,
-                  verifyToken: ch.verifyToken,
-                },
-                scopes: [],
-              },
-            });
+      const results = [];
+      for (const ch of channels) {
+        try {
+          const encrypted = encryptCredentials({
+            botToken: ch.botToken,
+            webhookSecret: ch.webhookSecret,
+            signingSecret: ch.signingSecret,
+            token: ch.token,
+            phoneNumberId: ch.phoneNumberId,
+            appSecret: ch.appSecret,
+            verifyToken: ch.verifyToken,
+          });
 
-            const webhookPath = `/webhooks/${ch.channel}/${crypto.randomUUID().slice(0, 12)}`;
+          const connection = await app.prisma.connection.create({
+            data: {
+              id: `conn_${crypto.randomUUID().slice(0, 8)}`,
+              organizationId: orgId,
+              serviceId: ch.channel,
+              serviceName: ch.channel,
+              authType: "bot_token",
+              credentials: encrypted,
+              scopes: [],
+            },
+          });
 
-            const managedChannel = await tx.managedChannel.create({
-              data: {
-                organizationId: orgId,
-                channel: ch.channel,
-                connectionId: connection.id,
-                webhookPath,
-                botUsername: null,
-              },
-            });
+          const webhookPath = `/webhooks/${ch.channel}/${crypto.randomUUID().slice(0, 12)}`;
 
-            created.push({
-              id: managedChannel.id,
-              channel: managedChannel.channel,
-              botUsername: managedChannel.botUsername,
-              webhookPath: managedChannel.webhookPath,
-              webhookRegistered: managedChannel.webhookRegistered,
-              status: "active",
-              statusDetail: null,
-              lastHealthCheck: null,
-              createdAt: managedChannel.createdAt.toISOString(),
-            });
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : "Unknown error";
-            created.push({
-              id: null,
+          const managedChannel = await app.prisma.managedChannel.create({
+            data: {
+              organizationId: orgId,
               channel: ch.channel,
+              connectionId: connection.id,
+              webhookPath,
               botUsername: null,
-              webhookPath: null,
-              webhookRegistered: false,
-              status: "error",
-              statusDetail: message,
-              lastHealthCheck: null,
-              createdAt: new Date().toISOString(),
-            });
-          }
+            },
+          });
+
+          results.push({
+            id: managedChannel.id,
+            channel: managedChannel.channel,
+            botUsername: managedChannel.botUsername,
+            webhookPath: managedChannel.webhookPath,
+            webhookRegistered: managedChannel.webhookRegistered,
+            status: "active",
+            statusDetail: null,
+            lastHealthCheck: null,
+            createdAt: managedChannel.createdAt.toISOString(),
+          });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          results.push({
+            id: null,
+            channel: ch.channel,
+            botUsername: null,
+            webhookPath: null,
+            webhookRegistered: false,
+            status: "error",
+            statusDetail: message,
+            lastHealthCheck: null,
+            createdAt: new Date().toISOString(),
+          });
         }
-        return created;
-      });
+      }
 
       return reply.send({ channels: results });
     },

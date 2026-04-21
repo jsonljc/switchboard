@@ -15,12 +15,12 @@ describe("Organizations API — Config", () => {
     managedChannel: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      create: vi.fn(),
       delete: vi.fn(),
     },
     connection: {
       create: vi.fn(),
     },
-    $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(mockPrisma)),
   };
 
   beforeEach(async () => {
@@ -223,7 +223,7 @@ describe("Organizations API — Config", () => {
   });
 
   describe("POST /api/organizations/:orgId/provision", () => {
-    it("creates connection and channel rows in transaction", async () => {
+    it("creates connection and channel rows", async () => {
       const createdChannel = {
         id: "ch_1",
         organizationId: "org_test",
@@ -238,14 +238,8 @@ describe("Organizations API — Config", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      mockPrisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        return fn(mockPrisma);
-      });
-      mockPrisma.connection = { create: vi.fn().mockResolvedValue({ id: "conn_1" }) } as never;
-      (mockPrisma as unknown as Record<string, unknown>).managedChannel = {
-        ...mockPrisma.managedChannel,
-        create: vi.fn().mockResolvedValue(createdChannel),
-      };
+      mockPrisma.connection.create.mockResolvedValue({ id: "conn_1" });
+      mockPrisma.managedChannel.create.mockResolvedValue(createdChannel);
 
       const res = await app.inject({
         method: "POST",

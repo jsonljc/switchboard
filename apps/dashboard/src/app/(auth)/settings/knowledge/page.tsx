@@ -1,14 +1,11 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
 import { UploadPanel } from "@/components/knowledge/upload-panel";
 
 export default function SettingsKnowledgePage() {
   const { status } = useSession();
-  const router = useRouter();
-
   if (status === "loading") return null;
   if (status === "unauthenticated") redirect("/login");
 
@@ -22,10 +19,6 @@ export default function SettingsKnowledgePage() {
       </section>
 
       <UploadPanel agentId="creative" />
-
-      <div className="flex justify-end pt-4">
-        <Button onClick={() => router.push("/settings/test-chat")}>Test your agent →</Button>
-      </div>
     </div>
   );
 }
