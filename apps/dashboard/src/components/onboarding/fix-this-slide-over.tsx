@@ -8,6 +8,7 @@ interface FixThisSlideOverProps {
   isOpen: boolean;
   onClose: () => void;
   onFix: (type: FixType, value: string) => void;
+  relevantSection?: string;
 }
 
 const FIX_OPTIONS: { type: FixType; label: string; description: string }[] = [
@@ -24,7 +25,22 @@ const FIX_OPTIONS: { type: FixType; label: string; description: string }[] = [
   },
 ];
 
-export function FixThisSlideOver({ isOpen, onClose, onFix }: FixThisSlideOverProps) {
+const SECTION_NAMES: Record<string, string> = {
+  businessIdentity: "Business Identity",
+  services: "Services",
+  hours: "Hours & Availability",
+  bookingRules: "Booking Rules",
+  approvalMode: "Approval Mode",
+  escalation: "Escalation",
+  channels: "Channels",
+};
+
+export function FixThisSlideOver({
+  isOpen,
+  onClose,
+  onFix,
+  relevantSection,
+}: FixThisSlideOverProps) {
   const [selectedType, setSelectedType] = useState<FixType | null>(null);
   const [input, setInput] = useState("");
 
@@ -81,7 +97,9 @@ export function FixThisSlideOver({ isOpen, onClose, onFix }: FixThisSlideOverPro
               ? "How should Alex have said this?"
               : selectedType === "missing_context"
                 ? "What should Alex know here?"
-                : "What's incorrect?"}
+                : selectedType === "wrong_info" && relevantSection
+                  ? `What's incorrect about ${SECTION_NAMES[relevantSection] || relevantSection}? Update your playbook to correct this.`
+                  : "What's incorrect?"}
           </label>
           <textarea
             value={input}

@@ -12,8 +12,17 @@ interface AlexChatProps {
 
 export function AlexChat({ messages, onSendMessage, isTyping }: AlexChatProps) {
   const [input, setInput] = useState("");
+  const [showNewMessagePill, setShowNewMessagePill] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottom = useRef(true);
+  const prevMessageCount = useRef(messages.length);
+
+  useEffect(() => {
+    if (messages.length > prevMessageCount.current && !isAtBottom.current) {
+      setShowNewMessagePill(true);
+    }
+    prevMessageCount.current = messages.length;
+  }, [messages.length]);
 
   useEffect(() => {
     if (isAtBottom.current && scrollRef.current) {
@@ -25,6 +34,14 @@ export function AlexChat({ messages, onSendMessage, isTyping }: AlexChatProps) {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     isAtBottom.current = scrollHeight - scrollTop - clientHeight < 40;
+    if (isAtBottom.current) setShowNewMessagePill(false);
+  };
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      setShowNewMessagePill(false);
+    }
   };
 
   const handleSend = () => {
@@ -48,38 +65,82 @@ export function AlexChat({ messages, onSendMessage, isTyping }: AlexChatProps) {
 
   return (
     <div className="flex h-full flex-col" style={{ backgroundColor: "var(--sw-base)" }}>
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messagesWithClusters.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
-        ))}
-        {isTyping && (
-          <div className="flex items-center gap-2" data-testid="typing-indicator">
-            <div className="shrink-0">
-              <AgentMark agent="alex" size="xs" />
-            </div>
-            <div
-              className="rounded-2xl px-4 py-3"
-              style={{ backgroundColor: "var(--sw-surface-raised)" }}
-            >
-              <div className="flex gap-1">
-                <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_0ms] rounded-full bg-[var(--sw-text-muted)]" />
-                <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_200ms] rounded-full bg-[var(--sw-text-muted)]" />
-                <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_400ms] rounded-full bg-[var(--sw-text-muted)]" />
+      <div className="relative flex-1">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="h-full space-y-3 overflow-y-auto p-4"
+        >
+          {messagesWithClusters.map((msg) => (
+            <ChatMessage key={msg.id} message={msg} />
+          ))}
+          {isTyping && (
+            <div className="flex items-center gap-2" data-testid="typing-indicator">
+              <div className="shrink-0">
+                <AgentMark agent="alex" size="xs" />
+              </div>
+              <div
+                className="rounded-2xl px-4 py-3"
+                style={{ backgroundColor: "var(--sw-surface-raised)" }}
+              >
+                <div className="flex gap-1">
+                  <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_0ms] rounded-full bg-[var(--sw-text-muted)]" />
+                  <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_200ms] rounded-full bg-[var(--sw-text-muted)]" />
+                  <span className="h-2 w-2 animate-[typing-dot_1.4s_infinite_400ms] rounded-full bg-[var(--sw-text-muted)]" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
+        {showNewMessagePill && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-[13px] shadow-sm"
+            style={{
+              backgroundColor: "var(--sw-surface-raised)",
+              borderColor: "var(--sw-border)",
+              color: "var(--sw-text-secondary)",
+            }}
+            data-testid="new-message-pill"
+          >
+            ↓ New message
+          </button>
         )}
       </div>
       <div className="border-t p-4" style={{ borderColor: "var(--sw-border)" }}>
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-[48px] w-full rounded-lg border bg-transparent px-4 text-[16px] outline-none transition-colors focus:border-[var(--sw-accent)]"
-          style={{ borderColor: "var(--sw-border)", color: "var(--sw-text-primary)" }}
-        />
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Type a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="h-[48px] w-full rounded-lg border bg-transparent px-4 pr-12 text-[16px] outline-none transition-colors focus:border-[var(--sw-accent)]"
+            style={{ borderColor: "var(--sw-border)", color: "var(--sw-text-primary)" }}
+          />
+          {input.trim() && (
+            <button
+              onClick={handleSend}
+              data-testid="send-button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-opacity duration-150"
+              style={{ color: "var(--sw-text-primary)" }}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

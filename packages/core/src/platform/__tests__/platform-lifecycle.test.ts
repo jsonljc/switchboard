@@ -662,5 +662,36 @@ describe("PlatformLifecycle", () => {
       expect(result.executionResult!.success).toBe(true);
       expect(stores.modeRegistry.dispatch).toHaveBeenCalledOnce();
     });
+
+    it("persists patched parameters to the work trace", async () => {
+      const { approvalId, envelopeId } = seedWithCartridge();
+
+      // Set trace parameters to match the original proposal
+      const trace = stores._traces.get(envelopeId)!;
+      trace.parameters = { campaignId: "camp-1", budget: 100 };
+      stores._traces.set(envelopeId, trace);
+
+      await lifecycle.respondToApproval({
+        approvalId,
+        action: "patch",
+        respondedBy: "approver-1",
+        bindingHash: BINDING_HASH,
+        patchValue: { budget: 55 },
+      });
+
+      // modeRegistry.dispatch was called with patched parameters
+      expect(stores.modeRegistry.dispatch).toHaveBeenCalledOnce();
+      const dispatchCall = vi.mocked(stores.modeRegistry.dispatch).mock.calls[0]!;
+      const dispatchedWorkUnit = dispatchCall[1];
+      expect(dispatchedWorkUnit.parameters).toEqual(
+        expect.objectContaining({ campaignId: "camp-1", budget: 55 }),
+      );
+
+      // The stored trace reflects patched parameters
+      const updatedTrace = stores._traces.get(envelopeId)!;
+      expect(updatedTrace.parameters).toEqual(
+        expect.objectContaining({ campaignId: "camp-1", budget: 55 }),
+      );
+    });
   });
 });

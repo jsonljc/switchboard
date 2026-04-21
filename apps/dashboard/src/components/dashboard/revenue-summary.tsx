@@ -4,6 +4,8 @@ interface RevenueSummaryProps {
   total: number;
   count: number;
   topSource: { name: string; amount: number } | null;
+  dailyBreakdown?: number[];
+  animate?: boolean;
 }
 
 function formatCurrency(amount: number): string {
@@ -15,7 +17,13 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function RevenueSummary({ total, count, topSource }: RevenueSummaryProps) {
+export function RevenueSummary({
+  total,
+  count,
+  topSource,
+  dailyBreakdown: _dailyBreakdown,
+  animate: _animate,
+}: RevenueSummaryProps) {
   return (
     <div>
       <SectionLabel>Revenue (7d)</SectionLabel>

@@ -13,6 +13,20 @@ beforeEach(() => {
       disconnect: vi.fn(),
     })),
   );
+
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 });
 
 describe("FadeIn", () => {
@@ -37,5 +51,38 @@ describe("FadeIn", () => {
     const { container } = render(<FadeIn delay={120}>x</FadeIn>);
     const div = container.firstChild as HTMLElement;
     expect(div.style.transition).toContain("120ms");
+  });
+
+  it("uses custom translateY value", () => {
+    const { container } = render(<FadeIn translateY={8}>x</FadeIn>);
+    const div = container.firstChild as HTMLElement;
+    expect(div.style.transform).toBe("translateY(0)");
+  });
+
+  it("applies style prop to wrapper", () => {
+    const { container } = render(<FadeIn style={{ marginTop: "32px" }}>x</FadeIn>);
+    const div = container.firstChild as HTMLElement;
+    expect(div.style.marginTop).toBe("32px");
+  });
+
+  it("respects reduced motion preference", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const { container } = render(<FadeIn>x</FadeIn>);
+    const div = container.firstChild as HTMLElement;
+    expect(div.style.opacity).toBe("1");
+    expect(div.style.transform).toBe("translateY(0)");
   });
 });

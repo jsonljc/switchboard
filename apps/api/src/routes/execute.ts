@@ -5,6 +5,7 @@ import type { SubmitWorkRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
+import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
 
@@ -100,13 +101,29 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
 
         // Approval pending
         if ("approvalRequired" in response && response.approvalRequired) {
-          return reply.code(200).send({
-            outcome: "PENDING_APPROVAL",
-            envelopeId: workUnit.id,
-            traceId: workUnit.traceId,
-            approvalId: result.approvalId,
-            approvalRequest: result.outputs,
-          });
+          try {
+            const { approvalId, bindingHash } = await createApprovalForWorkUnit({
+              workUnit,
+              storageContext: app.storageContext,
+              routingConfig: app.orchestrator.routingConfig,
+            });
+
+            return reply.code(200).send({
+              outcome: "PENDING_APPROVAL",
+              envelopeId: workUnit.id,
+              traceId: workUnit.traceId,
+              approvalRequest: { id: approvalId, bindingHash },
+            });
+          } catch (err) {
+            request.log.error(
+              { err, workUnitId: workUnit.id },
+              "Failed to persist execute approval",
+            );
+            return reply.code(500).send({
+              error: "Failed to persist approval state",
+              statusCode: 500,
+            });
+          }
         }
 
         // Governance deny (ingress-time) vs execution failure (execution-time)

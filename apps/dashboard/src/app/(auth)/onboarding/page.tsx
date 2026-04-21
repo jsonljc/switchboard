@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
 import { useUpdateOrgConfig } from "@/hooks/use-org-config";
+import { generateTestPrompts } from "@/lib/prompt-generator";
+import { useSimulation } from "@/hooks/use-simulation";
+import type { TestPrompt } from "@/components/onboarding/prompt-card";
 import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
 import { TestCenter } from "@/components/onboarding/test-center";
@@ -21,6 +24,17 @@ export default function OnboardingPage() {
   const [category, setCategory] = useState<string | null>(null);
   const [localStep, setLocalStep] = useState(1);
   const [localPlaybook, setLocalPlaybook] = useState<Playbook>(() => createEmptyPlaybook());
+
+  const simulation = useSimulation();
+  const [responses, setResponses] = useState<
+    Array<{
+      promptId: string;
+      userMessage: string;
+      alexMessage: string;
+      annotations: string[];
+      status: "pending" | "good" | "fixed";
+    }>
+  >([]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -60,6 +74,33 @@ export default function OnboardingPage() {
     });
   };
 
+  const testPrompts = generateTestPrompts(playbook);
+
+  const handleSendPrompt = (prompt: TestPrompt) => {
+    simulation.mutate(
+      { playbook, userMessage: prompt.text },
+      {
+        onSuccess: (data) => {
+          setResponses((prev) => [
+            ...prev.filter((r) => r.promptId !== prompt.id),
+            {
+              promptId: prompt.id,
+              userMessage: prompt.text,
+              alexMessage: data.alexMessage,
+              annotations: data.annotations,
+              status: "pending",
+            },
+          ]);
+        },
+      },
+    );
+  };
+
+  const handleRerunPrompt = (promptId: string) => {
+    const prompt = testPrompts.find((p) => p.id === promptId);
+    if (prompt) handleSendPrompt(prompt);
+  };
+
   switch (step) {
     case 1:
       return (
@@ -87,11 +128,12 @@ export default function OnboardingPage() {
     case 3:
       return (
         <TestCenter
-          prompts={[]}
-          onSendPrompt={() => {}}
+          prompts={testPrompts}
+          onSendPrompt={handleSendPrompt}
+          onRerunPrompt={handleRerunPrompt}
           onAdvance={() => handleUpdatePlaybook({ step: 4 })}
-          responses={[]}
-          isSimulating={false}
+          responses={responses}
+          isSimulating={simulation.isPending}
         />
       );
     case 4:
@@ -104,7 +146,7 @@ export default function OnboardingPage() {
           }}
           onBack={() => handleUpdatePlaybook({ step: 2 })}
           connectedChannels={[]}
-          scenariosTested={0}
+          scenariosTested={responses.length}
         />
       );
     default:

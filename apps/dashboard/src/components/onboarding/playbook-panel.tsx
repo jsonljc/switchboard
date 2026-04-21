@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { PlaybookSection } from "./playbook-section";
 import { ServiceCard } from "./service-card";
 import { ApprovalScenario } from "./approval-scenario";
@@ -13,7 +14,18 @@ interface PlaybookPanelProps {
   onDeleteService: (id: string) => void;
   onAddService: () => void;
   highlightedSection?: string;
+  lastUpdatedSection?: string;
 }
+
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  businessIdentity: "Business Identity",
+  services: "Services",
+  hours: "Hours & Availability",
+  bookingRules: "Booking Rules",
+  approvalMode: "Approval Mode",
+  escalation: "Escalation",
+  channels: "Channels",
+};
 
 const BOOKING_SCENARIOS = [
   {
@@ -55,9 +67,32 @@ export function PlaybookPanel({
   onDeleteService,
   onAddService,
   highlightedSection,
+  lastUpdatedSection,
 }: PlaybookPanelProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [updateIndicator, setUpdateIndicator] = useState<{ key: string; label: string }>();
+
+  useEffect(() => {
+    if (!lastUpdatedSection) return;
+    const sectionEl = sectionRefs.current[lastUpdatedSection];
+    if (!sectionEl || !scrollContainerRef.current) return;
+
+    const container = scrollContainerRef.current;
+    const rect = sectionEl.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (rect.top >= containerRect.top && rect.bottom <= containerRect.bottom) return;
+
+    setUpdateIndicator({
+      key: lastUpdatedSection,
+      label: SECTION_DISPLAY_NAMES[lastUpdatedSection] ?? lastUpdatedSection,
+    });
+  }, [lastUpdatedSection]);
+
   return (
     <div
+      ref={scrollContainerRef}
       className="h-full overflow-y-auto p-8"
       style={{ backgroundColor: "var(--sw-surface-raised)" }}
     >
@@ -76,160 +111,224 @@ export function PlaybookPanel({
         </h2>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-12">
         {/* Business Identity */}
-        <PlaybookSection
-          title="Business Identity"
-          status={playbook.businessIdentity.status}
-          required
-          defaultCollapsed={playbook.businessIdentity.status === "missing"}
-          highlight={highlightedSection === "businessIdentity"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["businessIdentity"] = el;
+          }}
         >
-          <div className="space-y-3 text-[16px]" style={{ color: "var(--sw-text-primary)" }}>
-            {playbook.businessIdentity.name && (
-              <p>
-                <strong>{playbook.businessIdentity.name}</strong>
-              </p>
-            )}
-            {playbook.businessIdentity.category && (
-              <p style={{ color: "var(--sw-text-secondary)" }}>
-                {playbook.businessIdentity.category}
-                {playbook.businessIdentity.location && ` · ${playbook.businessIdentity.location}`}
-              </p>
-            )}
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Business Identity"
+            status={playbook.businessIdentity.status}
+            required
+            defaultCollapsed={playbook.businessIdentity.status === "missing"}
+            highlight={highlightedSection === "businessIdentity"}
+          >
+            <div className="space-y-3 text-[16px]" style={{ color: "var(--sw-text-primary)" }}>
+              {playbook.businessIdentity.name && (
+                <p>
+                  <strong>{playbook.businessIdentity.name}</strong>
+                </p>
+              )}
+              {playbook.businessIdentity.category && (
+                <p style={{ color: "var(--sw-text-secondary)" }}>
+                  {playbook.businessIdentity.category}
+                  {playbook.businessIdentity.location && ` · ${playbook.businessIdentity.location}`}
+                </p>
+              )}
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Services */}
-        <PlaybookSection
-          title="Services"
-          status={
-            playbook.services.length > 0 && playbook.services.some((s) => s.status === "ready")
-              ? "ready"
-              : playbook.services.length > 0
-                ? "check_this"
-                : "missing"
-          }
-          required
-          defaultCollapsed={playbook.services.length === 0}
-          highlight={highlightedSection === "services"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["services"] = el;
+          }}
         >
-          <div className="space-y-3">
-            {playbook.services.map((service) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                onChange={onUpdateService}
-                onDelete={onDeleteService}
-              />
-            ))}
-            <button
-              onClick={onAddService}
-              className="w-full rounded-lg border border-dashed py-3 text-[14px] transition-colors hover:border-[var(--sw-accent)] hover:text-[var(--sw-accent)]"
-              style={{ borderColor: "var(--sw-border)", color: "var(--sw-text-muted)" }}
-            >
-              + Add service
-            </button>
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Services"
+            status={
+              playbook.services.length > 0 && playbook.services.some((s) => s.status === "ready")
+                ? "ready"
+                : playbook.services.length > 0
+                  ? "check_this"
+                  : "missing"
+            }
+            required
+            defaultCollapsed={playbook.services.length === 0}
+            highlight={highlightedSection === "services"}
+          >
+            <div className="space-y-3">
+              {playbook.services.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={service}
+                  onChange={onUpdateService}
+                  onDelete={onDeleteService}
+                />
+              ))}
+              <button
+                onClick={onAddService}
+                className="w-full rounded-lg border border-dashed py-3 text-[14px] transition-colors hover:border-[var(--sw-accent)] hover:text-[var(--sw-accent)]"
+                style={{ borderColor: "var(--sw-border)", color: "var(--sw-text-muted)" }}
+              >
+                + Add service
+              </button>
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Hours */}
-        <PlaybookSection
-          title="Hours & Availability"
-          status={playbook.hours.status}
-          required
-          defaultCollapsed={playbook.hours.status === "missing"}
-          highlight={highlightedSection === "hours"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["hours"] = el;
+          }}
         >
-          <div className="text-[16px]" style={{ color: "var(--sw-text-secondary)" }}>
-            {Object.entries(playbook.hours.schedule).length > 0 ? (
-              <div className="space-y-1">
-                {Object.entries(playbook.hours.schedule).map(([day, hours]) => (
-                  <p key={day}>
-                    <span className="inline-block w-12 font-medium capitalize">{day}</span>
-                    <span>{hours}</span>
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: "var(--sw-text-muted)" }}>No hours set yet</p>
-            )}
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Hours & Availability"
+            status={playbook.hours.status}
+            required
+            defaultCollapsed={playbook.hours.status === "missing"}
+            highlight={highlightedSection === "hours"}
+          >
+            <div className="text-[16px]" style={{ color: "var(--sw-text-secondary)" }}>
+              {Object.entries(playbook.hours.schedule).length > 0 ? (
+                <div className="space-y-1">
+                  {Object.entries(playbook.hours.schedule).map(([day, hours]) => (
+                    <p key={day}>
+                      <span className="inline-block w-12 font-medium capitalize">{day}</span>
+                      <span>{hours}</span>
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: "var(--sw-text-muted)" }}>No hours set yet</p>
+              )}
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Booking Rules */}
-        <PlaybookSection
-          title="Booking Rules"
-          status={playbook.bookingRules.status}
-          required
-          defaultCollapsed={playbook.bookingRules.status === "missing"}
-          highlight={highlightedSection === "bookingRules"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["bookingRules"] = el;
+          }}
         >
-          <div className="text-[16px]" style={{ color: "var(--sw-text-secondary)" }}>
-            {playbook.bookingRules.leadVsBooking || (
-              <span style={{ color: "var(--sw-text-muted)" }}>Not configured yet</span>
-            )}
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Booking Rules"
+            status={playbook.bookingRules.status}
+            required
+            defaultCollapsed={playbook.bookingRules.status === "missing"}
+            highlight={highlightedSection === "bookingRules"}
+          >
+            <div className="text-[16px]" style={{ color: "var(--sw-text-secondary)" }}>
+              {playbook.bookingRules.leadVsBooking || (
+                <span style={{ color: "var(--sw-text-muted)" }}>Not configured yet</span>
+              )}
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Approval Mode */}
-        <PlaybookSection
-          title="Approval Mode"
-          status={playbook.approvalMode.status}
-          required
-          defaultCollapsed={playbook.approvalMode.status === "missing"}
-          highlight={highlightedSection === "approvalMode"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["approvalMode"] = el;
+          }}
         >
-          <div className="space-y-6">
-            {BOOKING_SCENARIOS.map((scenario) => (
-              <ApprovalScenario
-                key={scenario.field}
-                question={scenario.question}
-                prompt={scenario.prompt}
-                options={scenario.options}
-                selected={playbook.approvalMode[scenario.field] as string | undefined}
-                onChange={(value) => {
-                  onUpdateSection("approvalMode", {
-                    ...playbook.approvalMode,
-                    [scenario.field]: value,
-                    status: "ready" as const,
-                    source: "manual" as const,
-                  });
-                }}
-              />
-            ))}
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Approval Mode"
+            status={playbook.approvalMode.status}
+            required
+            defaultCollapsed={playbook.approvalMode.status === "missing"}
+            highlight={highlightedSection === "approvalMode"}
+          >
+            <div className="space-y-6">
+              {BOOKING_SCENARIOS.map((scenario) => (
+                <ApprovalScenario
+                  key={scenario.field}
+                  question={scenario.question}
+                  prompt={scenario.prompt}
+                  options={scenario.options}
+                  selected={playbook.approvalMode[scenario.field] as string | undefined}
+                  onChange={(value) => {
+                    onUpdateSection("approvalMode", {
+                      ...playbook.approvalMode,
+                      [scenario.field]: value,
+                      status: "ready" as const,
+                      source: "manual" as const,
+                    });
+                  }}
+                />
+              ))}
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Escalation (recommended) */}
-        <PlaybookSection
-          title="Escalation"
-          status={playbook.escalation.status}
-          required={false}
-          defaultCollapsed={playbook.escalation.status === "missing"}
-          highlight={highlightedSection === "escalation"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["escalation"] = el;
+          }}
         >
-          <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-            {playbook.escalation.triggers.length > 0
-              ? playbook.escalation.triggers.join(", ")
-              : "No escalation rules set"}
-          </div>
-        </PlaybookSection>
+          <PlaybookSection
+            title="Escalation"
+            status={playbook.escalation.status}
+            required={false}
+            defaultCollapsed={playbook.escalation.status === "missing"}
+            highlight={highlightedSection === "escalation"}
+          >
+            <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
+              {playbook.escalation.triggers.length > 0
+                ? playbook.escalation.triggers.join(", ")
+                : "No escalation rules set"}
+            </div>
+          </PlaybookSection>
+        </div>
 
         {/* Channels (recommended) */}
-        <PlaybookSection
-          title="Channels"
-          status={playbook.channels.status}
-          required={false}
-          defaultCollapsed={playbook.channels.status === "missing"}
-          highlight={highlightedSection === "channels"}
+        <div
+          ref={(el) => {
+            sectionRefs.current["channels"] = el;
+          }}
         >
-          <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-            {playbook.channels.configured.length > 0
-              ? playbook.channels.configured.join(", ")
-              : "Configured during Go Live"}
+          <PlaybookSection
+            title="Channels"
+            status={playbook.channels.status}
+            required={false}
+            defaultCollapsed={playbook.channels.status === "missing"}
+            highlight={highlightedSection === "channels"}
+          >
+            <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
+              {playbook.channels.configured.length > 0
+                ? playbook.channels.configured.join(", ")
+                : "Configured during Go Live"}
+            </div>
+          </PlaybookSection>
+        </div>
+
+        {updateIndicator && (
+          <div className="sticky bottom-4 flex justify-center">
+            <button
+              onClick={() => {
+                sectionRefs.current[updateIndicator.key]?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+                setUpdateIndicator(undefined);
+              }}
+              className="rounded-full border px-4 py-1.5 text-[13px] shadow-sm"
+              style={{
+                backgroundColor: "var(--sw-surface-raised)",
+                borderColor: "var(--sw-border)",
+                color: "var(--sw-accent)",
+              }}
+            >
+              ↓ {updateIndicator.label} updated
+            </button>
           </div>
-        </PlaybookSection>
+        )}
       </div>
     </div>
   );

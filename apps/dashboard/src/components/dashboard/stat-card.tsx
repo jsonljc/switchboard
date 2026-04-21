@@ -3,9 +3,20 @@ interface StatCardProps {
   value: string | number;
   delta?: { direction: "up" | "down"; text: string };
   badge?: { text: string; variant: "overdue" };
+  isRevenue?: boolean;
+  animateCountUp?: boolean;
+  countUpDelay?: number;
 }
 
-export function StatCard({ label, value, delta, badge }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  delta,
+  badge,
+  isRevenue: _isRevenue,
+  animateCountUp: _animateCountUp,
+  countUpDelay: _countUpDelay,
+}: StatCardProps) {
   return (
     <div
       style={{

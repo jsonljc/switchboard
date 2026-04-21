@@ -1,4 +1,9 @@
 import { REQUIRED_SECTIONS, RECOMMENDED_SECTIONS, type Playbook } from "@switchboard/schemas";
+import {
+  parseBusinessIdentityResponse,
+  parseServicesResponse,
+  parseEscalationTriggers,
+} from "./interview-parsers";
 
 export type QuestionType = "ask" | "confirm" | "collect";
 
@@ -96,13 +101,58 @@ export class InterviewEngine {
     this.askedSections.add(section);
   }
 
-  processResponse(_question: InterviewQuestion, _response: string): ResponseUpdate {
-    this.askedSections.add(_question.targetSection);
-    return {
-      section: _question.targetSection,
-      fields: {},
-      newStatus: "ready",
-    };
+  processResponse(question: InterviewQuestion, response: string): ResponseUpdate {
+    this.askedSections.add(question.targetSection);
+    const section = question.targetSection;
+    const text = response.trim();
+
+    switch (section) {
+      case "businessIdentity": {
+        const parsed = parseBusinessIdentityResponse(text);
+        return {
+          section,
+          fields: parsed ?? { unparsedInput: text },
+          newStatus: "check_this",
+        };
+      }
+      case "services": {
+        const parsed = parseServicesResponse(text);
+        return {
+          section,
+          fields: parsed ? { services: parsed } : { unparsedInput: text },
+          newStatus: "check_this",
+        };
+      }
+      case "hours": {
+        return {
+          section,
+          fields: { unparsedInput: text },
+          newStatus: "check_this",
+        };
+      }
+      case "bookingRules": {
+        return {
+          section,
+          fields: { leadVsBooking: text },
+          newStatus: "check_this",
+        };
+      }
+      case "escalation": {
+        const triggers = parseEscalationTriggers(text);
+        return {
+          section,
+          fields: triggers ? { triggers } : { unparsedInput: text },
+          newStatus: "check_this",
+        };
+      }
+      default: {
+        return {
+          section,
+          fields: { unparsedInput: text },
+          newStatus: "check_this",
+        };
+      }
+    }
   }
 
   private getSectionStatus(section: string): string {

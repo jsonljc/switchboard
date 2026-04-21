@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AlexChat } from "./alex-chat";
 import { PlaybookPanel } from "./playbook-panel";
 import { InterviewEngine } from "@/lib/interview-engine";
+import { useWebsiteScan } from "@/hooks/use-website-scan";
+import { hydratePlaybookFromScan } from "@/lib/scan-to-playbook";
+import { applyInterviewUpdate } from "@/lib/interview-apply";
 import { getReadinessLabel, isPlaybookReady } from "@/lib/playbook-utils";
 import { Button } from "@/components/ui/button";
 import type { Playbook, PlaybookService } from "@switchboard/schemas";
@@ -40,6 +43,32 @@ export function TrainingShell({
   const [highlightedSection, setHighlightedSection] = useState<string>();
   const [engine] = useState(() => new InterviewEngine(playbook, category ?? undefined));
   const [mobileTab, setMobileTab] = useState<"chat" | "playbook">("chat");
+  const scan = useWebsiteScan();
+  const [scanApplied, setScanApplied] = useState(false);
+
+  useEffect(() => {
+    if (scanUrl && !scan.data && !scan.isPending && !scanApplied) {
+      scan.mutate(scanUrl);
+    }
+  }, [scanUrl]);
+
+  useEffect(() => {
+    if (scan.data?.result && !scanApplied) {
+      setScanApplied(true);
+      const hydrated = hydratePlaybookFromScan(playbook, scan.data.result);
+      onUpdatePlaybook(hydrated);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "scan-done",
+          role: "alex" as const,
+          text: scan.data.result.businessName
+            ? `I found ${scan.data.result.businessName.value}. I've filled in what I could — take a look at the playbook and let me know what needs fixing.`
+            : "I couldn't find much on that page, but let's build your playbook together. What's your business called?",
+        },
+      ]);
+    }
+  }, [scan.data, scanApplied]);
 
   const ready = isPlaybookReady(playbook);
   const readinessLabel = getReadinessLabel(playbook);
@@ -48,7 +77,23 @@ export function TrainingShell({
     (text: string) => {
       setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: "user" as const, text }]);
       setIsTyping(true);
+
+      const currentQuestion = engine.getNextQuestion();
+
       setTimeout(() => {
+        if (currentQuestion) {
+          const update = engine.processResponse(currentQuestion, text);
+
+          if (Object.keys(update.fields).length > 0) {
+            const updated = applyInterviewUpdate(playbook, update);
+            if (updated !== playbook) {
+              onUpdatePlaybook(updated);
+              setHighlightedSection(update.section);
+              setTimeout(() => setHighlightedSection(undefined), 1500);
+            }
+          }
+        }
+
         const nextQuestion = engine.getNextQuestion();
         if (nextQuestion) {
           engine.markAsked(nextQuestion.targetSection);
@@ -56,13 +101,20 @@ export function TrainingShell({
             ...prev,
             { id: `alex-${Date.now()}`, role: "alex" as const, text: nextQuestion.prompt },
           ]);
-          setHighlightedSection(nextQuestion.targetSection);
-          setTimeout(() => setHighlightedSection(undefined), 600);
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: "alex-done",
+              role: "alex" as const,
+              text: "I think we've covered everything. Review the playbook on the right and make any edits you'd like. When you're happy, hit 'Try Alex' to test.",
+            },
+          ]);
         }
         setIsTyping(false);
-      }, 1000);
+      }, 800);
     },
-    [engine],
+    [engine, playbook, onUpdatePlaybook],
   );
 
   const handleUpdateSection = useCallback(
@@ -139,6 +191,7 @@ export function TrainingShell({
             onDeleteService={handleDeleteService}
             onAddService={handleAddService}
             highlightedSection={highlightedSection}
+            lastUpdatedSection={highlightedSection}
           />
         </div>
       </div>
@@ -204,6 +257,7 @@ export function TrainingShell({
               onDeleteService={handleDeleteService}
               onAddService={handleAddService}
               highlightedSection={highlightedSection}
+              lastUpdatedSection={highlightedSection}
             />
           )}
         </div>

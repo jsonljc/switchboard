@@ -47,22 +47,22 @@ export function PlaybookSection({
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-[var(--sw-surface)]"
+        className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-[var(--sw-surface)]"
       >
         <span className="text-[16px] font-semibold" style={{ color: "var(--sw-text-primary)" }}>
           {title}
         </span>
         <span className="flex items-center gap-2">
-          <span className="text-[14px]" style={{ color: config.dotColor }}>
-            {config.label}
-          </span>
           <span
             className="inline-block h-2 w-2 rounded-full"
             style={{ backgroundColor: config.dotColor }}
           />
+          <span className="text-[14px]" style={{ color: config.dotColor }}>
+            {config.label}
+          </span>
         </span>
       </button>
-      {!collapsed && <div className="px-5 pb-5">{children}</div>}
+      {!collapsed && <div className="px-6 pb-6">{children}</div>}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
@@ -88,15 +88,17 @@ export function OwnerToday() {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
   };
 
-  if (!hasPlayed && overview) {
-    setTimeout(() => markPlayed(), 1200);
-  }
+  useEffect(() => {
+    if (hasPlayed || !overview) return;
+    const timer = setTimeout(() => markPlayed(), 1200);
+    return () => clearTimeout(timer);
+  }, [hasPlayed, overview, markPlayed]);
 
   if (isError) {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
     return (
-      <div className="dashboard-frame px-6 md:px-12">
+      <div className="dashboard-frame">
         <h1
           style={{
             fontFamily: "var(--font-display)",
@@ -230,7 +232,7 @@ export function OwnerToday() {
                 strokeLinejoin="round"
               />
             </svg>
-            <p style={{ fontSize: "15px", color: "var(--sw-text-secondary)", margin: 0 }}>
+            <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
               All caught up
             </p>
           </div>
@@ -242,7 +244,7 @@ export function OwnerToday() {
                 summary={approval.summary}
                 context={CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
                 createdAt={approval.createdAt}
-                riskCategory={approval.riskCategory}
+                riskCategory={approval.riskCategory as "high" | "medium" | "low"}
                 actions={[
                   {
                     label: respondingId === approval.id ? "Approving..." : "Approve",
@@ -292,7 +294,7 @@ export function OwnerToday() {
   const activitySection = <ActivityFeed events={overview.activity} animate={animate} />;
 
   return (
-    <div className="dashboard-frame px-6 md:px-12">
+    <div className="dashboard-frame">
       {/* Wave 1: Header */}
       <FadeIn delay={animate ? 0 : 0} translateY={animate ? 8 : 0}>
         <DashboardHeader overview={overview} />
@@ -307,7 +309,7 @@ export function OwnerToday() {
 
       {/* Wave 2: Stat Strip */}
       <FadeIn delay={animate ? 200 : 0} translateY={animate ? 8 : 0}>
-        <div style={{ marginTop: "32px" }}>
+        <div style={{ marginTop: "48px" }}>
           <StatCardGrid stats={stats} />
         </div>
       </FadeIn>

@@ -23,6 +23,7 @@ describe("TestCenter", () => {
       <TestCenter
         prompts={mockPrompts}
         onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
         onAdvance={vi.fn()}
         responses={[]}
         isSimulating={false}
@@ -37,6 +38,7 @@ describe("TestCenter", () => {
       <TestCenter
         prompts={mockPrompts}
         onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
         onAdvance={vi.fn()}
         responses={[]}
         isSimulating={false}
@@ -50,6 +52,7 @@ describe("TestCenter", () => {
       <TestCenter
         prompts={mockPrompts}
         onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
         onAdvance={vi.fn()}
         responses={[]}
         isSimulating={false}
@@ -64,6 +67,7 @@ describe("TestCenter", () => {
       <TestCenter
         prompts={mockPrompts}
         onSendPrompt={onSend}
+        onRerunPrompt={vi.fn()}
         onAdvance={vi.fn()}
         responses={[]}
         isSimulating={false}
@@ -71,5 +75,66 @@ describe("TestCenter", () => {
     );
     fireEvent.click(screen.getByText(/teeth whitening/i));
     expect(onSend).toHaveBeenCalledWith(mockPrompts[0]);
+  });
+
+  it("shows re-run button after response with status 'fixed'", () => {
+    render(
+      <TestCenter
+        prompts={mockPrompts}
+        onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
+        onAdvance={vi.fn()}
+        responses={[
+          {
+            promptId: "p1",
+            userMessage: "test",
+            alexMessage: "response",
+            annotations: [],
+            status: "fixed",
+          },
+        ]}
+        isSimulating={false}
+      />,
+    );
+    expect(screen.getByText("Re-run")).toBeTruthy();
+  });
+
+  it("calls onRerunPrompt with promptId when re-run is clicked", () => {
+    const onRerun = vi.fn();
+    render(
+      <TestCenter
+        prompts={mockPrompts}
+        onSendPrompt={vi.fn()}
+        onRerunPrompt={onRerun}
+        onAdvance={vi.fn()}
+        responses={[
+          {
+            promptId: "p1",
+            userMessage: "test",
+            alexMessage: "response",
+            annotations: [],
+            status: "fixed",
+          },
+        ]}
+        isSimulating={false}
+      />,
+    );
+    fireEvent.click(screen.getByText("Re-run"));
+    expect(onRerun).toHaveBeenCalledWith("p1");
+  });
+
+  it("shows zero-test confirmation when advancing with no tests", () => {
+    render(
+      <TestCenter
+        prompts={mockPrompts}
+        onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
+        onAdvance={vi.fn()}
+        responses={[]}
+        isSimulating={false}
+      />,
+    );
+    fireEvent.click(screen.getByText(/go live/i));
+    expect(screen.getByText(/haven't tested/i)).toBeTruthy();
   });
 });

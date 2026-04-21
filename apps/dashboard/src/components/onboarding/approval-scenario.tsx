@@ -30,7 +30,7 @@ export function ApprovalScenario({
           {prompt}
         </p>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-4">
         {options.map((option) => {
           const isSelected = selected === option.value;
           return (
@@ -39,7 +39,7 @@ export function ApprovalScenario({
               data-scenario-option
               data-value={option.value}
               onClick={() => onChange(option.value)}
-              className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all duration-200"
+              className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all duration-200 hover:border-[var(--sw-border-strong)]"
               style={{
                 borderColor: isSelected ? "var(--sw-accent)" : "var(--sw-border)",
                 borderLeftWidth: isSelected ? "3px" : "1px",

@@ -106,6 +106,59 @@ describe("Idempotency Middleware", () => {
     expect(first.json().workUnitId).not.toBe(second.json().workUnitId);
   });
 
+  it("returns 409 when the same key is used on a different route", async () => {
+    const propose = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: { "idempotency-key": "cross-route-key" },
+      payload: proposePayload,
+    });
+
+    expect(propose.statusCode).toBe(201);
+
+    const execute = await app.inject({
+      method: "POST",
+      url: "/api/execute",
+      headers: { "idempotency-key": "cross-route-key" },
+      payload: {
+        actorId: "default",
+        organizationId: "default",
+        action: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_execute" },
+          sideEffect: true,
+        },
+      },
+    });
+
+    expect(execute.statusCode).toBe(409);
+    expect(execute.json().error).toContain("Idempotency-Key");
+  });
+
+  it("returns 409 when the same key is used with a different payload", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: { "idempotency-key": "same-key-diff-body" },
+      payload: proposePayload,
+    });
+
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: { "idempotency-key": "same-key-diff-body" },
+      payload: {
+        ...proposePayload,
+        parameters: { campaignId: "camp_changed" },
+      },
+    });
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toContain("Idempotency-Key");
+  });
+
   it("MemoryBackend expires entries after TTL", async () => {
     const backend = new MemoryBackend();
 

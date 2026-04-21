@@ -8,14 +8,23 @@ interface ActionCardAction {
   disabled?: boolean;
 }
 
+type RiskCategory = "high" | "medium" | "low";
+
 interface ActionCardProps {
   summary: string;
   context: string | null;
   createdAt: string;
   actions: ActionCardAction[];
+  riskCategory?: RiskCategory;
 }
 
-export function ActionCard({ summary, context, createdAt, actions }: ActionCardProps) {
+export function ActionCard({
+  summary,
+  context,
+  createdAt,
+  actions,
+  riskCategory: _riskCategory,
+}: ActionCardProps) {
   return (
     <div
       style={{

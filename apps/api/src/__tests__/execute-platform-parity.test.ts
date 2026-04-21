@@ -229,6 +229,9 @@ describe("POST /api/execute — Platform Ingress Parity", () => {
     expect(body.outcome).toBe("PENDING_APPROVAL");
     expect(body.envelopeId).toBeDefined();
     expect(body.traceId).toBeDefined();
+    expect(body.approvalRequest).toBeDefined();
+    expect(body.approvalRequest.id).toBeTruthy();
+    expect(body.approvalRequest.bindingHash).toBeTruthy();
   });
 
   // --- Parity criterion 7: Response envelope shape ---

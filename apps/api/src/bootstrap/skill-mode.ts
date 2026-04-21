@@ -15,6 +15,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const {
     loadSkill,
     SkillExecutorImpl,
+    GovernanceHook,
     AnthropicToolCallingAdapter,
     BuilderRegistry,
     createCrmQueryTool,
@@ -161,7 +162,8 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
   const adapter = new AnthropicToolCallingAdapter(anthropicClient);
-  const skillExecutor = new SkillExecutorImpl(adapter, toolsMap);
+  const hooks = [new GovernanceHook(toolsMap)];
+  const skillExecutor = new SkillExecutorImpl(adapter, toolsMap, undefined, hooks);
 
   const builderRegistry = new BuilderRegistry();
 
