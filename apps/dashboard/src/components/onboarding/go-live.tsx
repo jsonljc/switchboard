@@ -26,8 +26,60 @@ export function GoLive({
   const serviceCount = playbook.services.length;
   const recommended = playbook.channels.recommended ?? "whatsapp";
 
+  const WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+  const WEEKDAY_ABBRS: Record<string, string> = {
+    mon: "Mon",
+    tue: "Tue",
+    wed: "Wed",
+    thu: "Thu",
+    fri: "Fri",
+    sat: "Sat",
+    sun: "Sun",
+  };
+
+  const hoursSummary = (() => {
+    const scheduledDays = WEEKDAY_ORDER.filter((d) => d in playbook.hours.schedule);
+    if (scheduledDays.length === 0) return "";
+
+    const formatTime = (t: string) => {
+      const [h, m] = t.split(":");
+      const hour = parseInt(h, 10);
+      const suffix = hour >= 12 ? "pm" : "am";
+      const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      return m === "00" ? `${display}${suffix}` : `${display}:${m}${suffix}`;
+    };
+
+    const firstHours = playbook.hours.schedule[scheduledDays[0]];
+    const [open, close] = firstHours.split("-");
+    const range = open && close ? `${formatTime(open)}-${formatTime(close)}` : firstHours;
+
+    const firstAbbr = WEEKDAY_ABBRS[scheduledDays[0]];
+    const lastAbbr = WEEKDAY_ABBRS[scheduledDays[scheduledDays.length - 1]];
+
+    let contiguous = true;
+    for (let i = 1; i < scheduledDays.length; i++) {
+      if (
+        WEEKDAY_ORDER.indexOf(scheduledDays[i]) !==
+        WEEKDAY_ORDER.indexOf(scheduledDays[i - 1]) + 1
+      ) {
+        contiguous = false;
+        break;
+      }
+    }
+
+    const dayLabel =
+      scheduledDays.length <= 2
+        ? scheduledDays.map((d) => WEEKDAY_ABBRS[d]).join(", ")
+        : contiguous
+          ? `${firstAbbr}-${lastAbbr}`
+          : scheduledDays.map((d) => WEEKDAY_ABBRS[d]).join(", ");
+
+    return `${dayLabel} ${range}`;
+  })();
+
   const playbookSummary = [
     `${serviceCount} service${serviceCount !== 1 ? "s" : ""}`,
+    hoursSummary,
     playbook.approvalMode.bookingApproval === "ask_before_booking" ? "Approval-first" : "Auto-book",
     ...connectedChannels.map((c) => c.charAt(0).toUpperCase() + c.slice(1)),
   ]

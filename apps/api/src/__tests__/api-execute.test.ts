@@ -169,6 +169,56 @@ describe("Execute API (POST /api/execute)", () => {
     expect(body.error).toContain("Intent not found");
   });
 
+  it("persists an approval record when execution returns PENDING_APPROVAL", async () => {
+    await app.storageContext.identity.saveSpec({
+      id: "spec_default",
+      principalId: "default",
+      organizationId: null,
+      name: "Default User",
+      description: "Approval-path test spec",
+      riskTolerance: {
+        none: "none" as const,
+        low: "standard" as const,
+        medium: "elevated" as const,
+        high: "mandatory" as const,
+        critical: "mandatory" as const,
+      },
+      globalSpendLimits: { daily: 10000, weekly: 50000, monthly: null, perAction: 5000 },
+      cartridgeSpendLimits: {},
+      forbiddenBehaviors: [],
+      trustBehaviors: [],
+      delegatedApprovers: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/execute",
+      headers: { "Idempotency-Key": "approval-persist-key" },
+      payload: {
+        actorId: "default",
+        organizationId: ORG_ID,
+        action: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_needs_approval" },
+          sideEffect: true,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.outcome).toBe("PENDING_APPROVAL");
+    expect(body.approvalRequest).toBeDefined();
+    expect(body.approvalRequest.id).toBeTruthy();
+    expect(body.approvalRequest.bindingHash).toBeTruthy();
+
+    const persisted = await app.storageContext.approvals.getById(body.approvalRequest.id);
+    expect(persisted).not.toBeNull();
+    expect(persisted?.envelopeId).toBe(body.envelopeId);
+  });
+
   it("returns 400 when body fails validation", async () => {
     const res = await app.inject({
       method: "POST",
