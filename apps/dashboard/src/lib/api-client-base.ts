@@ -278,19 +278,4 @@ export class SwitchboardClientBase {
       },
     );
   }
-
-  // Handoff Inbox
-  async listPendingHandoffs() {
-    return this.request<{ items: unknown[]; total: number }>("/api/handoff/pending");
-  }
-
-  async getHandoffCount() {
-    return this.request<{ count: number }>("/api/handoff/count");
-  }
-
-  async releaseHandoff(id: string) {
-    return this.request<{ released: boolean }>(`/api/handoff/${id}/release`, {
-      method: "POST",
-    });
-  }
 }

@@ -340,17 +340,6 @@ export class SwitchboardClient extends SwitchboardClientBase {
     );
   }
 
-  // Test Chat
-  async sendTestChatMessage(body: Record<string, unknown>) {
-    return this.request<{
-      reply: string;
-      confidence: number;
-      kbChunksUsed: number;
-      kbContext: string;
-      mode: string;
-    }>("/api/test-chat/message", { method: "POST", body: JSON.stringify(body) });
-  }
-
   // Go Live
   async goLiveAgent(agentId: string) {
     return this.request<{ agentId: string; status: string; message: string }>(

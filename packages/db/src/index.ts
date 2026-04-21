@@ -94,3 +94,4 @@ export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-s
 export { PrismaDispatchLogStore } from "./stores/prisma-dispatch-log-store.js";
 export { PrismaReconciliationStore } from "./stores/prisma-reconciliation-store.js";
 export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";
+export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
