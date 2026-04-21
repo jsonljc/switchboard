@@ -426,6 +426,19 @@ export async function buildServer() {
   });
   app.decorate("platformIngress", platformIngress);
 
+  // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
+  if (prismaClient) {
+    const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
+    await bootstrapContainedWorkflows({
+      prismaClient,
+      intentRegistry,
+      modeRegistry,
+      platformIngress,
+      deploymentResolver,
+      logger: app.log,
+    });
+  }
+
   const { PlatformLifecycle } = await import("@switchboard/core/platform");
   const platformLifecycle = new PlatformLifecycle({
     approvalStore: storage.approvals,
