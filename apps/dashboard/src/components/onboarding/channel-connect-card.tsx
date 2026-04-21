@@ -14,6 +14,55 @@ interface ChannelConnectCardProps {
   onConnect: (credentials: Record<string, string>) => void;
 }
 
+const CHANNEL_ICONS: Record<string, React.ReactNode> = {
+  whatsapp: (
+    <svg
+      data-testid="channel-icon-whatsapp"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  ),
+  telegram: (
+    <svg
+      data-testid="channel-icon-telegram"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="22" y1="2" x2="11" y2="13" />
+      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  ),
+  webchat: (
+    <svg
+      data-testid="channel-icon-webchat"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+};
+
 const CHANNEL_FIELDS: Record<string, { label: string; key: string; type: string }[]> = {
   whatsapp: [
     { label: "Phone number", key: "phone", type: "tel" },
@@ -41,6 +90,9 @@ export function ChannelConnectCard({
       <div className="flex items-center justify-between px-5 py-4">
         <div>
           <div className="flex items-center gap-2">
+            <div style={{ color: "var(--sw-text-muted)", width: 20, height: 20 }}>
+              {CHANNEL_ICONS[channel]}
+            </div>
             <span className="text-[16px] font-semibold" style={{ color: "var(--sw-text-primary)" }}>
               {label}
             </span>
