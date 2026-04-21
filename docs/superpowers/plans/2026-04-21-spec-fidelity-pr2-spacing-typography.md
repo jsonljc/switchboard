@@ -85,9 +85,9 @@ to:
       {!collapsed && <div className="px-6 pb-6">{children}</div>}
 ```
 
-- [ ] **Step 2: Swap status dot/label order (T7 — P3 polish)**
+- [ ] **Step 2: (Optional — P3 polish, include only if already touching file) Swap status dot/label order (T7)**
 
-In the same file, the status indicator currently renders label text first, then dot. Swap to dot-first:
+In the same file, the status indicator currently renders label text first, then dot. Swap to dot-first. Skip this step if it distracts from higher-priority work:
 
 Change:
 

@@ -75,11 +75,11 @@ Expected: FAIL — module `../use-entrance-played` not found
 ```typescript
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useState } from "react";
 
 const KEY = "sw-entrance-played";
 
-function getSnapshot(): boolean {
+function readStorage(): boolean {
   try {
     return sessionStorage.getItem(KEY) === "1";
   } catch {
@@ -87,25 +87,16 @@ function getSnapshot(): boolean {
   }
 }
 
-function getServerSnapshot(): boolean {
-  return false;
-}
-
-function subscribe(callback: () => void): () => void {
-  window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
-}
-
 export function useEntrancePlayed() {
-  const hasPlayed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [hasPlayed, setHasPlayed] = useState(readStorage);
 
   const markPlayed = useCallback(() => {
+    setHasPlayed(true);
     try {
       sessionStorage.setItem(KEY, "1");
     } catch {
       // sessionStorage unavailable — animation plays every time, harmless
     }
-    window.dispatchEvent(new StorageEvent("storage"));
   }, []);
 
   return { hasPlayed, markPlayed };
@@ -428,34 +419,53 @@ to:
           <StatCardGrid stats={stats} />
 ```
 
-- [ ] **Step 4: Override OwnerShell content-width for dashboard**
+- [ ] **Step 4: Override OwnerShell content-width for dashboard route (L5)**
 
-In `apps/dashboard/src/components/layout/owner-shell.tsx`, the `content-width` class constrains to 42rem. The dashboard-frame handles its own width. Add a CSS class that lets dashboard break out:
+`OwnerShell` wraps all content in `.content-width` (max-width 42rem). The dashboard needs to break out of this. Instead of using CSS `:has()` (browser support concern), use a route-aware class on the shell.
 
-In `apps/dashboard/src/app/globals.css`, inside the `@layer components` block, add:
+In `apps/dashboard/src/components/layout/owner-shell.tsx`, replace:
 
-```css
-/* Dashboard uses its own frame, bypass content-width constraint */
-.dashboard-frame {
-  max-width: 76rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+```typescript
+export function OwnerShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="pb-20">
+        <div key={pathname} className="content-width py-6 animate-fade-in">
+          {children}
+        </div>
+      </main>
+      <OwnerTabs />
+    </div>
+  );
 }
 ```
 
-Wait — this is already defined above. The issue is that `OwnerShell` wraps all content in `.content-width` which has `max-width: 42rem`. The dashboard-frame is _inside_ that container.
+with:
 
-The `.content-width` class on the parent div in OwnerShell constrains to 42rem, which is too narrow for the dashboard. The dashboard-frame needs its own width. Override with `:has()`:
+```typescript
+export function OwnerShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isDashboard = pathname === "/dashboard";
 
-Add this rule inside `@layer components` in globals.css, after the dashboard-frame block from Step 1:
-
-```css
-.content-width:has(.dashboard-frame) {
-  max-width: none;
-  padding-left: 0;
-  padding-right: 0;
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="pb-20">
+        <div
+          key={pathname}
+          className={`${isDashboard ? "py-6" : "content-width py-6"} animate-fade-in`}
+        >
+          {children}
+        </div>
+      </main>
+      <OwnerTabs />
+    </div>
+  );
 }
 ```
+
+When on `/dashboard`, the `content-width` constraint is removed. The `dashboard-frame` class inside OwnerToday handles its own max-width and padding.
 
 - [ ] **Step 5: Verify layout renders**
 
@@ -465,13 +475,14 @@ Expected: Build succeeds
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/dashboard/src/app/globals.css apps/dashboard/src/components/dashboard/owner-today.tsx && git commit -m "$(cat <<'EOF'
+git add apps/dashboard/src/app/globals.css apps/dashboard/src/components/dashboard/owner-today.tsx apps/dashboard/src/components/layout/owner-shell.tsx && git commit -m "$(cat <<'EOF'
 feat(dashboard): define dashboard-frame layout with sticky activity rail
 
 Adds dashboard-frame (76rem editorial / 88rem calm-grid at 1440px+),
 dashboard-content-grid with 320px sticky rail, and responsive
-show/hide for rail vs inline activity feed. Fixes header→stat spacing
-to 48px per approved spec.
+show/hide for rail vs inline activity feed. OwnerShell bypasses
+content-width constraint on /dashboard route. Fixes header→stat
+spacing to 48px per approved spec.
 EOF
 )"
 ```
