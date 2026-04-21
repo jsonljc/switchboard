@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
@@ -88,9 +88,11 @@ export function OwnerToday() {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
   };
 
-  if (!hasPlayed && overview) {
-    setTimeout(() => markPlayed(), 1200);
-  }
+  useEffect(() => {
+    if (hasPlayed || !overview) return;
+    const timer = setTimeout(() => markPlayed(), 1200);
+    return () => clearTimeout(timer);
+  }, [hasPlayed, overview, markPlayed]);
 
   if (isError) {
     const hour = new Date().getHours();
