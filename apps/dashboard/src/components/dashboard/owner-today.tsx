@@ -244,7 +244,7 @@ export function OwnerToday() {
                 summary={approval.summary}
                 context={CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
                 createdAt={approval.createdAt}
-                riskCategory={approval.riskCategory}
+                riskCategory={approval.riskCategory as "high" | "medium" | "low"}
                 actions={[
                   {
                     label: respondingId === approval.id ? "Approving..." : "Approve",
