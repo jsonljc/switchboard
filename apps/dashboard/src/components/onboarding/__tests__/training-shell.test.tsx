@@ -1,11 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TrainingShell } from "../training-shell";
 import { createEmptyPlaybook } from "@switchboard/schemas";
 
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 describe("TrainingShell", () => {
   it("renders chat and playbook panels", () => {
-    render(
+    renderWithProviders(
       <TrainingShell
         playbook={createEmptyPlaybook()}
         onUpdatePlaybook={vi.fn()}
@@ -14,12 +22,12 @@ describe("TrainingShell", () => {
         category={null}
       />,
     );
-    expect(screen.getByText(/Alex's Playbook/i)).toBeTruthy();
-    expect(screen.getByPlaceholderText("Type a message...")).toBeTruthy();
+    expect(screen.getAllByText(/Alex's Playbook/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByPlaceholderText("Type a message...").length).toBeGreaterThan(0);
   });
 
   it("shows readiness indicator", () => {
-    render(
+    renderWithProviders(
       <TrainingShell
         playbook={createEmptyPlaybook()}
         onUpdatePlaybook={vi.fn()}
@@ -28,6 +36,6 @@ describe("TrainingShell", () => {
         category={null}
       />,
     );
-    expect(screen.getByText(/0 of 5 required sections ready/)).toBeTruthy();
+    expect(screen.getAllByText(/0 of 5 required sections ready/).length).toBeGreaterThan(0);
   });
 });
