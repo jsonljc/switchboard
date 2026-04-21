@@ -102,6 +102,9 @@ const idempotencyPlugin: FastifyPluginAsync = async (app) => {
     if (!idempotencyKey) return payload;
 
     if (typeof payload === "string") {
+      const existing = await backend.get(idempotencyKey);
+      if (existing) return payload;
+
       const entry: CacheEntry = {
         statusCode: reply.statusCode,
         body: payload,

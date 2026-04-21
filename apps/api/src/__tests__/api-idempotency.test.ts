@@ -159,6 +159,47 @@ describe("Idempotency Middleware", () => {
     expect(second.json().error).toContain("Idempotency-Key");
   });
 
+  it("does not overwrite cached entry when a mismatch 409 is returned", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: { "idempotency-key": "overwrite-test-key" },
+      payload: proposePayload,
+    });
+
+    expect(first.statusCode).toBe(201);
+    const firstBody = first.json();
+
+    // Trigger a 409 mismatch with a different route
+    const mismatch = await app.inject({
+      method: "POST",
+      url: "/api/execute",
+      headers: { "idempotency-key": "overwrite-test-key" },
+      payload: {
+        actorId: "default",
+        organizationId: "default",
+        action: {
+          actionType: "digital-ads.campaign.pause",
+          parameters: { campaignId: "camp_mismatch" },
+          sideEffect: true,
+        },
+      },
+    });
+
+    expect(mismatch.statusCode).toBe(409);
+
+    // Original replay should still work after the mismatch
+    const replay = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: { "idempotency-key": "overwrite-test-key" },
+      payload: proposePayload,
+    });
+
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json()).toEqual(firstBody);
+  });
+
   it("MemoryBackend expires entries after TTL", async () => {
     const backend = new MemoryBackend();
 
