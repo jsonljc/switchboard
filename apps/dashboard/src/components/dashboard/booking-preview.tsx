@@ -51,11 +51,13 @@ export function BookingPreview({ bookings }: BookingPreviewProps) {
             No bookings today
           </p>
         ) : (
-          bookings.map((b, i) => (
+          bookings.slice(0, 5).map((b, i) => (
             <div
               key={b.id}
               style={
-                i < bookings.length - 1 ? { borderBottom: "1px solid var(--sw-border)" } : undefined
+                i < Math.min(bookings.length, 5) - 1
+                  ? { borderBottom: "1px solid var(--sw-border)" }
+                  : undefined
               }
             >
               <BookingRow
