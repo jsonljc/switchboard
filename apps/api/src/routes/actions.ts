@@ -87,7 +87,10 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         const response = await app.platformIngress.submit(submitRequest);
 
         if (!response.ok) {
-          const status = response.error.type === "intent_not_found" ? 404 : 400;
+          const notFound =
+            response.error.type === "intent_not_found" ||
+            response.error.type === "deployment_not_found";
+          const status = notFound ? 404 : 400;
           return reply.code(status).send({
             error: response.error.message,
             statusCode: status,
