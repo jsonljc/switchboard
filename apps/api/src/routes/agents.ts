@@ -342,12 +342,13 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // PUT /api/agents/go-live/:agentId — transition agent from draft to active
+  // PUT /api/agents/go-live/:agentId — authoritative launch confirmation
   app.put(
     "/go-live/:agentId",
     {
       schema: {
-        description: "Transition an agent from draft to active (go live).",
+        description:
+          "Authoritative launch confirmation. Validates at least one channel is provisioned, transitions channels to active, sets org config launch state.",
         tags: ["Agents"],
       },
     },
@@ -355,12 +356,49 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
       const { agentId } = request.params as { agentId: string };
+
+      const channels = await app.prisma.managedChannel.findMany({
+        where: { organizationId: orgId },
+      });
+
+      if (channels.length === 0) {
+        return reply.code(400).send({
+          error: "At least one channel must be connected before launching",
+          statusCode: 400,
+        });
+      }
+
+      await app.prisma.managedChannel.updateMany({
+        where: { organizationId: orgId },
+        data: { status: "active" },
+      });
+
+      const orgConfig = await app.prisma.organizationConfig.upsert({
+        where: { id: orgId },
+        update: {
+          onboardingComplete: true,
+          provisioningStatus: "active",
+        },
+        create: {
+          id: orgId,
+          name: orgId,
+          onboardingComplete: true,
+          provisioningStatus: "active",
+        },
+      });
 
       return reply.code(200).send({
         agentId,
         status: "active",
-        message: `${agentId} is now live.`,
+        orgConfig: {
+          onboardingComplete: orgConfig.onboardingComplete,
+          provisioningStatus: orgConfig.provisioningStatus,
+        },
       });
     },
   );
