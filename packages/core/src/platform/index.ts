@@ -12,6 +12,15 @@ export type {
   ExecutionError,
 } from "./types.js";
 
+// Canonical Request
+export type {
+  SurfaceName,
+  SurfaceMetadata,
+  TargetHint,
+  CanonicalSubmitRequest,
+  AuthoritativeDeploymentResolver,
+} from "./canonical-request.js";
+
 // WorkUnit
 export type { SubmitWorkRequest, WorkUnit } from "./work-unit.js";
 export { normalizeWorkUnit } from "./work-unit.js";

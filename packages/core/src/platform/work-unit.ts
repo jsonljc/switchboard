@@ -1,19 +1,11 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { ExecutionModeName, Actor, Trigger, Priority } from "./types.js";
 import type { DeploymentContext } from "./deployment-context.js";
+import type { CanonicalSubmitRequest } from "./canonical-request.js";
 
-export interface SubmitWorkRequest {
-  organizationId: string;
-  actor: Actor;
-  intent: string;
-  parameters: Record<string, unknown>;
+export interface SubmitWorkRequest extends CanonicalSubmitRequest {
   deployment: DeploymentContext;
   suggestedMode?: ExecutionModeName;
-  idempotencyKey?: string;
-  parentWorkUnitId?: string;
-  traceId?: string;
-  trigger: Trigger;
-  priority?: Priority;
 }
 
 export interface WorkUnit {

@@ -4,8 +4,12 @@ import type { GovernanceDecision } from "./governance-types.js";
 import type { ExecutionResult } from "./execution-result.js";
 import type { IngressError } from "./ingress-error.js";
 import type { IntentRegistration } from "./intent-registration.js";
-import type { SubmitWorkRequest, WorkUnit } from "./work-unit.js";
+import type { WorkUnit } from "./work-unit.js";
 import type { WorkTraceStore } from "./work-trace-recorder.js";
+import type {
+  AuthoritativeDeploymentResolver,
+  CanonicalSubmitRequest,
+} from "./canonical-request.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
 
@@ -17,6 +21,7 @@ export interface PlatformIngressConfig {
   intentRegistry: IntentRegistry;
   modeRegistry: ExecutionModeRegistry;
   governanceGate: GovernanceGateInterface;
+  deploymentResolver: AuthoritativeDeploymentResolver;
   traceStore?: WorkTraceStore;
 }
 
@@ -32,8 +37,9 @@ export class PlatformIngress {
     this.config = config;
   }
 
-  async submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> {
-    const { intentRegistry, modeRegistry, governanceGate, traceStore } = this.config;
+  async submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> {
+    const { intentRegistry, modeRegistry, governanceGate, traceStore, deploymentResolver } =
+      this.config;
 
     // 0. Idempotency check — return existing result if key matches prior trace
     if (request.idempotencyKey && traceStore) {
@@ -95,9 +101,17 @@ export class PlatformIngress {
       };
     }
 
-    // 3. Resolve mode + normalize
-    const resolvedMode = intentRegistry.resolveMode(request.intent, request.suggestedMode);
-    const workUnit = normalizeWorkUnit(request, resolvedMode);
+    // 3. Resolve deployment + mode + normalize
+    const resolvedMode = intentRegistry.resolveMode(request.intent);
+    const deployment = await deploymentResolver.resolve(request);
+    const workUnit = normalizeWorkUnit(
+      {
+        ...request,
+        deployment,
+        suggestedMode: resolvedMode,
+      },
+      resolvedMode,
+    );
 
     // 4. Governance gate
     let decision: GovernanceDecision;

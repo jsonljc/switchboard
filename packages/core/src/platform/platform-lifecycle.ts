@@ -264,13 +264,11 @@ export class PlatformLifecycle {
       parameters: undoRecipe.reverseParameters,
       actor: { id: principalId, type: "user" },
       organizationId,
-      deployment: {
-        deploymentId: "undo",
-        skillSlug: undoRecipe.reverseActionType.split(".")[0] ?? "unknown",
-        trustLevel: "supervised",
-        trustScore: 0,
-      },
       trigger: "api",
+      surface: { surface: "api" },
+      targetHint: {
+        skillSlug: undoRecipe.reverseActionType.split(".")[0] ?? "unknown",
+      },
       parentWorkUnitId: envelopeId,
     });
 

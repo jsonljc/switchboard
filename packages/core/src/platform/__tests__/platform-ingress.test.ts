@@ -5,10 +5,10 @@ import { ExecutionModeRegistry } from "../execution-mode-registry.js";
 import type { GovernanceGateInterface, PlatformIngressConfig } from "../platform-ingress.js";
 import type { WorkTraceStore } from "../work-trace-recorder.js";
 import type { IntentRegistration } from "../intent-registration.js";
-import type { SubmitWorkRequest } from "../work-unit.js";
 import type { ExecutionResult } from "../execution-result.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionMode } from "../execution-context.js";
+import type { CanonicalSubmitRequest } from "../canonical-request.js";
 
 const testConstraints: ExecutionConstraints = {
   allowedModelTiers: ["default"],
@@ -35,18 +35,16 @@ const testRegistration: IntentRegistration = {
   retryable: false,
 };
 
-const baseRequest: SubmitWorkRequest = {
+const baseRequest: CanonicalSubmitRequest = {
   organizationId: "org-1",
   actor: { id: "user-1", type: "user" },
   intent: "campaign.pause",
   parameters: { campaignId: "camp-123" },
-  deployment: {
-    deploymentId: "dep-1",
-    skillSlug: "test-skill",
-    trustLevel: "guided",
-    trustScore: 42,
-  },
   trigger: "chat",
+  surface: {
+    surface: "chat",
+    requestId: "req-base",
+  },
 };
 
 function buildExecuteDecision(): GovernanceDecision {
@@ -100,6 +98,7 @@ function createConfig(
     governanceThrows?: boolean;
     traceStore?: WorkTraceStore;
     mode?: ExecutionMode;
+    resolveDeployment?: ReturnType<typeof vi.fn>;
   } = {},
 ): PlatformIngressConfig {
   const intentRegistry = new IntentRegistry();
@@ -119,6 +118,16 @@ function createConfig(
     intentRegistry,
     modeRegistry,
     governanceGate,
+    deploymentResolver: {
+      resolve:
+        overrides.resolveDeployment ??
+        vi.fn().mockResolvedValue({
+          deploymentId: "dep-1",
+          skillSlug: "test-skill",
+          trustLevel: "guided",
+          trustScore: 42,
+        }),
+    },
     traceStore: overrides.traceStore,
   };
 }
@@ -242,6 +251,41 @@ describe("PlatformIngress", () => {
       expect(response.workUnit.traceId.length).toBeGreaterThan(0);
       expect(response.workUnit.resolvedMode).toBe("skill");
       expect(response.workUnit.organizationId).toBe("org-1");
+    }
+  });
+
+  it("resolves deployment inside PlatformIngress from canonical request fields", async () => {
+    const resolveDeployment = vi.fn().mockResolvedValue({
+      deploymentId: "dep-resolved",
+      skillSlug: "pause-campaign",
+      trustLevel: "guided",
+      trustScore: 42,
+    });
+    const config = createConfig({
+      resolveDeployment,
+    });
+    const ingress = new PlatformIngress(config);
+
+    const response = await ingress.submit({
+      organizationId: "org-1",
+      actor: { id: "user-1", type: "user" },
+      intent: "campaign.pause",
+      parameters: { campaignId: "camp-123" },
+      trigger: "api",
+      surface: {
+        surface: "api",
+        requestId: "req-1",
+      },
+      targetHint: {
+        skillSlug: "pause-campaign",
+      },
+    });
+
+    expect(resolveDeployment).toHaveBeenCalledOnce();
+    expect(response.ok).toBe(true);
+    if (response.ok) {
+      expect(response.workUnit.deployment.deploymentId).toBe("dep-resolved");
+      expect(response.workUnit.traceId.length).toBeGreaterThan(0);
     }
   });
 });
