@@ -18,6 +18,7 @@ interface SimulatedResponse {
 interface TestCenterProps {
   prompts: TestPrompt[];
   onSendPrompt: (prompt: TestPrompt) => void;
+  onRerunPrompt: (promptId: string) => void;
   onAdvance: () => void;
   responses: SimulatedResponse[];
   isSimulating: boolean;
@@ -26,6 +27,7 @@ interface TestCenterProps {
 export function TestCenter({
   prompts,
   onSendPrompt,
+  onRerunPrompt,
   onAdvance,
   responses,
   isSimulating,
@@ -35,6 +37,7 @@ export function TestCenter({
   const [fixingResponseId, setFixingResponseId] = useState<string>();
   const [expandedAnnotation, setExpandedAnnotation] = useState<string>();
   const [promptsCollapsed, setPromptsCollapsed] = useState(false);
+  const [showZeroTestGate, setShowZeroTestGate] = useState(false);
 
   const testedIds = new Set(responses.map((r) => r.promptId));
   const testedCount = testedIds.size;
@@ -211,6 +214,15 @@ export function TestCenter({
                     >
                       Fix this
                     </button>
+                    {response.status === "fixed" && (
+                      <button
+                        onClick={() => onRerunPrompt(response.promptId)}
+                        className="text-[14px] transition-colors hover:underline"
+                        style={{ color: "var(--sw-text-secondary)" }}
+                      >
+                        Re-run
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -245,13 +257,41 @@ export function TestCenter({
         className="flex h-[64px] items-center justify-end border-t px-6"
         style={{ backgroundColor: "var(--sw-surface-raised)", borderColor: "var(--sw-border)" }}
       >
-        <Button
-          onClick={onAdvance}
-          className="h-[48px] rounded-lg px-6 text-[16px] font-medium"
-          style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
-        >
-          Alex is ready. Go live →
-        </Button>
+        {showZeroTestGate ? (
+          <div className="flex items-center gap-4">
+            <p className="text-[14px]" style={{ color: "var(--sw-text-secondary)" }}>
+              You haven&apos;t tested Alex yet.
+            </p>
+            <button
+              onClick={() => setShowZeroTestGate(false)}
+              className="text-[14px] font-medium"
+              style={{ color: "var(--sw-accent)" }}
+            >
+              Test first
+            </button>
+            <Button
+              onClick={onAdvance}
+              className="h-[40px] rounded-lg px-4 text-[14px]"
+              style={{ backgroundColor: "var(--sw-text-muted)", color: "white" }}
+            >
+              Go live anyway
+            </Button>
+          </div>
+        ) : (
+          <Button
+            onClick={() => {
+              if (testedCount === 0) {
+                setShowZeroTestGate(true);
+                return;
+              }
+              onAdvance();
+            }}
+            className="h-[48px] rounded-lg px-6 text-[16px] font-medium"
+            style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
+          >
+            Alex is ready. Go live →
+          </Button>
+        )}
       </div>
     </div>
   );
