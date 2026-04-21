@@ -61,6 +61,27 @@ export class PrismaDeploymentStore {
     }) as unknown as AgentDeployment;
   }
 
+  async update(
+    id: string,
+    data: { inputConfig?: Record<string, unknown> },
+  ): Promise<AgentDeployment | null> {
+    const existing = await this.prisma.agentDeployment.findUnique({
+      where: { id },
+    });
+    if (!existing) return null;
+
+    const mergedConfig = data.inputConfig
+      ? { ...((existing.inputConfig as Record<string, unknown>) ?? {}), ...data.inputConfig }
+      : undefined;
+
+    return this.prisma.agentDeployment.update({
+      where: { id },
+      data: {
+        ...(mergedConfig !== undefined ? { inputConfig: mergedConfig as object } : {}),
+      },
+    }) as unknown as AgentDeployment;
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.agentDeployment.delete({ where: { id } });
   }
