@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { GoLive } from "../go-live";
 import { createEmptyPlaybook } from "@switchboard/schemas";
 
@@ -13,6 +13,9 @@ describe("GoLive", () => {
         onLaunch={vi.fn()}
         onBack={vi.fn()}
         connectedChannels={[]}
+        onConnectChannel={vi.fn()}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
         scenariosTested={0}
       />,
     );
@@ -27,6 +30,9 @@ describe("GoLive", () => {
         onLaunch={vi.fn()}
         onBack={vi.fn()}
         connectedChannels={[]}
+        onConnectChannel={vi.fn()}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
         scenariosTested={0}
       />,
     );
@@ -41,6 +47,9 @@ describe("GoLive", () => {
         onLaunch={vi.fn()}
         onBack={vi.fn()}
         connectedChannels={["whatsapp"]}
+        onConnectChannel={vi.fn()}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
         scenariosTested={3}
       />,
     );
@@ -93,10 +102,52 @@ describe("GoLive", () => {
         onLaunch={vi.fn()}
         onBack={vi.fn()}
         connectedChannels={["whatsapp"]}
+        onConnectChannel={vi.fn()}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
         scenariosTested={3}
       />,
     );
     expect(screen.getByText(/Mon-Sat/i)).toBeTruthy();
     expect(screen.getByText(/9am/i)).toBeTruthy();
+  });
+
+  it("calls onConnectChannel with channel name and credentials when connecting", async () => {
+    const onConnect = vi.fn();
+    render(
+      <GoLive
+        playbook={createEmptyPlaybook()}
+        onLaunch={vi.fn()}
+        onBack={vi.fn()}
+        connectedChannels={[]}
+        scenariosTested={0}
+        onConnectChannel={onConnect}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
+      />,
+    );
+    const connectButtons = screen.getAllByText("Connect →");
+    fireEvent.click(connectButtons[1]); // Telegram
+    const tokenInput = screen.getByLabelText("Bot token");
+    fireEvent.change(tokenInput, { target: { value: "test-token" } });
+    fireEvent.click(screen.getByText("Connect"));
+    expect(onConnect).toHaveBeenCalledWith("telegram", { botToken: "test-token" });
+  });
+
+  it("shows error message when connectError is set", () => {
+    render(
+      <GoLive
+        playbook={createEmptyPlaybook()}
+        onLaunch={vi.fn()}
+        onBack={vi.fn()}
+        connectedChannels={[]}
+        scenariosTested={0}
+        onConnectChannel={vi.fn()}
+        onLaunchComplete={vi.fn()}
+        isConnecting={false}
+        connectError="Connection failed"
+      />,
+    );
+    expect(screen.getByText("Connection failed")).toBeTruthy();
   });
 });
