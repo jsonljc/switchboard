@@ -1,10 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { NeedsClarificationError, NotFoundError, matchesAny } from "@switchboard/core";
-import type { SubmitWorkRequest } from "@switchboard/core/platform";
+import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ExecuteBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
-import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
@@ -68,21 +67,21 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const deployment = await resolveDeploymentForIntent(
-        app.deploymentResolver,
-        organizationId,
-        body.action.actionType,
-      );
-
-      const submitRequest: SubmitWorkRequest = {
+      const submitRequest: CanonicalSubmitRequest = {
         intent: body.action.actionType,
         parameters: body.action.parameters,
         actor: { id: body.actorId, type: "user" as const },
         organizationId,
-        deployment,
         trigger: "api" as const,
         idempotencyKey,
         traceId: body.traceId,
+        surface: {
+          surface: "api" as const,
+          requestId: request.id,
+        },
+        targetHint: {
+          skillSlug: body.action.actionType.split(".")[0],
+        },
       };
 
       try {

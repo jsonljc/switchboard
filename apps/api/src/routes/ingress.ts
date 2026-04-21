@@ -12,7 +12,10 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
       intent: string;
       parameters: Record<string, unknown>;
       trigger: string;
-      deployment?: Record<string, unknown>;
+      surface?: { surface: "chat" | "dashboard" | "mcp" | "api"; sessionId?: string };
+      targetHint?: Record<string, unknown>;
+      traceId?: string;
+      idempotencyKey?: string;
     };
 
     if (!body.organizationId || !body.intent) {
@@ -25,8 +28,11 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
         actor: { id: body.actor?.id ?? "anonymous", type: (body.actor?.type ?? "user") as "user" },
         intent: body.intent,
         parameters: body.parameters ?? {},
-        trigger: (body.trigger ?? "api") as "api",
-        deployment: body.deployment as never,
+        trigger: (body.trigger ?? "api") as "api" | "chat" | "schedule",
+        surface: body.surface ?? { surface: "api" },
+        targetHint: body.targetHint,
+        traceId: body.traceId,
+        idempotencyKey: body.idempotencyKey,
       });
 
       return reply.send(response);

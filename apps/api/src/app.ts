@@ -418,10 +418,14 @@ export async function buildServer() {
   }
   app.decorate("deploymentResolver", deploymentResolver);
 
+  const { resolveAuthoritativeDeployment } =
+    await import("./bootstrap/platform-deployment-resolver.js");
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
     governanceGate: platformGovernanceGate,
+    deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
     traceStore: workTraceStore,
   });
   app.decorate("platformIngress", platformIngress);

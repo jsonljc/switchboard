@@ -1,12 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { matchesAny, NeedsClarificationError, NotFoundError } from "@switchboard/core";
-import type { SubmitWorkRequest } from "@switchboard/core/platform";
+import type { CanonicalSubmitRequest } from "@switchboard/core/platform";
 import { ProposeBodySchema, BatchProposeBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
-import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
@@ -68,20 +67,20 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const deployment = await resolveDeploymentForIntent(
-        app.deploymentResolver,
-        organizationId,
-        body.actionType,
-      );
-
-      const submitRequest: SubmitWorkRequest = {
+      const submitRequest: CanonicalSubmitRequest = {
         intent: body.actionType,
         parameters: body.message ? { ...body.parameters, _message: body.message } : body.parameters,
         actor: { id: body.principalId, type: "user" as const },
         organizationId,
-        deployment,
         trigger: "api" as const,
         idempotencyKey,
+        surface: {
+          surface: "api" as const,
+          requestId: request.id,
+        },
+        targetHint: {
+          skillSlug: body.actionType.split(".")[0],
+        },
       };
 
       try {
@@ -333,20 +332,20 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       for (let i = 0; i < body.proposals.length; i++) {
         const proposal = body.proposals[i]!;
 
-        const batchDeployment = await resolveDeploymentForIntent(
-          app.deploymentResolver,
-          organizationId,
-          proposal.actionType,
-        );
-
-        const submitRequest: SubmitWorkRequest = {
+        const submitRequest: CanonicalSubmitRequest = {
           intent: proposal.actionType,
           parameters: proposal.parameters,
           actor: { id: body.principalId, type: "user" as const },
           organizationId,
-          deployment: batchDeployment,
           trigger: "api" as const,
           idempotencyKey: `${batchKey}:${i}`,
+          surface: {
+            surface: "api" as const,
+            requestId: request.id,
+          },
+          targetHint: {
+            skillSlug: proposal.actionType.split(".")[0],
+          },
         };
 
         try {
