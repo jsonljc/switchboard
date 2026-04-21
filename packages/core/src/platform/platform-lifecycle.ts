@@ -155,11 +155,17 @@ export class PlatformLifecycle {
         traceId: trace?.traceId ?? envelope?.traceId,
       });
     } else if (params.action === "patch") {
+      let patchedParameters: Record<string, unknown> | undefined;
+
       if (params.patchValue && envelope?.proposals[0]) {
         envelope.proposals[0].parameters = applyPatch(
           envelope.proposals[0].parameters,
           params.patchValue,
         );
+        patchedParameters = { ...envelope.proposals[0].parameters };
+        delete patchedParameters["_principalId"];
+        delete patchedParameters["_cartridgeId"];
+        delete patchedParameters["_organizationId"];
         await envelopeStore.update(envelope.id, {
           status: "approved",
           proposals: envelope.proposals,
@@ -171,6 +177,7 @@ export class PlatformLifecycle {
         approvalOutcome: "patched",
         approvalRespondedBy: params.respondedBy,
         approvalRespondedAt: respondedAt,
+        ...(patchedParameters ? { parameters: patchedParameters } : {}),
       });
 
       executionResult = await this.executeAfterApproval(workUnitId);
@@ -545,6 +552,7 @@ export class PlatformLifecycle {
       approvalRespondedAt: string;
       outcome?: WorkTrace["outcome"];
       completedAt?: string;
+      parameters?: Record<string, unknown>;
     },
   ): Promise<void> {
     try {
