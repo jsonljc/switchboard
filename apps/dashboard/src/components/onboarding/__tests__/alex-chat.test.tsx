@@ -39,4 +39,16 @@ describe("AlexChat", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(input.value).toBe("");
   });
+
+  it("shows send button when input has text", () => {
+    render(<AlexChat messages={[]} onSendMessage={vi.fn()} isTyping={false} />);
+    const input = screen.getByPlaceholderText("Type a message...");
+    fireEvent.change(input, { target: { value: "Hello" } });
+    expect(screen.getByTestId("send-button")).toBeTruthy();
+  });
+
+  it("hides send button when input is empty", () => {
+    render(<AlexChat messages={[]} onSendMessage={vi.fn()} isTyping={false} />);
+    expect(screen.queryByTestId("send-button")).toBeNull();
+  });
 });
