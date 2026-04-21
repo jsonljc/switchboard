@@ -76,4 +76,10 @@ describe("PlatformIngress boundary enforcement", () => {
     const exceptionCount = Object.keys(LEGACY_EXCEPTIONS).length;
     expect(exceptionCount).toBe(0);
   });
+
+  it("does not accept pre-resolved deployment objects in ingress route source", () => {
+    const source = readFileSync(resolve(ROUTES_DIR, "ingress.ts"), "utf-8");
+    expect(source).not.toContain("deployment?: Record<string, unknown>");
+    expect(source).not.toContain("deployment: body.deployment");
+  });
 });
