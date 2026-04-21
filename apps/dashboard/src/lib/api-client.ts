@@ -342,10 +342,11 @@ export class SwitchboardClient extends SwitchboardClientBase {
 
   // Go Live
   async goLiveAgent(agentId: string) {
-    return this.request<{ agentId: string; status: string; message: string }>(
-      `/api/agents/go-live/${agentId}`,
-      { method: "PUT" },
-    );
+    return this.request<{
+      agentId: string;
+      status: string;
+      orgConfig: { onboardingComplete: boolean; provisioningStatus: string };
+    }>(`/api/agents/go-live/${agentId}`, { method: "PUT" });
   }
 
   // Escalations
