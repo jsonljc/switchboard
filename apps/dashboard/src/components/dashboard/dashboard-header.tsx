@@ -18,6 +18,7 @@ function buildSummary(
 ): string {
   const signals: SignalEntry[] = [
     { count: stats.pendingApprovals, label: "approval" },
+    // TODO(PR4): add activeEscalations to DashboardOverviewSchema, remove cast
     { count: (stats as Record<string, number>).activeEscalations ?? 0, label: "escalation" },
     { count: stats.bookingsToday, label: "booking" },
     { count: stats.newInquiriesToday, label: "new inquiry" },
