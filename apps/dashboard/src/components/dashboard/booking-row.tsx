@@ -14,7 +14,7 @@ const DOT_COLORS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmed",
   pending: "Pending",
-  completed: "Done",
+  completed: "Completed",
 };
 
 export function BookingRow({ time, service, contact, status }: BookingRowProps) {
@@ -31,7 +31,6 @@ export function BookingRow({ time, service, contact, status }: BookingRowProps) 
     >
       <span
         style={{
-          fontFamily: "var(--font-display)",
           fontSize: "16px",
           fontWeight: 600,
           color: "var(--sw-text-primary)",
