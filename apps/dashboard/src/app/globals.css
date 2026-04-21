@@ -239,6 +239,69 @@
     padding-right: 1.5rem;
   }
 
+  /* ─── Dashboard layout: calm-grid with sticky activity rail ─── */
+  .dashboard-frame {
+    max-width: 76rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .dashboard-frame {
+      padding-left: 3rem;
+      padding-right: 3rem;
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .dashboard-frame {
+      max-width: 88rem;
+    }
+  }
+
+  .dashboard-content-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  @media (min-width: 1440px) {
+    .dashboard-content-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 32px;
+      align-items: start;
+    }
+  }
+
+  .dashboard-main {
+    min-width: 0;
+  }
+
+  .dashboard-rail {
+    display: none;
+  }
+
+  @media (min-width: 1440px) {
+    .dashboard-rail {
+      display: block;
+      position: sticky;
+      top: 24px;
+    }
+  }
+
+  .dashboard-activity-inline {
+    display: block;
+  }
+
+  @media (min-width: 1440px) {
+    .dashboard-activity-inline {
+      display: none;
+    }
+  }
+
   /* Section label — small caps, muted */
   .section-label {
     font-size: 0.6875rem;

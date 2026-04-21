@@ -98,7 +98,7 @@ export function OwnerToday() {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
     return (
-      <div className="dashboard-frame px-6 md:px-12">
+      <div className="dashboard-frame">
         <h1
           style={{
             fontFamily: "var(--font-display)",
@@ -294,7 +294,7 @@ export function OwnerToday() {
   const activitySection = <ActivityFeed events={overview.activity} animate={animate} />;
 
   return (
-    <div className="dashboard-frame px-6 md:px-12">
+    <div className="dashboard-frame">
       {/* Wave 1: Header */}
       <FadeIn delay={animate ? 0 : 0} translateY={animate ? 8 : 0}>
         <DashboardHeader overview={overview} />
@@ -309,7 +309,7 @@ export function OwnerToday() {
 
       {/* Wave 2: Stat Strip */}
       <FadeIn delay={animate ? 200 : 0} translateY={animate ? 8 : 0}>
-        <div style={{ marginTop: "32px" }}>
+        <div style={{ marginTop: "48px" }}>
           <StatCardGrid stats={stats} />
         </div>
       </FadeIn>
