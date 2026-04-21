@@ -8,6 +8,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import { useFirstRun } from "@/hooks/use-first-run";
+import { useEntrancePlayed } from "@/hooks/use-entrance-played";
+import { FadeIn } from "@/components/ui/fade-in";
 import { FirstRunBanner } from "@/components/dashboard/first-run-banner";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StatCardGrid } from "@/components/dashboard/stat-card-grid";
@@ -24,9 +26,12 @@ export function OwnerToday() {
   const { data: session } = useSession();
   const { data: overview, isLoading, isError } = useDashboardOverview();
   const { isFirstRun, dismissBanner } = useFirstRun();
+  const { hasPlayed, markPlayed } = useEntrancePlayed();
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const animate = !hasPlayed;
 
   const respondMutation = useMutation({
     mutationFn: async ({
@@ -83,24 +88,19 @@ export function OwnerToday() {
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
   };
 
+  if (!hasPlayed && overview) {
+    setTimeout(() => markPlayed(), 1200);
+  }
+
   if (isError) {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
     return (
-      <div
-        style={{
-          maxWidth: "64rem",
-          margin: "0 auto",
-          padding: "48px",
-          background: "var(--sw-base)",
-          minHeight: "100vh",
-        }}
-        className="px-6 md:px-12"
-      >
+      <div className="dashboard-frame px-6 md:px-12">
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "24px",
+            fontSize: "28px",
             fontWeight: 600,
             color: "var(--sw-text-primary)",
             margin: 0,
@@ -128,7 +128,7 @@ export function OwnerToday() {
 
   if (isLoading || !overview) {
     return (
-      <div style={{ maxWidth: "64rem", margin: "0 auto", padding: "48px" }}>
+      <div className="dashboard-frame">
         <div
           style={{
             height: "32px",
@@ -138,10 +138,7 @@ export function OwnerToday() {
             marginBottom: "48px",
           }}
         />
-        <div
-          style={{ display: "grid", gap: "16px" }}
-          className="grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
-        >
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
@@ -178,6 +175,7 @@ export function OwnerToday() {
     {
       label: "Revenue (7d)",
       value: `$${overview.stats.revenue7d.total.toLocaleString()}`,
+      isRevenue: true,
     },
     {
       label: "Open tasks",
@@ -187,7 +185,11 @@ export function OwnerToday() {
           ? { text: `${overview.stats.overdueTasks} overdue`, variant: "overdue" as const }
           : undefined,
     },
-  ];
+  ].map((stat, i) => ({
+    ...stat,
+    animateCountUp: animate,
+    countUpDelay: animate ? i * 60 : 0,
+  }));
 
   const funnelStages = [
     { name: "Inquiry", count: overview.funnel.inquiry },
@@ -199,19 +201,102 @@ export function OwnerToday() {
 
   const totalApprovals = overview.stats.pendingApprovals;
 
+  const approvalsSection = (
+    <div>
+      <SectionLabel>Needs Your Attention</SectionLabel>
+      <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        {overview.approvals.length === 0 ? (
+          <div
+            style={{
+              background: "var(--sw-surface-raised)",
+              border: "1px solid var(--sw-border)",
+              borderRadius: "12px",
+              padding: "24px",
+              textAlign: "center",
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              style={{ margin: "0 auto 8px", display: "block" }}
+            >
+              <path
+                d="M4 10l4 4 8-8"
+                stroke="var(--sw-text-muted)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <p style={{ fontSize: "15px", color: "var(--sw-text-secondary)", margin: 0 }}>
+              All caught up
+            </p>
+          </div>
+        ) : (
+          <>
+            {overview.approvals.map((approval) => (
+              <ActionCard
+                key={approval.id}
+                summary={approval.summary}
+                context={CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
+                createdAt={approval.createdAt}
+                riskCategory={approval.riskCategory}
+                actions={[
+                  {
+                    label: respondingId === approval.id ? "Approving..." : "Approve",
+                    variant: "primary",
+                    onClick: () => {
+                      setRespondingId(approval.id);
+                      respondMutation.mutate({
+                        approvalId: approval.id,
+                        action: "approve",
+                        bindingHash: approval.bindingHash,
+                      });
+                    },
+                    loading: respondingId === approval.id && respondMutation.isPending,
+                    disabled: respondingId === approval.id,
+                  },
+                  {
+                    label: respondingId === approval.id ? "Declining..." : "Not now",
+                    variant: "secondary",
+                    onClick: () => {
+                      setRespondingId(approval.id);
+                      respondMutation.mutate({
+                        approvalId: approval.id,
+                        action: "reject",
+                        bindingHash: approval.bindingHash,
+                      });
+                    },
+                    loading: respondingId === approval.id && respondMutation.isPending,
+                    disabled: respondingId === approval.id,
+                  },
+                ]}
+              />
+            ))}
+            {totalApprovals > 3 && (
+              <Link
+                href="/decide"
+                style={{ fontSize: "14px", color: "var(--sw-accent)", textDecoration: "none" }}
+              >
+                View all {totalApprovals} →
+              </Link>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const activitySection = <ActivityFeed events={overview.activity} animate={animate} />;
+
   return (
-    <div
-      style={{
-        maxWidth: "64rem",
-        margin: "0 auto",
-        padding: "48px",
-        background: "var(--sw-base)",
-        minHeight: "100vh",
-      }}
-      className="px-6 md:px-12"
-    >
-      {/* Header */}
-      <DashboardHeader overview={overview} />
+    <div className="dashboard-frame px-6 md:px-12">
+      {/* Wave 1: Header */}
+      <FadeIn delay={animate ? 0 : 0} translateY={animate ? 8 : 0}>
+        <DashboardHeader overview={overview} />
+      </FadeIn>
 
       {/* First Run Banner */}
       {isFirstRun && (
@@ -220,112 +305,52 @@ export function OwnerToday() {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div style={{ marginTop: "48px" }}>
-        <StatCardGrid stats={stats} />
-      </div>
+      {/* Wave 2: Stat Strip */}
+      <FadeIn delay={animate ? 200 : 0} translateY={animate ? 8 : 0}>
+        <div style={{ marginTop: "32px" }}>
+          <StatCardGrid stats={stats} />
+        </div>
+      </FadeIn>
 
-      {/* Action Zone */}
-      <div
-        style={{ marginTop: "48px", display: "grid", gap: "24px" }}
-        className="grid-cols-1 lg:grid-cols-[1fr_1fr]"
-      >
-        {/* Needs Your Attention */}
-        <div>
-          <SectionLabel>Needs Your Attention</SectionLabel>
-          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            {overview.approvals.length === 0 ? (
-              <div
-                style={{
-                  background: "var(--sw-surface-raised)",
-                  border: "1px solid var(--sw-border)",
-                  borderRadius: "12px",
-                  padding: "24px",
-                  textAlign: "center",
-                }}
-              >
-                <p style={{ fontSize: "16px", color: "var(--sw-text-secondary)", margin: 0 }}>
-                  All caught up
-                </p>
-              </div>
-            ) : (
-              <>
-                {overview.approvals.map((approval) => (
-                  <ActionCard
-                    key={approval.id}
-                    summary={approval.summary}
-                    context={CONSEQUENCE[approval.riskCategory] ?? CONSEQUENCE.medium}
-                    createdAt={approval.createdAt}
-                    actions={[
-                      {
-                        label: respondingId === approval.id ? "Approving..." : "Approve",
-                        variant: "primary",
-                        onClick: () => {
-                          setRespondingId(approval.id);
-                          respondMutation.mutate({
-                            approvalId: approval.id,
-                            action: "approve",
-                            bindingHash: approval.bindingHash,
-                          });
-                        },
-                        loading: respondingId === approval.id && respondMutation.isPending,
-                        disabled: respondingId === approval.id,
-                      },
-                      {
-                        label: respondingId === approval.id ? "Declining..." : "Not now",
-                        variant: "secondary",
-                        onClick: () => {
-                          setRespondingId(approval.id);
-                          respondMutation.mutate({
-                            approvalId: approval.id,
-                            action: "reject",
-                            bindingHash: approval.bindingHash,
-                          });
-                        },
-                        loading: respondingId === approval.id && respondMutation.isPending,
-                        disabled: respondingId === approval.id,
-                      },
-                    ]}
-                  />
-                ))}
-                {totalApprovals > 3 && (
-                  <Link
-                    href="/decide"
-                    style={{ fontSize: "14px", color: "var(--sw-accent)", textDecoration: "none" }}
-                  >
-                    View all {totalApprovals} →
-                  </Link>
-                )}
-              </>
-            )}
+      {/* Wave 3: Content pairs */}
+      <FadeIn delay={animate ? 400 : 0} translateY={animate ? 8 : 0}>
+        <div className="dashboard-content-grid" style={{ marginTop: "32px" }}>
+          <div
+            className="dashboard-main"
+            style={{ display: "flex", flexDirection: "column", gap: "32px" }}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "24px" }}>
+              {approvalsSection}
+              <BookingPreview bookings={overview.bookings} />
+            </div>
+
+            <FunnelStrip stages={funnelStages} animate={animate} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "24px" }}>
+              <RevenueSummary
+                total={overview.revenue.total}
+                count={overview.revenue.count}
+                topSource={overview.revenue.topSource}
+                dailyBreakdown={(overview.revenue as { dailyBreakdown?: number[] }).dailyBreakdown}
+                animate={animate}
+              />
+              <OwnerTaskList tasks={overview.tasks} onComplete={handleTaskComplete} />
+            </div>
+          </div>
+
+          <div className="dashboard-rail">
+            <FadeIn delay={animate ? 600 : 0} translateY={animate ? 8 : 0}>
+              {activitySection}
+            </FadeIn>
           </div>
         </div>
+      </FadeIn>
 
-        {/* Today's Bookings */}
-        <BookingPreview bookings={overview.bookings} />
-      </div>
-
-      {/* Funnel Snapshot */}
-      <div style={{ marginTop: "48px" }}>
-        <FunnelStrip stages={funnelStages} />
-      </div>
-
-      {/* Revenue + Tasks row */}
-      <div
-        style={{ marginTop: "48px", display: "grid", gap: "24px" }}
-        className={overview.tasks.length > 0 ? "grid-cols-1 lg:grid-cols-[1fr_1fr]" : ""}
-      >
-        <RevenueSummary
-          total={overview.revenue.total}
-          count={overview.revenue.count}
-          topSource={overview.revenue.topSource}
-        />
-        <OwnerTaskList tasks={overview.tasks} onComplete={handleTaskComplete} />
-      </div>
-
-      {/* Activity Feed */}
-      <div style={{ marginTop: "48px" }}>
-        <ActivityFeed events={overview.activity} />
+      {/* Activity inline — visible below 1440px */}
+      <div className="dashboard-activity-inline" style={{ marginTop: "32px" }}>
+        <FadeIn delay={animate ? 600 : 0} translateY={animate ? 8 : 0}>
+          {activitySection}
+        </FadeIn>
       </div>
     </div>
   );
