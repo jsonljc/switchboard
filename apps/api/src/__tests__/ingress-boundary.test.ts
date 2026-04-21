@@ -69,4 +69,20 @@ describe("PlatformIngress boundary enforcement", () => {
     const exceptionCount = Object.keys(LEGACY_EXCEPTIONS).length;
     expect(exceptionCount).toBe(0);
   });
+
+  it("creative-pipeline route no longer owns creative mutation primitives", () => {
+    const source = readFileSync(resolve(ROUTES_DIR, "creative-pipeline.ts"), "utf-8");
+    expect(source).not.toContain("PrismaAgentTaskStore");
+    expect(source).not.toContain("inngestClient");
+    expect(source).not.toContain("jobStore.create(");
+    expect(source).not.toContain("jobStore.createUgc(");
+    expect(source).not.toContain("jobStore.stop(");
+  });
+
+  it("ad-optimizer route no longer owns lead mutation primitives", () => {
+    const source = readFileSync(resolve(ROUTES_DIR, "ad-optimizer.ts"), "utf-8");
+    expect(source).not.toContain("PrismaContactStore");
+    expect(source).not.toContain("PrismaOutboxStore");
+    expect(source).not.toContain("sendWhatsAppTemplate(");
+  });
 });
