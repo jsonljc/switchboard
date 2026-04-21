@@ -249,6 +249,15 @@ export function TestCenter({
             isOpen={fixingResponseId !== undefined}
             onClose={() => setFixingResponseId(undefined)}
             onFix={() => setFixingResponseId(undefined)}
+            relevantSection={(() => {
+              const fixing = responses.find((r) => r.promptId === fixingResponseId);
+              if (!fixing) return undefined;
+              const joined = fixing.annotations.join(" ").toLowerCase();
+              if (joined.includes("booking mode")) return "approvalMode";
+              if (joined.includes("pricing mode")) return "approvalMode";
+              if (joined.includes("escalation")) return "escalation";
+              return "services";
+            })()}
           />
         </div>
       </div>

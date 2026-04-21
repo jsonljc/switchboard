@@ -191,6 +191,7 @@ export function TrainingShell({
             onDeleteService={handleDeleteService}
             onAddService={handleAddService}
             highlightedSection={highlightedSection}
+            lastUpdatedSection={highlightedSection}
           />
         </div>
       </div>
@@ -256,6 +257,7 @@ export function TrainingShell({
               onDeleteService={handleDeleteService}
               onAddService={handleAddService}
               highlightedSection={highlightedSection}
+              lastUpdatedSection={highlightedSection}
             />
           )}
         </div>

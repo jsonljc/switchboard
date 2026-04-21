@@ -40,8 +40,9 @@ const simulateChatRoutes: FastifyPluginAsync = async (app) => {
       });
     } catch (err) {
       app.log.warn({ err }, "Simulation failed");
-      return reply.send({
-        alexMessage: "Sorry, simulation is temporarily unavailable.",
+      return reply.code(503).send({
+        error: "Simulation temporarily unavailable",
+        alexMessage: "",
         annotations: [],
       });
     }
