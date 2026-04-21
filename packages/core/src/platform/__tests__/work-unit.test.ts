@@ -14,6 +14,7 @@ const baseRequest: SubmitWorkRequest = {
     trustScore: 42,
   },
   trigger: "chat",
+  surface: { surface: "chat" },
 };
 
 describe("normalizeWorkUnit", () => {

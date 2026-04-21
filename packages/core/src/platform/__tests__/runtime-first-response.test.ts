@@ -15,6 +15,7 @@ import { loadSkill } from "../../skill-runtime/skill-loader.js";
 import { createEscalateTool } from "../../skill-runtime/tools/escalate.js";
 import { ok } from "../../skill-runtime/tool-result.js";
 import { VERTICALS } from "../../skill-runtime/__tests__/behavior-fixtures/verticals.js";
+import { toDeploymentContext } from "../deployment-resolver.js";
 import type { DeploymentResolverResult, DeploymentResolver } from "../deployment-resolver.js";
 import type { GovernanceGateInterface } from "../platform-ingress.js";
 import type {
@@ -278,20 +279,23 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Runtime First Response", () => 
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
 
-    // PlatformIngress
-    const ingress = new PlatformIngress({
-      intentRegistry,
-      modeRegistry,
-      governanceGate,
-      traceStore,
-    });
-
     // DeploymentResolver (mock)
     const deploymentResolver: DeploymentResolver = {
       resolveByChannelToken: vi.fn(async (_channel: string, _token: string) => DEPLOYMENT),
       resolveByDeploymentId: vi.fn(async (_id: string) => DEPLOYMENT),
       resolveByOrgAndSlug: vi.fn(async (_org: string, _slug: string) => DEPLOYMENT),
     };
+
+    // PlatformIngress
+    const ingress = new PlatformIngress({
+      intentRegistry,
+      modeRegistry,
+      governanceGate,
+      deploymentResolver: {
+        resolve: vi.fn(async () => toDeploymentContext(DEPLOYMENT)),
+      },
+      traceStore,
+    });
 
     // ConversationStore (in-memory)
     const conversationStore: GatewayConversationStore = {

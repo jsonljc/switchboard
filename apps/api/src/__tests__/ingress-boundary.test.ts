@@ -65,8 +65,21 @@ describe("PlatformIngress boundary enforcement", () => {
     }
   });
 
+  it("does not import route-level deployment resolution helpers in mutating routes", () => {
+    for (const file of routeFiles) {
+      const source = readFileSync(resolve(ROUTES_DIR, file), "utf-8");
+      expect(source).not.toContain("resolveDeploymentForIntent(");
+    }
+  });
+
   it("has no legacy exceptions after Phase 2 migration", () => {
     const exceptionCount = Object.keys(LEGACY_EXCEPTIONS).length;
     expect(exceptionCount).toBe(0);
+  });
+
+  it("does not accept pre-resolved deployment objects in ingress route source", () => {
+    const source = readFileSync(resolve(ROUTES_DIR, "ingress.ts"), "utf-8");
+    expect(source).not.toContain("deployment?: Record<string, unknown>");
+    expect(source).not.toContain("deployment: body.deployment");
   });
 });

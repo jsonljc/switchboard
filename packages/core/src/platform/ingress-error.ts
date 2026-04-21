@@ -1,5 +1,5 @@
 export interface IngressError {
-  type: "intent_not_found" | "validation_failed" | "trigger_not_allowed";
+  type: "intent_not_found" | "validation_failed" | "trigger_not_allowed" | "deployment_not_found";
   intent: string;
   message: string;
 }

@@ -1,6 +1,6 @@
 import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "./types.js";
-import type { SubmitWorkRequest } from "../platform/work-unit.js";
-import { DeploymentInactiveError, toDeploymentContext } from "../platform/deployment-resolver.js";
+import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
+import { DeploymentInactiveError } from "../platform/deployment-resolver.js";
 
 const MAX_HISTORY_MESSAGES = 30;
 
@@ -53,8 +53,8 @@ export class ChannelGateway {
       content: m.content,
     }));
 
-    // 6. Build SubmitWorkRequest
-    const request: SubmitWorkRequest = {
+    // 6. Build CanonicalSubmitRequest
+    const request: CanonicalSubmitRequest = {
       organizationId: resolved.organizationId,
       actor: { id: message.sessionId, type: "user" as const },
       intent: `${resolved.skillSlug}.respond`,
@@ -64,7 +64,13 @@ export class ChannelGateway {
         persona: resolved.persona,
       },
       trigger: "chat" as const,
-      deployment: toDeploymentContext(resolved),
+      surface: { surface: "chat", sessionId: message.sessionId },
+      targetHint: {
+        skillSlug: resolved.skillSlug,
+        deploymentId: resolved.deploymentId,
+        channel: message.channel,
+        token: message.token,
+      },
     };
 
     // 7. Submit through PlatformIngress

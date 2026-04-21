@@ -605,4 +605,8 @@ describe("Dual-mode integration: in-memory vs API", () => {
       expect(apiResult.approvals.length).toBeGreaterThan(0);
     }
   });
+
+  it("documents that in-memory mode is test-only and not a shipped production mutation path", async () => {
+    expect(process.env.NODE_ENV ?? "test").not.toBe("production");
+  });
 }, 60_000);

@@ -1,6 +1,6 @@
 import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
-import type { SubmitWorkRequest } from "../platform/work-unit.js";
+import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 
 export interface ChannelGatewayConfig {
   conversationStore: GatewayConversationStore;
@@ -17,7 +17,7 @@ export interface ChannelGatewayConfig {
   /** Deployment resolver for converged execution path */
   deploymentResolver: DeploymentResolver;
   /** Platform ingress for converged execution path */
-  platformIngress: { submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> };
+  platformIngress: { submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> };
 }
 
 export interface GatewayConversationStore {
