@@ -102,7 +102,7 @@ export function OwnerToday() {
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: "24px",
+            fontSize: "28px",
             fontWeight: 600,
             color: "var(--sw-text-primary)",
             margin: 0,
