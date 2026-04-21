@@ -1,4 +1,4 @@
-import type { Actor, Trigger } from "./types.js";
+import type { Actor, ExecutionModeName, Trigger } from "./types.js";
 import type { DeploymentContext } from "./deployment-context.js";
 
 export type SurfaceName = "api" | "mcp" | "chat" | "dashboard";
@@ -29,6 +29,7 @@ export interface CanonicalSubmitRequest {
   traceId?: string;
   priority?: "low" | "normal" | "high";
   targetHint?: TargetHint;
+  suggestedMode?: ExecutionModeName;
 }
 
 export interface AuthoritativeDeploymentResolver {

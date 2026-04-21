@@ -254,6 +254,33 @@ describe("PlatformIngress", () => {
     }
   });
 
+  it("passes suggestedMode through to resolveMode", async () => {
+    const config = createConfig();
+    const ingress = new PlatformIngress(config);
+    const resolveSpy = vi.spyOn(config.intentRegistry, "resolveMode");
+
+    const response = await ingress.submit({ ...baseRequest, suggestedMode: "pipeline" });
+
+    expect(resolveSpy).toHaveBeenCalledWith("campaign.pause", "pipeline");
+    // pipeline is not in allowedModes for this registration, so resolveMode falls back to default
+    expect(response.ok).toBe(true);
+  });
+
+  it("returns IngressError when deployment resolution fails", async () => {
+    const resolveDeployment = vi.fn().mockRejectedValue(new Error("no deployment found"));
+    const config = createConfig({ resolveDeployment });
+    const ingress = new PlatformIngress(config);
+
+    const response = await ingress.submit(baseRequest);
+
+    expect(response.ok).toBe(false);
+    if (!response.ok) {
+      expect(response.error.type).toBe("deployment_not_found");
+      expect(response.error.intent).toBe("campaign.pause");
+      expect(response.error.message).toContain("no deployment found");
+    }
+  });
+
   it("resolves deployment inside PlatformIngress from canonical request fields", async () => {
     const resolveDeployment = vi.fn().mockResolvedValue({
       deploymentId: "dep-resolved",

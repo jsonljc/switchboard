@@ -102,8 +102,25 @@ export class PlatformIngress {
     }
 
     // 3. Resolve deployment + mode + normalize
-    const resolvedMode = intentRegistry.resolveMode(request.intent);
-    const deployment = await deploymentResolver.resolve(request);
+    const resolvedMode = intentRegistry.resolveMode(request.intent, request.suggestedMode);
+
+    let deployment;
+    try {
+      deployment = await deploymentResolver.resolve(request);
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          type: "deployment_not_found",
+          intent: request.intent,
+          message:
+            err instanceof Error
+              ? `Deployment resolution failed: ${err.message}`
+              : "Deployment resolution failed",
+        },
+      };
+    }
+
     const workUnit = normalizeWorkUnit(
       {
         ...request,
