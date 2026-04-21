@@ -99,14 +99,14 @@ describe("PrismaConversionRecordStore", () => {
       (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       await store.activePipelineCounts("org-1");
 
-      const call = (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mock.calls[0]![0];
       expect(call.where.OR).toBeDefined();
       expect(call.where.OR).toHaveLength(2);
       // First condition: active stages (not in terminal)
-      expect(call.where.OR[0].type.notIn).toContain("completed");
-      expect(call.where.OR[0].type.notIn).toContain("lost");
+      expect(call.where.OR![0].type.notIn).toContain("completed");
+      expect(call.where.OR![0].type.notIn).toContain("lost");
       // Second condition: terminal stages within 30 days
-      expect(call.where.OR[1].type.in).toContain("completed");
+      expect(call.where.OR![1].type.in).toContain("completed");
       expect(call.where.OR[1].occurredAt.gte).toBeInstanceOf(Date);
     });
   });

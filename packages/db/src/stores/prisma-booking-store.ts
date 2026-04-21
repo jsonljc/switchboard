@@ -89,7 +89,7 @@ export class PrismaBookingStore {
     const dayEnd = new Date(date);
     dayEnd.setHours(23, 59, 59, 999);
 
-    return this.prisma.booking.findMany({
+    const rows = await this.prisma.booking.findMany({
       where: {
         organizationId: orgId,
         startsAt: { gte: dayStart, lte: dayEnd },
@@ -97,9 +97,15 @@ export class PrismaBookingStore {
       },
       orderBy: { startsAt: "asc" },
       take: limit,
-      include: {
-        contact: { select: { name: true } },
-      },
     });
+
+    return rows.map((r) => ({
+      id: r.id,
+      startsAt: r.startsAt,
+      service: r.service,
+      status: r.status,
+      sourceChannel: r.sourceChannel,
+      contact: { name: r.attendeeName },
+    }));
   }
 }

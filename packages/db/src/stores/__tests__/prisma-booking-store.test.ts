@@ -128,21 +128,21 @@ describe("PrismaBookingStore", () => {
 
       const result = await store.listByDate("org-1", new Date("2026-04-20"));
       expect(result).toHaveLength(1);
-      expect(result[0].service).toBe("Whitening");
-      expect(result[0].status).toBe("confirmed");
+      expect(result[0]!.service).toBe("Whitening");
+      expect(result[0]!.status).toBe("confirmed");
 
-      const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
       expect(call.where.organizationId).toBe("org-1");
       expect(call.where.status).toEqual({ notIn: ["cancelled", "failed"] });
       expect(call.orderBy).toEqual({ startsAt: "asc" });
-      expect(call.include.contact).toEqual({ select: { name: true } });
+      expect(call.include).toBeUndefined();
     });
 
     it("limits results to 10 by default", async () => {
       (prisma.booking.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       await store.listByDate("org-1", new Date("2026-04-20"));
 
-      const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const call = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
       expect(call.take).toBe(10);
     });
   });

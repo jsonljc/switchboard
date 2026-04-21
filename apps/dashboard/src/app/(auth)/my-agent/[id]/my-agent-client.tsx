@@ -47,7 +47,7 @@ interface MyAgentClientProps {
 
 function StorefrontLinkCard({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
-  const storefrontUrl = `/agent/${slug}`;
+  const storefrontUrl = `/agents/${slug}`;
   const fullUrl =
     typeof window !== "undefined" ? `${window.location.origin}${storefrontUrl}` : storefrontUrl;
 

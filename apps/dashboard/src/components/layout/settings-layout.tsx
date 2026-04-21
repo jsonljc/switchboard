@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Users, BookOpen, Radio, Palette, MessagesSquare, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useViewPreference } from "@/hooks/use-view-preference";
 
 const SIDEBAR_ITEMS = [
   { href: "/settings/playbook", label: "Your Playbook", icon: BookOpen },
@@ -18,13 +17,11 @@ const SIDEBAR_ITEMS = [
 
 export function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { setView } = useViewPreference();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <div className="flex gap-10 min-h-[calc(100vh-120px)]">
-      {/* Desktop sidebar */}
       <aside className="hidden md:block w-[200px] shrink-0">
         <h2 className="text-[22px] font-semibold tracking-tight text-foreground mb-6">Settings</h2>
         <nav className="space-y-0.5">
@@ -48,18 +45,8 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-
-        <div className="mt-8 pt-4 border-t border-border/40">
-          <button
-            onClick={() => setView("owner")}
-            className="text-[12px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Switch to Owner view
-          </button>
-        </div>
       </aside>
 
-      {/* Mobile: stacked list when at /settings exactly, otherwise content with back */}
       <div className="flex-1 min-w-0">
         <div className="md:hidden">
           {pathname === "/settings" ? (
@@ -94,7 +81,6 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Desktop content */}
         <div className="hidden md:block">{children}</div>
       </div>
     </div>
