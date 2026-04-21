@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
-import { useUpdateOrgConfig } from "@/hooks/use-org-config";
+import { useManagedChannels, useProvision } from "@/hooks/use-managed-channels";
 import { generateTestPrompts } from "@/lib/prompt-generator";
 import { useSimulation } from "@/hooks/use-simulation";
 import type { TestPrompt } from "@/components/onboarding/prompt-card";
@@ -19,7 +19,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { data: playbookData, isLoading, isError } = usePlaybook();
   const updatePlaybook = useUpdatePlaybook();
-  const updateOrgConfig = useUpdateOrgConfig();
+  const channelsQuery = useManagedChannels();
+  const provision = useProvision();
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [localStep, setLocalStep] = useState(1);
@@ -35,6 +36,61 @@ export default function OnboardingPage() {
       status: "pending" | "good" | "fixed";
     }>
   >([]);
+  const [connectError, setConnectError] = useState<string>();
+
+  const connectedChannels = (channelsQuery.data?.channels ?? []).map(
+    (ch: { channel: string }) => ch.channel,
+  );
+
+  const handleConnectChannel = (channel: string, credentials: Record<string, string>) => {
+    setConnectError(undefined);
+
+    const provisionPayload: Record<string, unknown> = { channel };
+    if (channel === "whatsapp") {
+      provisionPayload.token = credentials.apiKey;
+      provisionPayload.phoneNumberId = credentials.phone;
+    } else if (channel === "telegram") {
+      provisionPayload.botToken = credentials.botToken;
+    }
+
+    provision.mutate(
+      {
+        channels: [
+          provisionPayload as {
+            channel: string;
+            botToken?: string;
+            token?: string;
+            phoneNumberId?: string;
+          },
+        ],
+      },
+      {
+        onError: (err: Error) => {
+          setConnectError(
+            err.message || "Connection failed — check your credentials and try again",
+          );
+        },
+      },
+    );
+  };
+
+  const handleLaunch = async () => {
+    setConnectError(undefined);
+    try {
+      const res = await fetch("/api/dashboard/agents/go-live/alex", { method: "PUT" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Launch failed");
+      }
+    } catch (err) {
+      setConnectError(err instanceof Error ? err.message : "Launch failed");
+      throw err;
+    }
+  };
+
+  const handleLaunchComplete = () => {
+    router.push("/");
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -140,13 +196,14 @@ export default function OnboardingPage() {
       return (
         <GoLive
           playbook={playbook}
-          onLaunch={() => {
-            updatePlaybook.mutate({ playbook, step: 4 });
-            updateOrgConfig.mutate({ onboardingComplete: true });
-          }}
+          onLaunch={handleLaunch}
           onBack={() => handleUpdatePlaybook({ step: 2 })}
-          connectedChannels={[]}
+          connectedChannels={connectedChannels}
           scenariosTested={responses.length}
+          onConnectChannel={handleConnectChannel}
+          onLaunchComplete={handleLaunchComplete}
+          isConnecting={provision.isPending}
+          connectError={connectError}
         />
       );
     default:
