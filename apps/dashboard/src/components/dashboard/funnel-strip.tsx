@@ -6,9 +6,10 @@ interface FunnelStage {
 }
 interface FunnelStripProps {
   stages: FunnelStage[];
+  animate?: boolean;
 }
 
-export function FunnelStrip({ stages }: FunnelStripProps) {
+export function FunnelStrip({ stages, animate: _animate }: FunnelStripProps) {
   return (
     <div>
       <SectionLabel>Pipeline</SectionLabel>
