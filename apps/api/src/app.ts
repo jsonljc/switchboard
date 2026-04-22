@@ -55,8 +55,6 @@ declare module "fastify" {
     ingestionPipeline: import("@switchboard/core").IngestionPipeline | null;
     sessionManager: import("@switchboard/core/sessions").SessionManager | null;
     workflowDeps: import("./bootstrap/workflow-deps.js").WorkflowDeps | null;
-    schedulerService: import("@switchboard/core").SchedulerService | null;
-    operatorDeps: import("./bootstrap/operator-deps.js").OperatorDeps | null;
     platformIngress: import("@switchboard/core/platform").PlatformIngress;
     platformLifecycle: import("@switchboard/core/platform").PlatformLifecycle;
     deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null;
@@ -246,21 +244,6 @@ export async function buildServer() {
     }
   }
   app.decorate("workflowDeps", workflowDeps);
-
-  // --- Scheduler service bootstrap (optional — requires DATABASE_URL + REDIS_URL + workflow engine) ---
-  const redisUrl = process.env["REDIS_URL"];
-  let schedulerDeps: import("./bootstrap/scheduler-deps.js").SchedulerDeps | null = null;
-  if (prismaClient && redisUrl && workflowDeps) {
-    const { buildSchedulerDeps } = await import("./bootstrap/scheduler-deps.js");
-    schedulerDeps = buildSchedulerDeps(prismaClient, redisUrl, workflowDeps.workflowEngine);
-    if (schedulerDeps) {
-      app.log.info("Scheduler service bootstrapped");
-    }
-  }
-  app.decorate("schedulerService", schedulerDeps?.service ?? null);
-
-  // --- Operator deps (stubbed — domain code removed) ---
-  app.decorate("operatorDeps", null as import("./bootstrap/operator-deps.js").OperatorDeps | null);
 
   // --- Approval notifier wiring ---
   const approvalNotifiers: ApprovalNotifier[] = [];
@@ -483,10 +466,6 @@ export async function buildServer() {
   // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
     conversionBusHandle.stop();
-
-    if (schedulerDeps) {
-      await schedulerDeps.cleanup();
-    }
 
     if (redis) {
       await redis.quit();
