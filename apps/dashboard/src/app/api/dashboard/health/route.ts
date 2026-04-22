@@ -8,12 +8,16 @@ export async function GET() {
   };
 
   // Check backend reachability (unauthenticated ping)
-  const apiUrl = process.env.SWITCHBOARD_API_URL ?? "http://localhost:3000";
-  try {
-    const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(3000) });
-    checks.backend = res.ok ? "reachable" : `status_${res.status}`;
-  } catch {
-    checks.backend = "unreachable";
+  const apiUrl = process.env.SWITCHBOARD_API_URL;
+  if (!apiUrl) {
+    checks.backend = "not_configured";
+  } else {
+    try {
+      const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(3000) });
+      checks.backend = res.ok ? "reachable" : `status_${res.status}`;
+    } catch {
+      checks.backend = "unreachable";
+    }
   }
 
   return NextResponse.json(checks);

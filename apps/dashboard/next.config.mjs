@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  poweredBy: false,
+  poweredByHeader: false,
   transpilePackages: ["@switchboard/schemas", "@switchboard/db", "bcryptjs"],
   output: "standalone",
 
