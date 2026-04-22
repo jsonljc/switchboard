@@ -248,6 +248,86 @@ model ApprovalRecord {
   @@index([organizationId, status])
 }
 
+// ---------------------------------------------------------------------------
+// ApprovalLifecycle — mutable approval/runtime control-plane authority
+// ---------------------------------------------------------------------------
+
+model ApprovalLifecycle {
+  id                         String    @id @default(uuid())
+  actionEnvelopeId           String    @unique
+  organizationId             String?
+  status                     String    @default("pending") // pending | approved | rejected | expired | superseded | recovery_required
+  currentRevisionId          String?
+  currentExecutableWorkUnitId String?
+  expiresAt                  DateTime
+  pausedSessionId            String?
+  version                    Int       @default(1)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([status])
+  @@index([organizationId, status])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// ApprovalRevision — immutable snapshot of approval scope at a version
+// ---------------------------------------------------------------------------
+
+model ApprovalRevision {
+  id                   String   @id @default(uuid())
+  lifecycleId          String
+  revisionNumber       Int
+  parametersSnapshot   Json     // frozen action parameters
+  approvalScopeSnapshot Json    // approvers, risk, routing config
+  bindingHash          String
+  rationale            String?
+  supersedesRevisionId String?
+  createdBy            String
+  createdAt            DateTime @default(now())
+
+  @@unique([lifecycleId, revisionNumber])
+  @@index([lifecycleId])
+}
+
+// ---------------------------------------------------------------------------
+// ExecutableWorkUnit — immutable dispatch authority from one approved revision
+// ---------------------------------------------------------------------------
+
+model ExecutableWorkUnit {
+  id                     String   @id @default(uuid())
+  lifecycleId            String
+  approvalRevisionId     String   @unique
+  actionEnvelopeId       String
+  frozenPayload          Json     // frozen WorkUnit snapshot
+  frozenBinding          Json     // frozen deployment + resolver target
+  frozenExecutionPolicy  Json     // frozen constraints
+  executableUntil        DateTime
+  createdAt              DateTime @default(now())
+
+  @@index([lifecycleId])
+}
+
+// ---------------------------------------------------------------------------
+// DispatchRecord — thin durable dispatch record (pre-launch minimal attempt)
+// ---------------------------------------------------------------------------
+
+model DispatchRecord {
+  id                     String    @id @default(uuid())
+  executableWorkUnitId   String
+  attemptNumber          Int
+  idempotencyKey         String    @unique
+  state                  String    @default("dispatching") // dispatching | succeeded | failed | terminal_failed
+  dispatchedAt           DateTime  @default(now())
+  completedAt            DateTime?
+  outcome                String?
+  errorMessage           String?
+  durationMs             Int?
+
+  @@unique([executableWorkUnitId, attemptNumber])
+  @@index([executableWorkUnitId])
+}
+
 model CompetenceRecord {
   id                    String   @id @default(uuid())
   principalId           String

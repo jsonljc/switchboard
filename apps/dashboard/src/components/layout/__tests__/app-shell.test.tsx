@@ -17,8 +17,13 @@ vi.mock("@/components/layout/owner-shell", () => ({
   ),
 }));
 
-vi.mock("@/components/dev/dev-panel", () => ({
-  DevPanel: () => <div data-testid="dev-panel" />,
+vi.mock("next/dynamic", () => ({
+  default: (_loader: () => Promise<{ DevPanel: React.FC }>) => {
+    // Return a simple wrapper that renders nothing in tests
+    const Component = () => <div data-testid="dev-panel" />;
+    Component.displayName = "DynamicDevPanel";
+    return Component;
+  },
 }));
 
 describe("AppShell", () => {

@@ -10,8 +10,12 @@ import type {
   AuthoritativeDeploymentResolver,
   CanonicalSubmitRequest,
 } from "./canonical-request.js";
+import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
+import type { ApprovalRoutingConfig } from "../approval/router.js";
+import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
+import { computeBindingHash, hashObject } from "../approval/binding.js";
 
 export interface GovernanceGateInterface {
   evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
@@ -23,12 +27,21 @@ export interface PlatformIngressConfig {
   governanceGate: GovernanceGateInterface;
   deploymentResolver: AuthoritativeDeploymentResolver;
   traceStore?: WorkTraceStore;
+  lifecycleService?: ApprovalLifecycleService;
+  approvalRoutingConfig?: ApprovalRoutingConfig;
 }
 
 export type SubmitWorkResponse =
   | { ok: true; result: ExecutionResult; workUnit: WorkUnit }
   | { ok: false; error: IngressError }
-  | { ok: true; result: ExecutionResult; workUnit: WorkUnit; approvalRequired: true };
+  | {
+      ok: true;
+      result: ExecutionResult;
+      workUnit: WorkUnit;
+      approvalRequired: true;
+      lifecycleId?: string;
+      bindingHash?: string;
+    };
 
 export class PlatformIngress {
   private readonly config: PlatformIngressConfig;
@@ -159,7 +172,7 @@ export class PlatformIngress {
       return { ok: true, result, workUnit };
     }
 
-    // 6. Require approval
+    // 6. Require approval — create lifecycle atomically if service available
     if (decision.outcome === "require_approval") {
       const result: ExecutionResult = {
         workUnitId: workUnit.id,
@@ -171,6 +184,45 @@ export class PlatformIngress {
         traceId: workUnit.traceId,
       };
       await this.persistTrace(traceStore, workUnit, decision, governanceCompletedAt, result);
+
+      if (this.config.lifecycleService) {
+        const routingConfig = this.config.approvalRoutingConfig ?? DEFAULT_ROUTING_CONFIG;
+        const expiresAt = new Date(Date.now() + routingConfig.defaultExpiryMs);
+        const bindingHash = computeBindingHash({
+          envelopeId: workUnit.id,
+          envelopeVersion: 1,
+          actionId: `prop_${workUnit.id}`,
+          parameters: workUnit.parameters,
+          decisionTraceHash: hashObject({ intent: workUnit.intent }),
+          contextSnapshotHash: hashObject({ actor: workUnit.actor.id }),
+        });
+
+        const { lifecycle, revision } = await this.config.lifecycleService.createGatedLifecycle({
+          actionEnvelopeId: workUnit.id,
+          organizationId: workUnit.organizationId,
+          expiresAt,
+          initialRevision: {
+            parametersSnapshot: workUnit.parameters,
+            approvalScopeSnapshot: {
+              approvers: routingConfig.defaultApprovers,
+              riskCategory: (decision as Record<string, unknown>).riskCategory ?? "medium",
+              fallbackApprover: routingConfig.defaultFallbackApprover,
+            },
+            bindingHash,
+            createdBy: workUnit.actor.id,
+          },
+        });
+
+        return {
+          ok: true,
+          result,
+          workUnit,
+          approvalRequired: true,
+          lifecycleId: lifecycle.id,
+          bindingHash: revision.bindingHash,
+        };
+      }
+
       return { ok: true, result, workUnit, approvalRequired: true };
     }
 

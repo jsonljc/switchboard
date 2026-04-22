@@ -19,6 +19,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireSession();
     const client = await getApiClient();
     const body = await request.json();
     const data = await client.createIdentitySpec(body);
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    await requireSession();
     const client = await getApiClient();
     const body = await request.json();
     const { id, ...updates } = body;

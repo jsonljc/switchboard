@@ -10,6 +10,11 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("@/components/character/agent-mark", () => ({
+  AgentMark: () => <div data-testid="agent-mark" />,
+  SLUG_TO_AGENT: {} as Record<string, string>,
+}));
+
 beforeEach(() => {
   vi.stubGlobal(
     "IntersectionObserver",
@@ -27,8 +32,6 @@ const mockAgent = {
   description: "Responds to inbound leads within 60 seconds.",
   trustScore: 47,
   autonomyLevel: "supervised",
-  roleFocus: "leads" as const,
-  bundleSlug: "sales-pipeline-bundle",
   stats: { totalTasks: 12, approvalRate: 98, lastActiveAt: new Date().toISOString() },
 };
 
@@ -48,15 +51,9 @@ describe("AgentMarketplaceCard", () => {
     expect(screen.getByText(/supervised/i)).toBeInTheDocument();
   });
 
-  it("renders Hire link to bundle", () => {
+  it("renders Learn more link to profile", () => {
     render(<AgentMarketplaceCard {...mockAgent} />);
-    const hireLink = screen.getByText("Hire");
-    expect(hireLink.closest("a")).toHaveAttribute("href", "/deploy/sales-pipeline-bundle");
-  });
-
-  it("renders See work link to profile", () => {
-    render(<AgentMarketplaceCard {...mockAgent} />);
-    const workLink = screen.getByText(/see work/i);
-    expect(workLink.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
+    const link = screen.getByText(/learn more/i);
+    expect(link.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
   });
 });

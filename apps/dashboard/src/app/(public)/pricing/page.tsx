@@ -421,17 +421,6 @@ export default function PricingPage() {
               ),
             )}
           </div>
-
-          <p
-            style={{
-              marginTop: "1rem",
-              textAlign: "center",
-              fontSize: "0.75rem",
-              color: "#9C958F",
-            }}
-          >
-            * Prices are illustrative — final pricing set at launch.
-          </p>
         </div>
       </section>
 

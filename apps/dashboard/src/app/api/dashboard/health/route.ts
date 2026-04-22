@@ -8,7 +8,7 @@ export async function GET() {
   };
 
   // Check backend reachability (unauthenticated ping)
-  const apiUrl = process.env.SWITCHBOARD_API_URL || "http://localhost:3000";
+  const apiUrl = process.env.SWITCHBOARD_API_URL ?? "http://localhost:3000";
   try {
     const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(3000) });
     checks.backend = res.ok ? "reachable" : `status_${res.status}`;
