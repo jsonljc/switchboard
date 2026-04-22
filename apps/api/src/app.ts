@@ -4,20 +4,8 @@ import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import {
-  LifecycleOrchestrator,
-  ExecutionService,
-  CompositeNotifier,
-  setMetrics,
-  evaluate,
-  resolveIdentity,
-} from "@switchboard/core";
-import type {
-  StorageContext,
-  PolicyCache,
-  ApprovalNotifier,
-  AgentNotifier,
-} from "@switchboard/core";
+import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
+import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
 import { AuditLedger } from "@switchboard/core";
 import {
   IntentRegistry,
@@ -42,11 +30,10 @@ import type Redis from "ioredis";
 
 declare module "fastify" {
   interface FastifyInstance {
-    orchestrator: LifecycleOrchestrator;
+    approvalRoutingConfig: import("@switchboard/core/approval").ApprovalRoutingConfig;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
-    executionService: ExecutionService;
     redis: Redis | null;
     prisma: import("@switchboard/db").PrismaClient | null;
     governanceProfileStore: import("@switchboard/core").GovernanceProfileStore;
@@ -149,16 +136,8 @@ export async function buildServer() {
   }
 
   // --- Bootstrap storage layer ---
-  const {
-    storage,
-    ledger,
-    guardrailState,
-    guardrailStateStore,
-    policyCache,
-    governanceProfileStore,
-    prismaClient,
-    redis,
-  } = await bootstrapStorage(app.log);
+  const { storage, ledger, policyCache, governanceProfileStore, prismaClient, redis } =
+    await bootstrapStorage(app.log);
 
   if (prismaClient) {
     await ensureSystemIdentity(prismaClient);
@@ -245,32 +224,6 @@ export async function buildServer() {
   }
   app.decorate("workflowDeps", workflowDeps);
 
-  // --- Approval notifier wiring ---
-  const approvalNotifiers: ApprovalNotifier[] = [];
-  if (process.env["TELEGRAM_BOT_TOKEN"]) {
-    const { TelegramApprovalNotifier } = await import("./notifications/telegram-notifier.js");
-    approvalNotifiers.push(new TelegramApprovalNotifier(process.env["TELEGRAM_BOT_TOKEN"]));
-  }
-  if (process.env["SLACK_BOT_TOKEN"]) {
-    const { SlackApprovalNotifier } = await import("./notifications/slack-notifier.js");
-    approvalNotifiers.push(new SlackApprovalNotifier(process.env["SLACK_BOT_TOKEN"]));
-  }
-  if (process.env["WHATSAPP_TOKEN"] && process.env["WHATSAPP_PHONE_NUMBER_ID"]) {
-    const { WhatsAppApprovalNotifier } = await import("./notifications/whatsapp-notifier.js");
-    approvalNotifiers.push(
-      new WhatsAppApprovalNotifier({
-        token: process.env["WHATSAPP_TOKEN"],
-        phoneNumberId: process.env["WHATSAPP_PHONE_NUMBER_ID"],
-      }),
-    );
-  }
-  const approvalNotifier: ApprovalNotifier | undefined =
-    approvalNotifiers.length > 1
-      ? new CompositeNotifier(approvalNotifiers)
-      : approvalNotifiers.length === 1
-        ? approvalNotifiers[0]
-        : undefined;
-
   // --- Marketplace trust adapter (optional — requires DATABASE_URL) ---
   let trustAdapter: import("@switchboard/core").TrustScoreAdapter | null = null;
   if (prismaClient) {
@@ -296,32 +249,14 @@ export async function buildServer() {
     }
   }
 
-  // --- Build orchestrator ---
-  const orchestrator = new LifecycleOrchestrator({
-    storage,
-    ledger,
-    guardrailState,
-    guardrailStateStore,
-    policyCache,
-    governanceProfileStore,
-    approvalNotifier,
-    trustAdapter,
-    credentialResolver: prismaClient
-      ? await (async () => {
-          const { PrismaCredentialResolver, PrismaConnectionStore } =
-            await import("@switchboard/db");
-          return new PrismaCredentialResolver(new PrismaConnectionStore(prismaClient));
-        })()
-      : undefined,
-  });
+  // --- Approval routing config (standalone — no orchestrator needed) ---
+  const { DEFAULT_ROUTING_CONFIG } = await import("@switchboard/core/approval");
+  app.decorate("approvalRoutingConfig", DEFAULT_ROUTING_CONFIG);
 
   // --- Decorate Fastify with shared instances ---
-  const executionService = new ExecutionService(orchestrator, storage);
-  app.decorate("orchestrator", orchestrator);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
-  app.decorate("executionService", executionService);
   app.decorate("redis", redis);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);

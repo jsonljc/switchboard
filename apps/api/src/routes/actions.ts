@@ -122,7 +122,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
             const { approvalId, bindingHash } = await createApprovalForWorkUnit({
               workUnit,
               storageContext: app.storageContext,
-              routingConfig: app.orchestrator.routingConfig,
+              routingConfig: app.approvalRoutingConfig,
             });
 
             return reply.code(201).send({
