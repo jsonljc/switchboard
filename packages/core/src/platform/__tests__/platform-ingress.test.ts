@@ -281,6 +281,42 @@ describe("PlatformIngress", () => {
     }
   });
 
+  it("creates lifecycle atomically when lifecycleService is provided and governance requires approval", async () => {
+    const mockLifecycleService = {
+      createGatedLifecycle: vi.fn().mockResolvedValue({
+        lifecycle: {
+          id: "lc-1",
+          actionEnvelopeId: "env-1",
+          status: "pending",
+          currentRevisionId: "rev-1",
+          version: 1,
+        },
+        revision: {
+          id: "rev-1",
+          bindingHash: "a".repeat(64),
+          revisionNumber: 1,
+        },
+      }),
+    };
+
+    const config = createConfig({ decision: buildApprovalDecision() });
+    config.lifecycleService = mockLifecycleService as never;
+    const ingress = new PlatformIngress(config);
+
+    const response = await ingress.submit(baseRequest);
+
+    expect(response.ok).toBe(true);
+    if (response.ok && "approvalRequired" in response) {
+      expect(response.approvalRequired).toBe(true);
+      expect(response.lifecycleId).toBe("lc-1");
+      expect(response.bindingHash).toBe("a".repeat(64));
+    }
+    expect(mockLifecycleService.createGatedLifecycle).toHaveBeenCalledOnce();
+    const input = mockLifecycleService.createGatedLifecycle.mock.calls[0]![0];
+    expect(input.initialRevision.parametersSnapshot).toEqual({ campaignId: "camp-123" });
+    expect(input.initialRevision.createdBy).toBe("user-1");
+  });
+
   it("resolves deployment inside PlatformIngress from canonical request fields", async () => {
     const resolveDeployment = vi.fn().mockResolvedValue({
       deploymentId: "dep-resolved",
