@@ -15,6 +15,60 @@ vi.mock("../utils/ssrf-guard.js", () => ({
 import { webhooksRoutes } from "../routes/webhooks.js";
 import { assertSafeUrl } from "../utils/ssrf-guard.js";
 
+/** In-memory store backing the mock Prisma client */
+let webhookRows: Array<{
+  id: string;
+  organizationId: string;
+  url: string;
+  events: string[];
+  secret: string;
+  active: boolean;
+  lastTriggeredAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}>;
+
+function buildMockPrisma() {
+  return {
+    webhookRegistration: {
+      create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+        const row = {
+          id: `wh_${crypto.randomUUID()}`,
+          organizationId: data.organizationId as string,
+          url: data.url as string,
+          events: data.events as string[],
+          secret: data.secret as string,
+          active: true,
+          lastTriggeredAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        webhookRows.push(row);
+        return Promise.resolve(row);
+      }),
+      findMany: vi.fn().mockImplementation(({ where }: { where: Record<string, unknown> }) => {
+        const filtered = webhookRows.filter(
+          (w) => w.organizationId === where.organizationId && w.active === where.active,
+        );
+        return Promise.resolve(filtered);
+      }),
+      findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) => {
+        return Promise.resolve(webhookRows.find((w) => w.id === where.id) ?? null);
+      }),
+      update: vi
+        .fn()
+        .mockImplementation(
+          ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            const row = webhookRows.find((w) => w.id === where.id);
+            if (!row) throw new Error("Not found");
+            Object.assign(row, data, { updatedAt: new Date() });
+            return Promise.resolve(row);
+          },
+        ),
+    },
+  };
+}
+
 describe("Webhooks API", () => {
   let app: FastifyInstance;
 
@@ -24,10 +78,12 @@ describe("Webhooks API", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    webhookRows = [];
 
     app = Fastify({ logger: false });
 
     app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
+    app.decorate("prisma", buildMockPrisma() as unknown as never);
 
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
@@ -127,7 +183,7 @@ describe("Webhooks API", () => {
   });
 
   describe("DELETE /api/webhooks/:id", () => {
-    it("deletes a webhook", async () => {
+    it("soft-deletes a webhook", async () => {
       // First create one
       const createRes = await app.inject({
         method: "POST",
@@ -146,6 +202,11 @@ describe("Webhooks API", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().deleted).toBe(true);
+
+      // Verify soft-delete: row still exists but active=false
+      const row = webhookRows.find((w) => w.id === webhookId);
+      expect(row).toBeDefined();
+      expect(row!.active).toBe(false);
     });
 
     it("returns 404 for unknown webhook", async () => {
@@ -215,12 +276,34 @@ describe("Webhooks API", () => {
     });
   });
 
+  describe("503 without database", () => {
+    it("returns 503 when prisma is null", async () => {
+      await app.close();
+
+      app = Fastify({ logger: false });
+      app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
+      app.decorate("prisma", null);
+      app.decorateRequest("organizationIdFromAuth", undefined);
+      app.decorateRequest("principalIdFromAuth", undefined);
+      app.addHook("onRequest", async (request) => {
+        request.organizationIdFromAuth = "org_test";
+        request.principalIdFromAuth = "user_admin";
+      });
+      await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
+
+      const res = await app.inject({ method: "GET", url: "/api/webhooks" });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toContain("Database required");
+    });
+  });
+
   describe("organization scope", () => {
     it("rejects unscoped requests", async () => {
       await app.close();
 
       app = Fastify({ logger: false });
       app.decorate("storageContext", { identity: mockIdentity } as unknown as never);
+      app.decorate("prisma", buildMockPrisma() as unknown as never);
       app.decorateRequest("organizationIdFromAuth", undefined);
       app.decorateRequest("principalIdFromAuth", undefined);
       app.addHook("onRequest", async (request) => {

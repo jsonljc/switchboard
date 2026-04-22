@@ -4,24 +4,6 @@ import { requireRole } from "../utils/require-role.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { assertSafeUrl, SSRFError } from "../utils/ssrf-guard.js";
 
-interface WebhookRegistration {
-  id: string;
-  url: string;
-  events: string[];
-  secret: string;
-  organizationId: string;
-  active: boolean;
-  createdAt: string;
-  lastTriggeredAt: string | null;
-}
-
-// In-memory store — production would use Prisma
-const webhookStore = new Map<string, WebhookRegistration>();
-
-function getOrgWebhooks(orgId: string): WebhookRegistration[] {
-  return [...webhookStore.values()].filter((w) => w.organizationId === orgId);
-}
-
 export const webhooksRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/webhooks — list registered webhooks
   app.get(
@@ -33,10 +15,20 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database required for webhook management" });
+      }
+
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
-      const webhooks = getOrgWebhooks(orgId).map(({ secret: _s, ...rest }) => rest);
-      return reply.code(200).send({ webhooks });
+
+      const webhooks = await app.prisma.webhookRegistration.findMany({
+        where: { organizationId: orgId, active: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const sanitized = webhooks.map(({ secret: _s, ...rest }) => rest);
+      return reply.code(200).send({ webhooks: sanitized });
     },
   );
 
@@ -60,6 +52,10 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database required for webhook management" });
+      }
+
       const { url, events } = request.body as { url: string; events: string[] };
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
@@ -72,18 +68,14 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: message, statusCode: 400 });
       }
 
-      const webhook: WebhookRegistration = {
-        id: `wh_${randomUUID()}`,
-        url,
-        events,
-        secret: randomUUID(),
-        organizationId: orgId,
-        active: true,
-        createdAt: new Date().toISOString(),
-        lastTriggeredAt: null,
-      };
-
-      webhookStore.set(webhook.id, webhook);
+      const webhook = await app.prisma.webhookRegistration.create({
+        data: {
+          organizationId: orgId,
+          url,
+          events,
+          secret: randomUUID(),
+        },
+      });
 
       return reply.code(201).send({
         id: webhook.id,
@@ -91,12 +83,12 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         events: webhook.events,
         secret: webhook.secret,
         active: webhook.active,
-        createdAt: webhook.createdAt,
+        createdAt: webhook.createdAt.toISOString(),
       });
     },
   );
 
-  // DELETE /api/webhooks/:id — deregister a webhook
+  // DELETE /api/webhooks/:id — deregister a webhook (soft-delete)
   app.delete(
     "/:id",
     {
@@ -113,8 +105,12 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database required for webhook management" });
+      }
+
       const { id } = request.params as { id: string };
-      const webhook = webhookStore.get(id);
+      const webhook = await app.prisma.webhookRegistration.findUnique({ where: { id } });
       if (!webhook) {
         return reply.code(404).send({ error: "Webhook not found", statusCode: 404 });
       }
@@ -125,7 +121,10 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
-      webhookStore.delete(id);
+      await app.prisma.webhookRegistration.update({
+        where: { id },
+        data: { active: false },
+      });
       return reply.code(200).send({ deleted: true });
     },
   );
@@ -147,8 +146,12 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       if (!(await requireRole(request, reply, "admin", "operator"))) return;
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database required for webhook management" });
+      }
+
       const { id } = request.params as { id: string };
-      const webhook = webhookStore.get(id);
+      const webhook = await app.prisma.webhookRegistration.findUnique({ where: { id } });
       if (!webhook) {
         return reply.code(404).send({ error: "Webhook not found", statusCode: 404 });
       }
@@ -188,12 +191,15 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
           signal: AbortSignal.timeout(10_000),
         });
 
-        webhook.lastTriggeredAt = new Date().toISOString();
+        await app.prisma.webhookRegistration.update({
+          where: { id },
+          data: { lastTriggeredAt: new Date() },
+        });
 
         return reply.code(200).send({
           success: response.ok,
           statusCode: response.status,
-          lastTriggeredAt: webhook.lastTriggeredAt,
+          lastTriggeredAt: new Date().toISOString(),
         });
       } catch (err) {
         return reply.code(200).send({
