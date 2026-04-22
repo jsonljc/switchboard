@@ -43,9 +43,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="section-label block mb-2.5">{children}</span>;
 }
 
-/* ─── Storage key ─── */
-const STORAGE_KEY = "switchboard.identity.v1";
-
 interface StoredConfig {
   roleFocus: RoleFocus;
   workingStyle: WorkingStyle;
@@ -61,22 +58,6 @@ const DEFAULT_CONFIG: StoredConfig = {
   autonomy: "sometimes",
   focusAreas: ["sales", "follow-up"],
 };
-
-function loadConfig(): StoredConfig {
-  if (typeof window === "undefined") return DEFAULT_CONFIG;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CONFIG;
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) } as StoredConfig;
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-
-function saveConfig(config: StoredConfig) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-}
 
 /* ─── Focus area options ─── */
 const FOCUS_AREAS = [
@@ -114,26 +95,24 @@ export default function SettingsIdentityPage() {
   const updateAgent = useUpdateAgentRoster();
 
   // Start with DEFAULT_CONFIG so server and client render identically (no hydration mismatch).
-  // After hydration, the first useEffect below syncs in the real localStorage value.
   const [config, setConfig] = useState<StoredConfig>(DEFAULT_CONFIG);
   const [nameInput, setNameInput] = useState("");
   const [nameSaved, setNameSaved] = useState(false);
 
-  // Post-hydration sync: read localStorage once after mount, then listen for
-  // cross-tab storage events. Both run client-side only — no SSR risk.
-  useEffect(() => {
-    setConfig(loadConfig());
-
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setConfig(loadConfig());
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
-  // Sync name from roster
+  // Load config from roster when data arrives
   useEffect(() => {
     const primary = rosterData?.roster?.find((a) => a.agentRole === "primary_operator");
+    if (primary?.config) {
+      const saved = primary.config as Partial<StoredConfig>;
+      setConfig((prev) => ({
+        ...prev,
+        ...(saved.roleFocus ? { roleFocus: saved.roleFocus } : {}),
+        ...(saved.workingStyle ? { workingStyle: saved.workingStyle } : {}),
+        ...(saved.tone ? { tone: saved.tone } : {}),
+        ...(saved.autonomy ? { autonomy: saved.autonomy } : {}),
+        ...(saved.focusAreas ? { focusAreas: saved.focusAreas } : {}),
+      }));
+    }
     if (primary?.displayName && !nameInput) {
       setNameInput(primary.displayName);
     }
@@ -141,29 +120,51 @@ export default function SettingsIdentityPage() {
 
   if (status === "unauthenticated") redirect("/login");
 
+  const persistConfig = useCallback(
+    (next: StoredConfig) => {
+      const primary = rosterData?.roster?.find((a) => a.agentRole === "primary_operator");
+      if (!primary) return;
+      updateAgent.mutate({
+        id: primary.id,
+        config: {
+          ...(primary.config as Record<string, unknown>),
+          roleFocus: next.roleFocus,
+          workingStyle: next.workingStyle,
+          tone: next.tone,
+          autonomy: next.autonomy,
+          focusAreas: next.focusAreas,
+        },
+      });
+    },
+    [rosterData, updateAgent],
+  );
+
   const updateConfig = useCallback(
     <K extends keyof StoredConfig>(key: K, value: StoredConfig[K]) => {
       setConfig((prev) => {
         const next = { ...prev, [key]: value };
-        saveConfig(next);
+        persistConfig(next);
         return next;
       });
     },
-    [],
+    [persistConfig],
   );
 
-  const toggleFocusArea = useCallback((id: string) => {
-    setConfig((prev) => {
-      const next = {
-        ...prev,
-        focusAreas: prev.focusAreas.includes(id)
-          ? prev.focusAreas.filter((f) => f !== id)
-          : [...prev.focusAreas, id],
-      };
-      saveConfig(next);
-      return next;
-    });
-  }, []);
+  const toggleFocusArea = useCallback(
+    (id: string) => {
+      setConfig((prev) => {
+        const next = {
+          ...prev,
+          focusAreas: prev.focusAreas.includes(id)
+            ? prev.focusAreas.filter((f) => f !== id)
+            : [...prev.focusAreas, id],
+        };
+        persistConfig(next);
+        return next;
+      });
+    },
+    [persistConfig],
+  );
 
   const saveName = useCallback(() => {
     const primary = rosterData?.roster?.find((a) => a.agentRole === "primary_operator");
@@ -416,7 +417,7 @@ export default function SettingsIdentityPage() {
                       ...prev,
                       focusAreas: prev.focusAreas.filter((f) => f !== "open-initiative"),
                     };
-                    saveConfig(next);
+                    persistConfig(next);
                     return next;
                   })
                 }
