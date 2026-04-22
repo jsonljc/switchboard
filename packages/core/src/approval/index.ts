@@ -14,5 +14,6 @@ export { canApprove, canApproveWithChain } from "./delegation.js";
 export { applyPatch, describePatch } from "./patching.js";
 export { resolveDelegationChain, narrowScope } from "./chain.js";
 export type { DelegationChainResult, ChainResolutionOptions } from "./chain.js";
+export * from "./lifecycle-types.js";
 export * from "./dispatch-admission.js";
 export * from "./executable-materializer.js";

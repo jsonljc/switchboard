@@ -86,6 +86,8 @@ export interface CompetenceStore {
   listPolicies(): Promise<CompetencePolicy[]>;
 }
 
+export type { ApprovalLifecycleStore } from "../approval/lifecycle-types.js";
+
 export interface StorageContext {
   envelopes: EnvelopeStore;
   policies: PolicyStore;
