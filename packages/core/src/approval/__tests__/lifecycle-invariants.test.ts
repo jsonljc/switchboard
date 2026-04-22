@@ -360,7 +360,7 @@ describe("Lifecycle Trust Invariants", () => {
     it("second approve fails with StaleVersionError when version has advanced", async () => {
       const lifecycle = makeLifecycle({ version: 1 });
       const currentRevision = makeRevision({ bindingHash: "hash-123" });
-      const _workUnit = makeWorkUnit();
+      const wu = makeWorkUnit();
 
       vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
       vi.mocked(store.getCurrentRevision).mockResolvedValue(currentRevision);
@@ -372,7 +372,7 @@ describe("Lifecycle Trust Invariants", () => {
           respondedBy: "approver-2",
           clientBindingHash: "hash-123",
           materializationParams: {
-            workUnit,
+            workUnit: wu,
             actionEnvelopeId: "env-1",
             constraints: {},
             executableUntilMs: 3600000,
