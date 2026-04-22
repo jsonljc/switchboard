@@ -20,6 +20,10 @@ export class ApprovalLifecycleService {
     this.store = config.store;
   }
 
+  async findByEnvelopeId(envelopeId: string): Promise<LifecycleRecord | null> {
+    return this.store.getLifecycleByEnvelopeId(envelopeId);
+  }
+
   async createGatedLifecycle(
     input: CreateLifecycleInput,
   ): Promise<{ lifecycle: LifecycleRecord; revision: ApprovalRevision }> {

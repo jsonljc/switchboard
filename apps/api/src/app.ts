@@ -61,6 +61,8 @@ declare module "fastify" {
     platformLifecycle: import("@switchboard/core/platform").PlatformLifecycle;
     deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null;
     resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
+    lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null;
+    workTraceStore: import("@switchboard/core/platform").WorkTraceStore | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
   }
@@ -417,6 +419,16 @@ export async function buildServer() {
     deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
   app.decorate("deploymentResolver", deploymentResolver);
+  app.decorate("workTraceStore", workTraceStore ?? null);
+
+  let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
+  if (prismaClient) {
+    const { PrismaLifecycleStore } = await import("@switchboard/db");
+    const { ApprovalLifecycleService } = await import("@switchboard/core");
+    const lifecycleStore = new PrismaLifecycleStore(prismaClient);
+    lifecycleService = new ApprovalLifecycleService({ store: lifecycleStore });
+  }
+  app.decorate("lifecycleService", lifecycleService);
 
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
@@ -427,6 +439,7 @@ export async function buildServer() {
     governanceGate: platformGovernanceGate,
     deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
     traceStore: workTraceStore,
+    lifecycleService: lifecycleService ?? undefined,
   });
   app.decorate("platformIngress", platformIngress);
 
