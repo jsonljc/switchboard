@@ -1,6 +1,15 @@
 import type { ApprovalRevision } from "@switchboard/schemas";
-import type { MaterializeWorkUnitInput } from "./lifecycle-types.js";
 import type { WorkUnit } from "../platform/work-unit.js";
+
+export interface MaterializeWorkUnitInput {
+  lifecycleId: string;
+  approvalRevisionId: string;
+  actionEnvelopeId: string;
+  frozenPayload: Record<string, unknown>;
+  frozenBinding: Record<string, unknown>;
+  frozenExecutionPolicy: Record<string, unknown>;
+  executableUntil: Date;
+}
 
 export interface MaterializationParams {
   revision: ApprovalRevision;
