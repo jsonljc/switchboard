@@ -7,7 +7,6 @@
 ```bash
 # Generate all required secrets (run once, save securely)
 echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)"
-echo "API_KEY_ENCRYPTION_SECRET=$(openssl rand -base64 32)"
 echo "CREDENTIALS_ENCRYPTION_KEY=$(openssl rand -base64 32)"
 echo "INTERNAL_API_SECRET=$(openssl rand -base64 32)"
 echo "SESSION_TOKEN_SECRET=$(openssl rand -base64 32)"
@@ -25,8 +24,7 @@ Copy `.env.example` to `.env` and fill in:
 | `VOYAGE_API_KEY`             | Yes\*    | [dash.voyageai.com](https://dash.voyageai.com) — without this, knowledge retrieval is random |
 | `NEXTAUTH_SECRET`            | Yes      | Generated above                                                                              |
 | `NEXTAUTH_URL`               | Yes      | Your dashboard URL (e.g. `https://dashboard.yourdomain.com`)                                 |
-| `API_KEY_ENCRYPTION_SECRET`  | Yes      | Generated above                                                                              |
-| `CREDENTIALS_ENCRYPTION_KEY` | Yes      | Generated above                                                                              |
+| `CREDENTIALS_ENCRYPTION_KEY` | Yes      | Generated above — used by API server and dashboard for API key encryption                    |
 | `INTERNAL_API_SECRET`        | Yes      | Generated above — shared between API, chat, dashboard                                        |
 | `SWITCHBOARD_API_KEY`        | Yes      | Generated above — chat + dashboard use this to call API                                      |
 | `SESSION_TOKEN_SECRET`       | Yes      | Generated above                                                                              |
@@ -180,7 +178,7 @@ docker compose up -d --build
 # 3. Restart affected service
 docker compose restart api    # for API_KEYS, INTERNAL_API_SECRET
 docker compose restart chat   # for CREDENTIALS_ENCRYPTION_KEY, channel tokens
-docker compose restart dashboard  # for NEXTAUTH_SECRET, API_KEY_ENCRYPTION_SECRET
+docker compose restart dashboard  # for NEXTAUTH_SECRET, CREDENTIALS_ENCRYPTION_KEY
 ```
 
 ## Dashboard Release Gate

@@ -17,16 +17,11 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "env": [
-        "DATABASE_URL",
-        "API_KEY_ENCRYPTION_SECRET",
-        "NEXTAUTH_SECRET",
-        "CREDENTIALS_ENCRYPTION_KEY"
-      ]
+      "env": ["DATABASE_URL", "CREDENTIALS_ENCRYPTION_KEY", "NEXTAUTH_SECRET"]
     },
     "test:unit": {
       "dependsOn": ["^build"],
-      "env": ["DATABASE_URL", "API_KEY_ENCRYPTION_SECRET"]
+      "env": ["DATABASE_URL", "CREDENTIALS_ENCRYPTION_KEY"]
     },
     "test:integration": {
       "dependsOn": ["^build"],

@@ -33,8 +33,6 @@ else
   INTERNAL_SETUP_SECRET=$(openssl rand -hex 32)
   INTERNAL_API_SECRET=$(openssl rand -hex 32)
   NEXTAUTH_SECRET=$(openssl rand -hex 32)
-  API_KEY_ENCRYPTION_SECRET=$(openssl rand -hex 32)
-
   read -rp "Domain name (e.g. switchboard.example.com): " DOMAIN
   read -rp "Admin email for Let's Encrypt: " CERTBOT_EMAIL
 
@@ -58,7 +56,6 @@ CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
 INTERNAL_SETUP_SECRET=${INTERNAL_SETUP_SECRET}
 INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET}
 
 # Channel tokens (fill in before starting)
 TELEGRAM_BOT_TOKEN=
