@@ -455,4 +455,97 @@ describe("ApprovalLifecycleService", () => {
       });
     });
   });
+
+  describe("approveLifecycle", () => {
+    it("transitions lifecycle to approved and materializes executable work unit", async () => {
+      const lifecycle = makeLifecycle({
+        id: "lc-approve",
+        actionEnvelopeId: "env-approve-lc",
+      });
+      const revision = makeRevision({
+        id: "rev-approve",
+        lifecycleId: "lc-approve",
+        parametersSnapshot: { campaignId: "camp-1" },
+        approvalScopeSnapshot: { approvers: ["approver-1"], riskCategory: "medium" },
+        bindingHash: "hash-approve-lc",
+        createdBy: "originator",
+      });
+
+      vi.mocked(store.createLifecycleWithRevision).mockResolvedValue({ lifecycle, revision });
+
+      const { lifecycle: createdLifecycle, revision: createdRevision } =
+        await service.createGatedLifecycle({
+          actionEnvelopeId: "env-approve-lc",
+          organizationId: "org-1",
+          expiresAt: new Date(Date.now() + 86400000),
+          initialRevision: {
+            parametersSnapshot: { campaignId: "camp-1" },
+            approvalScopeSnapshot: { approvers: ["approver-1"], riskCategory: "medium" },
+            bindingHash: "hash-approve-lc",
+            createdBy: "originator",
+          },
+        });
+
+      const mockWorkUnit = makeWorkUnit({
+        id: createdLifecycle.actionEnvelopeId,
+        organizationId: "org-1",
+        intent: "campaign.pause",
+        parameters: { campaignId: "camp-1" },
+        actor: { id: "originator", type: "user" as const },
+        deployment: {
+          deploymentId: "dep-1",
+          skillSlug: "campaign",
+          trustLevel: "supervised" as const,
+          trustScore: 0,
+        },
+        resolvedMode: "skill" as const,
+        traceId: "trace-1",
+        trigger: "api" as const,
+        priority: "normal" as const,
+      });
+
+      const approvedLifecycle = makeLifecycle({
+        id: "lc-approve",
+        actionEnvelopeId: "env-approve-lc",
+        status: "approved",
+        currentExecutableWorkUnitId: "wu-approved",
+      });
+
+      const executableWorkUnit = makeExecutableWorkUnit({
+        id: "wu-approved",
+        lifecycleId: "lc-approve",
+        approvalRevisionId: "rev-approve",
+        actionEnvelopeId: "env-approve-lc",
+        frozenPayload: {
+          parameters: { campaignId: "camp-1" },
+          intent: "campaign.pause",
+        },
+      });
+
+      vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
+      vi.mocked(store.getCurrentRevision).mockResolvedValue(createdRevision);
+      vi.mocked(store.approveAndMaterialize).mockResolvedValue({
+        lifecycle: approvedLifecycle,
+        workUnit: executableWorkUnit,
+      });
+
+      const result = await service.approveLifecycle({
+        lifecycleId: createdLifecycle.id,
+        respondedBy: "approver-1",
+        clientBindingHash: createdRevision.bindingHash,
+        workUnit: mockWorkUnit,
+        actionEnvelopeId: createdLifecycle.actionEnvelopeId,
+        constraints: {},
+      });
+
+      expect(result.lifecycle.status).toBe("approved");
+      expect(result.executableWorkUnit).toBeDefined();
+      expect(result.executableWorkUnit.frozenPayload).toEqual(
+        expect.objectContaining({
+          parameters: { campaignId: "camp-1" },
+          intent: "campaign.pause",
+        }),
+      );
+    });
+  });
 });

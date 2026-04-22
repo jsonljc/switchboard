@@ -92,6 +92,30 @@ export class ApprovalLifecycleService {
     return this.store.approveAndMaterialize(lifecycle.id, lifecycle.version, matInput);
   }
 
+  async approveLifecycle(params: {
+    lifecycleId: string;
+    respondedBy: string;
+    clientBindingHash: string;
+    workUnit: WorkUnit;
+    actionEnvelopeId: string;
+    constraints: Record<string, unknown>;
+    executableUntilMs?: number;
+  }): Promise<{ lifecycle: LifecycleRecord; executableWorkUnit: ExecutableWorkUnit }> {
+    const { lifecycle, workUnit: executableWorkUnit } = await this.approveRevision({
+      lifecycleId: params.lifecycleId,
+      respondedBy: params.respondedBy,
+      clientBindingHash: params.clientBindingHash,
+      materializationParams: {
+        workUnit: params.workUnit,
+        actionEnvelopeId: params.actionEnvelopeId,
+        constraints: params.constraints,
+        executableUntilMs: params.executableUntilMs ?? 3600000,
+      },
+    });
+
+    return { lifecycle, executableWorkUnit };
+  }
+
   async rejectRevision(params: {
     lifecycleId: string;
     respondedBy: string;
