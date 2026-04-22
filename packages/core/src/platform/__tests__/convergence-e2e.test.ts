@@ -14,7 +14,7 @@ import type {
   SkillExecutionParams,
 } from "../../skill-runtime/types.js";
 import type { GovernanceGateInterface } from "../platform-ingress.js";
-import type { SubmitWorkRequest } from "../work-unit.js";
+import type { CanonicalSubmitRequest } from "../canonical-request.js";
 import type { WorkTraceStore } from "../work-trace-recorder.js";
 import type { WorkTrace } from "../work-trace.js";
 
@@ -158,6 +158,12 @@ describe("Convergence E2E", () => {
       intentRegistry,
       modeRegistry,
       governanceGate,
+      deploymentResolver: {
+        resolve: vi.fn(async (req) => {
+          const slug = req.intent.split(".")[0] ?? "unknown";
+          return toDeploymentContext(makeDeploymentResult(slug));
+        }),
+      },
       traceStore,
     });
   });
@@ -167,13 +173,13 @@ describe("Convergence E2E", () => {
       it(`${slug}: deployment resolves -> ingress accepts -> builder runs -> executor runs -> trace written`, async () => {
         const resolved = makeDeploymentResult(slug);
 
-        const request: SubmitWorkRequest = {
+        const request: CanonicalSubmitRequest = {
           organizationId: resolved.organizationId,
           actor: { id: "session-1", type: "user" },
           intent: `${slug}.respond`,
           parameters: { message: "hello" },
           trigger: "chat",
-          deployment: toDeploymentContext(resolved),
+          surface: { surface: "chat" },
         };
 
         const response = await ingress.submit(request);
@@ -200,13 +206,13 @@ describe("Convergence E2E", () => {
       it(`${slug}: API submission with deployment context executes correctly`, async () => {
         const resolved = makeDeploymentResult(slug);
 
-        const request: SubmitWorkRequest = {
+        const request: CanonicalSubmitRequest = {
           organizationId: resolved.organizationId,
           actor: { id: "api-key-1", type: "service" },
           intent: `${slug}.respond`,
           parameters: { query: "analyze this" },
           trigger: "api",
-          deployment: toDeploymentContext(resolved),
+          surface: { surface: "api" },
         };
 
         const response = await ingress.submit(request);
@@ -246,18 +252,13 @@ describe("Convergence E2E", () => {
 
   describe("No fallback masking", () => {
     it("fails cleanly when intent is not registered", async () => {
-      const request: SubmitWorkRequest = {
+      const request: CanonicalSubmitRequest = {
         organizationId: "org-1",
         actor: { id: "u1", type: "user" },
         intent: "nonexistent.respond",
         parameters: {},
         trigger: "chat",
-        deployment: {
-          deploymentId: "dep-ghost",
-          skillSlug: "nonexistent",
-          trustLevel: "supervised",
-          trustScore: 0,
-        },
+        surface: { surface: "chat" },
       };
 
       const response = await ingress.submit(request);
@@ -271,7 +272,7 @@ describe("Convergence E2E", () => {
 
   it("passes conversation messages from parameters to executor", async () => {
     const dep = makeDeploymentResult("alex");
-    const request: SubmitWorkRequest = {
+    const request: CanonicalSubmitRequest = {
       organizationId: dep.organizationId,
       actor: { id: "user-1", type: "user" },
       intent: "alex.respond",
@@ -283,8 +284,8 @@ describe("Convergence E2E", () => {
         },
         persona: dep.persona,
       },
-      deployment: toDeploymentContext(dep),
       trigger: "chat",
+      surface: { surface: "chat" },
     };
 
     const response = await ingress.submit(request);

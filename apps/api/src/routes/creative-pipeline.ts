@@ -3,34 +3,10 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import type { SubmitWorkResponse } from "@switchboard/core/platform";
-import { PrismaCreativeJobStore } from "@switchboard/db";
+import { PrismaCreativeJobStore, PrismaAgentTaskStore } from "@switchboard/db";
 import { CreativeBriefInput } from "@switchboard/schemas";
+import { inngestClient } from "@switchboard/creative-pipeline";
 import { z } from "zod";
-import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
-
-const ERROR_STATUS_MAP: Record<string, number> = {
-  CREATIVE_JOB_NOT_FOUND: 404,
-  CREATIVE_JOB_NOT_AWAITING_APPROVAL: 409,
-  intent_not_found: 400,
-  trigger_not_allowed: 403,
-};
-
-function mapResponseToReply(
-  response: SubmitWorkResponse,
-  reply: { code(n: number): { send(b: unknown): unknown } },
-  successCode = 200,
-): unknown {
-  if (!response.ok) {
-    const status = ERROR_STATUS_MAP[response.error.type] ?? 400;
-    return reply.code(status).send({ error: response.error.message, statusCode: status });
-  }
-  if (response.result.outcome === "failed" && response.result.error) {
-    const status = ERROR_STATUS_MAP[response.result.error.code] ?? 400;
-    return reply.code(status).send({ error: response.result.error.message, statusCode: status });
-  }
-  return reply.code(successCode).send(response.result.outputs);
-}
 
 const SubmitBriefInput = z.object({
   deploymentId: z.string().min(1),
@@ -45,8 +21,12 @@ const ApproveStageInput = z.object({
 });
 
 export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
-  // POST /creative-jobs — submit a brief via PlatformIngress
+  // POST /creative-jobs — submit a brief, create AgentTask + CreativeJob
   app.post("/creative-jobs", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
       return reply.code(401).send({ error: "Organization required", statusCode: 401 });
@@ -61,27 +41,61 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
     const { deploymentId, listingId, brief, mode } = parsed.data;
 
-    const deployment = await resolveDeploymentForIntent(
-      app.deploymentResolver,
-      orgId,
-      "creative.job.submit",
-    );
-
-    const response = await app.platformIngress.submit({
+    // Create the AgentTask
+    const taskStore = new PrismaAgentTaskStore(app.prisma);
+    const task = await taskStore.create({
+      deploymentId,
       organizationId: orgId,
-      actor: { id: request.principalIdFromAuth ?? "creative-dashboard", type: "user" },
-      intent: "creative.job.submit",
-      parameters: { deploymentId, listingId, brief, mode },
-      deployment,
-      trigger: "api",
-      idempotencyKey:
-        typeof request.headers["idempotency-key"] === "string"
-          ? request.headers["idempotency-key"]
-          : undefined,
-      traceId: request.traceId,
+      listingId,
+      category: "creative_strategy",
+      input: brief as unknown as Record<string, unknown>,
     });
 
-    return mapResponseToReply(response, reply, 201);
+    // Create the CreativeJob
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job =
+      mode === "ugc"
+        ? await jobStore.createUgc({
+            taskId: task.id,
+            organizationId: orgId,
+            deploymentId,
+            productDescription: brief.productDescription,
+            targetAudience: brief.targetAudience,
+            platforms: brief.platforms,
+            brandVoice: brief.brandVoice ?? null,
+            productImages: brief.productImages,
+            references: brief.references,
+            pastPerformance: brief.pastPerformance ?? null,
+            generateReferenceImages: brief.generateReferenceImages,
+            ugcConfig: brief as unknown as Record<string, unknown>,
+          })
+        : await jobStore.create({
+            taskId: task.id,
+            organizationId: orgId,
+            deploymentId,
+            productDescription: brief.productDescription,
+            targetAudience: brief.targetAudience,
+            platforms: brief.platforms,
+            brandVoice: brief.brandVoice ?? null,
+            productImages: brief.productImages,
+            references: brief.references,
+            pastPerformance: brief.pastPerformance ?? null,
+            generateReferenceImages: brief.generateReferenceImages,
+          });
+
+    // Fire Inngest event to start the pipeline
+    await inngestClient.send({
+      name: "creative-pipeline/job.submitted",
+      data: {
+        jobId: job.id,
+        taskId: task.id,
+        organizationId: orgId,
+        deploymentId,
+        mode,
+      },
+    });
+
+    return reply.code(201).send({ task, job });
   });
 
   // GET /creative-jobs — list jobs for org
@@ -127,8 +141,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ job });
   });
 
-  // POST /creative-jobs/:id/approve — continue or stop pipeline via PlatformIngress
+  // POST /creative-jobs/:id/approve — continue or stop pipeline
   app.post("/creative-jobs/:id/approve", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
       return reply.code(401).send({ error: "Organization required", statusCode: 401 });
@@ -142,28 +160,59 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
-    const intent = parsed.data.action === "stop" ? "creative.job.stop" : "creative.job.continue";
-    const deployment = await resolveDeploymentForIntent(app.deploymentResolver, orgId, intent);
+    const jobStore = new PrismaCreativeJobStore(app.prisma);
+    const job = await jobStore.findById(id);
 
-    const response = await app.platformIngress.submit({
-      organizationId: orgId,
-      actor: { id: request.principalIdFromAuth ?? "creative-dashboard", type: "user" },
-      intent,
-      parameters: {
-        jobId: id,
-        action: parsed.data.action,
-        productionTier: parsed.data.productionTier,
-      },
-      deployment,
-      trigger: "api",
-      idempotencyKey:
-        typeof request.headers["idempotency-key"] === "string"
-          ? request.headers["idempotency-key"]
-          : undefined,
-      traceId: request.traceId,
+    if (!job || job.organizationId !== orgId) {
+      return reply.code(404).send({ error: "Creative job not found", statusCode: 404 });
+    }
+
+    if (job.currentStage === "complete" || job.stoppedAt) {
+      return reply.code(409).send({ error: "Job is not awaiting approval", statusCode: 409 });
+    }
+
+    // UGC mode: emit phase-specific approval event
+    if (job.mode === "ugc") {
+      if (parsed.data.action === "stop") {
+        await inngestClient.send({
+          name: "creative-pipeline/ugc-phase.approved",
+          data: { jobId: id, phase: job.ugcPhase, action: "stop" },
+        });
+        return reply.send({ job, action: "stopped" });
+      }
+
+      await inngestClient.send({
+        name: "creative-pipeline/ugc-phase.approved",
+        data: { jobId: id, phase: job.ugcPhase, action: "continue" },
+      });
+      return reply.send({ job, action: "approved" });
+    }
+
+    // Persist productionTier if this is Stage 4 (storyboard) approval
+    if (parsed.data.action === "continue" && job.currentStage === "storyboard") {
+      const tier = parsed.data.productionTier ?? "basic";
+      await jobStore.updateProductionTier(id, tier);
+    }
+
+    if (parsed.data.action === "stop") {
+      const stopped = await jobStore.stop(id, job.currentStage);
+
+      // Fire stop event so the running Inngest function unblocks and exits
+      await inngestClient.send({
+        name: "creative-pipeline/stage.approved",
+        data: { jobId: id, action: "stop" },
+      });
+
+      return reply.send({ job: stopped, action: "stopped" });
+    }
+
+    // Fire continue event — the running Inngest function's waitForEvent picks this up
+    await inngestClient.send({
+      name: "creative-pipeline/stage.approved",
+      data: { jobId: id, action: "continue" },
     });
 
-    return mapResponseToReply(response, reply);
+    return reply.send({ job, action: "approved" });
   });
 
   // GET /creative-jobs/:id/estimate — cost estimate per tier

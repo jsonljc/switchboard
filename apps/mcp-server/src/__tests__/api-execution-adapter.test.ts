@@ -228,6 +228,40 @@ describe("ApiExecutionAdapter", () => {
     expect(result.traceId).toBe("fallback-trace");
   });
 
+  it("treats the API as the canonical mutation boundary rather than a surface-local executor", async () => {
+    (client.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      status: 200,
+      data: {
+        outcome: "EXECUTED",
+        envelopeId: "env_canonical",
+        traceId: "trace_mcp_1",
+      },
+    });
+
+    await adapter.execute({
+      actorId: "mcp-user",
+      organizationId: "org_test",
+      requestedAction: {
+        actionType: "digital-ads.campaign.pause",
+        parameters: { campaignId: "camp_123" },
+        sideEffect: true,
+      },
+      traceId: "trace_mcp_1",
+    });
+
+    expect(client.post).toHaveBeenCalledWith(
+      "/api/execute",
+      expect.objectContaining({
+        actorId: "mcp-user",
+        organizationId: "org_test",
+        action: expect.objectContaining({
+          actionType: "digital-ads.campaign.pause",
+        }),
+      }),
+      expect.any(String),
+    );
+  });
+
   it("uses empty string traceId when neither response nor request has one", async () => {
     (client.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       status: 200,

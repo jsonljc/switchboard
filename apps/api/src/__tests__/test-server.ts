@@ -287,10 +287,14 @@ export async function buildTestServer(): Promise<TestContext> {
 
   const workTraceStore = new InMemoryWorkTraceStore();
 
+  const { resolveAuthoritativeDeployment } =
+    await import("../bootstrap/platform-deployment-resolver.js");
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
     governanceGate: platformGovernanceGate,
+    deploymentResolver: resolveAuthoritativeDeployment(null),
     traceStore: workTraceStore,
   });
   app.decorate("platformIngress", platformIngress);
