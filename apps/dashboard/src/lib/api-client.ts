@@ -711,4 +711,20 @@ export class SwitchboardClient extends SwitchboardClientBase {
       body: JSON.stringify(body),
     });
   }
+
+  async getRoiSummary(orgId: string, params?: { from?: string; to?: string; breakdown?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.from) searchParams.set("from", params.from);
+    if (params?.to) searchParams.set("to", params.to);
+    if (params?.breakdown) searchParams.set("breakdown", params.breakdown);
+    const qs = searchParams.toString();
+    return this.request(`/api/${orgId}/roi/summary${qs ? `?${qs}` : ""}`);
+  }
+
+  async sendOperatorCommand(body: { rawInput: string; channel?: string; operatorId?: string }) {
+    return this.request("/api/operator/command", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
 }
