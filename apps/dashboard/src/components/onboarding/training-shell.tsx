@@ -16,6 +16,7 @@ interface TrainingShellProps {
   playbook: Playbook;
   onUpdatePlaybook: (playbook: Playbook) => void;
   onAdvance: () => void;
+  onContinueManually: () => void;
   scanUrl: string | null;
   category: string | null;
 }
@@ -24,6 +25,7 @@ export function TrainingShell({
   playbook,
   onUpdatePlaybook,
   onAdvance,
+  onContinueManually,
   scanUrl,
   category,
 }: TrainingShellProps) {
@@ -71,6 +73,7 @@ export function TrainingShell({
   }, [scan.data, scanApplied]);
 
   const handleContinueManually = useCallback(() => {
+    onContinueManually();
     setMessages((prev) => {
       if (prev.some((message) => message.id === "scan-manual-fallback")) {
         return prev;
@@ -85,7 +88,7 @@ export function TrainingShell({
         },
       ];
     });
-  }, []);
+  }, [onContinueManually]);
 
   const ready = isPlaybookReady(playbook);
   const readinessLabel = getReadinessLabel(playbook);
@@ -195,7 +198,7 @@ export function TrainingShell({
       </div>
 
       {/* Desktop: split panels */}
-      {scan.isError && (
+      {scan.isError && scanUrl && (
         <div
           className="mx-6 mt-4 rounded-lg border p-4"
           style={{

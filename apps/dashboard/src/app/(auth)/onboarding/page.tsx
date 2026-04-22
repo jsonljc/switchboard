@@ -151,6 +151,13 @@ export default function OnboardingPage() {
     });
   };
 
+  const handleContinueManually = () => {
+    const nextCategory = category ?? draft?.category ?? null;
+
+    setScanUrl(null);
+    saveDraft({ scanUrl: null, category: nextCategory });
+  };
+
   const testPrompts = generateTestPrompts(playbook);
 
   const handleSendPrompt = (prompt: TestPrompt) => {
@@ -202,6 +209,7 @@ export default function OnboardingPage() {
           playbook={playbook}
           onUpdatePlaybook={(updated) => handleUpdatePlaybook({ playbook: updated })}
           onAdvance={() => handleUpdatePlaybook({ step: 3 })}
+          onContinueManually={handleContinueManually}
           scanUrl={restoredScanUrl}
           category={restoredCategory}
         />

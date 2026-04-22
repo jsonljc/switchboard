@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TrainingShell } from "../training-shell";
 import { createEmptyPlaybook } from "@switchboard/schemas";
@@ -36,6 +36,7 @@ describe("TrainingShell", () => {
         playbook={createEmptyPlaybook()}
         onUpdatePlaybook={vi.fn()}
         onAdvance={vi.fn()}
+        onContinueManually={vi.fn()}
         scanUrl={null}
         category={null}
       />,
@@ -50,6 +51,7 @@ describe("TrainingShell", () => {
         playbook={createEmptyPlaybook()}
         onUpdatePlaybook={vi.fn()}
         onAdvance={vi.fn()}
+        onContinueManually={vi.fn()}
         scanUrl={null}
         category={null}
       />,
@@ -65,6 +67,7 @@ describe("TrainingShell", () => {
         playbook={createEmptyPlaybook()}
         onUpdatePlaybook={vi.fn()}
         onAdvance={vi.fn()}
+        onContinueManually={vi.fn()}
         scanUrl="https://example.com"
         category={null}
       />,
@@ -75,5 +78,28 @@ describe("TrainingShell", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry scan/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /continue manually/i })).toBeInTheDocument();
+  });
+
+  it("notifies the page when the user continues manually after a scan failure", () => {
+    mockWebsiteScan.isError = true;
+    const onContinueManually = vi.fn();
+
+    renderWithProviders(
+      <TrainingShell
+        playbook={createEmptyPlaybook()}
+        onUpdatePlaybook={vi.fn()}
+        onAdvance={vi.fn()}
+        onContinueManually={onContinueManually}
+        scanUrl="https://example.com"
+        category={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /continue manually/i }));
+
+    expect(onContinueManually).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getAllByText(/let's keep going manually\. what's your business called/i).length,
+    ).toBeGreaterThan(0);
   });
 });

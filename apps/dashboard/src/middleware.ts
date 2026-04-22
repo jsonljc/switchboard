@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDevBypassEnabled } from "@/lib/dev-auth";
 
 /**
  * Simple in-memory rate limiter for dashboard API routes.
@@ -82,6 +83,10 @@ export function middleware(request: NextRequest) {
   );
 
   if (isAuthPage) {
+    if (isDevBypassEnabled()) {
+      return NextResponse.next();
+    }
+
     const sessionToken =
       request.cookies.get("__Secure-authjs.session-token")?.value ??
       request.cookies.get("authjs.session-token")?.value;
