@@ -297,7 +297,15 @@ export function OwnerToday() {
     <div className="dashboard-frame">
       {/* Wave 1: Header */}
       <FadeIn delay={animate ? 0 : 0} translateY={animate ? 8 : 0}>
-        <DashboardHeader overview={overview} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <DashboardHeader overview={overview} />
+          <Link
+            href="/my-agent"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Manage agent →
+          </Link>
+        </div>
       </FadeIn>
 
       {/* First Run Banner */}
