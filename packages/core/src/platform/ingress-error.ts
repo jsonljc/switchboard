@@ -1,7 +1,14 @@
 export interface IngressError {
-  type: "intent_not_found" | "validation_failed" | "trigger_not_allowed" | "deployment_not_found";
+  type:
+    | "intent_not_found"
+    | "validation_failed"
+    | "trigger_not_allowed"
+    | "deployment_not_found"
+    | "upstream_error"
+    | "network_error";
   intent: string;
   message: string;
+  retryable?: boolean;
 }
 
 export function isIngressError(value: unknown): value is IngressError {
