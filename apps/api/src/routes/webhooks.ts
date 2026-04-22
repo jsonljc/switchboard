@@ -191,15 +191,16 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
           signal: AbortSignal.timeout(10_000),
         });
 
+        const triggeredAt = new Date();
         await app.prisma.webhookRegistration.update({
           where: { id },
-          data: { lastTriggeredAt: new Date() },
+          data: { lastTriggeredAt: triggeredAt },
         });
 
         return reply.code(200).send({
           success: response.ok,
           statusCode: response.status,
-          lastTriggeredAt: new Date().toISOString(),
+          lastTriggeredAt: triggeredAt.toISOString(),
         });
       } catch (err) {
         return reply.code(200).send({
