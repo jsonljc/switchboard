@@ -1,19 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getApiClient } from "@/lib/get-api-client";
-import { requireSession } from "@/lib/session";
-import { proxyError } from "@/lib/proxy-error";
+import { NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-  try {
-    await requireSession();
-    const client = await getApiClient();
-    const body = await request.json();
-    const data = await client.simulateChat(body);
-    return NextResponse.json(data);
-  } catch (err: unknown) {
-    return proxyError(
-      err instanceof Error ? { error: err.message } : {},
-      err instanceof Error && err.message === "Unauthorized" ? 401 : 500,
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "Simulation endpoint removed. Chat simulation will be rebuilt on the skill runtime." },
+    { status: 501 },
+  );
 }
