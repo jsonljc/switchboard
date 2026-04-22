@@ -51,7 +51,9 @@ export default async function MyAgentPage({ params }: PageProps) {
       (c) => c.type === "web_widget" && c.status === "active",
     );
     const widgetToken =
-      typeof widgetConnection?.metadata?.token === "string" ? widgetConnection.metadata.token : id; // fallback: use deploymentId as placeholder
+      typeof widgetConnection?.metadata?.token === "string"
+        ? widgetConnection.metadata.token
+        : null;
 
     return (
       <MyAgentClient
