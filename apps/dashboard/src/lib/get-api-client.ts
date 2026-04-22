@@ -8,7 +8,10 @@ const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new Prism
 
 export async function getApiClient(): Promise<SwitchboardClient> {
   const session = await requireSession();
-  const baseUrl = process.env.SWITCHBOARD_API_URL || "http://localhost:3000";
+  const baseUrl = process.env.SWITCHBOARD_API_URL;
+  if (!baseUrl) {
+    throw new Error("SWITCHBOARD_API_URL environment variable is required");
+  }
 
   const user = await prisma.dashboardUser.findUnique({
     where: { id: session.user.id },

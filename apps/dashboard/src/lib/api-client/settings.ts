@@ -1,4 +1,4 @@
-import type { IdentitySpec, CartridgeManifest } from "@switchboard/schemas";
+import type { IdentitySpec } from "@switchboard/schemas";
 import type { HealthCheck } from "../api-client-types";
 import { SwitchboardGovernanceClient } from "./governance";
 
@@ -33,11 +33,6 @@ export class SwitchboardSettingsClient extends SwitchboardGovernanceClient {
 
   async deepHealthCheck() {
     return this.request<HealthCheck>("/api/health/deep");
-  }
-
-  // Cartridges
-  async listCartridges() {
-    return this.request<{ cartridges: CartridgeManifest[] }>("/api/cartridges");
   }
 
   // Connections
@@ -110,11 +105,6 @@ export class SwitchboardSettingsClient extends SwitchboardGovernanceClient {
     });
   }
 
-  async getIntegrationGuide(orgId: string, runtimeType?: string) {
-    const qs = runtimeType ? `?runtimeType=${runtimeType}` : "";
-    return this.request<{ guide: unknown }>(`/api/organizations/${orgId}/integration${qs}`);
-  }
-
   // Managed Provisioning
   async provision(
     orgId: string,
@@ -162,16 +152,5 @@ export class SwitchboardSettingsClient extends SwitchboardGovernanceClient {
     return this.request<{ deleted: boolean }>(`/api/organizations/${orgId}/channels/${channelId}`, {
       method: "DELETE",
     });
-  }
-
-  // Post-onboarding handoff
-  async triggerHandoff(orgId: string, principalId: string) {
-    return this.request<{ triggered: boolean; message: string }>(
-      `/api/organizations/${orgId}/handoff`,
-      {
-        method: "POST",
-        body: JSON.stringify({ principalId }),
-      },
-    );
   }
 }

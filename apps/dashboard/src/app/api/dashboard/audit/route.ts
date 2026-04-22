@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
+import { requireSession } from "@/lib/session";
 
 /**
  * Audit route: always returns 200 with { entries, total } so the UI never breaks.
@@ -7,6 +8,7 @@ import { getApiClient } from "@/lib/get-api-client";
  */
 export async function GET(request: NextRequest) {
   try {
+    await requireSession();
     const client = await getApiClient();
     const { searchParams } = new URL(request.url);
     const data = await client.queryAudit({

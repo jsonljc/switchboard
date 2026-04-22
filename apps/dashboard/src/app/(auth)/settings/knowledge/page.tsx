@@ -6,7 +6,17 @@ import { UploadPanel } from "@/components/knowledge/upload-panel";
 
 export default function SettingsKnowledgePage() {
   const { status } = useSession();
-  if (status === "loading") return null;
+  if (status === "loading") {
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div>
+          <div className="h-7 w-40 rounded bg-muted" />
+          <div className="h-4 w-72 rounded bg-muted mt-2" />
+        </div>
+        <div className="h-48 rounded-lg bg-muted" />
+      </div>
+    );
+  }
   if (status === "unauthenticated") redirect("/login");
 
   return (

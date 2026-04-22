@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
+import { requireSession } from "@/lib/session";
 import { proxyError } from "@/lib/proxy-error";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireSession();
     const client = await getApiClient();
     const body = await request.json();
     const data = await client.onboard(body);

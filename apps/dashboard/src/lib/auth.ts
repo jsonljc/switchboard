@@ -7,6 +7,21 @@ import { PrismaClient } from "@prisma/client";
 import { verifyPassword } from "./password";
 import { provisionDashboardUser } from "./provision-dashboard-user";
 
+/* ------------------------------------------------------------------ */
+/* Production guards                                                   */
+/* ------------------------------------------------------------------ */
+if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
+  throw new Error(
+    "NEXTAUTH_SECRET must be set in production. Refusing to start without a signing secret.",
+  );
+}
+
+if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+  throw new Error(
+    "NEXT_PUBLIC_DEV_BYPASS_AUTH must not be 'true' in production. Refusing to start with auth bypass enabled.",
+  );
+}
+
 const prisma = new PrismaClient();
 
 const providers: NextAuthConfig["providers"] = [

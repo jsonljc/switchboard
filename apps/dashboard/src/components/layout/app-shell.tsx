@@ -1,10 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { DevPanel } from "../dev/dev-panel";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { OwnerShell } from "@/components/layout/owner-shell";
+
+const DevPanel = dynamic(() => import("../dev/dev-panel").then((m) => m.DevPanel), {
+  ssr: false,
+});
+
+const IS_DEV = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
 
@@ -32,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <main className="min-h-screen bg-background">
         {children}
-        <DevPanel />
+        {IS_DEV && <DevPanel />}
       </main>
     );
   }
@@ -40,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <OwnerShell>{children}</OwnerShell>
-      <DevPanel />
+      {IS_DEV && <DevPanel />}
     </>
   );
 }
