@@ -69,8 +69,11 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
 
     if (!organizationId) {
       app.log.warn({ entryId }, "No org found for Meta webhook entry, skipping");
-      return reply.code(200).send({ received: leads.length, created: 0 });
+      return reply.code(200).send({ received: leads.length, skipped: true, reason: "no_org" });
     }
+
+    const leadIds = leads.map((l) => l.leadId).sort();
+    const idempotencyKey = `meta-lead-${entryId}-${leadIds.join(",")}`;
 
     const result = await app.platformIngress.submit({
       intent: "meta.lead.intake",
@@ -83,6 +86,7 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
       trigger: "api",
       surface: { surface: "api" },
       targetHint: { skillSlug: "meta-lead" },
+      idempotencyKey,
     });
 
     if (!result.ok) {
