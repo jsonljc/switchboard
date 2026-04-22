@@ -40,7 +40,7 @@ const PUBLIC_PATTERNS: RegExp[] = [
   /^\/api\/auth(\/.*)?$/,
   /^\/api\/waitlist$/,
   /^\/_next(\/.*)?$/,
-  /^\/favicon\.(ico|svg)$/,
+  /^\/favicon\.ico$/,
   /^\/widget\.js$/,
 ];
 
