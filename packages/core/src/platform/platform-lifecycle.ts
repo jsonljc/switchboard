@@ -279,28 +279,6 @@ export class PlatformLifecycle {
     return { undoSubmitted: true, undoWorkUnitId: response.workUnit.id };
   }
 
-  async simulate(_params: {
-    intent: string;
-    parameters: Record<string, unknown>;
-    actorId: string;
-    organizationId?: string;
-  }): Promise<{
-    governanceOutcome: string;
-    riskScore: number;
-    matchedPolicies: string[];
-    constraints?: ExecutionConstraints;
-  }> {
-    // Phase 2 stub: simulate remains on the old orchestrator path for now.
-    // Full migration requires GovernanceGate to support simulation mode
-    // without cartridge dependency — tracked in Phase 7.
-    return {
-      governanceOutcome: "execute",
-      riskScore: 0,
-      matchedPolicies: [],
-      constraints: DEFAULT_CONSTRAINTS,
-    };
-  }
-
   private async executeAfterApproval(workUnitId: string): Promise<ExecuteResult> {
     const { envelopeStore, modeRegistry, traceStore, ledger } = this.config;
 

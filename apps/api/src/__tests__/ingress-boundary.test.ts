@@ -9,8 +9,7 @@ const ROUTES_DIR = resolve(import.meta.dirname, "../routes");
  * All work submission and lifecycle operations go through PlatformIngress + PlatformLifecycle.
  *
  * Phase 2 migrated: respondToApproval, executeApproved, requestUndo, propose, emergency halt.
- * Remaining legacy bridge: simulate (read-only, no lifecycle mutation — requires cartridge
- * integration not yet available in GovernanceGate simulation mode).
+ * simulate route deleted — no legacy bridges remain.
  */
 const BLOCKED_METHODS = [
   "resolveAndPropose",
@@ -23,7 +22,7 @@ const BLOCKED_METHODS = [
 
 /**
  * Legacy exceptions — routes that still call the orchestrator directly.
- * Phase 2 cleared all lifecycle exceptions. Only simulate remains.
+ * Phase 2 cleared all lifecycle exceptions. No exceptions remain.
  */
 const LEGACY_EXCEPTIONS: Record<
   string,
@@ -33,7 +32,7 @@ const LEGACY_EXCEPTIONS: Record<
   }
 > = {};
 
-const FULLY_EXEMPT = new Set(["simulate.ts"]);
+const FULLY_EXEMPT = new Set<string>();
 
 describe("PlatformIngress boundary enforcement", () => {
   const routeFiles = readdirSync(ROUTES_DIR).filter(

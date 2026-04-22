@@ -6,7 +6,6 @@ import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
-import { simulateRoutes } from "../routes/simulate.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
   LifecycleOrchestrator,
@@ -322,7 +321,6 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
-  await app.register(simulateRoutes, { prefix: "/api/simulate" });
 
   return { app, cartridge, storage };
 }

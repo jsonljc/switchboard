@@ -9,7 +9,6 @@ import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
-import { simulateRoutes } from "../routes/simulate.js";
 import { healthRoutes } from "../routes/health.js";
 import { connectionsRoutes } from "../routes/connections.js";
 import { dlqRoutes } from "../routes/dlq.js";
@@ -43,7 +42,6 @@ import { dashboardOverviewRoutes } from "../routes/dashboard-overview.js";
 import websiteScanRoutes from "../routes/website-scan.js";
 import { ownerTaskRoutes } from "../routes/owner-tasks.js";
 import { organizationsRoutes } from "../routes/organizations.js";
-import simulateChatRoutes from "../routes/simulate-chat.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -54,7 +52,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
-  await app.register(simulateRoutes, { prefix: "/api/simulate" });
   await app.register(healthRoutes, { prefix: "/api/health" });
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
   await app.register(facebookOAuthRoutes, { prefix: "/api/connections" });
@@ -85,8 +82,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });
   await app.register(ownerTaskRoutes, { prefix: "/api" });
   await app.register(organizationsRoutes, { prefix: "/api/organizations" });
-  // playbook, simulate-chat, and website-scan routes define their own full paths including /api prefix
+  // playbook and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);
-  await app.register(simulateChatRoutes);
   await app.register(websiteScanRoutes);
 }
