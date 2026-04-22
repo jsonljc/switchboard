@@ -548,4 +548,64 @@ describe("ApprovalLifecycleService", () => {
       );
     });
   });
+
+  describe("rejectLifecycle", () => {
+    it("transitions lifecycle to rejected and updates WorkTrace to terminal rejected", async () => {
+      const lifecycle = makeLifecycle({
+        id: "lc-reject",
+        actionEnvelopeId: "env-reject-lc",
+      });
+      const revision = makeRevision({
+        id: "rev-reject",
+        lifecycleId: "lc-reject",
+        bindingHash: "hash-reject-lc",
+      });
+
+      vi.mocked(store.createLifecycleWithRevision).mockResolvedValue({ lifecycle, revision });
+
+      const { lifecycle: createdLifecycle } = await service.createGatedLifecycle({
+        actionEnvelopeId: "env-reject-lc",
+        organizationId: "org-1",
+        expiresAt: new Date(Date.now() + 86400000),
+        initialRevision: {
+          parametersSnapshot: { campaignId: "camp-1" },
+          approvalScopeSnapshot: { approvers: ["approver-1"] },
+          bindingHash: "hash-reject-lc",
+          createdBy: "originator",
+        },
+      });
+
+      const rejectedLifecycle = makeLifecycle({
+        id: "lc-reject",
+        actionEnvelopeId: "env-reject-lc",
+        status: "rejected",
+      });
+
+      vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
+      vi.mocked(store.updateLifecycleStatus).mockResolvedValue(rejectedLifecycle);
+
+      const mockTraceStore = {
+        update: vi.fn().mockResolvedValue(undefined),
+        getByWorkUnitId: vi.fn(),
+        persist: vi.fn(),
+        getByIdempotencyKey: vi.fn(),
+      };
+
+      const result = await service.rejectLifecycle({
+        lifecycleId: createdLifecycle.id,
+        respondedBy: "approver-1",
+        traceStore: mockTraceStore as any,
+      });
+
+      expect(result.status).toBe("rejected");
+      expect(mockTraceStore.update).toHaveBeenCalledWith(
+        lifecycle.actionEnvelopeId,
+        expect.objectContaining({
+          outcome: "failed",
+          approvalOutcome: "rejected",
+          approvalRespondedBy: "approver-1",
+        }),
+      );
+    });
+  });
 });

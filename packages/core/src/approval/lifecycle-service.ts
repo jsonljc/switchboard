@@ -5,6 +5,7 @@ import type {
 } from "./lifecycle-types.js";
 import type { ApprovalRevision, ExecutableWorkUnit } from "@switchboard/schemas";
 import type { WorkUnit } from "../platform/work-unit.js";
+import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import { buildMaterializationInput } from "./executable-materializer.js";
 import { validateDispatchAdmission } from "./dispatch-admission.js";
 
@@ -127,6 +128,27 @@ export class ApprovalLifecycleService {
     }
 
     return this.store.updateLifecycleStatus(lifecycle.id, "rejected", lifecycle.version);
+  }
+
+  async rejectLifecycle(params: {
+    lifecycleId: string;
+    respondedBy: string;
+    traceStore: WorkTraceStore;
+  }): Promise<LifecycleRecord> {
+    const lifecycle = await this.rejectRevision({
+      lifecycleId: params.lifecycleId,
+      respondedBy: params.respondedBy,
+    });
+
+    await params.traceStore.update(lifecycle.actionEnvelopeId, {
+      outcome: "failed",
+      completedAt: new Date().toISOString(),
+      approvalOutcome: "rejected",
+      approvalRespondedBy: params.respondedBy,
+      approvalRespondedAt: new Date().toISOString(),
+    });
+
+    return lifecycle;
   }
 
   async expireLifecycle(lifecycleId: string): Promise<LifecycleRecord> {
