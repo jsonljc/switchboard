@@ -19,11 +19,13 @@ Return ONLY valid JSON, no markdown.`;
 const websiteScanRoutes: FastifyPluginAsync = async (app) => {
   app.post("/api/website-scan", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
-    if (!orgId) return reply.code(401).send({ error: "Unauthorized" });
+    if (!orgId) return reply.code(401).send({ error: "Unauthorized", statusCode: 401 });
 
     const parsed = ScanRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+      return reply
+        .code(400)
+        .send({ error: "Invalid request", issues: parsed.error.issues, statusCode: 400 });
     }
 
     const { url } = parsed.data;
@@ -32,7 +34,7 @@ const websiteScanRoutes: FastifyPluginAsync = async (app) => {
       await assertSafeUrl(url);
     } catch (err) {
       if (err instanceof SSRFError) {
-        return reply.code(400).send({ error: err.message });
+        return reply.code(400).send({ error: err.message, statusCode: 400 });
       }
       throw err;
     }

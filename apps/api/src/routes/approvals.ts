@@ -26,7 +26,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 
@@ -34,7 +34,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         // Org access check for the approval resource
         const approval = await app.storageContext.approvals.getById(id);
         if (!approval) {
-          return reply.code(404).send({ error: "Approval not found" });
+          return reply.code(404).send({ error: "Approval not found", statusCode: 404 });
         }
         if (!assertOrgAccess(request, approval.organizationId, reply)) return;
 
@@ -44,6 +44,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         if (authenticatedPrincipal && authenticatedPrincipal !== body.respondedBy) {
           return reply.code(403).send({
             error: `Forbidden: authenticated principal '${authenticatedPrincipal}' cannot respond as '${body.respondedBy}'`,
+            statusCode: 403,
           });
         }
 
@@ -51,6 +52,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         if ((body.action === "approve" || body.action === "patch") && !body.bindingHash) {
           return reply.code(400).send({
             error: "bindingHash is required for approve and patch actions",
+            statusCode: 400,
           });
         }
 
@@ -101,10 +103,12 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         if (err instanceof StaleVersionError) {
           return reply.code(409).send({
             error: "Conflict: approval has already been responded to",
+            statusCode: 409,
           });
         }
         return reply.code(400).send({
           error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
         });
       }
     },
@@ -153,7 +157,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
 
       const approval = await app.storageContext.approvals.getById(id);
       if (!approval) {
-        return reply.code(404).send({ error: "Approval not found" });
+        return reply.code(404).send({ error: "Approval not found", statusCode: 404 });
       }
 
       if (!assertOrgAccess(request, approval.organizationId, reply)) return;
@@ -161,7 +165,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       if (approval.state.status !== "pending") {
         return reply
           .code(400)
-          .send({ error: `Cannot remind: approval status is ${approval.state.status}` });
+          .send({
+            error: `Cannot remind: approval status is ${approval.state.status}`,
+            statusCode: 400,
+          });
       }
 
       // Re-notify via the orchestrator's notifier if available
@@ -205,7 +212,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
 
       const approval = await app.storageContext.approvals.getById(id);
       if (!approval) {
-        return reply.code(404).send({ error: "Approval not found" });
+        return reply.code(404).send({ error: "Approval not found", statusCode: 404 });
       }
 
       if (!assertOrgAccess(request, approval.organizationId, reply)) return;

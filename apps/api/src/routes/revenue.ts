@@ -25,7 +25,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
   // POST /:orgId/revenue — record a revenue event
   app.post("/:orgId/revenue", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);
@@ -35,7 +35,9 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
 
     const parsed = RecordRevenueInputSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const {
@@ -88,7 +90,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
   // GET /:orgId/revenue — list revenue events by opportunityId or sumByOrg
   app.get("/:orgId/revenue", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);
@@ -109,7 +111,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
   // GET /:orgId/revenue/summary — total revenue by org
   app.get("/:orgId/revenue/summary", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);
@@ -123,7 +125,7 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
   // GET /:orgId/revenue/by-campaign — revenue grouped by campaign
   app.get("/:orgId/revenue/by-campaign", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);

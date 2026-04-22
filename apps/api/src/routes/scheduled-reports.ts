@@ -41,7 +41,7 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/scheduled-reports — list reports for org
   app.get("/", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
     const reports = await prisma.scheduledReport.findMany({
@@ -53,12 +53,14 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/scheduled-reports — create report
   app.post("/", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
     const parsed = createReportSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
+      return reply
+        .code(400)
+        .send({ error: "Validation failed", details: parsed.error.format(), statusCode: 400 });
     }
 
     const nextRunAt = computeNextRunAt(parsed.data.cronExpression, parsed.data.timezone);
@@ -70,19 +72,22 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
   // PUT /api/scheduled-reports/:id — update report
   app.put("/:id", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
     const { id } = request.params as { id: string };
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
     const parsed = updateReportSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Validation failed", details: parsed.error.format() });
+      return reply
+        .code(400)
+        .send({ error: "Validation failed", details: parsed.error.format(), statusCode: 400 });
     }
 
     const existing = await prisma.scheduledReport.findFirst({
       where: { id, organizationId: orgId },
     });
-    if (!existing) return reply.code(404).send({ error: "Scheduled report not found" });
+    if (!existing)
+      return reply.code(404).send({ error: "Scheduled report not found", statusCode: 404 });
 
     const data: Record<string, unknown> = { ...parsed.data };
 
@@ -99,26 +104,28 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
   // DELETE /api/scheduled-reports/:id — delete report
   app.delete("/:id", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
     const { id } = request.params as { id: string };
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
     const existing = await prisma.scheduledReport.findFirst({
       where: { id, organizationId: orgId },
     });
-    if (!existing) return reply.code(404).send({ error: "Scheduled report not found" });
+    if (!existing)
+      return reply.code(404).send({ error: "Scheduled report not found", statusCode: 404 });
     await prisma.scheduledReport.delete({ where: { id } });
     return reply.send({ id, deleted: true });
   });
 
   // POST /api/scheduled-reports/:id/run — manually trigger report
   app.post("/:id/run", async (request, reply) => {
-    if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+    if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
     const { id } = request.params as { id: string };
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
     const report = await prisma.scheduledReport.findFirst({ where: { id, organizationId: orgId } });
-    if (!report) return reply.code(404).send({ error: "Scheduled report not found" });
+    if (!report)
+      return reply.code(404).send({ error: "Scheduled report not found", statusCode: 404 });
 
     try {
       const vertical = report.vertical ?? "commerce";
@@ -126,7 +133,9 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
 
       const cartridge = app.storageContext.cartridges.get(cartridgeId);
       if (!cartridge)
-        return reply.code(400).send({ error: `${cartridgeId} cartridge not registered` });
+        return reply
+          .code(400)
+          .send({ error: `${cartridgeId} cartridge not registered`, statusCode: 400 });
 
       const actionId = resolveDiagnoseAction(cartridgeId, report.reportType);
 
@@ -134,7 +143,9 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
         execute?: (id: string, p: unknown) => Promise<{ data: unknown }>;
       };
       if (typeof executeCapable.execute !== "function") {
-        return reply.code(501).send({ error: `${cartridgeId} cartridge does not support execute` });
+        return reply
+          .code(501)
+          .send({ error: `${cartridgeId} cartridge does not support execute`, statusCode: 501 });
       }
 
       const result = await executeCapable.execute(actionId, {
@@ -153,7 +164,9 @@ export const scheduledReportsRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ success: true, data: result?.data ?? null });
     } catch (err: any) {
       app.log.error({ err, reportId: id }, "Manual report run failed");
-      return reply.code(500).send({ error: "Report run failed", detail: err.message });
+      return reply
+        .code(500)
+        .send({ error: "Report run failed", detail: err.message, statusCode: 500 });
     }
   });
 };

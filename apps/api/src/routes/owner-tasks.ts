@@ -5,7 +5,8 @@ import { requireOrganizationScope } from "../utils/require-org.js";
 
 export const ownerTaskRoutes: FastifyPluginAsync = async (app) => {
   app.get("/:orgId/tasks", async (request, reply) => {
-    if (!app.prisma) return reply.code(503).send({ error: "Database not available" });
+    if (!app.prisma)
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
 
@@ -15,7 +16,8 @@ export const ownerTaskRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch("/:orgId/tasks/:taskId", async (request, reply) => {
-    if (!app.prisma) return reply.code(503).send({ error: "Database not available" });
+    if (!app.prisma)
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     const orgId = requireOrganizationScope(request, reply);
     if (!orgId) return;
 

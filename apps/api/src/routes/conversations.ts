@@ -197,16 +197,18 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const prisma = app.prisma;
-      if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
 
       const parsed = conversationsQuerySchema.safeParse(request.query);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Invalid query", details: parsed.error.format() });
+        return reply
+          .code(400)
+          .send({ error: "Invalid query", details: parsed.error.format(), statusCode: 400 });
       }
 
       const orgId = request.organizationIdFromAuth;
       if (!orgId) {
-        return reply.code(403).send({ error: "Organization scope required" });
+        return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
       }
 
       const result = await buildConversationList(prisma as unknown as PrismaLike, orgId, {
@@ -232,12 +234,12 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const prisma = app.prisma;
-      if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
 
       const { threadId } = request.params as { threadId: string };
       const orgId = request.organizationIdFromAuth;
       if (!orgId) {
-        return reply.code(403).send({ error: "Organization scope required" });
+        return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
       }
 
       const detail = await buildConversationDetail(
@@ -246,7 +248,7 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
         threadId,
       );
       if (!detail) {
-        return reply.code(404).send({ error: "Conversation not found" });
+        return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
       }
 
       return reply.send(detail);
@@ -264,20 +266,20 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const prisma = app.prisma;
-      if (!prisma) return reply.code(503).send({ error: "Database unavailable" });
+      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
 
       const { threadId } = request.params as { threadId: string };
       const body = request.body as { override?: boolean };
       const orgId = request.organizationIdFromAuth;
       if (!orgId) {
-        return reply.code(403).send({ error: "Organization scope required" });
+        return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
       }
 
       const existing = await (prisma as unknown as PrismaLike).conversationState.findFirst({
         where: { threadId, organizationId: orgId },
       });
       if (!existing) {
-        return reply.code(404).send({ error: "Conversation not found" });
+        return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
       }
 
       const status = body.override === false ? "active" : "human_override";

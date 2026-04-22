@@ -11,11 +11,13 @@ const SimulateChatRequestSchema = z.object({
 const simulateChatRoutes: FastifyPluginAsync = async (app) => {
   app.post("/api/simulate-chat", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
-    if (!orgId) return reply.code(401).send({ error: "Unauthorized" });
+    if (!orgId) return reply.code(401).send({ error: "Unauthorized", statusCode: 401 });
 
     const parsed = SimulateChatRequestSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid request", issues: parsed.error.issues });
+      return reply
+        .code(400)
+        .send({ error: "Invalid request", issues: parsed.error.issues, statusCode: 400 });
     }
 
     const { playbook, userMessage } = parsed.data;
@@ -44,6 +46,7 @@ const simulateChatRoutes: FastifyPluginAsync = async (app) => {
         error: "Simulation temporarily unavailable",
         alexMessage: "",
         annotations: [],
+        statusCode: 503,
       });
     }
   });

@@ -42,7 +42,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 
@@ -157,16 +157,19 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
           return reply.code(422).send({
             status: "needs_clarification",
             question: err.question,
+            statusCode: 422,
           });
         }
         if (err instanceof NotFoundError) {
           return reply.code(404).send({
             status: "not_found",
             explanation: err.explanation,
+            statusCode: 404,
           });
         }
         return reply.code(500).send({
           error: sanitizeErrorMessage(err, 500),
+          statusCode: 500,
         });
       }
     },
@@ -187,7 +190,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
       const envelope = await app.storageContext.envelopes.getById(id);
       if (!envelope) {
-        return reply.code(404).send({ error: "Envelope not found" });
+        return reply.code(404).send({ error: "Envelope not found", statusCode: 404 });
       }
 
       const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
@@ -219,6 +222,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       } catch (err) {
         return reply.code(400).send({
           error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
         });
       }
     },
@@ -240,7 +244,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
 
       const envelope = await app.storageContext.envelopes.getById(id);
       if (!envelope) {
-        return reply.code(404).send({ error: "Envelope not found" });
+        return reply.code(404).send({ error: "Envelope not found", statusCode: 404 });
       }
 
       const envelopeOrgId = envelope.proposals[0]?.parameters["_organizationId"] as
@@ -254,6 +258,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         if (!result.undoSubmitted) {
           return reply.code(400).send({
             error: result.error ?? "Undo submission failed",
+            statusCode: 400,
           });
         }
         return reply.code(201).send({
@@ -263,6 +268,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       } catch (err) {
         return reply.code(400).send({
           error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
         });
       }
     },
@@ -301,7 +307,7 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 

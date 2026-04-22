@@ -38,7 +38,7 @@ export const competenceRoutes: FastifyPluginAsync = async (app) => {
 
       const record = await app.storageContext.competence.getRecord(principalId, actionType);
       if (!record) {
-        return reply.code(404).send({ error: "Competence record not found" });
+        return reply.code(404).send({ error: "Competence record not found", statusCode: 404 });
       }
       return reply.code(200).send({ record });
     },
@@ -52,7 +52,7 @@ export const competenceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_request, reply) => {
       if (!app.prisma) {
-        return reply.code(503).send({ error: "Database not available" });
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
       const policies = await app.prisma.competencePolicy.findMany({
@@ -71,7 +71,7 @@ export const competenceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.prisma) {
-        return reply.code(503).send({ error: "Database not available" });
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
       const body = request.body as {
@@ -104,7 +104,7 @@ export const competenceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.prisma) {
-        return reply.code(503).send({ error: "Database not available" });
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
       const { id } = request.params as { id: string };
@@ -135,7 +135,7 @@ export const competenceRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.prisma) {
-        return reply.code(503).send({ error: "Database not available" });
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
       const { id } = request.params as { id: string };

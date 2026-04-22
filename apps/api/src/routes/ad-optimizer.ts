@@ -19,7 +19,7 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
     if (mode === "subscribe" && token === VERIFY_TOKEN) {
       return reply.code(200).send(challenge);
     }
-    return reply.code(403).send({ error: "Verification failed" });
+    return reply.code(403).send({ error: "Verification failed", statusCode: 403 });
   });
 
   // Meta Leads webhook receiver (POST) — thin adapter into PlatformIngress
