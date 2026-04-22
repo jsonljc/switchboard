@@ -94,7 +94,7 @@ export default function DecidePage() {
   const { data: session, status } = useSession();
   const { data: approvalsData, isLoading } = useApprovals();
   const { data: historyData } = useAudit({ limit: 50 });
-  const { data: allTaskData } = useTasks();
+  const { data: allTaskData, isLoading: tasksLoading } = useTasks();
   const reviewTask = useReviewTask();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"pending" | "history" | "tasks">("pending");
@@ -284,7 +284,7 @@ export default function DecidePage() {
 
       {tab === "tasks" && (
         <div className="space-y-4">
-          {isLoading ? (
+          {tasksLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-xl" />
             ))

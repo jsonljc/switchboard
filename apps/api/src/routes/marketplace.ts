@@ -305,6 +305,9 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const updated = await store.update(id, { inputConfig });
+    if (!updated) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
     return reply.send({ deployment: updated });
   });
 
