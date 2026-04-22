@@ -1,7 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
 import { parseLeadWebhook } from "@switchboard/ad-optimizer";
 
-const VERIFY_TOKEN = process.env["META_WEBHOOK_VERIFY_TOKEN"] ?? "switchboard-verify";
+function getVerifyToken(): string {
+  const token = process.env["META_WEBHOOK_VERIFY_TOKEN"];
+  if (!token) {
+    throw new Error(
+      "META_WEBHOOK_VERIFY_TOKEN is required. " +
+        "Set this to the verify token configured in your Meta webhook settings.",
+    );
+  }
+  return token;
+}
 
 export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
   // Meta Leads webhook verification (GET)
@@ -16,7 +25,16 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
     const token = request.query["hub.verify_token"];
     const challenge = request.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    let verifyToken: string;
+    try {
+      verifyToken = getVerifyToken();
+    } catch {
+      return reply
+        .code(500)
+        .send({ error: "Webhook verification not configured", statusCode: 500 });
+    }
+
+    if (mode === "subscribe" && token === verifyToken) {
       return reply.code(200).send(challenge);
     }
     return reply.code(403).send({ error: "Verification failed", statusCode: 403 });
