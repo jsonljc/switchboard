@@ -8,11 +8,16 @@ import { RespondDialog } from "@/components/approvals/respond-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApprovals } from "@/hooks/use-approvals";
 import { useAudit } from "@/hooks/use-audit";
+import { useTasks, useReviewTask } from "@/hooks/use-marketplace";
+import { TaskCard } from "@/components/tasks/task-card";
+import { CreativeTaskCard } from "@/components/tasks/creative-task-card";
+import { TaskReviewDialog } from "@/components/tasks/task-review-dialog";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { formatRelative } from "@/lib/format";
 import { CONSEQUENCE } from "@/lib/approval-constants";
 import { useToast } from "@/components/ui/use-toast";
+import type { MarketplaceTask } from "@/lib/api-client";
 
 const APPROVAL_EVENT_TYPES = ["action.approved", "action.rejected", "action.expired"];
 
@@ -89,9 +94,17 @@ export default function DecidePage() {
   const { data: session, status } = useSession();
   const { data: approvalsData, isLoading } = useApprovals();
   const { data: historyData } = useAudit({ limit: 50 });
+  const { data: allTaskData } = useTasks();
+  const reviewTask = useReviewTask();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"pending" | "history">("pending");
+  const [tab, setTab] = useState<"pending" | "history" | "tasks">("pending");
   const { toast } = useToast();
+
+  const [taskDialog, setTaskDialog] = useState<{
+    open: boolean;
+    action: "approved" | "rejected";
+    task: MarketplaceTask;
+  } | null>(null);
 
   const [dialog, setDialog] = useState<{
     open: boolean;
@@ -182,6 +195,35 @@ export default function DecidePage() {
 
   const pendingCount = approvalsData?.approvals.length ?? 0;
 
+  const allTasks = allTaskData ?? [];
+  const reviewableTasks = allTasks.filter((t) => t.status === "awaiting_review" && t.output);
+  const reviewableCount = reviewableTasks.length;
+
+  const handleTaskReview = async (result: "approved" | "rejected", reviewResult?: string) => {
+    if (!taskDialog) return;
+    try {
+      await reviewTask.mutateAsync({
+        taskId: taskDialog.task.id,
+        result,
+        reviewResult,
+      });
+      toast({
+        title: result === "approved" ? "Approved" : "Rejected",
+        description:
+          result === "approved"
+            ? "Trust score updated. Agent earns more autonomy."
+            : "Trust score updated. Agent requires more oversight.",
+      });
+      setTaskDialog(null);
+    } catch (err) {
+      toast({
+        title: "Review failed",
+        description: err instanceof Error ? err.message : "Something went wrong",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-10">
       <section>
@@ -194,8 +236,9 @@ export default function DecidePage() {
         {(
           [
             { key: "pending", label: `Pending${pendingCount > 0 ? ` · ${pendingCount}` : ""}` },
+            { key: "tasks", label: `Tasks${reviewableCount > 0 ? ` · ${reviewableCount}` : ""}` },
             { key: "history", label: "History" },
-          ] as { key: "pending" | "history"; label: string }[]
+          ] as { key: "pending" | "history" | "tasks"; label: string }[]
         ).map((t) => (
           <button
             key={t.key}
@@ -239,6 +282,35 @@ export default function DecidePage() {
         </div>
       )}
 
+      {tab === "tasks" && (
+        <div className="space-y-4">
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 rounded-xl" />
+            ))
+          ) : reviewableTasks.length === 0 ? (
+            <div className="py-16 text-center">
+              <p className="text-[15px] text-foreground font-medium">Nothing to review.</p>
+              <p className="text-[14px] text-muted-foreground mt-1.5">
+                Agent outputs will appear here when they need your approval.
+              </p>
+            </div>
+          ) : (
+            reviewableTasks.map((task) => {
+              const Card = task.category === "creative_strategy" ? CreativeTaskCard : TaskCard;
+              return (
+                <Card
+                  key={task.id}
+                  task={task}
+                  onApprove={(t) => setTaskDialog({ open: true, action: "approved", task: t })}
+                  onReject={(t) => setTaskDialog({ open: true, action: "rejected", task: t })}
+                />
+              );
+            })
+          )}
+        </div>
+      )}
+
       {tab === "history" && (
         <div>
           {historyEntries.length === 0 ? (
@@ -272,6 +344,17 @@ export default function DecidePage() {
               bindingHash: dialog.approval.bindingHash,
             })
           }
+        />
+      )}
+
+      {taskDialog && (
+        <TaskReviewDialog
+          open={taskDialog.open}
+          onClose={() => setTaskDialog(null)}
+          action={taskDialog.action}
+          taskCategory={taskDialog.task.category}
+          isLoading={reviewTask.isPending}
+          onConfirm={(reviewResult) => handleTaskReview(taskDialog.action, reviewResult)}
         />
       )}
     </div>
