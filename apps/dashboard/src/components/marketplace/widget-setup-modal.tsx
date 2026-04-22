@@ -35,8 +35,13 @@ export function WidgetSetupModal({ deploymentId, onClose, onConnected }: WidgetS
     }
   }
 
+  const chatServerUrl =
+    process.env.NEXT_PUBLIC_CHAT_SERVER_URL ??
+    process.env.NEXT_PUBLIC_CHAT_URL ??
+    "http://localhost:3001";
+
   const embedSnippet = token
-    ? `<script src="${window.location.origin}/widget.js" data-token="${token}"></script>`
+    ? `<script src="${chatServerUrl}/widget.js" data-token="${token}" async></script>`
     : "";
 
   function handleCopy() {

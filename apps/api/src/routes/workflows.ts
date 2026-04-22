@@ -21,14 +21,14 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const workflow = await workflowEngine.getWorkflow(request.params.id);
       if (!workflow) {
-        return reply.status(404).send({ error: "Workflow not found" });
+        return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
       }
       // Verify org scoping if provided
       if (
         request.query.organizationId &&
         workflow.organizationId !== request.query.organizationId
       ) {
-        return reply.status(404).send({ error: "Workflow not found" });
+        return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
       }
       return reply.send(workflow);
     },
@@ -40,7 +40,7 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   }>("/", async (request, reply) => {
     const { organizationId, status, limit } = request.query;
     if (!organizationId) {
-      return reply.status(400).send({ error: "organizationId required" });
+      return reply.status(400).send({ error: "organizationId required", statusCode: 400 });
     }
 
     // Validate status if provided
@@ -48,7 +48,7 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
     if (status) {
       const parsed = WorkflowStatusSchema.safeParse(status);
       if (!parsed.success) {
-        return reply.status(400).send({ error: `Invalid status: ${status}` });
+        return reply.status(400).send({ error: `Invalid status: ${status}`, statusCode: 400 });
       }
       validatedStatus = parsed.data;
     }
@@ -70,14 +70,14 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
         if (request.query.organizationId) {
           const workflow = await workflowEngine.getWorkflow(request.params.id);
           if (!workflow || workflow.organizationId !== request.query.organizationId) {
-            return reply.status(404).send({ error: "Workflow not found" });
+            return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
           }
         }
         await workflowEngine.cancelWorkflow(request.params.id);
         return reply.send({ success: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return reply.status(400).send({ error: message });
+        return reply.status(400).send({ error: message, statusCode: 400 });
       }
     },
   );
@@ -88,7 +88,7 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   }>("/actions/pending", async (request, reply) => {
     const { organizationId, limit } = request.query;
     if (!organizationId) {
-      return reply.status(400).send({ error: "organizationId required" });
+      return reply.status(400).send({ error: "organizationId required", statusCode: 400 });
     }
     const actions = await store.actions.listByStatus(
       organizationId,
@@ -127,9 +127,9 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("not found")) {
-        return reply.status(404).send({ error: message });
+        return reply.status(404).send({ error: message, statusCode: 404 });
       }
-      return reply.status(400).send({ error: message });
+      return reply.status(400).send({ error: message, statusCode: 400 });
     }
   });
 }

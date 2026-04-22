@@ -219,7 +219,7 @@ export async function buildDashboardOverview(
 export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
   app.get("/:orgId/dashboard/overview", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);
@@ -276,7 +276,7 @@ export const dashboardOverviewRoutes: FastifyPluginAsync = async (app) => {
       return reply.send(overview);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Dashboard query failed";
-      return reply.code(500).send({ error: message });
+      return reply.code(500).send({ error: message, statusCode: 500 });
     }
   });
 };

@@ -26,13 +26,15 @@ export const simulateRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 
       const cartridgeId = body.cartridgeId ?? inferCartridgeId(body.actionType);
       if (!cartridgeId) {
-        return reply.code(400).send({ error: "Cannot infer cartridgeId from actionType" });
+        return reply
+          .code(400)
+          .send({ error: "Cannot infer cartridgeId from actionType", statusCode: 400 });
       }
 
       try {
@@ -47,6 +49,7 @@ export const simulateRoutes: FastifyPluginAsync = async (app) => {
       } catch (err) {
         return reply.code(400).send({
           error: sanitizeErrorMessage(err, 400),
+          statusCode: 400,
         });
       }
     },

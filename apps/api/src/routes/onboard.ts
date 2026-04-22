@@ -47,15 +47,17 @@ export const onboardRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/onboard", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
-    if (!orgId) return reply.code(401).send({ error: "Unauthorized" });
+    if (!orgId) return reply.code(401).send({ error: "Unauthorized", statusCode: 401 });
 
     const parsed = OnboardInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error.issues, statusCode: 400 });
     }
     const body = parsed.data;
     const listing = await listingStore.findById(body.listingId);
-    if (!listing) return reply.code(404).send({ error: "Listing not found" });
+    if (!listing) return reply.code(404).send({ error: "Listing not found", statusCode: 404 });
 
     // Resolve onboarding config
     const metadata = (listing.metadata as Record<string, unknown>) ?? {};

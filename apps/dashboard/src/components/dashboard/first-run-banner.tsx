@@ -8,7 +8,7 @@ interface FirstRunBannerProps {
 
 const ACTIONS = [
   { title: "Review first conversations", href: "/decide" },
-  { title: "Send a test lead", href: "#test-lead" },
+  { title: "Send a test lead", href: "/my-agent" },
   { title: "Refine your playbook", href: "/settings/playbook" },
 ];
 

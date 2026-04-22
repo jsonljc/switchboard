@@ -50,7 +50,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const now = new Date();
@@ -95,7 +95,7 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const policy = await app.storageContext.policies.getById(id);
       if (!policy) {
-        return reply.code(404).send({ error: "Policy not found" });
+        return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, policy.organizationId, reply)) return;
       return reply.code(200).send({ policy });
@@ -122,12 +122,12 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const existing = await app.storageContext.policies.getById(id);
       if (!existing) {
-        return reply.code(404).send({ error: "Policy not found" });
+        return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
@@ -171,13 +171,13 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const existing = await app.storageContext.policies.getById(id);
       if (!existing) {
-        return reply.code(404).send({ error: "Policy not found" });
+        return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
       const deleted = await app.storageContext.policies.delete(id);
       if (!deleted) {
-        return reply.code(404).send({ error: "Policy not found" });
+        return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }
       if (existing) {
         await app.policyCache.invalidate(existing.cartridgeId ?? undefined);

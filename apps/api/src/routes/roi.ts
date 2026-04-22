@@ -10,7 +10,7 @@ export const roiRoutes: FastifyPluginAsync = async (app) => {
   // GET /:orgId/roi/summary — single aggregate ROI endpoint
   app.get("/:orgId/roi/summary", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = requireOrganizationScope(request, reply);

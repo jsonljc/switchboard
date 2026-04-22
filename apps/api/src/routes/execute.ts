@@ -39,7 +39,7 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 
@@ -164,22 +164,26 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
           return reply.code(422).send({
             status: "needs_clarification",
             question: err.question,
+            statusCode: 422,
           });
         }
         if (err instanceof NotFoundError) {
           return reply.code(404).send({
             status: "not_found",
             explanation: err.explanation,
+            statusCode: 404,
           });
         }
         if (err instanceof Error && err.message.includes("cartridgeId")) {
           return reply.code(400).send({
             error: err.message,
             actionType: body.action.actionType,
+            statusCode: 400,
           });
         }
         return reply.code(500).send({
           error: sanitizeErrorMessage(err, 500),
+          statusCode: 500,
         });
       }
     },

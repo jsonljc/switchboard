@@ -94,6 +94,7 @@ export default function MePage() {
         <h2 className="section-label mb-3">Settings</h2>
         <div className="space-y-2">
           {[
+            { href: "/settings/playbook", label: "Playbook" },
             { href: "/settings/channels", label: "Channels" },
             { href: "/settings/knowledge", label: "Knowledge" },
             { href: "/settings/identity", label: "Identity" },

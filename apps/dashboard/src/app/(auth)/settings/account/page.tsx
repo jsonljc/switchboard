@@ -5,8 +5,6 @@ import { redirect } from "next/navigation";
 import { SpendLimitsForm } from "@/components/settings/spend-limits-form";
 import { ForbiddenList } from "@/components/settings/forbidden-list";
 import { GovernanceMode } from "@/components/settings/governance-mode";
-import { ChannelManagement } from "@/components/settings/channel-management";
-import { ConnectionsList } from "@/components/settings/connections-list";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -124,7 +122,6 @@ export default function SettingsAccountPage() {
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="boundaries">How your assistant works</TabsTrigger>
-          <TabsTrigger value="connections">Connections</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 mt-4">
@@ -197,11 +194,6 @@ export default function SettingsAccountPage() {
               />
             </>
           )}
-        </TabsContent>
-
-        <TabsContent value="connections" className="space-y-6 mt-4">
-          <ConnectionsList />
-          <ChannelManagement />
         </TabsContent>
       </Tabs>
     </div>

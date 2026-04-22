@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SectionLabel } from "./section-label";
 
 interface RevenueSummaryProps {
@@ -26,7 +27,15 @@ export function RevenueSummary({
 }: RevenueSummaryProps) {
   return (
     <div>
-      <SectionLabel>Revenue (7d)</SectionLabel>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <SectionLabel>Revenue (7d)</SectionLabel>
+        <Link
+          href="/dashboard/roi"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          See details →
+        </Link>
+      </div>
       <div
         style={{
           marginTop: "12px",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
+import { proxyError } from "@/lib/proxy-error";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -7,17 +8,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     const action = body?.action;
     if (action !== "continue" && action !== "stop") {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid action", statusCode: 400 }, { status: 400 });
     }
     const productionTier = body?.productionTier;
     const client = await getApiClient();
     const data = await client.approveCreativeJobStage(id, action, productionTier);
     return NextResponse.json(data);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Request failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Unauthorized" ? 401 : 500 },
+    return proxyError(
+      err instanceof Error ? { error: err.message } : {},
+      err instanceof Error && err.message === "Unauthorized" ? 401 : 500,
     );
   }
 }

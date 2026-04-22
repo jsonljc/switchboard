@@ -187,7 +187,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const entry = await app.auditLedger.getById(id);
       if (!entry) {
-        return reply.code(404).send({ error: "Audit entry not found" });
+        return reply.code(404).send({ error: "Audit entry not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, entry.organizationId, reply)) return;
       return reply.code(200).send({ entry });

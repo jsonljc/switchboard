@@ -24,12 +24,12 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
   // GET /persona — get org's persona
   app.get("/persona", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const store = new PrismaAgentPersonaStore(app.prisma);
@@ -40,17 +40,19 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
   // POST /persona — upsert persona
   app.post("/persona", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const parsed = UpsertPersonaInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const store = new PrismaAgentPersonaStore(app.prisma);
@@ -65,17 +67,19 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
   // POST /persona/deploy — upsert persona + create 3 Sales Pipeline deployments
   app.post("/persona/deploy", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const parsed = UpsertPersonaInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     // 1. Upsert persona
@@ -95,7 +99,9 @@ export const marketplacePersonaRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (listings.length === 0) {
-      return reply.code(404).send({ error: "Sales Pipeline agents not found. Run db:seed first." });
+      return reply
+        .code(404)
+        .send({ error: "Sales Pipeline agents not found. Run db:seed first.", statusCode: 404 });
     }
 
     // 3. Create deployments (upsert to avoid duplicates)

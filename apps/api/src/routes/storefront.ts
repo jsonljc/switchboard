@@ -4,7 +4,7 @@ import { decryptCredentials } from "@switchboard/db";
 export const storefrontRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { slug: string } }>("/:slug", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const { slug } = request.params;
@@ -15,7 +15,7 @@ export const storefrontRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!deployment || deployment.status === "inactive") {
-      return reply.code(404).send({ error: "Agent not found" });
+      return reply.code(404).send({ error: "Agent not found", statusCode: 404 });
     }
 
     const inputConfig = deployment.inputConfig as Record<string, unknown>;

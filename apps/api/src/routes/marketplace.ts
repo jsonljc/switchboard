@@ -82,7 +82,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/listings", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaListingStore(app.prisma);
@@ -103,7 +103,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/listings/:id", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaListingStore(app.prisma);
@@ -111,7 +111,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const listing = await store.findById(id);
 
     if (!listing) {
-      return reply.code(404).send({ error: "Listing not found" });
+      return reply.code(404).send({ error: "Listing not found", statusCode: 404 });
     }
 
     // Strip sensitive fields from public listing response
@@ -121,18 +121,20 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/listings", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     // Fix 5: Require auth for listing creation
     if (!request.organizationIdFromAuth) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     // Fix 3: Input validation
     const parsed = CreateListingInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const store = new PrismaListingStore(app.prisma);
@@ -144,7 +146,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/listings/:id/trust", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const trustStore = new PrismaTrustScoreStore(app.prisma);
@@ -159,12 +161,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/listings/:id/trust/progression", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -203,7 +205,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/listings/:id/deploy", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaDeploymentStore(app.prisma);
@@ -211,13 +213,15 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const orgId = request.organizationIdFromAuth;
 
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     // Fix 3: Input validation
     const parsed = DeployInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const deployment = await store.create({
@@ -237,37 +241,99 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/deployments", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaDeploymentStore(app.prisma);
     const orgId = request.organizationIdFromAuth;
 
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const deployments = await store.listByOrg(orgId);
     return reply.send({ deployments });
   });
 
+  app.get<{ Params: { id: string } }>("/deployments/:id", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+    }
+
+    const { id } = request.params;
+    const store = new PrismaDeploymentStore(app.prisma);
+    const deployment = await store.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+    }
+
+    return reply.send({ deployment });
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: { inputConfig?: Record<string, unknown> };
+  }>("/deployments/:id", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+    }
+
+    const { id } = request.params;
+    const store = new PrismaDeploymentStore(app.prisma);
+    const existing = await store.findById(id);
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
+    if (existing.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+    }
+
+    const { inputConfig } = request.body ?? {};
+    if (!inputConfig || typeof inputConfig !== "object") {
+      return reply.code(400).send({ error: "inputConfig is required", statusCode: 400 });
+    }
+
+    const updated = await store.update(id, { inputConfig });
+    if (!updated) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
+    return reply.send({ deployment: updated });
+  });
+
   // ── Tasks ──
 
   app.post("/tasks", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     // Fix 1: Use organizationIdFromAuth instead of accepting from body
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     // Fix 3: Input validation
     const parsed = CreateTaskInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const store = new PrismaAgentTaskStore(app.prisma);
@@ -280,14 +346,14 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/tasks", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaAgentTaskStore(app.prisma);
     const orgId = request.organizationIdFromAuth;
 
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { status, deploymentId } = request.query as Record<string, string | undefined>;
@@ -302,7 +368,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/tasks/:id/submit", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const store = new PrismaAgentTaskStore(app.prisma);
@@ -310,18 +376,20 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
     const task = await store.findById(id);
     if (!task) {
-      return reply.code(404).send({ error: "Task not found" });
+      return reply.code(404).send({ error: "Task not found", statusCode: 404 });
     }
 
     // Verify org ownership
     const orgId = request.organizationIdFromAuth;
     if (orgId && task.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const parsed = SubmitTaskOutput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const updated = await store.submitOutput(id, parsed.data.output);
@@ -330,7 +398,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/tasks/:id/review", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const taskStore = new PrismaAgentTaskStore(app.prisma);
@@ -342,20 +410,22 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     // Fix 3: Input validation
     const parsed = ReviewTaskInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const reviewedBy = request.principalIdFromAuth ?? "unknown";
 
     const task = await taskStore.findById(id);
     if (!task) {
-      return reply.code(404).send({ error: "Task not found" });
+      return reply.code(404).send({ error: "Task not found", statusCode: 404 });
     }
 
     // Verify org ownership
     const orgId = request.organizationIdFromAuth;
     if (orgId && task.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const updated = await taskStore.review(
@@ -384,12 +454,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/deployments/:id/connections/widget", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -397,10 +467,10 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const deployment = await deploymentStore.findById(id);
 
     if (!deployment) {
-      return reply.code(404).send({ error: "Deployment not found" });
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
     }
     if (deployment.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
@@ -408,7 +478,9 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const activeWidget = existing.find((c) => c.type === "web_widget" && c.status === "active");
 
     if (activeWidget) {
-      return reply.code(409).send({ error: "Active web_widget connection already exists" });
+      return reply
+        .code(409)
+        .send({ error: "Active web_widget connection already exists", statusCode: 409 });
     }
 
     const token = "sw_" + randomBytes(15).toString("base64url").slice(0, 20);
@@ -430,12 +502,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/deployments/:id/connections/telegram", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -443,15 +515,17 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const deployment = await deploymentStore.findById(id);
 
     if (!deployment) {
-      return reply.code(404).send({ error: "Deployment not found" });
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
     }
     if (deployment.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const parsed = TelegramConnectInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const { botToken, webhookBaseUrl } = parsed.data;
@@ -465,11 +539,13 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
         result?: { username: string };
       };
       if (!getMeData.ok || !getMeData.result?.username) {
-        return reply.code(400).send({ error: "Invalid Telegram bot token" });
+        return reply.code(400).send({ error: "Invalid Telegram bot token", statusCode: 400 });
       }
       botUsername = getMeData.result.username;
     } catch {
-      return reply.code(502).send({ error: "Failed to validate bot token with Telegram" });
+      return reply
+        .code(502)
+        .send({ error: "Failed to validate bot token with Telegram", statusCode: 502 });
     }
 
     const webhookSecret = randomBytes(32).toString("hex");
@@ -498,11 +574,15 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
       const setWebhookData = (await setWebhookRes.json()) as { ok: boolean };
       if (!setWebhookData.ok) {
         await connectionStore.delete(connection.id);
-        return reply.code(502).send({ error: "Failed to register Telegram webhook" });
+        return reply
+          .code(502)
+          .send({ error: "Failed to register Telegram webhook", statusCode: 502 });
       }
     } catch {
       await connectionStore.delete(connection.id);
-      return reply.code(502).send({ error: "Failed to register Telegram webhook" });
+      return reply
+        .code(502)
+        .send({ error: "Failed to register Telegram webhook", statusCode: 502 });
     }
 
     return reply.code(201).send({
@@ -513,12 +593,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/deployments/:id/connections", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -526,10 +606,10 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const deployment = await deploymentStore.findById(id);
 
     if (!deployment) {
-      return reply.code(404).send({ error: "Deployment not found" });
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
     }
     if (deployment.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
@@ -547,12 +627,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/deployments/:id/connections/:connectionId", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Authentication required" });
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
     }
 
     const { id, connectionId } = request.params as { id: string; connectionId: string };
@@ -560,10 +640,10 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const deployment = await deploymentStore.findById(id);
 
     if (!deployment) {
-      return reply.code(404).send({ error: "Deployment not found" });
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
     }
     if (deployment.organizationId !== orgId) {
-      return reply.code(403).send({ error: "Forbidden" });
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
     }
 
     const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
@@ -571,7 +651,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const connection = connections.find((c) => c.id === connectionId);
 
     if (!connection) {
-      return reply.code(404).send({ error: "Connection not found" });
+      return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
     }
 
     // For Telegram connections, clean up the webhook
@@ -599,12 +679,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     Querystring: { limit?: string; cursor?: string };
   }>("/deployments/:deploymentId/traces", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { deploymentId } = request.params;
@@ -621,12 +701,12 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     Params: { traceId: string };
   }>("/traces/:traceId", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { traceId } = request.params;
@@ -635,7 +715,7 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     const trace = await traceStore.findById(orgId, traceId);
 
     if (!trace) {
-      return reply.status(404).send({ error: "Trace not found" });
+      return reply.status(404).send({ error: "Trace not found", statusCode: 404 });
     }
 
     return reply.send({ trace });

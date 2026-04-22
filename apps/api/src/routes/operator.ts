@@ -90,12 +90,14 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const orgId = request.organizationIdFromAuth;
       if (!orgId) {
-        return reply.status(401).send({ error: "Organization context required" });
+        return reply.status(401).send({ error: "Organization context required", statusCode: 401 });
       }
 
       const parsed = CommandBodySchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid input", details: parsed.error.issues });
+        return reply
+          .status(400)
+          .send({ error: "Invalid input", details: parsed.error.issues, statusCode: 400 });
       }
 
       const { rawInput, channel, operatorId } = parsed.data;
@@ -195,12 +197,14 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
   app.get("/commands", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.status(401).send({ error: "Organization context required" });
+      return reply.status(401).send({ error: "Organization context required", statusCode: 401 });
     }
 
     const queryParsed = CommandsQuerySchema.safeParse(request.query);
     if (!queryParsed.success) {
-      return reply.status(400).send({ error: "Invalid query", details: queryParsed.error.issues });
+      return reply
+        .status(400)
+        .send({ error: "Invalid query", details: queryParsed.error.issues, statusCode: 400 });
     }
 
     const commands = await deps.commandStore.listCommands({
@@ -216,19 +220,23 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
   app.post("/command/:id/confirm", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.status(401).send({ error: "Organization context required" });
+      return reply.status(401).send({ error: "Organization context required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
     const command = await deps.commandStore.getCommandById(id);
     if (!command) {
-      return reply.status(404).send({ error: "Command not found" });
+      return reply.status(404).send({ error: "Command not found", statusCode: 404 });
     }
     if (command.organizationId !== orgId) {
-      return reply.status(403).send({ error: "Command belongs to a different organization" });
+      return reply
+        .status(403)
+        .send({ error: "Command belongs to a different organization", statusCode: 403 });
     }
     if (command.status !== "parsed") {
-      return reply.status(409).send({ error: "Command must be in parsed status to confirm" });
+      return reply
+        .status(409)
+        .send({ error: "Command must be in parsed status to confirm", statusCode: 409 });
     }
 
     // Mark as executing
@@ -252,19 +260,23 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
   app.post("/command/:id/cancel", async (request, reply) => {
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.status(401).send({ error: "Organization context required" });
+      return reply.status(401).send({ error: "Organization context required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
     const command = await deps.commandStore.getCommandById(id);
     if (!command) {
-      return reply.status(404).send({ error: "Command not found" });
+      return reply.status(404).send({ error: "Command not found", statusCode: 404 });
     }
     if (command.organizationId !== orgId) {
-      return reply.status(403).send({ error: "Command belongs to a different organization" });
+      return reply
+        .status(403)
+        .send({ error: "Command belongs to a different organization", statusCode: 403 });
     }
     if (command.status !== "parsed") {
-      return reply.status(409).send({ error: "Command must be in parsed status to cancel" });
+      return reply
+        .status(409)
+        .send({ error: "Command must be in parsed status to cancel", statusCode: 409 });
     }
 
     await deps.commandStore.updateCommandStatus(id, "rejected", {

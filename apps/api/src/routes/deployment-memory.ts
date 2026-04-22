@@ -17,7 +17,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Params: { orgId: string; deploymentId: string };
   }>("/:orgId/deployments/:deploymentId/memory", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const store = new PrismaDeploymentMemoryStore(app.prisma);
     const { orgId, deploymentId } = request.params;
@@ -31,13 +31,15 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Body: z.infer<typeof CorrectMemoryInput>;
   }>("/:orgId/deployments/:deploymentId/memory", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const store = new PrismaDeploymentMemoryStore(app.prisma);
     const { orgId, deploymentId } = request.params;
     const parsed = CorrectMemoryInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.issues });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error.issues, statusCode: 400 });
     }
     const body = parsed.data;
     const entry = await store.create({
@@ -55,7 +57,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Params: { orgId: string; deploymentId: string; memoryId: string };
   }>("/:orgId/deployments/:deploymentId/memory/:memoryId", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const store = new PrismaDeploymentMemoryStore(app.prisma);
     const { orgId, deploymentId, memoryId } = request.params;
@@ -63,7 +65,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     const entries = await store.listByDeployment(orgId, deploymentId);
     const entry = entries.find((e) => e.id === memoryId);
     if (!entry) {
-      return reply.code(404).send({ error: "Memory entry not found" });
+      return reply.code(404).send({ error: "Memory entry not found", statusCode: 404 });
     }
     await store.delete(memoryId);
     return reply.status(204).send();
@@ -74,7 +76,7 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Params: { orgId: string; deploymentId: string };
   }>("/:orgId/deployments/:deploymentId/faq-drafts", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
     const { orgId, deploymentId } = request.params;
@@ -87,14 +89,14 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Params: { orgId: string; deploymentId: string; faqId: string };
   }>("/:orgId/deployments/:deploymentId/faq-drafts/:faqId/approve", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
     const { orgId, deploymentId, faqId } = request.params;
     // Verify the FAQ belongs to this org+deployment
     const drafts = await ownerStore.listDraftFAQs(orgId, deploymentId);
     if (!drafts.some((d) => d.id === faqId)) {
-      return reply.code(404).send({ error: "FAQ draft not found" });
+      return reply.code(404).send({ error: "FAQ draft not found", statusCode: 404 });
     }
     await ownerStore.approveDraftFAQ(faqId);
     return { success: true };
@@ -105,14 +107,14 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
     Params: { orgId: string; deploymentId: string; faqId: string };
   }>("/:orgId/deployments/:deploymentId/faq-drafts/:faqId/reject", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
     const ownerStore = new PrismaOwnerMemoryStore(app.prisma);
     const { orgId, deploymentId, faqId } = request.params;
     // Verify the FAQ belongs to this org+deployment
     const drafts = await ownerStore.listDraftFAQs(orgId, deploymentId);
     if (!drafts.some((d) => d.id === faqId)) {
-      return reply.code(404).send({ error: "FAQ draft not found" });
+      return reply.code(404).send({ error: "FAQ draft not found", statusCode: 404 });
     }
     await ownerStore.rejectDraftFAQ(faqId);
     return reply.status(204).send();

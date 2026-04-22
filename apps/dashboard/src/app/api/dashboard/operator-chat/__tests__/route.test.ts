@@ -5,12 +5,16 @@ vi.mock("@/lib/session", () => ({
   requireSession: vi.fn(),
 }));
 
+// Mock getApiClient
+const mockSendOperatorCommand = vi.fn();
+vi.mock("@/lib/get-api-client", () => ({
+  getApiClient: vi.fn(() => ({
+    sendOperatorCommand: mockSendOperatorCommand,
+  })),
+}));
+
 import { POST } from "../route";
 import { requireSession } from "@/lib/session";
-
-// Mock fetch
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
 
 describe("POST /api/dashboard/operator-chat", () => {
   beforeEach(() => {
@@ -35,9 +39,10 @@ describe("POST /api/dashboard/operator-chat", () => {
       organizationId: "org-1",
       principalId: "p-1",
     });
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ commandId: "cmd-1", status: "completed", message: "Done" }),
+    mockSendOperatorCommand.mockResolvedValue({
+      commandId: "cmd-1",
+      status: "completed",
+      message: "Done",
     });
 
     const request = new Request("http://localhost/api/dashboard/operator-chat", {
@@ -51,17 +56,13 @@ describe("POST /api/dashboard/operator-chat", () => {
     expect(body.commandId).toBe("cmd-1");
   });
 
-  it("returns API error status on failure", async () => {
+  it("returns error status on failure", async () => {
     (requireSession as ReturnType<typeof vi.fn>).mockResolvedValue({
       user: { id: "u-1", email: "owner@example.com" },
       organizationId: "org-1",
       principalId: "p-1",
     });
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve("Internal server error"),
-    });
+    mockSendOperatorCommand.mockRejectedValue(new Error("API error: 500"));
 
     const request = new Request("http://localhost/api/dashboard/operator-chat", {
       method: "POST",

@@ -69,7 +69,7 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         await assertSafeUrl(url);
       } catch (err) {
         const message = err instanceof SSRFError ? err.message : "Invalid webhook URL";
-        return reply.code(400).send({ error: message });
+        return reply.code(400).send({ error: message, statusCode: 400 });
       }
 
       const webhook: WebhookRegistration = {
@@ -116,13 +116,13 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const webhook = webhookStore.get(id);
       if (!webhook) {
-        return reply.code(404).send({ error: "Webhook not found" });
+        return reply.code(404).send({ error: "Webhook not found", statusCode: 404 });
       }
 
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
       if (webhook.organizationId !== orgId) {
-        return reply.code(403).send({ error: "Forbidden" });
+        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
       webhookStore.delete(id);
@@ -150,13 +150,13 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const webhook = webhookStore.get(id);
       if (!webhook) {
-        return reply.code(404).send({ error: "Webhook not found" });
+        return reply.code(404).send({ error: "Webhook not found", statusCode: 404 });
       }
 
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
       if (webhook.organizationId !== orgId) {
-        return reply.code(403).send({ error: "Forbidden" });
+        return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
       }
 
       // Re-validate URL at fetch time (DNS rebinding defense)
@@ -164,7 +164,7 @@ export const webhooksRoutes: FastifyPluginAsync = async (app) => {
         await assertSafeUrl(webhook.url);
       } catch (err) {
         const message = err instanceof SSRFError ? err.message : "Invalid webhook URL";
-        return reply.code(400).send({ error: message });
+        return reply.code(400).send({ error: message, statusCode: 400 });
       }
 
       const testPayload = {

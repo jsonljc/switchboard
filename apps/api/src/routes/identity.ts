@@ -38,7 +38,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const now = new Date();
@@ -70,7 +70,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
       const spec = await app.storageContext.identity.getSpecById(id);
       if (!spec) {
-        return reply.code(404).send({ error: "Identity spec not found" });
+        return reply.code(404).send({ error: "Identity spec not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, spec.organizationId, reply)) return;
       return reply.code(200).send({ spec });
@@ -95,7 +95,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       const { principalId } = request.params as { principalId: string };
       const spec = await app.storageContext.identity.getSpecByPrincipalId(principalId);
       if (!spec) {
-        return reply.code(404).send({ error: "Identity spec not found" });
+        return reply.code(404).send({ error: "Identity spec not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, spec.organizationId, reply)) return;
       return reply.code(200).send({ spec });
@@ -122,12 +122,12 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const existing = await app.storageContext.identity.getSpecById(id);
       if (!existing) {
-        return reply.code(404).send({ error: "Identity spec not found" });
+        return reply.code(404).send({ error: "Identity spec not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
 
@@ -159,7 +159,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const now = new Date();
@@ -196,7 +196,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = request.query as { specId?: string };
       if (!query.specId) {
-        return reply.code(400).send({ error: "specId query parameter required" });
+        return reply.code(400).send({ error: "specId query parameter required", statusCode: 400 });
       }
 
       // Check org access via the parent identity spec
@@ -228,12 +228,12 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
 
       const existing = await app.storageContext.identity.getOverlayById(id);
       if (!existing) {
-        return reply.code(404).send({ error: "Role overlay not found" });
+        return reply.code(404).send({ error: "Role overlay not found", statusCode: 404 });
       }
 
       // Check org access via the parent identity spec

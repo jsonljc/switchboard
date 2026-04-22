@@ -24,17 +24,19 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // POST /creative-jobs — submit a brief, create AgentTask + CreativeJob
   app.post("/creative-jobs", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const parsed = SubmitBriefInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const { deploymentId, listingId, brief, mode } = parsed.data;
@@ -99,12 +101,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // GET /creative-jobs — list jobs for org
   app.get("/creative-jobs", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const query = request.query as { deploymentId?: string; limit?: string };
@@ -120,12 +122,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // GET /creative-jobs/:id — get single job with stage outputs
   app.get("/creative-jobs/:id", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -133,7 +135,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     const job = await jobStore.findById(id);
 
     if (!job || job.organizationId !== orgId) {
-      return reply.code(404).send({ error: "Creative job not found" });
+      return reply.code(404).send({ error: "Creative job not found", statusCode: 404 });
     }
 
     return reply.send({ job });
@@ -142,29 +144,31 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // POST /creative-jobs/:id/approve — continue or stop pipeline
   app.post("/creative-jobs/:id/approve", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
     const parsed = ApproveStageInput.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error });
+      return reply
+        .code(400)
+        .send({ error: "Invalid input", details: parsed.error, statusCode: 400 });
     }
 
     const jobStore = new PrismaCreativeJobStore(app.prisma);
     const job = await jobStore.findById(id);
 
     if (!job || job.organizationId !== orgId) {
-      return reply.code(404).send({ error: "Creative job not found" });
+      return reply.code(404).send({ error: "Creative job not found", statusCode: 404 });
     }
 
     if (job.currentStage === "complete" || job.stoppedAt) {
-      return reply.code(409).send({ error: "Job is not awaiting approval" });
+      return reply.code(409).send({ error: "Job is not awaiting approval", statusCode: 409 });
     }
 
     // UGC mode: emit phase-specific approval event
@@ -214,12 +218,12 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
   // GET /creative-jobs/:id/estimate — cost estimate per tier
   app.get("/creative-jobs/:id/estimate", async (request, reply) => {
     if (!app.prisma) {
-      return reply.code(503).send({ error: "Database not available" });
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
     }
 
     const orgId = request.organizationIdFromAuth;
     if (!orgId) {
-      return reply.code(401).send({ error: "Organization required" });
+      return reply.code(401).send({ error: "Organization required", statusCode: 401 });
     }
 
     const { id } = request.params as { id: string };
@@ -227,7 +231,7 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     const job = await jobStore.findById(id);
 
     if (!job || job.organizationId !== orgId) {
-      return reply.code(404).send({ error: "Creative job not found" });
+      return reply.code(404).send({ error: "Creative job not found", statusCode: 404 });
     }
 
     const stageOutputs = (job.stageOutputs ?? {}) as Record<string, unknown>;

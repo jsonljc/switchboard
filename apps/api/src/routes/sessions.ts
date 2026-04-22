@@ -15,14 +15,14 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.sessionManager) {
-        return reply.code(503).send({ error: "Session runtime not enabled" });
+        return reply.code(503).send({ error: "Session runtime not enabled", statusCode: 503 });
       }
 
       const parsed = CreateSessionRequestSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
           .code(400)
-          .send({ error: "Invalid request body", details: parsed.error.issues });
+          .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
 
@@ -71,7 +71,7 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
         });
       } catch (err) {
         if (err instanceof Error && err.message.includes("Concurrent session limit")) {
-          return reply.code(429).send({ error: err.message });
+          return reply.code(429).send({ error: err.message, statusCode: 429 });
         }
         throw err;
       }
@@ -90,13 +90,13 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.sessionManager) {
-        return reply.code(503).send({ error: "Session runtime not enabled" });
+        return reply.code(503).send({ error: "Session runtime not enabled", statusCode: 503 });
       }
 
       const { id } = request.params as { id: string };
       const session = await app.sessionManager.getSession(id);
       if (!session) {
-        return reply.code(404).send({ error: "Session not found" });
+        return reply.code(404).send({ error: "Session not found", statusCode: 404 });
       }
 
       if (!assertOrgAccess(request, session.organizationId, reply)) return;
@@ -117,13 +117,13 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       if (!app.sessionManager) {
-        return reply.code(503).send({ error: "Session runtime not enabled" });
+        return reply.code(503).send({ error: "Session runtime not enabled", statusCode: 503 });
       }
 
       const { id } = request.params as { id: string };
       const session = await app.sessionManager.getSession(id);
       if (!session) {
-        return reply.code(404).send({ error: "Session not found" });
+        return reply.code(404).send({ error: "Session not found", statusCode: 404 });
       }
 
       if (!assertOrgAccess(request, session.organizationId, reply)) return;
@@ -134,7 +134,7 @@ export const sessionRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(200).send({ session: updated });
       } catch (err) {
         if (err instanceof Error && err.name === "SessionTransitionError") {
-          return reply.code(409).send({ error: err.message });
+          return reply.code(409).send({ error: err.message, statusCode: 409 });
         }
         throw err;
       }

@@ -49,7 +49,14 @@ export function DeploymentDetailClient({
   const { data: progression, isLoading: progressionLoading } = useTrustProgression(
     listing?.id ?? "",
   );
-  const { data: creativeJobs, isLoading: creativeJobsLoading } = useCreativeJobs(deploymentId);
+
+  const isCreativeListing = !!(
+    listing?.metadata && (listing.metadata as Record<string, unknown>).family === "creative"
+  );
+
+  const { data: creativeJobs, isLoading: creativeJobsLoading } = useCreativeJobs(
+    isCreativeListing ? deploymentId : "",
+  );
   const [briefSheetOpen, setBriefSheetOpen] = useState(false);
 
   const workLogTasks = (tasks ?? []).map((t) => ({
@@ -177,40 +184,44 @@ export function DeploymentDetailClient({
       </section>
 
       {/* Creative Jobs */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="section-label">Creative Jobs</h2>
-          {listingId && (
-            <Button variant="outline" size="sm" onClick={() => setBriefSheetOpen(true)}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              New Creative Job
-            </Button>
-          )}
-        </div>
-        <div className="rounded-xl border border-border bg-surface p-6">
-          {creativeJobsLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12" />
-              <Skeleton className="h-12" />
+      {isCreativeListing && (
+        <>
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="section-label">Creative Jobs</h2>
+              {listingId && (
+                <Button variant="outline" size="sm" onClick={() => setBriefSheetOpen(true)}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  New Creative Job
+                </Button>
+              )}
             </div>
-          ) : creativeJobs && creativeJobs.length > 0 ? (
-            <div className="space-y-2">
-              {creativeJobs.map((job) => (
-                <CreativeJobCard key={job.id} job={job} deploymentId={deploymentId} />
-              ))}
+            <div className="rounded-xl border border-border bg-surface p-6">
+              {creativeJobsLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-12" />
+                  <Skeleton className="h-12" />
+                </div>
+              ) : creativeJobs && creativeJobs.length > 0 ? (
+                <div className="space-y-2">
+                  {creativeJobs.map((job) => (
+                    <CreativeJobCard key={job.id} job={job} deploymentId={deploymentId} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-muted-foreground">No creative jobs yet</p>
+              )}
             </div>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">No creative jobs yet</p>
-          )}
-        </div>
-      </section>
+          </section>
 
-      <BriefSubmissionSheet
-        open={briefSheetOpen}
-        onOpenChange={setBriefSheetOpen}
-        deploymentId={deploymentId}
-        listingId={listingId}
-      />
+          <BriefSubmissionSheet
+            open={briefSheetOpen}
+            onOpenChange={setBriefSheetOpen}
+            deploymentId={deploymentId}
+            listingId={listingId}
+          />
+        </>
+      )}
 
       {listing?.metadata &&
         (listing.metadata as Record<string, unknown>).family === "paid_media" &&

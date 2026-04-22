@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 export const ingressRoutes: FastifyPluginAsync = async (app) => {
   app.post("/ingress/submit", async (request, reply) => {
     if (!app.platformIngress) {
-      return reply.code(503).send({ error: "PlatformIngress not available" });
+      return reply.code(503).send({ error: "PlatformIngress not available", statusCode: 503 });
     }
 
     const body = request.body as {
@@ -19,7 +19,7 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
     };
 
     if (!body.organizationId || !body.intent) {
-      return reply.code(400).send({ error: "Missing organizationId or intent" });
+      return reply.code(400).send({ error: "Missing organizationId or intent", statusCode: 400 });
     }
 
     try {
@@ -42,6 +42,7 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(500).send({
         ok: false,
         error: { type: "internal_error", message },
+        statusCode: 500,
       });
     }
   });

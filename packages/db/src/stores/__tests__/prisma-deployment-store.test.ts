@@ -159,6 +159,68 @@ describe("PrismaDeploymentStore", () => {
     });
   });
 
+  describe("update", () => {
+    it("merges partial inputConfig into existing deployment", async () => {
+      prisma.agentDeployment.findUnique.mockResolvedValue({
+        id: "dep_1",
+        organizationId: "org-1",
+        listingId: "lst-1",
+        status: "active",
+        inputConfig: { persona: { businessName: "Acme" }, bookingLink: "https://old.link" },
+        governanceSettings: {},
+        connectionIds: [],
+      });
+      prisma.agentDeployment.update.mockResolvedValue({
+        id: "dep_1",
+        organizationId: "org-1",
+        listingId: "lst-1",
+        status: "active",
+        inputConfig: {
+          persona: { businessName: "Acme" },
+          bookingLink: "https://old.link",
+          businessFacts: { industry: "SaaS" },
+        },
+        governanceSettings: {},
+        connectionIds: [],
+      });
+
+      const result = await store.update("dep_1", {
+        inputConfig: { businessFacts: { industry: "SaaS" } },
+      });
+
+      expect(prisma.agentDeployment.findUnique).toHaveBeenCalledWith({
+        where: { id: "dep_1" },
+      });
+      expect(prisma.agentDeployment.update).toHaveBeenCalledWith({
+        where: { id: "dep_1" },
+        data: {
+          inputConfig: {
+            persona: { businessName: "Acme" },
+            bookingLink: "https://old.link",
+            businessFacts: { industry: "SaaS" },
+          },
+        },
+      });
+      expect(result).not.toBeNull();
+      expect(result?.inputConfig).toEqual({
+        persona: { businessName: "Acme" },
+        bookingLink: "https://old.link",
+        businessFacts: { industry: "SaaS" },
+      });
+    });
+
+    it("returns null when deployment not found", async () => {
+      prisma.agentDeployment.findUnique.mockResolvedValue(null);
+
+      const result = await store.update("dep_999", {
+        inputConfig: { foo: "bar" },
+      });
+
+      expect(result).toBeNull();
+      expect(prisma.agentDeployment.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe("delete", () => {
     it("deletes a deployment", async () => {
       prisma.agentDeployment.delete.mockResolvedValue({});

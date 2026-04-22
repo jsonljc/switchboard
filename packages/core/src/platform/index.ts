@@ -81,6 +81,14 @@ export { CartridgeMode } from "./modes/index.js";
 export type { CartridgeModeConfig } from "./modes/index.js";
 export { PipelineMode } from "./modes/index.js";
 export type { PipelineModeConfig, PipelineEventSender } from "./modes/index.js";
+export { WorkflowMode } from "./modes/index.js";
+export type {
+  WorkflowModeConfig,
+  WorkflowHandler,
+  WorkflowHandlerResult,
+  WorkflowRuntimeServices,
+  ChildWorkRequest,
+} from "./modes/index.js";
 
 // Registrars
 export { registerSkillIntents } from "./skill-intent-registrar.js";
