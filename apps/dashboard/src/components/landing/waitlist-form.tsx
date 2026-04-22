@@ -7,24 +7,29 @@ type State = "idle" | "loading" | "success" | "error";
 export function WaitlistForm() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email || state === "loading") return;
     setState("loading");
+    setErrorMessage("");
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      if (res.ok || res.status === 409) {
+      if (res.ok) {
         setState("success");
       } else {
+        const data = await res.json().catch(() => ({}));
         setState("error");
+        setErrorMessage(data.error || "Waitlist signup is temporarily unavailable");
       }
     } catch {
       setState("error");
+      setErrorMessage("Waitlist signup is temporarily unavailable");
     }
   }
 
@@ -130,7 +135,7 @@ export function WaitlistForm() {
 
       {state === "error" && (
         <p style={{ paddingLeft: "0.5rem", fontSize: "0.75rem", color: "#8B3A3A" }}>
-          Something went wrong. Try again or email{" "}
+          {errorMessage || "Waitlist signup is temporarily unavailable"} Try again or email{" "}
           <a href="mailto:hello@switchboard.ai" style={{ color: "#A07850" }}>
             hello@switchboard.ai
           </a>

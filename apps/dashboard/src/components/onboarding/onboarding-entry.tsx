@@ -14,8 +14,6 @@ const CATEGORIES = [
   { label: "Other", value: "other" },
 ];
 
-const SECONDARY_SOURCES = ["Instagram", "Google Business", "Facebook"];
-
 interface OnboardingEntryProps {
   onScan: (url: string) => void;
   onSkip: (category: string) => void;
@@ -25,15 +23,25 @@ export function OnboardingEntry({ onScan, onSkip }: OnboardingEntryProps) {
   const [url, setUrl] = useState("");
   const [showCategories, setShowCategories] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const normalizedUrl = url.trim();
+  const isValidUrl = (() => {
+    if (!normalizedUrl) return false;
+    try {
+      const parsed = new URL(normalizedUrl);
+      return parsed.protocol === "https:" || parsed.protocol === "http:";
+    } catch {
+      return false;
+    }
+  })();
 
   const handleScan = () => {
-    if (!url.trim()) return;
+    if (!isValidUrl) return;
     setIsScanning(true);
-    onScan(url.trim());
+    onScan(normalizedUrl);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && url.trim()) handleScan();
+    if (e.key === "Enter" && isValidUrl) handleScan();
   };
 
   return (
@@ -89,36 +97,16 @@ export function OnboardingEntry({ onScan, onSkip }: OnboardingEntryProps) {
 
           <Button
             onClick={handleScan}
-            disabled={!url.trim() || isScanning}
+            disabled={!isValidUrl || isScanning}
             className="h-[48px] rounded-lg px-8 text-[16px] font-medium transition-all duration-200"
             style={{
               backgroundColor: "var(--sw-text-primary)",
               color: "white",
-              opacity: !url.trim() ? 0.4 : 1,
+              opacity: !isValidUrl ? 0.4 : 1,
             }}
           >
             {isScanning ? "Scanning..." : "Start scanning"}
           </Button>
-
-          <div className="my-8 flex items-center gap-4">
-            <div className="h-px flex-1" style={{ backgroundColor: "var(--sw-border)" }} />
-            <span className="text-[14px]" style={{ color: "var(--sw-text-muted)" }}>
-              or use another page
-            </span>
-            <div className="h-px flex-1" style={{ backgroundColor: "var(--sw-border)" }} />
-          </div>
-
-          <div className="mb-6 flex justify-center gap-4">
-            {SECONDARY_SOURCES.map((source) => (
-              <button
-                key={source}
-                className="text-[14px] underline-offset-2 transition-colors hover:underline"
-                style={{ color: "var(--sw-text-secondary)" }}
-              >
-                {source}
-              </button>
-            ))}
-          </div>
 
           <div>
             <button

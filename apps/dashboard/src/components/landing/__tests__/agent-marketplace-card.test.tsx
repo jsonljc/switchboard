@@ -51,9 +51,9 @@ describe("AgentMarketplaceCard", () => {
     expect(screen.getByText(/supervised/i)).toBeInTheDocument();
   });
 
-  it("renders Learn more link to profile", () => {
+  it("renders Learn more link to the agent profile", () => {
     render(<AgentMarketplaceCard {...mockAgent} />);
-    const link = screen.getByText(/learn more/i);
-    expect(link.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
+    const profileLink = screen.getByText(/learn more/i);
+    expect(profileLink.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
   });
 });

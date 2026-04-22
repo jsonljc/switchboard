@@ -183,6 +183,39 @@ docker compose restart chat   # for CREDENTIALS_ENCRYPTION_KEY, channel tokens
 docker compose restart dashboard  # for NEXTAUTH_SECRET, API_KEY_ENCRYPTION_SECRET
 ```
 
+## Dashboard Release Gate
+
+Before launch, make sure the dashboard production env is present:
+
+- `NEXTAUTH_SECRET`
+- `SWITCHBOARD_API_URL`
+
+Then run:
+
+```bash
+pnpm dashboard:preflight
+pnpm --filter @switchboard/dashboard test
+pnpm --filter @switchboard/dashboard build
+```
+
+Do not launch if any of the three commands fail.
+
+## Onboarding Funnel Smoke Test
+
+1. Submit a waitlist request and confirm persisted success or an explicit failure
+2. Start onboarding with a website URL and refresh on step 2
+3. Start onboarding without a website and confirm the manual path still works
+4. Open `/settings` on a mobile viewport and confirm the settings menu renders
+5. Open `/settings/knowledge` and confirm a loading state is visible
+6. Trigger a website scan failure and confirm retry plus manual fallback are visible
+
+## Dashboard Presentation Sweep
+
+1. Share the homepage URL in Slack or iMessage and confirm the `og-image.png` preview renders
+2. Open the site on macOS and iOS and confirm the favicon and Apple touch icon appear
+3. Recheck the pricing page and confirm no placeholder launch copy is visible
+4. Open the production dashboard and confirm no dev-only controls appear
+
 ---
 
 ## Architecture (for reference)

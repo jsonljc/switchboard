@@ -16,6 +16,7 @@ interface TrainingShellProps {
   playbook: Playbook;
   onUpdatePlaybook: (playbook: Playbook) => void;
   onAdvance: () => void;
+  onContinueManually: () => void;
   scanUrl: string | null;
   category: string | null;
 }
@@ -24,6 +25,7 @@ export function TrainingShell({
   playbook,
   onUpdatePlaybook,
   onAdvance,
+  onContinueManually,
   scanUrl,
   category,
 }: TrainingShellProps) {
@@ -69,6 +71,24 @@ export function TrainingShell({
       ]);
     }
   }, [scan.data, scanApplied]);
+
+  const handleContinueManually = useCallback(() => {
+    onContinueManually();
+    setMessages((prev) => {
+      if (prev.some((message) => message.id === "scan-manual-fallback")) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          id: "scan-manual-fallback",
+          role: "alex" as const,
+          text: "Let's keep going manually. What's your business called, and what do you do?",
+        },
+      ];
+    });
+  }, [onContinueManually]);
 
   const ready = isPlaybookReady(playbook);
   const readinessLabel = getReadinessLabel(playbook);
@@ -178,6 +198,36 @@ export function TrainingShell({
       </div>
 
       {/* Desktop: split panels */}
+      {scan.isError && scanUrl && (
+        <div
+          className="mx-6 mt-4 rounded-lg border p-4"
+          style={{
+            borderColor: "rgba(181, 54, 54, 0.28)",
+            backgroundColor: "rgba(181, 54, 54, 0.06)",
+          }}
+        >
+          <p className="text-sm" style={{ color: "#8B3A3A" }}>
+            We couldn&apos;t scan that page. You can retry or keep building manually.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              onClick={() => scanUrl && scan.mutate(scanUrl)}
+              className="h-[40px] rounded-lg px-4 text-[14px] font-medium"
+              style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
+            >
+              Retry scan
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleContinueManually}
+              className="h-[40px] rounded-lg px-4 text-[14px] font-medium"
+            >
+              Continue manually
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="hidden flex-1 overflow-hidden md:flex">
         <div className="w-[45%] border-r" style={{ borderColor: "var(--sw-border)" }}>
           <AlexChat messages={messages} onSendMessage={handleSendMessage} isTyping={isTyping} />

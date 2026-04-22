@@ -27,9 +27,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
       }
 
-      // DB not set up yet — log and return success anyway (graceful fallback)
-      console.warn("[waitlist] DB not available, email not persisted:", email, msg);
-      return NextResponse.json({ ok: true, persisted: false }, { status: 200 });
+      console.warn("[waitlist] persistence failed:", msg);
+      return NextResponse.json(
+        { ok: false, error: "Waitlist signup is temporarily unavailable" },
+        { status: 503 },
+      );
     }
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

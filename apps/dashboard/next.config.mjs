@@ -1,8 +1,27 @@
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "img-src 'self' data: https:",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self' https:",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredBy: false,
   transpilePackages: ["@switchboard/schemas", "@switchboard/db", "bcryptjs"],
   output: "standalone",
+  poweredByHeader: false,
 
   async headers() {
     return [
@@ -36,6 +55,14 @@ const nextConfig = {
     "@radix-ui/react-radio-group",
     "@radix-ui/react-checkbox",
   ],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

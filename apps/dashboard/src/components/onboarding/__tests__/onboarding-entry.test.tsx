@@ -46,4 +46,20 @@ describe("OnboardingEntry", () => {
     fireEvent.click(screen.getByText("Dental"));
     expect(onSkip).toHaveBeenCalledWith("dental");
   });
+
+  it("does not submit an invalid URL", () => {
+    const onScan = vi.fn();
+    render(<OnboardingEntry onScan={onScan} onSkip={vi.fn()} />);
+    const input = screen.getByPlaceholderText("https://yourwebsite.com");
+    fireEvent.change(input, { target: { value: "not-a-url" } });
+    fireEvent.click(screen.getByRole("button", { name: /start scanning/i }));
+    expect(onScan).not.toHaveBeenCalled();
+  });
+
+  it("does not render unwired secondary source buttons", () => {
+    render(<OnboardingEntry onScan={vi.fn()} onSkip={vi.fn()} />);
+    expect(screen.queryByText("Instagram")).toBeNull();
+    expect(screen.queryByText("Google Business")).toBeNull();
+    expect(screen.queryByText("Facebook")).toBeNull();
+  });
 });

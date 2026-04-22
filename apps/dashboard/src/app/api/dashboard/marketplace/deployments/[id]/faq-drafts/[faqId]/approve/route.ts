@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function POST(
   request: NextRequest,
@@ -9,6 +10,7 @@ export async function POST(
   try {
     const { id, faqId } = await params;
     const orgId = request.nextUrl.searchParams.get("orgId") ?? "";
+    await requireDashboardSession();
     const client = await getApiClient();
     const data = await client.approveDraftFAQ(orgId, id, faqId);
     return NextResponse.json(data);

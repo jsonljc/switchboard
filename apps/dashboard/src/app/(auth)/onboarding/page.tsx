@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlaybook, useUpdatePlaybook } from "@/hooks/use-playbook";
 import { useManagedChannels, useProvision } from "@/hooks/use-managed-channels";
+import { useOnboardingDraft } from "@/hooks/use-onboarding-draft";
 import { generateTestPrompts } from "@/lib/prompt-generator";
 import { useSimulation } from "@/hooks/use-simulation";
 import type { TestPrompt } from "@/components/onboarding/prompt-card";
@@ -21,6 +22,12 @@ export default function OnboardingPage() {
   const updatePlaybook = useUpdatePlaybook();
   const channelsQuery = useManagedChannels();
   const provision = useProvision();
+  const {
+    draft,
+    isHydrated: isOnboardingDraftHydrated,
+    saveDraft,
+    clearDraft,
+  } = useOnboardingDraft(session?.organizationId);
   const [scanUrl, setScanUrl] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [localStep, setLocalStep] = useState(1);
@@ -89,6 +96,7 @@ export default function OnboardingPage() {
   };
 
   const handleLaunchComplete = () => {
+    clearDraft();
     router.push("/");
   };
 
@@ -103,23 +111,36 @@ export default function OnboardingPage() {
     }
   }, [playbookData]);
 
-  if (status === "loading" || (isLoading && !isError)) {
-    return (
-      <div
-        className="flex min-h-screen items-center justify-center"
-        style={{ backgroundColor: "var(--sw-base)" }}
-      >
-        <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
-          Loading...
-        </div>
+  useEffect(() => {
+    setScanUrl(null);
+    setCategory(null);
+  }, [session?.organizationId]);
+
+  const loadingScreen = (
+    <div
+      className="flex min-h-screen items-center justify-center"
+      style={{ backgroundColor: "var(--sw-base)" }}
+    >
+      <div className="text-[16px]" style={{ color: "var(--sw-text-muted)" }}>
+        Loading...
       </div>
-    );
+    </div>
+  );
+
+  if (status === "loading" || (isLoading && !isError)) {
+    return loadingScreen;
   }
 
   if (!session) return null;
 
   const step = playbookData?.step ?? localStep;
   const playbook = playbookData?.playbook ?? localPlaybook;
+  const restoredScanUrl = scanUrl ?? draft?.scanUrl ?? null;
+  const restoredCategory = category ?? draft?.category ?? null;
+
+  if (step === 2 && !isOnboardingDraftHydrated) {
+    return loadingScreen;
+  }
 
   const handleUpdatePlaybook = (updates: Partial<{ playbook: Playbook; step: number }>) => {
     if (updates.step !== undefined) setLocalStep(updates.step);
@@ -128,6 +149,13 @@ export default function OnboardingPage() {
       playbook: updates.playbook ?? playbook,
       step: updates.step,
     });
+  };
+
+  const handleContinueManually = () => {
+    const nextCategory = category ?? draft?.category ?? null;
+
+    setScanUrl(null);
+    saveDraft({ scanUrl: null, category: nextCategory });
   };
 
   const testPrompts = generateTestPrompts(playbook);
@@ -163,10 +191,14 @@ export default function OnboardingPage() {
         <OnboardingEntry
           onScan={(url) => {
             setScanUrl(url);
+            setCategory(null);
+            saveDraft({ scanUrl: url, category: null });
             handleUpdatePlaybook({ step: 2 });
           }}
           onSkip={(cat) => {
+            setScanUrl(null);
             setCategory(cat);
+            saveDraft({ scanUrl: null, category: cat });
             handleUpdatePlaybook({ step: 2 });
           }}
         />
@@ -177,8 +209,9 @@ export default function OnboardingPage() {
           playbook={playbook}
           onUpdatePlaybook={(updated) => handleUpdatePlaybook({ playbook: updated })}
           onAdvance={() => handleUpdatePlaybook({ step: 3 })}
-          scanUrl={scanUrl}
-          category={category}
+          onContinueManually={handleContinueManually}
+          scanUrl={restoredScanUrl}
+          category={restoredCategory}
         />
       );
     case 3:
