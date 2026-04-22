@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { decryptApiKey } from "./crypto";
 import { SwitchboardClient } from "./api-client";
+import { isDevBypassEnabled } from "./dev-auth";
 import { requireSession } from "./session";
 
 const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
@@ -8,7 +9,11 @@ const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new Prism
 
 export async function getApiClient(): Promise<SwitchboardClient> {
   const session = await requireSession();
-  const baseUrl = process.env.SWITCHBOARD_API_URL || "http://localhost:3000";
+  const baseUrl = process.env.SWITCHBOARD_API_URL;
+
+  if (!baseUrl) {
+    throw new Error("SWITCHBOARD_API_URL is required");
+  }
 
   const user = await prisma.dashboardUser.findUnique({
     where: { id: session.user.id },
@@ -26,7 +31,7 @@ export async function getApiClient(): Promise<SwitchboardClient> {
   }
 
   // Dev bypass fallback: use env API key when user not found in DB
-  if (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true") {
+  if (isDevBypassEnabled()) {
     const fallbackKey = process.env.SWITCHBOARD_API_KEY;
     if (fallbackKey) {
       return new SwitchboardClient(baseUrl, fallbackKey);

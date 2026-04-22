@@ -48,15 +48,9 @@ describe("AgentMarketplaceCard", () => {
     expect(screen.getByText(/supervised/i)).toBeInTheDocument();
   });
 
-  it("renders Hire link to bundle", () => {
+  it("renders Learn more link to the agent profile", () => {
     render(<AgentMarketplaceCard {...mockAgent} />);
-    const hireLink = screen.getByText("Hire");
-    expect(hireLink.closest("a")).toHaveAttribute("href", "/deploy/sales-pipeline-bundle");
-  });
-
-  it("renders See work link to profile", () => {
-    render(<AgentMarketplaceCard {...mockAgent} />);
-    const workLink = screen.getByText(/see work/i);
-    expect(workLink.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
+    const profileLink = screen.getByText(/learn more/i);
+    expect(profileLink.closest("a")).toHaveAttribute("href", "/agents/speed-to-lead");
   });
 });

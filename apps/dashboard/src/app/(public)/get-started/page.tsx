@@ -61,7 +61,8 @@ export default async function GetStartedPage() {
               }}
             >
               We&rsquo;re onboarding businesses one by one. We review every request personally and
-              follow up with next steps.
+              follow up with next steps. If signup is temporarily unavailable, we&rsquo;ll tell you
+              instead of silently dropping the request.
             </p>
 
             <WaitlistForm />

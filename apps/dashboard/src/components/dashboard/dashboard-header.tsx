@@ -11,15 +11,17 @@ const GREETING_TEXT = {
 };
 
 type SignalEntry = { count: number; label: string };
+type DashboardSummaryStats = DashboardOverview["stats"] & { activeEscalations?: number };
 
 function buildSummary(
   stats: DashboardOverview["stats"],
   period: "morning" | "afternoon" | "evening",
 ): string {
+  const activeEscalations = (stats as DashboardSummaryStats).activeEscalations ?? 0;
   const signals: SignalEntry[] = [
     { count: stats.pendingApprovals, label: "approval" },
     // TODO(PR4): add activeEscalations to DashboardOverviewSchema, remove cast
-    { count: (stats as Record<string, number>).activeEscalations ?? 0, label: "escalation" },
+    { count: activeEscalations, label: "escalation" },
     { count: stats.bookingsToday, label: "booking" },
     { count: stats.newInquiriesToday, label: "new inquiry" },
     { count: stats.overdueTasks, label: "overdue task" },

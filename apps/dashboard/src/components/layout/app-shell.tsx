@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { DevPanel } from "../dev/dev-panel";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { OwnerShell } from "@/components/layout/owner-shell";
+
+const DevPanel =
+  process.env.NODE_ENV === "production"
+    ? () => null
+    : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
 

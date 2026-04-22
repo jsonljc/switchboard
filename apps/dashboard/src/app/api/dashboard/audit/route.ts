@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
+import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 /**
  * Audit route: always returns 200 with { entries, total } so the UI never breaks.
@@ -7,6 +9,7 @@ import { getApiClient } from "@/lib/get-api-client";
  */
 export async function GET(request: NextRequest) {
   try {
+    await requireDashboardSession();
     const client = await getApiClient();
     const { searchParams } = new URL(request.url);
     const data = await client.queryAudit({
@@ -21,6 +24,9 @@ export async function GET(request: NextRequest) {
       total: typeof data?.total === "number" ? data.total : entries.length,
     });
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "Unauthorized") {
+      return proxyError({ error: err.message }, 401);
+    }
     const message = err instanceof Error ? err.message : "Failed to load activity";
     // Return 200 with empty data so the UI can show a friendly message instead of a hard error
     return NextResponse.json({

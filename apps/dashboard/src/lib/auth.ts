@@ -2,12 +2,14 @@ import NextAuth, { type NextAuthConfig } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
-import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { assertSafeDashboardAuthEnv } from "./dev-auth";
 import { verifyPassword } from "./password";
 import { provisionDashboardUser } from "./provision-dashboard-user";
 
 const prisma = new PrismaClient();
+
+assertSafeDashboardAuthEnv();
 
 const providers: NextAuthConfig["providers"] = [
   CredentialsProvider({
@@ -66,6 +68,7 @@ if (process.env.EMAIL_SERVER_HOST) {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  secret: process.env.NEXTAUTH_SECRET,
   providers,
   adapter: {
     async createUser(user) {
@@ -140,49 +143,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async unlinkAccount() {
       // SAFETY: No OAuth providers — account unlinking is never called
       return undefined as never;
-    },
-    async createSession(session) {
-      await prisma.dashboardSession.create({
-        data: {
-          id: randomUUID(),
-          sessionToken: session.sessionToken,
-          userId: session.userId,
-          expires: session.expires,
-        },
-      });
-      return session;
-    },
-    async getSessionAndUser(sessionToken) {
-      const session = await prisma.dashboardSession.findUnique({
-        where: { sessionToken },
-        include: { user: true },
-      });
-      if (!session) return null;
-      return {
-        session: {
-          sessionToken: session.sessionToken,
-          userId: session.userId,
-          expires: session.expires,
-        },
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.name,
-          emailVerified: session.user.emailVerified,
-        },
-      };
-    },
-    async updateSession(session) {
-      await prisma.dashboardSession.update({
-        where: { sessionToken: session.sessionToken },
-        data: { expires: session.expires },
-      });
-      // SAFETY: NextAuth expects the full session object returned, but we only
-      // update `expires` — the returned type is compatible at runtime
-      return session as typeof session & { userId: string; expires: Date };
-    },
-    async deleteSession(sessionToken) {
-      await prisma.dashboardSession.delete({ where: { sessionToken } }).catch(() => {});
     },
     async createVerificationToken(token) {
       await prisma.dashboardVerificationToken.create({

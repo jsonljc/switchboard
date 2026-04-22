@@ -430,7 +430,7 @@ export default function PricingPage() {
               color: "#9C958F",
             }}
           >
-            * Prices are illustrative — final pricing set at launch.
+            Start with guided onboarding. Expand channels and workflows as your team goes live.
           </p>
         </div>
       </section>

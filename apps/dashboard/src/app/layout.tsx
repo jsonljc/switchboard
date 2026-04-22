@@ -26,6 +26,10 @@ const spaceMono = Space_Mono({
 export const metadata: Metadata = {
   title: "Switchboard",
   description: "Your AI team runs the business. Stay in control, without the clutter.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

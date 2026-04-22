@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+import { useSession } from "next-auth/react";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -16,10 +15,13 @@ const NAV_LINKS = [
 ];
 
 export function DevPanel() {
+  if (process.env.NODE_ENV === "production") return null;
+
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { data: session } = useSession();
 
-  if (!DEV_BYPASS) return null;
+  if (session?.user?.id !== "dev-user") return null;
 
   return (
     <div className="fixed bottom-24 right-4 z-[100] md:bottom-4">

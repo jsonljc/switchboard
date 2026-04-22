@@ -7,7 +7,7 @@
     "build": "next build",
     "dev": "next dev -p 3002",
     "start": "next start -p 3002",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/db build && tsc --noEmit",
     "lint": "next lint",
     "test": "vitest run",
     "test:unit": "vitest run",
