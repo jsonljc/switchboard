@@ -18,7 +18,7 @@ export default function SettingsKnowledgePage() {
         </p>
       </section>
 
-      <UploadPanel agentId="creative" />
+      <UploadPanel />
     </div>
   );
 }
