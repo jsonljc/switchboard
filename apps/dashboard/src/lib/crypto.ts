@@ -1,11 +1,16 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 
 function getKey(): Buffer {
-  const secret = process.env.API_KEY_ENCRYPTION_SECRET;
-  if (!secret) throw new Error("API_KEY_ENCRYPTION_SECRET is not set");
-  return Buffer.from(secret, "hex");
+  const secret = process.env.CREDENTIALS_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error(
+      "CREDENTIALS_ENCRYPTION_KEY is not set. " +
+        "This must match the secret used by the API server for encryption.",
+    );
+  }
+  return createHash("sha256").update(secret).digest();
 }
 
 export function encryptApiKey(apiKey: string): string {
@@ -19,9 +24,9 @@ export function encryptApiKey(apiKey: string): string {
 
 export function decryptApiKey(encryptedApiKey: string): string {
   const [ivHex, authTagHex, encrypted] = encryptedApiKey.split(":");
-  const decipher = createDecipheriv(ALGORITHM, getKey(), Buffer.from(ivHex, "hex"));
-  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
-  let decrypted = decipher.update(encrypted, "hex", "utf8");
+  const decipher = createDecipheriv(ALGORITHM, getKey(), Buffer.from(ivHex!, "hex"));
+  decipher.setAuthTag(Buffer.from(authTagHex!, "hex"));
+  let decrypted = decipher.update(encrypted!, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
 }
