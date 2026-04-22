@@ -3,11 +3,13 @@ import { BusinessFactsSchema } from "@switchboard/schemas";
 import { getApiClient } from "@/lib/get-api-client";
 import { requireSession } from "@/lib/session";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireSession();
     const { id } = await params;
+    await requireDashboardSession();
     const client = await getApiClient();
     const data = await client.getBusinessFacts(id);
     return NextResponse.json({ facts: data.config ?? null });
@@ -32,6 +34,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
+    await requireDashboardSession();
     const client = await getApiClient();
     await client.upsertBusinessFacts(id, parsed.data);
     return NextResponse.json({ success: true });

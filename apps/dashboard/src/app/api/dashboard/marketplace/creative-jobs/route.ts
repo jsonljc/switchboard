@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
         { status: 400 },
       );
     }
+    await requireDashboardSession();
     const client = await getApiClient();
     const data = await client.listCreativeJobs({ deploymentId });
     return NextResponse.json(data);
@@ -24,6 +26,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireDashboardSession();
     const client = await getApiClient();
     const body = await request.json();
     const data = await client.submitCreativeBrief(body);

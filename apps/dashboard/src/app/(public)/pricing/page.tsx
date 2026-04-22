@@ -421,6 +421,17 @@ export default function PricingPage() {
               ),
             )}
           </div>
+
+          <p
+            style={{
+              marginTop: "1rem",
+              textAlign: "center",
+              fontSize: "0.75rem",
+              color: "#9C958F",
+            }}
+          >
+            Start with guided onboarding. Expand channels and workflows as your team goes live.
+          </p>
         </div>
       </section>
 

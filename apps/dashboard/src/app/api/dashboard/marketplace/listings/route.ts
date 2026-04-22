@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function GET(request: NextRequest) {
   try {
+    await requireDashboardSession();
     const client = await getApiClient();
     const status = request.nextUrl.searchParams.get("status") ?? undefined;
     const type = request.nextUrl.searchParams.get("type") ?? undefined;

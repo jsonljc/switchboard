@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
-import { requireSession } from "@/lib/session";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function GET() {
   try {
-    await requireSession();
+    await requireDashboardSession();
     const client = await getApiClient();
     const data = await client.getPersona();
     return NextResponse.json(data);
@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireSession();
+    await requireDashboardSession();
     const client = await getApiClient();
     const body = await req.json();
     const data = await client.upsertPersona(body);

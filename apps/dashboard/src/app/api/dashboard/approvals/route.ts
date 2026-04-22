@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiClient } from "@/lib/get-api-client";
-import { requireSession } from "@/lib/session";
 import { proxyError } from "@/lib/proxy-error";
+import { requireDashboardSession } from "@/lib/require-dashboard-session";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireSession();
+    await requireDashboardSession();
     const client = await getApiClient();
     const id = request.nextUrl.searchParams.get("id");
     if (id) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireSession();
+    await requireDashboardSession();
     const client = await getApiClient();
     const body = await request.json();
     const { approvalId, ...rest } = body;

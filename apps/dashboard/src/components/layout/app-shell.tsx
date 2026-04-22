@@ -6,11 +6,10 @@ import { useEffect } from "react";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { OwnerShell } from "@/components/layout/owner-shell";
 
-const DevPanel = dynamic(() => import("../dev/dev-panel").then((m) => m.DevPanel), {
-  ssr: false,
-});
-
-const IS_DEV = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+const DevPanel =
+  process.env.NODE_ENV === "production"
+    ? () => null
+    : dynamic(() => import("../dev/dev-panel").then((mod) => mod.DevPanel), { ssr: false });
 
 const CHROME_HIDDEN_PATHS = ["/login", "/onboarding", "/setup"];
 
@@ -38,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <main className="min-h-screen bg-background">
         {children}
-        {IS_DEV && <DevPanel />}
+        <DevPanel />
       </main>
     );
   }
@@ -46,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <OwnerShell>{children}</OwnerShell>
-      {IS_DEV && <DevPanel />}
+      <DevPanel />
     </>
   );
 }
