@@ -106,21 +106,21 @@ export async function bootstrapContainedWorkflows(
       workflowId: "meta.lead.intake",
       budgetClass: "standard",
       approvalPolicy: "none",
-      allowedTriggers: ["internal"],
+      allowedTriggers: ["internal", "api"],
     },
     {
       intent: "meta.lead.greeting.send",
       workflowId: "meta.lead.greeting.send",
       budgetClass: "standard",
       approvalPolicy: "none",
-      allowedTriggers: ["internal"],
+      allowedTriggers: ["internal", "api"],
     },
     {
       intent: "meta.lead.inquiry.record",
       workflowId: "meta.lead.inquiry.record",
       budgetClass: "standard",
       approvalPolicy: "none",
-      allowedTriggers: ["internal"],
+      allowedTriggers: ["internal", "api"],
     },
   ];
 
