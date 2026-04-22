@@ -89,16 +89,7 @@ export class ApprovalLifecycleService {
       ...params.materializationParams,
     });
 
-    const workUnit = await this.store.materializeWorkUnit(matInput);
-
-    const updatedLifecycle = await this.store.updateLifecycleStatus(
-      lifecycle.id,
-      "approved",
-      lifecycle.version,
-      { currentExecutableWorkUnitId: workUnit.id },
-    );
-
-    return { lifecycle: updatedLifecycle, workUnit };
+    return this.store.approveAndMaterialize(lifecycle.id, lifecycle.version, matInput);
   }
 
   async rejectRevision(params: {
@@ -143,7 +134,7 @@ export class ApprovalLifecycleService {
     const workUnit = await this.store.getExecutableWorkUnit(params.executableWorkUnitId);
     if (!workUnit) throw new Error(`Work unit not found: ${params.executableWorkUnitId}`);
 
-    validateDispatchAdmission(lifecycle as never, workUnit);
+    validateDispatchAdmission(lifecycle, workUnit);
 
     const dispatchRecord = await this.store.createDispatchRecord({
       executableWorkUnitId: workUnit.id,

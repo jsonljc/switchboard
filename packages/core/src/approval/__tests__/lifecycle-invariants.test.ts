@@ -17,6 +17,7 @@ function makeStore(): ApprovalLifecycleStore {
     createRevision: vi.fn(),
     updateLifecycleStatus: vi.fn(),
     materializeWorkUnit: vi.fn(),
+    approveAndMaterialize: vi.fn(),
     getExecutableWorkUnit: vi.fn(),
     createDispatchRecord: vi.fn(),
     updateDispatchRecord: vi.fn(),
@@ -252,8 +253,10 @@ describe("Lifecycle Trust Invariants", () => {
 
       vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
       vi.mocked(store.getCurrentRevision).mockResolvedValue(currentRevision);
-      vi.mocked(store.materializeWorkUnit).mockResolvedValue(executableWorkUnit);
-      vi.mocked(store.updateLifecycleStatus).mockResolvedValue(approvedLifecycle);
+      vi.mocked(store.approveAndMaterialize).mockResolvedValue({
+        lifecycle: approvedLifecycle,
+        workUnit: executableWorkUnit,
+      });
 
       const result = await service.approveRevision({
         lifecycleId: "lc-1",
@@ -271,8 +274,11 @@ describe("Lifecycle Trust Invariants", () => {
       expect(result.lifecycle.currentExecutableWorkUnitId).toBe("wu-1");
       expect(result.workUnit.id).toBe("wu-1");
 
-      expect(store.materializeWorkUnit).toHaveBeenCalled();
-      expect(store.updateLifecycleStatus).toHaveBeenCalled();
+      expect(store.approveAndMaterialize).toHaveBeenCalledWith(
+        "lc-1",
+        1,
+        expect.objectContaining({ lifecycleId: "lc-1" }),
+      );
     });
 
     it("validates dispatch admission requires approved status with materialized work unit", () => {
@@ -354,13 +360,11 @@ describe("Lifecycle Trust Invariants", () => {
     it("second approve fails with StaleVersionError when version has advanced", async () => {
       const lifecycle = makeLifecycle({ version: 1 });
       const currentRevision = makeRevision({ bindingHash: "hash-123" });
-      const workUnit = makeWorkUnit();
-      const executableWorkUnit = makeExecutableWorkUnit();
+      const _workUnit = makeWorkUnit();
 
       vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
       vi.mocked(store.getCurrentRevision).mockResolvedValue(currentRevision);
-      vi.mocked(store.materializeWorkUnit).mockResolvedValue(executableWorkUnit);
-      vi.mocked(store.updateLifecycleStatus).mockRejectedValue(new StaleVersionError("lc-1", 2, 1));
+      vi.mocked(store.approveAndMaterialize).mockRejectedValue(new StaleVersionError("lc-1", 2, 1));
 
       await expect(
         service.approveRevision({
@@ -390,8 +394,10 @@ describe("Lifecycle Trust Invariants", () => {
 
       vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
       vi.mocked(store.getCurrentRevision).mockResolvedValue(currentRevision);
-      vi.mocked(store.materializeWorkUnit).mockResolvedValue(executableWorkUnit);
-      vi.mocked(store.updateLifecycleStatus).mockResolvedValue(approvedLifecycle);
+      vi.mocked(store.approveAndMaterialize).mockResolvedValue({
+        lifecycle: approvedLifecycle,
+        workUnit: executableWorkUnit,
+      });
 
       await service.approveRevision({
         lifecycleId: "lc-1",
@@ -405,9 +411,11 @@ describe("Lifecycle Trust Invariants", () => {
         },
       });
 
-      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "approved", 3, {
-        currentExecutableWorkUnitId: "wu-1",
-      });
+      expect(store.approveAndMaterialize).toHaveBeenCalledWith(
+        "lc-1",
+        3,
+        expect.objectContaining({ lifecycleId: "lc-1" }),
+      );
     });
   });
 

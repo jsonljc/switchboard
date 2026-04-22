@@ -20,6 +20,7 @@ function makeStore(): ApprovalLifecycleStore {
     createRevision: vi.fn(),
     updateLifecycleStatus: vi.fn(),
     materializeWorkUnit: vi.fn(),
+    approveAndMaterialize: vi.fn(),
     getExecutableWorkUnit: vi.fn(),
     createDispatchRecord: vi.fn(),
     updateDispatchRecord: vi.fn(),
@@ -218,8 +219,10 @@ describe("ApprovalLifecycleService", () => {
 
       vi.mocked(store.getLifecycleById).mockResolvedValue(lifecycle);
       vi.mocked(store.getCurrentRevision).mockResolvedValue(currentRevision);
-      vi.mocked(store.materializeWorkUnit).mockResolvedValue(executableWorkUnit);
-      vi.mocked(store.updateLifecycleStatus).mockResolvedValue(approvedLifecycle);
+      vi.mocked(store.approveAndMaterialize).mockResolvedValue({
+        lifecycle: approvedLifecycle,
+        workUnit: executableWorkUnit,
+      });
 
       const result = await service.approveRevision({
         lifecycleId: "lc-1",
@@ -235,10 +238,11 @@ describe("ApprovalLifecycleService", () => {
 
       expect(result.lifecycle).toEqual(approvedLifecycle);
       expect(result.workUnit).toEqual(executableWorkUnit);
-      expect(store.materializeWorkUnit).toHaveBeenCalled();
-      expect(store.updateLifecycleStatus).toHaveBeenCalledWith("lc-1", "approved", 1, {
-        currentExecutableWorkUnitId: "wu-1",
-      });
+      expect(store.approveAndMaterialize).toHaveBeenCalledWith(
+        "lc-1",
+        1,
+        expect.objectContaining({ lifecycleId: "lc-1" }),
+      );
     });
 
     it("rejects when lifecycle is not pending", async () => {

@@ -1,4 +1,5 @@
-import type { ExecutableWorkUnit, ApprovalLifecycle } from "@switchboard/schemas";
+import type { ExecutableWorkUnit } from "@switchboard/schemas";
+import type { LifecycleRecord } from "./lifecycle-types.js";
 
 export type AdmissionErrorCode =
   | "LIFECYCLE_NOT_APPROVED"
@@ -17,7 +18,7 @@ export class DispatchAdmissionError extends Error {
 }
 
 export function validateDispatchAdmission(
-  lifecycle: ApprovalLifecycle,
+  lifecycle: LifecycleRecord,
   workUnit: ExecutableWorkUnit,
   now?: Date,
 ): void {

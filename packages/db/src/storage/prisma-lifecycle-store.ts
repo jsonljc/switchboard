@@ -171,6 +171,50 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
     return toExecutableWorkUnit(row);
   }
 
+  async approveAndMaterialize(
+    lifecycleId: string,
+    expectedVersion: number,
+    materializeInput: MaterializeWorkUnitInput,
+  ): Promise<{ lifecycle: LifecycleRecord; workUnit: ExecutableWorkUnit }> {
+    const workUnitId = randomUUID();
+
+    const [lcResult, wuRow] = await this.prisma.$transaction([
+      this.prisma.approvalLifecycle.updateMany({
+        where: { id: lifecycleId, version: expectedVersion },
+        data: {
+          status: "approved",
+          version: expectedVersion + 1,
+          currentExecutableWorkUnitId: workUnitId,
+        },
+      }),
+      this.prisma.executableWorkUnit.create({
+        data: {
+          id: workUnitId,
+          lifecycleId: materializeInput.lifecycleId,
+          approvalRevisionId: materializeInput.approvalRevisionId,
+          actionEnvelopeId: materializeInput.actionEnvelopeId,
+          frozenPayload: materializeInput.frozenPayload as object,
+          frozenBinding: materializeInput.frozenBinding as object,
+          frozenExecutionPolicy: materializeInput.frozenExecutionPolicy as object,
+          executableUntil: materializeInput.executableUntil,
+        },
+      }),
+    ]);
+
+    if (lcResult.count === 0) {
+      throw new StaleVersionError(lifecycleId, expectedVersion, -1);
+    }
+
+    const updatedLc = await this.prisma.approvalLifecycle.findUniqueOrThrow({
+      where: { id: lifecycleId },
+    });
+
+    return {
+      lifecycle: toLifecycleRecord(updatedLc),
+      workUnit: toExecutableWorkUnit(wuRow),
+    };
+  }
+
   async getExecutableWorkUnit(id: string): Promise<ExecutableWorkUnit | null> {
     const row = await this.prisma.executableWorkUnit.findUnique({ where: { id } });
     return row ? toExecutableWorkUnit(row) : null;

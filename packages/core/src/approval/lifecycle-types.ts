@@ -72,6 +72,12 @@ export interface ApprovalLifecycleStore {
     input: import("./executable-materializer.js").MaterializeWorkUnitInput,
   ): Promise<ExecutableWorkUnit>;
 
+  approveAndMaterialize(
+    lifecycleId: string,
+    expectedVersion: number,
+    materializeInput: import("./executable-materializer.js").MaterializeWorkUnitInput,
+  ): Promise<{ lifecycle: LifecycleRecord; workUnit: ExecutableWorkUnit }>;
+
   getExecutableWorkUnit(id: string): Promise<ExecutableWorkUnit | null>;
 
   createDispatchRecord(input: {

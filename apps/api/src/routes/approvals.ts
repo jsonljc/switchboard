@@ -56,6 +56,8 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
+        // Phase 2 gap: respond still uses legacy PlatformLifecycle path.
+        // Migration to ApprovalLifecycleService requires delegation chain + envelope integration.
         const response = await app.platformLifecycle.respondToApproval({
           approvalId: id,
           action: body.action,
@@ -124,6 +126,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
+      // Phase 2 gap: reads from legacy ApprovalStore; will migrate to lifecycleService.listPendingLifecycles()
       const pending = await app.storageContext.approvals.listPending(
         request.organizationIdFromAuth,
       );

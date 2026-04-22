@@ -12,10 +12,10 @@ import type {
 } from "./canonical-request.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
+import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
-import { routeApproval } from "../approval/router.js";
 
 export interface GovernanceGateInterface {
   evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
@@ -186,14 +186,8 @@ export class PlatformIngress {
       await this.persistTrace(traceStore, workUnit, decision, governanceCompletedAt, result);
 
       if (this.config.lifecycleService) {
-        const riskCategory =
-          ((decision as Record<string, unknown>).riskCategory as string) ?? "medium";
-        const routing = routeApproval(
-          riskCategory as "none" | "low" | "medium" | "high" | "critical",
-          { effectiveRiskTolerance: {} } as never,
-          this.config.approvalRoutingConfig,
-        );
-        const expiresAt = new Date(Date.now() + routing.expiresInMs);
+        const routingConfig = this.config.approvalRoutingConfig ?? DEFAULT_ROUTING_CONFIG;
+        const expiresAt = new Date(Date.now() + routingConfig.defaultExpiryMs);
         const bindingHash = computeBindingHash({
           envelopeId: workUnit.id,
           envelopeVersion: 1,
@@ -210,9 +204,9 @@ export class PlatformIngress {
           initialRevision: {
             parametersSnapshot: workUnit.parameters,
             approvalScopeSnapshot: {
-              approvers: routing.approvers,
-              riskCategory,
-              fallbackApprover: routing.fallbackApprover,
+              approvers: routingConfig.defaultApprovers,
+              riskCategory: (decision as Record<string, unknown>).riskCategory ?? "medium",
+              fallbackApprover: routingConfig.defaultFallbackApprover,
             },
             bindingHash,
             createdBy: workUnit.actor.id,
