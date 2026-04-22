@@ -17,3 +17,4 @@ export type { DelegationChainResult, ChainResolutionOptions } from "./chain.js";
 export * from "./lifecycle-types.js";
 export * from "./dispatch-admission.js";
 export * from "./executable-materializer.js";
+export * from "./lifecycle-service.js";
