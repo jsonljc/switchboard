@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getApiClient } from "@/lib/get-api-client";
+import { proxyError } from "@/lib/proxy-error";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,10 +11,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const result = await client.getEscalation(id);
     return NextResponse.json(result);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: message === "Unauthorized" ? 401 : 500 },
+    return proxyError(
+      err instanceof Error ? { error: err.message } : {},
+      err instanceof Error && err.message === "Unauthorized" ? 401 : 500,
     );
   }
 }

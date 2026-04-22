@@ -7,6 +7,7 @@ import {
 import type { AgentStateStoreInterface, ActionRequestStore } from "@switchboard/core/agent-runtime";
 import { requireSession } from "@/lib/session";
 import { z } from "zod";
+import { proxyError } from "@/lib/proxy-error";
 
 const TestChatInput = z.object({
   persona: z.object({
@@ -91,11 +92,10 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ reply: capturedReply });
-  } catch (err) {
-    console.error("Test chat error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Test chat failed" },
-      { status: 500 },
+  } catch (err: unknown) {
+    return proxyError(
+      err instanceof Error ? { error: err.message } : {},
+      err instanceof Error && err.message === "Unauthorized" ? 401 : 500,
     );
   }
 }
