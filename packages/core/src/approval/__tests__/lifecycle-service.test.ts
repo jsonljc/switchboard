@@ -63,15 +63,24 @@ function makeRevision(overrides?: Partial<ApprovalRevision>): ApprovalRevision {
 
 function makeWorkUnit(overrides?: Partial<WorkUnit>): WorkUnit {
   return {
+    id: "wu-1",
+    requestedAt: new Date().toISOString(),
     intent: "test.action",
     parameters: { foo: "bar" },
-    actor: { type: "user", userId: "user-1" },
+    actor: { type: "user", id: "user-1" },
     organizationId: "org-1",
-    resolvedMode: { type: "skill", skillName: "test-skill" },
+    resolvedMode: "skill",
     traceId: "trace-1",
-    deployment: { agentId: "agent-1", deploymentId: "dep-1" },
+    trigger: "api",
+    priority: "normal",
+    deployment: {
+      deploymentId: "dep-1",
+      skillSlug: "test-skill",
+      trustLevel: "supervised",
+      trustScore: 0,
+    },
     ...overrides,
-  };
+  } as WorkUnit;
 }
 
 function makeExecutableWorkUnit(overrides?: Partial<ExecutableWorkUnit>): ExecutableWorkUnit {
@@ -364,10 +373,10 @@ describe("ApprovalLifecycleService", () => {
         executableWorkUnitId: "wu-1",
         attemptNumber: 1,
         idempotencyKey: "idem-1",
-        state: "pending",
+        state: "dispatching" as const,
         outcome: null,
         errorMessage: null,
-        createdAt: new Date(),
+        dispatchedAt: new Date(),
         completedAt: null,
         durationMs: null,
       };
@@ -416,10 +425,10 @@ describe("ApprovalLifecycleService", () => {
         executableWorkUnitId: "wu-1",
         attemptNumber: 1,
         idempotencyKey: "idem-1",
-        state: "succeeded",
+        state: "succeeded" as const,
         outcome: "success",
         errorMessage: null,
-        createdAt: new Date(),
+        dispatchedAt: new Date(),
         completedAt: new Date(),
         durationMs: 1000,
       };

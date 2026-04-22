@@ -186,9 +186,10 @@ export class PlatformIngress {
       await this.persistTrace(traceStore, workUnit, decision, governanceCompletedAt, result);
 
       if (this.config.lifecycleService) {
-        const riskCategory = (decision as Record<string, unknown>).riskCategory ?? "medium";
+        const riskCategory =
+          ((decision as Record<string, unknown>).riskCategory as string) ?? "medium";
         const routing = routeApproval(
-          riskCategory as "none" | "low" | "medium" | "elevated" | "mandatory",
+          riskCategory as "none" | "low" | "medium" | "high" | "critical",
           { effectiveRiskTolerance: {} } as never,
           this.config.approvalRoutingConfig,
         );
