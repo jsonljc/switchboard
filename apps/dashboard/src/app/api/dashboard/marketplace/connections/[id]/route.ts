@@ -12,7 +12,10 @@ export async function DELETE(
     const { id } = await params;
     const deploymentId = request.nextUrl.searchParams.get("deploymentId");
     if (!deploymentId) {
-      return NextResponse.json({ error: "deploymentId query param required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "deploymentId query param required", statusCode: 400 },
+        { status: 400 },
+      );
     }
     const client = await getApiClient();
     const data = await client.disconnectChannel(deploymentId, id);

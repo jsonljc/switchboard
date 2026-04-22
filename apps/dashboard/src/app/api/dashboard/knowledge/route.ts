@@ -26,7 +26,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const documentId = searchParams.get("documentId");
     if (!documentId) {
-      return NextResponse.json({ error: "documentId required" }, { status: 400 });
+      return NextResponse.json({ error: "documentId required", statusCode: 400 }, { status: 400 });
     }
     const result = await client.deleteKnowledgeDocument(documentId);
     return NextResponse.json(result);

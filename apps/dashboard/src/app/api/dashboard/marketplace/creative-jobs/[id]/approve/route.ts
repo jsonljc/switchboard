@@ -8,7 +8,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json();
     const action = body?.action;
     if (action !== "continue" && action !== "stop") {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid action", statusCode: 400 }, { status: 400 });
     }
     const productionTier = body?.productionTier;
     const client = await getApiClient();
