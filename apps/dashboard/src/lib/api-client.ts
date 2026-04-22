@@ -421,15 +421,19 @@ export class SwitchboardClient extends SwitchboardClientBase {
   }
 
   async getBusinessFacts(deploymentId: string) {
-    return this.request<{ config: unknown }>(`/api/marketplace/deployments/${deploymentId}/config`);
+    const { deployment } = await this.request<{ deployment: MarketplaceDeployment }>(
+      `/api/marketplace/deployments/${deploymentId}`,
+    );
+    const config = deployment?.inputConfig as Record<string, unknown> | undefined;
+    return { config: config?.businessFacts ?? null };
   }
 
   async upsertBusinessFacts(deploymentId: string, facts: Record<string, unknown>) {
-    return this.request<{ success: boolean }>(
-      `/api/marketplace/deployments/${deploymentId}/config`,
+    return this.request<{ deployment: MarketplaceDeployment }>(
+      `/api/marketplace/deployments/${deploymentId}`,
       {
-        method: "PUT",
-        body: JSON.stringify(facts),
+        method: "PATCH",
+        body: JSON.stringify({ inputConfig: { businessFacts: facts } }),
       },
     );
   }

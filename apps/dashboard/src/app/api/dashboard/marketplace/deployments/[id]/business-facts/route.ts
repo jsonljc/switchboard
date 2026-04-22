@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const parsed = BusinessFactsSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
+        { error: "Validation failed", details: parsed.error.flatten(), statusCode: 400 },
         { status: 400 },
       );
     }

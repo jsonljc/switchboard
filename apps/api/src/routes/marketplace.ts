@@ -251,6 +251,30 @@ export const marketplaceRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ deployments });
   });
 
+  app.get<{ Params: { id: string } }>("/deployments/:id", async (request, reply) => {
+    if (!app.prisma) {
+      return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+    }
+
+    const orgId = request.organizationIdFromAuth;
+    if (!orgId) {
+      return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+    }
+
+    const { id } = request.params;
+    const store = new PrismaDeploymentStore(app.prisma);
+    const deployment = await store.findById(id);
+
+    if (!deployment) {
+      return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+    }
+    if (deployment.organizationId !== orgId) {
+      return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+    }
+
+    return reply.send({ deployment });
+  });
+
   app.patch<{
     Params: { id: string };
     Body: { inputConfig?: Record<string, unknown> };
