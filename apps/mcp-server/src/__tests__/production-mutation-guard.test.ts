@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-describe("MCP production mutation guard", () => {
+describe("MCP mutation guard", () => {
   const originalEnv = { ...process.env };
 
   afterEach(() => {
@@ -8,40 +8,18 @@ describe("MCP production mutation guard", () => {
     vi.resetModules();
   });
 
-  it("refuses in-memory mutation mode in production without API delegation", async () => {
-    process.env.NODE_ENV = "production";
+  it("requires SWITCHBOARD_API_URL in all environments", async () => {
     delete process.env.SWITCHBOARD_API_URL;
-    delete process.env.ALLOW_IN_MEMORY_MCP;
 
     const { buildMutationModeGuard } = await import("../main.js");
 
     expect(() => buildMutationModeGuard()).toThrow(
-      "Production MCP mutation requires SWITCHBOARD_API_URL",
+      "SWITCHBOARD_API_URL is required. The MCP server delegates all operations to the Switchboard API.",
     );
   });
 
-  it("allows production mode when SWITCHBOARD_API_URL is set", async () => {
-    process.env.NODE_ENV = "production";
+  it("allows operation when SWITCHBOARD_API_URL is set", async () => {
     process.env.SWITCHBOARD_API_URL = "https://api.example.com";
-
-    const { buildMutationModeGuard } = await import("../main.js");
-
-    expect(() => buildMutationModeGuard()).not.toThrow();
-  });
-
-  it("allows in-memory mode when ALLOW_IN_MEMORY_MCP is true", async () => {
-    process.env.NODE_ENV = "production";
-    delete process.env.SWITCHBOARD_API_URL;
-    process.env.ALLOW_IN_MEMORY_MCP = "true";
-
-    const { buildMutationModeGuard } = await import("../main.js");
-
-    expect(() => buildMutationModeGuard()).not.toThrow();
-  });
-
-  it("allows in-memory mode in non-production environments", async () => {
-    process.env.NODE_ENV = "development";
-    delete process.env.SWITCHBOARD_API_URL;
 
     const { buildMutationModeGuard } = await import("../main.js");
 

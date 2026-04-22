@@ -1,16 +1,4 @@
-import {
-  LifecycleOrchestrator,
-  createInMemoryStorage,
-  seedDefaultStorage,
-  InMemoryLedgerStorage,
-  AuditLedger,
-  createGuardrailState,
-  DEFAULT_REDACTION_CONFIG,
-  InMemoryPolicyCache,
-  InMemoryGovernanceProfileStore,
-  ExecutionService,
-  CartridgeReadAdapter,
-} from "@switchboard/core";
+import type { ExecutionService } from "@switchboard/core";
 import { SwitchboardMcpServer } from "./server.js";
 import { McpApiClient } from "./api-client.js";
 import { ApiReadAdapter } from "./adapters/api-read-adapter.js";
@@ -23,115 +11,73 @@ import {
 
 export function buildMutationModeGuard(): void {
   const apiUrl = process.env["SWITCHBOARD_API_URL"];
-  const allowInMemory = process.env["ALLOW_IN_MEMORY_MCP"] === "true";
-
-  if (process.env.NODE_ENV === "production" && !apiUrl && !allowInMemory) {
-    throw new Error("Production MCP mutation requires SWITCHBOARD_API_URL");
+  if (!apiUrl) {
+    throw new Error(
+      "SWITCHBOARD_API_URL is required. " +
+        "The MCP server delegates all operations to the Switchboard API.",
+    );
   }
 }
 
 async function main() {
   buildMutationModeGuard();
-  const apiUrl = process.env["SWITCHBOARD_API_URL"];
+  const apiUrl = process.env["SWITCHBOARD_API_URL"]!;
   const apiKey = process.env["SWITCHBOARD_API_KEY"];
 
-  if (apiUrl) {
-    // -- API mode: delegate all operations to the Switchboard API --
-    console.error(`[mcp-server] API mode: delegating to ${apiUrl}`);
+  // -- API mode: delegate all operations to the Switchboard API --
+  console.error(`[mcp-server] API mode: delegating to ${apiUrl}`);
 
-    const client = new McpApiClient({ baseUrl: apiUrl, apiKey });
+  const client = new McpApiClient({ baseUrl: apiUrl, apiKey });
 
-    const orchestrator = createApiOrchestrator(client);
-    const storage = createApiStorage(client);
-    const ledger = createApiLedger(client);
-    const governanceProfileStore = createApiGovernanceProfileStore(client);
-    const readAdapter = new ApiReadAdapter(client);
+  const orchestrator = createApiOrchestrator(client);
+  const storage = createApiStorage(client);
+  const ledger = createApiLedger(client);
+  const governanceProfileStore = createApiGovernanceProfileStore(client);
+  const readAdapter = new ApiReadAdapter(client);
 
-    // ExecutionService is used by side-effect tools -- create a proxy
-    // that delegates to the API via POST /api/execute.
-    const executionService = {
-      async execute(params: {
-        actionType: string;
-        parameters: Record<string, unknown>;
-        principalId: string;
-        organizationId?: string | null;
-      }) {
-        const { data } = await client.post<{
-          outcome: string;
-          envelopeId: string;
-          traceId?: string;
-          executionResult?: unknown;
-          approvalId?: string;
-          approvalRequest?: unknown;
-          deniedExplanation?: string;
-        }>(
-          "/api/execute",
-          {
-            actorId: params.principalId,
-            organizationId: params.organizationId ?? null,
-            action: {
-              actionType: params.actionType,
-              parameters: params.parameters,
-              sideEffect: true,
-            },
+  // ExecutionService is used by side-effect tools -- create a proxy
+  // that delegates to the API via POST /api/execute.
+  const executionService = {
+    async execute(params: {
+      actionType: string;
+      parameters: Record<string, unknown>;
+      principalId: string;
+      organizationId?: string | null;
+    }) {
+      const { data } = await client.post<{
+        outcome: string;
+        envelopeId: string;
+        traceId?: string;
+        executionResult?: unknown;
+        approvalId?: string;
+        approvalRequest?: unknown;
+        deniedExplanation?: string;
+      }>(
+        "/api/execute",
+        {
+          actorId: params.principalId,
+          organizationId: params.organizationId ?? null,
+          action: {
+            actionType: params.actionType,
+            parameters: params.parameters,
+            sideEffect: true,
           },
-          client.idempotencyKey("mcp_exec"),
-        );
+        },
+        client.idempotencyKey("mcp_exec"),
+      );
 
-        return {
-          outcome: data.outcome,
-          envelopeId: data.envelopeId,
-          traceId: data.traceId,
-          executionResult: data.executionResult,
-          approvalId: data.approvalId,
-          approvalRequest: data.approvalRequest,
-          deniedExplanation: data.deniedExplanation,
-        };
-      },
-    } as unknown as ExecutionService;
+      return {
+        outcome: data.outcome,
+        envelopeId: data.envelopeId,
+        traceId: data.traceId,
+        executionResult: data.executionResult,
+        approvalId: data.approvalId,
+        approvalRequest: data.approvalRequest,
+        deniedExplanation: data.deniedExplanation,
+      };
+    },
+  } as unknown as ExecutionService;
 
-    const server = new SwitchboardMcpServer({
-      executionService,
-      readAdapter,
-      orchestrator,
-      storage,
-      ledger,
-      governanceProfileStore,
-    });
-
-    process.on("SIGTERM", () => process.exit(0));
-    process.on("SIGINT", () => process.exit(0));
-
-    await server.start();
-    return;
-  }
-
-  // -- In-memory mode (dev/testing) --
-  console.error("[mcp-server] In-memory mode (set SWITCHBOARD_API_URL for API delegation)");
-
-  const storage = createInMemoryStorage();
-  const ledgerStorage = new InMemoryLedgerStorage();
-  const ledger = new AuditLedger(ledgerStorage, DEFAULT_REDACTION_CONFIG);
-  const guardrailState = createGuardrailState();
-  const policyCache = new InMemoryPolicyCache();
-  const governanceProfileStore = new InMemoryGovernanceProfileStore();
-
-  // Seed default governance policies (no cartridges registered in employee mode)
-  await seedDefaultStorage(storage);
-
-  // -- Orchestrator + services --
-  const orchestrator = new LifecycleOrchestrator({
-    storage,
-    ledger,
-    guardrailState,
-    policyCache,
-    governanceProfileStore,
-  });
-
-  const executionService = new ExecutionService(orchestrator, storage);
-  const readAdapter = new CartridgeReadAdapter(storage, ledger);
-
-  // -- MCP Server --
   const server = new SwitchboardMcpServer({
     executionService,
     readAdapter,
@@ -139,16 +85,10 @@ async function main() {
     storage,
     ledger,
     governanceProfileStore,
-    cartridgeRegistry: storage.cartridges,
   });
 
-  // Graceful shutdown
-  process.on("SIGTERM", () => {
-    process.exit(0);
-  });
-  process.on("SIGINT", () => {
-    process.exit(0);
-  });
+  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGINT", () => process.exit(0));
 
   await server.start();
 }
