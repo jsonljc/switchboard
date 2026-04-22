@@ -14,10 +14,14 @@ interface CacheEntry {
 function computeFingerprint(request: FastifyRequest): string {
   const method = request.method;
   const route = request.routerPath ?? request.routeOptions.url ?? request.url;
+  const orgId =
+    request.organizationIdFromAuth ?? (request.headers["x-organization-id"] as string) ?? "";
+  const actorId =
+    request.principalIdFromAuth ?? (request.headers["x-principal-id"] as string) ?? "";
   const bodyHash = createHash("sha256")
     .update(JSON.stringify(request.body ?? null))
     .digest("hex");
-  return `${method}:${route}:${bodyHash}`;
+  return `${method}:${route}:${orgId}:${actorId}:${bodyHash}`;
 }
 
 export interface IdempotencyBackend {
