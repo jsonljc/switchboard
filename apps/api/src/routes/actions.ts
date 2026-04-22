@@ -102,6 +102,22 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
         if ("approvalRequired" in response && response.approvalRequired) {
           const { workUnit } = response;
 
+          // Prefer lifecycle path when lifecycleId is present (atomically created inside ingress)
+          if (
+            "lifecycleId" in response &&
+            "bindingHash" in response &&
+            response.lifecycleId &&
+            response.bindingHash
+          ) {
+            return reply.code(201).send({
+              outcome: "PENDING_APPROVAL",
+              workUnitId: workUnit.id,
+              traceId: workUnit.traceId,
+              approvalRequest: { id: response.lifecycleId, bindingHash: response.bindingHash },
+            });
+          }
+
+          // Legacy fallback — lifecycle service not wired, use route-owned approval creation
           try {
             const { approvalId, bindingHash } = await createApprovalForWorkUnit({
               workUnit,
@@ -219,6 +235,9 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
       const { id } = request.params as { id: string };
 
       try {
+        // Compatibility shim: direct execute goes through legacy PlatformLifecycle.
+        // When lifecycle service is fully wired, this route must go through
+        // lifecycle dispatch admission (prepareDispatch + validateDispatchAdmission).
         const result = await app.platformLifecycle.executeApproved(id);
         return reply.code(200).send({ result });
       } catch (err) {

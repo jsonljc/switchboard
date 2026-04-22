@@ -127,8 +127,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       const pending = await app.storageContext.approvals.listPending(
         request.organizationIdFromAuth,
       );
+      const now = new Date();
+      const activePending = pending.filter((a) => a.state.expiresAt > now);
       return reply.code(200).send({
-        approvals: pending.map((a) => ({
+        approvals: activePending.map((a) => ({
           id: a.request.id,
           summary: a.request.summary,
           riskCategory: a.request.riskCategory,
@@ -163,12 +165,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       if (!assertOrgAccess(request, approval.organizationId, reply)) return;
 
       if (approval.state.status !== "pending") {
-        return reply
-          .code(400)
-          .send({
-            error: `Cannot remind: approval status is ${approval.state.status}`,
-            statusCode: 400,
-          });
+        return reply.code(400).send({
+          error: `Cannot remind: approval status is ${approval.state.status}`,
+          statusCode: 400,
+        });
       }
 
       // Re-notify via the orchestrator's notifier if available
