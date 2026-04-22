@@ -69,6 +69,8 @@ export interface ApprovalStore {
   >;
 }
 
+export type { ApprovalLifecycleStore } from "../approval/lifecycle-types.js";
+
 export interface CartridgeRegistry {
   register(cartridgeId: string, cartridge: Cartridge, interceptors?: CartridgeInterceptor[]): void;
   unregister(cartridgeId: string): boolean;
