@@ -700,8 +700,8 @@ export class SwitchboardClient extends SwitchboardClientBase {
     return this.request<DashboardOverview>(`/api/${orgId}/dashboard/overview`);
   }
 
-  async updateTask(taskId: string, body: Record<string, unknown>) {
-    return this.request(`/tasks/${taskId}`, {
+  async updateTask(orgId: string, taskId: string, body: Record<string, unknown>) {
+    return this.request(`/api/${orgId}/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
