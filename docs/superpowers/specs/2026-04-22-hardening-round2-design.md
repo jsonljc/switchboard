@@ -56,7 +56,7 @@ The critical PR. Two parts — migration first, then deletion.
 ### Testable invariants (post-PR2)
 
 - All mutating request entrypoints flow through `PlatformIngress`
-- All approval responses flow through `ApprovalLifecycleService`
+- All lifecycle-backed approval responses flow through `ApprovalLifecycleService` (legacy fallback remains for pre-existing approvals without lifecycleId until fully migrated)
 - No mutating route calls legacy orchestrator/lifecycle paths directly
 
 ### Part A — Migrate approval respond to ApprovalLifecycleService
@@ -154,7 +154,7 @@ Remove the `StaticDeploymentResolver` + `InMemoryGatewayConversationStore` path.
 After all four PRs:
 
 1. `app.ts` boots exactly one runtime stack (PlatformIngress + PlatformLifecycle + ModeRegistry)
-2. All approval responses flow through `ApprovalLifecycleService` with revision-based parameter canonicalization
+2. All lifecycle-backed approval responses flow through `ApprovalLifecycleService` with revision-based parameter canonicalization (legacy fallback remains until pre-existing approvals are migrated)
 3. No dead routes, legacy mutating entrypoints, stubs returning null, or silent no-ops in production boot
 4. Ad-optimizer side effects have governance audit trail
 5. Idempotency keys are tenant-isolated
