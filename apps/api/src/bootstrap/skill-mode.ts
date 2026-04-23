@@ -199,60 +199,166 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
 }
 
-const STUB_CALENDAR_PROVIDER: CalendarProvider = {
-  listAvailableSlots: async () => [],
-  createBooking: async () => {
-    throw new Error("Calendar provider not connected — set GOOGLE_CALENDAR_CREDENTIALS");
-  },
-  cancelBooking: async () => {
-    throw new Error("Calendar provider not connected");
-  },
-  rescheduleBooking: async () => {
-    throw new Error("Calendar provider not connected");
-  },
-  getBooking: async () => null,
-  healthCheck: async () => ({
-    status: "disconnected" as const,
-    latencyMs: 0,
-    error: "No calendar connection provisioned",
-  }),
-};
-
 async function resolveCalendarProvider(
   prismaClient: PrismaClient,
   logger: { info(msg: string): void; error(msg: string): void },
 ): Promise<CalendarProvider> {
+  // Read business hours from the first org config that has them
+  let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
+  const orgConfig = await prismaClient.organizationConfig.findFirst({
+    select: { businessHours: true },
+  });
+  if (orgConfig?.businessHours && typeof orgConfig.businessHours === "object") {
+    businessHours = orgConfig.businessHours as import("@switchboard/schemas").BusinessHoursConfig;
+  }
+
   const credentials = process.env["GOOGLE_CALENDAR_CREDENTIALS"];
   const calendarId = process.env["GOOGLE_CALENDAR_ID"];
 
-  if (!credentials || !calendarId) {
-    logger.info("Calendar: no GOOGLE_CALENDAR_CREDENTIALS or GOOGLE_CALENDAR_ID — using stub");
-    return STUB_CALENDAR_PROVIDER;
-  }
+  // Option 1: Google Calendar if credentials present
+  if (credentials && calendarId) {
+    try {
+      const { createGoogleCalendarProvider } = await import("./google-calendar-factory.js");
+      const provider = await createGoogleCalendarProvider({
+        credentials,
+        calendarId,
+        businessHours,
+      });
 
-  try {
-    // Read business hours from the first org config that has them
-    let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
-    const orgConfig = await prismaClient.organizationConfig.findFirst({
-      select: { businessHours: true },
-    });
-    if (orgConfig?.businessHours && typeof orgConfig.businessHours === "object") {
-      businessHours = orgConfig.businessHours as import("@switchboard/schemas").BusinessHoursConfig;
+      const health = await provider.healthCheck();
+      logger.info(`Calendar: Google Calendar connected (${health.status}, ${health.latencyMs}ms)`);
+      return provider;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Calendar: failed to initialize Google Calendar: ${msg}`);
+      // Fall through to local provider if business hours available
     }
-
-    const { createGoogleCalendarProvider } = await import("./google-calendar-factory.js");
-    const provider = await createGoogleCalendarProvider({
-      credentials,
-      calendarId,
-      businessHours,
-    });
-
-    const health = await provider.healthCheck();
-    logger.info(`Calendar: Google Calendar connected (${health.status}, ${health.latencyMs}ms)`);
-    return provider;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`Calendar: failed to initialize Google Calendar — falling back to stub: ${msg}`);
-    return STUB_CALENDAR_PROVIDER;
   }
+
+  // Option 2: Local provider if business hours configured
+  if (businessHours) {
+    const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
+
+    const localStore = {
+      findOverlapping: async (_orgId: string, startsAt: Date, endsAt: Date) => {
+        const rows = await prismaClient.booking.findMany({
+          where: {
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt },
+            status: { notIn: ["cancelled", "failed"] },
+          },
+          select: { startsAt: true, endsAt: true },
+        });
+        return rows;
+      },
+      createInTransaction: async (input: {
+        organizationId: string;
+        contactId: string;
+        opportunityId?: string | null;
+        service: string;
+        startsAt: Date;
+        endsAt: Date;
+        timezone: string;
+        status: string;
+        calendarEventId: string;
+        attendeeName?: string | null;
+        attendeeEmail?: string | null;
+        createdByType: string;
+        sourceChannel?: string | null;
+        workTraceId?: string | null;
+      }) => {
+        return prismaClient.$transaction(async (tx) => {
+          const conflicts = await tx.booking.findMany({
+            where: {
+              startsAt: { lt: input.endsAt },
+              endsAt: { gt: input.startsAt },
+              status: { notIn: ["cancelled", "failed"] },
+            },
+            select: { id: true },
+            take: 1,
+          });
+          if (conflicts.length > 0) {
+            throw new Error("SLOT_CONFLICT");
+          }
+          return tx.booking.create({
+            data: {
+              organizationId: input.organizationId,
+              contactId: input.contactId,
+              opportunityId: input.opportunityId ?? null,
+              service: input.service,
+              startsAt: input.startsAt,
+              endsAt: input.endsAt,
+              timezone: input.timezone,
+              status: input.status,
+              calendarEventId: input.calendarEventId,
+              attendeeName: input.attendeeName ?? null,
+              attendeeEmail: input.attendeeEmail ?? null,
+              createdByType: input.createdByType,
+              sourceChannel: input.sourceChannel ?? null,
+              workTraceId: input.workTraceId ?? null,
+            },
+            select: { id: true },
+          });
+        });
+      },
+      findById: async (bookingId: string) => {
+        const row = await prismaClient.booking.findUnique({ where: { id: bookingId } });
+        if (!row) return null;
+        return {
+          id: row.id,
+          contactId: row.contactId,
+          organizationId: row.organizationId,
+          opportunityId: row.opportunityId ?? null,
+          service: row.service,
+          status: row.status as "confirmed" | "cancelled" | "pending_confirmation",
+          calendarEventId: row.calendarEventId ?? null,
+          attendeeName: row.attendeeName ?? null,
+          attendeeEmail: row.attendeeEmail ?? null,
+          notes: null,
+          createdByType: (row.createdByType ?? "agent") as "agent" | "human" | "contact",
+          sourceChannel: row.sourceChannel ?? null,
+          workTraceId: row.workTraceId ?? null,
+          rescheduledAt: null,
+          rescheduleCount: 0,
+          startsAt: row.startsAt.toISOString(),
+          endsAt: row.endsAt.toISOString(),
+          timezone: row.timezone ?? "Asia/Singapore",
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        };
+      },
+      cancel: async (bookingId: string) => {
+        await prismaClient.booking.update({
+          where: { id: bookingId },
+          data: { status: "cancelled" },
+        });
+      },
+      reschedule: async (bookingId: string, newSlot: { start: string; end: string }) => {
+        const updated = await prismaClient.booking.update({
+          where: { id: bookingId },
+          data: {
+            startsAt: new Date(newSlot.start),
+            endsAt: new Date(newSlot.end),
+            rescheduleCount: { increment: 1 },
+          },
+          select: { id: true },
+        });
+        return { id: updated.id };
+      },
+    };
+
+    const provider = new LocalCalendarProvider({
+      businessHours,
+      bookingStore: localStore,
+    });
+    logger.info(
+      "Calendar: using LocalCalendarProvider (business hours configured, no Google creds)",
+    );
+    return provider;
+  }
+
+  // Option 3: No provider available
+  throw new Error(
+    "Calendar unavailable: no GOOGLE_CALENDAR_CREDENTIALS and no business hours configured",
+  );
 }
