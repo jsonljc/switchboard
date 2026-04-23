@@ -6,7 +6,11 @@ import {
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
-import { ConversationCompoundingService, VoyageEmbeddingAdapter } from "@switchboard/core";
+import {
+  ConversationCompoundingService,
+  VoyageEmbeddingAdapter,
+  DisabledEmbeddingAdapter,
+} from "@switchboard/core";
 import type { EmbeddingAdapter } from "@switchboard/core";
 import { PrismaDeploymentResolver } from "@switchboard/core/platform";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
@@ -18,15 +22,8 @@ function createEmbeddingAdapter(): EmbeddingAdapter {
   if (process.env.VOYAGE_API_KEY) {
     return new VoyageEmbeddingAdapter({ apiKey: process.env.VOYAGE_API_KEY });
   }
-  console.warn(
-    "[gateway] VOYAGE_API_KEY not set — using zero-vector stubs (memory dedup and RAG disabled)",
-  );
-  return {
-    embed: async (_text: string) => new Array(1024).fill(0) as number[],
-    embedBatch: async (texts: string[]) => texts.map(() => new Array(1024).fill(0) as number[]),
-    dimensions: 1024,
-    available: false,
-  };
+  console.warn("[gateway] VOYAGE_API_KEY not set — semantic search and memory dedup disabled");
+  return new DisabledEmbeddingAdapter();
 }
 
 export interface GatewayBridgeOptions {

@@ -38,27 +38,29 @@ const simulateRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const result = await app.simulationExecutor.execute({
-        skill: app.simulationSkill,
+        skill: {
+          ...app.simulationSkill,
+          body: app.simulationSkill.body + "\n\n" + SIMULATION_SYSTEM_PROMPT,
+        },
         parameters: {
           playbook: playbookParse.data,
-          simulationPrompt: SIMULATION_SYSTEM_PROMPT,
         },
         messages: [{ role: "user", content: body.userMessage }],
         deploymentId: `sim-${orgId}`,
         orgId,
-        trustScore: 0,
-        trustLevel: "supervised",
+        trustScore: 50,
+        trustLevel: "guided",
       });
 
-      const toolsAttempted = result.toolCalls.map((tc) => ({
-        toolId: tc.toolId,
-        operation: tc.operation,
-        simulated: tc.result.data?.simulated === true,
-        effectCategory:
-          typeof tc.result.data?.effect_category === "string"
-            ? tc.result.data.effect_category
-            : "read",
-      }));
+      const toolsAttempted = result.toolCalls.map((tc) => {
+        const simulated = tc.result.data?.simulated === true;
+        return {
+          toolId: tc.toolId,
+          operation: tc.operation,
+          simulated,
+          effectCategory: simulated ? String(tc.result.data?.effect_category ?? "unknown") : "read",
+        };
+      });
 
       const blockedActions = result.toolCalls
         .filter((tc) => tc.result.data?.simulated === true)
