@@ -32,6 +32,7 @@ import { storefrontRoutes } from "../routes/storefront.js";
 import { deploymentMemoryRoutes } from "../routes/deployment-memory.js";
 import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
+import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
@@ -54,6 +55,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes, { prefix: "/api/health" });
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
   await app.register(facebookOAuthRoutes, { prefix: "/api/connections" });
+  await app.register(whatsappTestRoutes, { prefix: "/api/connections" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
   await app.register(competenceRoutes, { prefix: "/api/competence" });
