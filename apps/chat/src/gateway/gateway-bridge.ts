@@ -49,7 +49,7 @@ export function createGatewayBridge(
     submitOutput: (taskId, output) => taskStore.submitOutput(taskId, output),
   });
 
-  // Shared embedding adapter — Voyage in production, zero-vector in dev
+  // Shared embedding adapter — Voyage when configured, disabled otherwise
   const embeddingAdapter = createEmbeddingAdapter();
 
   const compoundingService = new ConversationCompoundingService({

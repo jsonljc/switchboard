@@ -167,6 +167,7 @@ export class ConversationCompoundingService {
     deploymentId: string,
     fact: { fact: string; confidence: number; category: string },
   ): Promise<void> {
+    if (!this.embedding.available) return;
     const count = await this.memoryStore.countByDeployment(organizationId, deploymentId);
     if (count >= MAX_MEMORY_ENTRIES) return;
 
@@ -205,6 +206,7 @@ export class ConversationCompoundingService {
     deploymentId: string,
     question: string,
   ): Promise<void> {
+    if (!this.embedding.available) return;
     const existing = await this.memoryStore.findByCategory(organizationId, deploymentId, "faq");
 
     if (existing.length > 0) {

@@ -57,6 +57,10 @@ export class IngestionPipeline {
       return { documentId: input.documentId, chunksCreated: 0 };
     }
 
+    if (!this.embedding.available) {
+      return { documentId: input.documentId, chunksCreated: 0 };
+    }
+
     const embeddings = await this.embedding.embedBatch(textChunks.map((c) => c.content));
 
     const chunks: KnowledgeChunk[] = textChunks.map((tc, i) => ({
