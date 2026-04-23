@@ -11,10 +11,9 @@ vi.mock("@/hooks/use-approvals", () => ({
 }));
 
 describe("OwnerTabs", () => {
-  it("renders 4 tab items", () => {
+  it("renders 3 tab items", () => {
     render(<OwnerTabs />);
-    expect(screen.getByText("Today")).toBeDefined();
-    expect(screen.getByText("Hire")).toBeDefined();
+    expect(screen.getByText("Home")).toBeDefined();
     expect(screen.getByText("Decide")).toBeDefined();
     expect(screen.getByText("Me")).toBeDefined();
   });
