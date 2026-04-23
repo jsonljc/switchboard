@@ -3,22 +3,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaClient } from "@prisma/client";
-import { assertSafeDashboardAuthEnv } from "./dev-auth";
 import { verifyPassword } from "./password";
 import { provisionDashboardUser } from "./provision-dashboard-user";
 
-/* ------------------------------------------------------------------ */
-/* Production guards                                                   */
-/* ------------------------------------------------------------------ */
-if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
-  throw new Error(
-    "NEXTAUTH_SECRET must be set in production. Refusing to start without a signing secret.",
-  );
-}
-
 const prisma = new PrismaClient();
-
-assertSafeDashboardAuthEnv();
 
 const providers: NextAuthConfig["providers"] = [
   CredentialsProvider({

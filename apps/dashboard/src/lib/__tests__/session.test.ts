@@ -51,4 +51,12 @@ describe("getServerSession", () => {
 
     expect(session).toBeNull();
   });
+
+  it("throws in production when NEXTAUTH_SECRET is missing", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+
+    const { getServerSession } = await import("../session.js");
+
+    await expect(getServerSession()).rejects.toThrow(/NEXTAUTH_SECRET/i);
+  });
 });
