@@ -14,6 +14,7 @@ const DIMENSIONS = 1024;
 
 export class ClaudeEmbeddingAdapter implements EmbeddingAdapter {
   readonly dimensions = DIMENSIONS;
+  readonly available = true;
   private readonly createEmbeddingFn: EmbeddingClient["createEmbedding"];
   private readonly model: string;
 

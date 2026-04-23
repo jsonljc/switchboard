@@ -5,6 +5,7 @@ import type { EmbeddingAdapter, KnowledgeStore, KnowledgeChunk } from "@switchbo
 function createMockEmbedding(): EmbeddingAdapter {
   return {
     dimensions: 1024,
+    available: true,
     embed: vi.fn().mockResolvedValue(new Array(1024).fill(0.1)),
     embedBatch: vi
       .fn()
