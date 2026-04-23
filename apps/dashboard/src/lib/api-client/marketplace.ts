@@ -92,21 +92,23 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
 
   async listFacebookAdAccounts(deploymentId: string) {
     return this.request<{
-      adAccounts: Array<{
+      accounts: Array<{
         accountId: string;
         name: string;
         currency: string;
-        status: string;
+        status: number;
       }>;
-    }>(`/api/marketplace/deployments/${deploymentId}/facebook/ad-accounts`);
+    }>(`/api/connections/facebook/${deploymentId}/accounts`);
   }
 
   async setAdAccountSelection(deploymentId: string, adAccountId: string, adAccountName: string) {
     return this.request<{ deployment: MarketplaceDeployment }>(
-      `/api/marketplace/deployments/${deploymentId}/facebook/ad-account`,
+      `/api/marketplace/deployments/${deploymentId}`,
       {
-        method: "POST",
-        body: JSON.stringify({ adAccountId, adAccountName }),
+        method: "PATCH",
+        body: JSON.stringify({
+          inputConfig: { adAccountId, adAccountName },
+        }),
       },
     );
   }
