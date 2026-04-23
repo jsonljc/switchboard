@@ -199,6 +199,8 @@ export interface HookResult {
   reason?: string;
   /** When a hook blocks a tool call, this distinguishes deny from pending_approval. */
   decision?: "denied" | "pending_approval";
+  /** When set with proceed=false and decision=undefined, executor uses this instead of denied/pendingApproval. */
+  substituteResult?: ToolResult;
 }
 
 export interface LlmHookResult extends HookResult {
@@ -292,4 +294,17 @@ export class ContextResolutionError extends Error {
     super(`Required knowledge not found: kind=${kind}, scope=${scope}`);
     this.name = "ContextResolutionError";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Request Context (per-request identity, never shared across requests)
+// ---------------------------------------------------------------------------
+
+export interface SkillRequestContext {
+  sessionId: string;
+  orgId: string;
+  deploymentId: string;
+  actorId?: string;
+  traceId?: string;
+  surface?: "chat" | "simulation" | "api" | "system";
 }

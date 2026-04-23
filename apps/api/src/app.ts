@@ -50,6 +50,8 @@ declare module "fastify" {
     workTraceStore: import("@switchboard/core/platform").WorkTraceStore | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
+    simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
+    simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -288,17 +290,21 @@ export async function buildServer() {
   modeRegistry.register(new CartridgeMode({ cartridgeRegistry: storage.cartridges }));
 
   // --- SkillMode registration (skill-backed deployments) ---
+  let simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null = null;
+  let simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null = null;
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
     }
     const { bootstrapSkillMode } = await import("./bootstrap/skill-mode.js");
-    await bootstrapSkillMode({
+    const skillModeResult = await bootstrapSkillMode({
       prismaClient,
       intentRegistry,
       modeRegistry,
       logger: app.log,
     });
+    simulationExecutor = skillModeResult.simulationExecutor;
+    simulationSkill = skillModeResult.alexSkill;
   } catch (err) {
     if (process.env.NODE_ENV === "production") {
       throw err;
@@ -307,6 +313,8 @@ export async function buildServer() {
       `Failed to register SkillMode: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+  app.decorate("simulationExecutor", simulationExecutor);
+  app.decorate("simulationSkill", simulationSkill);
 
   const platformGovernanceGate = new GovernanceGate({
     evaluate,

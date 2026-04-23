@@ -12,7 +12,7 @@ import { BuilderRegistry } from "../../skill-runtime/builder-registry.js";
 import { SkillExecutorImpl } from "../../skill-runtime/skill-executor.js";
 import { AnthropicToolCallingAdapter } from "../../skill-runtime/tool-calling-adapter.js";
 import { loadSkill } from "../../skill-runtime/skill-loader.js";
-import { createEscalateTool } from "../../skill-runtime/tools/escalate.js";
+import { createEscalateToolFactory } from "../../skill-runtime/tools/escalate.js";
 import { ok } from "../../skill-runtime/tool-result.js";
 import { VERTICALS } from "../../skill-runtime/__tests__/behavior-fixtures/verticals.js";
 import { toDeploymentContext } from "../deployment-resolver.js";
@@ -111,7 +111,7 @@ function createMockTools(): Map<string, SkillTool> {
   });
   tools.set(
     "escalate",
-    createEscalateTool({
+    createEscalateToolFactory({
       assembler: {
         assemble: () => ({
           id: "h_1",
@@ -133,9 +133,10 @@ function createMockTools(): Map<string, SkillTool> {
       },
       handoffStore: { save: async () => {}, getBySessionId: async () => null },
       notifier: { notify: async () => {} },
+    })({
       sessionId: "test-session",
       orgId: "test-org",
-      messages: [],
+      deploymentId: "test-deployment",
     }),
   );
   tools.set("calendar-book", {
