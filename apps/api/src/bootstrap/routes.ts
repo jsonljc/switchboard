@@ -42,6 +42,7 @@ import websiteScanRoutes from "../routes/website-scan.js";
 import { ownerTaskRoutes } from "../routes/owner-tasks.js";
 import { organizationsRoutes } from "../routes/organizations.js";
 import { simulateRoutes } from "../routes/simulate.js";
+import { readinessRoutes } from "../routes/readiness.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -63,6 +64,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(governanceRoutes, { prefix: "/api/governance" });
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });
+  await app.register(readinessRoutes, { prefix: "/api/agents" });
   await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
   await app.register(knowledgeEntryRoutes, { prefix: "/api/knowledge-entries" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
