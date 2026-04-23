@@ -170,7 +170,7 @@ This step is judged through three concrete checks.
 - Can the owner see what to do next?
 
 Pass condition:
-The product provides clear setup state, action history, decision visibility, failure reasons, and next-step guidance without requiring internal interpretation.
+The product provides clear setup state, action history, decision visibility, failure reasons, and next-step guidance without requiring internal or founder interpretation.
 
 ### 8. Operator Intervention
 
@@ -186,7 +186,7 @@ Question:
 Can the owner clearly see business outcomes, not just activity?
 
 Pass condition:
-The trial experience exposes booked appointments and meaningful funnel performance signals that demonstrate value inside the trial window.
+The trial experience exposes booked appointments and meaningful funnel performance signals that demonstrate value inside the trial window and are attributable enough to feel credible to the owner.
 
 ---
 
@@ -298,7 +298,8 @@ The final audit should produce:
 3. A blocker list ordered by launch impact
 4. A major-gap list that would keep launch in beta/cohort mode
 5. A polish list for post-launch cleanup
-6. A short statement of the strongest evidence behind the final verdict
+6. A recommended launch mode: `broad self-serve`, `controlled beta`, `founder-led cohort`, or `not launchable`
+7. A short statement of the strongest evidence behind the final verdict
 
 The final artifact should make it impossible to confuse subsystem progress with customer success.
 
