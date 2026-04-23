@@ -11,6 +11,7 @@ function createMockDeps() {
       embed: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
       embedBatch: vi.fn().mockResolvedValue([new Array(1024).fill(0)]),
       dimensions: 1024,
+      available: true,
     },
     interactionSummaryStore: {
       create: vi.fn().mockResolvedValue({ id: "sum-1" }),

@@ -1,6 +1,12 @@
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
 import type { CalendarProvider } from "@switchboard/schemas";
+import type { SkillExecutor, SkillDefinition } from "@switchboard/core/skill-runtime";
+
+export interface SkillModeBootstrapResult {
+  simulationExecutor: SkillExecutor;
+  alexSkill: SkillDefinition;
+}
 
 interface SkillModeBootstrapDeps {
   prismaClient: PrismaClient;
@@ -9,7 +15,9 @@ interface SkillModeBootstrapDeps {
   logger: { info(msg: string): void; error(msg: string): void };
 }
 
-export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<void> {
+export async function bootstrapSkillMode(
+  deps: SkillModeBootstrapDeps,
+): Promise<SkillModeBootstrapResult> {
   const { prismaClient, intentRegistry, modeRegistry, logger } = deps;
 
   const {
@@ -197,6 +205,13 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
   );
 
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
+
+  // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes
+  const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
+  const simulationHooks = [new GovernanceHook(toolsMap), new SimulationPolicyHook()];
+  const simulationExecutor = new SkillExecutorImpl(adapter, toolsMap, undefined, simulationHooks);
+
+  return { simulationExecutor, alexSkill };
 }
 
 async function resolveCalendarProvider(

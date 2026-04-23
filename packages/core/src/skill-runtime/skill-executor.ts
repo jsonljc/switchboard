@@ -228,7 +228,15 @@ export class SkillExecutorImpl implements SkillExecutor {
         let governanceOutcome: string;
 
         if (!toolHookResult.proceed) {
-          if (toolHookResult.decision === "pending_approval") {
+          if (toolHookResult.substituteResult) {
+            if (toolHookResult.decision) {
+              throw new Error(
+                `Hook invariant violated: substituteResult and decision are mutually exclusive (got decision=${toolHookResult.decision})`,
+              );
+            }
+            result = toolHookResult.substituteResult;
+            governanceOutcome = "auto-approved";
+          } else if (toolHookResult.decision === "pending_approval") {
             result = pendingApproval(toolHookResult.reason ?? "Requires approval");
             governanceOutcome = "require-approval";
           } else {

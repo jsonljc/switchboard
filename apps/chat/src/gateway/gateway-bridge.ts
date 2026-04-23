@@ -25,6 +25,7 @@ function createEmbeddingAdapter(): EmbeddingAdapter {
     embed: async (_text: string) => new Array(1024).fill(0) as number[],
     embedBatch: async (texts: string[]) => texts.map(() => new Array(1024).fill(0) as number[]),
     dimensions: 1024,
+    available: false,
   };
 }
 

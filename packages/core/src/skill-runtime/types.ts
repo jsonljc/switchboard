@@ -199,6 +199,8 @@ export interface HookResult {
   reason?: string;
   /** When a hook blocks a tool call, this distinguishes deny from pending_approval. */
   decision?: "denied" | "pending_approval";
+  /** When set with proceed=false and decision=undefined, executor uses this instead of denied/pendingApproval. */
+  substituteResult?: ToolResult;
 }
 
 export interface LlmHookResult extends HookResult {
