@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FadeIn } from "@/components/ui/fade-in";
 import { AgentMark } from "@/components/character/agent-mark";
 import { FaqAccordion } from "./faq-accordion";
+import { getCtaHref } from "@/lib/launch-mode";
 
 const FEATURES = [
   "Instant lead response",
@@ -164,7 +165,7 @@ export function PricingSection() {
 
             {/* CTA */}
             <Link
-              href="/get-started"
+              href={getCtaHref()}
               style={{
                 display: "block",
                 width: "100%",

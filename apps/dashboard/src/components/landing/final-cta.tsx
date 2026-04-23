@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FadeIn } from "@/components/ui/fade-in";
+import { getCtaHref, getCtaLabel } from "@/lib/launch-mode";
 
 export function FinalCta() {
   return (
@@ -27,7 +28,7 @@ export function FinalCta() {
             Get Alex live where your leads already come in.
           </p>
           <Link
-            href="/get-started"
+            href={getCtaHref()}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -40,7 +41,7 @@ export function FinalCta() {
               textDecoration: "none",
             }}
           >
-            Get started →
+            {getCtaLabel()} →
           </Link>
           <p
             style={{

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { getCtaHref, getCtaLabel } from "@/lib/launch-mode";
 
 interface LandingNavProps {
   isAuthenticated: boolean;
@@ -121,7 +122,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
               </Link>
             )}
             <Link
-              href="/get-started"
+              href={getCtaHref()}
               style={{
                 fontFamily: "var(--font-display)",
                 fontWeight: 600,
@@ -141,7 +142,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                 (e.currentTarget as HTMLElement).style.background = "#1A1714";
               }}
             >
-              Get early access
+              {getCtaLabel()}
             </Link>
           </div>
 
@@ -270,7 +271,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                 </Link>
               )}
               <Link
-                href="/get-started"
+                href={getCtaHref()}
                 style={{
                   fontFamily: "var(--font-display)",
                   fontWeight: 600,
@@ -291,7 +292,7 @@ export function LandingNav({ isAuthenticated }: LandingNavProps) {
                   (e.currentTarget as HTMLElement).style.background = "#1A1714";
                 }}
               >
-                Get early access
+                {getCtaLabel()}
               </Link>
             </div>
           </div>
