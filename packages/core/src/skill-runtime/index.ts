@@ -1,6 +1,7 @@
 export { loadSkill } from "./skill-loader.js";
 export { SkillExecutorImpl } from "./skill-executor.js";
 export { GovernanceHook } from "./hooks/governance-hook.js";
+export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
 export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
@@ -16,8 +17,9 @@ export {
   createCrmWriteTool,
   createCalendarBookTool,
   createWebScannerTool,
-  createEscalateTool,
+  createEscalateToolFactory,
 } from "./tools/index.js";
+export type { EscalateToolFactory } from "./tools/index.js";
 export {
   alexBuilder,
   salesPipelineBuilder,
@@ -78,6 +80,7 @@ export type {
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,
+  SkillRequestContext,
 } from "./types.js";
 export {
   SkillParseError,

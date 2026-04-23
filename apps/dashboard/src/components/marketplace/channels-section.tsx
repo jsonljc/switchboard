@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Globe, MessageCircle } from "lucide-react";
-import { WidgetSetupModal } from "./widget-setup-modal";
-import { TelegramSetupModal } from "./telegram-setup-modal";
 
 interface Connection {
   id: string;
@@ -89,18 +87,30 @@ export function ChannelsSection({ deploymentId, connections, onRefresh }: Channe
       </div>
 
       {showWidgetModal && (
-        <WidgetSetupModal
-          deploymentId={deploymentId}
-          onClose={() => setShowWidgetModal(false)}
-          onConnected={onRefresh}
-        />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
+            <h3 className="font-semibold">Web Widget Setup</h3>
+            <p className="text-sm text-muted-foreground">
+              Widget setup will be available in the module detail view.
+            </p>
+            <Button variant="outline" onClick={() => setShowWidgetModal(false)}>
+              Close
+            </Button>
+          </div>
+        </div>
       )}
       {showTelegramModal && (
-        <TelegramSetupModal
-          deploymentId={deploymentId}
-          onClose={() => setShowTelegramModal(false)}
-          onConnected={onRefresh}
-        />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
+            <h3 className="font-semibold">Telegram Setup</h3>
+            <p className="text-sm text-muted-foreground">
+              Telegram setup will be available in the module detail view.
+            </p>
+            <Button variant="outline" onClick={() => setShowTelegramModal(false)}>
+              Close
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

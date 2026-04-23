@@ -5,7 +5,12 @@
 // Returns null when required config is missing, allowing degraded boot.
 // ---------------------------------------------------------------------------
 
-import { ClaudeLLMAdapter, ClaudeEmbeddingAdapter, KnowledgeRetriever } from "@switchboard/core";
+import {
+  ClaudeLLMAdapter,
+  ClaudeEmbeddingAdapter,
+  DisabledEmbeddingAdapter,
+  KnowledgeRetriever,
+} from "@switchboard/core";
 import type {
   LLMCompleteFn,
   EmbeddingClient,
@@ -20,7 +25,7 @@ export interface ConversationDepsInput {
   conversationStore?: ConversationStore;
   knowledgeStore?: KnowledgeStore;
   model?: string;
-  /** Voyage AI API key for real embeddings. When absent, uses zero-vector stubs. */
+  /** Voyage AI API key for real embeddings. When absent, semantic search is disabled. */
   voyageApiKey?: string;
 }
 
@@ -76,40 +81,41 @@ export function buildConversationDeps(input: ConversationDepsInput): Conversatio
 
   const llm = new ClaudeLLMAdapter({ complete });
 
-  const createEmbeddingFn: EmbeddingClient["createEmbedding"] = input.voyageApiKey
-    ? async (params) => {
-        const resp = await fetch("https://api.voyageai.com/v1/embeddings", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${input.voyageApiKey}`,
-          },
-          body: JSON.stringify({
-            input: params.texts,
-            model: "voyage-3-lite",
-          }),
-        });
+  let embeddingAdapter: EmbeddingAdapter;
 
-        if (!resp.ok) {
-          console.warn(
-            `[conversation-deps] Voyage API error ${resp.status} — falling back to zero-vector embeddings`,
-          );
-          return { embeddings: params.texts.map(() => new Array(1024).fill(0)) };
-        }
+  if (input.voyageApiKey) {
+    const createEmbeddingFn: EmbeddingClient["createEmbedding"] = async (params) => {
+      const resp = await fetch("https://api.voyageai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${input.voyageApiKey}`,
+        },
+        body: JSON.stringify({
+          input: params.texts,
+          model: "voyage-3-lite",
+        }),
+      });
 
-        const result = (await resp.json()) as {
-          data: Array<{ embedding: number[] }>;
-        };
-        return { embeddings: result.data.map((d) => d.embedding) };
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        throw new Error(`Voyage API error ${resp.status}: ${body}`);
       }
-    : async (params) => {
-        return { embeddings: params.texts.map(() => new Array(1024).fill(0)) };
-      };
 
-  const embeddingAdapter = new ClaudeEmbeddingAdapter({
-    createEmbedding: createEmbeddingFn,
-    model: "voyage-3-lite",
-  });
+      const result = (await resp.json()) as {
+        data: Array<{ embedding: number[] }>;
+      };
+      return { embeddings: result.data.map((d) => d.embedding) };
+    };
+
+    embeddingAdapter = new ClaudeEmbeddingAdapter({
+      createEmbedding: createEmbeddingFn,
+      model: "voyage-3-lite",
+    });
+  } else {
+    console.warn("[boot] Embedding provider not configured — semantic search disabled");
+    embeddingAdapter = new DisabledEmbeddingAdapter();
+  }
 
   const retriever = new KnowledgeRetriever({
     store: knowledgeStore,

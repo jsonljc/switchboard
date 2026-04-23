@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { KnowledgeRetriever, computeConfidence } from "../retrieval.js";
+import { DisabledEmbeddingAdapter } from "../../llm/disabled-embedding-adapter.js";
 import type { EmbeddingAdapter, KnowledgeStore, RetrievalResult } from "@switchboard/core";
 
 function createMockEmbedding(): EmbeddingAdapter {
   return {
     dimensions: 1024,
+    available: true,
     embed: vi.fn().mockResolvedValue(new Array(1024).fill(0.1)),
     embedBatch: vi.fn().mockResolvedValue([]),
   };
@@ -134,6 +136,20 @@ describe("KnowledgeRetriever", () => {
       expect.any(Array),
       expect.objectContaining({ topK: 10 }),
     );
+  });
+});
+
+describe("KnowledgeRetriever — unavailable embeddings", () => {
+  it("returns empty results when adapter is unavailable", async () => {
+    const adapter = new DisabledEmbeddingAdapter();
+    const mockStore = createMockStore([]);
+    const retriever = new KnowledgeRetriever({ embedding: adapter, store: mockStore });
+    const result = await retriever.retrieve("test query", {
+      organizationId: "org1",
+      agentId: "agent1",
+    });
+    expect(result).toEqual([]);
+    expect(mockStore.search).not.toHaveBeenCalled();
   });
 });
 

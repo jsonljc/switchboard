@@ -21,6 +21,10 @@ import { RevenueSummary } from "@/components/dashboard/revenue-summary";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { OwnerTaskList } from "@/components/dashboard/owner-task-list";
 import { CONSEQUENCE } from "@/lib/approval-constants";
+import { useModuleStatus } from "@/hooks/use-module-status";
+import { ModuleCards } from "@/components/dashboard/module-cards";
+import { RecommendationBar } from "@/components/dashboard/recommendation-bar";
+import { SynergyStrip } from "@/components/dashboard/synergy-strip";
 
 export function OwnerToday() {
   const { data: session } = useSession();
@@ -30,6 +34,7 @@ export function OwnerToday() {
   const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { data: modules } = useModuleStatus();
 
   const animate = !hasPlayed;
 
@@ -297,15 +302,7 @@ export function OwnerToday() {
     <div className="dashboard-frame">
       {/* Wave 1: Header */}
       <FadeIn delay={animate ? 0 : 0} translateY={animate ? 8 : 0}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <DashboardHeader overview={overview} />
-          <Link
-            href="/my-agent"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Manage agent →
-          </Link>
-        </div>
+        <DashboardHeader overview={overview} />
       </FadeIn>
 
       {/* First Run Banner */}
@@ -313,6 +310,17 @@ export function OwnerToday() {
         <div style={{ marginTop: "32px" }}>
           <FirstRunBanner onDismiss={dismissBanner} />
         </div>
+      )}
+
+      {/* Module Control Center */}
+      {modules && (
+        <FadeIn delay={animate ? 100 : 0} translateY={animate ? 8 : 0}>
+          <div style={{ marginTop: "32px", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <ModuleCards modules={modules} />
+            <RecommendationBar modules={modules} />
+            <SynergyStrip modules={modules} />
+          </div>
+        </FadeIn>
       )}
 
       {/* Wave 2: Stat Strip */}

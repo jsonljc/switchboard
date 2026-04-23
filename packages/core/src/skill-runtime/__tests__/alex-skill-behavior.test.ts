@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { SkillExecutorImpl } from "../skill-executor.js";
 import { loadSkill } from "../skill-loader.js";
-import { createEscalateTool } from "../tools/escalate.js";
+import { createEscalateToolFactory } from "../tools/escalate.js";
 import { AnthropicToolCallingAdapter } from "../tool-calling-adapter.js";
 import type { SkillTool, SkillExecutionParams } from "../types.js";
 import { ok } from "../tool-result.js";
@@ -74,7 +74,7 @@ function createMockTools(): Map<string, SkillTool> {
   });
   tools.set(
     "escalate",
-    createEscalateTool({
+    createEscalateToolFactory({
       assembler: {
         assemble: () => ({
           id: "h_1",
@@ -96,9 +96,10 @@ function createMockTools(): Map<string, SkillTool> {
       },
       handoffStore: { save: async () => {}, getBySessionId: async () => null },
       notifier: { notify: async () => {} },
+    })({
       sessionId: "test-session",
       orgId: "test-org",
-      messages: [],
+      deploymentId: "test-deployment",
     }),
   );
   tools.set("calendar-book", {

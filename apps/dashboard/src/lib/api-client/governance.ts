@@ -68,7 +68,7 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     });
   }
 
-  // Simulate
+  // Simulate (governance dry-run — legacy)
   async simulate(body: {
     actionType: string;
     parameters: Record<string, unknown>;
@@ -76,6 +76,24 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     cartridgeId?: string;
   }) {
     return this.request<SimulateResult>("/api/simulate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Simulate chat (onboarding TestCenter — real executor with dry-run policy)
+  async simulateChat(body: { playbook: unknown; userMessage: string }) {
+    return this.request<{
+      alexMessage: string;
+      annotations: string[];
+      toolsAttempted?: Array<{
+        toolId: string;
+        operation: string;
+        simulated: boolean;
+        effectCategory: string;
+      }>;
+      blockedActions?: string[];
+    }>("/api/simulate", {
       method: "POST",
       body: JSON.stringify(body),
     });

@@ -11,7 +11,7 @@ import { TrustScoreBadge } from "@/components/marketplace/trust-score-badge";
 import { TrustHistoryChart } from "@/components/marketplace/trust-history-chart";
 import { WorkLogList } from "@/components/marketplace/work-log-list";
 import { ChannelsSection } from "@/components/marketplace/channels-section";
-import { InstallInstructions } from "@/components/marketplace/install-instructions";
+
 import { useTrustProgression } from "@/hooks/use-marketplace";
 import type {
   MarketplaceListing,
@@ -128,7 +128,7 @@ export function MyAgentClient({
   trustBreakdown,
   initialTasks,
   onboarding,
-  chatServerUrl,
+  chatServerUrl: _chatServerUrl,
   widgetToken,
 }: MyAgentClientProps) {
   const router = useRouter();
@@ -240,16 +240,16 @@ export function MyAgentClient({
         <section className="space-y-4">
           <h2 className="section-label">Storefront &amp; Embed</h2>
           <StorefrontLinkCard slug={listing.slug} />
-          {widgetToken ? (
-            <InstallInstructions widgetToken={widgetToken} chatServerUrl={chatServerUrl} />
-          ) : (
-            <div className="rounded-lg border border-border bg-surface-raised p-4 text-center">
-              <p className="text-sm text-muted-foreground">No web widget connected yet.</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Connect a web widget from the Channels settings to get your embed code.
-              </p>
-            </div>
-          )}
+          <div className="rounded-lg border border-border bg-surface-raised p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              {widgetToken
+                ? "Web widget connected. Embed instructions coming soon."
+                : "No web widget connected yet."}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Connect a web widget from the Channels settings to get your embed code.
+            </p>
+          </div>
         </section>
       )}
 

@@ -30,7 +30,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   createCalendarBookTool: vi.fn(() => ({
     operations: { create: { effectCategory: "external_mutation" } },
   })),
-  createEscalateTool: vi.fn(() => ({ operations: { owner: { effectCategory: "external_send" } } })),
+  createEscalateToolFactory: vi.fn(() => () => ({
+    operations: { owner: { effectCategory: "external_send" } },
+  })),
   BookingFailureHandler: vi.fn().mockImplementation(() => ({})),
 }));
 

@@ -15,6 +15,7 @@ const API_URL = "https://api.voyageai.com/v1/embeddings";
 
 export class VoyageEmbeddingAdapter implements EmbeddingAdapter {
   readonly dimensions = DIMENSIONS;
+  readonly available = true;
   private readonly apiKey: string;
   private readonly model: string;
 

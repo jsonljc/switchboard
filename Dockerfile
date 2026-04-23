@@ -61,6 +61,7 @@ COPY --from=build /app/packages/ad-optimizer/dist/ packages/ad-optimizer/dist/
 
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist/ apps/api/dist/
+COPY --from=build /app/skills/ skills/
 
 RUN pnpm install --frozen-lockfile --prod
 
