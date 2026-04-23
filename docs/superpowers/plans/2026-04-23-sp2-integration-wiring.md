@@ -317,6 +317,20 @@ export default function ModuleSetupPage() {
     );
   }
 
+  if (!isLoading && !deploymentId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center text-sm text-muted-foreground">
+          No deployment found for this module. Please deploy the module first from the{" "}
+          <a href="/dashboard" className="underline">
+            dashboard
+          </a>
+          .
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <ModuleSetupWizard
@@ -1305,50 +1319,54 @@ const alexListing = await app.prisma.agentListing.findUnique({
   where: { slug: "alex-conversion" },
 });
 
-if (alexListing) {
-  const deployment = await app.prisma.agentDeployment.upsert({
-    where: {
-      organizationId_listingId: {
-        organizationId: orgId,
-        listingId: alexListing.id,
-      },
-    },
-    update: {},
-    create: {
+if (!alexListing) {
+  throw new Error(
+    `Cannot provision ${ch.channel}: Alex listing (alex-conversion) not found. Run database seed first.`,
+  );
+}
+
+const deployment = await app.prisma.agentDeployment.upsert({
+  where: {
+    organizationId_listingId: {
       organizationId: orgId,
       listingId: alexListing.id,
-      status: "active",
-      skillSlug: "alex",
     },
-  });
+  },
+  update: {},
+  create: {
+    organizationId: orgId,
+    listingId: alexListing.id,
+    status: "active",
+    skillSlug: "alex",
+  },
+});
 
-  const tokenHash = createHash("sha256").update(connection.id).digest("hex");
+const tokenHash = createHash("sha256").update(connection.id).digest("hex");
 
-  await app.prisma.deploymentConnection.upsert({
-    where: {
-      deploymentId_type_slot: {
-        deploymentId: deployment.id,
-        type: ch.channel,
-        slot: "default",
-      },
-    },
-    update: {
-      credentials: encrypted,
-      tokenHash,
-      status: "active",
-    },
-    create: {
+await app.prisma.deploymentConnection.upsert({
+  where: {
+    deploymentId_type_slot: {
       deploymentId: deployment.id,
       type: ch.channel,
       slot: "default",
-      credentials: encrypted,
-      tokenHash,
     },
-  });
-}
+  },
+  update: {
+    credentials: encrypted,
+    tokenHash,
+    status: "active",
+  },
+  create: {
+    deploymentId: deployment.id,
+    type: ch.channel,
+    slot: "default",
+    credentials: encrypted,
+    tokenHash,
+  },
+});
 ```
 
-Note: This code is inside the existing `try/catch` block. If `alexListing` is not found (e.g. seed data not run), it silently skips — this is acceptable because without the listing, there's no deployment to route to anyway. But if the listing exists and `upsert` fails, the error propagates and the channel is marked as `error` in the response.
+Note: This code is inside the existing `try/catch` block. If any step fails — missing listing, deployment upsert, or connection upsert — the error propagates and the channel is marked as `error` in the response. This is intentional: a "connected" channel with no bridge is worse than a visible provisioning failure.
 
 - [ ] **Step 3: Run typecheck**
 
@@ -1439,30 +1457,28 @@ describe("Provisioning bridge → DeploymentResolver integration", () => {
         }),
       },
       deploymentConnection: {
-        upsert: vi
-          .fn()
-          .mockImplementation(
-            async (args: {
-              where: {
-                deploymentId_type_slot: { deploymentId: string; type: string; slot: string };
-              };
-              create: {
-                deploymentId: string;
-                type: string;
-                credentials: string;
-                tokenHash: string;
-              };
-            }) => {
-              const record = {
-                deploymentId: args.create.deploymentId,
-                type: args.create.type,
-                tokenHash: args.create.tokenHash,
-                credentials: args.create.credentials,
-              };
-              bridgeRecords.set(args.create.tokenHash, record);
-              return record;
-            },
-          ),
+        upsert: vi.fn().mockImplementation(
+          async (args: {
+            where: {
+              deploymentId_type_slot: { deploymentId: string; type: string; slot: string };
+            };
+            create: {
+              deploymentId: string;
+              type: string;
+              credentials: string;
+              tokenHash: string;
+            };
+          }) => {
+            const record = {
+              deploymentId: args.create.deploymentId,
+              type: args.create.type,
+              tokenHash: args.create.tokenHash,
+              credentials: args.create.credentials,
+            };
+            bridgeRecords.set(args.create.tokenHash, record);
+            return record;
+          },
+        ),
         findFirst: vi
           .fn()
           .mockImplementation(async (args: { where: { tokenHash?: string; type?: string } }) => {
@@ -1479,7 +1495,9 @@ describe("Provisioning bridge → DeploymentResolver integration", () => {
     const alexListing = await mockPrisma.agentListing.findUnique({
       where: { slug: "alex-conversion" },
     });
-    if (!alexListing) throw new Error("Alex listing not found");
+    if (!alexListing) {
+      throw new Error(`Cannot provision ${channel}: Alex listing (alex-conversion) not found.`);
+    }
 
     const deployment = await mockPrisma.agentDeployment.upsert({
       where: {
@@ -1574,11 +1592,19 @@ describe("Provisioning bridge → DeploymentResolver integration", () => {
     );
   });
 
-  it("provisioning fails if listing not found", async () => {
+  it("provisioning hard-fails if listing not found", async () => {
     mockPrisma.agentListing.findUnique.mockResolvedValue(null);
 
     await expect(simulateProvisioning(MOCK_CONNECTION_ID, "whatsapp")).rejects.toThrow(
-      "Alex listing not found",
+      "Cannot provision whatsapp",
+    );
+  });
+
+  it("provisioning hard-fails if deployment upsert fails", async () => {
+    mockPrisma.agentDeployment.upsert.mockRejectedValue(new Error("DB constraint violation"));
+
+    await expect(simulateProvisioning(MOCK_CONNECTION_ID, "whatsapp")).rejects.toThrow(
+      "DB constraint violation",
     );
   });
 });
@@ -1657,4 +1683,5 @@ After all tasks are complete, verify SP2's pass condition:
 10. **Enter invalid credentials + Test Connection:** Should show specific error message (not generic)
 11. **Connect with verified credentials:** Should persist and show "Connected ✓"
 12. **Verify bridge:** Check DB for `DeploymentConnection` record with `tokenHash` = SHA-256 of `Connection.id`
-13. **Verify resolver:** Run unit test confirming `PrismaDeploymentResolver.resolveByChannelToken()` resolves the WhatsApp channel
+13. **Verify resolver:** Run integration test confirming `PrismaDeploymentResolver.resolveByChannelToken()` resolves the WhatsApp channel using the token the runtime actually passes (`Connection.id`)
+14. **Verify hard-fail:** Attempt provisioning without seed data (no `alex-conversion` listing) — should fail with clear error, not succeed silently
