@@ -3,20 +3,7 @@ import { requireDashboardSession } from "@/lib/require-dashboard-session";
 import { getApiClient } from "@/lib/get-api-client";
 import { resolveModuleStatuses } from "@/lib/module-state-resolver";
 import type { ResolverInput } from "@/lib/module-state-resolver";
-
-// ---------------------------------------------------------------------------
-// Mapping from listing slug → module ID used by the resolver.
-// When a new revenue module is added, extend this map.
-// ---------------------------------------------------------------------------
-
-const SLUG_TO_MODULE: Record<string, string> = {
-  "alex-conversion": "lead-to-booking",
-  "speed-to-lead": "lead-to-booking",
-  "sales-closer": "lead-to-booking",
-  "nurture-specialist": "lead-to-booking",
-  "creative-family": "creative",
-  "ad-optimizer": "ad-optimizer",
-};
+import { SLUG_TO_MODULE } from "@/lib/module-types";
 
 export async function GET() {
   try {

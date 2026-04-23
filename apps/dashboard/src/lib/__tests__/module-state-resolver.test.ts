@@ -152,6 +152,72 @@ describe("resolveModuleStatuses", () => {
     expect(result[2].state).toBe("connection_broken");
   });
 
+  it("returns live for lead-to-booking in local scheduling mode without calendar", () => {
+    const result = resolveModuleStatuses(
+      makeInput({
+        deployments: [
+          {
+            id: "d1",
+            moduleType: "lead-to-booking",
+            status: "active",
+            inputConfig: { schedulingMode: "local" },
+          },
+        ],
+        orgConfig: {
+          businessHours: {
+            timezone: "Asia/Singapore",
+            days: [{ day: 1, open: "09:00", close: "17:00" }],
+          },
+        },
+      }),
+    );
+    expect(result[0].state).toBe("live");
+  });
+
+  it("returns needs_connection for lead-to-booking in google mode without calendar", () => {
+    const result = resolveModuleStatuses(
+      makeInput({
+        deployments: [
+          {
+            id: "d1",
+            moduleType: "lead-to-booking",
+            status: "active",
+            inputConfig: { schedulingMode: "google" },
+          },
+        ],
+      }),
+    );
+    expect(result[0].state).toBe("needs_connection");
+  });
+
+  it("returns partial_setup for ad-optimizer when config complete but no audits", () => {
+    const result = resolveModuleStatuses(
+      makeInput({
+        deployments: [
+          {
+            id: "d3",
+            moduleType: "ad-optimizer",
+            status: "active",
+            inputConfig: { accountId: "act_123", targetCPA: 100, targetROAS: 3 },
+          },
+        ],
+        connections: [{ deploymentId: "d3", type: "meta_ads", status: "active" }],
+        auditCount: 0,
+      }),
+    );
+    expect(result[2].state).toBe("partial_setup");
+    expect(result[2].subtext).toContain("audit");
+  });
+
+  it("includes step param in CTA href for needs_connection state", () => {
+    const result = resolveModuleStatuses(
+      makeInput({
+        deployments: [{ id: "d3", moduleType: "ad-optimizer", status: "active", inputConfig: {} }],
+      }),
+    );
+    expect(result[2].cta.href).toContain("?step=connect-meta");
+  });
+
   it("metric is only populated when state is live", () => {
     const result = resolveModuleStatuses(makeInput());
     for (const mod of result) {

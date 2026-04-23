@@ -33,3 +33,12 @@ export const STATE_PRIORITY: ModuleState[] = [
   "not_setup",
   "live",
 ];
+
+export const SLUG_TO_MODULE: Record<string, ModuleId> = {
+  "alex-conversion": "lead-to-booking",
+  "speed-to-lead": "lead-to-booking",
+  "sales-pipeline-bundle": "lead-to-booking",
+  "creative-family": "creative",
+  "performance-creative-director": "creative",
+  "ad-optimizer": "ad-optimizer",
+};

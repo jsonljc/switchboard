@@ -65,14 +65,15 @@ function resolveLeadToBooking(input: ResolverInput): ResolvedState {
     };
   }
 
+  const schedulingMode = (deployment.inputConfig.schedulingMode as string) ?? "local";
   const hasCalendar = calendarConn?.status === "active";
   const hasBusinessHours = input.orgConfig.businessHours !== null;
 
-  if (!hasCalendar) {
+  if (schedulingMode === "google" && !hasCalendar) {
     return {
       state: "needs_connection",
       subtext: "Connect Google Calendar to start booking",
-      setupProgress: { done: hasBusinessHours ? 1 : 0, total: 2 },
+      setupProgress: { done: hasBusinessHours ? 1 : 0, total: 3 },
     };
   }
 
@@ -145,11 +146,19 @@ function resolveAdOptimizer(input: ResolverInput): ResolvedState {
   if (!hasAccountId || !hasTargets) {
     return {
       state: "partial_setup",
-      subtext: "Configure ad account and targets",
+      subtext: !hasAccountId ? "Select an ad account" : "Set optimization targets",
       setupProgress: {
         done: (hasAccountId ? 1 : 0) + (hasTargets ? 1 : 0),
-        total: 2,
+        total: 3,
       },
+    };
+  }
+
+  if (input.auditCount === 0) {
+    return {
+      state: "partial_setup",
+      subtext: "Waiting for first audit to complete",
+      setupProgress: { done: 2, total: 3 },
     };
   }
 
@@ -160,17 +169,23 @@ function resolveAdOptimizer(input: ResolverInput): ResolvedState {
 // CTA builder
 // ---------------------------------------------------------------------------
 
+const CONNECT_STEP: Record<ModuleId, string> = {
+  "lead-to-booking": "connect-calendar",
+  creative: "enable",
+  "ad-optimizer": "connect-meta",
+};
+
 function buildCta(moduleId: ModuleId, state: ModuleState): { label: string; href: string } {
   const base = `/modules/${moduleId}`;
   switch (state) {
     case "not_setup":
       return { label: "Enable", href: `${base}/setup` };
     case "needs_connection":
-      return { label: "Connect", href: `${base}/setup` };
+      return { label: "Connect", href: `${base}/setup?step=${CONNECT_STEP[moduleId]}` };
     case "partial_setup":
       return { label: "Continue", href: `${base}/setup` };
     case "connection_broken":
-      return { label: "Fix", href: `${base}/setup` };
+      return { label: "Fix", href: `${base}/setup?step=${CONNECT_STEP[moduleId]}` };
     case "live":
       return { label: "View", href: base };
   }

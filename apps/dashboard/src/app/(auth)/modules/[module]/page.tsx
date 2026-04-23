@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getApiClient } from "@/lib/get-api-client";
 import { MODULE_IDS, MODULE_LABELS } from "@/lib/module-types";
 import type { ModuleId } from "@/lib/module-types";
@@ -23,7 +23,7 @@ export default async function ModuleDetailPage({ params }: PageProps) {
     const deployment = deployments.find((d) => d.listingId === moduleId || d.id === moduleId);
 
     if (!deployment) {
-      notFound();
+      redirect(`/modules/${moduleId}/setup`);
     }
 
     const [connectionsResult, trustResult] = await Promise.all([

@@ -1,18 +1,6 @@
 import { redirect } from "next/navigation";
 import { getApiClient } from "@/lib/get-api-client";
-
-/**
- * Mapping from listing slug to module route slug.
- * Mirrors SLUG_TO_MODULE in the module status API route.
- */
-const SLUG_TO_MODULE: Record<string, string> = {
-  "alex-conversion": "lead-to-booking",
-  "speed-to-lead": "lead-to-booking",
-  "sales-closer": "lead-to-booking",
-  "nurture-specialist": "lead-to-booking",
-  "creative-family": "creative",
-  "ad-optimizer": "ad-optimizer",
-};
+import { SLUG_TO_MODULE } from "@/lib/module-types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
