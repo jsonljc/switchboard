@@ -3,14 +3,12 @@ import type { ToolResult } from "../tool-result.js";
 import { ok } from "../tool-result.js";
 import type { AssemblerInput } from "../../handoff/package-assembler.js";
 import type { HandoffPackage, HandoffReason, HandoffStore } from "../../handoff/types.js";
+import type { SkillRequestContext } from "../types.js";
 
-interface EscalateToolDeps {
+interface EscalateToolBaseDeps {
   assembler: { assemble(input: AssemblerInput): HandoffPackage };
   handoffStore: Pick<HandoffStore, "save" | "getBySessionId">;
   notifier: { notify(pkg: HandoffPackage): Promise<void> };
-  sessionId: string;
-  orgId: string;
-  messages: Array<{ role: string; content: string }>;
 }
 
 interface EscalateInput {
@@ -19,8 +17,10 @@ interface EscalateInput {
   customerSentiment?: "positive" | "neutral" | "frustrated" | "angry";
 }
 
-export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
-  return {
+export type EscalateToolFactory = (ctx: SkillRequestContext) => SkillTool;
+
+export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateToolFactory {
+  return (ctx: SkillRequestContext): SkillTool => ({
     id: "escalate",
     operations: {
       "handoff.create": {
@@ -56,26 +56,19 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
         },
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as EscalateInput;
-          const sessionId = deps.sessionId;
-          const orgId = deps.orgId;
 
-          const existing = await deps.handoffStore.getBySessionId(sessionId);
+          const existing = await deps.handoffStore.getBySessionId(ctx.sessionId);
           if (existing && (existing.status === "pending" || existing.status === "assigned")) {
             return ok({ handoffId: existing.id, status: "already_pending" });
           }
 
-          const messages = deps.messages.map((m: { role: string; content: string }) => ({
-            role: m.role,
-            text: m.content,
-          }));
-
           const pkg = deps.assembler.assemble({
-            sessionId,
-            organizationId: orgId,
+            sessionId: ctx.sessionId,
+            organizationId: ctx.orgId,
             reason: input.reason,
             leadSnapshot: { channel: "whatsapp" },
             qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
-            messages,
+            messages: [],
           });
 
           await deps.handoffStore.save(pkg);
@@ -85,5 +78,5 @@ export function createEscalateTool(deps: EscalateToolDeps): SkillTool {
         },
       },
     },
-  };
+  });
 }

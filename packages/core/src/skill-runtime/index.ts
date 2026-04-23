@@ -16,8 +16,9 @@ export {
   createCrmWriteTool,
   createCalendarBookTool,
   createWebScannerTool,
-  createEscalateTool,
+  createEscalateToolFactory,
 } from "./tools/index.js";
+export type { EscalateToolFactory } from "./tools/index.js";
 export {
   alexBuilder,
   salesPipelineBuilder,
@@ -78,6 +79,7 @@ export type {
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,
+  SkillRequestContext,
 } from "./types.js";
 export {
   SkillParseError,

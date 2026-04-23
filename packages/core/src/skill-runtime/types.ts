@@ -293,3 +293,16 @@ export class ContextResolutionError extends Error {
     this.name = "ContextResolutionError";
   }
 }
+
+// ---------------------------------------------------------------------------
+// Request Context (per-request identity, never shared across requests)
+// ---------------------------------------------------------------------------
+
+export interface SkillRequestContext {
+  sessionId: string;
+  orgId: string;
+  deploymentId: string;
+  actorId?: string;
+  traceId?: string;
+  surface?: "chat" | "simulation" | "api" | "system";
+}

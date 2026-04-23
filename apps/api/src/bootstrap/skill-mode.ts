@@ -21,7 +21,7 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     createCrmQueryTool,
     createCrmWriteTool,
     createCalendarBookTool,
-    createEscalateTool,
+    createEscalateToolFactory,
     BookingFailureHandler,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
@@ -104,7 +104,13 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
     },
   });
 
-  const toolsMap = new Map([
+  const escalateFactory = createEscalateToolFactory({
+    assembler: handoffAssembler,
+    handoffStore,
+    notifier: handoffNotifier,
+  });
+
+  const baseTools = new Map([
     ["crm-query", createCrmQueryTool(contactStore, activityStore)],
     ["crm-write", createCrmWriteTool(opportunityStore, activityStore)],
     [
@@ -146,18 +152,18 @@ export async function bootstrapSkillMode(deps: SkillModeBootstrapDeps): Promise<
         failureHandler,
       }),
     ],
-    [
-      "escalate",
-      createEscalateTool({
-        assembler: handoffAssembler,
-        handoffStore,
-        notifier: handoffNotifier,
-        sessionId: "bootstrap-placeholder",
-        orgId: "bootstrap-placeholder",
-        messages: [],
-      }),
-    ],
   ]);
+
+  // Schema-only instance for Anthropic tool registration; real execution uses per-request context.
+  const toolsMap = new Map(baseTools);
+  toolsMap.set(
+    "escalate",
+    escalateFactory({
+      sessionId: "__schema_only__",
+      orgId: "__schema_only__",
+      deploymentId: "__schema_only__",
+    }),
+  );
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
