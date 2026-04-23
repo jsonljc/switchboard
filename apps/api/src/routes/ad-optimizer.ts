@@ -67,123 +67,37 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    let created = 0;
-    for (const lead of leads) {
-      app.log.info(
-        { leadId: lead.leadId, adId: lead.adId, email: lead.email ? "[redacted]" : undefined },
-        "Received Meta lead",
-      );
-
-      if (!lead.phone || !organizationId) continue;
-
-      if (app.prisma) {
-        const { PrismaContactStore } = await import("@switchboard/db");
-        const contactStore = new PrismaContactStore(app.prisma);
-
-        // Dedup: skip if contact exists with same phone + adId
-        const existing = await contactStore.findByPhone(organizationId, lead.phone);
-        if (existing) {
-          const existingAdId = (existing.attribution as Record<string, unknown> | null)?.sourceAdId;
-          if (existingAdId === lead.adId) {
-            app.log.info({ phone: "[redacted]", adId: lead.adId }, "Duplicate lead, skipping");
-            continue;
-          }
-        }
-
-        // Create contact with attribution
-        await contactStore.create({
-          organizationId,
-          name: lead.name ?? null,
-          phone: lead.phone,
-          email: lead.email ?? null,
-          primaryChannel: "whatsapp",
-          source: "meta-instant-form",
-          attribution: {
-            sourceAdId: lead.adId,
-            fbclid: null,
-            gclid: null,
-            ttclid: null,
-            sourceCampaignId: null,
-            utmSource: null,
-            utmMedium: null,
-            utmCampaign: null,
-          },
-        });
-        created++;
-
-        // Send WhatsApp template greeting
-        try {
-          const waToken = process.env["WHATSAPP_ACCESS_TOKEN"];
-          const waPhoneId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
-          if (waToken && waPhoneId) {
-            const firstName = lead.name?.split(" ")[0] ?? "there";
-            await sendWhatsAppTemplate(
-              waToken,
-              waPhoneId,
-              lead.phone,
-              greetingTemplateName,
-              firstName,
-            );
-            app.log.info({ phone: "[redacted]" }, "Sent lead greeting template");
-          }
-        } catch (err) {
-          app.log.error({ err, phone: "[redacted]" }, "Failed to send lead greeting template");
-        }
-
-        // Write inquiry event to outbox for durable processing
-        if (app.prisma) {
-          const { PrismaOutboxStore } = await import("@switchboard/db");
-          const outboxStore = new PrismaOutboxStore(app.prisma);
-          await outboxStore.write(`evt_lead_${lead.leadId}`, "inquiry", {
-            type: "inquiry",
-            contactId: lead.leadId,
-            organizationId,
-            value: 0,
-            sourceAdId: lead.adId,
-            occurredAt: new Date().toISOString(),
-            source: "meta-webhook",
-            metadata: {},
-          });
-        }
-      }
+    if (!organizationId) {
+      app.log.warn({ entryId }, "No org found for Meta webhook entry, skipping");
+      return reply.code(200).send({ received: leads.length, skipped: true, reason: "no_org" });
     }
 
-    return reply.code(200).send({ received: leads.length, created });
+    const leadIds = leads.map((l) => l.leadId).sort();
+    const idempotencyKey = `meta-lead-${entryId}-${leadIds.join(",")}`;
+
+    const result = await app.platformIngress.submit({
+      intent: "meta.lead.intake",
+      parameters: {
+        payload: request.body,
+        greetingTemplateName,
+      },
+      actor: { id: "system", type: "service" },
+      organizationId,
+      trigger: "api",
+      surface: { surface: "api" },
+      targetHint: { skillSlug: "meta-lead" },
+      idempotencyKey,
+    });
+
+    if (!result.ok) {
+      app.log.error({ error: result.error }, "Lead intake submission failed");
+      return reply.code(500).send({ error: result.error.message, statusCode: 500 });
+    }
+
+    return reply.code(200).send({
+      received: leads.length,
+      workUnitId: result.workUnit.id,
+      traceId: result.workUnit.traceId,
+    });
   });
 };
-
-async function sendWhatsAppTemplate(
-  accessToken: string,
-  phoneNumberId: string,
-  to: string,
-  templateName: string,
-  firstName: string,
-): Promise<void> {
-  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "template",
-      template: {
-        name: templateName,
-        language: { code: "en" },
-        components: [
-          {
-            type: "body",
-            parameters: [{ type: "text", text: firstName }],
-          },
-        ],
-      },
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`WhatsApp template send failed: ${res.status} ${body}`);
-  }
-}

@@ -106,7 +106,7 @@ export async function bootstrapContainedWorkflows(
       workflowId: "meta.lead.intake",
       budgetClass: "standard",
       approvalPolicy: "none",
-      allowedTriggers: ["internal"],
+      allowedTriggers: ["internal", "api"],
     },
     {
       intent: "meta.lead.greeting.send",
