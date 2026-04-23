@@ -168,7 +168,7 @@ function buildCta(moduleId: ModuleId, state: ModuleState): { label: string; href
     case "needs_connection":
       return { label: "Connect", href: `${base}/setup` };
     case "partial_setup":
-      return { label: "Continue Setup", href: `${base}/setup` };
+      return { label: "Continue", href: `${base}/setup` };
     case "connection_broken":
       return { label: "Fix", href: `${base}/setup` };
     case "live":
