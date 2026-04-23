@@ -457,7 +457,7 @@ function LoginForm() {
         <p className="mt-6 text-center" style={{ fontSize: "13px", color: "var(--sw-text-muted)" }}>
           Don&apos;t have an account?{" "}
           <Link
-            href="/"
+            href="/signup"
             style={{
               color: "var(--sw-text-secondary)",
               textDecoration: "none",
