@@ -6,22 +6,19 @@ import { approvalsRoutes } from "../routes/approvals.js";
 import { policiesRoutes } from "../routes/policies.js";
 import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
-import { simulateRoutes } from "../routes/simulate.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
 import {
-  LifecycleOrchestrator,
   createInMemoryStorage,
   seedDefaultStorage,
   InMemoryLedgerStorage,
   AuditLedger,
-  createGuardrailState,
   InMemoryPolicyCache,
   InMemoryGovernanceProfileStore,
-  ExecutionService,
   evaluate,
   resolveIdentity,
 } from "@switchboard/core";
 import type { StorageContext, PolicyCache } from "@switchboard/core";
+import type { ApprovalRoutingConfig } from "@switchboard/core/approval";
 import {
   IntentRegistry,
   ExecutionModeRegistry,
@@ -68,11 +65,10 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
 // Re-declare Fastify augmentation for test context
 declare module "fastify" {
   interface FastifyInstance {
-    orchestrator: LifecycleOrchestrator;
+    approvalRoutingConfig: ApprovalRoutingConfig;
     storageContext: StorageContext;
     auditLedger: AuditLedger;
     policyCache: PolicyCache;
-    executionService: ExecutionService;
     platformIngress: PlatformIngress;
     platformLifecycle: PlatformLifecycle;
   }
@@ -97,7 +93,7 @@ export async function buildTestServer(): Promise<TestContext> {
   const storage = createInMemoryStorage();
   const ledgerStorage = new InMemoryLedgerStorage();
   const ledger = new AuditLedger(ledgerStorage);
-  const guardrailState = createGuardrailState();
+  // guardrailState removed — was only used by LifecycleOrchestrator
   const policyCache = new InMemoryPolicyCache();
   const governanceProfileStore = new InMemoryGovernanceProfileStore();
 
@@ -223,29 +219,20 @@ export async function buildTestServer(): Promise<TestContext> {
     roles: ["approver"],
   });
 
-  const orchestrator = new LifecycleOrchestrator({
-    storage,
-    ledger,
-    guardrailState,
-    policyCache,
-    governanceProfileStore,
-    routingConfig: {
-      defaultApprovers: ["reviewer_1"],
-      defaultFallbackApprover: null,
-      defaultExpiryMs: 24 * 60 * 60 * 1000,
-      defaultExpiredBehavior: "deny" as const,
-      elevatedExpiryMs: 12 * 60 * 60 * 1000,
-      mandatoryExpiryMs: 4 * 60 * 60 * 1000,
-      denyWhenNoApprovers: true,
-    },
-  });
+  const approvalRoutingConfig: ApprovalRoutingConfig = {
+    defaultApprovers: ["reviewer_1"],
+    defaultFallbackApprover: null,
+    defaultExpiryMs: 24 * 60 * 60 * 1000,
+    defaultExpiredBehavior: "deny" as const,
+    elevatedExpiryMs: 12 * 60 * 60 * 1000,
+    mandatoryExpiryMs: 4 * 60 * 60 * 1000,
+    denyWhenNoApprovers: true,
+  };
 
-  const executionService = new ExecutionService(orchestrator, storage);
-  app.decorate("orchestrator", orchestrator);
+  app.decorate("approvalRoutingConfig", approvalRoutingConfig);
   app.decorate("storageContext", storage);
   app.decorate("auditLedger", ledger);
   app.decorate("policyCache", policyCache);
-  app.decorate("executionService", executionService);
 
   // --- PlatformIngress wiring ---
   const intentRegistry = new IntentRegistry();
@@ -322,7 +309,6 @@ export async function buildTestServer(): Promise<TestContext> {
   await app.register(policiesRoutes, { prefix: "/api/policies" });
   await app.register(auditRoutes, { prefix: "/api/audit" });
   await app.register(identityRoutes, { prefix: "/api/identity" });
-  await app.register(simulateRoutes, { prefix: "/api/simulate" });
 
   return { app, cartridge, storage };
 }

@@ -5,6 +5,7 @@ import type {
 } from "./lifecycle-types.js";
 import type { ApprovalRevision, ExecutableWorkUnit } from "@switchboard/schemas";
 import type { WorkUnit } from "../platform/work-unit.js";
+import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import { buildMaterializationInput } from "./executable-materializer.js";
 import { validateDispatchAdmission } from "./dispatch-admission.js";
 
@@ -17,6 +18,10 @@ export class ApprovalLifecycleService {
 
   constructor(config: ApprovalLifecycleServiceConfig) {
     this.store = config.store;
+  }
+
+  async findByEnvelopeId(envelopeId: string): Promise<LifecycleRecord | null> {
+    return this.store.getLifecycleByEnvelopeId(envelopeId);
   }
 
   async createGatedLifecycle(
@@ -92,6 +97,30 @@ export class ApprovalLifecycleService {
     return this.store.approveAndMaterialize(lifecycle.id, lifecycle.version, matInput);
   }
 
+  async approveLifecycle(params: {
+    lifecycleId: string;
+    respondedBy: string;
+    clientBindingHash: string;
+    workUnit: WorkUnit;
+    actionEnvelopeId: string;
+    constraints: Record<string, unknown>;
+    executableUntilMs?: number;
+  }): Promise<{ lifecycle: LifecycleRecord; executableWorkUnit: ExecutableWorkUnit }> {
+    const { lifecycle, workUnit: executableWorkUnit } = await this.approveRevision({
+      lifecycleId: params.lifecycleId,
+      respondedBy: params.respondedBy,
+      clientBindingHash: params.clientBindingHash,
+      materializationParams: {
+        workUnit: params.workUnit,
+        actionEnvelopeId: params.actionEnvelopeId,
+        constraints: params.constraints,
+        executableUntilMs: params.executableUntilMs ?? 3600000,
+      },
+    });
+
+    return { lifecycle, executableWorkUnit };
+  }
+
   async rejectRevision(params: {
     lifecycleId: string;
     respondedBy: string;
@@ -103,6 +132,27 @@ export class ApprovalLifecycleService {
     }
 
     return this.store.updateLifecycleStatus(lifecycle.id, "rejected", lifecycle.version);
+  }
+
+  async rejectLifecycle(params: {
+    lifecycleId: string;
+    respondedBy: string;
+    traceStore: WorkTraceStore;
+  }): Promise<LifecycleRecord> {
+    const lifecycle = await this.rejectRevision({
+      lifecycleId: params.lifecycleId,
+      respondedBy: params.respondedBy,
+    });
+
+    await params.traceStore.update(lifecycle.actionEnvelopeId, {
+      outcome: "failed",
+      completedAt: new Date().toISOString(),
+      approvalOutcome: "rejected",
+      approvalRespondedBy: params.respondedBy,
+      approvalRespondedAt: new Date().toISOString(),
+    });
+
+    return lifecycle;
   }
 
   async expireLifecycle(lifecycleId: string): Promise<LifecycleRecord> {
