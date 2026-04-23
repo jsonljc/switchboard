@@ -235,7 +235,7 @@ export class SkillExecutorImpl implements SkillExecutor {
               );
             }
             result = toolHookResult.substituteResult;
-            governanceOutcome = "auto-approved";
+            governanceOutcome = "simulated";
           } else if (toolHookResult.decision === "pending_approval") {
             result = pendingApproval(toolHookResult.reason ?? "Requires approval");
             governanceOutcome = "require-approval";
