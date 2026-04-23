@@ -55,7 +55,14 @@ async function main() {
   const apiKey = process.env["SWITCHBOARD_API_KEY"];
   const platformIngressAdapter = new HttpPlatformIngressAdapter(apiUrl, apiKey);
 
-  // Single-tenant setup: ChannelGateway with static deployment
+  // Single-tenant setup: ChannelGateway with static deployment.
+  // This path serves the /webhook/telegram endpoint for dev and non-DB deployments.
+  // When DATABASE_URL is set, managed channels (registered via ManagedChannel rows)
+  // are handled separately through RuntimeRegistry + /webhook/managed/:id routes.
+  // This path remains necessary because:
+  //   1. Dev environments run without a database
+  //   2. The /webhook/telegram endpoint is only wired through this gateway
+  //   3. Managed channels use a different webhook path scheme (/webhook/managed/<uuid>)
   const botToken = process.env["TELEGRAM_BOT_TOKEN"] ?? "";
   const webhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
   const singleTenantAdapter = new TelegramAdapter(botToken, undefined, webhookSecret);

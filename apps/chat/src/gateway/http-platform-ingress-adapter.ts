@@ -26,13 +26,15 @@ export class HttpPlatformIngressAdapter {
 
       if (!response.ok) {
         const text = await response.text();
+        const isClientError = response.status >= 400 && response.status < 500;
         console.error(`[HttpPlatformIngress] API error ${response.status}: ${text}`);
         return {
           ok: false,
           error: {
-            type: "validation_failed",
+            type: isClientError ? "validation_failed" : "upstream_error",
             message: `API server returned ${response.status}`,
             intent: request.intent,
+            retryable: !isClientError,
           },
         };
       }
@@ -43,9 +45,10 @@ export class HttpPlatformIngressAdapter {
       return {
         ok: false,
         error: {
-          type: "validation_failed",
+          type: "network_error",
           message: err instanceof Error ? err.message : "Unknown network error",
           intent: request.intent,
+          retryable: true,
         },
       };
     }
