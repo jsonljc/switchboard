@@ -58,6 +58,9 @@ export class KnowledgeRetriever {
   }
 
   async retrieve(query: string, options: RetrieveOptions): Promise<RetrievedChunk[]> {
+    if (!this.embedding.available) {
+      return [];
+    }
     const queryEmbedding = await this.embedding.embed(query);
 
     const results = await this.store.search(queryEmbedding, {

@@ -15,3 +15,7 @@ export {
   VoyageEmbeddingAdapter,
   type VoyageEmbeddingAdapterConfig,
 } from "./voyage-embedding-adapter.js";
+export {
+  DisabledEmbeddingAdapter,
+  EmbeddingsUnavailableError,
+} from "./disabled-embedding-adapter.js";

@@ -5,6 +5,7 @@ describe("EmbeddingAdapter interface", () => {
   it("can be implemented with a mock adapter", async () => {
     const adapter: EmbeddingAdapter = {
       dimensions: 1024,
+      available: true,
       async embed(_text: string): Promise<number[]> {
         return new Array(1024).fill(0).map(() => Math.random());
       },
