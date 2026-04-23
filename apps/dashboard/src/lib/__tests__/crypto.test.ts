@@ -11,7 +11,7 @@ function encryptLikeSetup(apiKey: string, secret: string): string {
   let encrypted = cipher.update(apiKey, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
 }
 
 describe("crypto roundtrip", () => {
