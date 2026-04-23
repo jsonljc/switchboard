@@ -12,9 +12,15 @@ interface ModuleSetupWizardProps {
   moduleId: ModuleId;
   label: string;
   initialStep?: string;
+  deploymentId?: string;
 }
 
-export function ModuleSetupWizard({ moduleId, label, initialStep }: ModuleSetupWizardProps) {
+export function ModuleSetupWizard({
+  moduleId,
+  label,
+  initialStep,
+  deploymentId,
+}: ModuleSetupWizardProps) {
   const router = useRouter();
 
   const handleComplete = useCallback(() => {
@@ -42,7 +48,11 @@ export function ModuleSetupWizard({ moduleId, label, initialStep }: ModuleSetupW
         <CreateAdsSetup initialStep={initialStep} onComplete={handleComplete} />
       )}
       {moduleId === "ad-optimizer" && (
-        <ImproveSpendSetup initialStep={initialStep} onComplete={handleComplete} />
+        <ImproveSpendSetup
+          initialStep={initialStep}
+          onComplete={handleComplete}
+          deploymentId={deploymentId}
+        />
       )}
     </div>
   );
