@@ -693,5 +693,26 @@ describe("PlatformLifecycle", () => {
         expect.objectContaining({ campaignId: "camp-1", budget: 55 }),
       );
     });
+
+    it("throws when trace update fails during patch (no silent proceed)", async () => {
+      const { approvalId } = seedWithCartridge();
+
+      // Force the first trace update (updateWorkTraceApproval) to fail.
+      // If the error is silently swallowed, executeAfterApproval would proceed
+      // with stale parameters — this test ensures the error propagates.
+      vi.mocked(stores.traceStore.update).mockRejectedValueOnce(
+        new Error("Trace store unavailable"),
+      );
+
+      await expect(
+        lifecycle.respondToApproval({
+          approvalId,
+          action: "patch",
+          respondedBy: "approver-1",
+          bindingHash: BINDING_HASH,
+          patchValue: { campaignId: "camp-patched" },
+        }),
+      ).rejects.toThrow("Trace store unavailable");
+    });
   });
 });

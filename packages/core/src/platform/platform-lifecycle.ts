@@ -553,24 +553,19 @@ export class PlatformLifecycle {
       parameters?: Record<string, unknown>;
     },
   ): Promise<void> {
-    try {
-      await this.config.traceStore.update(workUnitId, fields);
-    } catch {
-      // Best-effort — trace may not exist for legacy envelopes
-    }
+    // Temporary guard (PR2 deletes this method entirely).
+    // Trace update MUST succeed before execution proceeds — silent failure
+    // would cause executeAfterApproval to use stale parameters.
+    await this.config.traceStore.update(workUnitId, fields);
   }
 
   private async updateWorkTraceOutcome(
     workUnitId: string,
     outcome: WorkTrace["outcome"],
   ): Promise<void> {
-    try {
-      await this.config.traceStore.update(workUnitId, {
-        outcome,
-        completedAt: new Date().toISOString(),
-      });
-    } catch {
-      // Best-effort — trace may not exist for legacy envelopes
-    }
+    await this.config.traceStore.update(workUnitId, {
+      outcome,
+      completedAt: new Date().toISOString(),
+    });
   }
 }

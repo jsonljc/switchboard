@@ -200,6 +200,63 @@ describe("Idempotency Middleware", () => {
     expect(replay.json()).toEqual(firstBody);
   });
 
+  it("returns 409 when the same key is used by a different org", async () => {
+    // First request with org_alpha
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: {
+        "idempotency-key": "cross-org-key",
+        "x-organization-id": "org_alpha",
+      },
+      payload: proposePayload,
+    });
+
+    expect(first.statusCode).toBe(201);
+
+    // Same key, same payload, different org
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: {
+        "idempotency-key": "cross-org-key",
+        "x-organization-id": "org_beta",
+      },
+      payload: proposePayload,
+    });
+
+    // Different org = different fingerprint = 409 mismatch
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toContain("Idempotency-Key");
+  });
+
+  it("returns 409 when the same key is used by a different principal", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: {
+        "idempotency-key": "cross-actor-key",
+        "x-principal-id": "user_alice",
+      },
+      payload: proposePayload,
+    });
+
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/actions/propose",
+      headers: {
+        "idempotency-key": "cross-actor-key",
+        "x-principal-id": "user_bob",
+      },
+      payload: proposePayload,
+    });
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error).toContain("Idempotency-Key");
+  });
+
   it("MemoryBackend expires entries after TTL", async () => {
     const backend = new MemoryBackend();
 
