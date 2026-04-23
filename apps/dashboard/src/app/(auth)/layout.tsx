@@ -5,6 +5,8 @@ import { OperatorChatWidget } from "@/components/operator-chat/operator-chat-wid
 import { Toaster } from "@/components/ui/toaster";
 import { getServerSession } from "@/lib/session";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
 
