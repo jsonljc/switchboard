@@ -66,8 +66,8 @@ const CHANNEL_ICONS: Record<string, React.ReactNode> = {
 
 const CHANNEL_FIELDS: Record<string, { label: string; key: string; type: string }[]> = {
   whatsapp: [
-    { label: "Phone number", key: "phone", type: "tel" },
-    { label: "API key", key: "apiKey", type: "password" },
+    { label: "Phone Number ID", key: "phoneNumberId", type: "text" },
+    { label: "WhatsApp Cloud API Access Token", key: "token", type: "password" },
   ],
   telegram: [{ label: "Bot token", key: "botToken", type: "password" }],
 };
@@ -84,8 +84,50 @@ export function ChannelConnectCard({
 }: ChannelConnectCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [showGuide, setShowGuide] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    verifiedName?: string;
+    displayPhoneNumber?: string;
+  } | null>(null);
 
   const channelFields = CHANNEL_FIELDS[channel] ?? [];
+  const isWhatsApp = channel === "whatsapp";
+  const canTest = isWhatsApp && fields.token && fields.phoneNumberId;
+  const canSave = isWhatsApp ? testStatus === "success" : true;
+
+  async function handleTestConnection() {
+    setTestStatus("testing");
+    setTestError(null);
+    setTestResult(null);
+
+    try {
+      const res = await fetch("/api/dashboard/connections/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: fields.token,
+          phoneNumberId: fields.phoneNumberId,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setTestStatus("success");
+        setTestResult({
+          verifiedName: data.verifiedName,
+          displayPhoneNumber: data.displayPhoneNumber,
+        });
+      } else {
+        setTestStatus("error");
+        setTestError(data.error || "Connection test failed");
+      }
+    } catch {
+      setTestStatus("error");
+      setTestError("Could not reach Meta's servers. Check your network and try again.");
+    }
+  }
 
   return (
     <div className="border-b last:border-b-0" style={{ borderColor: "var(--sw-border)" }}>
@@ -132,6 +174,48 @@ export function ChannelConnectCard({
       {expanded && !isConnected && (
         <div className="border-t px-5 py-4" style={{ borderColor: "var(--sw-border)" }}>
           <div className="space-y-3">
+            {isWhatsApp && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => setShowGuide(!showGuide)}
+                  className="text-[13px] underline"
+                  style={{ color: "var(--sw-accent)" }}
+                >
+                  {showGuide ? "Hide guide" : "Where do I find these?"}
+                </button>
+                {showGuide && (
+                  <div
+                    className="mt-2 rounded-lg p-3 text-[13px] space-y-1"
+                    style={{
+                      backgroundColor: "rgba(160, 120, 80, 0.05)",
+                      color: "var(--sw-text-secondary)",
+                    }}
+                  >
+                    <p>
+                      <strong>Phone Number ID</strong> — A numeric ID for your WhatsApp business
+                      phone number. Find it in Meta Business Suite → WhatsApp → API Setup.
+                    </p>
+                    <p>
+                      <strong>Access Token</strong> — A temporary or permanent token from the same
+                      API Setup page. Use a permanent token for production.
+                    </p>
+                    <p>Your Meta Business account must have WhatsApp Cloud API access enabled.</p>
+                    <p>
+                      <a
+                        href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                        style={{ color: "var(--sw-accent)" }}
+                      >
+                        Meta Cloud API documentation →
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {channelFields.map((field) => (
               <div key={field.key}>
                 <label
@@ -145,22 +229,59 @@ export function ChannelConnectCard({
                   id={`${channel}-${field.key}`}
                   type={field.type}
                   value={fields[field.key] ?? ""}
-                  onChange={(e) => setFields({ ...fields, [field.key]: e.target.value })}
+                  onChange={(e) => {
+                    setFields({ ...fields, [field.key]: e.target.value });
+                    if (testStatus !== "idle") {
+                      setTestStatus("idle");
+                      setTestError(null);
+                      setTestResult(null);
+                    }
+                  }}
                   className="h-[48px]"
                 />
               </div>
             ))}
-            <Button
-              onClick={() => {
-                onConnect(fields);
-                setExpanded(false);
-              }}
-              disabled={isConnecting}
-              className="h-[48px] rounded-lg px-6 text-[16px]"
-              style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
-            >
-              {isConnecting ? "Connecting..." : "Connect"}
-            </Button>
+            {testStatus === "success" && testResult && (
+              <div
+                className="rounded-lg p-3 text-[13px]"
+                style={{ backgroundColor: "rgba(34, 197, 94, 0.08)", color: "hsl(145, 45%, 42%)" }}
+              >
+                ✓ Connected to <strong>{testResult.verifiedName || "WhatsApp Business"}</strong>
+                {testResult.displayPhoneNumber && ` (${testResult.displayPhoneNumber})`}
+              </div>
+            )}
+
+            {testStatus === "error" && testError && (
+              <div
+                className="rounded-lg p-3 text-[13px]"
+                style={{ backgroundColor: "rgba(229, 72, 77, 0.08)", color: "hsl(358, 75%, 59%)" }}
+              >
+                {testError}
+              </div>
+            )}
+            <div className="flex gap-3">
+              {isWhatsApp && (
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={!canTest || testStatus === "testing"}
+                  variant="outline"
+                  className="h-[48px] flex-1 rounded-lg px-6 text-[14px]"
+                >
+                  {testStatus === "testing" ? "Testing…" : "Test Connection"}
+                </Button>
+              )}
+              <Button
+                onClick={() => {
+                  onConnect(fields);
+                  setExpanded(false);
+                }}
+                disabled={isConnecting || !canSave}
+                className="h-[48px] flex-1 rounded-lg px-6 text-[16px]"
+                style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
+              >
+                {isConnecting ? "Connecting..." : "Connect"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

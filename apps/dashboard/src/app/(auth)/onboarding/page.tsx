@@ -54,8 +54,8 @@ export default function OnboardingPage() {
 
     const provisionPayload: Record<string, unknown> = { channel };
     if (channel === "whatsapp") {
-      provisionPayload.token = credentials.apiKey;
-      provisionPayload.phoneNumberId = credentials.phone;
+      provisionPayload.token = credentials.token;
+      provisionPayload.phoneNumberId = credentials.phoneNumberId;
     } else if (channel === "telegram") {
       provisionPayload.botToken = credentials.botToken;
     }
