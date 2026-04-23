@@ -13,9 +13,13 @@ from the dashboard without founder intervention. The resulting credentials are
 stored and usable by the chat runtime for SP3 activation.
 
 **Pass condition:** A user can complete Meta Ads OAuth and WhatsApp channel
-setup from dashboard UI surfaces, with the resulting credentials stored and
-resolvable by the chat runtime's `PrismaDeploymentResolver`, without the founder
-configuring per-customer env vars or pasting tokens on their behalf.
+setup from dashboard UI surfaces, without the founder configuring per-customer
+env vars or pasting tokens on their behalf. Specifically:
+
+- Meta Ads credentials are stored and retrievable by the module runtime path
+  (ad-optimizer can read `inputConfig.adAccountId` and decrypt stored tokens)
+- WhatsApp credentials are stored and resolvable by the chat runtime via
+  `PrismaDeploymentResolver.resolveByChannelToken()`
 
 **Deployment-level env vars (not per-customer):**
 
@@ -153,8 +157,9 @@ During provisioning, after creating `Connection` + `ManagedChannel`, also:
 
 1. **Find or create an `AgentDeployment`** for the org, linked to the Alex
    listing (slug: `alex-conversion`) with `skillSlug: "alex"`, status `active`.
-   Look up by org ID + listing slug first; create only if none exists.
-2. **Create a `DeploymentConnection`** record with:
+   Look up by org ID + listing slug first; create only if none exists. The bridge
+   must never create multiple active Alex deployments for the same org.
+2. **Create or update a `DeploymentConnection`** record with:
    - `deploymentId` → the Alex deployment
    - `type` → channel name (e.g. "whatsapp")
    - `credentials` → same encrypted credentials as the `Connection`
@@ -162,6 +167,8 @@ During provisioning, after creating `Connection` + `ManagedChannel`, also:
      value passed as `token` to `resolveByChannelToken` via the
      `ManagedChannel` path — see `runtime-registry.ts:80` and
      `managed-webhook.ts:73`)
+   - If a matching `DeploymentConnection` already exists for the same
+     org/channel/deployment, update it in place rather than creating duplicates.
 
 ### Sync Invariant
 
@@ -221,8 +228,10 @@ onboarding/ManagedChannel credential path (WhatsApp, Telegram).
 - Bridge `tokenHash` matches SHA-256 hash of `Connection.id`
 - Bridge updates when credentials are re-provisioned (not stale)
 - `PrismaDeploymentResolver.resolveByChannelToken()` successfully resolves after
-  provisioning with the bridge in place
+  provisioning with the bridge in place (integration test preferred over DB check)
 - Re-provisioning with new credentials updates `DeploymentConnection.credentials`
+- Bridge never creates duplicate `AgentDeployment` or `DeploymentConnection`
+  records for the same org/channel
 
 ---
 
@@ -231,7 +240,7 @@ onboarding/ManagedChannel credential path (WhatsApp, Telegram).
 - No WhatsApp embedded signup or WABA provisioning
 - No Meta Ads campaign creation or management from dashboard
 - No CAPI (Conversions API) setup
-- No multi-ad-account management (single account per org)
+- No multi-ad-account management UI beyond selecting one active account per org
 - No token refresh scheduler or proactive expiry UX
 - No connection health dashboard beyond what exists
 - No credential store unification
@@ -264,4 +273,4 @@ After SP2, validate:
 9. After successful WhatsApp connection, verify `DeploymentConnection` bridge
    record exists with correct `tokenHash`
 10. Verify `PrismaDeploymentResolver.resolveByChannelToken()` can resolve the
-    WhatsApp channel (unit test or manual DB check)
+    WhatsApp channel (integration test first; DB check only as fallback)
