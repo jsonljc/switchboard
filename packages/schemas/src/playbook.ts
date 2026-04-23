@@ -36,6 +36,15 @@ export const PlaybookServiceSchema = z.object({
 });
 export type PlaybookService = z.infer<typeof PlaybookServiceSchema>;
 
+export const PlaybookBusinessFactsSchema = z.object({
+  serviceArea: z.string().optional(),
+  contactPreference: z.enum(["whatsapp", "email", "phone", "in-person"]).optional(),
+  escalationContact: z.string().optional(),
+  uniqueSellingPoints: z.array(z.string()).optional(),
+  targetCustomer: z.string().optional(),
+});
+export type PlaybookBusinessFacts = z.infer<typeof PlaybookBusinessFactsSchema>;
+
 export const PlaybookSchema = z.object({
   businessIdentity: z.object({
     name: z.string().default(""),
@@ -76,6 +85,7 @@ export const PlaybookSchema = z.object({
     status: PlaybookSectionStatus,
     source: PlaybookSource,
   }),
+  businessFacts: PlaybookBusinessFactsSchema.optional(),
 });
 export type Playbook = z.infer<typeof PlaybookSchema>;
 
