@@ -21,6 +21,7 @@ const AUTH_PAGE_PREFIXES = [
   "/me",
   "/my-agent",
   "/tasks",
+  "/modules",
 ] as const;
 
 interface RateLimitEntry {
@@ -121,5 +122,6 @@ export const config = {
     "/me/:path*",
     "/my-agent/:path*",
     "/tasks/:path*",
+    "/modules/:path*",
   ],
 };

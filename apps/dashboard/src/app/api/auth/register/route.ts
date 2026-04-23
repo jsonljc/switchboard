@@ -31,26 +31,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
-  const existing = await prisma.dashboardUser.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json(
-      { error: "An account with this email already exists" },
-      { status: 409 },
-    );
-  }
-
   const passwordHash = await hashPassword(password);
 
-  const dashboardUser = await provisionDashboardUser(prisma, {
-    email,
-    name: null,
-    emailVerified: null,
-  });
+  let dashboardUser;
+  try {
+    dashboardUser = await provisionDashboardUser(prisma, {
+      email,
+      name: null,
+      emailVerified: null,
+    });
 
-  await prisma.dashboardUser.update({
-    where: { id: dashboardUser.id },
-    data: { passwordHash },
-  });
+    await prisma.dashboardUser.update({
+      where: { id: dashboardUser.id },
+      data: { passwordHash },
+    });
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === "P2002") {
+      return NextResponse.json(
+        { error: "An account with this email already exists" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   return NextResponse.json(
     {
