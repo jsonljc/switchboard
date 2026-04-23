@@ -21,6 +21,7 @@ const AUTH_PAGE_PREFIXES = [
   "/me",
   "/my-agent",
   "/tasks",
+  "/modules",
 ] as const;
 
 interface RateLimitEntry {
@@ -78,6 +79,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Block /signup in non-beta mode at the middleware level
+  if (pathname === "/signup") {
+    const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "waitlist";
+    if (launchMode !== "beta") {
+      return NextResponse.redirect(new URL("/get-started", request.url));
+    }
+  }
+
   const isAuthPage = AUTH_PAGE_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
@@ -101,6 +110,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/signup",
     "/api/dashboard/:path*",
     "/dashboard/:path*",
     "/marketplace/:path*",
@@ -112,5 +122,6 @@ export const config = {
     "/me/:path*",
     "/my-agent/:path*",
     "/tasks/:path*",
+    "/modules/:path*",
   ],
 };

@@ -136,7 +136,7 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
 
         const dashboardUrl = process.env["DASHBOARD_URL"] ?? "http://localhost:3002";
         return reply.redirect(
-          `${dashboardUrl}/marketplace/deployments/${deploymentId}?connected=true`,
+          `${dashboardUrl}/modules/improve-spend/setup?step=select-account&connected=true&deploymentId=${deploymentId}`,
         );
       } catch (err) {
         app.log.error(err, "Facebook OAuth callback failed");

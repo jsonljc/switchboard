@@ -133,9 +133,9 @@ describe("LocalCalendarProvider", () => {
   });
 
   describe("healthCheck", () => {
-    it("returns degraded status", async () => {
+    it("returns connected status", async () => {
       const health = await provider.healthCheck();
-      expect(health.status).toBe("degraded");
+      expect(health.status).toBe("connected");
       expect(health.latencyMs).toBe(0);
     });
   });

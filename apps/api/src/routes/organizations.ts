@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { createHash } from "node:crypto";
 import { encryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -218,6 +219,60 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
               connectionId: connection.id,
               webhookPath,
               botUsername: null,
+            },
+          });
+
+          // ── Beta compatibility bridge ──
+          // Create AgentDeployment + DeploymentConnection so
+          // PrismaDeploymentResolver.resolveByChannelToken() can resolve
+          // credentials from the ManagedChannel path.
+          const alexListing = await app.prisma.agentListing.findUnique({
+            where: { slug: "alex-conversion" },
+          });
+
+          if (!alexListing) {
+            throw new Error(
+              `Cannot provision ${ch.channel}: Alex listing (alex-conversion) not found. Run database seed first.`,
+            );
+          }
+
+          const deployment = await app.prisma.agentDeployment.upsert({
+            where: {
+              organizationId_listingId: {
+                organizationId: orgId,
+                listingId: alexListing.id,
+              },
+            },
+            update: {},
+            create: {
+              organizationId: orgId,
+              listingId: alexListing.id,
+              status: "active",
+              skillSlug: "alex",
+            },
+          });
+
+          const tokenHash = createHash("sha256").update(connection.id).digest("hex");
+
+          await app.prisma.deploymentConnection.upsert({
+            where: {
+              deploymentId_type_slot: {
+                deploymentId: deployment.id,
+                type: ch.channel,
+                slot: "default",
+              },
+            },
+            update: {
+              credentials: encrypted,
+              tokenHash,
+              status: "active",
+            },
+            create: {
+              deploymentId: deployment.id,
+              type: ch.channel,
+              slot: "default",
+              credentials: encrypted,
+              tokenHash,
             },
           });
 
