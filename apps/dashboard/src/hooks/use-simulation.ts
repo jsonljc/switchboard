@@ -11,6 +11,13 @@ interface SimulateRequest {
 interface SimulateResponse {
   alexMessage: string;
   annotations: string[];
+  toolsAttempted?: Array<{
+    toolId: string;
+    operation: string;
+    simulated: boolean;
+    effectCategory: string;
+  }>;
+  blockedActions?: string[];
 }
 
 async function simulateChat(req: SimulateRequest): Promise<SimulateResponse> {

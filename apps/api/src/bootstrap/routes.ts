@@ -40,6 +40,7 @@ import { dashboardOverviewRoutes } from "../routes/dashboard-overview.js";
 import websiteScanRoutes from "../routes/website-scan.js";
 import { ownerTaskRoutes } from "../routes/owner-tasks.js";
 import { organizationsRoutes } from "../routes/organizations.js";
+import { simulateRoutes } from "../routes/simulate.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -78,7 +79,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });
   await app.register(ownerTaskRoutes, { prefix: "/api" });
   await app.register(organizationsRoutes, { prefix: "/api/organizations" });
-  // playbook and website-scan routes define their own full paths including /api prefix
+  // playbook, simulate, and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);
+  await app.register(simulateRoutes);
   await app.register(websiteScanRoutes);
 }
