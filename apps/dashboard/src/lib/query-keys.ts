@@ -114,6 +114,10 @@ export const queryKeys = {
   scan: {
     all: ["scan"] as const,
   },
+  modules: {
+    all: ["modules"] as const,
+    status: () => [...queryKeys.modules.all, "status"] as const,
+  },
   dashboard: {
     all: ["dashboard"] as const,
     overview: () => ["dashboard", "overview"] as const,
