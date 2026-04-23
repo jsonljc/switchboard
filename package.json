@@ -18,7 +18,7 @@
     "prepare": "husky || true",
     "arch:check": "npx tsx scripts/arch-check.ts",
     "preflight": "bash scripts/preflight.sh",
-    "dashboard:preflight": "pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/db build && pnpm --filter @switchboard/dashboard typecheck",
+    "dashboard:preflight": "pnpm --filter @switchboard/dashboard^... build && pnpm --filter @switchboard/dashboard typecheck",
     "dashboard:release-check": "pnpm dashboard:preflight && pnpm --filter @switchboard/dashboard test && pnpm --filter @switchboard/dashboard build"
   },
   "lint-staged": {
