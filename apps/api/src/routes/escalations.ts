@@ -56,6 +56,8 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         qualificationSnapshot: e.qualificationSnapshot,
         slaDeadlineAt: e.slaDeadlineAt.toISOString(),
         acknowledgedAt: e.acknowledgedAt?.toISOString() ?? null,
+        resolutionNote: e.resolutionNote ?? null,
+        resolvedAt: e.resolvedAt?.toISOString() ?? null,
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
       }));
@@ -117,6 +119,8 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         qualificationSnapshot: handoff.qualificationSnapshot,
         slaDeadlineAt: handoff.slaDeadlineAt.toISOString(),
         acknowledgedAt: handoff.acknowledgedAt?.toISOString() ?? null,
+        resolutionNote: handoff.resolutionNote ?? null,
+        resolvedAt: handoff.resolvedAt?.toISOString() ?? null,
         createdAt: handoff.createdAt.toISOString(),
         updatedAt: handoff.updatedAt.toISOString(),
       };
@@ -218,6 +222,64 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       };
 
       return reply.send({ escalation, replySent: true });
+    },
+  );
+
+  // POST /api/escalations/:id/resolve — mark escalation resolved with optional note
+  app.post(
+    "/:id/resolve",
+    {
+      schema: {
+        description: "Mark an escalation as resolved with an optional internal note.",
+        tags: ["Escalations"],
+        body: {
+          type: "object",
+          properties: {
+            resolutionNote: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
+      const { id } = request.params as { id: string };
+      const { resolutionNote } = (request.body as { resolutionNote?: string }) ?? {};
+
+      const handoff = await app.prisma.handoff.findUnique({ where: { id } });
+
+      if (!handoff || handoff.organizationId !== orgId) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
+
+      const updatedHandoff = await app.prisma.handoff.update({
+        where: { id },
+        data: {
+          status: "resolved",
+          resolutionNote: resolutionNote ?? null,
+          resolvedAt: new Date(),
+        },
+      });
+
+      return reply.send({
+        escalation: {
+          id: updatedHandoff.id,
+          sessionId: updatedHandoff.sessionId,
+          leadId: updatedHandoff.leadId,
+          status: updatedHandoff.status,
+          reason: updatedHandoff.reason,
+          resolutionNote: updatedHandoff.resolutionNote,
+          resolvedAt: updatedHandoff.resolvedAt?.toISOString() ?? null,
+          slaDeadlineAt: updatedHandoff.slaDeadlineAt.toISOString(),
+          createdAt: updatedHandoff.createdAt.toISOString(),
+          updatedAt: updatedHandoff.updatedAt.toISOString(),
+        },
+      });
     },
   );
 };
