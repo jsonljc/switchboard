@@ -3,7 +3,11 @@ import type {
   LearningPhaseStatusSchema as LearningPhaseStatus,
   RecommendationOutputSchema as RecommendationOutput,
   WatchOutputSchema as WatchOutput,
+  CampaignLearningInput,
 } from "@switchboard/schemas";
+
+// Re-export for backward compatibility
+export type { CampaignLearningInput };
 
 // ── Constants ──
 
@@ -12,13 +16,6 @@ const LEARNING_EVENTS_REQUIRED = 50;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ── Input / Output Types ──
-
-export interface CampaignLearningInput {
-  effectiveStatus: string;
-  learningPhase: boolean;
-  lastModifiedDays: number;
-  optimizationEvents: number;
-}
 
 export interface PerformanceMetrics {
   cpa: number;

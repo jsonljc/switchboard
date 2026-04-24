@@ -95,6 +95,9 @@ export * from "./conversion.js";
 export * from "./calendar.js";
 export * from "./crm.js";
 
+// CRM Outcome types (shared across ad-optimizer + db)
+export * from "./crm-outcome.js";
+
 // Playbook (structured onboarding playbook)
 export * from "./playbook.js";
 

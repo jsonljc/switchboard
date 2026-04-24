@@ -13,6 +13,7 @@ export const RecommendationActionSchema = z.enum([
   "restructure",
   "hold",
   "test",
+  "review_budget",
 ]);
 export type RecommendationActionSchema = z.infer<typeof RecommendationActionSchema>;
 
