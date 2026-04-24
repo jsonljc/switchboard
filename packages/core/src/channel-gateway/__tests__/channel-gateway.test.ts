@@ -217,4 +217,112 @@ describe("ChannelGateway", () => {
       "I'm having trouble right now. Let me connect you with the team.",
     );
   });
+
+  it("skips skill dispatch when conversation status is human_override", async () => {
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const submitSpy = vi.fn();
+    const sendSpy = vi.fn();
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({
+          conversationId: "conv-1",
+          messages: [],
+        }),
+        addMessage: addMessageSpy,
+        getConversationStatus: vi.fn().mockResolvedValue("human_override"),
+      },
+      platformIngress: { submit: submitSpy },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // Message should be persisted
+    expect(addMessageSpy).toHaveBeenCalledWith("conv-1", "user", "Hello");
+    // But skill dispatch and reply should be skipped
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("proceeds normally when conversation status is active", async () => {
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const submitSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        outcome: "completed",
+        outputs: { response: "Hello from agent" },
+        summary: "Responded to user",
+      },
+      workUnit: { id: "wu-1", traceId: "trace-1" },
+    });
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({
+          conversationId: "conv-1",
+          messages: [],
+        }),
+        addMessage: addMessageSpy,
+        getConversationStatus: vi.fn().mockResolvedValue("active"),
+      },
+      platformIngress: { submit: submitSpy },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // Should proceed normally
+    expect(submitSpy).toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
+  });
+
+  it("proceeds normally when getConversationStatus is not implemented", async () => {
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const submitSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        outcome: "completed",
+        outputs: { response: "Hello from agent" },
+        summary: "Responded to user",
+      },
+      workUnit: { id: "wu-1", traceId: "trace-1" },
+    });
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({
+          conversationId: "conv-1",
+          messages: [],
+        }),
+        addMessage: addMessageSpy,
+        // No getConversationStatus method
+      },
+      platformIngress: { submit: submitSpy },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid",
+      sessionId: "sess-1",
+      text: "Hello",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // Should proceed normally for backward compatibility
+    expect(submitSpy).toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
+  });
 });
