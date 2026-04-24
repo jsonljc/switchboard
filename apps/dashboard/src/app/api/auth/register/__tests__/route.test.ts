@@ -65,7 +65,9 @@ describe("POST /api/auth/register", () => {
   });
 
   it("returns 409 for duplicate email", async () => {
-    mockFindUnique.mockResolvedValue({ id: "existing", email: "a@b.com" });
+    const duplicateError = new Error("Unique constraint failed") as Error & { code: string };
+    duplicateError.code = "P2002";
+    mockProvision.mockRejectedValue(duplicateError);
     const res = await callRegister({ email: "a@b.com", password: "12345678" });
     expect(res.status).toBe(409);
     const data = await res.json();

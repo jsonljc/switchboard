@@ -63,9 +63,10 @@ export function createAdsAnalyticsTool(): SkillTool {
           properties: {
             insights: { type: "array" },
             crmData: { type: "object" },
-            benchmarks: { type: "object" },
+            crmBenchmarks: { type: "object" },
+            mediaBenchmarks: { type: "object" },
           },
-          required: ["insights", "crmData", "benchmarks"],
+          required: ["insights", "crmData", "crmBenchmarks", "mediaBenchmarks"],
         },
         execute: async (params: unknown) => {
           const input = params as FunnelInput;

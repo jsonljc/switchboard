@@ -11,7 +11,7 @@ describe("POST /api/website-scan", () => {
     app = Fastify({ logger: false });
 
     // Stub organizationIdFromAuth on every request
-    app.decorateRequest("organizationIdFromAuth", null);
+    app.decorateRequest("organizationIdFromAuth", undefined as unknown as string);
     app.addHook("preHandler", async (request) => {
       const orgHeader = request.headers["x-organization-id"];
       if (typeof orgHeader === "string") {

@@ -23,6 +23,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   })),
   SkillExecutorImpl,
   GovernanceHook,
+  SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
   BuilderRegistry: vi.fn().mockImplementation(() => ({})),
   createCrmQueryTool: vi.fn(() => ({ operations: { get: { effectCategory: "read" } } })),
@@ -76,25 +77,57 @@ describe("bootstrapSkillMode governance wiring", () => {
       prismaClient: {
         $transaction: vi.fn(async (fn: (tx: Record<string, unknown>) => unknown) =>
           fn({
-            booking: { update: vi.fn() },
+            booking: {
+              findMany: vi.fn(async () => []),
+              create: vi.fn(async () => ({
+                id: "booking_1",
+                startsAt: new Date(),
+                endsAt: new Date(),
+                status: "confirmed",
+                calendarEventId: "evt_1",
+                timezone: "UTC",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })),
+              update: vi.fn(),
+            },
             escalationRecord: {},
             outboxEvent: { create: vi.fn() },
           }),
         ),
         escalationRecord: { findMany: vi.fn(async () => []) },
+        organizationConfig: {
+          findFirst: vi.fn(async () => ({
+            businessHours: {
+              timezone: "UTC",
+              slots: [
+                { day: 1, start: "09:00", end: "17:00" },
+                { day: 2, start: "09:00", end: "17:00" },
+                { day: 3, start: "09:00", end: "17:00" },
+                { day: 4, start: "09:00", end: "17:00" },
+                { day: 5, start: "09:00", end: "17:00" },
+              ],
+            },
+          })),
+        },
+        booking: {
+          findMany: vi.fn(async () => []),
+          create: vi.fn(async () => ({ id: "booking_1" })),
+          update: vi.fn(async () => ({ id: "booking_1" })),
+        },
       } as never,
       intentRegistry: {} as never,
       modeRegistry: { register } as never,
       logger: { info: vi.fn(), error: vi.fn() },
     });
 
-    // GovernanceHook was constructed with the tools map
-    expect(GovernanceHook).toHaveBeenCalledOnce();
+    // GovernanceHook was constructed with the tools map (once for main, once for simulation)
+    expect(GovernanceHook).toHaveBeenCalledTimes(2);
     const hookArg = GovernanceHook.mock.calls[0]![0];
     expect(hookArg).toBeInstanceOf(Map);
 
-    // SkillExecutorImpl was constructed
-    expect(SkillExecutorImpl).toHaveBeenCalledOnce();
+    // SkillExecutorImpl was constructed (once for main, once for simulation)
+    expect(SkillExecutorImpl).toHaveBeenCalledTimes(2);
 
     // The GovernanceHook instance was passed to SkillExecutorImpl
     const executorArgs = SkillExecutorImpl.mock.calls[0]!;

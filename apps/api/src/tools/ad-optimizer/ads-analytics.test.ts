@@ -112,13 +112,38 @@ describe("ads-analytics tool", () => {
             frequency: 2,
           },
         ],
-        crmData: { leads: 5, qualified: 1, closed: 0, revenue: 0 },
-        benchmarks: {
+        crmData: {
+          campaignIds: ["c1"],
+          leads: 5,
+          qualified: 1,
+          opportunities: 0,
+          bookings: 0,
+          closed: 0,
+          revenue: 0,
+          rates: {
+            leadToQualified: 0.2,
+            qualifiedToBooking: null,
+            bookingToClosed: null,
+            leadToClosed: 0,
+          },
+          coverage: {
+            attributedContacts: 5,
+            contactsWithEmailOrPhone: 5,
+            contactsWithOpportunity: 0,
+            contactsWithBooking: 0,
+            contactsWithRevenueEvent: 0,
+          },
+        },
+        crmBenchmarks: {
+          leadToQualifiedRate: 0.3,
+          qualifiedToBookingRate: 0.5,
+          bookingToClosedRate: 0.2,
+          leadToClosedRate: 0.03,
+        },
+        mediaBenchmarks: {
           ctr: 2,
           landingPageViewRate: 0.8,
-          leadRate: 0.05,
-          qualificationRate: 0.3,
-          closeRate: 0.2,
+          clickToLeadRate: 0.05,
         },
       });
       expect(result.status).toBe("success");

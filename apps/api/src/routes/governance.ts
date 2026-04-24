@@ -213,13 +213,12 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
                   parameters: { campaignId: campaign.id },
                   actor: { id: actorId, type: "user" as const },
                   organizationId: orgId,
-                  deployment: {
+                  targetHint: {
                     deploymentId: "emergency-halt",
                     skillSlug: "digital-ads",
-                    trustLevel: "autonomous" as const,
-                    trustScore: 100,
                   },
                   trigger: "api" as const,
+                  surface: { surface: "api" },
                 });
 
                 if (response.ok && response.result.outcome === "completed") {
