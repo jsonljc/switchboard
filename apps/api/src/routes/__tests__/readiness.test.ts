@@ -20,7 +20,7 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
         id: "conn-1",
         serviceId: "whatsapp",
         credentials: "encrypted-creds",
-        credentials_exist: undefined as never,
+
         status: "connected",
         lastHealthCheck: new Date("2026-04-20T12:00:00Z"),
       },
@@ -77,7 +77,7 @@ describe("checkReadiness", () => {
             id: "conn-1",
             serviceId: "whatsapp",
             credentials: null,
-            credentials_exist: undefined as never,
+
             status: "connected",
             lastHealthCheck: new Date(),
           },
@@ -97,7 +97,7 @@ describe("checkReadiness", () => {
             id: "conn-1",
             serviceId: "whatsapp",
             credentials: "encrypted-creds",
-            credentials_exist: undefined as never,
+
             status: "connected",
             lastHealthCheck: null,
           },

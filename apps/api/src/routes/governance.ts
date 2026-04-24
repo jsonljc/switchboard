@@ -6,7 +6,7 @@ import {
   EmergencyHaltBodySchema,
   ResumeBodySchema,
 } from "../validation.js";
-import { checkReadiness } from "./readiness.js";
+import { checkReadiness, buildReadinessContext } from "./readiness.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -287,69 +287,15 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
-      // Gather readiness context
-      const [managedChannels, connections, deployment, orgConfig] = await Promise.all([
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { id: true, channel: true, status: true, connectionId: true },
-        }),
-        app.prisma.connection.findMany({
-          where: { organizationId: orgId },
-          select: {
-            id: true,
-            serviceId: true,
-            credentials: true,
-            status: true,
-            lastHealthCheck: true,
-          },
-        }),
-        app.prisma.agentDeployment.findFirst({
-          where: { organizationId: orgId, skillSlug: "alex" },
-          select: {
-            id: true,
-            status: true,
-            skillSlug: true,
-            organizationId: true,
-            listingId: true,
-          },
-        }),
-        app.prisma.organizationConfig.findUnique({
-          where: { id: orgId },
-          select: { onboardingPlaybook: true, runtimeConfig: true },
-        }),
-      ]);
-
-      const deploymentConnections = deployment
-        ? await app.prisma.deploymentConnection.findMany({
-            where: { deploymentId: deployment.id },
-            select: { id: true, deploymentId: true, type: true, status: true },
-          })
-        : [];
-
-      const playbook = (orgConfig?.onboardingPlaybook as Record<string, unknown>) ?? {};
-      const runtimeConfig = (orgConfig?.runtimeConfig as Record<string, unknown>) ?? {};
-      const scenariosTestedCount =
-        typeof runtimeConfig.scenariosTestedCount === "number"
-          ? runtimeConfig.scenariosTestedCount
-          : 0;
-
-      const mappedConnections = connections.map((c) => ({
-        ...c,
-        credentials:
-          c.credentials !== null && c.credentials !== undefined ? String(c.credentials) : null,
-        credentials_exist: undefined as never,
-      }));
+      // Gather readiness context via shared helper
+      const ctx = await buildReadinessContext(app.prisma, orgId);
 
       // Override deployment status to "active" for readiness check (it's paused right now)
-      const deploymentForCheck = deployment ? { ...deployment, status: "active" } : null;
+      const deploymentForCheck = ctx.deployment ? { ...ctx.deployment, status: "active" } : null;
 
       const report = checkReadiness({
-        managedChannels,
-        connections: mappedConnections,
+        ...ctx,
         deployment: deploymentForCheck,
-        deploymentConnections,
-        playbook,
-        scenariosTestedCount,
       });
 
       if (!report.ready) {

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { deriveAgentStates } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
-import { checkReadiness } from "./readiness.js";
+import { checkReadiness, buildReadinessContext } from "./readiness.js";
 
 const DEFAULT_ROSTER = [
   {
@@ -363,67 +363,9 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
 
       const { agentId } = request.params as { agentId: string };
 
-      // Load readiness context in parallel
-      const [managedChannels, connections, deployment, orgConfig] = await Promise.all([
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { id: true, channel: true, status: true, connectionId: true },
-        }),
-        app.prisma.connection.findMany({
-          where: { organizationId: orgId },
-          select: {
-            id: true,
-            serviceId: true,
-            credentials: true,
-            status: true,
-            lastHealthCheck: true,
-          },
-        }),
-        app.prisma.agentDeployment.findFirst({
-          where: { organizationId: orgId, skillSlug: "alex" },
-          select: {
-            id: true,
-            status: true,
-            skillSlug: true,
-            organizationId: true,
-            listingId: true,
-          },
-        }),
-        app.prisma.organizationConfig.findUnique({
-          where: { id: orgId },
-          select: { onboardingPlaybook: true, runtimeConfig: true },
-        }),
-      ]);
-
-      const deploymentConnections = deployment
-        ? await app.prisma.deploymentConnection.findMany({
-            where: { deploymentId: deployment.id },
-            select: { id: true, deploymentId: true, type: true, status: true },
-          })
-        : [];
-
-      const playbook = (orgConfig?.onboardingPlaybook as Record<string, unknown>) ?? {};
-      const runtimeConfig = (orgConfig?.runtimeConfig as Record<string, unknown>) ?? {};
-      const scenariosTestedCount =
-        typeof runtimeConfig.scenariosTestedCount === "number"
-          ? runtimeConfig.scenariosTestedCount
-          : 0;
-
-      const mappedConnections = connections.map((c) => ({
-        ...c,
-        credentials:
-          c.credentials !== null && c.credentials !== undefined ? String(c.credentials) : null,
-        credentials_exist: undefined as never,
-      }));
-
-      const report = checkReadiness({
-        managedChannels,
-        connections: mappedConnections,
-        deployment,
-        deploymentConnections,
-        playbook,
-        scenariosTestedCount,
-      });
+      // Load readiness context via shared helper
+      const ctx = await buildReadinessContext(app.prisma, orgId);
+      const report = checkReadiness(ctx);
 
       if (!report.ready) {
         return reply
@@ -457,7 +399,7 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         actorType: "user",
         actorId: orgId,
         entityType: "deployment",
-        entityId: deployment?.id ?? agentId,
+        entityId: ctx.deployment?.id ?? agentId,
         riskCategory: "low",
         organizationId: orgId,
         summary: `Agent activated for organization ${orgId}`,

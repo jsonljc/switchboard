@@ -31,7 +31,6 @@ export interface ReadinessContext {
     id: string;
     serviceId: string;
     credentials: string | null;
-    credentials_exist: never;
     status: string;
     lastHealthCheck: Date | null;
   }>;
@@ -50,6 +49,135 @@ export interface ReadinessContext {
   }>;
   playbook: Record<string, unknown>;
   scenariosTestedCount: number;
+}
+
+// ── PrismaLike — narrow type for readiness queries ─────────────────────────
+
+export interface PrismaLike {
+  managedChannel: {
+    findMany(args: {
+      where: { organizationId: string };
+      select: { id: true; channel: true; status: true; connectionId: true };
+    }): Promise<Array<{ id: string; channel: string; status: string; connectionId: string }>>;
+  };
+  connection: {
+    findMany(args: {
+      where: { organizationId: string };
+      select: {
+        id: true;
+        serviceId: true;
+        credentials: true;
+        status: true;
+        lastHealthCheck: true;
+      };
+    }): Promise<
+      Array<{
+        id: string;
+        serviceId: string;
+        credentials: unknown;
+        status: string;
+        lastHealthCheck: Date | null;
+      }>
+    >;
+  };
+  agentDeployment: {
+    findFirst(args: {
+      where: { organizationId: string; skillSlug: string };
+      select: {
+        id: true;
+        status: true;
+        skillSlug: true;
+        organizationId: true;
+        listingId: true;
+      };
+    }): Promise<{
+      id: string;
+      status: string;
+      skillSlug: string | null;
+      organizationId: string;
+      listingId: string;
+    } | null>;
+  };
+  organizationConfig: {
+    findUnique(args: {
+      where: { id: string };
+      select: { onboardingPlaybook: true; runtimeConfig: true };
+    }): Promise<{
+      onboardingPlaybook: unknown;
+      runtimeConfig: unknown;
+    } | null>;
+  };
+  deploymentConnection: {
+    findMany(args: {
+      where: { deploymentId: string };
+      select: { id: true; deploymentId: true; type: true; status: true };
+    }): Promise<Array<{ id: string; deploymentId: string; type: string; status: string }>>;
+  };
+}
+
+// ── Shared helper — assembles ReadinessContext from Prisma ──────────────────
+
+export async function buildReadinessContext(
+  prisma: PrismaLike,
+  orgId: string,
+): Promise<ReadinessContext> {
+  const [managedChannels, connections, deployment, orgConfig] = await Promise.all([
+    prisma.managedChannel.findMany({
+      where: { organizationId: orgId },
+      select: { id: true, channel: true, status: true, connectionId: true },
+    }),
+    prisma.connection.findMany({
+      where: { organizationId: orgId },
+      select: {
+        id: true,
+        serviceId: true,
+        credentials: true,
+        status: true,
+        lastHealthCheck: true,
+      },
+    }),
+    prisma.agentDeployment.findFirst({
+      where: { organizationId: orgId, skillSlug: "alex" },
+      select: {
+        id: true,
+        status: true,
+        skillSlug: true,
+        organizationId: true,
+        listingId: true,
+      },
+    }),
+    prisma.organizationConfig.findUnique({
+      where: { id: orgId },
+      select: { onboardingPlaybook: true, runtimeConfig: true },
+    }),
+  ]);
+
+  const deploymentConnections = deployment
+    ? await prisma.deploymentConnection.findMany({
+        where: { deploymentId: deployment.id },
+        select: { id: true, deploymentId: true, type: true, status: true },
+      })
+    : [];
+
+  const playbook = (orgConfig?.onboardingPlaybook as Record<string, unknown>) ?? {};
+  const runtimeConfig = (orgConfig?.runtimeConfig as Record<string, unknown>) ?? {};
+  const scenariosTestedCount =
+    typeof runtimeConfig.scenariosTestedCount === "number" ? runtimeConfig.scenariosTestedCount : 0;
+
+  const mappedConnections = connections.map((c) => ({
+    ...c,
+    credentials:
+      c.credentials !== null && c.credentials !== undefined ? String(c.credentials) : null,
+  }));
+
+  return {
+    managedChannels,
+    connections: mappedConnections,
+    deployment,
+    deploymentConnections,
+    playbook,
+    scenariosTestedCount,
+  };
 }
 
 // ── Pure function ───────────────────────────────────────────────────────────
@@ -278,67 +406,8 @@ export const readinessRoutes: FastifyPluginAsync = async (app) => {
       const orgId = requireOrganizationScope(request, reply);
       if (!orgId) return;
 
-      const [managedChannels, connections, deployment, orgConfig] = await Promise.all([
-        app.prisma.managedChannel.findMany({
-          where: { organizationId: orgId },
-          select: { id: true, channel: true, status: true, connectionId: true },
-        }),
-        app.prisma.connection.findMany({
-          where: { organizationId: orgId },
-          select: {
-            id: true,
-            serviceId: true,
-            credentials: true,
-            status: true,
-            lastHealthCheck: true,
-          },
-        }),
-        app.prisma.agentDeployment.findFirst({
-          where: { organizationId: orgId, skillSlug: "alex" },
-          select: {
-            id: true,
-            status: true,
-            skillSlug: true,
-            organizationId: true,
-            listingId: true,
-          },
-        }),
-        app.prisma.organizationConfig.findUnique({
-          where: { id: orgId },
-          select: { onboardingPlaybook: true, runtimeConfig: true },
-        }),
-      ]);
-
-      const deploymentConnections = deployment
-        ? await app.prisma.deploymentConnection.findMany({
-            where: { deploymentId: deployment.id },
-            select: { id: true, deploymentId: true, type: true, status: true },
-          })
-        : [];
-
-      const playbook = (orgConfig?.onboardingPlaybook as Record<string, unknown>) ?? {};
-      const runtimeConfig = (orgConfig?.runtimeConfig as Record<string, unknown>) ?? {};
-      const scenariosTestedCount =
-        typeof runtimeConfig.scenariosTestedCount === "number"
-          ? runtimeConfig.scenariosTestedCount
-          : 0;
-
-      // Map credentials to string | null for the pure function
-      const mappedConnections = connections.map((c) => ({
-        ...c,
-        credentials:
-          c.credentials !== null && c.credentials !== undefined ? String(c.credentials) : null,
-        credentials_exist: undefined as never,
-      }));
-
-      const report = checkReadiness({
-        managedChannels,
-        connections: mappedConnections,
-        deployment,
-        deploymentConnections,
-        playbook,
-        scenariosTestedCount,
-      });
+      const ctx = await buildReadinessContext(app.prisma, orgId);
+      const report = checkReadiness(ctx);
 
       return reply.code(200).send(report);
     },

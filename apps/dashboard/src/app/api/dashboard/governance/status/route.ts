@@ -5,9 +5,9 @@ import { proxyError } from "@/lib/proxy-error";
 
 export async function GET() {
   try {
-    await requireSession();
+    const session = await requireSession();
     const client = await getApiClient();
-    const result = await client.getGovernanceStatus("current");
+    const result = await client.getGovernanceStatus(session.organizationId);
     return NextResponse.json(result);
   } catch (err: unknown) {
     return proxyError(
