@@ -25,6 +25,7 @@ import { useModuleStatus } from "@/hooks/use-module-status";
 import { ModuleCards } from "@/components/dashboard/module-cards";
 import { RecommendationBar } from "@/components/dashboard/recommendation-bar";
 import { SynergyStrip } from "@/components/dashboard/synergy-strip";
+import { EmergencyHaltButton } from "./emergency-halt-button";
 
 export function OwnerToday() {
   const { data: session } = useSession();
@@ -311,6 +312,11 @@ export function OwnerToday() {
           <FirstRunBanner onDismiss={dismissBanner} />
         </div>
       )}
+
+      {/* Emergency Halt */}
+      <div style={{ marginTop: "24px" }}>
+        <EmergencyHaltButton />
+      </div>
 
       {/* Module Control Center */}
       {modules && (
