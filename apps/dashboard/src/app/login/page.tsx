@@ -18,6 +18,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const isVerify = searchParams.get("verify") === "true";
+  const isVerified = searchParams.get("verified") === "true";
+  const verifyError = searchParams.get("error");
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const { status } = useSession();
@@ -144,6 +146,34 @@ function LoginForm() {
             Sign in to your workspace
           </p>
         </div>
+
+        {/* Verification banners */}
+        {isVerified && (
+          <div
+            className="rounded-lg p-4 mb-6 text-center"
+            style={{
+              background: "hsl(145, 45%, 42%, 0.08)",
+              border: "1px solid hsl(145, 45%, 42%, 0.2)",
+              color: "hsl(145, 45%, 30%)",
+              fontSize: "15px",
+            }}
+          >
+            Email verified. You can now sign in.
+          </div>
+        )}
+        {verifyError && !isVerified && (
+          <div
+            className="rounded-lg p-4 mb-6 text-center"
+            style={{
+              background: "hsl(0, 20%, 97%)",
+              border: "1px solid hsl(0, 20%, 88%)",
+              color: "hsl(0, 38%, 40%)",
+              fontSize: "15px",
+            }}
+          >
+            {decodeURIComponent(verifyError)}
+          </div>
+        )}
 
         {/* Form card */}
         <div

@@ -10,8 +10,8 @@ function encryptLikeSetup(apiKey: string, secret: string): string {
   const cipher = createCipheriv("aes-256-gcm", keyBuffer, iv);
   let encrypted = cipher.update(apiKey, "utf8", "hex");
   encrypted += cipher.final("hex");
-  const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString("hex")}:${Buffer.from(authTag).toString("hex")}:${encrypted}`;
 }
 
 describe("crypto roundtrip", () => {
