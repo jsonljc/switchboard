@@ -122,7 +122,7 @@ The critical gap: the `PATCH /conversations/:threadId/override` route sets
 `status: "human_override"` in the DB, but the `ChannelGateway` never checks
 this status before processing inbound messages. Override is currently cosmetic.
 
-**Guard behavior:**
+**Guard placement:**
 
 The guard is placed in `ChannelGateway.handleIncoming()` — the single method
 through which all channel inbound messages flow (called by both
