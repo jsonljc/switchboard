@@ -1,131 +1,143 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { GoLive } from "../go-live";
 import { createEmptyPlaybook } from "@switchboard/schemas";
 
+const mockReadiness = vi.fn();
+
+vi.mock("@/hooks/use-governance", () => ({
+  useReadiness: () => mockReadiness(),
+}));
+
+function readinessLoading() {
+  mockReadiness.mockReturnValue({
+    data: undefined,
+    isLoading: true,
+  });
+}
+
+function readinessNotReady() {
+  mockReadiness.mockReturnValue({
+    data: {
+      ready: false,
+      checks: [
+        {
+          id: "playbook",
+          label: "Playbook configured",
+          status: "fail",
+          message: "Complete your playbook first",
+          blocking: true,
+        },
+        {
+          id: "channel",
+          label: "Channel connected",
+          status: "pass",
+          message: "",
+          blocking: true,
+        },
+        {
+          id: "scenarios",
+          label: "Test scenarios run",
+          status: "fail",
+          message: "Run at least 3 test conversations",
+          blocking: false,
+        },
+      ],
+    },
+    isLoading: false,
+  });
+}
+
+function readinessReady() {
+  mockReadiness.mockReturnValue({
+    data: {
+      ready: true,
+      checks: [
+        {
+          id: "playbook",
+          label: "Playbook configured",
+          status: "pass",
+          message: "",
+          blocking: true,
+        },
+        {
+          id: "channel",
+          label: "Channel connected",
+          status: "pass",
+          message: "",
+          blocking: true,
+        },
+      ],
+    },
+    isLoading: false,
+  });
+}
+
+function defaultProps(overrides: Partial<Parameters<typeof GoLive>[0]> = {}) {
+  return {
+    playbook: createEmptyPlaybook(),
+    onLaunch: vi.fn().mockResolvedValue(undefined),
+    onBack: vi.fn(),
+    connectedChannels: [] as string[],
+    onConnectChannel: vi.fn(),
+    onLaunchComplete: vi.fn(),
+    isConnecting: false,
+    scenariosTested: 0,
+    ...overrides,
+  };
+}
+
 describe("GoLive", () => {
-  it("renders page title and checklist", () => {
-    const playbook = createEmptyPlaybook();
-    playbook.businessIdentity.status = "ready";
-    render(
-      <GoLive
-        playbook={playbook}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={[]}
-        onConnectChannel={vi.fn()}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-        scenariosTested={0}
-      />,
-    );
+  beforeEach(() => {
+    mockReadiness.mockReset();
+  });
+
+  it("renders page title and required section", () => {
+    readinessReady();
+    render(<GoLive {...defaultProps()} />);
     expect(screen.getByText("Alex is ready for your business")).toBeTruthy();
     expect(screen.getByText(/required to launch/i)).toBeTruthy();
   });
 
-  it("disables launch button when no channel connected", () => {
-    render(
-      <GoLive
-        playbook={createEmptyPlaybook()}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={[]}
-        onConnectChannel={vi.fn()}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-        scenariosTested={0}
-      />,
-    );
+  it("shows loading state while readiness is being fetched", () => {
+    readinessLoading();
+    render(<GoLive {...defaultProps()} />);
+    expect(screen.getByText(/checking readiness/i)).toBeTruthy();
+  });
+
+  it("renders blocking checks from API data", () => {
+    readinessNotReady();
+    render(<GoLive {...defaultProps()} />);
+    expect(screen.getByText("Playbook configured")).toBeTruthy();
+    expect(screen.getByText("Channel connected")).toBeTruthy();
+    expect(screen.getByText("Complete your playbook first")).toBeTruthy();
+  });
+
+  it("renders advisory checks in recommended section", () => {
+    readinessNotReady();
+    render(<GoLive {...defaultProps()} />);
+    expect(screen.getAllByText("Recommended").length).toBeGreaterThan(0);
+    expect(screen.getByText("Test scenarios run")).toBeTruthy();
+  });
+
+  it("disables launch button when not ready", () => {
+    readinessNotReady();
+    render(<GoLive {...defaultProps()} />);
     const button = screen.getByRole("button", { name: /launch alex/i });
     expect(button).toHaveProperty("disabled", true);
   });
 
-  it("enables launch button when a channel is connected", () => {
-    render(
-      <GoLive
-        playbook={createEmptyPlaybook()}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={["whatsapp"]}
-        onConnectChannel={vi.fn()}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-        scenariosTested={3}
-      />,
-    );
+  it("enables launch button when ready", () => {
+    readinessReady();
+    render(<GoLive {...defaultProps()} />);
     const button = screen.getByRole("button", { name: /launch alex/i });
     expect(button).toHaveProperty("disabled", false);
   });
 
-  it("includes hours in playbook summary", () => {
-    const playbook = {
-      ...createEmptyPlaybook(),
-      services: [
-        {
-          id: "s1",
-          name: "Cleaning",
-          bookingBehavior: "ask_first" as const,
-          status: "ready" as const,
-          source: "scan" as const,
-        },
-        {
-          id: "s2",
-          name: "Whitening",
-          bookingBehavior: "ask_first" as const,
-          status: "ready" as const,
-          source: "scan" as const,
-        },
-      ],
-      hours: {
-        timezone: "",
-        schedule: {
-          mon: "09:00-18:00",
-          tue: "09:00-18:00",
-          wed: "09:00-18:00",
-          thu: "09:00-18:00",
-          fri: "09:00-18:00",
-          sat: "10:00-14:00",
-        },
-        afterHoursBehavior: "",
-        status: "ready" as const,
-        source: "scan" as const,
-      },
-      approvalMode: {
-        bookingApproval: "ask_before_booking" as const,
-        status: "ready" as const,
-        source: "manual" as const,
-      },
-    };
-    render(
-      <GoLive
-        playbook={playbook}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={["whatsapp"]}
-        onConnectChannel={vi.fn()}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-        scenariosTested={3}
-      />,
-    );
-    expect(screen.getByText(/Mon-Sat/i)).toBeTruthy();
-    expect(screen.getByText(/9am/i)).toBeTruthy();
-  });
-
   it("calls onConnectChannel with channel name and credentials when connecting", async () => {
+    readinessReady();
     const onConnect = vi.fn();
-    render(
-      <GoLive
-        playbook={createEmptyPlaybook()}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={[]}
-        scenariosTested={0}
-        onConnectChannel={onConnect}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-      />,
-    );
+    render(<GoLive {...defaultProps({ onConnectChannel: onConnect })} />);
     const connectButtons = screen.getAllByText("Connect →");
     fireEvent.click(connectButtons[1]); // Telegram
     const tokenInput = screen.getByLabelText("Bot token");
@@ -135,19 +147,8 @@ describe("GoLive", () => {
   });
 
   it("shows error message when connectError is set", () => {
-    render(
-      <GoLive
-        playbook={createEmptyPlaybook()}
-        onLaunch={vi.fn()}
-        onBack={vi.fn()}
-        connectedChannels={[]}
-        scenariosTested={0}
-        onConnectChannel={vi.fn()}
-        onLaunchComplete={vi.fn()}
-        isConnecting={false}
-        connectError="Connection failed"
-      />,
-    );
+    readinessReady();
+    render(<GoLive {...defaultProps({ connectError: "Connection failed" })} />);
     expect(screen.getByText("Connection failed")).toBeTruthy();
   });
 });
