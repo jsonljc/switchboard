@@ -36,3 +36,4 @@ export type { FacebookOAuthConfig, TokenResult, AdAccount } from "./facebook-oau
 export { buildConversionEvent } from "./crm-event-emitter.js";
 export type { BuildConversionEventParams } from "./crm-event-emitter.js";
 export { MetaCAPIDispatcher } from "./meta-capi-dispatcher.js";
+export { MetaCampaignInsightsProvider } from "./meta-campaign-insights-provider.js";
