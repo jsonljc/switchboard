@@ -23,7 +23,6 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@switchboard/ad-optimizer": "workspace:*",
     "@switchboard/cartridge-sdk": "workspace:*",
-    "@switchboard/ad-optimizer": "workspace:*",
     "@switchboard/core": "workspace:*",
     "@switchboard/creative-pipeline": "workspace:*",
     "@switchboard/db": "workspace:*",
@@ -39,6 +38,7 @@
     "jose": "^6.2.2",
     "pino": "^9.0.0",
     "prom-client": "^15.1.0",
+    "stripe": "^22.1.0",
     "zod": "^3.23.0",
     "zod-to-json-schema": "^3.25.1"
   },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, BookOpen, Radio, Palette, Building2 } from "lucide-react";
+import { Users, BookOpen, Radio, Palette, Building2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_ITEMS = [
@@ -11,6 +11,7 @@ const SIDEBAR_ITEMS = [
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },
   { href: "/settings/identity", label: "Identity", icon: Palette },
+  { href: "/settings/billing", label: "Billing", icon: CreditCard },
   { href: "/settings/account", label: "Account", icon: Building2 },
 ] as const;
 

@@ -11,6 +11,8 @@ export type {
 
 export type { AgentRosterEntry, AgentStateEntry } from "./agents";
 
+export type { BillingStatus, CheckoutResult, PortalResult } from "./billing";
+
 // Re-export types from api-client-types (governance types used by base)
 export type {
   PendingApproval,
@@ -20,6 +22,6 @@ export type {
 } from "../api-client-types";
 
 // The final composed client
-import { SwitchboardKnowledgeClient } from "./knowledge";
+import { SwitchboardBillingClient } from "./billing";
 
-export class SwitchboardClient extends SwitchboardKnowledgeClient {}
+export class SwitchboardClient extends SwitchboardBillingClient {}
