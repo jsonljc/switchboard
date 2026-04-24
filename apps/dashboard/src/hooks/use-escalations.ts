@@ -26,6 +26,12 @@ export function useEscalationDetail(id: string | null) {
   });
 }
 
+export function useEscalationCount() {
+  const { data } = useEscalations("pending");
+  const escalations = (data as { escalations?: unknown[] })?.escalations;
+  return Array.isArray(escalations) ? escalations.length : 0;
+}
+
 export function useReplyToEscalation() {
   const queryClient = useQueryClient();
   return useMutation({
