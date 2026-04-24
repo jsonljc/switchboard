@@ -30,7 +30,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 5000,
-      daysAboveTarget: 10,
+      targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -50,7 +50,7 @@ describe("generateRecommendations", () => {
       targetCPA: 80,
       targetROAS: 3,
       currentSpend: 1000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -69,7 +69,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 2000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -89,7 +89,7 @@ describe("generateRecommendations", () => {
       targetCPA: 80,
       targetROAS: 3,
       currentSpend: 1000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -109,7 +109,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 2000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -126,7 +126,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 2000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -145,7 +145,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 2000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -165,7 +165,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 2000,
-      daysAboveTarget: 2,
+      targetBreach: { periodsAboveTarget: 2, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -185,7 +185,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 5000,
-      daysAboveTarget: 5,
+      targetBreach: { periodsAboveTarget: 5, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -203,7 +203,7 @@ describe("generateRecommendations", () => {
       targetCPA: 80,
       targetROAS: 3,
       currentSpend: 1000,
-      daysAboveTarget: 0,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -221,7 +221,7 @@ describe("generateRecommendations", () => {
       targetCPA: 100,
       targetROAS: 3,
       currentSpend: 5000,
-      daysAboveTarget: 10,
+      targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
     };
 
     const result = generateRecommendations(input);
@@ -237,5 +237,44 @@ describe("generateRecommendations", () => {
       expect(Array.isArray(rec.steps)).toBe(true);
       expect(typeof rec.learningPhaseImpact).toBe("string");
     }
+  });
+
+  it("generates review_budget for weekly breach above kill CPA", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-weekly",
+      campaignName: "Weekly Breach",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 250, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 1, granularity: "weekly", isApproximate: true },
+    };
+
+    const result = generateRecommendations(input);
+
+    const review = result.find((r) => r.action === "review_budget");
+    expect(review).toBeDefined();
+    expect(review?.confidence).toBe(0.65);
+  });
+
+  it("does not generate kill for weekly breach", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-weekly-2",
+      campaignName: "Weekly No Kill",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 250, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 7, granularity: "weekly", isApproximate: true },
+    };
+
+    const result = generateRecommendations(input);
+
+    const kill = result.find((r) => r.action === "kill");
+    expect(kill).toBeUndefined();
+    const review = result.find((r) => r.action === "review_budget");
+    expect(review).toBeDefined();
   });
 });

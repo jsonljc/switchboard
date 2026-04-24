@@ -4,6 +4,7 @@ import type {
   RecommendationOutputSchema as RecommendationOutput,
   MetricDeltaSchema as MetricDelta,
   UrgencySchema as Urgency,
+  TargetBreachResult,
 } from "@switchboard/schemas";
 
 // ── Re-export types ──
@@ -26,7 +27,7 @@ export interface RecommendationInput {
   targetCPA: number;
   targetROAS: number;
   currentSpend: number;
-  daysAboveTarget: number;
+  targetBreach: TargetBreachResult;
 }
 
 // ── Helpers ──
@@ -61,35 +62,88 @@ function makeRec(
   };
 }
 
+function addKillRecommendation(
+  results: RecommendationOutput[],
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+  cpa: number,
+  targetCPA: number,
+  targetBreach: TargetBreachResult,
+): void {
+  const multiplier = (cpa / targetCPA).toFixed(1);
+  results.push(
+    makeRec(
+      base,
+      "kill",
+      0.85,
+      "immediate",
+      "Campaign is significantly over target CPA and should be paused immediately",
+      [
+        "Pause campaign in Ads Manager",
+        `CPA has been ${multiplier}x target for ${targetBreach.periodsAboveTarget} days`,
+      ],
+      "no impact",
+    ),
+  );
+}
+
+function addReviewBudgetRecommendation(
+  results: RecommendationOutput[],
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+  cpa: number,
+  targetCPA: number,
+): void {
+  const multiplier = (cpa / targetCPA).toFixed(1);
+  results.push(
+    makeRec(
+      base,
+      "review_budget",
+      0.65,
+      "this_week",
+      `Campaign appears above target CPA (${multiplier}x) based on weekly snapshot data — treat as review signal`,
+      [
+        "Review campaign performance in Ads Manager",
+        "Based on weekly snapshot data, not daily trend — exercise caution",
+      ],
+      "no impact",
+    ),
+  );
+}
+
 // ── Main export ──
 
 export function generateRecommendations(input: RecommendationInput): RecommendationOutput[] {
-  const { campaignId, campaignName, diagnoses, deltas, targetCPA, daysAboveTarget } = input;
+  const { campaignId, campaignName, diagnoses, deltas, targetCPA, targetBreach } = input;
   const cpa = getCPA(deltas);
   const results: RecommendationOutput[] = [];
   const base = { campaignId, campaignName };
 
-  // Kill rule: CPA > 2x targetCPA AND daysAboveTarget >= 7
-  if (cpa > KILL_CPA_MULTIPLIER * targetCPA && daysAboveTarget >= KILL_DAYS_THRESHOLD) {
-    const multiplier = (cpa / targetCPA).toFixed(1);
-    results.push(
-      makeRec(
-        base,
-        "kill",
-        0.85,
-        "immediate",
-        "Campaign is significantly over target CPA and should be paused immediately",
-        [
-          "Pause campaign in Ads Manager",
-          `CPA has been ${multiplier}x target for ${daysAboveTarget} days`,
-        ],
-        "no impact",
-      ),
-    );
+  const isAboveKillCpa = cpa > KILL_CPA_MULTIPLIER * targetCPA;
+
+  // Daily data — high confidence pause/kill
+  if (
+    isAboveKillCpa &&
+    targetBreach.granularity === "daily" &&
+    targetBreach.periodsAboveTarget >= KILL_DAYS_THRESHOLD
+  ) {
+    addKillRecommendation(results, base, cpa, targetCPA, targetBreach);
+  }
+
+  // Weekly approximation — review/reduce-budget signal, NOT kill
+  if (
+    isAboveKillCpa &&
+    targetBreach.granularity === "weekly" &&
+    targetBreach.periodsAboveTarget >= 1
+  ) {
+    addReviewBudgetRecommendation(results, base, cpa, targetCPA);
   }
 
   // Scale rule: CPA > 0 AND CPA < 0.8x targetCPA AND daysAboveTarget===0 AND no diagnoses
-  if (cpa > 0 && cpa < 0.8 * targetCPA && daysAboveTarget === 0 && diagnoses.length === 0) {
+  if (
+    cpa > 0 &&
+    cpa < 0.8 * targetCPA &&
+    targetBreach.periodsAboveTarget === 0 &&
+    diagnoses.length === 0
+  ) {
     results.push(
       makeRec(
         base,
