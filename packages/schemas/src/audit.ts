@@ -55,6 +55,8 @@ export const AuditEventTypeSchema = z.enum([
   "event.reaction.triggered",
   "event.reaction.created",
   "agent.activated",
+  "agent.emergency-halted",
+  "agent.resumed",
 ]);
 export type AuditEventType = z.infer<typeof AuditEventTypeSchema>;
 

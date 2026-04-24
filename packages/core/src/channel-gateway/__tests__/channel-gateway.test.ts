@@ -96,7 +96,7 @@ describe("ChannelGateway", () => {
     await gateway.handleIncoming(message, replySink);
 
     expect(sendSpy).toHaveBeenCalledWith(
-      "This agent is currently inactive. Please contact your administrator.",
+      "This service is temporarily paused. Please try again later.",
     );
   });
 

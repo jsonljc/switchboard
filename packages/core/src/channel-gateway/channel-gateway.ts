@@ -16,9 +16,18 @@ export class ChannelGateway {
       resolved = await deploymentResolver.resolveByChannelToken(message.channel, message.token);
     } catch (err) {
       if (err instanceof DeploymentInactiveError) {
-        await replySink.send(
-          "This agent is currently inactive. Please contact your administrator.",
-        );
+        // Persist inbound message so owners can see what was missed while paused
+        try {
+          const { conversationId } = await conversationStore.getOrCreateBySession(
+            err.deploymentId,
+            message.channel,
+            message.sessionId,
+          );
+          await conversationStore.addMessage(conversationId, "user", message.text);
+        } catch {
+          // Best-effort: don't fail the paused reply if persistence fails
+        }
+        await replySink.send("This service is temporarily paused. Please try again later.");
         return;
       }
       throw err;
