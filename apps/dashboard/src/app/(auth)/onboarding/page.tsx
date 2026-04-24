@@ -13,6 +13,7 @@ import { OnboardingEntry } from "@/components/onboarding/onboarding-entry";
 import { TrainingShell } from "@/components/onboarding/training-shell";
 import { TestCenter } from "@/components/onboarding/test-center";
 import { GoLive } from "@/components/onboarding/go-live";
+import { BusinessFactsStep } from "@/components/onboarding/business-facts-step";
 import { createEmptyPlaybook, type Playbook } from "@switchboard/schemas";
 
 export default function OnboardingPage() {
@@ -54,8 +55,8 @@ export default function OnboardingPage() {
 
     const provisionPayload: Record<string, unknown> = { channel };
     if (channel === "whatsapp") {
-      provisionPayload.token = credentials.apiKey;
-      provisionPayload.phoneNumberId = credentials.phone;
+      provisionPayload.token = credentials.token;
+      provisionPayload.phoneNumberId = credentials.phoneNumberId;
     } else if (channel === "telegram") {
       provisionPayload.botToken = credentials.botToken;
     }
@@ -216,21 +217,40 @@ export default function OnboardingPage() {
       );
     case 3:
       return (
-        <TestCenter
-          prompts={testPrompts}
-          onSendPrompt={handleSendPrompt}
-          onRerunPrompt={handleRerunPrompt}
-          onAdvance={() => handleUpdatePlaybook({ step: 4 })}
-          responses={responses}
-          isSimulating={simulation.isPending}
+        <BusinessFactsStep
+          initialFacts={
+            (playbook as unknown as Record<string, unknown>)?.businessFacts as
+              | Record<string, unknown>
+              | undefined
+          }
+          onSave={(facts) => {
+            const currentPlaybook = playbook ?? {};
+            handleUpdatePlaybook({
+              playbook: { ...currentPlaybook, businessFacts: facts } as Playbook,
+              step: 4,
+            });
+          }}
+          onBack={() => handleUpdatePlaybook({ step: 2 })}
+          onSkip={() => handleUpdatePlaybook({ step: 4 })}
         />
       );
     case 4:
       return (
+        <TestCenter
+          prompts={testPrompts}
+          onSendPrompt={handleSendPrompt}
+          onRerunPrompt={handleRerunPrompt}
+          onAdvance={() => handleUpdatePlaybook({ step: 5 })}
+          responses={responses}
+          isSimulating={simulation.isPending}
+        />
+      );
+    case 5:
+      return (
         <GoLive
           playbook={playbook}
           onLaunch={handleLaunch}
-          onBack={() => handleUpdatePlaybook({ step: 2 })}
+          onBack={() => handleUpdatePlaybook({ step: 4 })}
           connectedChannels={connectedChannels}
           scenariosTested={responses.length}
           onConnectChannel={handleConnectChannel}

@@ -126,6 +126,67 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     });
   }
 
+  // Readiness
+  async getReadiness(agentId: string) {
+    return this.request<{
+      ready: boolean;
+      checks: Array<{
+        id: string;
+        label: string;
+        status: "pass" | "fail";
+        message: string;
+        blocking: boolean;
+      }>;
+    }>(`/api/agents/${agentId}/readiness`);
+  }
+
+  // Governance status
+  async getGovernanceStatus(orgId: string) {
+    return this.request<{
+      organizationId: string;
+      profile: string;
+      posture: string;
+      config: unknown;
+      deploymentStatus: string;
+      haltedAt: string | null;
+      haltReason: string | null;
+    }>(`/api/governance/${orgId}/status`);
+  }
+
+  // Emergency halt
+  async emergencyHalt(body: { organizationId?: string; reason?: string }) {
+    return this.request<{
+      governanceProfile: string;
+      organizationId: string;
+      deploymentsPaused: number;
+      reason: string | null;
+    }>("/api/governance/emergency-halt", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  // Resume
+  async resume(body: { organizationId?: string }) {
+    return this.request<{
+      resumed: boolean;
+      profile?: string;
+      readiness?: {
+        ready: boolean;
+        checks: Array<{
+          id: string;
+          label: string;
+          status: "pass" | "fail";
+          message: string;
+          blocking: boolean;
+        }>;
+      };
+    }>("/api/governance/resume", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
   // Escalations
   async listEscalations(status = "pending") {
     return this.request<{ escalations: unknown[] }>(`/api/escalations?status=${status}`);

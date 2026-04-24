@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FadeIn } from "@/components/ui/fade-in";
 import { ConversationDemo } from "@/components/landing/conversation-demo";
+import { getCtaHref, getCtaLabel } from "@/lib/launch-mode";
 
 export function HomepageHero() {
   return (
@@ -91,6 +92,22 @@ export function HomepageHero() {
                   flexWrap: "wrap",
                 }}
               >
+                <a
+                  href={getCtaHref()}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    background: "#A07850",
+                    color: "#1A1714",
+                    borderRadius: "9999px",
+                    padding: "0.875rem 2rem",
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  {getCtaLabel()} →
+                </a>
                 <a
                   href="#conversation-demo"
                   style={{

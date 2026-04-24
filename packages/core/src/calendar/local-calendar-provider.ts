@@ -81,7 +81,7 @@ export class LocalCalendarProvider implements CalendarProvider {
       service: input.service,
       startsAt: new Date(input.slot.start),
       endsAt: new Date(input.slot.end),
-      timezone: "Asia/Singapore",
+      timezone: this.businessHours.timezone,
       status: "confirmed",
       calendarEventId,
       attendeeName: input.attendeeName ?? null,
@@ -108,7 +108,7 @@ export class LocalCalendarProvider implements CalendarProvider {
       rescheduleCount: 0,
       startsAt: input.slot.start,
       endsAt: input.slot.end,
-      timezone: "Asia/Singapore",
+      timezone: this.businessHours.timezone,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -119,24 +119,31 @@ export class LocalCalendarProvider implements CalendarProvider {
   }
 
   async rescheduleBooking(bookingId: string, newSlot: TimeSlot): Promise<Booking> {
+    const existing = await this.store.findById(bookingId);
     const result = await this.store.reschedule(bookingId, {
       start: newSlot.start,
       end: newSlot.end,
     });
     return {
       id: result.id,
-      contactId: "",
-      organizationId: "",
-      service: "",
+      contactId: existing?.contactId ?? "",
+      organizationId: existing?.organizationId ?? "",
+      service: existing?.service ?? "",
       status: "confirmed",
-      calendarEventId: null,
+      calendarEventId: existing?.calendarEventId ?? null,
+      attendeeName: existing?.attendeeName ?? null,
+      attendeeEmail: existing?.attendeeEmail ?? null,
+      notes: existing?.notes ?? null,
+      createdByType: existing?.createdByType ?? "agent",
+      sourceChannel: existing?.sourceChannel ?? null,
+      workTraceId: existing?.workTraceId ?? null,
+      opportunityId: existing?.opportunityId ?? null,
       startsAt: newSlot.start,
       endsAt: newSlot.end,
-      timezone: "Asia/Singapore",
-      createdByType: "agent",
-      rescheduleCount: 0,
+      timezone: this.businessHours.timezone,
+      rescheduleCount: (existing?.rescheduleCount ?? 0) + 1,
       rescheduledAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   }
@@ -146,6 +153,6 @@ export class LocalCalendarProvider implements CalendarProvider {
   }
 
   async healthCheck(): Promise<CalendarHealthCheck> {
-    return { status: "degraded", latencyMs: 0 };
+    return { status: "connected", latencyMs: 0 };
   }
 }

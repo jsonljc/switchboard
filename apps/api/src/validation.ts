@@ -170,3 +170,7 @@ export const EmergencyHaltBodySchema = z.object({
   organizationId: z.string().min(1).max(500).optional(),
   reason: z.string().max(2000).optional(),
 });
+
+export const ResumeBodySchema = z.object({
+  organizationId: z.string().min(1).max(500).optional(),
+});

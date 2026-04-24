@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { deriveAgentStates } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { checkReadiness, buildReadinessContext } from "./readiness.js";
 
 const DEFAULT_ROSTER = [
   {
@@ -348,37 +349,37 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
     {
       schema: {
         description:
-          "Authoritative launch confirmation. Validates at least one channel is provisioned, transitions channels to active, sets org config launch state.",
+          "Authoritative launch confirmation. Runs readiness checks, transitions channels to active, sets org config launch state, and creates audit entry.",
         tags: ["Agents"],
       },
     },
     async (request, reply) => {
-      const orgId = requireOrganizationScope(request, reply);
-      if (!orgId) return;
-
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
+      const orgId = requireOrganizationScope(request, reply);
+      if (!orgId) return;
+
       const { agentId } = request.params as { agentId: string };
 
-      const channels = await app.prisma.managedChannel.findMany({
-        where: { organizationId: orgId },
-      });
+      // Load readiness context via shared helper
+      const ctx = await buildReadinessContext(app.prisma, orgId);
+      const report = checkReadiness(ctx);
 
-      if (channels.length === 0) {
-        return reply.code(400).send({
-          error: "At least one channel must be connected before launching",
-          statusCode: 400,
-        });
+      if (!report.ready) {
+        return reply
+          .code(400)
+          .send({ error: "Readiness checks failed", readiness: report, statusCode: 400 });
       }
 
+      // Activate channels and update org config
       await app.prisma.managedChannel.updateMany({
         where: { organizationId: orgId },
         data: { status: "active" },
       });
 
-      const orgConfig = await app.prisma.organizationConfig.upsert({
+      await app.prisma.organizationConfig.upsert({
         where: { id: orgId },
         update: {
           onboardingComplete: true,
@@ -392,12 +393,25 @@ export const agentsRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
+      // Create audit entry for activation
+      await app.auditLedger.record({
+        eventType: "agent.activated",
+        actorType: "user",
+        actorId: orgId,
+        entityType: "deployment",
+        entityId: ctx.deployment?.id ?? agentId,
+        riskCategory: "low",
+        organizationId: orgId,
+        summary: `Agent activated for organization ${orgId}`,
+        snapshot: { readiness: report, agentId },
+      });
+
       return reply.code(200).send({
         agentId,
         status: "active",
         orgConfig: {
-          onboardingComplete: orgConfig.onboardingComplete,
-          provisioningStatus: orgConfig.provisioningStatus,
+          onboardingComplete: true,
+          provisioningStatus: "active",
         },
       });
     },

@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getApiClient } from "@/lib/get-api-client";
-import { MODULE_IDS, MODULE_LABELS } from "@/lib/module-types";
+import { MODULE_IDS, MODULE_LABELS, SLUG_TO_MODULE } from "@/lib/module-types";
 import type { ModuleId } from "@/lib/module-types";
 import { ModuleDetailClient } from "@/components/modules/module-detail";
 
@@ -20,7 +20,11 @@ export default async function ModuleDetailPage({ params }: PageProps) {
   try {
     const client = await getApiClient();
     const { deployments } = await client.listDeployments();
-    const deployment = deployments.find((d) => d.listingId === moduleId || d.id === moduleId);
+    const deployment = deployments.find((d) => {
+      if (d.listingId === moduleId || d.id === moduleId) return true;
+      const mapped = SLUG_TO_MODULE[d.listingId];
+      return mapped === moduleId;
+    });
 
     if (!deployment) {
       redirect(`/modules/${moduleId}/setup`);

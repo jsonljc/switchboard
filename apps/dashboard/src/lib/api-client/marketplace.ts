@@ -90,6 +90,29 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     );
   }
 
+  async listFacebookAdAccounts(deploymentId: string) {
+    return this.request<{
+      accounts: Array<{
+        accountId: string;
+        name: string;
+        currency: string;
+        status: number;
+      }>;
+    }>(`/api/connections/facebook/${deploymentId}/accounts`);
+  }
+
+  async setAdAccountSelection(deploymentId: string, adAccountId: string, adAccountName: string) {
+    return this.request<{ deployment: MarketplaceDeployment }>(
+      `/api/marketplace/deployments/${deploymentId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          inputConfig: { adAccountId, adAccountName },
+        }),
+      },
+    );
+  }
+
   async createTask(data: {
     deploymentId: string;
     listingId: string;

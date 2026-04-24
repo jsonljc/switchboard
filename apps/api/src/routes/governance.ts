@@ -1,7 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import { profileToPosture } from "@switchboard/core";
 import type { GovernanceProfileStore } from "@switchboard/core";
-import { SetGovernanceProfileBodySchema, EmergencyHaltBodySchema } from "../validation.js";
+import {
+  SetGovernanceProfileBodySchema,
+  EmergencyHaltBodySchema,
+  ResumeBodySchema,
+} from "../validation.js";
+import { checkReadiness, buildReadinessContext } from "./readiness.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -49,11 +54,43 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const posture = profileToPosture(profile);
       const config = await store.getConfig(orgId);
 
+      // Deployment status and halt info
+      let deploymentStatus: string = "unknown";
+      let haltedAt: string | null = null;
+      let haltReason: string | null = null;
+
+      if (app.prisma) {
+        const deployment = await app.prisma.agentDeployment.findFirst({
+          where: { organizationId: orgId, skillSlug: "alex" },
+          select: { status: true },
+        });
+        deploymentStatus = deployment?.status ?? "not_found";
+
+        if (deploymentStatus === "paused") {
+          const haltEntry = await app.prisma.auditEntry.findFirst({
+            where: {
+              organizationId: orgId,
+              eventType: "agent.emergency-halted",
+            },
+            orderBy: { timestamp: "desc" },
+            select: { timestamp: true, snapshot: true },
+          });
+          if (haltEntry) {
+            haltedAt = haltEntry.timestamp.toISOString();
+            const snap = haltEntry.snapshot as Record<string, unknown> | null;
+            haltReason = typeof snap?.reason === "string" ? snap.reason : null;
+          }
+        }
+      }
+
       return reply.code(200).send({
         organizationId: orgId,
         profile,
         posture,
         config,
+        deploymentStatus,
+        haltedAt,
+        haltReason,
       });
     },
   );
@@ -136,6 +173,29 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       const store = app.governanceProfileStore;
       await store.set(orgId, "locked");
 
+      // Pause all active deployments
+      let deploymentsPaused = 0;
+      if (app.prisma) {
+        const result = await app.prisma.agentDeployment.updateMany({
+          where: { organizationId: orgId, status: "active" },
+          data: { status: "paused" },
+        });
+        deploymentsPaused = result.count;
+
+        // Audit entry
+        await app.auditLedger.record({
+          eventType: "agent.emergency-halted",
+          actorType: "user",
+          actorId: request.principalIdFromAuth ?? "system",
+          entityType: "organization",
+          entityId: orgId,
+          riskCategory: "high",
+          organizationId: orgId,
+          summary: `Emergency halt: locked governance and paused ${deploymentsPaused} deployment(s)`,
+          snapshot: { reason: body.reason ?? null, deploymentsPaused },
+        });
+      }
+
       const paused: string[] = [];
       const failures: Array<{ campaignId: string; error: string }> = [];
 
@@ -181,9 +241,97 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({
         governanceProfile: "locked",
         organizationId: orgId,
+        deploymentsPaused,
         campaignsPaused: paused,
         failures,
         reason: body.reason ?? null,
+      });
+    },
+  );
+
+  // POST /api/governance/resume
+  app.post(
+    "/resume",
+    {
+      schema: {
+        description: "Resume after emergency halt: restore governance and reactivate deployment.",
+        tags: ["Governance"],
+      },
+    },
+    async (request, reply) => {
+      const parsed = ResumeBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: parsed.error.issues.map((i) => i.message).join("; "),
+          statusCode: 400,
+        });
+      }
+      const orgId = parsed.data.organizationId ?? request.organizationIdFromAuth ?? null;
+
+      if (!orgId) {
+        return reply.code(400).send({
+          error: "organizationId is required (provide in body or via API key scoping)",
+          statusCode: 400,
+        });
+      }
+
+      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+        return reply.code(403).send({
+          error: "Forbidden: organization mismatch",
+          hint: "Verify your API key is scoped to the correct organization.",
+          statusCode: 403,
+        });
+      }
+
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      // Gather readiness context via shared helper
+      const ctx = await buildReadinessContext(app.prisma, orgId);
+
+      // Override deployment status to "active" for readiness check (it's paused right now)
+      const deploymentForCheck = ctx.deployment ? { ...ctx.deployment, status: "active" } : null;
+
+      const report = checkReadiness({
+        ...ctx,
+        deployment: deploymentForCheck,
+      });
+
+      if (!report.ready) {
+        return reply.code(400).send({
+          resumed: false,
+          readiness: report,
+          statusCode: 400,
+        });
+      }
+
+      // Restore governance to guarded (safe default)
+      const store = app.governanceProfileStore;
+      await store.set(orgId, "guarded");
+
+      // Reactivate paused Alex deployment
+      await app.prisma.agentDeployment.updateMany({
+        where: { organizationId: orgId, skillSlug: "alex", status: "paused" },
+        data: { status: "active" },
+      });
+
+      // Audit entry
+      await app.auditLedger.record({
+        eventType: "agent.resumed",
+        actorType: "user",
+        actorId: request.principalIdFromAuth ?? "system",
+        entityType: "organization",
+        entityId: orgId,
+        riskCategory: "medium",
+        organizationId: orgId,
+        summary: `Agent resumed for organization ${orgId}`,
+        snapshot: { previousProfile: "locked", newProfile: "guarded" },
+      });
+
+      return reply.code(200).send({
+        resumed: true,
+        profile: "guarded",
       });
     },
   );

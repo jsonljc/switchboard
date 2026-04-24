@@ -59,6 +59,7 @@ export async function GET() {
         businessHours:
           (orgConfig?.businessHours as ResolverInput["orgConfig"]["businessHours"]) ?? null,
       },
+      // TODO: wire to real counts once API endpoints exist
       creativeJobCount: 0,
       auditCount: 0,
       platformConfig: {
