@@ -77,7 +77,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ attribution: { lead_id: "lead_123" } });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].action_source).toBe("crm");
     expect(body.data[0].user_data.lead_id).toBe("lead_123");
   });
@@ -94,7 +94,7 @@ describe("MetaCAPIDispatcher", () => {
     });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].action_source).toBe("website");
     expect(body.data[0].event_source_url).toBe("https://example.com/landing");
     expect(body.data[0].user_data.client_user_agent).toBe("Mozilla/5.0");
@@ -107,7 +107,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ customer: { email: "a@b.com" } });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].action_source).toBe("system_generated");
   });
 
@@ -118,7 +118,7 @@ describe("MetaCAPIDispatcher", () => {
     });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].action_source).toBe("system_generated");
     expect(body.data[0].user_data.fbc).toMatch(/^fb\.1\.\d+\.fb_partial$/);
   });
@@ -135,7 +135,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ type: stage });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].event_name).toBe(metaName);
   });
 
@@ -145,7 +145,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ eventId: "org_1:act_1:Booking:bk_1:booked:confirmed" });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].event_id).toBe("org_1:act_1:Booking:bk_1:booked:confirmed");
   });
 
@@ -155,7 +155,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ value: 500, currency: "SGD" });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].custom_data).toEqual({ value: 500, currency: "SGD" });
   });
 
@@ -163,7 +163,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent({ value: 500 });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].custom_data).toBeUndefined();
   });
 
@@ -171,7 +171,7 @@ describe("MetaCAPIDispatcher", () => {
     const event = makeEvent();
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].custom_data).toBeUndefined();
   });
 
@@ -207,7 +207,7 @@ describe("MetaCAPIDispatcher", () => {
     });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     const ud = body.data[0].user_data;
     expect(ud.em).toMatch(/^[a-f0-9]{64}$/);
     expect(ud.ph).toMatch(/^[a-f0-9]{64}$/);
@@ -220,7 +220,7 @@ describe("MetaCAPIDispatcher", () => {
     });
     await dispatcher.dispatch(event);
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
     expect(body.data[0].user_data.em).toMatch(/^[a-f0-9]{64}$/);
     expect(body.data[0].user_data.ph).toMatch(/^[a-f0-9]{64}$/);
   });

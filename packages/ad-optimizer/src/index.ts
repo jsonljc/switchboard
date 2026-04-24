@@ -15,12 +15,7 @@ export type { Diagnosis } from "./metric-diagnostician.js";
 export { generateRecommendations } from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
 export { AuditRunner } from "./audit-runner.js";
-export type {
-  AuditDependencies,
-  AuditConfig,
-  AdsClientInterface,
-  CrmDataProvider,
-} from "./audit-runner.js";
+export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
 export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions.js";
 export type { CronDependencies } from "./inngest-functions.js";
 export { parseLeadWebhook } from "./meta-leads-ingester.js";

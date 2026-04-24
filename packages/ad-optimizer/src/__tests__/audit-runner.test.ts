@@ -1,18 +1,18 @@
 // packages/core/src/ad-optimizer/__tests__/audit-runner.test.ts
 import { describe, it, expect, vi } from "vitest";
 import { AuditRunner } from "../audit-runner.js";
-import type {
-  AuditDependencies,
-  AdsClientInterface,
-  CrmDataProvider,
-  AuditConfig,
-} from "../audit-runner.js";
+import type { AuditDependencies, AdsClientInterface, AuditConfig } from "../audit-runner.js";
 import type {
   CampaignInsightSchema as CampaignInsight,
   AccountSummarySchema as AccountSummary,
+  CrmDataProvider,
+  CrmFunnelData,
+  FunnelBenchmarks,
+  MediaBenchmarks,
+  CampaignInsightsProvider,
+  CampaignLearningInput,
+  TargetBreachResult,
 } from "@switchboard/schemas";
-import type { CrmFunnelData, FunnelBenchmarks } from "../funnel-analyzer.js";
-import type { CampaignLearningInput } from "../learning-phase-guard.js";
 
 // ── Fixtures ──
 
@@ -50,17 +50,41 @@ function makeAccountSummary(): AccountSummary {
 }
 
 function makeFunnelData(): CrmFunnelData {
-  return { leads: 100, qualified: 40, closed: 10, revenue: 30_000 };
+  return {
+    campaignIds: ["camp-1"],
+    leads: 100,
+    qualified: 40,
+    opportunities: 50,
+    bookings: 25,
+    closed: 10,
+    revenue: 30_000,
+    rates: {
+      leadToQualified: 0.4,
+      qualifiedToBooking: 0.625,
+      bookingToClosed: 0.4,
+      leadToClosed: 0.1,
+    },
+    coverage: {
+      attributedContacts: 100,
+      contactsWithEmailOrPhone: 90,
+      contactsWithOpportunity: 50,
+      contactsWithBooking: 25,
+      contactsWithRevenueEvent: 10,
+    },
+  };
 }
 
-function makeBenchmarks(): FunnelBenchmarks {
+function makeCrmBenchmarks(): FunnelBenchmarks {
   return {
-    ctr: 2.0,
-    landingPageViewRate: 0.85,
-    leadRate: 0.05,
-    qualificationRate: 0.4,
-    closeRate: 0.25,
+    leadToQualifiedRate: 0.4,
+    qualifiedToBookingRate: 0.5,
+    bookingToClosedRate: 0.25,
+    leadToClosedRate: 0.06,
   };
+}
+
+function makeMediaBenchmarks(): MediaBenchmarks {
+  return { ctr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 };
 }
 
 function makeLearningInput(): CampaignLearningInput {
@@ -70,6 +94,10 @@ function makeLearningInput(): CampaignLearningInput {
     lastModifiedDays: 14,
     optimizationEvents: 100,
   };
+}
+
+function makeTargetBreach(): TargetBreachResult {
+  return { periodsAboveTarget: 0, granularity: "daily", isApproximate: false };
 }
 
 // ── Mock dependencies builder ──
@@ -106,18 +134,23 @@ function buildMockDeps(
 
   const crmDataProvider: CrmDataProvider = {
     getFunnelData: vi.fn().mockResolvedValue(makeFunnelData()),
-    getBenchmarks: vi.fn().mockResolvedValue(makeBenchmarks()),
+    getBenchmarks: vi.fn().mockResolvedValue(makeCrmBenchmarks()),
+  };
+
+  const insightsProvider: CampaignInsightsProvider = {
     getCampaignLearningData: vi.fn().mockResolvedValue(makeLearningInput()),
-    getDaysAboveTarget: vi.fn().mockResolvedValue(0),
+    getTargetBreachStatus: vi.fn().mockResolvedValue(makeTargetBreach()),
   };
 
   const config: AuditConfig = {
     accountId: "act-123",
+    orgId: "org-1",
     targetCPA: 100,
     targetROAS: 3.0,
+    mediaBenchmarks: makeMediaBenchmarks(),
   };
 
-  return { adsClient, crmDataProvider, config };
+  return { adsClient, crmDataProvider, insightsProvider, config };
 }
 
 // ── Tests ──

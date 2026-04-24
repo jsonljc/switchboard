@@ -6,10 +6,13 @@ import type {
   WatchOutputSchema as WatchOutput,
   RecommendationOutputSchema as RecommendationOutput,
   AccountSummarySchema as AccountSummary,
+  CrmDataProvider,
+  MediaBenchmarks,
+  CampaignInsightsProvider,
 } from "@switchboard/schemas";
-import { analyzeFunnel, type CrmFunnelData, type FunnelBenchmarks } from "./funnel-analyzer.js";
+import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
-import { LearningPhaseGuard, type CampaignLearningInput } from "./learning-phase-guard.js";
+import { LearningPhaseGuard } from "./learning-phase-guard.js";
 import { diagnose } from "./metric-diagnostician.js";
 import { generateRecommendations } from "./recommendation-engine.js";
 
@@ -27,22 +30,18 @@ export interface AdsClientInterface {
   getAccountSummary(): Promise<AccountSummary>;
 }
 
-export interface CrmDataProvider {
-  getFunnelData(campaignIds: string[]): Promise<CrmFunnelData>;
-  getBenchmarks(accountId: string): Promise<FunnelBenchmarks>;
-  getCampaignLearningData(campaignId: string): Promise<CampaignLearningInput>;
-  getDaysAboveTarget(campaignId: string, targetCPA: number): Promise<number>;
-}
-
 export interface AuditConfig {
   accountId: string;
+  orgId: string;
   targetCPA: number;
   targetROAS: number;
+  mediaBenchmarks: MediaBenchmarks;
 }
 
 export interface AuditDependencies {
   adsClient: AdsClientInterface;
   crmDataProvider: CrmDataProvider;
+  insightsProvider: CampaignInsightsProvider;
   config: AuditConfig;
 }
 
@@ -117,12 +116,14 @@ function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
 export class AuditRunner {
   private readonly adsClient: AdsClientInterface;
   private readonly crmDataProvider: CrmDataProvider;
+  private readonly insightsProvider: CampaignInsightsProvider;
   private readonly config: AuditConfig;
   private readonly learningGuard: LearningPhaseGuard;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
     this.crmDataProvider = deps.crmDataProvider;
+    this.insightsProvider = deps.insightsProvider;
     this.config = deps.config;
     this.learningGuard = new LearningPhaseGuard();
   }
@@ -142,13 +143,27 @@ export class AuditRunner {
 
     // Step 2: Pull CRM funnel data + benchmarks (parallel)
     const campaignIds = currentInsights.map((i) => i.campaignId);
-    const [crmData, benchmarks] = await Promise.all([
-      this.crmDataProvider.getFunnelData(campaignIds),
-      this.crmDataProvider.getBenchmarks(this.config.accountId),
+    const [crmData, crmBenchmarks] = await Promise.all([
+      this.crmDataProvider.getFunnelData({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+        campaignIds,
+        startDate: new Date(dateRange.since),
+        endDate: new Date(dateRange.until),
+      }),
+      this.crmDataProvider.getBenchmarks({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+      }),
     ]);
 
     // Step 3: Compute funnel analysis
-    const funnel = analyzeFunnel({ insights: currentInsights, crmData, benchmarks });
+    const funnel = analyzeFunnel({
+      insights: currentInsights,
+      crmData,
+      crmBenchmarks,
+      mediaBenchmarks: this.config.mediaBenchmarks,
+    });
 
     // Step 4: Aggregate metrics and compute period deltas
     const currentMetrics = aggregateMetrics(currentInsights);
@@ -169,7 +184,11 @@ export class AuditRunner {
 
     for (const insight of currentInsights) {
       // 5a: Check learning phase
-      const learningInput = await this.crmDataProvider.getCampaignLearningData(insight.campaignId);
+      const learningInput = await this.insightsProvider.getCampaignLearningData({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+        campaignId: insight.campaignId,
+      });
       const learningStatus = this.learningGuard.check(insight.campaignId, learningInput);
       if (learningStatus.inLearning) {
         campaignsInLearning++;
@@ -211,11 +230,15 @@ export class AuditRunner {
         continue;
       }
 
-      // 5e: Get daysAboveTarget
-      const daysAboveTarget = await this.crmDataProvider.getDaysAboveTarget(
-        insight.campaignId,
-        this.config.targetCPA,
-      );
+      // 5e: Get target breach status
+      const targetBreach = await this.insightsProvider.getTargetBreachStatus({
+        orgId: this.config.orgId,
+        accountId: this.config.accountId,
+        campaignId: insight.campaignId,
+        targetCPA: this.config.targetCPA,
+        startDate: new Date(dateRange.since),
+        endDate: new Date(dateRange.until),
+      });
 
       // 5f: Generate recommendations
       const campaignRecs = generateRecommendations({
@@ -226,7 +249,7 @@ export class AuditRunner {
         targetCPA: this.config.targetCPA,
         targetROAS: this.config.targetROAS,
         currentSpend: insight.spend,
-        daysAboveTarget,
+        targetBreach,
       });
 
       // 5g: Gate recommendations through learning phase
