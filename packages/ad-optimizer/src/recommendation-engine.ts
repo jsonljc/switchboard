@@ -137,7 +137,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
     addReviewBudgetRecommendation(results, base, cpa, targetCPA);
   }
 
-  // Scale rule: CPA > 0 AND CPA < 0.8x targetCPA AND daysAboveTarget===0 AND no diagnoses
+  // Scale rule: CPA > 0 AND CPA < 0.8x targetCPA AND periodsAboveTarget===0 AND no diagnoses
   if (
     cpa > 0 &&
     cpa < 0.8 * targetCPA &&
