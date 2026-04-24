@@ -45,21 +45,47 @@ describe("executeWeeklyAudit", () => {
         }),
       }),
       createCrmProvider: vi.fn().mockReturnValue({
-        getFunnelData: vi.fn().mockResolvedValue({ leads: 0, qualified: 0, closed: 0, revenue: 0 }),
-        getBenchmarks: vi.fn().mockResolvedValue({
-          ctr: 2.5,
-          landingPageViewRate: 0.8,
-          leadRate: 0.04,
-          qualificationRate: 0.4,
-          closeRate: 0.3,
+        getFunnelData: vi.fn().mockResolvedValue({
+          campaignIds: [],
+          leads: 0,
+          qualified: 0,
+          opportunities: 0,
+          bookings: 0,
+          closed: 0,
+          revenue: 0,
+          rates: {
+            leadToQualified: 0,
+            qualifiedToBooking: 0,
+            bookingToClosed: 0,
+            leadToClosed: 0,
+          },
+          coverage: {
+            attributedContacts: 0,
+            contactsWithEmailOrPhone: 0,
+            contactsWithOpportunity: 0,
+            contactsWithBooking: 0,
+            contactsWithRevenueEvent: 0,
+          },
         }),
+        getBenchmarks: vi.fn().mockResolvedValue({
+          leadToQualifiedRate: 0.4,
+          qualifiedToBookingRate: 0.5,
+          bookingToClosedRate: 0.25,
+          leadToClosedRate: 0.06,
+        }),
+      }),
+      createInsightsProvider: vi.fn().mockReturnValue({
         getCampaignLearningData: vi.fn().mockResolvedValue({
           effectiveStatus: "ACTIVE",
           learningPhase: false,
           lastModifiedDays: 14,
           optimizationEvents: 100,
         }),
-        getDaysAboveTarget: vi.fn().mockResolvedValue(0),
+        getTargetBreachStatus: vi.fn().mockResolvedValue({
+          periodsAboveTarget: 0,
+          granularity: "daily",
+          isApproximate: false,
+        }),
       }),
       saveAuditReport: vi.fn().mockResolvedValue(undefined),
       getDeploymentCredentials: vi.fn().mockResolvedValue({
@@ -112,6 +138,7 @@ describe("executeDailyCheck", () => {
         }),
       }),
       createCrmProvider: vi.fn(),
+      createInsightsProvider: vi.fn(),
       saveAuditReport: vi.fn(),
       getDeploymentCredentials: vi.fn().mockResolvedValue({
         accessToken: "token",

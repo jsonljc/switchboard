@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
 import type { AdConversionDispatcher, DispatchResult } from "./ad-conversion-dispatcher.js";
-import type { ConversionEvent } from "@switchboard/schemas";
+import type { ConversionEvent, ConversionStage } from "@switchboard/schemas";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+const META_EVENT_NAME: Record<ConversionStage, string> = {
+  inquiry: "Contact",
+  qualified: "QualifiedLead",
+  booked: "ConvertedLead",
+  purchased: "Purchase",
+  completed: "Purchase",
+};
 
 interface MetaCAPIConfig {
   pixelId: string;
@@ -22,32 +31,77 @@ export class MetaCAPIDispatcher implements AdConversionDispatcher {
   }
 
   canDispatch(event: ConversionEvent): boolean {
-    return !!(event.sourceAdId || event.metadata?.["fbclid"]);
+    const email = event.customer?.email ?? (event.metadata?.["email"] as string | undefined);
+    const phone = event.customer?.phone ?? (event.metadata?.["phone"] as string | undefined);
+    const leadId =
+      event.attribution?.lead_id ?? (event.metadata?.["lead_id"] as string | undefined);
+    const fbclid = event.attribution?.fbclid ?? (event.metadata?.["fbclid"] as string | undefined);
+
+    return Boolean(leadId || fbclid || email || phone);
   }
 
   async dispatch(event: ConversionEvent): Promise<DispatchResult> {
-    const eventName = event.type === "purchased" ? "Purchase" : "Lead";
-    const fbclid = event.metadata?.["fbclid"] as string | undefined;
+    if (event.occurredAt.getTime() < Date.now() - SEVEN_DAYS_MS) {
+      console.warn("[MetaCAPIDispatcher] Skipping event: event_time_too_old", event.eventId);
+      return { accepted: false, errorMessage: "event_time_too_old" };
+    }
+
+    const leadId =
+      event.attribution?.lead_id ?? (event.metadata?.["lead_id"] as string | undefined);
+    const fbclid = event.attribution?.fbclid ?? (event.metadata?.["fbclid"] as string | undefined);
+    const eventSourceUrl = event.attribution?.eventSourceUrl;
+    const clientUserAgent = event.attribution?.clientUserAgent;
+    const fbclidTimestamp = event.attribution?.fbclidTimestamp;
+
+    const email = event.customer?.email ?? (event.metadata?.["email"] as string | undefined);
+    const phone = event.customer?.phone ?? (event.metadata?.["phone"] as string | undefined);
 
     const userData: Record<string, string> = {};
-    if (fbclid) {
-      userData.fbc = `fb.1.${event.occurredAt.getTime()}.${fbclid}`;
+    let actionSource: string;
+    let eventSourceUrlValue: string | undefined;
+
+    if (leadId) {
+      actionSource = "crm";
+      userData.lead_id = leadId;
+    } else if (fbclid && eventSourceUrl && clientUserAgent) {
+      actionSource = "website";
+      eventSourceUrlValue = eventSourceUrl;
+      userData.client_user_agent = clientUserAgent;
+      userData.fbc = buildFbc(fbclid, fbclidTimestamp ?? event.occurredAt);
+    } else {
+      actionSource = "system_generated";
+      if (fbclid) {
+        userData.fbc = buildFbc(fbclid, fbclidTimestamp ?? event.occurredAt);
+      }
     }
-    if (event.metadata?.["email"]) {
-      userData.em = sha256((event.metadata["email"] as string).toLowerCase().trim());
+
+    if (email) {
+      userData.em = sha256(email.toLowerCase().trim());
     }
-    if (event.metadata?.["phone"]) {
-      userData.ph = sha256((event.metadata["phone"] as string).replace(/\D/g, ""));
+    if (phone) {
+      userData.ph = sha256(phone.replace(/\D/g, ""));
+    }
+
+    let customData: { value: number; currency: string } | undefined;
+    if (event.value != null && event.currency) {
+      customData = { value: event.value, currency: event.currency };
+    } else if (event.value != null && !event.currency) {
+      console.warn(
+        "[MetaCAPIDispatcher] missing_currency_for_value, omitting custom_data",
+        event.eventId,
+      );
     }
 
     const body = {
       data: [
         {
-          event_name: eventName,
+          event_name: META_EVENT_NAME[event.type],
           event_time: Math.floor(event.occurredAt.getTime() / 1000),
+          event_id: event.eventId,
           user_data: userData,
-          custom_data: event.value ? { value: event.value, currency: "SGD" } : undefined,
-          action_source: "system_generated",
+          action_source: actionSource,
+          ...(eventSourceUrlValue ? { event_source_url: eventSourceUrlValue } : {}),
+          ...(customData ? { custom_data: customData } : {}),
         },
       ],
     };
@@ -74,4 +128,8 @@ export class MetaCAPIDispatcher implements AdConversionDispatcher {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function buildFbc(fbclid: string, timestamp: Date): string {
+  return `fb.1.${timestamp.getTime()}.${fbclid}`;
 }

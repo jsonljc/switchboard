@@ -85,4 +85,12 @@ export class PrismaGatewayConversationStore implements GatewayConversationStore 
       data: { messageCount: { increment: 1 } },
     });
   }
+
+  async getConversationStatus(sessionId: string): Promise<string | null> {
+    const row = await this.prisma.conversationState.findUnique({
+      where: { threadId: sessionId },
+      select: { status: true },
+    });
+    return row?.status ?? null;
+  }
 }

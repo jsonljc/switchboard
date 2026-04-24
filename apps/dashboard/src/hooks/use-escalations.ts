@@ -49,3 +49,21 @@ export function useReplyToEscalation() {
     },
   });
 }
+
+export function useResolveEscalation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, resolutionNote }: { id: string; resolutionNote?: string }) => {
+      const res = await fetch(`/api/dashboard/escalations/${id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...(resolutionNote ? { resolutionNote } : {}) }),
+      });
+      if (!res.ok) throw new Error("Failed to resolve escalation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.escalations.all });
+    },
+  });
+}

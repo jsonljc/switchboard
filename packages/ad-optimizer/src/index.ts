@@ -15,12 +15,7 @@ export type { Diagnosis } from "./metric-diagnostician.js";
 export { generateRecommendations } from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
 export { AuditRunner } from "./audit-runner.js";
-export type {
-  AuditDependencies,
-  AuditConfig,
-  AdsClientInterface,
-  CrmDataProvider,
-} from "./audit-runner.js";
+export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
 export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions.js";
 export type { CronDependencies } from "./inngest-functions.js";
 export { parseLeadWebhook } from "./meta-leads-ingester.js";
@@ -33,3 +28,7 @@ export {
   refreshTokenIfNeeded,
 } from "./facebook-oauth.js";
 export type { FacebookOAuthConfig, TokenResult, AdAccount } from "./facebook-oauth.js";
+export { buildConversionEvent } from "./crm-event-emitter.js";
+export type { BuildConversionEventParams } from "./crm-event-emitter.js";
+export { MetaCAPIDispatcher } from "./meta-capi-dispatcher.js";
+export { MetaCampaignInsightsProvider } from "./meta-campaign-insights-provider.js";

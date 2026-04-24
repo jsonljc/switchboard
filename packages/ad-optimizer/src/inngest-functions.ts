@@ -3,7 +3,8 @@ import { Inngest } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
-import type { AdsClientInterface, CrmDataProvider, AuditConfig } from "./audit-runner.js";
+import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
+import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 
 interface DeploymentInfo {
   id: string;
@@ -24,6 +25,7 @@ export interface CronDependencies {
   getDeploymentCredentials: (deploymentId: string) => Promise<DeploymentCredentials | null>;
   createAdsClient: (creds: DeploymentCredentials) => AdsClientInterface;
   createCrmProvider: (deploymentId: string) => CrmDataProvider;
+  createInsightsProvider: (adsClient: AdsClientInterface) => CampaignInsightsProvider;
   saveAuditReport: (deploymentId: string, report: unknown) => Promise<void>;
 }
 
@@ -66,14 +68,18 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
     if (!creds) continue;
 
     await step.run(`audit-${deployment.id}`, async () => {
+      const adsClient = deps.createAdsClient(creds);
       const config: AuditConfig = {
         accountId: creds.accountId,
+        orgId: "TODO", // TODO: Extract from deployment when deployment model is updated
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+        mediaBenchmarks: { ctr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 },
       };
       const runner = new AuditRunner({
-        adsClient: deps.createAdsClient(creds),
+        adsClient,
         crmDataProvider: deps.createCrmProvider(deployment.id),
+        insightsProvider: deps.createInsightsProvider(adsClient),
         config,
       });
       const report = await runner.run(dateRanges);

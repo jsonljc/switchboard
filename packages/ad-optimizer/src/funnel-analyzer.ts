@@ -1,34 +1,18 @@
-// packages/core/src/ad-optimizer/funnel-analyzer.ts
 import type {
   CampaignInsightSchema as CampaignInsight,
   FunnelAnalysisSchema as FunnelAnalysis,
   FunnelStageSchema as FunnelStage,
 } from "@switchboard/schemas";
+import type { CrmFunnelData, FunnelBenchmarks, MediaBenchmarks } from "@switchboard/schemas";
 
-// ── Input Types ──
-
-export interface CrmFunnelData {
-  leads: number;
-  qualified: number;
-  closed: number;
-  revenue: number;
-}
-
-export interface FunnelBenchmarks {
-  ctr: number;
-  landingPageViewRate: number;
-  leadRate: number;
-  qualificationRate: number;
-  closeRate: number;
-}
+export type { CrmFunnelData, FunnelBenchmarks, MediaBenchmarks };
 
 export interface FunnelInput {
   insights: CampaignInsight[];
   crmData: CrmFunnelData;
-  benchmarks: FunnelBenchmarks;
+  crmBenchmarks: FunnelBenchmarks;
+  mediaBenchmarks: MediaBenchmarks;
 }
-
-// ── Helper ──
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
@@ -38,18 +22,14 @@ function makeStage(name: string, count: number, rate: number, benchmark: number)
   return { name, count, rate, benchmark, delta: rate - benchmark };
 }
 
-// ── Main export ──
-
 export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
-  const { insights, crmData, benchmarks } = input;
+  const { insights, crmData, crmBenchmarks, mediaBenchmarks } = input;
 
-  // 1. Aggregate totals
   const totalImpressions = insights.reduce((sum, i) => sum + i.impressions, 0);
   const totalClicks = insights.reduce((sum, i) => sum + i.clicks, 0);
 
-  // 2. Build 6 funnel stages
-  const ctrBenchmark = benchmarks.ctr / 100;
-  const lpvRate = benchmarks.landingPageViewRate;
+  const ctrBenchmark = mediaBenchmarks.ctr / 100;
+  const lpvRate = mediaBenchmarks.landingPageViewRate;
   const lpvCount = Math.round(totalClicks * lpvRate);
 
   const clickRate = safeDivide(totalClicks, totalImpressions);
@@ -57,22 +37,22 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
   const qualRate = safeDivide(crmData.qualified, crmData.leads);
   const closeRate = safeDivide(crmData.closed, crmData.qualified);
 
+  const leadBenchmark = mediaBenchmarks.clickToLeadRate ?? 0.04;
+
   const stages: FunnelStage[] = [
     makeStage("Impressions", totalImpressions, 1, 1),
     makeStage("Clicks", totalClicks, clickRate, ctrBenchmark),
     makeStage("Landing Page Views", lpvCount, lpvRate, lpvRate),
-    makeStage("Leads", crmData.leads, leadRate, benchmarks.leadRate),
-    makeStage("Qualified", crmData.qualified, qualRate, benchmarks.qualificationRate),
-    makeStage("Closed", crmData.closed, closeRate, benchmarks.closeRate),
+    makeStage("Leads", crmData.leads, leadRate, leadBenchmark),
+    makeStage("Qualified", crmData.qualified, qualRate, crmBenchmarks.leadToQualifiedRate),
+    makeStage("Closed", crmData.closed, closeRate, crmBenchmarks.bookingToClosedRate),
   ];
 
-  // 3. Handle zero-impressions edge case
   if (totalImpressions === 0) {
     const fallbackName = stages[1]?.name ?? "Clicks";
     return { stages, leakagePoint: fallbackName, leakageMagnitude: 0 };
   }
 
-  // 4. Find worst leakage (most negative delta), skip Impressions stage
   const candidates = stages.slice(1);
   let worstStage = candidates[0]!;
   for (const stage of candidates) {
@@ -83,9 +63,5 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
 
   const leakageMagnitude = worstStage.delta < 0 ? Math.abs(worstStage.delta) : 0;
 
-  return {
-    stages,
-    leakagePoint: worstStage.name,
-    leakageMagnitude,
-  };
+  return { stages, leakagePoint: worstStage.name, leakageMagnitude };
 }

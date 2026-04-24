@@ -10,19 +10,29 @@ import {
   Loader2,
   CheckCircle2,
   Info,
+  FileText,
 } from "lucide-react";
-import { useEscalations, useReplyToEscalation } from "@/hooks/use-escalations";
+import {
+  useEscalations,
+  useReplyToEscalation,
+  useEscalationDetail,
+  useResolveEscalation,
+} from "@/hooks/use-escalations";
+import { ConversationTranscript } from "@/components/marketplace/conversation-transcript";
 
-type FilterStatus = "pending" | "released";
+type FilterStatus = "pending" | "released" | "resolved";
 
 interface Escalation {
   id: string;
   reason: string;
   conversationSummary?: string;
   createdAt: string;
-  slaDeadline?: string;
+  slaDeadlineAt?: string;
   leadName?: string;
   leadChannel?: string;
+  resolutionNote?: string | null;
+  resolvedAt?: string | null;
+  sessionId?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -75,7 +85,14 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [expanded, setExpanded] = useState(false);
   const [reply, setReply] = useState("");
   const [sent, setSent] = useState(false);
+  const [showResolveForm, setShowResolveForm] = useState(false);
+  const [resolutionNote, setResolutionNote] = useState("");
   const replyMutation = useReplyToEscalation();
+  const resolveMutation = useResolveEscalation();
+  const { data: detailData } = useEscalationDetail(expanded ? escalation.id : null);
+
+  const conversationHistory = detailData?.conversationHistory ?? [];
+  const isResolved = !!escalation.resolvedAt;
 
   const summaryPreview =
     escalation.conversationSummary && escalation.conversationSummary.length > 120
@@ -95,6 +112,32 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
     );
   };
 
+  const handleResolve = () => {
+    resolveMutation.mutate(
+      { id: escalation.id, resolutionNote: resolutionNote.trim() || undefined },
+      {
+        onSuccess: () => {
+          setShowResolveForm(false);
+          setResolutionNote("");
+        },
+      },
+    );
+  };
+
+  // Map conversation history roles to transcript roles
+  const transcriptMessages = conversationHistory.map(
+    (msg: { role: string; text: string; timestamp: string }) => ({
+      role:
+        msg.role === "user" || msg.role === "lead"
+          ? ("lead" as const)
+          : msg.role === "owner"
+            ? ("owner" as const)
+            : ("agent" as const),
+      text: msg.text,
+      timestamp: msg.timestamp,
+    }),
+  );
+
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       {/* Collapsed header */}
@@ -111,7 +154,7 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {escalation.slaDeadline && <SlaIndicator deadline={escalation.slaDeadline} />}
+          {escalation.slaDeadlineAt && <SlaIndicator deadline={escalation.slaDeadlineAt} />}
           <span className="text-xs text-muted-foreground">
             {relativeTime(escalation.createdAt)}
           </span>
@@ -126,10 +169,6 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
       {/* Expanded body */}
       {expanded && (
         <div className="mt-3 space-y-3 border-t border-border pt-3">
-          {escalation.conversationSummary && (
-            <p className="text-sm text-muted-foreground">{escalation.conversationSummary}</p>
-          )}
-
           {(escalation.leadName || escalation.leadChannel) && (
             <div className="flex gap-4 text-xs text-muted-foreground">
               {escalation.leadName && <span>Lead: {escalation.leadName}</span>}
@@ -137,8 +176,37 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
             </div>
           )}
 
+          {/* Transcript view */}
+          {transcriptMessages.length > 0 ? (
+            <div className="rounded-md border border-border bg-muted/30 px-3">
+              <ConversationTranscript messages={transcriptMessages} />
+            </div>
+          ) : (
+            escalation.conversationSummary && (
+              <p className="text-sm text-muted-foreground">{escalation.conversationSummary}</p>
+            )
+          )}
+
+          {/* Resolution note display (for resolved escalations) */}
+          {isResolved && escalation.resolutionNote && (
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex items-start gap-2">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="flex-1 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Internal note</p>
+                  <p className="text-sm">{escalation.resolutionNote}</p>
+                  {escalation.resolvedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Resolved {relativeTime(escalation.resolvedAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Info banner after successful reply */}
-          {sent && (
+          {sent && !isResolved && (
             <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
@@ -148,31 +216,81 @@ function EscalationCard({ escalation }: { escalation: Escalation }) {
             </div>
           )}
 
-          {/* Reply form */}
-          {!sent && (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                placeholder="Type a reply..."
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSend();
-                }}
-              />
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                disabled={!reply.trim() || replyMutation.isPending}
-                onClick={handleSend}
-              >
-                {replyMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </button>
+          {/* Reply form (only for non-resolved escalations) */}
+          {!sent && !isResolved && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder="Type a reply..."
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSend();
+                  }}
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  disabled={!reply.trim() || replyMutation.isPending}
+                  onClick={handleSend}
+                >
+                  {replyMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Resolution form toggle */}
+              {!showResolveForm && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => setShowResolveForm(true)}
+                >
+                  Resolve with note...
+                </button>
+              )}
+
+              {/* Resolution form */}
+              {showResolveForm && (
+                <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Internal note (optional)
+                  </label>
+                  <textarea
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    placeholder="Add internal notes about resolution..."
+                    rows={3}
+                    value={resolutionNote}
+                    onChange={(e) => setResolutionNote(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      disabled={resolveMutation.isPending}
+                      onClick={handleResolve}
+                    >
+                      {resolveMutation.isPending ? "Resolving..." : "Mark Resolved"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                      disabled={resolveMutation.isPending}
+                      onClick={() => {
+                        setShowResolveForm(false);
+                        setResolutionNote("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -194,7 +312,7 @@ export function EscalationList() {
     <div className="space-y-4">
       {/* Filter tabs */}
       <div className="flex gap-2">
-        {(["pending", "released"] as const).map((status) => (
+        {(["pending", "released", "resolved"] as const).map((status) => (
           <button
             key={status}
             type="button"
@@ -205,7 +323,7 @@ export function EscalationList() {
             }`}
             onClick={() => setFilter(status)}
           >
-            {status === "pending" ? "Pending" : "Resolved"}
+            {status === "pending" ? "Pending" : status === "released" ? "Released" : "Resolved"}
           </button>
         ))}
       </div>

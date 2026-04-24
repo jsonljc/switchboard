@@ -33,7 +33,7 @@ interface RecordInput {
   type: string;
   contactId: string;
   organizationId: string;
-  value: number;
+  value?: number;
   sourceAdId?: string;
   sourceCampaignId?: string;
   sourceChannel?: string;

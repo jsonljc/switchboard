@@ -550,6 +550,8 @@ model Handoff {
   conversationSummary   Json      @default("{}")
   slaDeadlineAt         DateTime
   acknowledgedAt        DateTime?
+  resolutionNote        String?
+  resolvedAt            DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -836,6 +838,7 @@ model ConversationThread {
   followUpSchedule Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
   lastOutcomeAt    DateTime?
   messageCount     Int       @default(0)
+  firstAgentMessageAt DateTime?
   threadStatus     String    @default("open")
   opportunityId    String?
   createdAt        DateTime  @default(now())
@@ -1367,6 +1370,7 @@ model Contact {
   attribution       Json?
   qualificationData Json?
   roles             String[]  @default(["lead"])
+  leadgenId         String?
   firstContactAt    DateTime  @default(now())
   lastActivityAt    DateTime  @default(now())
   createdAt         DateTime  @default(now())
@@ -1381,6 +1385,7 @@ model Contact {
   @@index([organizationId, stage])
   @@index([organizationId, phone])
   @@index([organizationId, lastActivityAt])
+  @@index([organizationId, leadgenId])
 }
 
 model Opportunity {

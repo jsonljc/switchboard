@@ -77,22 +77,49 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
     createCrmProvider: (_deploymentId) => ({
-      // Stub CRM provider — real implementation in SP3 when CRM queries are built
-      getFunnelData: async () => ({ leads: 0, qualified: 0, closed: 0, revenue: 0 }),
-      getBenchmarks: async () => ({
-        ctr: 2.5,
-        landingPageViewRate: 0.8,
-        leadRate: 0.04,
-        qualificationRate: 0.4,
-        closeRate: 0.3,
+      // Stub CRM provider — real implementation in Task 11 when CRM queries are built
+      getFunnelData: async () => ({
+        campaignIds: [],
+        leads: 0,
+        qualified: 0,
+        opportunities: 0,
+        bookings: 0,
+        closed: 0,
+        revenue: 0,
+        rates: {
+          leadToQualified: 0,
+          qualifiedToBooking: 0,
+          bookingToClosed: 0,
+          leadToClosed: 0,
+        },
+        coverage: {
+          attributedContacts: 0,
+          contactsWithEmailOrPhone: 0,
+          contactsWithOpportunity: 0,
+          contactsWithBooking: 0,
+          contactsWithRevenueEvent: 0,
+        },
       }),
+      getBenchmarks: async () => ({
+        leadToQualifiedRate: 0.4,
+        qualifiedToBookingRate: 0.5,
+        bookingToClosedRate: 0.25,
+        leadToClosedRate: 0.06,
+      }),
+    }),
+    createInsightsProvider: (_adsClient) => ({
+      // Stub insights provider — real implementation delegates to MetaCampaignInsightsProvider
       getCampaignLearningData: async () => ({
         effectiveStatus: "ACTIVE",
         learningPhase: false,
         lastModifiedDays: 30,
         optimizationEvents: 100,
       }),
-      getDaysAboveTarget: async () => 0,
+      getTargetBreachStatus: async () => ({
+        periodsAboveTarget: 0,
+        granularity: "daily",
+        isApproximate: false,
+      }),
     }),
     saveAuditReport: async (deploymentId, report) => {
       const deployment = await deploymentStore.findById(deploymentId);

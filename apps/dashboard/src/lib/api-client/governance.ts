@@ -204,4 +204,11 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
       { method: "POST", body: JSON.stringify({ message }) },
     );
   }
+
+  async resolveEscalation(id: string, resolutionNote?: string) {
+    return this.request<{ escalation: unknown }>(`/api/escalations/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ resolutionNote }),
+    });
+  }
 }

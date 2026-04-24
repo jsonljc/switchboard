@@ -52,6 +52,14 @@ export class ChannelGateway {
       content: message.text,
     });
 
+    // 3b. Check for human override — skip skill dispatch if owner has taken over
+    if (this.config.conversationStore.getConversationStatus) {
+      const status = await this.config.conversationStore.getConversationStatus(message.sessionId);
+      if (status === "human_override") {
+        return;
+      }
+    }
+
     // 4. Signal typing
     replySink.onTyping?.();
 

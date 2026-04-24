@@ -96,3 +96,4 @@ export { PrismaReconciliationStore } from "./stores/prisma-reconciliation-store.
 export { PrismaLifecycleStore } from "./storage/prisma-lifecycle-store.js";
 export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";
 export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
+export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
