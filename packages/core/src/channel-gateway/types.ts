@@ -30,6 +30,7 @@ export interface GatewayConversationStore {
     messages: Array<{ role: string; content: string }>;
   }>;
   addMessage(conversationId: string, role: string, content: string): Promise<void>;
+  getConversationStatus?(sessionId: string): Promise<string | null>;
 }
 
 export interface IncomingChannelMessage {

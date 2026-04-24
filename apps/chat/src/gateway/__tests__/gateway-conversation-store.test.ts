@@ -12,6 +12,9 @@ describe("PrismaGatewayConversationStore", () => {
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    conversationState: {
+      findUnique: vi.fn(),
+    },
   };
 
   beforeEach(() => {
@@ -89,5 +92,35 @@ describe("PrismaGatewayConversationStore", () => {
         }),
       }),
     );
+  });
+
+  describe("getConversationStatus", () => {
+    it("returns status from ConversationState when it exists", async () => {
+      mockPrisma.conversationState.findUnique.mockResolvedValue({
+        status: "human_override",
+      });
+
+      const store = new PrismaGatewayConversationStore(mockPrisma as never);
+      const result = await store.getConversationStatus("session-1");
+
+      expect(result).toBe("human_override");
+      expect(mockPrisma.conversationState.findUnique).toHaveBeenCalledWith({
+        where: { threadId: "session-1" },
+        select: { status: true },
+      });
+    });
+
+    it("returns null when no ConversationState exists for sessionId", async () => {
+      mockPrisma.conversationState.findUnique.mockResolvedValue(null);
+
+      const store = new PrismaGatewayConversationStore(mockPrisma as never);
+      const result = await store.getConversationStatus("nonexistent");
+
+      expect(result).toBe(null);
+      expect(mockPrisma.conversationState.findUnique).toHaveBeenCalledWith({
+        where: { threadId: "nonexistent" },
+        select: { status: true },
+      });
+    });
   });
 });
