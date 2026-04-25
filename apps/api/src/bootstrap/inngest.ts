@@ -28,6 +28,8 @@ import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import { createReconciliationCron } from "../services/cron/reconciliation.js";
 import type { ReconciliationCronDeps } from "../services/cron/reconciliation.js";
+import { createLeadRetryCron } from "../services/cron/lead-retry.js";
+import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 
 export async function registerInngest(app: FastifyInstance): Promise<void> {
   if (!app.prisma) {
@@ -203,6 +205,91 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
     },
   };
 
+  // Lead retry cron dependencies
+  const leadRetryDeps: LeadRetryCronDeps = {
+    findPendingLeads: async () => {
+      const now = new Date();
+      const records = await app.prisma!.pendingLeadRetry.findMany({
+        where: {
+          resolvedAt: null,
+          nextRetryAt: { lte: now },
+          attempts: { lt: 5 },
+        },
+        orderBy: { nextRetryAt: "asc" },
+        take: 100,
+      });
+      return records.map(
+        (r: {
+          id: string;
+          organizationId: string;
+          leadId: string;
+          adId: string;
+          formId: string;
+          reason: string;
+          attempts: number;
+          maxAttempts: number;
+        }) => ({
+          id: r.id,
+          organizationId: r.organizationId,
+          leadId: r.leadId,
+          adId: r.adId,
+          formId: r.formId,
+          reason: r.reason,
+          attempts: r.attempts,
+          maxAttempts: r.maxAttempts,
+        }),
+      );
+    },
+    getOrgAccessToken: async (orgId) => {
+      const deployment = await app.prisma!.agentDeployment.findFirst({
+        where: { organizationId: orgId, status: "active" },
+        select: { id: true },
+      });
+      if (!deployment) return null;
+      const connections = await connectionStore.listByDeployment(deployment.id);
+      const metaConn = connections.find((c) => c.type === "meta-ads" && c.status === "active");
+      if (!metaConn) return null;
+      const creds = decryptCredentials(metaConn.credentials);
+      return (creds.accessToken as string) ?? null;
+    },
+    fetchLeadDetail: async (leadId, accessToken) => {
+      const { fetchLeadDetail: fetchDetail } = await import("@switchboard/ad-optimizer");
+      return fetchDetail(leadId, accessToken);
+    },
+    extractFieldValue: (fields, name) => {
+      const f = fields?.find((x) => x.name === name);
+      return f?.values?.[0];
+    },
+    findExistingContact: async (orgId, phone) => {
+      const { PrismaContactStore } = await import("@switchboard/db");
+      const contactStore = new PrismaContactStore(app.prisma!);
+      return contactStore.findByPhone(orgId, phone);
+    },
+    createContact: async (data) => {
+      const { PrismaContactStore } = await import("@switchboard/db");
+      const store = new PrismaContactStore(app.prisma!);
+      return store.create(data as unknown as Parameters<typeof store.create>[0]);
+    },
+    markResolved: async (id) => {
+      await app.prisma!.pendingLeadRetry.update({
+        where: { id },
+        data: { resolvedAt: new Date() },
+      });
+    },
+    incrementAttempt: async (id, nextRetryAt) => {
+      await app.prisma!.pendingLeadRetry.update({
+        where: { id },
+        data: { attempts: { increment: 1 }, nextRetryAt },
+      });
+    },
+    markExhausted: async (id) => {
+      await app.prisma!.pendingLeadRetry.update({
+        where: { id },
+        data: { resolvedAt: new Date(), attempts: { increment: 1 } },
+      });
+    },
+  };
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -230,6 +317,7 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       createDailyCheckCron(adOptimizerDeps),
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
+      createLeadRetryCron(leadRetryDeps),
     ],
   });
 

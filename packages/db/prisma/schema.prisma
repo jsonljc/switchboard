@@ -1662,3 +1662,24 @@ model ReconciliationReport {
   @@index([organizationId, createdAt])
 }
 
+// ---------------------------------------------------------------------------
+// PendingLeadRetry — queued leads for retry when token unavailable
+// ---------------------------------------------------------------------------
+
+model PendingLeadRetry {
+  id             String    @id @default(uuid())
+  organizationId String
+  leadId         String
+  adId           String
+  formId         String
+  reason         String    // "missing_token", "fetch_failed"
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  nextRetryAt    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  @@index([organizationId, resolvedAt])
+  @@index([nextRetryAt, resolvedAt])
+}
+

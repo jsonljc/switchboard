@@ -20,6 +20,11 @@ export interface ReadinessReport {
   checks: ReadinessCheck[];
 }
 
+export interface MetaAdsConnectionInfo {
+  exists: boolean;
+  expiresAt: Date | null;
+}
+
 export interface ReadinessContext {
   managedChannels: Array<{
     id: string;
@@ -46,9 +51,11 @@ export interface ReadinessContext {
     deploymentId: string;
     type: string;
     status: string;
+    metadata?: Record<string, unknown> | null;
   }>;
   playbook: Record<string, unknown>;
   scenariosTestedCount: number;
+  metaAdsConnection: MetaAdsConnectionInfo;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -110,8 +117,16 @@ export interface PrismaLike {
   deploymentConnection: {
     findMany(args: {
       where: { deploymentId: string };
-      select: { id: true; deploymentId: true; type: true; status: true };
-    }): Promise<Array<{ id: string; deploymentId: string; type: string; status: string }>>;
+      select: { id: true; deploymentId: true; type: true; status: true; metadata: true };
+    }): Promise<
+      Array<{
+        id: string;
+        deploymentId: string;
+        type: string;
+        status: string;
+        metadata: unknown;
+      }>
+    >;
   };
 }
 
@@ -155,7 +170,7 @@ export async function buildReadinessContext(
   const deploymentConnections = deployment
     ? await prisma.deploymentConnection.findMany({
         where: { deploymentId: deployment.id },
-        select: { id: true, deploymentId: true, type: true, status: true },
+        select: { id: true, deploymentId: true, type: true, status: true, metadata: true },
       })
     : [];
 
@@ -170,13 +185,32 @@ export async function buildReadinessContext(
       c.credentials !== null && c.credentials !== undefined ? String(c.credentials) : null,
   }));
 
+  const mappedDeploymentConnections = deploymentConnections.map((dc) => ({
+    id: dc.id,
+    deploymentId: dc.deploymentId,
+    type: dc.type,
+    status: dc.status,
+    metadata: (dc.metadata as Record<string, unknown> | null) ?? null,
+  }));
+
+  // Derive meta-ads connection info from deployment connections
+  const metaAdsDc = mappedDeploymentConnections.find(
+    (dc) => dc.type === "meta-ads" && dc.status === "active",
+  );
+  const metaAdsExpiresAtRaw = metaAdsDc?.metadata?.expiresAt;
+  const metaAdsConnection: MetaAdsConnectionInfo = {
+    exists: !!metaAdsDc,
+    expiresAt: typeof metaAdsExpiresAtRaw === "string" ? new Date(metaAdsExpiresAtRaw) : null,
+  };
+
   return {
     managedChannels,
     connections: mappedConnections,
     deployment,
-    deploymentConnections,
+    deploymentConnections: mappedDeploymentConnections,
     playbook,
     scenariosTestedCount,
+    metaAdsConnection,
   };
 }
 
@@ -208,6 +242,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 8. approval-mode-reviewed (advisory)
   checks.push(checkApprovalModeReviewed(ctx));
+
+  // 9. meta-ads-token
+  checks.push(checkMetaAdsToken(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -385,6 +422,48 @@ function checkApprovalModeReviewed(ctx: ReadinessContext): ReadinessCheck {
       ? "Approval mode has been reviewed"
       : "Approval mode not reviewed. Review your approval settings.",
   };
+}
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
+  const id = "meta-ads-token";
+  const label = "Meta Ads token valid";
+  const blocking = true;
+
+  if (!ctx.metaAdsConnection.exists) {
+    return { id, label, blocking, status: "fail", message: "Meta Ads not connected" };
+  }
+
+  if (!ctx.metaAdsConnection.expiresAt) {
+    // Connection exists but no expiry info — assume valid
+    return { id, label, blocking, status: "pass", message: "Meta Ads connected" };
+  }
+
+  const msUntilExpiry = ctx.metaAdsConnection.expiresAt.getTime() - Date.now();
+
+  if (msUntilExpiry <= 0) {
+    return {
+      id,
+      label,
+      blocking,
+      status: "fail",
+      message: "Meta Ads token expired — reconnect in Settings",
+    };
+  }
+
+  if (msUntilExpiry <= SEVEN_DAYS_MS) {
+    const daysLeft = Math.ceil(msUntilExpiry / (24 * 60 * 60 * 1000));
+    return {
+      id,
+      label,
+      blocking: false,
+      status: "pass",
+      message: `Meta Ads token expires in ${daysLeft} day(s) — consider reconnecting soon`,
+    };
+  }
+
+  return { id, label, blocking, status: "pass", message: "Meta Ads token is valid" };
 }
 
 // ── Fastify route ───────────────────────────────────────────────────────────

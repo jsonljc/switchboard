@@ -1,6 +1,14 @@
 import type { WorkflowHandler, WorkflowRuntimeServices } from "@switchboard/core/platform";
 import type { LeadData } from "@switchboard/ad-optimizer";
 
+interface PendingLeadRetryCreate {
+  organizationId: string;
+  leadId: string;
+  adId: string;
+  formId: string;
+  reason: string;
+}
+
 interface MetaLeadIntakeDeps {
   prisma: unknown;
   accessToken?: string;
@@ -18,6 +26,7 @@ interface MetaLeadIntakeDeps {
   ) => string | undefined;
   findExistingContact?: (orgId: string, phone: string) => Promise<{ attribution?: unknown } | null>;
   createContact?: (data: Record<string, unknown>) => Promise<{ id: string }>;
+  savePendingRetry?: (data: PendingLeadRetryCreate) => Promise<void>;
 }
 
 export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowHandler {
@@ -35,7 +44,8 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
 
       let findExistingContact = deps.findExistingContact;
       let createContact = deps.createContact;
-      if (!findExistingContact || !createContact) {
+      let savePendingRetry = deps.savePendingRetry;
+      if (!findExistingContact || !createContact || !savePendingRetry) {
         const { PrismaContactStore } = await import("@switchboard/db");
         const prisma = deps.prisma as import("@switchboard/db").PrismaClient;
         const contactStore = new PrismaContactStore(prisma);
@@ -45,9 +55,43 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           (contactStore.create.bind(contactStore) as unknown as (
             data: Record<string, unknown>,
           ) => Promise<{ id: string }>);
+        savePendingRetry =
+          savePendingRetry ??
+          (async (data: PendingLeadRetryCreate) => {
+            type PrismaWithRetry = {
+              pendingLeadRetry: {
+                create: (args: { data: PendingLeadRetryCreate }) => Promise<unknown>;
+              };
+            };
+            await (prisma as unknown as PrismaWithRetry).pendingLeadRetry.create({ data });
+          });
       }
 
       const webhookLeads = parseLeadWebhook(input.payload);
+
+      // Fail loudly when leads arrive but no access token is configured
+      if (webhookLeads.length > 0 && !deps.accessToken) {
+        for (const lead of webhookLeads) {
+          await savePendingRetry!({
+            organizationId: workUnit.organizationId,
+            leadId: lead.leadId,
+            adId: lead.adId,
+            formId: lead.formId,
+            reason: "missing_token",
+          });
+        }
+        return {
+          outcome: "failed",
+          summary: `${webhookLeads.length} lead(s) queued for retry — Meta Ads access token not configured`,
+          outputs: { pendingLeadIds: webhookLeads.map((l) => l.leadId) },
+          error: {
+            code: "MISSING_ACCESS_TOKEN",
+            message:
+              "Meta Ads connection required to process leads. Connect Meta Ads in Settings > Channels.",
+          },
+        };
+      }
+
       let created = 0;
       const childFailures: Array<{ intent: string; leadId: string; error: string }> = [];
 
@@ -65,7 +109,14 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
             phone = extractField(detail.field_data, "phone_number");
             campaignId = detail.campaign_id;
           } catch {
-            console.warn(`[meta-lead-intake] Failed to fetch detail for lead ${lead.leadId}`);
+            await savePendingRetry!({
+              organizationId: workUnit.organizationId,
+              leadId: lead.leadId,
+              adId: lead.adId,
+              formId: lead.formId,
+              reason: "fetch_failed",
+            });
+            continue;
           }
         }
 
