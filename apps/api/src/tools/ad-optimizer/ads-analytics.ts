@@ -1,4 +1,8 @@
 import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
+import type {
+  MetricTrendSchema as MetricTrend,
+  CreativeEntrySchema as CreativeEntry,
+} from "@switchboard/schemas";
 import type { SkillTool, EffectCategory } from "@switchboard/core/skill-runtime";
 import { ok } from "@switchboard/core/skill-runtime";
 import {
@@ -6,6 +10,8 @@ import {
   comparePeriods,
   analyzeFunnel,
   LearningPhaseGuard,
+  detectSaturation,
+  analyzeCreatives,
 } from "@switchboard/ad-optimizer";
 import type { MetricSet, FunnelInput, CampaignLearningInput } from "@switchboard/ad-optimizer";
 
@@ -90,6 +96,64 @@ export function createAdsAnalyticsTool(): SkillTool {
             input: CampaignLearningInput;
           };
           const result = learningGuard.check(campaignId, input);
+          return ok(result as Record<string, unknown>);
+        },
+      },
+
+      "detect-saturation": {
+        description:
+          "Detect audience saturation, creative fatigue, or campaign decay signals for an ad set.",
+        effectCategory: TIER,
+        idempotent: true,
+        inputSchema: {
+          type: "object",
+          properties: {
+            adSetId: { type: "string" },
+            trends: { type: "array", description: "MetricTrend[] from trend engine" },
+            audienceReachedRatio: { type: "number" },
+            weeklyConversionRates: { type: "array", items: { type: "number" } },
+          },
+          required: ["adSetId", "trends"],
+        },
+        execute: async (params: unknown) => {
+          const { adSetId, trends, audienceReachedRatio, weeklyConversionRates } = params as {
+            adSetId: string;
+            trends: MetricTrend[];
+            audienceReachedRatio?: number | null;
+            weeklyConversionRates?: number[] | null;
+          };
+          const signals = detectSaturation(
+            adSetId,
+            trends,
+            audienceReachedRatio ?? null,
+            weeklyConversionRates ?? null,
+          );
+          return ok({ signals });
+        },
+      },
+
+      "analyze-creatives": {
+        description:
+          "Analyze creative-level performance for a campaign. Returns ranking, diagnoses, and recommendations.",
+        effectCategory: TIER,
+        idempotent: true,
+        inputSchema: {
+          type: "object",
+          properties: {
+            campaignId: { type: "string" },
+            creativeEntries: {
+              type: "array",
+              description: "CreativeEntry[] from deduplication",
+            },
+          },
+          required: ["campaignId", "creativeEntries"],
+        },
+        execute: async (params: unknown) => {
+          const { campaignId, creativeEntries } = params as {
+            campaignId: string;
+            creativeEntries: CreativeEntry[];
+          };
+          const result = analyzeCreatives(campaignId, creativeEntries);
           return ok(result as Record<string, unknown>);
         },
       },
