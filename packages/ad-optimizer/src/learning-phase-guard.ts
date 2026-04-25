@@ -46,19 +46,16 @@ export class LearningPhaseGuard {
 
     const inLearning = learningPhase || dataSignalsLearning;
 
-    let estimatedExitDate: Date | null = null;
-    if (inLearning) {
-      const remainingDays = LEARNING_DAYS - lastModifiedDays;
-      estimatedExitDate = new Date(Date.now() + remainingDays * MS_PER_DAY);
-    }
+    const state: LearningPhaseStatus["state"] = inLearning ? "learning" : "success";
 
     return {
+      adSetId: campaignId,
+      adSetName: campaignId,
       campaignId,
-      inLearning,
-      daysSinceChange: lastModifiedDays,
-      eventsAccumulated: optimizationEvents,
-      eventsRequired: LEARNING_EVENTS_REQUIRED,
-      estimatedExitDate,
+      state,
+      metricsSnapshot: null,
+      postExitSnapshot: null,
+      exitStability: state === "success" ? "pending" : null,
     };
   }
 
@@ -72,19 +69,15 @@ export class LearningPhaseGuard {
     recommendation: RecommendationOutput,
     status: LearningPhaseStatus,
   ): RecommendationOutput | WatchOutput {
-    if (!status.inLearning) {
+    if (status.state !== "learning") {
       return recommendation;
     }
 
-    const { daysSinceChange, eventsAccumulated, eventsRequired, estimatedExitDate } = status;
-
-    const checkBackDate = estimatedExitDate
-      ? (estimatedExitDate.toISOString().split("T")[0] ?? "")
-      : (new Date().toISOString().split("T")[0] ?? "");
+    const checkBackDate =
+      new Date(Date.now() + LEARNING_DAYS * MS_PER_DAY).toISOString().split("T")[0] ?? "";
 
     const message =
-      `Campaign is in learning (Day ${daysSinceChange}/${LEARNING_DAYS}, ` +
-      `${eventsAccumulated}/${eventsRequired} events). ` +
+      `Campaign is in learning. ` +
       `${recommendation.action} recommendation held until learning completes.`;
 
     const watch: WatchOutput = {

@@ -14,7 +14,8 @@ export type { RecommendationOutput };
 // ── Constants ──
 
 const MAX_BUDGET_INCREASE_PERCENT = 20;
-const KILL_CPA_MULTIPLIER = 2;
+const ADD_CREATIVE_CPA_MULTIPLIER = 2;
+const PAUSE_CPA_MULTIPLIER = 3;
 const KILL_DAYS_THRESHOLD = 7;
 
 // ── Input type ──
@@ -62,7 +63,7 @@ function makeRec(
   };
 }
 
-function addKillRecommendation(
+function addCreativeRecommendation(
   results: RecommendationOutput[],
   base: Pick<RecommendationInput, "campaignId" | "campaignName">,
   cpa: number,
@@ -70,16 +71,41 @@ function addKillRecommendation(
   targetBreach: TargetBreachResult,
 ): void {
   const multiplier = (cpa / targetCPA).toFixed(1);
+  const periods = targetBreach.periodsAboveTarget;
   results.push(
     makeRec(
       base,
-      "kill",
-      0.85,
-      "immediate",
-      "Campaign is significantly over target CPA and should be paused immediately",
+      "add_creative",
+      0.8,
+      "this_week",
+      "CPA significantly above target — add fresh creatives and reduce budget on underperforming ads",
       [
-        "Pause campaign in Ads Manager",
-        `CPA has been ${multiplier}x target for ${targetBreach.periodsAboveTarget} days`,
+        "Add fresh creatives alongside existing ads",
+        "Reduce budget on underperforming ads once replacements are delivering",
+        `CPA has been ${multiplier}x target for ${periods} days`,
+      ],
+      "will reset learning",
+    ),
+  );
+}
+
+function addPauseRecommendation(
+  results: RecommendationOutput[],
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+  cpa: number,
+  targetCPA: number,
+): void {
+  const multiplier = (cpa / targetCPA).toFixed(1);
+  results.push(
+    makeRec(
+      base,
+      "pause",
+      0.9,
+      "immediate",
+      "Campaign is critically over target CPA — pause to stop financial loss",
+      [
+        "Pause campaign in Ads Manager immediately",
+        `CPA is ${multiplier}x target — active financial loss`,
       ],
       "no impact",
     ),
@@ -117,20 +143,24 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   const results: RecommendationOutput[] = [];
   const base = { campaignId, campaignName };
 
-  const isAboveKillCpa = cpa > KILL_CPA_MULTIPLIER * targetCPA;
+  const isAboveAddCreativeCpa = cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
+  const isAbovePauseCpa = cpa > PAUSE_CPA_MULTIPLIER * targetCPA;
 
-  // Daily data — high confidence pause/kill
+  // Daily data — add_creative at 2x, pause at 3x
   if (
-    isAboveKillCpa &&
+    isAboveAddCreativeCpa &&
     targetBreach.granularity === "daily" &&
     targetBreach.periodsAboveTarget >= KILL_DAYS_THRESHOLD
   ) {
-    addKillRecommendation(results, base, cpa, targetCPA, targetBreach);
+    addCreativeRecommendation(results, base, cpa, targetCPA, targetBreach);
+    if (isAbovePauseCpa) {
+      addPauseRecommendation(results, base, cpa, targetCPA);
+    }
   }
 
-  // Weekly approximation — review/reduce-budget signal, NOT kill
+  // Weekly approximation — review/reduce-budget signal, NOT pause
   if (
-    isAboveKillCpa &&
+    isAboveAddCreativeCpa &&
     targetBreach.granularity === "weekly" &&
     targetBreach.periodsAboveTarget >= 1
   ) {

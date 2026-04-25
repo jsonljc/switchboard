@@ -54,9 +54,8 @@ describe("LearningPhaseGuard", () => {
       });
       const status = guard.check(CAMPAIGN_ID, input);
 
-      expect(status.inLearning).toBe(true);
+      expect(status.state).toBe("learning");
       expect(status.campaignId).toBe(CAMPAIGN_ID);
-      expect(status.estimatedExitDate).not.toBeNull();
     });
 
     it("detects learning from data when lastModifiedDays<7 AND events<50 even when API says stable", () => {
@@ -67,11 +66,7 @@ describe("LearningPhaseGuard", () => {
       });
       const status = guard.check(CAMPAIGN_ID, input);
 
-      expect(status.inLearning).toBe(true);
-      expect(status.daysSinceChange).toBe(3);
-      expect(status.eventsAccumulated).toBe(20);
-      expect(status.eventsRequired).toBe(50);
-      expect(status.estimatedExitDate).not.toBeNull();
+      expect(status.state).toBe("learning");
     });
 
     it("marks stable when past 7 days with sufficient events", () => {
@@ -82,8 +77,7 @@ describe("LearningPhaseGuard", () => {
       });
       const status = guard.check(CAMPAIGN_ID, input);
 
-      expect(status.inLearning).toBe(false);
-      expect(status.estimatedExitDate).toBeNull();
+      expect(status.state).toBe("success");
     });
   });
 

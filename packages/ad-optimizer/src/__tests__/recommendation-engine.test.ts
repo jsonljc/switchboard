@@ -21,7 +21,7 @@ function makeDiagnosis(pattern: string): Diagnosis {
 }
 
 describe("generateRecommendations", () => {
-  it("generates kill recommendation when CPA > 2x targetCPA and daysAboveTarget >= 7", () => {
+  it("generates add_creative recommendation when CPA > 2x targetCPA and daysAboveTarget >= 7", () => {
     const input: RecommendationInput = {
       campaignId: "camp-1",
       campaignName: "Test Campaign",
@@ -35,10 +35,10 @@ describe("generateRecommendations", () => {
 
     const result = generateRecommendations(input);
 
-    const kill = result.find((r) => r.action === "kill");
-    expect(kill).toBeDefined();
-    expect(kill?.urgency).toBe("immediate");
-    expect(kill?.confidence).toBe(0.85);
+    const addCreative = result.find((r) => r.action === "add_creative");
+    expect(addCreative).toBeDefined();
+    expect(addCreative?.urgency).toBe("this_week");
+    expect(addCreative?.confidence).toBe(0.8);
   });
 
   it("generates scale recommendation when CPA < 0.8x targetCPA, daysAboveTarget=0, no diagnoses", () => {
@@ -176,7 +176,7 @@ describe("generateRecommendations", () => {
     expect(hold?.urgency).toBe("this_week");
   });
 
-  it("does not generate kill when daysAboveTarget < 7", () => {
+  it("does not generate add_creative when daysAboveTarget < 7", () => {
     const input: RecommendationInput = {
       campaignId: "camp-9",
       campaignName: "Not Dead Yet",
@@ -190,8 +190,8 @@ describe("generateRecommendations", () => {
 
     const result = generateRecommendations(input);
 
-    const kill = result.find((r) => r.action === "kill");
-    expect(kill).toBeUndefined();
+    const addCreative = result.find((r) => r.action === "add_creative");
+    expect(addCreative).toBeUndefined();
   });
 
   it("does not generate scale when diagnoses exist", () => {
@@ -258,7 +258,7 @@ describe("generateRecommendations", () => {
     expect(review?.confidence).toBe(0.65);
   });
 
-  it("does not generate kill for weekly breach", () => {
+  it("does not generate add_creative for weekly breach", () => {
     const input: RecommendationInput = {
       campaignId: "camp-weekly-2",
       campaignName: "Weekly No Kill",
@@ -272,9 +272,68 @@ describe("generateRecommendations", () => {
 
     const result = generateRecommendations(input);
 
-    const kill = result.find((r) => r.action === "kill");
-    expect(kill).toBeUndefined();
+    const addCreative = result.find((r) => r.action === "add_creative");
+    expect(addCreative).toBeUndefined();
     const review = result.find((r) => r.action === "review_budget");
     expect(review).toBeDefined();
+  });
+
+  it("generates add_creative instead of kill when CPA > 2x target (daily, 7+ days)", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-add-creative",
+      campaignName: "Add Creative Campaign",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 250, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+    };
+
+    const result = generateRecommendations(input);
+
+    const addCreative = result.find((r) => r.action === "add_creative");
+    expect(addCreative).toBeDefined();
+    const kill = result.find((r) => r.action === "kill");
+    expect(kill).toBeUndefined();
+  });
+
+  it("generates pause only when CPA > 3x target", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-pause",
+      campaignName: "Extreme CPA Campaign",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 350, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+    };
+
+    const result = generateRecommendations(input);
+
+    const pause = result.find((r) => r.action === "pause");
+    expect(pause).toBeDefined();
+    expect(pause?.urgency).toBe("immediate");
+    expect(pause?.confidence).toBe(0.9);
+  });
+
+  it("adds learning phase reset warning to restructure recommendations", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-restructure",
+      campaignName: "Restructure Campaign",
+      diagnoses: [makeDiagnosis("audience_saturation")],
+      deltas: [makeDelta("cpa", 90, 80, "up", false)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+    };
+
+    const result = generateRecommendations(input);
+
+    const restructure = result.find((r) => r.action === "restructure");
+    expect(restructure).toBeDefined();
+    expect(restructure?.learningPhaseImpact).toBe("will reset learning");
   });
 });
