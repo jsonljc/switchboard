@@ -35,7 +35,7 @@
     "fastify-plugin": "^5.1.0",
     "googleapis": "^171.4.0",
     "inngest": "^4.2.0",
-    "ioredis": "^5.10.0",
+    "ioredis": "^5.10.1",
     "jose": "^6.2.2",
     "pino": "^9.0.0",
     "prom-client": "^15.1.0",
