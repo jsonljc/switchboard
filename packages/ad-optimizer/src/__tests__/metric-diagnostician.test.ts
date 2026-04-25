@@ -142,4 +142,26 @@ describe("diagnose", () => {
     const patterns = result.map((d) => d.pattern);
     expect(patterns).not.toContain("account_level_issue");
   });
+
+  it("detects creative_fatigue without fixed frequency threshold — uses trend direction", () => {
+    const deltas: MetricDelta[] = [
+      makeDelta("cpm", 10, 10, "stable", false),
+      makeDelta("ctr", 1.0, 2.0, "down", true),
+      makeDelta("cpa", 30, 20, "up", true),
+      makeDelta("frequency", 2.8, 2.0, "up", true),
+    ];
+    const result = diagnose(deltas);
+    expect(result.map((d) => d.pattern)).toContain("creative_fatigue");
+  });
+
+  it("does not require frequency > 3.5 for creative_fatigue", () => {
+    const deltas: MetricDelta[] = [
+      makeDelta("cpm", 10, 10, "stable", false),
+      makeDelta("ctr", 1.0, 2.0, "down", true),
+      makeDelta("cpa", 30, 20, "up", true),
+      makeDelta("frequency", 2.5, 1.8, "up", true),
+    ];
+    const result = diagnose(deltas);
+    expect(result.find((d) => d.pattern === "creative_fatigue")).toBeDefined();
+  });
 });
