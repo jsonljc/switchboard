@@ -294,8 +294,8 @@ describe("generateRecommendations", () => {
 
     const addCreative = result.find((r) => r.action === "add_creative");
     expect(addCreative).toBeDefined();
-    const kill = result.find((r) => r.action === "kill");
-    expect(kill).toBeUndefined();
+    const pause = result.find((r) => r.action === "pause");
+    expect(pause).toBeUndefined();
   });
 
   it("generates pause only when CPA > 3x target", () => {

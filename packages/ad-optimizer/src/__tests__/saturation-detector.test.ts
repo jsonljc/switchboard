@@ -11,7 +11,7 @@ describe("detectSaturation", () => {
     metric,
     direction,
     consecutiveWeeks,
-    tier: "warning",
+    tier: consecutiveWeeks >= 3 ? "confirmed" : consecutiveWeeks >= 1 ? "alert" : "stable",
     projectedBreachWeeks: null,
   });
 
