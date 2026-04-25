@@ -32,3 +32,5 @@ export { buildConversionEvent } from "./crm-event-emitter.js";
 export type { BuildConversionEventParams } from "./crm-event-emitter.js";
 export { MetaCAPIDispatcher } from "./meta-capi-dispatcher.js";
 export { MetaCampaignInsightsProvider } from "./meta-campaign-insights-provider.js";
+export { deduplicateCreatives, analyzeCreatives } from "./creative-analyzer.js";
+export type { RawAdData } from "./creative-analyzer.js";
