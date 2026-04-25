@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { CreditCard, Check, ExternalLink, AlertTriangle } from "lucide-react";
+import { CreditCard, Check, ExternalLink, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ interface Plan {
   name: string;
   price: string;
   priceId: string;
+  envKey: string;
   popular?: boolean;
   features: readonly string[];
 }
@@ -22,13 +23,15 @@ const PLANS: readonly Plan[] = [
   {
     name: "Starter",
     price: "$49",
-    priceId: "price_starter",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER || "",
+    envKey: "NEXT_PUBLIC_STRIPE_PRICE_STARTER",
     features: ["1 AI operator", "500 conversations/mo", "Email + chat support", "Basic analytics"],
   },
   {
     name: "Pro",
     price: "$149",
-    priceId: "price_pro",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO || "",
+    envKey: "NEXT_PUBLIC_STRIPE_PRICE_PRO",
     popular: true,
     features: [
       "3 AI operators",
@@ -41,7 +44,8 @@ const PLANS: readonly Plan[] = [
   {
     name: "Scale",
     price: "$399",
-    priceId: "price_scale",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_SCALE || "",
+    envKey: "NEXT_PUBLIC_STRIPE_PRICE_SCALE",
     features: [
       "Unlimited operators",
       "Unlimited conversations",
@@ -52,6 +56,8 @@ const PLANS: readonly Plan[] = [
     ],
   },
 ];
+
+const stripeConfigured = PLANS.some((p) => p.priceId !== "");
 
 function StatusBadge({ status }: { status: string }) {
   const variant =
@@ -88,7 +94,7 @@ function formatDate(iso: string | null): string {
 
 export default function BillingPage() {
   const { status: sessionStatus } = useSession();
-  const { data: billing, isLoading, isError, error, refetch } = useBillingStatus();
+  const { data: billing, isLoading, isError, refetch } = useBillingStatus();
   const checkout = useCheckout();
   const portal = usePortal();
 
@@ -110,19 +116,24 @@ export default function BillingPage() {
     });
   };
 
-  if (isError) {
+  // If Stripe is not configured or the API returns an error, show a friendly placeholder
+  if (!stripeConfigured || isError) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Billing</h1>
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <div className="flex items-center gap-2 text-destructive mb-2">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="font-medium">Failed to load billing</span>
-          </div>
-          <p className="text-[15px] text-muted-foreground mb-4">{(error as Error)?.message}</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Retry
-          </Button>
+        <div className="rounded-lg border border-border bg-surface p-8 text-center">
+          <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+          <h2 className="text-lg font-medium text-foreground mb-1">
+            Billing will be available soon
+          </h2>
+          <p className="text-[15px] text-muted-foreground max-w-md mx-auto">
+            {"You're on the free beta right now. We'll notify you when paid plans are ready."}
+          </p>
+          {isError && (
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -203,9 +214,10 @@ export default function BillingPage() {
         <div className="grid gap-4 md:grid-cols-3">
           {PLANS.map((plan) => {
             const isCurrent = billing?.priceId === plan.priceId;
+            const missingPrice = !plan.priceId;
             return (
               <Card
-                key={plan.priceId}
+                key={plan.envKey}
                 className={cn(
                   "relative",
                   plan.popular && "ring-1 ring-primary",
@@ -244,10 +256,16 @@ export default function BillingPage() {
                     className="w-full"
                     variant={isCurrent ? "outline" : "default"}
                     size="sm"
-                    disabled={isCurrent || checkout.isPending}
+                    disabled={isCurrent || missingPrice || checkout.isPending}
                     onClick={() => handleUpgrade(plan.priceId)}
                   >
-                    {isCurrent ? "Current Plan" : checkout.isPending ? "Redirecting..." : "Upgrade"}
+                    {isCurrent
+                      ? "Current Plan"
+                      : missingPrice
+                        ? "Coming Soon"
+                        : checkout.isPending
+                          ? "Redirecting..."
+                          : "Upgrade"}
                   </Button>
                 </CardContent>
               </Card>

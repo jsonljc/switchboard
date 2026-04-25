@@ -10,9 +10,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const [verificationSent, setVerificationSent] = useState(false);
   const _launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "public";
 
   async function handleSubmit(e: React.FormEvent) {
@@ -41,12 +39,7 @@ export default function SignupPage() {
         return;
       }
 
-      if (data.verificationEmailSent) {
-        setVerificationSent(true);
-        setLoading(false);
-        return;
-      }
-
+      // Auto sign-in immediately — email verification is advisory, not blocking
       const signInResult = await signIn("credentials", {
         email,
         password,
@@ -64,37 +57,6 @@ export default function SignupPage() {
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }
-  }
-
-  if (verificationSent) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#1A1714",
-          color: "#EDE8E1",
-          padding: "2rem",
-        }}
-      >
-        <div style={{ textAlign: "center", maxWidth: "24rem" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>
-            Check your email
-          </h1>
-          <p style={{ color: "#A09A93", marginBottom: "0.5rem" }}>We sent a verification link to</p>
-          <p style={{ fontWeight: 600, marginBottom: "1.5rem" }}>{email}</p>
-          <p style={{ color: "#7A736C", fontSize: "0.875rem" }}>
-            Click the link in the email to activate your account, then{" "}
-            <Link href="/login" style={{ color: "#A07850" }}>
-              sign in
-            </Link>
-            .
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -213,63 +175,57 @@ export default function SignupPage() {
             }}
           />
 
-          <label
-            htmlFor="agreedToTerms"
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "0.5rem",
-              marginBottom: "1.5rem",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              id="agreedToTerms"
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(e) => setAgreedToTerms(e.target.checked)}
-              style={{
-                marginTop: "0.25rem",
-                accentColor: "#A07850",
-                width: "1rem",
-                height: "1rem",
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ fontSize: "0.8125rem", color: "#A09A93", lineHeight: 1.5 }}>
-              I agree to the{" "}
-              <Link href="/terms" style={{ color: "#A07850", textDecoration: "underline" }}>
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" style={{ color: "#A07850", textDecoration: "underline" }}>
-                Privacy Policy
-              </Link>
-            </span>
-          </label>
-
           {error && (
             <p style={{ color: "#E5484D", fontSize: "0.875rem", marginBottom: "1rem" }}>{error}</p>
           )}
 
           <button
             type="submit"
-            disabled={loading || !agreedToTerms}
+            disabled={loading}
             style={{
               width: "100%",
               padding: "0.75rem",
-              background: loading || !agreedToTerms ? "#7A736C" : "#A07850",
+              background: loading ? "#7A736C" : "#A07850",
               color: "#1A1714",
               borderRadius: "9999px",
               border: "none",
               fontWeight: 600,
               fontSize: "0.9375rem",
-              cursor: loading || !agreedToTerms ? "not-allowed" : "pointer",
-              opacity: !agreedToTerms ? 0.6 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
             }}
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
+
+          <p
+            style={{
+              fontSize: "0.8125rem",
+              color: "#7A736C",
+              lineHeight: 1.5,
+              marginTop: "1rem",
+              textAlign: "center",
+            }}
+          >
+            By creating an account, you agree to our{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#A07850", textDecoration: "underline" }}
+            >
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#A07850", textDecoration: "underline" }}
+            >
+              Privacy Policy
+            </a>
+            .
+          </p>
         </form>
 
         <p

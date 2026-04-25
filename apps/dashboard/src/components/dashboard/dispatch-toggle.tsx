@@ -57,7 +57,7 @@ export function DispatchToggle() {
             margin: 0,
           }}
         >
-          Skill Dispatch
+          Alex
         </p>
         <p
           style={{
@@ -74,7 +74,7 @@ export function DispatchToggle() {
         type="button"
         disabled={pending}
         onClick={handleToggle}
-        aria-label={isPaused ? "Resume skill dispatch" : "Pause skill dispatch"}
+        aria-label={isPaused ? "Resume Alex" : "Pause Alex"}
         style={{
           display: "inline-flex",
           alignItems: "center",

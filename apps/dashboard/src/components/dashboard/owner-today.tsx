@@ -27,6 +27,7 @@ import { RecommendationBar } from "@/components/dashboard/recommendation-bar";
 import { SynergyStrip } from "@/components/dashboard/synergy-strip";
 import { EmergencyHaltButton } from "./emergency-halt-button";
 import { DispatchToggle } from "./dispatch-toggle";
+import { EmailVerificationBanner } from "./email-verification-banner";
 import { useOrgConfig } from "@/hooks/use-org-config";
 import { formatOrgCurrency } from "@/lib/format-currency";
 
@@ -325,6 +326,11 @@ export function OwnerToday() {
         <div style={{ marginTop: "32px" }}>
           <FirstRunBanner onDismiss={dismissBanner} />
         </div>
+      )}
+
+      {/* Email Verification Banner */}
+      {session?.user && !(session as unknown as Record<string, unknown>).emailVerified && (
+        <EmailVerificationBanner />
       )}
 
       {/* Dispatch Toggle + Emergency Halt */}

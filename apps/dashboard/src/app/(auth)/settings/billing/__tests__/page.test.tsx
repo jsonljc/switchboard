@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const useSessionMock = vi.fn();
@@ -31,18 +31,17 @@ vi.mock("@/hooks/use-billing", () => ({
   usePortal: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-import BillingPage from "../page";
+beforeEach(() => {
+  useSessionMock.mockReturnValue({ status: "authenticated" });
+});
 
 describe("BillingPage", () => {
-  it("renders plan cards when there is no subscription", () => {
-    useSessionMock.mockReturnValue({ status: "authenticated" });
-
+  it("shows coming-soon placeholder when Stripe price env vars are not set", async () => {
+    // Price env vars are not set in test environment, so the page shows placeholder
+    const { default: BillingPage } = await import("../page");
     render(<BillingPage />);
 
     expect(screen.getByText("Billing")).toBeInTheDocument();
-    expect(screen.getByText("Choose a Plan")).toBeInTheDocument();
-    expect(screen.getByText("Starter")).toBeInTheDocument();
-    expect(screen.getByText("Pro")).toBeInTheDocument();
-    expect(screen.getByText("Scale")).toBeInTheDocument();
+    expect(screen.getByText("Billing will be available soon")).toBeInTheDocument();
   });
 });

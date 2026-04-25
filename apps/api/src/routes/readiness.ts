@@ -56,6 +56,7 @@ export interface ReadinessContext {
   playbook: Record<string, unknown>;
   scenariosTestedCount: number;
   metaAdsConnection: MetaAdsConnectionInfo;
+  emailVerified: boolean;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -128,6 +129,11 @@ export interface PrismaLike {
       }>
     >;
   };
+  dashboardUser: {
+    findFirst(args: {
+      where: { organizationId: string; emailVerified: { not: null } };
+    }): Promise<{ id: string } | null>;
+  };
 }
 
 // ── Shared helper — assembles ReadinessContext from Prisma ──────────────────
@@ -136,7 +142,7 @@ export async function buildReadinessContext(
   prisma: PrismaLike,
   orgId: string,
 ): Promise<ReadinessContext> {
-  const [managedChannels, connections, deployment, orgConfig] = await Promise.all([
+  const [managedChannels, connections, deployment, orgConfig, verifiedUser] = await Promise.all([
     prisma.managedChannel.findMany({
       where: { organizationId: orgId },
       select: { id: true, channel: true, status: true, connectionId: true },
@@ -164,6 +170,9 @@ export async function buildReadinessContext(
     prisma.organizationConfig.findUnique({
       where: { id: orgId },
       select: { onboardingPlaybook: true, runtimeConfig: true },
+    }),
+    prisma.dashboardUser.findFirst({
+      where: { organizationId: orgId, emailVerified: { not: null } },
     }),
   ]);
 
@@ -211,6 +220,7 @@ export async function buildReadinessContext(
     playbook,
     scenariosTestedCount,
     metaAdsConnection,
+    emailVerified: verifiedUser !== null,
   };
 }
 
@@ -218,6 +228,9 @@ export async function buildReadinessContext(
 
 export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
   const checks: ReadinessCheck[] = [];
+
+  // 0. email-verified
+  checks.push(checkEmailVerified(ctx));
 
   // 1. channel-connected
   checks.push(checkChannelConnected(ctx));
@@ -252,6 +265,22 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 }
 
 // ── Individual checks ───────────────────────────────────────────────────────
+
+function checkEmailVerified(ctx: ReadinessContext): ReadinessCheck {
+  const id = "email-verified";
+  const label = "Email verified";
+  const blocking = true;
+
+  return {
+    id,
+    label,
+    blocking,
+    status: ctx.emailVerified ? "pass" : "fail",
+    message: ctx.emailVerified
+      ? "Account email has been verified"
+      : "Verify your email address before going live.",
+  };
+}
 
 function checkChannelConnected(ctx: ReadinessContext): ReadinessCheck {
   const id = "channel-connected";
@@ -429,7 +458,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
   const id = "meta-ads-token";
   const label = "Meta Ads token valid";
-  const blocking = true;
+  const blocking = false;
 
   if (!ctx.metaAdsConnection.exists) {
     return { id, label, blocking, status: "fail", message: "Meta Ads not connected" };
