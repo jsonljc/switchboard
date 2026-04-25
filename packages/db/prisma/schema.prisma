@@ -419,6 +419,12 @@ model OrganizationConfig {
   onboardingPlaybook   Json?
   onboardingStep       Int      @default(1)
   firstRunPhase        Json?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  subscriptionStatus   String    @default("none") // none, trialing, active, past_due, canceled
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]

@@ -22,7 +22,7 @@ export function buildCreativeJobSubmitWorkflow(_prisma: unknown): WorkflowHandle
         brandVoice?: string | null;
         productImages: string[];
         references: string[];
-        pastPerformance?: string | null;
+        pastPerformance?: Record<string, unknown> | null;
         generateReferenceImages: boolean;
       };
 

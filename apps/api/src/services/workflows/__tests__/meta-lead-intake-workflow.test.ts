@@ -70,7 +70,7 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     const workflow = buildMetaLeadIntakeWorkflow({
       prisma: {} as never,
       parseLeadWebhook: () => [
-        { leadId: "lead_1", adId: "ad_1", name: "No Phone", phone: null, email: null },
+        { leadId: "lead_1", adId: "ad_1", name: "No Phone", phone: undefined, email: undefined },
       ],
       findExistingContact: vi.fn(),
       createContact,
@@ -100,7 +100,7 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     );
 
     expect(result.outcome).toBe("completed");
-    expect(result.outputs.created).toBe(0);
+    expect(result.outputs!.created).toBe(0);
     expect(createContact).not.toHaveBeenCalled();
     expect(submitChildWork).not.toHaveBeenCalled();
   });
@@ -110,7 +110,7 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     const workflow = buildMetaLeadIntakeWorkflow({
       prisma: {} as never,
       parseLeadWebhook: () => [
-        { leadId: "lead_1", adId: "ad_1", name: "Dupe", phone: "+15550001", email: null },
+        { leadId: "lead_1", adId: "ad_1", name: "Dupe", phone: "+15550001", email: undefined },
       ],
       findExistingContact: vi.fn().mockResolvedValue({ attribution: { sourceAdId: "ad_1" } }),
       createContact,
@@ -139,7 +139,7 @@ describe("buildMetaLeadIntakeWorkflow", () => {
       { submitChildWork },
     );
 
-    expect(result.outputs.created).toBe(0);
+    expect(result.outputs!.created).toBe(0);
     expect(createContact).not.toHaveBeenCalled();
     expect(submitChildWork).not.toHaveBeenCalled();
   });

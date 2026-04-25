@@ -50,7 +50,7 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
 
   if (totalImpressions === 0) {
     const fallbackName = stages[1]?.name ?? "Clicks";
-    return { stages, leakagePoint: fallbackName, leakageMagnitude: 0 };
+    return { stages, leakagePoint: fallbackName, leakageMagnitude: 0, funnelShape: "website" };
   }
 
   const candidates = stages.slice(1);
@@ -63,5 +63,5 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
 
   const leakageMagnitude = worstStage.delta < 0 ? Math.abs(worstStage.delta) : 0;
 
-  return { stages, leakagePoint: worstStage.name, leakageMagnitude };
+  return { stages, leakagePoint: worstStage.name, leakageMagnitude, funnelShape: "website" };
 }

@@ -11,8 +11,6 @@ export interface Diagnosis {
 
 // ── Constants ──
 
-const FREQUENCY_THRESHOLD = 3.5;
-
 const COST_METRICS = new Set(["cpm", "cpc", "cpl", "cpa"]);
 const PERFORMANCE_METRICS = new Set(["ctr", "roas"]);
 
@@ -42,11 +40,14 @@ const RULES: Rule[] = [
     match: (map) => {
       const ctr = map.get("ctr");
       const freq = map.get("frequency");
+      const cpa = map.get("cpa");
       const cpm = map.get("cpm");
       const ctrDownSignificant = ctr !== undefined && ctr.direction === "down" && ctr.significant;
-      const freqHigh = freq !== undefined && freq.current > FREQUENCY_THRESHOLD;
+      const freqRising = freq !== undefined && freq.direction === "up" && freq.significant;
       const cpmNotSignificant = cpm === undefined || !cpm.significant;
-      return ctrDownSignificant && freqHigh && cpmNotSignificant;
+      const cpaRisingOrStable =
+        cpa === undefined || cpa.direction === "up" || cpa.direction === "stable";
+      return ctrDownSignificant && freqRising && cpmNotSignificant && cpaRisingOrStable;
     },
   },
   {
@@ -92,9 +93,9 @@ const RULES: Rule[] = [
     match: (map) => {
       const freq = map.get("frequency");
       const ctr = map.get("ctr");
-      const freqHigh = freq !== undefined && freq.current > FREQUENCY_THRESHOLD;
+      const freqRising = freq !== undefined && freq.direction === "up" && freq.significant;
       const ctrDownSignificant = ctr !== undefined && ctr.direction === "down" && ctr.significant;
-      return freqHigh && ctrDownSignificant;
+      return freqRising && ctrDownSignificant;
     },
   },
   {

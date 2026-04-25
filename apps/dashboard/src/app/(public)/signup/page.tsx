@@ -11,9 +11,10 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [verificationSent, setVerificationSent] = useState(false);
   const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "waitlist";
 
-  if (launchMode !== "beta") {
+  if (launchMode !== "beta" && launchMode !== "public") {
     return (
       <div
         style={{
@@ -67,6 +68,12 @@ export default function SignupPage() {
         return;
       }
 
+      if (data.verificationEmailSent) {
+        setVerificationSent(true);
+        setLoading(false);
+        return;
+      }
+
       const signInResult = await signIn("credentials", {
         email,
         password,
@@ -84,6 +91,37 @@ export default function SignupPage() {
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }
+  }
+
+  if (verificationSent) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#1A1714",
+          color: "#EDE8E1",
+          padding: "2rem",
+        }}
+      >
+        <div style={{ textAlign: "center", maxWidth: "24rem" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>
+            Check your email
+          </h1>
+          <p style={{ color: "#A09A93", marginBottom: "0.5rem" }}>We sent a verification link to</p>
+          <p style={{ fontWeight: 600, marginBottom: "1.5rem" }}>{email}</p>
+          <p style={{ color: "#7A736C", fontSize: "0.875rem" }}>
+            Click the link in the email to activate your account, then{" "}
+            <Link href="/login" style={{ color: "#A07850" }}>
+              sign in
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

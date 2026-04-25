@@ -4,12 +4,12 @@ interface MetaLeadIntakeDeps {
   prisma: unknown;
   parseLeadWebhook?: (payload: unknown) => Array<{
     leadId: string;
-    adId: string | null;
-    name: string | null;
-    phone: string | null;
-    email: string | null;
+    adId: string;
+    name?: string;
+    phone?: string;
+    email?: string;
   }>;
-  findExistingContact?: (orgId: string, phone: string) => Promise<{ attribution: unknown } | null>;
+  findExistingContact?: (orgId: string, phone: string) => Promise<{ attribution?: unknown } | null>;
   createContact?: (data: Record<string, unknown>) => Promise<{ id: string }>;
 }
 
@@ -21,11 +21,8 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
         greetingTemplateName: string;
       };
 
-      let parseLeadWebhook = deps.parseLeadWebhook;
-      if (!parseLeadWebhook) {
-        const mod = await import("@switchboard/ad-optimizer");
-        parseLeadWebhook = mod.parseLeadWebhook;
-      }
+      const parseLeadWebhook =
+        deps.parseLeadWebhook ?? (await import("@switchboard/ad-optimizer")).parseLeadWebhook;
 
       let findExistingContact = deps.findExistingContact;
       let createContact = deps.createContact;
@@ -35,7 +32,10 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
         const contactStore = new PrismaContactStore(prisma);
         findExistingContact = findExistingContact ?? contactStore.findByPhone.bind(contactStore);
         createContact =
-          createContact ?? (contactStore.create.bind(contactStore) as typeof createContact);
+          createContact ??
+          (contactStore.create.bind(contactStore) as unknown as (
+            data: Record<string, unknown>,
+          ) => Promise<{ id: string }>);
       }
 
       const leads = parseLeadWebhook(input.payload);

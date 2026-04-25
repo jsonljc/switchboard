@@ -9,10 +9,21 @@ import type {
   CrmDataProvider,
   MediaBenchmarks,
   CampaignInsightsProvider,
+  AdSetLearningInput,
+  MetricSnapshotSchema as MetricSnapshot,
+  AdSetDetailSchema as AdSetDetail,
+  FunnelAnalysisSchema as FunnelAnalysis,
+  TrendAnalysisSchema as TrendAnalysis,
+  BudgetAnalysisSchema as BudgetAnalysis,
+  CampaignBudgetEntrySchema as CampaignBudgetEntry,
 } from "@switchboard/schemas";
 import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { LearningPhaseGuard } from "./learning-phase-guard.js";
+import { LearningPhaseGuardV2 } from "./learning-phase-guard.js";
+import { detectFunnelShape } from "./funnel-detector.js";
+import { detectTrends } from "./trend-engine.js";
+import { analyzeBudgetDistribution } from "./budget-analyzer.js";
 import { diagnose } from "./metric-diagnostician.js";
 import { generateRecommendations } from "./recommendation-engine.js";
 
@@ -43,6 +54,16 @@ export interface AuditDependencies {
   crmDataProvider: CrmDataProvider;
   insightsProvider: CampaignInsightsProvider;
   config: AuditConfig;
+  getAdSetInsights?(params: {
+    dateRange: { since: string; until: string };
+    fields: string[];
+  }): Promise<AdSetLearningInput[]>;
+  getTrendData?(params: { accountId: string }): Promise<{
+    day30: MetricSnapshot;
+    day60: MetricSnapshot;
+    day90: MetricSnapshot;
+    weekly: MetricSnapshot[];
+  } | null>;
 }
 
 // ── Helpers ──
@@ -119,6 +140,9 @@ export class AuditRunner {
   private readonly insightsProvider: CampaignInsightsProvider;
   private readonly config: AuditConfig;
   private readonly learningGuard: LearningPhaseGuard;
+  private readonly learningGuardV2: LearningPhaseGuardV2;
+  private readonly getAdSetInsightsFn?: AuditDependencies["getAdSetInsights"];
+  private readonly getTrendDataFn?: AuditDependencies["getTrendData"];
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -126,6 +150,9 @@ export class AuditRunner {
     this.insightsProvider = deps.insightsProvider;
     this.config = deps.config;
     this.learningGuard = new LearningPhaseGuard();
+    this.learningGuardV2 = new LearningPhaseGuardV2();
+    this.getAdSetInsightsFn = deps.getAdSetInsights;
+    this.getTrendDataFn = deps.getTrendData;
   }
 
   async run(params: {
@@ -157,13 +184,24 @@ export class AuditRunner {
       }),
     ]);
 
-    // Step 3: Compute funnel analysis
-    const funnel = analyzeFunnel({
+    // Step 2b: Pull V2 data (ad set insights + trend data) if available
+    const [adSetData, trendRawData] = await Promise.all([
+      this.getAdSetInsightsFn
+        ? this.getAdSetInsightsFn({ dateRange, fields: INSIGHT_FIELDS })
+        : Promise.resolve(null),
+      this.getTrendDataFn
+        ? this.getTrendDataFn({ accountId: this.config.accountId })
+        : Promise.resolve(null),
+    ]);
+
+    // Step 3: Compute funnel analysis — wrap in array with funnelShape
+    const baseFunnel = analyzeFunnel({
       insights: currentInsights,
       crmData,
       crmBenchmarks,
       mediaBenchmarks: this.config.mediaBenchmarks,
     });
+    const funnel: FunnelAnalysis[] = [{ ...baseFunnel, funnelShape: "website" }];
 
     // Step 4: Aggregate metrics and compute period deltas
     const currentMetrics = aggregateMetrics(currentInsights);
@@ -190,7 +228,7 @@ export class AuditRunner {
         campaignId: insight.campaignId,
       });
       const learningStatus = this.learningGuard.check(insight.campaignId, learningInput);
-      if (learningStatus.inLearning) {
+      if (learningStatus.state === "learning" || learningStatus.state === "learning_limited") {
         campaignsInLearning++;
       }
 
@@ -263,7 +301,94 @@ export class AuditRunner {
       }
     }
 
-    // Step 6: Assemble report
+    // Step 6: V2 — Ad set level learning + details
+    let adSetsInLearning = 0;
+    let adSetsLearningLimited = 0;
+    let adSetDetails: AdSetDetail[] | undefined;
+
+    if (adSetData) {
+      adSetDetails = adSetData.map((input) => {
+        const learningStatus = this.learningGuardV2.classifyState(input);
+
+        if (learningStatus.state === "learning") {
+          adSetsInLearning++;
+        } else if (learningStatus.state === "learning_limited") {
+          adSetsLearningLimited++;
+        }
+
+        const destinationType = input.destinationType ?? "WEBSITE";
+        const funnelShape = detectFunnelShape(destinationType);
+
+        if (learningStatus.state === "learning_limited") {
+          const diagnosis = this.learningGuardV2.diagnoseLearningLimited(learningStatus, input);
+          const msg = `Ad set ${input.adSetId} is Learning Limited (${diagnosis.cause}). Recommended: ${diagnosis.recommendation}.`;
+          recommendations.push({
+            type: "recommendation",
+            campaignId: input.campaignId,
+            campaignName: input.adSetName,
+            action: diagnosis.recommendation as RecommendationOutput["action"],
+            confidence: 0.75,
+            urgency: "this_week",
+            estimatedImpact: msg,
+            steps: [msg],
+            learningPhaseImpact:
+              diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
+          });
+        }
+
+        return {
+          adSetId: input.adSetId,
+          adSetName: input.adSetName,
+          campaignId: input.campaignId,
+          destinationType,
+          funnelShape,
+          frequency: input.frequency,
+          learningStatus,
+          hasFrequencyCap: input.hasFrequencyCap ?? false,
+        };
+      });
+    }
+
+    // Step 7: V2 — Trends
+    let trends: TrendAnalysis | undefined;
+    if (trendRawData) {
+      const weeklyTrends = detectTrends(trendRawData.weekly);
+      trends = {
+        rollingAverages: {
+          day30: trendRawData.day30,
+          day60: trendRawData.day60,
+          day90: trendRawData.day90,
+        },
+        weeklySnapshots: trendRawData.weekly.map((w, i) => ({
+          weekStart: `week-${i}`,
+          weekEnd: `week-${i}`,
+          metrics: w,
+        })),
+        trends: weeklyTrends,
+      };
+    }
+
+    // Step 8: V2 — Budget distribution
+    let budgetDistribution: BudgetAnalysis | undefined;
+    if (currentInsights.length >= 2) {
+      const totalSpendAll = currentInsights.reduce((sum, i) => sum + i.spend, 0);
+      const budgetEntries: CampaignBudgetEntry[] = currentInsights.map((insight) => ({
+        campaignId: insight.campaignId,
+        campaignName: insight.campaignName,
+        spendShare: safeDivide(insight.spend, totalSpendAll),
+        spend: insight.spend,
+        cpa: safeDivide(insight.spend, insight.conversions),
+        roas: safeDivide(insight.revenue, insight.spend),
+        isCbo: false,
+        dailyBudget: null,
+        lifetimeBudget: null,
+        spendCap: null,
+        objective: "CONVERSIONS",
+      }));
+      budgetDistribution = analyzeBudgetDistribution(budgetEntries, this.config.targetCPA, null);
+    }
+
+    // Step 9: Assemble report
     const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
     const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
     const totalRevenue = currentInsights.reduce((sum, i) => sum + i.revenue, 0);
@@ -278,12 +403,17 @@ export class AuditRunner {
         overallROAS: safeDivide(totalRevenue, totalSpend),
         activeCampaigns: currentInsights.length,
         campaignsInLearning,
+        adSetsInLearning,
+        adSetsLearningLimited,
       },
       funnel,
       periodDeltas,
       insights,
       watches,
       recommendations,
+      ...(trends ? { trends } : {}),
+      ...(budgetDistribution ? { budgetDistribution } : {}),
+      ...(adSetDetails ? { adSetDetails } : {}),
     };
   }
 }

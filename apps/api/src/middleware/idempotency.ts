@@ -13,7 +13,10 @@ interface CacheEntry {
 
 function computeFingerprint(request: FastifyRequest): string {
   const method = request.method;
-  const route = request.routerPath ?? request.routeOptions.url ?? request.url;
+  const route =
+    (request as unknown as Record<string, string>).routerPath ??
+    request.routeOptions?.url ??
+    request.url;
   const orgId =
     request.organizationIdFromAuth ?? (request.headers["x-organization-id"] as string) ?? "";
   const actorId =

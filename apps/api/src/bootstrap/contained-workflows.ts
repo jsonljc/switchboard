@@ -52,11 +52,14 @@ export async function bootstrapContainedWorkflows(
       actor: request.actor,
       intent: request.intent,
       parameters: request.parameters,
-      deployment,
+      targetHint: deployment
+        ? { deploymentId: deployment.deploymentId, skillSlug: deployment.skillSlug }
+        : undefined,
       trigger: "internal",
+      surface: { surface: "api" },
       parentWorkUnitId: request.parentWorkUnitId,
       idempotencyKey: request.idempotencyKey,
-      priority: request.priority,
+      priority: request.priority as "low" | "normal" | "high" | undefined,
     });
   };
 

@@ -150,7 +150,37 @@ function buildMockDeps(
     mediaBenchmarks: makeMediaBenchmarks(),
   };
 
-  return { adsClient, crmDataProvider, insightsProvider, config };
+  return {
+    adsClient,
+    crmDataProvider,
+    insightsProvider,
+    config,
+    getAdSetInsights: vi.fn().mockResolvedValue([
+      {
+        adSetId: "adset-1",
+        adSetName: "Test Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "SUCCESS" as const,
+        frequency: 1.5,
+        spend: 5000,
+        conversions: 50,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+      },
+    ]),
+    getTrendData: vi.fn().mockResolvedValue({
+      day30: { cpm: 50, ctr: 2.0, cpc: 2.5, cpl: 100, cpa: 100, roas: 3.0 },
+      day60: { cpm: 48, ctr: 2.1, cpc: 2.4, cpl: 95, cpa: 95, roas: 3.1 },
+      day90: { cpm: 45, ctr: 2.2, cpc: 2.3, cpl: 90, cpa: 90, roas: 3.2 },
+      weekly: [
+        { cpm: 48, ctr: 2.1, cpc: 2.4, cpl: 95, cpa: 95, roas: 3.1 },
+        { cpm: 49, ctr: 2.0, cpc: 2.5, cpl: 98, cpa: 98, roas: 3.0 },
+        { cpm: 50, ctr: 2.0, cpc: 2.5, cpl: 100, cpa: 100, roas: 3.0 },
+        { cpm: 51, ctr: 1.9, cpc: 2.6, cpl: 102, cpa: 102, roas: 2.9 },
+      ],
+    }),
+  };
 }
 
 // ── Tests ──
@@ -170,7 +200,10 @@ describe("AuditRunner", () => {
     expect(report.dateRange).toEqual({ since: "2026-03-01", until: "2026-03-31" });
     expect(report.summary).toBeDefined();
     expect(report.funnel).toBeDefined();
-    expect(report.funnel.stages).toHaveLength(6);
+    expect(Array.isArray(report.funnel)).toBe(true);
+    expect(report.funnel).toHaveLength(1);
+    expect(report.funnel[0]!.stages).toHaveLength(6);
+    expect(report.funnel[0]!.funnelShape).toBe("website");
     expect(report.periodDeltas).toBeDefined();
     expect(Array.isArray(report.insights)).toBe(true);
     expect(Array.isArray(report.watches)).toBe(true);
@@ -249,5 +282,164 @@ describe("AuditRunner", () => {
     expect(stableInsight!.type).toBe("insight");
     expect(stableInsight!.message).toContain("ROAS");
     expect(stableInsight!.message).toContain("No changes recommended");
+  });
+
+  it("includes adSetDetails in audit report", async () => {
+    const deps = buildMockDeps();
+    const runner = new AuditRunner(deps);
+
+    const report = await runner.run({
+      dateRange: { since: "2026-03-01", until: "2026-03-31" },
+      previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+    });
+
+    expect(report.adSetDetails).toBeDefined();
+    expect(report.adSetDetails).toHaveLength(1);
+    expect(report.adSetDetails![0]!.adSetId).toBe("adset-1");
+    expect(report.adSetDetails![0]!.learningStatus.state).toBe("success");
+  });
+
+  it("includes trends in audit report", async () => {
+    const deps = buildMockDeps();
+    const runner = new AuditRunner(deps);
+
+    const report = await runner.run({
+      dateRange: { since: "2026-03-01", until: "2026-03-31" },
+      previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+    });
+
+    expect(report.trends).toBeDefined();
+    expect(report.trends!.rollingAverages.day30).toBeDefined();
+    expect(report.trends!.rollingAverages.day60).toBeDefined();
+    expect(report.trends!.rollingAverages.day90).toBeDefined();
+    expect(Array.isArray(report.trends!.trends)).toBe(true);
+  });
+
+  it("includes budgetDistribution in audit report", async () => {
+    const deps = buildMockDeps({
+      currentInsights: [
+        makeCampaignInsight({
+          campaignId: "camp-1",
+          spend: 5_000,
+          conversions: 50,
+          revenue: 15_000,
+        }),
+        makeCampaignInsight({
+          campaignId: "camp-2",
+          spend: 3_000,
+          conversions: 30,
+          revenue: 9_000,
+        }),
+      ],
+      previousInsights: [
+        makeCampaignInsight({ campaignId: "camp-1", spend: 4_500 }),
+        makeCampaignInsight({ campaignId: "camp-2", spend: 2_800 }),
+      ],
+    });
+    const runner = new AuditRunner(deps);
+
+    const report = await runner.run({
+      dateRange: { since: "2026-03-01", until: "2026-03-31" },
+      previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+    });
+
+    expect(report.budgetDistribution).toBeDefined();
+    expect(report.budgetDistribution!.entries).toHaveLength(2);
+    expect(report.budgetDistribution!.currency).toBe("USD");
+  });
+
+  it("returns funnel as array with detected shapes", async () => {
+    const deps = buildMockDeps();
+    // Mock ad sets with different destination types
+    (deps.getAdSetInsights as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        adSetId: "adset-1",
+        adSetName: "Website Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "SUCCESS" as const,
+        frequency: 1.5,
+        spend: 3000,
+        conversions: 30,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+        destinationType: "WEBSITE",
+      },
+      {
+        adSetId: "adset-2",
+        adSetName: "Instant Form Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "SUCCESS" as const,
+        frequency: 2.0,
+        spend: 2000,
+        conversions: 20,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+        destinationType: "ON_AD",
+      },
+    ]);
+
+    const runner = new AuditRunner(deps);
+    const report = await runner.run({
+      dateRange: { since: "2026-03-01", until: "2026-03-31" },
+      previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+    });
+
+    expect(Array.isArray(report.funnel)).toBe(true);
+    // At minimum the default website funnel from analyzeFunnel
+    expect(report.funnel.length).toBeGreaterThanOrEqual(1);
+    expect(report.funnel[0]!.funnelShape).toBeDefined();
+  });
+
+  it("tracks adSetsInLearning and adSetsLearningLimited in summary", async () => {
+    const deps = buildMockDeps();
+    (deps.getAdSetInsights as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        adSetId: "adset-1",
+        adSetName: "Learning Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "LEARNING" as const,
+        frequency: 1.5,
+        spend: 2000,
+        conversions: 20,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+      },
+      {
+        adSetId: "adset-2",
+        adSetName: "Limited Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "FAIL" as const,
+        frequency: 4.0,
+        spend: 3000,
+        conversions: 30,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+      },
+      {
+        adSetId: "adset-3",
+        adSetName: "Stable Ad Set",
+        campaignId: "camp-1",
+        learningStageStatus: "SUCCESS" as const,
+        frequency: 1.5,
+        spend: 5000,
+        conversions: 50,
+        cpa: 100,
+        roas: 3.0,
+        ctr: 2.0,
+      },
+    ]);
+
+    const runner = new AuditRunner(deps);
+    const report = await runner.run({
+      dateRange: { since: "2026-03-01", until: "2026-03-31" },
+      previousDateRange: { since: "2026-02-01", until: "2026-02-28" },
+    });
+
+    expect(report.summary.adSetsInLearning).toBe(1);
+    expect(report.summary.adSetsLearningLimited).toBe(1);
   });
 });
