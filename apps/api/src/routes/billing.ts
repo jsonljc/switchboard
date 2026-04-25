@@ -218,6 +218,15 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
           });
           break;
         }
+        case "customer.subscription.trial_will_end": {
+          if (result.data.trialEnd) {
+            await app.prisma.organizationConfig.update({
+              where: { id: orgId },
+              data: { trialEndsAt: new Date(result.data.trialEnd as string) },
+            });
+          }
+          break;
+        }
       }
 
       return reply.code(200).send({ received: true });

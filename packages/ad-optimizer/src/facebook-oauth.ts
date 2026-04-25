@@ -2,7 +2,8 @@
 
 export const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
 export const OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
-export const SCOPES = "ads_read,ads_management,business_management";
+export const SCOPES =
+  "ads_read,ads_management,business_management,pages_manage_metadata,leads_retrieval";
 export const REFRESH_THRESHOLD_DAYS = 7;
 
 export interface FacebookOAuthConfig {

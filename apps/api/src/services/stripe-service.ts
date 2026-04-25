@@ -96,6 +96,12 @@ export async function handleWebhookEvent(body: string, signature: string): Promi
       data.attemptCount = invoice.attempt_count;
       break;
     }
+    case "customer.subscription.trial_will_end": {
+      const sub = event.data.object as Stripe.Subscription;
+      organizationId = sub.metadata?.organizationId ?? undefined;
+      data.trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+      break;
+    }
   }
 
   return { type: event.type, organizationId, data };
