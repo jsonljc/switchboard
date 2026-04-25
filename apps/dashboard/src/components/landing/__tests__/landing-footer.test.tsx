@@ -21,6 +21,12 @@ describe("LandingFooter", () => {
     );
   });
 
+  it("renders privacy and terms links", () => {
+    render(<LandingFooter />);
+    expect(screen.getByRole("link", { name: /^privacy$/i })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: /^terms$/i })).toHaveAttribute("href", "/terms");
+  });
+
   it("does not render removed links", () => {
     render(<LandingFooter />);
     expect(screen.queryByText(/build an agent/i)).toBeNull();

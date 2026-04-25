@@ -41,7 +41,7 @@ describe("AgentMarketplaceCard", () => {
     expect(screen.getByText("Speed-to-Lead Rep")).toBeInTheDocument();
   });
 
-  it("renders trust score", () => {
+  it("renders performance score", () => {
     render(<AgentMarketplaceCard {...mockAgent} />);
     expect(screen.getByText("47")).toBeInTheDocument();
   });

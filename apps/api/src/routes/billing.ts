@@ -162,8 +162,13 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const rawBody =
-        (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(request.body);
+      const rawBody = (request as unknown as { rawBody?: string }).rawBody;
+      if (!rawBody) {
+        return reply.code(500).send({
+          error: "Raw body not available — configure Fastify rawBody parser for webhook routes",
+          statusCode: 500,
+        });
+      }
 
       let result: Awaited<ReturnType<typeof handleWebhookEvent>>;
       try {
@@ -216,6 +221,15 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
             where: { id: orgId },
             data: { subscriptionStatus: "past_due" },
           });
+          break;
+        }
+        case "customer.subscription.trial_will_end": {
+          if (result.data.trialEnd) {
+            await app.prisma.organizationConfig.update({
+              where: { id: orgId },
+              data: { trialEndsAt: new Date(result.data.trialEnd as string) },
+            });
+          }
           break;
         }
       }

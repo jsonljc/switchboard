@@ -211,8 +211,8 @@ export default function DecidePage() {
         title: result === "approved" ? "Approved" : "Rejected",
         description:
           result === "approved"
-            ? "Trust score updated. Agent earns more autonomy."
-            : "Trust score updated. Agent requires more oversight.",
+            ? "Performance score updated. Agent earns more autonomy."
+            : "Performance score updated. Agent requires more oversight.",
       });
       setTaskDialog(null);
     } catch (err) {

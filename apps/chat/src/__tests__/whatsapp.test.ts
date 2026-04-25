@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 
 describe("WhatsAppAdapter", () => {
@@ -48,7 +48,7 @@ describe("WhatsAppAdapter", () => {
       expect(msg!.id).toBe("wamid.abc123");
     });
 
-    it("should return unsupported message for non-text messages", () => {
+    it("should parse image as media message with attachment", () => {
       const payload = {
         object: "whatsapp_business_account",
         entry: [
@@ -74,8 +74,9 @@ describe("WhatsAppAdapter", () => {
       const msg = adapter.parseIncomingMessage(payload);
       expect(msg).not.toBeNull();
       expect(msg?.text).toBe("");
-      expect(msg?.metadata?.["unsupported"]).toBe(true);
       expect(msg?.metadata?.["originalType"]).toBe("image");
+      expect(msg?.metadata?.["mediaId"]).toBe("img_123");
+      expect(msg?.attachments).toHaveLength(1);
     });
 
     it("should return null for empty payload", () => {
@@ -342,6 +343,28 @@ describe("WhatsAppAdapter", () => {
       expect(msg).not.toBeNull();
       expect(msg!.metadata).not.toHaveProperty("sourceAdId");
       expect(msg!.metadata).not.toHaveProperty("adSourceType");
+    });
+  });
+
+  describe("markAsRead", () => {
+    it("should send read receipt to WhatsApp API", async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+      await adapter.markAsRead("wamid.abc123");
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      expect(url).toContain("/123456789/messages");
+      const body = JSON.parse(options!.body as string);
+      expect(body).toEqual({
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: "wamid.abc123",
+      });
+
+      fetchSpy.mockRestore();
     });
   });
 });

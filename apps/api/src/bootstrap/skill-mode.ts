@@ -42,8 +42,10 @@ export async function bootstrapSkillMode(
     PrismaHandoffStore,
     PrismaBusinessFactsStore,
   } = await import("@switchboard/db");
-  const { NoopNotifier, TelegramApprovalNotifier } =
+  const { NoopNotifier, TelegramApprovalNotifier, CompositeNotifier } =
     await import("@switchboard/core/notifications");
+  const { EmailEscalationNotifier } =
+    await import("../services/notifications/email-escalation-notifier.js");
 
   if (!process.env["ANTHROPIC_API_KEY"]) {
     throw new Error("SkillMode requires ANTHROPIC_API_KEY");
@@ -67,17 +69,43 @@ export async function bootstrapSkillMode(
 
   const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
   const escalationChatId = process.env["ESCALATION_CHAT_ID"];
-  const approvalNotifier = telegramToken
-    ? new TelegramApprovalNotifier(telegramToken)
-    : new NoopNotifier();
-  const escalationApprovers = escalationChatId ? [escalationChatId] : [];
+  const resendApiKey = process.env["RESEND_API_KEY"];
+  const escalationEmail = process.env["ESCALATION_EMAIL"];
 
-  if (!telegramToken) {
-    logger.info("Escalation: no TELEGRAM_BOT_TOKEN — handoff notifications disabled");
-  } else if (!escalationChatId) {
-    logger.info("Escalation: no ESCALATION_CHAT_ID — handoff records saved but no one notified");
-  } else {
-    logger.info(`Escalation: Telegram notifications enabled for chat ${escalationChatId}`);
+  // Build notifier chain: email (default) + Telegram (optional)
+  const notifiers: import("@switchboard/core/notifications").ApprovalNotifier[] = [];
+
+  if (resendApiKey && escalationEmail) {
+    notifiers.push(
+      new EmailEscalationNotifier({
+        resendApiKey,
+        fromAddress: process.env["EMAIL_FROM"] ?? "noreply@switchboard.app",
+        dashboardBaseUrl: process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3002",
+      }),
+    );
+    logger.info(`Escalation: email notifications enabled for ${escalationEmail}`);
+  }
+
+  if (telegramToken) {
+    notifiers.push(new TelegramApprovalNotifier(telegramToken));
+    logger.info(
+      `Escalation: Telegram notifications enabled for chat ${escalationChatId ?? "(no chat ID)"}`,
+    );
+  }
+
+  const approvalNotifier =
+    notifiers.length > 1
+      ? new CompositeNotifier(notifiers)
+      : notifiers.length === 1
+        ? notifiers[0]!
+        : new NoopNotifier();
+
+  const escalationApprovers: string[] = [];
+  if (escalationEmail) escalationApprovers.push(escalationEmail);
+  if (escalationChatId) escalationApprovers.push(escalationChatId);
+
+  if (notifiers.length === 0) {
+    logger.info("Escalation: no notification channels configured — handoff records saved only");
   }
 
   const handoffNotifier = new HandoffNotifier(approvalNotifier, escalationApprovers);
@@ -372,8 +400,8 @@ async function resolveCalendarProvider(
     return provider;
   }
 
-  // Option 3: No provider available
-  throw new Error(
-    "Calendar unavailable: no GOOGLE_CALENDAR_CREDENTIALS and no business hours configured",
-  );
+  // Option 3: No provider available — use noop so the app still works
+  const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
+  logger.info("Calendar: using NoopCalendarProvider (no calendar configured, bookings disabled)");
+  return new NoopCalendarProvider();
 }

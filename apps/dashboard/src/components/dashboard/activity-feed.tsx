@@ -7,6 +7,7 @@ interface ActivityItem {
   description: string;
   dotColor: "green" | "amber" | "blue" | "gray";
   createdAt: string;
+  reasoning?: string | null;
 }
 interface ActivityFeedProps {
   events: ActivityItem[];
@@ -34,6 +35,7 @@ export function ActivityFeed({ events, animate: _animate }: ActivityFeedProps) {
                 description={event.description}
                 dotColor={event.dotColor}
                 createdAt={event.createdAt}
+                reasoning={event.reasoning}
               />
             </div>
           ))

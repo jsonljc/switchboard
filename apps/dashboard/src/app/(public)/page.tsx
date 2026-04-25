@@ -4,6 +4,7 @@ import { BeforeAfterSection } from "@/components/landing/before-after-section";
 import { ScrollytellingSection } from "@/components/landing/scrollytelling-section";
 import { ProofBar } from "@/components/landing/proof-bar";
 import { TrustCards } from "@/components/landing/trust-cards";
+import { SocialProof } from "@/components/landing/social-proof";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { FinalCta } from "@/components/landing/final-cta";
 
@@ -25,6 +26,7 @@ export default function HomePage() {
           <TrustCards />
         </div>
       </section>
+      <SocialProof />
       <PricingSection />
       <FinalCta />
     </>

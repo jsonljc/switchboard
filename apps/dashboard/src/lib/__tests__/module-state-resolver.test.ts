@@ -172,6 +172,7 @@ describe("resolveModuleStatuses", () => {
       }),
     );
     expect(result[0].state).toBe("live");
+    expect(result[0].subtext).toBe("Not connected — bookings saved locally");
   });
 
   it("returns needs_connection for lead-to-booking in google mode without calendar", () => {

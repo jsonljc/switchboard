@@ -200,6 +200,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
         }
       }
+
+      // Refresh emailVerified from DB on each token refresh so the banner
+      // disappears as soon as the user verifies without re-login
+      if (token.id) {
+        const freshUser = await prisma.dashboardUser.findUnique({
+          where: { id: token.id as string },
+          select: { emailVerified: true },
+        });
+        token.emailVerified = freshUser?.emailVerified?.toISOString() ?? null;
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -210,8 +221,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // SAFETY: Extending session with custom fields from JWT token — NextAuth's
       // type definitions don't include custom fields, but the session object is
       // a plain object that accepts additional properties at runtime
-      (session as unknown as Record<string, unknown>).organizationId = token.organizationId;
-      (session as unknown as Record<string, unknown>).principalId = token.principalId;
+      const ext = session as unknown as Record<string, unknown>;
+      ext.organizationId = token.organizationId;
+      ext.principalId = token.principalId;
+      ext.emailVerified = token.emailVerified ?? null;
       return session;
     },
   },

@@ -23,7 +23,7 @@ const ACTS = [
         }}
       >
         {[
-          { name: "Speed-to-Lead", role: "Qualifies leads" },
+          { name: "Alex", role: "Qualifies leads" },
           { name: "Sales Closer", role: "Books calls" },
           { name: "Nurture Specialist", role: "Re-engages contacts" },
         ].map(({ name, role }) => (
@@ -121,7 +121,7 @@ const ACTS = [
     n: "03",
     label: "Earn trust",
     title: "Earn trust. Earn autonomy.",
-    copy: "Every agent starts supervised. It proves itself through real tasks — you review and approve its first actions. As its trust score climbs, it earns more operating freedom. You step in only when it flags something important. That's not compliance theater — it's what makes the system safe to scale.",
+    copy: "Every agent starts supervised. It proves itself through real tasks — you review and approve its first actions. As its performance score climbs, it earns more operating freedom. You step in only when it flags something important. That's not compliance theater — it's what makes the system safe to scale.",
     visual: (
       <div
         style={{
@@ -357,7 +357,7 @@ export default function HowItWorksPage() {
             Browse agents
           </Link>
           <Link
-            href="/get-started"
+            href="/signup"
             style={{
               background: "transparent",
               border: "1px solid #DDD9D3",
@@ -369,7 +369,7 @@ export default function HowItWorksPage() {
               textDecoration: "none",
             }}
           >
-            Join waitlist
+            Get Started
           </Link>
         </div>
       </section>

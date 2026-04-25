@@ -28,10 +28,11 @@ import {
   useTestConnection,
 } from "@/hooks/use-connections";
 import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
-import { SERVICE_FIELD_CONFIGS } from "@/lib/service-field-configs";
+import { SERVICE_FIELD_CONFIGS, SERVICE_CONNECTION_CONFIGS } from "@/lib/service-field-configs";
 
 const serviceOptions = [
   { id: "meta-ads", name: "Meta Ads" },
+  { id: "google_calendar", name: "Google Calendar" },
   { id: "google-ads", name: "Google Ads" },
   { id: "tiktok-ads", name: "TikTok Ads" },
   { id: "stripe", name: "Stripe" },
@@ -314,7 +315,27 @@ export function ConnectionsList() {
               </Select>
             </div>
 
-            {SERVICE_FIELD_CONFIGS[serviceId] ? (
+            {SERVICE_CONNECTION_CONFIGS[serviceId]?.oauth && (
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    const url = SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.getUrl();
+                    window.location.href = url;
+                  }}
+                >
+                  {SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.label}
+                </Button>
+                {SERVICE_FIELD_CONFIGS[serviceId]?.length > 0 && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    Or enter credentials manually below
+                  </p>
+                )}
+              </div>
+            )}
+
+            {SERVICE_FIELD_CONFIGS[serviceId]?.length ? (
               <div className="space-y-3">
                 {SERVICE_FIELD_CONFIGS[serviceId].map((field) => (
                   <div key={field.key} className="space-y-1.5">

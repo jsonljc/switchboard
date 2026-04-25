@@ -145,6 +145,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     // Capture non-text messages as leads instead of silently dropping
     if (msgType !== "text") {
+      if (MEDIA_TYPES.has(msgType)) {
+        return parseMediaMessage(msg, value, msgType);
+      }
       return parseUnsupportedMessage(msg, value, msgType);
     }
 
@@ -232,6 +235,77 @@ export class WhatsAppAdapter implements ChannelAdapter {
     await this.sendTextReply(threadId, parts.join("\n"));
   }
 
+  parseStatusUpdate(rawPayload: unknown): {
+    messageId: string;
+    recipientId: string;
+    status: string;
+    timestamp: Date;
+    errorCode?: string;
+    errorTitle?: string;
+    pricingCategory?: string;
+    billable?: boolean;
+  } | null {
+    const payload = rawPayload as Record<string, unknown>;
+    if (!payload) return null;
+
+    const value = extractWhatsAppValue(payload);
+    if (!value) return null;
+
+    const statuses = value["statuses"] as Array<Record<string, unknown>> | undefined;
+    if (!statuses || statuses.length === 0) return null;
+
+    const s = statuses[0]!;
+    const result: {
+      messageId: string;
+      recipientId: string;
+      status: string;
+      timestamp: Date;
+      errorCode?: string;
+      errorTitle?: string;
+      pricingCategory?: string;
+      billable?: boolean;
+    } = {
+      messageId: s["id"] as string,
+      recipientId: s["recipient_id"] as string,
+      status: s["status"] as string,
+      timestamp: new Date(parseInt(s["timestamp"] as string) * 1000),
+    };
+
+    const errors = s["errors"] as Array<Record<string, unknown>> | undefined;
+    if (errors && errors.length > 0) {
+      result.errorCode = String(errors[0]!["code"]);
+      result.errorTitle = errors[0]!["title"] as string;
+    }
+
+    const pricing = s["pricing"] as Record<string, unknown> | undefined;
+    if (pricing) {
+      result.pricingCategory = pricing["category"] as string;
+      result.billable = pricing["billable"] as boolean;
+    }
+
+    return result;
+  }
+
+  async markAsRead(messageId: string): Promise<void> {
+    const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: messageId,
+        }),
+      });
+    } catch {
+      // Fire-and-forget — don't block message processing
+    }
+  }
+
   extractMessageId(rawPayload: unknown): string | null {
     const payload = rawPayload as Record<string, unknown>;
     const entry = (payload?.["entry"] as Array<Record<string, unknown>>)?.[0];
@@ -287,6 +361,8 @@ export class WhatsAppAdapter implements ChannelAdapter {
 // ---------------------------------------------------------------------------
 // Helper functions for parseIncomingMessage complexity reduction
 // ---------------------------------------------------------------------------
+
+const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
 function extractWhatsAppValue(payload: Record<string, unknown>): Record<string, unknown> | null {
   const entry = (payload["entry"] as Array<Record<string, unknown>>)?.[0];
@@ -358,6 +434,56 @@ function parseInteractiveMessage(
     timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
     metadata,
     attachments: [],
+    organizationId: null,
+  };
+}
+
+function parseMediaMessage(
+  msg: Record<string, unknown>,
+  value: Record<string, unknown>,
+  msgType: string,
+): IncomingMessage {
+  const from = msg["from"] as string;
+  const msgId = msg["id"] as string;
+  const timestamp = msg["timestamp"] as string;
+  const contactName = extractContactName(value);
+
+  const mediaObj = msg[msgType] as Record<string, unknown> | undefined;
+  const mediaId = mediaObj?.["id"] as string | undefined;
+  const filename = mediaObj?.["filename"] as string | undefined;
+
+  const metadata: Record<string, unknown> = { originalType: msgType };
+  if (contactName) metadata["contactName"] = contactName;
+  if (mediaId) metadata["mediaId"] = mediaId;
+
+  const referralData = extractReferralData(msg);
+  Object.assign(metadata, referralData);
+
+  const attachments: Array<{
+    type: string;
+    url: string | null;
+    data: unknown;
+    filename: string | null;
+  }> = [];
+  if (mediaId) {
+    attachments.push({
+      type: msgType,
+      url: null,
+      data: { mediaId },
+      filename: filename ?? null,
+    });
+  }
+
+  return {
+    id: msgId ?? `wa_${Date.now()}`,
+    channel: "whatsapp",
+    channelMessageId: msgId ?? `wa_${Date.now()}`,
+    principalId: from ?? "unknown",
+    text: "",
+    threadId: from,
+    timestamp: timestamp ? new Date(parseInt(timestamp) * 1000) : new Date(),
+    metadata,
+    attachments,
     organizationId: null,
   };
 }

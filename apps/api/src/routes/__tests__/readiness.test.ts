@@ -47,6 +47,11 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
       approvalMode: { status: "ready" },
     },
     scenariosTestedCount: 3,
+    metaAdsConnection: {
+      exists: true,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    },
+    emailVerified: true,
     ...overrides,
   };
 }
@@ -56,7 +61,17 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(8);
+    expect(report.checks).toHaveLength(10);
+  });
+
+  // ── email-verified ──────────────────────────────────────────────────────
+
+  it("email-verified fails when email not verified", () => {
+    const report = checkReadiness(makeContext({ emailVerified: false }));
+    const check = report.checks.find((c) => c.id === "email-verified")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(true);
+    expect(report.ready).toBe(false);
   });
 
   // ── channel-connected ───────────────────────────────────────────────────
@@ -277,6 +292,7 @@ describe("checkReadiness", () => {
 
     const ids = report.checks.map((c) => c.id);
     expect(ids).toEqual([
+      "email-verified",
       "channel-connected",
       "deployment-exists",
       "deployment-connection",
@@ -285,6 +301,59 @@ describe("checkReadiness", () => {
       "hours-set",
       "test-scenarios-run",
       "approval-mode-reviewed",
+      "meta-ads-token",
     ]);
+  });
+
+  // ── meta-ads-token ─────────────────────────────────────────────────────
+
+  it("meta-ads-token fails (advisory) when not connected", () => {
+    const report = checkReadiness(
+      makeContext({ metaAdsConnection: { exists: false, expiresAt: null } }),
+    );
+    const check = report.checks.find((c) => c.id === "meta-ads-token")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toBe("Meta Ads not connected");
+    // Advisory — does not block readiness
+    expect(report.ready).toBe(true);
+  });
+
+  it("meta-ads-token fails (advisory) when token expired", () => {
+    const report = checkReadiness(
+      makeContext({
+        metaAdsConnection: {
+          exists: true,
+          expiresAt: new Date(Date.now() - 1000),
+        },
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "meta-ads-token")!;
+    expect(check.status).toBe("fail");
+    expect(check.message).toContain("expired");
+    // Advisory — does not block readiness
+    expect(report.ready).toBe(true);
+  });
+
+  it("meta-ads-token passes with advisory when expiring within 7 days", () => {
+    const report = checkReadiness(
+      makeContext({
+        metaAdsConnection: {
+          exists: true,
+          expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
+        },
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "meta-ads-token")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toContain("expires in");
+  });
+
+  it("meta-ads-token passes when token valid", () => {
+    const report = checkReadiness(makeContext());
+    const check = report.checks.find((c) => c.id === "meta-ads-token")!;
+    expect(check.status).toBe("pass");
+    expect(check.message).toBe("Meta Ads token is valid");
   });
 });

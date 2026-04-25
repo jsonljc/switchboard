@@ -8,6 +8,19 @@ export interface ManagedWebhookDeps {
     getGatewayByWebhookPath(path: string): GatewayEntry | null;
   };
   failedMessageStore?: FailedMessageStore | null;
+  onStatusUpdate?: (
+    status: {
+      messageId: string;
+      recipientId: string;
+      status: string;
+      timestamp: Date;
+      errorCode?: string;
+      errorTitle?: string;
+      pricingCategory?: string;
+      billable?: boolean;
+    },
+    orgId?: string,
+  ) => Promise<void>;
 }
 
 export function registerManagedWebhookRoutes(app: FastifyInstance, deps: ManagedWebhookDeps): void {
@@ -53,6 +66,19 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
       const headers = request.headers as Record<string, string | undefined>;
       if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
         return reply.code(401).send({ error: "Invalid signature" });
+      }
+    }
+
+    if (gatewayEntry.channel === "whatsapp" && deps.onStatusUpdate) {
+      const wa = gatewayEntry.adapter as import("../adapters/whatsapp.js").WhatsAppAdapter;
+      if (typeof wa.parseStatusUpdate === "function") {
+        const statusUpdate = wa.parseStatusUpdate(request.body);
+        if (statusUpdate) {
+          deps
+            .onStatusUpdate(statusUpdate, gatewayEntry.orgId)
+            .catch((err: unknown) => app.log.error(err, "Status update processing error"));
+          return reply.code(200).send({ ok: true });
+        }
       }
     }
 

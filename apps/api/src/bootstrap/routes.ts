@@ -44,6 +44,7 @@ import { organizationsRoutes } from "../routes/organizations.js";
 import { simulateRoutes } from "../routes/simulate.js";
 import { readinessRoutes } from "../routes/readiness.js";
 import { billingRoutes } from "../routes/billing.js";
+import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -58,6 +59,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
   await app.register(facebookOAuthRoutes, { prefix: "/api/connections" });
   await app.register(whatsappTestRoutes, { prefix: "/api/connections" });
+  await app.register(googleCalendarOAuthRoutes, { prefix: "/api/connections" });
   await app.register(dlqRoutes, { prefix: "/api/dlq" });
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
   await app.register(competenceRoutes, { prefix: "/api/competence" });

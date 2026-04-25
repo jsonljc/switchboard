@@ -1,16 +1,32 @@
 import type { WorkflowHandler, WorkflowRuntimeServices } from "@switchboard/core/platform";
+import type { LeadData } from "@switchboard/ad-optimizer";
+
+interface PendingLeadRetryCreate {
+  organizationId: string;
+  leadId: string;
+  adId: string;
+  formId: string;
+  reason: string;
+}
 
 interface MetaLeadIntakeDeps {
   prisma: unknown;
-  parseLeadWebhook?: (payload: unknown) => Array<{
-    leadId: string;
-    adId: string;
-    name?: string;
-    phone?: string;
-    email?: string;
+  accessToken?: string;
+  parseLeadWebhook?: (payload: unknown) => LeadData[];
+  fetchLeadDetail?: (
+    leadId: string,
+    accessToken: string,
+  ) => Promise<{
+    field_data?: Array<{ name: string; values: string[] }>;
+    campaign_id?: string;
   }>;
+  extractFieldValue?: (
+    fields: Array<{ name: string; values: string[] }> | undefined,
+    name: string,
+  ) => string | undefined;
   findExistingContact?: (orgId: string, phone: string) => Promise<{ attribution?: unknown } | null>;
   createContact?: (data: Record<string, unknown>) => Promise<{ id: string }>;
+  savePendingRetry?: (data: PendingLeadRetryCreate) => Promise<void>;
 }
 
 export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowHandler {
@@ -21,12 +37,15 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
         greetingTemplateName: string;
       };
 
-      const parseLeadWebhook =
-        deps.parseLeadWebhook ?? (await import("@switchboard/ad-optimizer")).parseLeadWebhook;
+      const adOptimizer = await import("@switchboard/ad-optimizer");
+      const parseLeadWebhook = deps.parseLeadWebhook ?? adOptimizer.parseLeadWebhook;
+      const fetchDetail = deps.fetchLeadDetail ?? adOptimizer.fetchLeadDetail;
+      const extractField = deps.extractFieldValue ?? adOptimizer.extractFieldValue;
 
       let findExistingContact = deps.findExistingContact;
       let createContact = deps.createContact;
-      if (!findExistingContact || !createContact) {
+      let savePendingRetry = deps.savePendingRetry;
+      if (!findExistingContact || !createContact || !savePendingRetry) {
         const { PrismaContactStore } = await import("@switchboard/db");
         const prisma = deps.prisma as import("@switchboard/db").PrismaClient;
         const contactStore = new PrismaContactStore(prisma);
@@ -36,32 +55,90 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           (contactStore.create.bind(contactStore) as unknown as (
             data: Record<string, unknown>,
           ) => Promise<{ id: string }>);
+        savePendingRetry =
+          savePendingRetry ??
+          (async (data: PendingLeadRetryCreate) => {
+            type PrismaWithRetry = {
+              pendingLeadRetry: {
+                create: (args: { data: PendingLeadRetryCreate }) => Promise<unknown>;
+              };
+            };
+            await (prisma as unknown as PrismaWithRetry).pendingLeadRetry.create({ data });
+          });
       }
 
-      const leads = parseLeadWebhook(input.payload);
+      const webhookLeads = parseLeadWebhook(input.payload);
+
+      // Fail loudly when leads arrive but no access token is configured
+      if (webhookLeads.length > 0 && !deps.accessToken) {
+        for (const lead of webhookLeads) {
+          await savePendingRetry!({
+            organizationId: workUnit.organizationId,
+            leadId: lead.leadId,
+            adId: lead.adId,
+            formId: lead.formId,
+            reason: "missing_token",
+          });
+        }
+        return {
+          outcome: "failed",
+          summary: `${webhookLeads.length} lead(s) queued for retry — Meta Ads access token not configured`,
+          outputs: { pendingLeadIds: webhookLeads.map((l) => l.leadId) },
+          error: {
+            code: "MISSING_ACCESS_TOKEN",
+            message:
+              "Meta Ads connection required to process leads. Connect Meta Ads in Settings > Channels.",
+          },
+        };
+      }
+
       let created = 0;
       const childFailures: Array<{ intent: string; leadId: string; error: string }> = [];
 
-      for (const lead of leads) {
-        if (!lead.phone) continue;
+      for (const lead of webhookLeads) {
+        let name: string | undefined;
+        let email: string | undefined;
+        let phone: string | undefined;
+        let campaignId: string | undefined;
 
-        const existing = await findExistingContact!(workUnit.organizationId, lead.phone);
+        if (deps.accessToken) {
+          try {
+            const detail = await fetchDetail(lead.leadId, deps.accessToken);
+            name = extractField(detail.field_data, "full_name");
+            email = extractField(detail.field_data, "email");
+            phone = extractField(detail.field_data, "phone_number");
+            campaignId = detail.campaign_id;
+          } catch {
+            await savePendingRetry!({
+              organizationId: workUnit.organizationId,
+              leadId: lead.leadId,
+              adId: lead.adId,
+              formId: lead.formId,
+              reason: "fetch_failed",
+            });
+            continue;
+          }
+        }
+
+        if (!phone) continue;
+
+        const existing = await findExistingContact!(workUnit.organizationId, phone);
         const existingAdId = (existing?.attribution as Record<string, unknown> | null)?.sourceAdId;
         if (existing && existingAdId === lead.adId) continue;
 
         await createContact!({
           organizationId: workUnit.organizationId,
-          name: lead.name ?? null,
-          phone: lead.phone,
-          email: lead.email ?? null,
+          name: name ?? null,
+          phone,
+          email: email ?? null,
           primaryChannel: "whatsapp",
           source: "meta-instant-form",
           attribution: {
             sourceAdId: lead.adId,
+            sourceCampaignId: campaignId ?? null,
             fbclid: null,
             gclid: null,
             ttclid: null,
-            sourceCampaignId: null,
             utmSource: null,
             utmMedium: null,
             utmCampaign: null,
@@ -75,8 +152,8 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           actor: workUnit.actor,
           parentWorkUnitId: workUnit.id,
           parameters: {
-            phone: lead.phone,
-            firstName: lead.name?.split(" ")[0] ?? "there",
+            phone,
+            firstName: name?.split(" ")[0] ?? "there",
             templateName: input.greetingTemplateName,
           },
         });
@@ -112,9 +189,13 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
       return {
         outcome: hasFailures ? "failed" : "completed",
         summary: hasFailures
-          ? `Processed ${leads.length} leads (${childFailures.length} child failures)`
-          : `Processed ${leads.length} leads`,
-        outputs: { received: leads.length, created, ...(hasFailures ? { childFailures } : {}) },
+          ? `Processed ${webhookLeads.length} leads (${childFailures.length} child failures)`
+          : `Processed ${webhookLeads.length} leads`,
+        outputs: {
+          received: webhookLeads.length,
+          created,
+          ...(hasFailures ? { childFailures } : {}),
+        },
         ...(hasFailures
           ? {
               error: {

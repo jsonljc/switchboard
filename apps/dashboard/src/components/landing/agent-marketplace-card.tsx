@@ -97,7 +97,7 @@ export function AgentMarketplaceCard({
         {description}
       </p>
 
-      {/* Trust score */}
+      {/* Performance score */}
       <div
         style={{
           marginTop: "1.25rem",
@@ -124,7 +124,7 @@ export function AgentMarketplaceCard({
           >
             {trustScore}
           </div>
-          <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>trust score</span>
+          <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>performance score</span>
         </div>
 
         <Link

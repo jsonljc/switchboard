@@ -18,7 +18,7 @@ export { AuditRunner } from "./audit-runner.js";
 export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
 export { createWeeklyAuditCron, createDailyCheckCron } from "./inngest-functions.js";
 export type { CronDependencies } from "./inngest-functions.js";
-export { parseLeadWebhook } from "./meta-leads-ingester.js";
+export { parseLeadWebhook, fetchLeadDetail, extractFieldValue } from "./meta-leads-ingester.js";
 export type { LeadData } from "./meta-leads-ingester.js";
 export {
   buildAuthorizationUrl,

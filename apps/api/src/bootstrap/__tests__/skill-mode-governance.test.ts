@@ -52,6 +52,11 @@ vi.mock("@switchboard/core", () => ({
 vi.mock("@switchboard/core/notifications", () => ({
   NoopNotifier: vi.fn().mockImplementation(() => ({})),
   TelegramApprovalNotifier: vi.fn().mockImplementation(() => ({})),
+  CompositeNotifier: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock("../../services/notifications/email-escalation-notifier.js", () => ({
+  EmailEscalationNotifier: vi.fn().mockImplementation(() => ({})),
 }));
 
 vi.mock("@switchboard/db", () => ({

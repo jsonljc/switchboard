@@ -30,7 +30,10 @@ export function TrustScoreBadge({
   const level = getAutonomyLevel(score);
 
   return (
-    <div className={cn("flex items-center gap-2", size === "lg" && "gap-3")}>
+    <div
+      className={cn("flex items-center gap-2", size === "lg" && "gap-3")}
+      title="Measures reliability based on successful task completions"
+    >
       <span
         className={cn(
           "font-semibold tabular-nums",

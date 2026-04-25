@@ -129,7 +129,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
                 }}
               >
                 <Link
-                  href="/get-started"
+                  href="/signup"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -143,7 +143,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
                     color: "#F5F3F0",
                   }}
                 >
-                  Get early access
+                  Get Started
                 </Link>
 
                 {/* Trust score badge */}
@@ -165,7 +165,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
                   >
                     {listing.trustScore}
                   </div>
-                  <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>trust score</span>
+                  <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>performance score</span>
                 </div>
               </div>
             </div>
@@ -565,7 +565,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
             Ready to put {listing.name} to work?
           </p>
           <Link
-            href="/get-started"
+            href="/signup"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -579,7 +579,7 @@ export default async function AgentProfilePage({ params }: PageProps) {
               color: "#F5F3F0",
             }}
           >
-            Get early access →
+            Get Started →
           </Link>
         </div>
       </section>

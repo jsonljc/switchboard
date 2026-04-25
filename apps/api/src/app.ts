@@ -17,8 +17,10 @@ import {
 } from "@switchboard/core/platform";
 import type { CartridgeManifestForRegistration } from "@switchboard/core/platform";
 import { initTelemetry } from "./telemetry/otel-init.js";
+import { initSentry, wireSentryErrorHandler } from "./bootstrap/sentry.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { authMiddleware } from "./middleware/auth.js";
+import { authRateLimit } from "./middleware/rate-limit.js";
 import apiVersionPlugin from "./versioning.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
@@ -69,8 +71,18 @@ export async function buildServer() {
   // Initialize OpenTelemetry before Fastify starts (must be first)
   await initTelemetry();
 
+  // Initialize Sentry before Fastify starts (captures unhandled errors)
+  await initSentry();
+
+  const logLevel =
+    process.env["LOG_LEVEL"] ?? (process.env.NODE_ENV === "production" ? "info" : "debug");
+
   const app = Fastify({
-    logger: true,
+    logger: {
+      level: logLevel,
+      // Structured JSON logging in production, pretty print in development
+      ...(process.env.NODE_ENV === "production" ? {} : { transport: { target: "pino-pretty" } }),
+    },
     bodyLimit: 1_048_576, // 1 MB explicit body size limit
   });
 
@@ -118,6 +130,9 @@ export async function buildServer() {
       statusCode,
     });
   });
+
+  // Wire Sentry error capture (wraps the error handler above)
+  wireSentryErrorHandler(app);
 
   // Wire Prometheus metrics before orchestrator creation
   setMetrics(createPromMetrics());
@@ -420,6 +435,7 @@ export async function buildServer() {
 
   // Register middleware (idempotency picks up shared redis via app.redis)
   await app.register(authMiddleware);
+  await app.register(authRateLimit);
   await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
 
@@ -431,6 +447,7 @@ export async function buildServer() {
   });
 
   // Live health check — pings configured backends
+  const bootTime = Date.now();
   app.get("/health", async (_request, reply) => {
     const checks: Record<string, string> = {};
     let healthy = true;
@@ -445,9 +462,9 @@ export async function buildServer() {
     if (prismaClient) {
       try {
         await timeout(prismaClient.$queryRaw`SELECT 1`, 3000);
-        checks["database"] = "ok";
+        checks["db"] = "ok";
       } catch {
-        checks["database"] = "unreachable";
+        checks["db"] = "unreachable";
         healthy = false;
       }
     }
@@ -466,7 +483,7 @@ export async function buildServer() {
     return reply.code(healthy ? 200 : 503).send({
       status: healthy ? "ok" : "degraded",
       checks,
-      timestamp: new Date().toISOString(),
+      uptime: Math.floor((Date.now() - bootTime) / 1000),
     });
   });
 

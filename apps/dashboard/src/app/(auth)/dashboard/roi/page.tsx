@@ -8,6 +8,9 @@ import { MetricCard } from "@/components/roi/metric-card";
 import { FunnelBars } from "@/components/roi/funnel-bars";
 import { BreakdownTable } from "@/components/roi/breakdown-table";
 import { HealthIndicator } from "@/components/roi/health-indicator";
+import { ManualRevenueForm } from "@/components/roi/manual-revenue-form";
+import { useOrgConfig } from "@/hooks/use-org-config";
+import { formatOrgCurrency } from "@/lib/format-currency";
 
 const RANGES = [
   { label: "7d", days: 7 },
@@ -19,6 +22,9 @@ export default function RoiPage() {
   const { status } = useSession();
   const [rangeDays, setRangeDays] = useState(30);
   const [breakdown, setBreakdown] = useState<"campaign" | "channel">("campaign");
+
+  const { data: orgData } = useOrgConfig();
+  const currency = orgData?.config?.currency ?? "SGD";
 
   if (status === "unauthenticated") redirect("/login");
 
@@ -86,9 +92,11 @@ export default function RoiPage() {
         <MetricCard label="Leads" value={f.inquiry} />
         <MetricCard label="Qualified" value={f.qualified} subtext={rate(f.qualified, f.inquiry)} />
         <MetricCard label="Booked" value={f.booked} subtext={rate(f.booked, f.inquiry)} />
-        <MetricCard label="Revenue" value={`$${f.totalRevenue.toLocaleString()}`} />
+        <MetricCard label="Revenue" value={formatOrgCurrency(f.totalRevenue, currency)} />
         <MetricCard label="Booking Rate" value={rate(f.booked, f.inquiry)} />
       </div>
+
+      <ManualRevenueForm />
 
       <div className="rounded-lg border p-6">
         <h2 className="mb-4 text-lg font-semibold">Funnel</h2>

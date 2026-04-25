@@ -7,16 +7,10 @@ export interface LeadData {
   phone?: string;
 }
 
-interface FieldData {
-  name: string;
-  values: string[];
-}
-
 interface LeadgenValue {
   leadgen_id: string;
   ad_id: string;
   form_id: string;
-  field_data?: FieldData[];
 }
 
 interface WebhookChange {
@@ -33,6 +27,19 @@ interface WebhookPayload {
   entry: WebhookEntry[];
 }
 
+interface LeadFieldData {
+  name: string;
+  values: string[];
+}
+
+interface LeadDetailResponse {
+  id: string;
+  ad_id?: string;
+  form_id?: string;
+  campaign_id?: string;
+  field_data?: LeadFieldData[];
+}
+
 export function parseLeadWebhook(payload: unknown): LeadData[] {
   const p = payload as WebhookPayload;
   if (!p?.entry) return [];
@@ -42,21 +49,37 @@ export function parseLeadWebhook(payload: unknown): LeadData[] {
       if (change.field !== "leadgen") continue;
       const value = change.value as LeadgenValue;
       if (!value.leadgen_id) continue;
-      const fields = value.field_data ?? [];
       leads.push({
         leadId: value.leadgen_id,
         adId: value.ad_id,
         formId: value.form_id,
-        name: findField(fields, "full_name"),
-        email: findField(fields, "email"),
-        phone: findField(fields, "phone_number"),
       });
     }
   }
   return leads;
 }
 
-function findField(fields: FieldData[], name: string): string | undefined {
-  const field = fields.find((f) => f.name === name);
+const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
+
+export async function fetchLeadDetail(
+  leadId: string,
+  accessToken: string,
+): Promise<LeadDetailResponse> {
+  const params = new URLSearchParams({ fields: "id,ad_id,form_id,campaign_id,field_data" });
+  const url = `${GRAPH_API_BASE}/${leadId}?${params.toString()}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch lead ${leadId}: HTTP ${response.status}`);
+  }
+  return (await response.json()) as LeadDetailResponse;
+}
+
+export function extractFieldValue(
+  fields: LeadFieldData[] | undefined,
+  name: string,
+): string | undefined {
+  const field = fields?.find((f) => f.name === name);
   return field?.values?.[0];
 }

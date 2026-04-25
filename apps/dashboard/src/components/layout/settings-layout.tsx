@@ -5,18 +5,28 @@ import { usePathname } from "next/navigation";
 import { Users, BookOpen, Radio, Palette, Building2, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const SIDEBAR_ITEMS = [
+const stripeEnabled = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
+
+const ALL_SIDEBAR_ITEMS = [
   { href: "/settings/playbook", label: "Your Playbook", icon: BookOpen },
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },
   { href: "/settings/identity", label: "Identity", icon: Palette },
-  { href: "/settings/billing", label: "Billing", icon: CreditCard },
+  { href: "/settings/billing", label: "Billing", icon: CreditCard, requiresStripe: true },
   { href: "/settings/account", label: "Account", icon: Building2 },
 ] as const;
 
+type SidebarItem = (typeof ALL_SIDEBAR_ITEMS)[number];
+
+function getVisibleItems(): readonly SidebarItem[] {
+  if (stripeEnabled) return ALL_SIDEBAR_ITEMS;
+  return ALL_SIDEBAR_ITEMS.filter((item) => !("requiresStripe" in item && item.requiresStripe));
+}
+
 export function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const sidebarItems = getVisibleItems();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -25,7 +35,7 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:block w-[200px] shrink-0">
         <h2 className="text-[22px] font-semibold tracking-tight text-foreground mb-6">Settings</h2>
         <nav className="space-y-0.5">
-          {SIDEBAR_ITEMS.map((item) => {
+          {sidebarItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (
@@ -54,7 +64,7 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
               <h2 className="text-[22px] font-semibold tracking-tight text-foreground mb-6">
                 Settings
               </h2>
-              {SIDEBAR_ITEMS.map((item) => {
+              {sidebarItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link

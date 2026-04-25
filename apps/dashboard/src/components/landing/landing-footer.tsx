@@ -29,7 +29,7 @@ export function LandingFooter() {
                 lineHeight: 1.5,
               }}
             >
-              AI agents that earn your trust over time.
+              AI-powered revenue operations for growing businesses.
             </p>
           </div>
 
@@ -94,6 +94,28 @@ export function LandingFooter() {
               >
                 Contact us
               </a>
+              <Link
+                href="/privacy"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/terms"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
+              >
+                Terms
+              </Link>
             </div>
           </div>
         </div>
@@ -113,7 +135,7 @@ export function LandingFooter() {
             &copy; {new Date().getFullYear()} Switchboard. All rights reserved.
           </span>
           <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>
-            AI agents that earn autonomy through trust.
+            AI-powered revenue operations for growing businesses.
           </span>
         </div>
       </div>

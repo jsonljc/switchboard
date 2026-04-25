@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
-import { registerManagedWebhookRoutes } from "../routes/managed-webhook.js";
+import {
+  registerManagedWebhookRoutes,
+  type ManagedWebhookDeps,
+} from "../routes/managed-webhook.js";
 import type { GatewayEntry } from "../managed/runtime-registry.js";
 
 const APP_SECRET = "test_secret";
@@ -53,6 +56,9 @@ describe("WhatsApp wiring — managed webhook", () => {
     await replySink.send(REPLY_TEXT);
   });
   let sendTextReply: ReturnType<typeof vi.fn>;
+  const onStatusUpdate: ReturnType<
+    typeof vi.fn<NonNullable<ManagedWebhookDeps["onStatusUpdate"]>>
+  > = vi.fn(async () => {});
 
   beforeAll(async () => {
     const adapter = new WhatsAppAdapter({
@@ -83,7 +89,7 @@ describe("WhatsApp wiring — managed webhook", () => {
     };
 
     app = Fastify({ logger: false });
-    registerManagedWebhookRoutes(app, { registry });
+    registerManagedWebhookRoutes(app, { registry, onStatusUpdate });
     await app.ready();
   });
 
@@ -149,5 +155,55 @@ describe("WhatsApp wiring — managed webhook", () => {
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: "Invalid signature" });
     expect(handleIncoming).not.toHaveBeenCalled();
+  });
+
+  it("handles status webhook without dispatching to gateway", async () => {
+    handleIncoming.mockClear();
+    onStatusUpdate.mockClear();
+
+    const statusPayload = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "entry-1",
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "1234567890", phone_number_id: "123456789" },
+                statuses: [
+                  {
+                    id: "wamid.status1",
+                    recipient_id: SENDER_PHONE,
+                    status: "delivered",
+                    timestamp: String(Math.floor(Date.now() / 1000)),
+                  },
+                ],
+              },
+              field: "messages",
+            },
+          ],
+        },
+      ],
+    };
+
+    const body = JSON.stringify(statusPayload);
+    const signature = signBody(body, APP_SECRET);
+
+    const response = await app.inject({
+      method: "POST",
+      url: WEBHOOK_PATH,
+      payload: statusPayload,
+      headers: { "x-hub-signature-256": signature },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(handleIncoming).not.toHaveBeenCalled();
+    expect(onStatusUpdate).toHaveBeenCalledOnce();
+    expect(onStatusUpdate.mock.calls[0]![0]).toMatchObject({
+      messageId: "wamid.status1",
+      recipientId: SENDER_PHONE,
+      status: "delivered",
+    });
   });
 });
