@@ -316,20 +316,35 @@ export class AuditRunner {
           adSetsLearningLimited++;
         }
 
-        const destinationType = (input as unknown as Record<string, unknown>).destinationType as
-          | string
-          | undefined;
-        const funnelShape = detectFunnelShape(destinationType ?? "WEBSITE");
+        const destinationType = input.destinationType ?? "WEBSITE";
+        const funnelShape = detectFunnelShape(destinationType);
+
+        if (learningStatus.state === "learning_limited") {
+          const diagnosis = this.learningGuardV2.diagnoseLearningLimited(learningStatus, input);
+          const msg = `Ad set ${input.adSetId} is Learning Limited (${diagnosis.cause}). Recommended: ${diagnosis.recommendation}.`;
+          recommendations.push({
+            type: "recommendation",
+            campaignId: input.campaignId,
+            campaignName: input.adSetName,
+            action: diagnosis.recommendation as RecommendationOutput["action"],
+            confidence: 0.75,
+            urgency: "this_week",
+            estimatedImpact: msg,
+            steps: [msg],
+            learningPhaseImpact:
+              diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
+          });
+        }
 
         return {
           adSetId: input.adSetId,
           adSetName: input.adSetName,
           campaignId: input.campaignId,
-          destinationType: destinationType ?? "WEBSITE",
+          destinationType,
           funnelShape,
           frequency: input.frequency,
           learningStatus,
-          hasFrequencyCap: false,
+          hasFrequencyCap: input.hasFrequencyCap ?? false,
         };
       });
     }

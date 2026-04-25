@@ -98,6 +98,8 @@ export interface AdSetLearningInput {
   cpa: number;
   roas: number;
   ctr: number;
+  destinationType?: string;
+  hasFrequencyCap?: boolean;
 }
 
 export interface CampaignInsightsProvider {

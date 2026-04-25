@@ -20,13 +20,14 @@ export function analyzeBudgetDistribution(
   entries: CampaignBudgetEntry[],
   targetCPA: number,
   accountSpendCap: number | null,
+  currency = "USD",
 ): BudgetAnalysis {
   if (entries.length < 2) {
     return {
       entries,
       imbalances: [],
       accountSpendCap,
-      currency: "USD",
+      currency,
     };
   }
 
@@ -69,6 +70,6 @@ export function analyzeBudgetDistribution(
     entries,
     imbalances,
     accountSpendCap,
-    currency: "USD",
+    currency,
   };
 }
