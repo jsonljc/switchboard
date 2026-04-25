@@ -29,6 +29,7 @@
     "@radix-ui/react-switch": "^1.1.2",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-toast": "^1.2.4",
+    "@sentry/nextjs": "^10.50.0",
     "@switchboard/core": "workspace:*",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",

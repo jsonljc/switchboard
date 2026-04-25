@@ -32,7 +32,14 @@ async function main() {
     console.error("[Startup] Aborting — fix the above errors before starting");
     process.exit(1);
   }
-  const app = Fastify({ logger: true });
+  const chatLogLevel =
+    process.env["LOG_LEVEL"] ?? (process.env.NODE_ENV === "production" ? "info" : "debug");
+  const app = Fastify({
+    logger: {
+      level: chatLogLevel,
+      ...(process.env.NODE_ENV === "production" ? {} : { transport: { target: "pino-pretty" } }),
+    },
+  });
 
   // Parse application/x-www-form-urlencoded (Slack interactive payloads)
   app.addContentTypeParser(
@@ -141,23 +148,43 @@ async function main() {
   }
 
   // Health check — report degraded if DB is configured but unreachable
-  app.get("/health", async () => {
-    let dbStatus = "not_configured";
+  const chatBootTime = Date.now();
+  app.get("/health", async (_request, reply) => {
+    const checks: Record<string, string> = {};
+    let healthy = true;
+
+    // DB check
     if (process.env["DATABASE_URL"]) {
       try {
         const { getDb } = await import("@switchboard/db");
         await getDb().$queryRaw`SELECT 1`;
-        dbStatus = "connected";
+        checks["db"] = "ok";
       } catch {
-        dbStatus = "disconnected";
+        checks["db"] = "unreachable";
+        healthy = false;
       }
     }
-    return {
-      status: dbStatus === "disconnected" ? "degraded" : "ok",
-      database: dbStatus,
+
+    // Redis check
+    if (process.env["REDIS_URL"]) {
+      try {
+        const Redis = (await import("ioredis")).default;
+        const redisClient = new Redis(process.env["REDIS_URL"]);
+        await redisClient.ping();
+        await redisClient.quit();
+        checks["redis"] = "ok";
+      } catch {
+        checks["redis"] = "unreachable";
+        healthy = false;
+      }
+    }
+
+    return reply.code(healthy ? 200 : 503).send({
+      status: healthy ? "ok" : "degraded",
+      checks,
+      uptime: Math.floor((Date.now() - chatBootTime) / 1000),
       managedChannels: registry?.size ?? 0,
-      timestamp: new Date().toISOString(),
-    };
+    });
   });
 
   // Telegram webhook endpoint (single-tenant) — uses ChannelGateway + PlatformIngress
