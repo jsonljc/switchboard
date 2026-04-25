@@ -38,6 +38,7 @@
     "jose": "^6.2.2",
     "pino": "^9.0.0",
     "prom-client": "^15.1.0",
+    "resend": "^6.12.2",
     "stripe": "^22.1.0",
     "zod": "^3.23.0",
     "zod-to-json-schema": "^3.25.1"

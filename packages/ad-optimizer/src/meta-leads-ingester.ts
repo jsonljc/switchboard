@@ -2,6 +2,7 @@ export interface LeadData {
   leadId: string;
   adId: string;
   formId: string;
+  campaignId?: string;
   name?: string;
   email?: string;
   phone?: string;
@@ -16,6 +17,7 @@ interface LeadgenValue {
   leadgen_id: string;
   ad_id: string;
   form_id: string;
+  campaign_id?: string;
   field_data?: FieldData[];
 }
 
@@ -47,6 +49,7 @@ export function parseLeadWebhook(payload: unknown): LeadData[] {
         leadId: value.leadgen_id,
         adId: value.ad_id,
         formId: value.form_id,
+        campaignId: value.campaign_id,
         name: findField(fields, "full_name"),
         email: findField(fields, "email"),
         phone: findField(fields, "phone_number"),

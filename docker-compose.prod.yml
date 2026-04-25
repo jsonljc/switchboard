@@ -181,9 +181,35 @@ services:
     networks:
       - internal
 
+  db-backup:
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c '
+        while true; do
+          TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
+          BACKUP_FILE="/backups/switchboard_$${TIMESTAMP}.sql.gz";
+          echo "Starting backup → $${BACKUP_FILE}";
+          pg_dump "$$DATABASE_URL" | gzip > "$${BACKUP_FILE}";
+          find /backups -name "switchboard_*.sql.gz" -mtime +30 -delete;
+          echo "Backup complete. Sleeping 24h.";
+          sleep 86400;
+        done
+      '
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-switchboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-switchboard}
+    volumes:
+      - db_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
 volumes:
   postgres_data:
   redis_data:
+  db_backups:
   certbot_etc:
   certbot_var:
   certbot_webroot:

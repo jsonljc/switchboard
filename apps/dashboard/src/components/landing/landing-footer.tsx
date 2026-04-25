@@ -94,6 +94,28 @@ export function LandingFooter() {
               >
                 Contact us
               </a>
+              <Link
+                href="/privacy"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/terms"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.875rem",
+                  color: "#6B6560",
+                  textDecoration: "none",
+                }}
+              >
+                Terms
+              </Link>
             </div>
           </div>
         </div>

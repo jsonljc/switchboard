@@ -85,6 +85,10 @@ function resolveLeadToBooking(input: ResolverInput): ResolvedState {
     };
   }
 
+  if (!hasCalendar) {
+    return { state: "live", subtext: "Not connected — bookings saved locally" };
+  }
+
   return { state: "live", subtext: "Qualifying and booking leads" };
 }
 

@@ -24,6 +24,10 @@ import {
   MetaAdsClient,
 } from "@switchboard/ad-optimizer";
 import type { CronDependencies } from "@switchboard/ad-optimizer";
+import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
+import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
+import { createReconciliationCron } from "../services/cron/reconciliation.js";
+import type { ReconciliationCronDeps } from "../services/cron/reconciliation.js";
 
 export async function registerInngest(app: FastifyInstance): Promise<void> {
   if (!app.prisma) {
@@ -136,6 +140,69 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
     },
   };
 
+  // Meta token refresh cron dependencies
+  const metaTokenRefreshDeps: MetaTokenRefreshDeps = {
+    listMetaConnections: async () => {
+      const allConnections = await app.prisma!.deploymentConnection.findMany({
+        where: { type: "meta-ads" },
+      });
+      return allConnections.map(
+        (c: {
+          id: string;
+          deploymentId: string;
+          type: string;
+          status: string;
+          credentials: string;
+          metadata: unknown;
+        }) => ({
+          id: c.id,
+          deploymentId: c.deploymentId,
+          type: c.type,
+          status: c.status,
+          credentials: c.credentials,
+          metadata: (c.metadata as Record<string, unknown>) ?? null,
+        }),
+      );
+    },
+    updateCredentials: async (id, credentials) => {
+      await connectionStore.updateCredentials(id, credentials);
+    },
+    updateStatus: async (id, status) => {
+      await connectionStore.updateStatus(id, status);
+    },
+    refreshTokenIfNeeded: async (config, currentToken, expiresAt) => {
+      const { refreshTokenIfNeeded } = await import("@switchboard/ad-optimizer");
+      return refreshTokenIfNeeded(config, currentToken, expiresAt);
+    },
+    getOAuthConfig: () => ({
+      appId: process.env["META_APP_ID"] ?? "",
+      appSecret: process.env["META_APP_SECRET"] ?? "",
+      redirectUri: process.env["META_OAUTH_REDIRECT_URI"] ?? "",
+    }),
+  };
+
+  // Reconciliation cron dependencies
+  const reconciliationDeps: ReconciliationCronDeps = {
+    listActiveOrganizations: async () => {
+      const orgs = await app.prisma!.organizationConfig.findMany({
+        where: { provisioningStatus: "active" },
+        select: { id: true, name: true },
+      });
+      return orgs;
+    },
+    runReconciliation: async (orgId, dateRange) => {
+      // Stub — full wiring requires booking/conversion/opportunity stores
+      // Returns healthy by default; real implementation connects ReconciliationRunner
+      return {
+        organizationId: orgId,
+        overallStatus: "healthy",
+        checks: [],
+        dateRangeFrom: dateRange.from,
+        dateRangeTo: dateRange.to,
+      };
+    },
+  };
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -161,6 +228,8 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       }),
       createWeeklyAuditCron(adOptimizerDeps),
       createDailyCheckCron(adOptimizerDeps),
+      createMetaTokenRefreshCron(metaTokenRefreshDeps),
+      createReconciliationCron(reconciliationDeps),
     ],
   });
 

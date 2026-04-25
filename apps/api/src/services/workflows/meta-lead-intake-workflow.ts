@@ -5,6 +5,7 @@ interface MetaLeadIntakeDeps {
   parseLeadWebhook?: (payload: unknown) => Array<{
     leadId: string;
     adId: string;
+    campaignId?: string;
     name?: string;
     phone?: string;
     email?: string;
@@ -58,10 +59,10 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           source: "meta-instant-form",
           attribution: {
             sourceAdId: lead.adId,
+            sourceCampaignId: lead.campaignId ?? null,
             fbclid: null,
             gclid: null,
             ttclid: null,
-            sourceCampaignId: null,
             utmSource: null,
             utmMedium: null,
             utmCampaign: null,
