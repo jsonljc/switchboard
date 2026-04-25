@@ -85,6 +85,9 @@ export * from "./three-channel.js";
 // Ad Optimizer (campaign insights, funnel analysis, audit reports)
 export * from "./ad-optimizer.js";
 
+// Ad Optimizer V2 (trends, budget, creative, saturation)
+export * from "./ad-optimizer-v2.js";
+
 // Knowledge entries (curated playbooks, policies, domain guidance)
 export * from "./knowledge.js";
 

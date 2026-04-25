@@ -1,5 +1,11 @@
 // packages/schemas/src/ad-optimizer.ts
 import { z } from "zod";
+import {
+  TrendAnalysisSchema,
+  BudgetAnalysisSchema,
+  CreativeAnalysisSchema,
+  AdSetDetailSchema,
+} from "./ad-optimizer-v2.js";
 
 // ── Enums ──
 
@@ -8,12 +14,15 @@ export type OutputTypeSchema = z.infer<typeof OutputTypeSchema>;
 
 export const RecommendationActionSchema = z.enum([
   "scale",
-  "kill",
+  "pause",
   "refresh_creative",
   "restructure",
   "hold",
   "test",
   "review_budget",
+  "add_creative",
+  "expand_targeting",
+  "consolidate",
 ]);
 export type RecommendationActionSchema = z.infer<typeof RecommendationActionSchema>;
 
@@ -22,6 +31,12 @@ export type UrgencySchema = z.infer<typeof UrgencySchema>;
 
 export const MetricDirectionSchema = z.enum(["up", "down", "stable"]);
 export type MetricDirectionSchema = z.infer<typeof MetricDirectionSchema>;
+
+export const FunnelShapeSchema = z.enum(["website", "instant_form", "whatsapp"]);
+export type FunnelShapeSchema = z.infer<typeof FunnelShapeSchema>;
+
+export const LearningStateSchema = z.enum(["learning", "learning_limited", "success", "unknown"]);
+export type LearningStateSchema = z.infer<typeof LearningStateSchema>;
 
 // ── Campaign & Ad Set Insights ──
 
@@ -89,6 +104,7 @@ export const FunnelAnalysisSchema = z.object({
   stages: z.array(FunnelStageSchema),
   leakagePoint: z.string(),
   leakageMagnitude: z.number(),
+  funnelShape: FunnelShapeSchema,
 });
 export type FunnelAnalysisSchema = z.infer<typeof FunnelAnalysisSchema>;
 
@@ -107,12 +123,29 @@ export type MetricDeltaSchema = z.infer<typeof MetricDeltaSchema>;
 // ── Learning Phase Status ──
 
 export const LearningPhaseStatusSchema = z.object({
+  adSetId: z.string(),
+  adSetName: z.string(),
   campaignId: z.string(),
-  inLearning: z.boolean(),
-  daysSinceChange: z.number(),
-  eventsAccumulated: z.number(),
-  eventsRequired: z.number(),
-  estimatedExitDate: z.coerce.date().nullable(),
+  state: LearningStateSchema,
+  metricsSnapshot: z
+    .object({
+      cpa: z.number(),
+      roas: z.number(),
+      ctr: z.number(),
+      spend: z.number(),
+      conversions: z.number(),
+    })
+    .nullable(),
+  postExitSnapshot: z
+    .object({
+      cpa: z.number(),
+      roas: z.number(),
+      ctr: z.number(),
+      spend: z.number(),
+      conversions: z.number(),
+    })
+    .nullable(),
+  exitStability: z.enum(["healthy", "unstable", "pending"]).nullable(),
 });
 export type LearningPhaseStatusSchema = z.infer<typeof LearningPhaseStatusSchema>;
 
@@ -185,11 +218,18 @@ export const AuditReportSchema = z.object({
     overallROAS: z.number(),
     activeCampaigns: z.number(),
     campaignsInLearning: z.number(),
+    adSetsInLearning: z.number(),
+    adSetsLearningLimited: z.number(),
   }),
-  funnel: FunnelAnalysisSchema,
+  funnel: z.array(FunnelAnalysisSchema),
   periodDeltas: z.array(MetricDeltaSchema),
   insights: z.array(InsightOutputSchema),
   watches: z.array(WatchOutputSchema),
   recommendations: z.array(RecommendationOutputSchema),
+  // V2 fields
+  trends: TrendAnalysisSchema.optional(),
+  budgetDistribution: BudgetAnalysisSchema.optional(),
+  creativeBreakdown: z.array(CreativeAnalysisSchema).optional(),
+  adSetDetails: z.array(AdSetDetailSchema).optional(),
 });
 export type AuditReportSchema = z.infer<typeof AuditReportSchema>;

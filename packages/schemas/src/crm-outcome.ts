@@ -79,11 +79,25 @@ export interface TargetBreachResult {
   isApproximate: boolean;
 }
 
+/** @deprecated Use AdSetLearningInput for ad-set-level learning status */
 export interface CampaignLearningInput {
   effectiveStatus: string;
   learningPhase: boolean;
   lastModifiedDays: number;
   optimizationEvents: number;
+}
+
+export interface AdSetLearningInput {
+  adSetId: string;
+  adSetName: string;
+  campaignId: string;
+  learningStageStatus: "LEARNING" | "SUCCESS" | "FAIL" | "UNKNOWN";
+  frequency: number;
+  spend: number;
+  conversions: number;
+  cpa: number;
+  roas: number;
+  ctr: number;
 }
 
 export interface CampaignInsightsProvider {
