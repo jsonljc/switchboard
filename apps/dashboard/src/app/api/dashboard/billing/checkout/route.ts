@@ -5,10 +5,16 @@ import { proxyError } from "@/lib/proxy-error";
 
 export async function POST(request: NextRequest) {
   try {
-    await requireDashboardSession();
+    const session = await requireDashboardSession();
     const client = await getApiClient();
     const body = (await request.json()) as { priceId: string };
-    const data = await client.createCheckout(body.priceId);
+
+    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3002";
+    const data = await client.createCheckout(body.priceId, {
+      email: session.user?.email ?? "",
+      successUrl: `${baseUrl}/settings/billing?checkout=success`,
+      cancelUrl: `${baseUrl}/settings/billing?checkout=canceled`,
+    });
     return NextResponse.json(data);
   } catch (err: unknown) {
     return proxyError(

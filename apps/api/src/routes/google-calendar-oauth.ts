@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { createHmac } from "node:crypto";
 import { google } from "googleapis";
 import {
   PrismaDeploymentConnectionStore,
@@ -35,6 +36,31 @@ const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
 
+function getStateSecret(): string {
+  return process.env["SESSION_TOKEN_SECRET"] || process.env["NEXTAUTH_SECRET"] || "dev-fallback";
+}
+
+function signState(deploymentId: string): string {
+  const timestamp = Date.now().toString(36);
+  const payload = `${deploymentId}:${timestamp}`;
+  const sig = createHmac("sha256", getStateSecret()).update(payload).digest("hex").slice(0, 16);
+  return `${payload}:${sig}`;
+}
+
+function verifyState(state: string): { valid: boolean; deploymentId: string } {
+  const parts = state.split(":");
+  if (parts.length !== 3) return { valid: false, deploymentId: "" };
+  const [deploymentId, timestamp, sig] = parts as [string, string, string];
+  const expectedSig = createHmac("sha256", getStateSecret())
+    .update(`${deploymentId}:${timestamp}`)
+    .digest("hex")
+    .slice(0, 16);
+  if (sig !== expectedSig) return { valid: false, deploymentId: "" };
+  const age = Date.now() - parseInt(timestamp, 36);
+  if (age > 10 * 60 * 1000) return { valid: false, deploymentId: "" };
+  return { valid: true, deploymentId };
+}
+
 export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/connections/google-calendar/authorize — redirect to Google OAuth consent screen
   app.get<{ Querystring: { deploymentId?: string } }>(
@@ -60,7 +86,7 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         const url = oauth2Client.generateAuthUrl({
           access_type: "offline",
           scope: CALENDAR_SCOPES,
-          state: deploymentId,
+          state: signState(deploymentId),
           prompt: "consent",
         });
 
@@ -89,10 +115,10 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { code, state: deploymentId, error } = request.query;
+      const { code, state, error } = request.query;
 
       if (error) {
-        app.log.warn({ error, deploymentId }, "Google Calendar OAuth error callback");
+        app.log.warn({ error, state }, "Google Calendar OAuth error callback");
         return reply.code(400).send({
           error: "Google Calendar OAuth denied",
           detail: error,
@@ -100,9 +126,15 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      if (!code || !deploymentId) {
+      if (!code || !state) {
         return reply.code(400).send({ error: "Missing code or state parameter", statusCode: 400 });
       }
+
+      const stateResult = verifyState(state);
+      if (!stateResult.valid) {
+        return reply.code(400).send({ error: "Invalid or expired OAuth state", statusCode: 400 });
+      }
+      const deploymentId = stateResult.deploymentId;
 
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });

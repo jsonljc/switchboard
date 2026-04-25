@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
       contactName: string;
       service?: string;
       amount: number;
+      currency?: string;
       date?: string;
     };
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     const data = await client.recordRevenue(session.organizationId, {
       contactId,
       amount: body.amount,
-      currency: "SGD",
+      currency: body.currency ?? "USD",
       type: "payment",
       recordedBy: "owner",
       externalReference: body.service ?? null,

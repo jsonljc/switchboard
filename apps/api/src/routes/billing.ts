@@ -162,8 +162,13 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const rawBody =
-        (request as unknown as { rawBody?: string }).rawBody ?? JSON.stringify(request.body);
+      const rawBody = (request as unknown as { rawBody?: string }).rawBody;
+      if (!rawBody) {
+        return reply.code(500).send({
+          error: "Raw body not available — configure Fastify rawBody parser for webhook routes",
+          statusCode: 500,
+        });
+      }
 
       let result: Awaited<ReturnType<typeof handleWebhookEvent>>;
       try {

@@ -65,8 +65,11 @@ export async function fetchLeadDetail(
   leadId: string,
   accessToken: string,
 ): Promise<LeadDetailResponse> {
-  const url = `${GRAPH_API_BASE}/${leadId}?fields=id,ad_id,form_id,campaign_id,field_data&access_token=${accessToken}`;
-  const response = await fetch(url);
+  const params = new URLSearchParams({ fields: "id,ad_id,form_id,campaign_id,field_data" });
+  const url = `${GRAPH_API_BASE}/${leadId}?${params.toString()}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch lead ${leadId}: HTTP ${response.status}`);
   }

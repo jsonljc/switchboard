@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   CalendarProvider,
   SlotQuery,
@@ -22,7 +23,7 @@ export class NoopCalendarProvider implements CalendarProvider {
   async createBooking(input: CreateBookingInput): Promise<Booking> {
     this.logger.info("NoopCalendarProvider: createBooking called — returning stub booking");
     return {
-      id: "",
+      id: `noop-${randomUUID()}`,
       contactId: input.contactId,
       organizationId: input.organizationId,
       opportunityId: input.opportunityId ?? null,

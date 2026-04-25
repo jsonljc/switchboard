@@ -23,10 +23,18 @@ export class SwitchboardBillingClient extends SwitchboardKnowledgeClient {
     return this.request("/api/billing/status");
   }
 
-  async createCheckout(priceId: string): Promise<CheckoutResult> {
+  async createCheckout(
+    priceId: string,
+    opts?: { email?: string; successUrl?: string; cancelUrl?: string },
+  ): Promise<CheckoutResult> {
     return this.request("/api/billing/checkout", {
       method: "POST",
-      body: JSON.stringify({ priceId }),
+      body: JSON.stringify({
+        priceId,
+        email: opts?.email,
+        successUrl: opts?.successUrl,
+        cancelUrl: opts?.cancelUrl,
+      }),
     });
   }
 
