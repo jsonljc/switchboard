@@ -40,6 +40,10 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
   }
 
   app.post<{ Body: { esToken?: string } }>("/whatsapp/onboard", async (request, reply) => {
+    if (!request.principalIdFromAuth && process.env.NODE_ENV === "production") {
+      return reply.code(401).send({ error: "Authentication required" });
+    }
+
     const { esToken } = request.body ?? {};
     if (!esToken) {
       return reply.code(400).send({ error: "esToken is required" });
@@ -47,7 +51,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
 
     try {
       // 1. Extract WABA ID from debug_token
-      const tokenInfo = await graphCall(`/debug_token?input_token=${esToken}`);
+      const tokenInfo = await graphCall(`/debug_token?input_token=${encodeURIComponent(esToken)}`);
       const data = tokenInfo["data"] as Record<string, unknown>;
       const scopes = data["granular_scopes"] as Array<{
         scope: string;
