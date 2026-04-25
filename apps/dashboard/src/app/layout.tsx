@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
+import Script from "next/script";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -41,6 +42,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className={inter.className}>
         <QueryProvider>{children}</QueryProvider>
+        {process.env.NEXT_PUBLIC_META_APP_ID && (
+          <Script
+            src="https://connect.facebook.net/en_US/sdk.js"
+            strategy="lazyOnload"
+            onLoad={() => {
+              window.FB?.init({
+                appId: process.env.NEXT_PUBLIC_META_APP_ID!,
+                cookie: true,
+                xfbml: true,
+                version: "v21.0",
+              });
+            }}
+          />
+        )}
       </body>
     </html>
   );
