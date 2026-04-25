@@ -165,7 +165,7 @@ describe("ads-analytics tool", () => {
         },
       });
       expect(result.status).toBe("success");
-      expect(result.data?.inLearning).toBe(true);
+      expect(result.data?.state).toBe("learning");
     });
 
     it("detects campaign not in learning", async () => {
@@ -179,7 +179,7 @@ describe("ads-analytics tool", () => {
         },
       });
       expect(result.status).toBe("success");
-      expect(result.data?.inLearning).toBe(false);
+      expect(result.data?.state).toBe("success");
     });
   });
 
