@@ -26,6 +26,9 @@ import { ModuleCards } from "@/components/dashboard/module-cards";
 import { RecommendationBar } from "@/components/dashboard/recommendation-bar";
 import { SynergyStrip } from "@/components/dashboard/synergy-strip";
 import { EmergencyHaltButton } from "./emergency-halt-button";
+import { DispatchToggle } from "./dispatch-toggle";
+import { useOrgConfig } from "@/hooks/use-org-config";
+import { formatOrgCurrency } from "@/lib/format-currency";
 
 export function OwnerToday() {
   const { data: session } = useSession();
@@ -36,6 +39,8 @@ export function OwnerToday() {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const { toast } = useToast();
   const { data: modules } = useModuleStatus();
+  const { data: orgData } = useOrgConfig();
+  const currency = orgData?.config?.currency ?? "SGD";
 
   const animate = !hasPlayed;
 
@@ -71,12 +76,21 @@ export function OwnerToday() {
             : "The action has been blocked.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Something went wrong",
-        description: "Try again or check your connection.",
-        variant: "destructive",
-      });
+    onError: (err: Error) => {
+      const msg = err.message.toLowerCase();
+      const title =
+        msg.includes("unauthorized") || msg.includes("401")
+          ? "Session expired"
+          : msg.includes("fetch") || msg.includes("network")
+            ? "Cannot reach the server"
+            : "Approval failed";
+      const description =
+        msg.includes("unauthorized") || msg.includes("401")
+          ? "Please refresh the page and log in again."
+          : msg.includes("fetch") || msg.includes("network")
+            ? "Check that the API server is running, then retry."
+            : "The action could not be completed. Please try again.";
+      toast({ title, description, variant: "destructive" });
     },
     onSettled: () => {
       setRespondingId(null);
@@ -182,7 +196,7 @@ export function OwnerToday() {
     { label: "Bookings today", value: overview.stats.bookingsToday },
     {
       label: "Revenue (7d)",
-      value: `$${overview.stats.revenue7d.total.toLocaleString()}`,
+      value: formatOrgCurrency(overview.stats.revenue7d.total, currency),
       isRevenue: true,
     },
     {
@@ -313,8 +327,17 @@ export function OwnerToday() {
         </div>
       )}
 
-      {/* Emergency Halt */}
-      <div style={{ marginTop: "24px" }}>
+      {/* Dispatch Toggle + Emergency Halt */}
+      <div
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          alignItems: "start",
+          gap: "16px",
+          flexWrap: "wrap",
+        }}
+      >
+        <DispatchToggle />
         <EmergencyHaltButton />
       </div>
 
@@ -332,7 +355,7 @@ export function OwnerToday() {
       {/* Wave 2: Stat Strip */}
       <FadeIn delay={animate ? 200 : 0} translateY={animate ? 8 : 0}>
         <div style={{ marginTop: "48px" }}>
-          <StatCardGrid stats={stats} />
+          <StatCardGrid stats={stats} lastUpdated={overview.generatedAt} />
         </div>
       </FadeIn>
 
@@ -357,6 +380,7 @@ export function OwnerToday() {
                 topSource={overview.revenue.topSource}
                 dailyBreakdown={(overview.revenue as { dailyBreakdown?: number[] }).dailyBreakdown}
                 animate={animate}
+                currency={currency}
               />
               <OwnerTaskList tasks={overview.tasks} onComplete={handleTaskComplete} />
             </div>

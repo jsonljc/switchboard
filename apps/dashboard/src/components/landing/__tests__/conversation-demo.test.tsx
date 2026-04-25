@@ -8,7 +8,7 @@ describe("ConversationDemo", () => {
   it("renders the phone frame with header", () => {
     render(<ConversationDemo />);
     expect(screen.getByText("Alex")).toBeInTheDocument();
-    expect(screen.getByText("Speed-to-Lead")).toBeInTheDocument();
+    expect(screen.getByText("Booking Agent")).toBeInTheDocument();
     expect(screen.getByText("Online")).toBeInTheDocument();
   });
 

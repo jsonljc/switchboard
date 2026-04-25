@@ -8,9 +8,9 @@ describe("PricingSection", () => {
     expect(screen.getByText("Simple pricing for your first booking agent.")).toBeInTheDocument();
   });
 
-  it("renders Alex card with price", () => {
+  it("renders Starter card with price", () => {
     render(<PricingSection />);
-    expect(screen.getByText("Alex")).toBeInTheDocument();
+    expect(screen.getByText("Starter")).toBeInTheDocument();
     expect(screen.getByText("Your first booking agent")).toBeInTheDocument();
     expect(screen.getByText(/\$49/)).toBeInTheDocument();
   });

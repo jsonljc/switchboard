@@ -74,6 +74,7 @@ export const DashboardOverviewSchema = z.object({
       description: z.string(),
       dotColor: z.enum(["green", "amber", "blue", "gray"]),
       createdAt: z.string(),
+      reasoning: z.string().nullable().optional(),
     }),
   ),
 });

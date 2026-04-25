@@ -89,7 +89,7 @@ function MiniCard({
             >
               {agent.trustScore}
             </div>
-            <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>trust score</span>
+            <span style={{ fontSize: "0.8125rem", color: "#9C958F" }}>performance score</span>
           </div>
           <Link
             href={`/agents/${agent.slug}`}

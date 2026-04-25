@@ -12,6 +12,7 @@ export interface OrgConfig {
   onboardingComplete: boolean;
   managedChannels: string[];
   provisioningStatus: string;
+  currency?: string;
 }
 
 async function fetchOrgConfig(): Promise<{ config: OrgConfig }> {

@@ -41,7 +41,7 @@ describe("HeroCardCluster", () => {
     expect(screen.getByText("Speed-to-Lead")).toBeInTheDocument();
   });
 
-  it("renders primary trust score", () => {
+  it("renders primary performance score", () => {
     render(<HeroCardCluster agents={agents} />);
     expect(screen.getByText("84")).toBeInTheDocument();
   });

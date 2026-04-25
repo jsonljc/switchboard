@@ -39,8 +39,8 @@ export function TaskReviewDialog({
           <DialogTitle>{action === "approved" ? "Approve" : "Reject"} this output?</DialogTitle>
           <DialogDescription>
             {action === "approved"
-              ? `This will improve the agent's trust score for "${taskCategory}" tasks.`
-              : `This will lower the agent's trust score for "${taskCategory}" tasks.`}
+              ? `This will improve the agent's performance score for "${taskCategory}" tasks.`
+              : `This will lower the agent's performance score for "${taskCategory}" tasks.`}
           </DialogDescription>
         </DialogHeader>
 

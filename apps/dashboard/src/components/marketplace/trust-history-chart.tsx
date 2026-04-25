@@ -39,7 +39,7 @@ export function TrustHistoryChart({
                   minute: "2-digit",
                 })
               }
-              formatter={(value: number) => [`${value}`, "Trust Score"]}
+              formatter={(value: number) => [`${value}`, "Performance Score"]}
               contentStyle={{
                 backgroundColor: "hsl(var(--surface))",
                 border: "1px solid hsl(var(--border))",

@@ -13,35 +13,7 @@ export default function SignupPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const [verificationSent, setVerificationSent] = useState(false);
-  const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "waitlist";
-
-  if (launchMode !== "beta" && launchMode !== "public") {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#1A1714",
-          color: "#EDE8E1",
-          padding: "2rem",
-        }}
-      >
-        <div style={{ textAlign: "center", maxWidth: "24rem" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>
-            Not yet open
-          </h1>
-          <p style={{ color: "#7A736C", marginBottom: "2rem" }}>
-            Registration is currently invite-only.
-          </p>
-          <Link href="/get-started" style={{ color: "#A07850", textDecoration: "underline" }}>
-            Join the waitlist
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const _launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "public";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

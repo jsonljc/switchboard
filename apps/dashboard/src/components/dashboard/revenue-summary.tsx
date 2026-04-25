@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SectionLabel } from "./section-label";
+import { formatOrgCurrency } from "@/lib/format-currency";
 
 interface RevenueSummaryProps {
   total: number;
@@ -7,15 +8,7 @@ interface RevenueSummaryProps {
   topSource: { name: string; amount: number } | null;
   dailyBreakdown?: number[];
   animate?: boolean;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "SGD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  currency?: string;
 }
 
 export function RevenueSummary({
@@ -24,6 +17,7 @@ export function RevenueSummary({
   topSource,
   dailyBreakdown: _dailyBreakdown,
   animate: _animate,
+  currency,
 }: RevenueSummaryProps) {
   return (
     <div>
@@ -55,7 +49,7 @@ export function RevenueSummary({
             lineHeight: 1,
           }}
         >
-          {formatCurrency(total)}
+          {formatOrgCurrency(total, currency)}
         </p>
         <p style={{ fontSize: "14px", color: "var(--sw-text-secondary)", marginTop: "8px" }}>
           {count === 0
@@ -64,7 +58,7 @@ export function RevenueSummary({
         </p>
         {topSource && (
           <p style={{ fontSize: "14px", color: "var(--sw-text-secondary)", marginTop: "4px" }}>
-            Top: {topSource.name} · {formatCurrency(topSource.amount)}
+            Top: {topSource.name} · {formatOrgCurrency(topSource.amount, currency)}
           </p>
         )}
       </div>

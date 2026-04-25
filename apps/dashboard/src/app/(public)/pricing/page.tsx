@@ -9,81 +9,63 @@ export const metadata: Metadata = {
 
 const TIERS = [
   {
-    name: "Free",
-    price: "$0",
-    period: "forever",
+    name: "Starter",
+    price: "$49",
+    period: "per month",
     threshold: "Start here",
     thresholdScore: null,
     autonomy: "Supervised",
     autonomyDesc: "Every action reviewed by you",
     capabilities: [
-      "Up to 50 tasks / month",
+      "1 AI operator",
+      "500 conversations / month",
       "All channels (WhatsApp, Telegram, web)",
       "Full audit trail",
-      "Manual approval required",
     ],
-    cta: "Get started free",
-    ctaHref: "/get-started",
+    cta: "Get Started",
+    ctaHref: "/signup",
     dark: false,
     highlight: false,
     accent: "#C8C3BC",
   },
   {
-    name: "Basic",
-    price: "$49",
-    period: "per month",
-    threshold: "Unlocks at 40+ trust",
-    thresholdScore: 40,
-    autonomy: "Semi-supervised",
-    autonomyDesc: "Routine tasks run independently",
-    capabilities: [
-      "Unlimited tasks",
-      "Routine actions auto-approved",
-      "Exception-only review",
-      "Performance analytics",
-    ],
-    cta: "Join waitlist",
-    ctaHref: "/get-started",
-    dark: false,
-    highlight: false,
-    accent: "#B89870",
-  },
-  {
     name: "Pro",
     price: "$149",
     period: "per month",
-    threshold: "Unlocks at 70+ trust",
-    thresholdScore: 70,
-    autonomy: "Autonomous",
-    autonomyDesc: "Operates independently within scope",
+    threshold: "Most businesses start here",
+    thresholdScore: null,
+    autonomy: "Semi-supervised",
+    autonomyDesc: "Routine tasks run independently",
     capabilities: [
-      "Everything in Basic",
-      "Multi-agent coordination",
-      "Custom guardrails",
+      "3 AI operators",
+      "5,000 conversations / month",
+      "Custom playbooks",
+      "Advanced analytics",
       "Priority support",
     ],
-    cta: "Join waitlist",
-    ctaHref: "/get-started",
+    cta: "Get Started",
+    ctaHref: "/signup",
     dark: false,
     highlight: true,
     accent: "#A07850",
   },
   {
-    name: "Elite",
-    price: "$349",
+    name: "Scale",
+    price: "$399",
     period: "per month",
-    threshold: "Unlocks at 90+ trust",
-    thresholdScore: 90,
-    autonomy: "Fully trusted",
-    autonomyDesc: "Humans step in only on exception",
+    threshold: "For growing teams",
+    thresholdScore: null,
+    autonomy: "Autonomous",
+    autonomyDesc: "Operates independently within scope",
     capabilities: [
-      "Everything in Pro",
-      "Dedicated account support",
-      "Custom agent configuration",
-      "SLA guarantees",
+      "Unlimited operators",
+      "Unlimited conversations",
+      "Custom integrations",
+      "Dedicated support",
+      "Team management",
     ],
-    cta: "Join waitlist",
-    ctaHref: "/get-started",
+    cta: "Get Started",
+    ctaHref: "/signup",
     dark: true,
     highlight: false,
     accent: "#C4986A",
@@ -92,20 +74,20 @@ const TIERS = [
 
 const FAQ = [
   {
-    q: "Can I downgrade an agent?",
-    a: "Yes. You can manually cap any agent at a lower tier regardless of its trust score. You stay in control at all times.",
+    q: "Can I change plans?",
+    a: "Yes. You can upgrade or downgrade at any time. Changes take effect on your next billing cycle.",
   },
   {
-    q: "How does an agent earn trust?",
-    a: "Trust is calculated from its track record: tasks completed correctly, approvals received, exceptions flagged, and consistency over time. The more reliably it performs, the higher its score.",
+    q: "How does the performance score work?",
+    a: "Performance is calculated from real task completions: tasks handled correctly, approvals received, exceptions flagged, and consistency over time. The more reliably it performs, the higher its score.",
   },
   {
     q: "Do I need a credit card to start?",
-    a: "No. Every agent starts on Free with no payment required. You only upgrade when the agent has earned it.",
+    a: "No. Sign up and start with a free trial. You only pay when you're ready.",
   },
   {
-    q: "What happens if an agent loses trust score?",
-    a: "If performance drops below a tier's threshold, the agent reverts to the previous tier automatically. You'll be notified, and it will require more supervision until it earns the score back.",
+    q: "Can I cancel anytime?",
+    a: "Yes. No lock-in, no long-term contracts. Cancel from your billing settings at any time.",
   },
 ];
 
@@ -228,7 +210,7 @@ export default function PricingPage() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      Most popular
+                      Recommended
                     </div>
                   )}
 
@@ -504,7 +486,7 @@ export default function PricingPage() {
       <section style={{ background: "#EDEAE5", paddingTop: "4rem", paddingBottom: "4rem" }}>
         <div className="page-width">
           <Link
-            href="/get-started"
+            href="/signup"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -517,7 +499,7 @@ export default function PricingPage() {
               textDecoration: "none",
             }}
           >
-            Start with a free agent →
+            Get Started →
           </Link>
         </div>
       </section>

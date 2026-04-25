@@ -215,7 +215,7 @@ export default function BillingPage() {
                 {plan.popular && (
                   <div className="absolute -top-2.5 left-4">
                     <Badge variant="default" className="text-[11px]">
-                      Most Popular
+                      Recommended
                     </Badge>
                   </div>
                 )}

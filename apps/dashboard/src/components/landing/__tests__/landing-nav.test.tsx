@@ -38,11 +38,11 @@ describe("LandingNav", () => {
     expect(screen.getByRole("link", { name: /dashboard/i, hidden: true })).toBeInTheDocument();
   });
 
-  it("shows Get started CTA", () => {
+  it("shows Get Started CTA", () => {
     render(<LandingNav isAuthenticated={false} />);
-    expect(screen.getByRole("link", { name: /get early access/i, hidden: true })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /get started/i, hidden: true })).toHaveAttribute(
       "href",
-      "/get-started",
+      "/signup",
     );
   });
 });

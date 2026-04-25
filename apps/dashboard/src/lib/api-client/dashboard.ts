@@ -52,4 +52,23 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     const qs = searchParams.toString();
     return this.request(`/api/${orgId}/roi/summary${qs ? `?${qs}` : ""}`);
   }
+
+  async recordRevenue(
+    orgId: string,
+    body: {
+      contactId: string;
+      amount: number;
+      currency: string;
+      type: string;
+      recordedBy: string;
+      externalReference: string | null;
+      sourceCampaignId: string | null;
+      sourceAdId: string | null;
+    },
+  ) {
+    return this.request(`/api/${orgId}/revenue`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
 }

@@ -143,7 +143,7 @@ export function ConversationDemo() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#1A1714" }}>Alex</span>
-              <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>Speed-to-Lead</span>
+              <span style={{ fontSize: "0.75rem", color: "#9C958F" }}>Booking Agent</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
               <div

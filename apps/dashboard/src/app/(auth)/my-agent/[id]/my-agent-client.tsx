@@ -184,10 +184,10 @@ export function MyAgentClient({
         )}
       </section>
 
-      {/* Trust Score Card */}
+      {/* Performance Score Card */}
       {trustBreakdown && (
         <section>
-          <h2 className="section-label mb-4">Agent Trust Score — Marketplace Reputation</h2>
+          <h2 className="section-label mb-4">Performance Score</h2>
           <div className="rounded-xl border border-border bg-surface p-6 space-y-6">
             {progressionLoading ? (
               <Skeleton className="h-48" />

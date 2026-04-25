@@ -72,7 +72,7 @@ export default async function AgentCatalogPage() {
               </p>
             </div>
             <Link
-              href="/get-started"
+              href="/signup"
               style={{
                 background: "#1A1714",
                 color: "#F5F3F0",
@@ -85,7 +85,7 @@ export default async function AgentCatalogPage() {
                 alignSelf: "flex-start",
               }}
             >
-              Get early access
+              Get Started
             </Link>
           </div>
         </div>

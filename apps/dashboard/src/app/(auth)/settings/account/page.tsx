@@ -33,6 +33,7 @@ export default function SettingsAccountPage() {
 
   const [businessName, setBusinessName] = useState("");
   const [operatorName, setOperatorName] = useState("");
+  const [orgCurrency, setOrgCurrency] = useState("SGD");
   const [nameInitialized, setNameInitialized] = useState(false);
   const { theme, setTheme } = useTheme();
 
@@ -46,6 +47,7 @@ export default function SettingsAccountPage() {
   if (orgConfig && !nameInitialized) {
     setBusinessName(orgConfig.name ?? "");
     setOperatorName(primaryOperator?.displayName ?? "");
+    setOrgCurrency(orgConfig.currency ?? "SGD");
     setNameInitialized(true);
   }
 
@@ -70,8 +72,15 @@ export default function SettingsAccountPage() {
   };
 
   const handleSaveGeneral = () => {
+    const updates: Record<string, unknown> = {};
     if (businessName.trim() && businessName !== orgConfig?.name) {
-      updateOrgConfig.mutate({ name: businessName.trim() });
+      updates.name = businessName.trim();
+    }
+    if (orgCurrency !== (orgConfig?.currency ?? "SGD")) {
+      updates.currency = orgCurrency;
+    }
+    if (Object.keys(updates).length > 0) {
+      updateOrgConfig.mutate(updates);
     }
     if (primaryOperator && operatorName.trim() && operatorName !== primaryOperator.displayName) {
       updateAgent.mutate({
@@ -143,6 +152,27 @@ export default function SettingsAccountPage() {
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="settings-currency">Currency</Label>
+                <select
+                  id="settings-currency"
+                  value={orgCurrency}
+                  onChange={(e) => setOrgCurrency(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="SGD">SGD - Singapore Dollar</option>
+                  <option value="USD">USD - US Dollar</option>
+                  <option value="MYR">MYR - Malaysian Ringgit</option>
+                  <option value="EUR">EUR - Euro</option>
+                  <option value="GBP">GBP - British Pound</option>
+                  <option value="AUD">AUD - Australian Dollar</option>
+                  <option value="JPY">JPY - Japanese Yen</option>
+                  <option value="THB">THB - Thai Baht</option>
+                  <option value="IDR">IDR - Indonesian Rupiah</option>
+                  <option value="PHP">PHP - Philippine Peso</option>
+                </select>
               </div>
 
               <div className="space-y-2">

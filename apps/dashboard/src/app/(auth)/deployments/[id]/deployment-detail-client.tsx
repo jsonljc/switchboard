@@ -105,10 +105,10 @@ export function DeploymentDetailClient({
         )}
       </section>
 
-      {/* Trust Score */}
+      {/* Performance Score */}
       {trustBreakdown && trustBreakdown.breakdown.length > 0 && (
         <section>
-          <h2 className="section-label mb-4">Trust Score</h2>
+          <h2 className="section-label mb-4">Performance Score</h2>
           <div className="rounded-xl border border-border bg-surface p-6 space-y-6">
             {/* Trust History Chart */}
             {progressionLoading ? (

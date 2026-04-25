@@ -106,7 +106,7 @@ export function PricingSection() {
                   color: "#1A1714",
                 }}
               >
-                Alex
+                Starter
               </h3>
               <p style={{ fontSize: "0.875rem", color: "#6B6560" }}>Your first booking agent</p>
             </div>
