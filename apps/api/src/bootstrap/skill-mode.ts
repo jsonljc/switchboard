@@ -372,8 +372,8 @@ async function resolveCalendarProvider(
     return provider;
   }
 
-  // Option 3: No provider available
-  throw new Error(
-    "Calendar unavailable: no GOOGLE_CALENDAR_CREDENTIALS and no business hours configured",
-  );
+  // Option 3: No provider available — use noop so the app still works
+  const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
+  logger.info("Calendar: using NoopCalendarProvider (no calendar configured, bookings disabled)");
+  return new NoopCalendarProvider();
 }
