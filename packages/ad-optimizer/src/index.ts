@@ -40,3 +40,4 @@ export { deduplicateCreatives, analyzeCreatives } from "./creative-analyzer.js";
 export type { RawAdData } from "./creative-analyzer.js";
 export { detectSaturation } from "./saturation-detector.js";
 export * from "./lead-intake/index.js";
+export * from "./outcome-dispatcher.js";
