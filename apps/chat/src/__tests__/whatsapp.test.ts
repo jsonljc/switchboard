@@ -315,6 +315,79 @@ describe("WhatsAppAdapter", () => {
       expect(msg!.metadata).toHaveProperty("interactiveType", "button_reply");
     });
 
+    it("should extract ctwa_clid and source_url from CTWA referral", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "CTWA User" }, wa_id: "6591234567" }],
+                  messages: [
+                    {
+                      from: "6591234567",
+                      id: "wamid.ctwa001",
+                      timestamp: "1700000000",
+                      text: { body: "hi" },
+                      type: "text",
+                      referral: {
+                        source_id: "120000000",
+                        source_type: "ad",
+                        source_url: "https://fb.me/abc",
+                        ctwa_clid: "ARxx_clickid_abc",
+                        headline: "Book now",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("ctwaClid", "ARxx_clickid_abc");
+      expect(msg!.metadata).toHaveProperty("ctwaSourceUrl", "https://fb.me/abc");
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "120000000");
+    });
+
+    it("should omit ctwaClid when referral lacks it", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: "6591234567",
+                      id: "wamid.noctwa",
+                      timestamp: "1700000000",
+                      text: { body: "hi" },
+                      type: "text",
+                      referral: {
+                        source_id: "ad_123",
+                        source_type: "ad",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata["ctwaClid"]).toBeUndefined();
+      expect(msg!.metadata["ctwaSourceUrl"]).toBeUndefined();
+    });
+
     it("should not include referral fields when referral is absent", () => {
       const payload = {
         object: "whatsapp_business_account",
