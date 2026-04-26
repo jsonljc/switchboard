@@ -131,7 +131,7 @@ describe("PrismaLeadWebhookStore", () => {
         orderBy: { createdAt: "desc" },
       });
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe("wh-2");
+      expect(result[0]?.id).toBe("wh-2");
     });
 
     it("returns empty array when org has no webhooks", async () => {
