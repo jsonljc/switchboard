@@ -50,7 +50,7 @@ function findNextHandlers(sf: SourceFile): RouteHandler[] {
     if (!sf.getFilePath().includes("route-next")) return out;
   }
   for (const fn of sf.getFunctions()) {
-    if (!fn.isExported() || !fn.isNamedExport()) continue;
+    if (!fn.isExported()) continue;
     const name = fn.getName();
     if (!name) continue;
     if ((MUTATING_METHODS as string[]).includes(name)) {
@@ -59,6 +59,19 @@ function findNextHandlers(sf: SourceFile): RouteHandler[] {
         method: name as HttpMethod,
         line: fn.getStartLineNumber(),
       });
+    }
+  }
+  for (const stmt of sf.getVariableStatements()) {
+    if (!stmt.isExported()) continue;
+    for (const decl of stmt.getDeclarations()) {
+      const name = decl.getName();
+      if ((MUTATING_METHODS as string[]).includes(name)) {
+        out.push({
+          framework: "next",
+          method: name as HttpMethod,
+          line: decl.getStartLineNumber(),
+        });
+      }
     }
   }
   return out;

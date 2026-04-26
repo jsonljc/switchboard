@@ -36,6 +36,7 @@ describe("findMutatingRouteHandlers", () => {
     expect(found).toHaveLength(1);
     expect(found[0].framework).toBe("next");
     expect(found[0].method).toBe("POST");
+    expect(found[0].line).toBeGreaterThan(0);
   });
 
   it("ignores Next App Router GET-only files", () => {
@@ -43,5 +44,28 @@ describe("findMutatingRouteHandlers", () => {
     const sf = p.addSourceFileAtPath(fixture("route-next-readonly.ts"));
     const found = findMutatingRouteHandlers(sf);
     expect(found).toHaveLength(0);
+  });
+
+  it("finds Next App Router POST exported as const arrow function", () => {
+    const p = project();
+    const sf = p.addSourceFileAtPath(fixture("route-next-const-export.ts"));
+    const found = findMutatingRouteHandlers(sf);
+    expect(found).toHaveLength(1);
+    expect(found[0].framework).toBe("next");
+    expect(found[0].method).toBe("POST");
+    expect(found[0].line).toBeGreaterThan(0);
+  });
+
+  it("finds Next App Router PUT/PATCH/DELETE in addition to POST", () => {
+    const p = project();
+    const sf = p.addSourceFileAtPath(fixture("route-next-all-methods.ts"));
+    const found = findMutatingRouteHandlers(sf);
+    expect(found).toHaveLength(4);
+    const methods = found.map((h) => h.method).sort();
+    expect(methods).toEqual(["DELETE", "PATCH", "POST", "PUT"]);
+    for (const h of found) {
+      expect(h.framework).toBe("next");
+      expect(h.line).toBeGreaterThan(0);
+    }
   });
 });
