@@ -1,0 +1,5 @@
+# Route ingress-check allowlist.
+# Each entry exempts ONE route path glob from the PlatformIngress.submit requirement.
+# Adding an entry requires a one-line reason. PR review enforces the bar.
+# Globs are matched against the repo-relative file path.
+[]

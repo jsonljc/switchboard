@@ -1,0 +1,2 @@
+- path: ".agent/tools/__tests__/fixtures/synthetic-violation/**"
+  reason: Synthetic test fixture for the check-routes tool itself.
