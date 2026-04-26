@@ -41,10 +41,38 @@ describe("RealCrmDataProvider", () => {
     expect(data.bySource.instant_form!.received).toBe(200);
   });
 
-  it("returns benchmarks", async () => {
+  it("returns benchmarks computed from real historical means", async () => {
     const provider = new RealCrmDataProvider(makeStore([]));
     const b = await provider.getBenchmarks({ orgId: "o1", accountId: "a1" });
+    // Spec field names
     expect(b.leadToQualified).toBe(0.5);
+    expect(b.qualifiedToBooked).toBe(0.6);
+    expect(b.bookedToPaid).toBe(0.7);
+    // Legacy *Rate field names mirror the spec fields
+    expect(b.leadToQualifiedRate).toBe(0.5);
+    expect(b.qualifiedToBookingRate).toBe(0.6);
+    expect(b.bookingToClosedRate).toBe(0.7);
+    expect(b.leadToClosedRate).toBeCloseTo(0.5 * 0.6 * 0.7);
+  });
+
+  it("returns null benchmarks when no historical data exists", async () => {
+    const store = {
+      queryFunnelCounts: vi.fn().mockResolvedValue([]),
+      queryHistoricalMeans: vi.fn().mockResolvedValue({
+        leadToQualified: null,
+        qualifiedToBooked: null,
+        bookedToPaid: null,
+      }),
+    };
+    const provider = new RealCrmDataProvider(store);
+    const b = await provider.getBenchmarks({ orgId: "o1", accountId: "a1" });
+    expect(b.leadToQualified).toBeNull();
+    expect(b.qualifiedToBooked).toBeNull();
+    expect(b.bookedToPaid).toBeNull();
+    expect(b.leadToQualifiedRate).toBeNull();
+    expect(b.qualifiedToBookingRate).toBeNull();
+    expect(b.bookingToClosedRate).toBeNull();
+    expect(b.leadToClosedRate).toBeNull();
   });
 
   it("preserves CrmFunnelData aggregate fields for backward compatibility", async () => {

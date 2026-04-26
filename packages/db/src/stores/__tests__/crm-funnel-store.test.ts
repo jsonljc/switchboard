@@ -68,15 +68,27 @@ describe("PrismaCrmFunnelStore", () => {
     expect(find("ctwa", "paid")?.revenue).toBe(1500);
   });
 
-  it("returns conservative defaults for historical means when no leads", async () => {
+  it("returns null historical means when no leads exist in the window", async () => {
     prisma.contact.findMany.mockResolvedValue([]);
     const means = await store.queryHistoricalMeans({ orgId: "o1" });
-    expect(means.leadToQualified).toBe(0.3);
-    expect(means.qualifiedToBooked).toBe(0.4);
-    expect(means.bookedToPaid).toBe(0.5);
+    expect(means.leadToQualified).toBeNull();
+    expect(means.qualifiedToBooked).toBeNull();
+    expect(means.bookedToPaid).toBeNull();
   });
 
-  it("computes historical means from cumulative counts", async () => {
+  it("returns null for downstream rates when intermediate counts are zero", async () => {
+    prisma.contact.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
+    prisma.opportunity.count.mockResolvedValue(0);
+    prisma.booking.count.mockResolvedValue(0);
+    prisma.lifecycleRevenueEvent.count.mockResolvedValue(0);
+
+    const means = await store.queryHistoricalMeans({ orgId: "o1" });
+    expect(means.leadToQualified).toBe(0); // 0/2 — well-defined zero
+    expect(means.qualifiedToBooked).toBeNull(); // no qualified denominator
+    expect(means.bookedToPaid).toBeNull(); // no bookings denominator
+  });
+
+  it("computes historical means from cumulative counts when data is present", async () => {
     prisma.contact.findMany.mockResolvedValue([
       { id: "c1" },
       { id: "c2" },

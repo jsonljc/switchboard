@@ -28,9 +28,9 @@ export interface CrmFunnelStore {
   }): Promise<CrmFunnelCountRow[]>;
 
   queryHistoricalMeans(query: { orgId: string }): Promise<{
-    leadToQualified: number;
-    qualifiedToBooked: number;
-    bookedToPaid: number;
+    leadToQualified: number | null;
+    qualifiedToBooked: number | null;
+    bookedToPaid: number | null;
   }>;
 }
 
@@ -44,6 +44,11 @@ export interface SourceFunnel {
   received: number;
   qualified: number;
   booked: number;
+  /**
+   * v1: always 0 — schema does not yet model show events. Consumers should treat
+   * a 0 here as "missing data" rather than "zero shows" (e.g., skip computing
+   * rates that involve `showed`, like bookedToShowed).
+   */
   showed: number;
   paid: number;
   revenue: number;
@@ -167,12 +172,20 @@ export class RealCrmDataProvider implements CrmDataProvider {
 
   async getBenchmarks(input: { orgId: string; accountId: string; vertical?: string }): Promise<
     FunnelBenchmarks & {
-      leadToQualified: number;
-      qualifiedToBooked: number;
-      bookedToPaid: number;
+      leadToQualified: number | null;
+      qualifiedToBooked: number | null;
+      bookedToPaid: number | null;
     }
   > {
     const means = await this.store.queryHistoricalMeans({ orgId: input.orgId });
+    // Composite leadToClosed is only well-defined when every link in the chain
+    // has data; if any leg is null the composite is null too.
+    const leadToClosed =
+      means.leadToQualified !== null &&
+      means.qualifiedToBooked !== null &&
+      means.bookedToPaid !== null
+        ? means.leadToQualified * means.qualifiedToBooked * means.bookedToPaid
+        : null;
     return {
       // Spec-flavoured field names (consumed by the per-source comparator).
       leadToQualified: means.leadToQualified,
@@ -184,7 +197,7 @@ export class RealCrmDataProvider implements CrmDataProvider {
       leadToQualifiedRate: means.leadToQualified,
       qualifiedToBookingRate: means.qualifiedToBooked,
       bookingToClosedRate: means.bookedToPaid,
-      leadToClosedRate: means.leadToQualified * means.qualifiedToBooked * means.bookedToPaid,
+      leadToClosedRate: leadToClosed,
     };
   }
 }

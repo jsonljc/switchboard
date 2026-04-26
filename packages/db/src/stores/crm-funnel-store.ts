@@ -181,14 +181,15 @@ export class PrismaCrmFunnelStore {
   /**
    * Computes 28-day rolling conversion means across all sources for the org.
    *
-   * For v1 we compute simple ratios from cumulative counts in the historical
-   * window; if the denominator is zero we return conservative defaults so the
-   * audit doesn't divide-by-zero downstream.
+   * Returns `null` for any rate whose denominator is 0 (no leads / no
+   * qualified / no booked in the window), so consumers can distinguish
+   * "missing data" from "zero conversion". Callers must handle null
+   * explicitly — there is no silent fallback.
    */
   async queryHistoricalMeans(query: { orgId: string }): Promise<{
-    leadToQualified: number;
-    qualifiedToBooked: number;
-    bookedToPaid: number;
+    leadToQualified: number | null;
+    qualifiedToBooked: number | null;
+    bookedToPaid: number | null;
   }> {
     const end = new Date();
     const start = new Date(end);
@@ -204,7 +205,7 @@ export class PrismaCrmFunnelStore {
     });
     const leadCount = contacts.length;
     if (leadCount === 0) {
-      return { leadToQualified: 0.3, qualifiedToBooked: 0.4, bookedToPaid: 0.5 };
+      return { leadToQualified: null, qualifiedToBooked: null, bookedToPaid: null };
     }
 
     const contactIds = contacts.map((c) => c.id);
@@ -234,8 +235,8 @@ export class PrismaCrmFunnelStore {
     });
 
     const leadToQualified = qualifiedOppCount / leadCount;
-    const qualifiedToBooked = qualifiedOppCount > 0 ? bookingCount / qualifiedOppCount : 0;
-    const bookedToPaid = bookingCount > 0 ? paidCount / bookingCount : 0;
+    const qualifiedToBooked = qualifiedOppCount > 0 ? bookingCount / qualifiedOppCount : null;
+    const bookedToPaid = bookingCount > 0 ? paidCount / bookingCount : null;
 
     return { leadToQualified, qualifiedToBooked, bookedToPaid };
   }

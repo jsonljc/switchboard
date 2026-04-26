@@ -44,8 +44,11 @@ export function analyzeFunnel(input: FunnelInput): FunnelAnalysis {
     makeStage("Clicks", totalClicks, clickRate, ctrBenchmark),
     makeStage("Landing Page Views", lpvCount, lpvRate, lpvRate),
     makeStage("Leads", crmData.leads, leadRate, leadBenchmark),
-    makeStage("Qualified", crmData.qualified, qualRate, crmBenchmarks.leadToQualifiedRate),
-    makeStage("Closed", crmData.closed, closeRate, crmBenchmarks.bookingToClosedRate),
+    // Null benchmarks (no historical data) collapse to 0 here so the funnel
+    // still renders; downstream consumers that need to distinguish "no
+    // benchmark" from "0% benchmark" should read the raw provider output.
+    makeStage("Qualified", crmData.qualified, qualRate, crmBenchmarks.leadToQualifiedRate ?? 0),
+    makeStage("Closed", crmData.closed, closeRate, crmBenchmarks.bookingToClosedRate ?? 0),
   ];
 
   if (totalImpressions === 0) {
