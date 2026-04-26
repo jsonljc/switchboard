@@ -20,6 +20,15 @@ const KILL_DAYS_THRESHOLD = 7;
 
 // ── Input type ──
 
+export interface SourceComparisonRow {
+  source: string;
+  cpl: number | null;
+  costPerQualified: number | null;
+  costPerBooked: number | null;
+  closeRate: number | null;
+  trueRoas: number | null;
+}
+
 export interface RecommendationInput {
   campaignId: string;
   campaignName: string;
@@ -29,6 +38,14 @@ export interface RecommendationInput {
   targetROAS: number;
   currentSpend: number;
   targetBreach: TargetBreachResult;
+  sourceComparison?: { rows: SourceComparisonRow[] };
+  /**
+   * Optional flag set externally (e.g. by CAPI dispatch tracker) when no
+   * Schedule events have been received in 7+ days for a CTWA campaign.
+   * The recommendation engine itself does not have visibility into CAPI
+   * dispatch state, so this is a heuristic input rather than computed.
+   */
+  capiAttributionStale?: boolean;
 }
 
 // ── Helpers ──
@@ -49,6 +66,7 @@ function makeRec(
   estimatedImpact: string,
   steps: string[],
   learningPhaseImpact: string,
+  params?: Record<string, string>,
 ): RecommendationOutput {
   return {
     type: "recommendation",
@@ -60,7 +78,33 @@ function makeRec(
     estimatedImpact,
     steps,
     learningPhaseImpact,
+    ...(params ? { params } : {}),
   };
+}
+
+const SHIFT_TRUE_ROAS_RATIO = 2;
+const SHIFT_MIN_CLOSE_RATE = 0.05;
+
+function findShiftCandidates(
+  rows: SourceComparisonRow[],
+): { from: SourceComparisonRow; to: SourceComparisonRow } | null {
+  const eligible = rows.filter(
+    (r) => r.trueRoas !== null && r.trueRoas !== undefined && r.closeRate !== null,
+  );
+  if (eligible.length < 2) return null;
+  let best: SourceComparisonRow | null = null;
+  let worst: SourceComparisonRow | null = null;
+  for (const row of eligible) {
+    if (best === null || (row.trueRoas ?? 0) > (best.trueRoas ?? 0)) best = row;
+    if (worst === null || (row.trueRoas ?? 0) < (worst.trueRoas ?? 0)) worst = row;
+  }
+  if (!best || !worst || best === worst) return null;
+  const bestRoas = best.trueRoas ?? 0;
+  const worstRoas = worst.trueRoas ?? 0;
+  if (worstRoas <= 0) return null;
+  if (bestRoas < worstRoas * SHIFT_TRUE_ROAS_RATIO) return null;
+  if ((best.closeRate ?? 0) < SHIFT_MIN_CLOSE_RATE) return null;
+  return { from: worst, to: best };
 }
 
 function addCreativeRecommendation(
@@ -234,6 +278,69 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "Audience is saturated — expanding targeting will find new reach",
         ["Create new ad set with expanded targeting", "Approve new ad set draft"],
         "will reset learning",
+      ),
+    );
+  }
+
+  // Shift budget across sources when one clearly outperforms another
+  if (input.sourceComparison && input.sourceComparison.rows.length >= 2) {
+    const candidate = findShiftCandidates(input.sourceComparison.rows);
+    if (candidate) {
+      const ratio = ((candidate.to.trueRoas ?? 0) / (candidate.from.trueRoas ?? 1)).toFixed(1);
+      results.push(
+        makeRec(
+          base,
+          "shift_budget_to_source",
+          0.6,
+          "this_week",
+          `${candidate.to.source} trueRoas is ${ratio}x ${candidate.from.source} — consider shifting budget`,
+          [
+            `Reduce budget on ${candidate.from.source} (trueRoas ${candidate.from.trueRoas?.toFixed(2)})`,
+            `Increase budget on ${candidate.to.source} (trueRoas ${candidate.to.trueRoas?.toFixed(2)})`,
+            "Source attribution is heuristic — operator should validate before large reallocations",
+          ],
+          "no impact",
+          { from: candidate.from.source, to: candidate.to.source },
+        ),
+      );
+    }
+  }
+
+  // CTWA optimizing on chats sees drive-by clickers — switch optimization event
+  if (hasDiagnosis(diagnoses, "ctwa_drive_by_clickers")) {
+    results.push(
+      makeRec(
+        base,
+        "switch_optimization_event",
+        0.75,
+        "this_week",
+        "Optimizing on chat starts is attracting low-intent clickers — switch to a deeper event",
+        [
+          "Change campaign optimization event from Lead/Chat to Schedule",
+          "Ensure CAPI is sending Schedule events reliably before switching",
+          "Allow 3–5 days for re-learning",
+        ],
+        "will reset learning",
+        { from: "Lead", to: "Schedule" },
+      ),
+    );
+  }
+
+  // CAPI attribution stale — externally flagged, no internal computation
+  if (input.capiAttributionStale) {
+    results.push(
+      makeRec(
+        base,
+        "harden_capi_attribution",
+        0.7,
+        "this_week",
+        "No CAPI Schedule events received in 7+ days — Meta cannot optimize without signal",
+        [
+          "Verify CAPI access token and Pixel ID configuration",
+          "Re-run a Schedule test event from the booking system",
+          "Confirm event_id deduplication matches browser pixel",
+        ],
+        "no impact",
       ),
     );
   }

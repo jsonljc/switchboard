@@ -112,6 +112,32 @@ const RULES: Rule[] = [
     },
   },
   {
+    pattern: "lead_quality_degradation",
+    description: "CPL improving but downstream booking cost rising — leads are lower quality",
+    confidence: "high",
+    match: (map) => {
+      const cpl = map.get("cpl");
+      const cpb = map.get("costPerBooked");
+      if (!cpl || !cpb) return false;
+      const cplDown = cpl.current < cpl.previous;
+      const cpbUp = cpb.previous > 0 && cpb.current > cpb.previous * 1.2;
+      return cplDown && cpbUp;
+    },
+  },
+  {
+    pattern: "ctwa_drive_by_clickers",
+    description: "Chat starts up but reply rate down — clicks are not converting to conversations",
+    confidence: "high",
+    match: (map) => {
+      const chats = map.get("chatsStarted");
+      const reply = map.get("replyRate");
+      if (!chats || !reply) return false;
+      const chatsUp = chats.previous > 0 && chats.current > chats.previous * 1.2;
+      const replyDown = reply.previous > 0 && reply.current < reply.previous * 0.7;
+      return chatsUp && replyDown;
+    },
+  },
+  {
     pattern: "account_level_issue",
     description: "All metrics degrading",
     confidence: "low",

@@ -154,6 +154,24 @@ describe("diagnose", () => {
     expect(result.map((d) => d.pattern)).toContain("creative_fatigue");
   });
 
+  it("flags lead_quality_degradation when CPL drops but cost-per-booked rises", () => {
+    const deltas: MetricDelta[] = [
+      makeDelta("cpl", 3, 4, "down", true),
+      makeDelta("costPerBooked", 50, 30, "up", true),
+    ];
+    const result = diagnose(deltas);
+    expect(result.find((d) => d.pattern === "lead_quality_degradation")).toBeDefined();
+  });
+
+  it("flags ctwa_drive_by_clickers when chats up but reply rate down", () => {
+    const deltas: MetricDelta[] = [
+      makeDelta("chatsStarted", 130, 100, "up", true),
+      makeDelta("replyRate", 0.3, 0.6, "down", true),
+    ];
+    const result = diagnose(deltas);
+    expect(result.find((d) => d.pattern === "ctwa_drive_by_clickers")).toBeDefined();
+  });
+
   it("does not require frequency > 3.5 for creative_fatigue", () => {
     const deltas: MetricDelta[] = [
       makeDelta("cpm", 10, 10, "stable", false),

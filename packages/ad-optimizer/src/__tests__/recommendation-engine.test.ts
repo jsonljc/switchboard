@@ -318,6 +318,63 @@ describe("generateRecommendations", () => {
     expect(pause?.confidence).toBe(0.9);
   });
 
+  it("recommends shift_budget_to_source when one source has much better trueRoas", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-shift",
+      campaignName: "Shift Source",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: {
+        rows: [
+          {
+            source: "ctwa",
+            cpl: 4,
+            costPerQualified: 10,
+            costPerBooked: 30,
+            closeRate: 0.12,
+            trueRoas: 3.2,
+          },
+          {
+            source: "instant_form",
+            cpl: 2,
+            costPerQualified: 12,
+            costPerBooked: 50,
+            closeRate: 0.03,
+            trueRoas: 0.9,
+          },
+        ],
+      },
+    };
+
+    const result = generateRecommendations(input);
+
+    const shift = result.find((r) => r.action === "shift_budget_to_source");
+    expect(shift).toBeDefined();
+    expect(shift?.params?.from).toBe("instant_form");
+    expect(shift?.params?.to).toBe("ctwa");
+  });
+
+  it("recommends switch_optimization_event for CTWA optimizing on chats", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-ctwa",
+      campaignName: "CTWA Campaign",
+      diagnoses: [makeDiagnosis("ctwa_drive_by_clickers")],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.some((r) => r.action === "switch_optimization_event")).toBe(true);
+  });
+
   it("adds learning phase reset warning to restructure recommendations", () => {
     const input: RecommendationInput = {
       campaignId: "camp-restructure",

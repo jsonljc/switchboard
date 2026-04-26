@@ -24,6 +24,9 @@ export const RecommendationActionSchema = z.enum([
   "add_creative",
   "expand_targeting",
   "consolidate",
+  "shift_budget_to_source",
+  "switch_optimization_event",
+  "harden_capi_attribution",
 ]);
 export type RecommendationActionSchema = z.infer<typeof RecommendationActionSchema>;
 
@@ -172,6 +175,7 @@ export const RecommendationOutputSchema = z.object({
   steps: z.array(z.string()),
   learningPhaseImpact: z.string(),
   draftId: z.string().nullable().optional(),
+  params: z.record(z.string(), z.string()).optional(),
 });
 export type RecommendationOutputSchema = z.infer<typeof RecommendationOutputSchema>;
 
