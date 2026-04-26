@@ -2,4 +2,149 @@
 # Each entry exempts ONE route path glob from the PlatformIngress.submit requirement.
 # Adding an entry requires a one-line reason. PR review enforces the bar.
 # Globs are matched against the repo-relative file path.
-[]
+
+# ---------------------------------------------------------------------------
+# Dashboard proxy routes (apps/dashboard/src/app/api/dashboard/**)
+# ---------------------------------------------------------------------------
+# Next.js App Router routes that forward to the API tier via getApiClient().
+# They are not direct mutators; PlatformIngress.submit (where applicable) runs
+# on the API server. The check tool's 2-hop import scan cannot follow the HTTP
+# proxy hop, so these are structurally invisible to it.
+
+- path: "apps/dashboard/src/app/api/dashboard/**"
+  reason: "Next.js dashboard proxy route — forwards to API tier via getApiClient(); ingress (when required) happens on the API server, not in the proxy."
+
+# ---------------------------------------------------------------------------
+# Dashboard auth / public lead capture routes
+# ---------------------------------------------------------------------------
+
+- path: "apps/dashboard/src/app/api/auth/**"
+  reason: "Pre-platform auth lifecycle (NextAuth + dashboard registration); runs before any org/agent context exists, no governed action surface."
+- path: "apps/dashboard/src/app/api/waitlist/route.ts"
+  reason: "Public waitlist lead capture; pre-auth marketing surface, no governed action surface."
+
+# ---------------------------------------------------------------------------
+# API tier auth / session / setup / OAuth — pre-ingress lifecycle
+# ---------------------------------------------------------------------------
+# Authentication, session issuance, one-time admin bootstrap, and channel
+# OAuth/credential flows. These mutate auth/credential state, not business
+# state, and run before any PlatformIngress request can be constructed.
+
+- path: "apps/api/src/routes/setup.ts"
+  reason: "One-time admin bootstrap (creates first DashboardUser); INTERNAL_SETUP_SECRET-gated, idempotent, runs before any org exists."
+- path: "apps/api/src/routes/sessions.ts"
+  reason: "Agent session token issuance; auth lifecycle, not a governed business action."
+- path: "apps/api/src/routes/whatsapp-onboarding.ts"
+  reason: "Meta WhatsApp Embedded Signup OAuth dance — exchanges OAuth code, registers WABA/phone number; channel credential setup, pre-ingress."
+- path: "apps/api/src/routes/whatsapp-flows.ts"
+  reason: "Meta WhatsApp Flows endpoint — RSA/AES decrypt of Meta-encrypted Flow payloads; channel protocol handler, no business mutation."
+- path: "apps/api/src/routes/whatsapp-test.ts"
+  reason: "WhatsApp credential verification helper — calls Graph API to validate tokens during onboarding; no business state."
+
+# ---------------------------------------------------------------------------
+# Approval / DLQ / escalation lifecycle routes
+# ---------------------------------------------------------------------------
+# Per DOCTRINE: approval is lifecycle state, not a route-owned side effect.
+# These routes operate on lifecycle records via transitionApproval /
+# ApprovalLifecycleService / DLQ retry / escalation reply, not via
+# PlatformIngress.submit (the original action already passed through ingress).
+
+- path: "apps/api/src/routes/approvals.ts"
+  reason: "Approval response — uses transitionApproval/ApprovalLifecycleService per DOCTRINE; original action already passed through ingress."
+- path: "apps/api/src/routes/dlq.ts"
+  reason: "DLQ retry/resolve — operates on failed-message lifecycle records; the original message already passed (or attempted) ingress."
+- path: "apps/api/src/routes/escalations.ts"
+  reason: "Escalation inbox — owner replies/resolutions on existing escalation records; lifecycle state transitions, not new governed actions."
+
+# ---------------------------------------------------------------------------
+# Governance / policy / identity — control-plane configuration
+# ---------------------------------------------------------------------------
+# Owner-controlled platform configuration that defines how the governance
+# spine itself behaves. Not "actions" in the doctrine sense; they shape the
+# rules ingress applies, rather than passing through them.
+
+- path: "apps/api/src/routes/governance.ts"
+  reason: "Governance profile / emergency halt / resume — control-plane config that ingress reads; not a governed action itself."
+- path: "apps/api/src/routes/policies.ts"
+  reason: "Policy CRUD — defines rules ingress evaluates; control-plane config, not a governed action."
+- path: "apps/api/src/routes/identity.ts"
+  reason: "Identity spec / role overlay CRUD — agent identity configuration; control-plane config, not a governed business action."
+- path: "apps/api/src/routes/operator-config.ts"
+  reason: "AdsOperatorConfig CRUD — operator autonomy configuration; control-plane config (currently stubbed)."
+- path: "apps/api/src/routes/competence.ts"
+  reason: "Competence record listing/updates — internal competence-tracking state, not an operator-initiated business action."
+
+# ---------------------------------------------------------------------------
+# Org / agent / connection / billing / marketplace configuration CRUD
+# ---------------------------------------------------------------------------
+# Owner-facing platform configuration: organization settings, agent rosters,
+# connection credentials, billing/checkout, marketplace listings/deployments.
+# These mutate platform config and external-service auth state, not governed
+# business actions executed by agents on behalf of the operator.
+
+- path: "apps/api/src/routes/organizations.ts"
+  reason: "Organization config CRUD (name, runtime, governance profile); platform configuration, not a governed business action."
+- path: "apps/api/src/routes/agents.ts"
+  reason: "Agent roster / state listing and updates; agent-management config, not an action executed by an agent."
+- path: "apps/api/src/routes/connections.ts"
+  reason: "Connection credential CRUD (encrypted credentials for external services); credential setup, pre-ingress."
+- path: "apps/api/src/routes/billing.ts"
+  reason: "Stripe checkout / portal / webhook / status — payment-provider lifecycle; pre-platform billing, not a governed agent action."
+- path: "apps/api/src/routes/onboard.ts"
+  reason: "Marketplace deployment onboarding — creates Deployment + encrypted credentials from setup answers; provisioning flow, pre-ingress."
+- path: "apps/api/src/routes/marketplace.ts"
+  reason: "Marketplace listing / deployment / task / trust-score CRUD; marketplace platform config, not a governed agent action."
+- path: "apps/api/src/routes/marketplace-persona.ts"
+  reason: "AgentPersona CRUD for marketplace deployments; persona configuration, not a governed action."
+- path: "apps/api/src/routes/owner-tasks.ts"
+  reason: "Owner task list/PATCH — owner-facing TODO inbox; lifecycle CRUD on owner_tasks, not a governed agent action."
+- path: "apps/api/src/routes/playbook.ts"
+  reason: "Onboarding playbook config CRUD; org-level setup configuration, not a governed action."
+
+# ---------------------------------------------------------------------------
+# Knowledge / memory ingestion
+# ---------------------------------------------------------------------------
+# Owner-supplied knowledge base content. Owner data ingestion, not actions
+# executed on behalf of the operator by an agent.
+
+- path: "apps/api/src/routes/knowledge.ts"
+  reason: "Knowledge document upload/management — owner-supplied RAG content; data ingestion, not a governed action."
+- path: "apps/api/src/routes/knowledge-entries.ts"
+  reason: "Structured knowledge-entry CRUD (FAQs / facts); owner data ingestion, not a governed action."
+- path: "apps/api/src/routes/deployment-memory.ts"
+  reason: "Deployment / owner memory CRUD — owner-authored corrections and learned memory; data ingestion, not a governed action."
+
+# ---------------------------------------------------------------------------
+# Revenue / scheduled reports / outbound webhook registry
+# ---------------------------------------------------------------------------
+
+- path: "apps/api/src/routes/revenue.ts"
+  reason: "Revenue event recording — operator/integration data-ingestion endpoint (writes to outbox); events, not agent-executed actions."
+- path: "apps/api/src/routes/scheduled-reports.ts"
+  reason: "Scheduled-report CRUD (cron-based reporting jobs); reporting configuration, not a governed agent action."
+- path: "apps/api/src/routes/webhooks.ts"
+  reason: "Outbound webhook registration CRUD (org-managed webhook receivers); platform integration config, not a governed action."
+
+# ---------------------------------------------------------------------------
+# Ingress-equivalent / inbound channel / read-only routes
+# ---------------------------------------------------------------------------
+# These are themselves ingress entry points (or pre-ingress receivers that
+# hand off to a gateway/handler that subsequently invokes ingress). The
+# 2-hop import scan does not follow the runtime hop into the gateway.
+
+- path: "apps/api/src/routes/execute.ts"
+  reason: "POST /api/execute IS a PlatformIngress entry point — calls app.platformIngress.submit at line 88; 2-hop import scan misses the dynamic resolution through @switchboard/core/platform."
+- path: "apps/api/src/routes/workflows.ts"
+  reason: "Workflow CRUD + checkpoint resolution; checkpoints are lifecycle state on workflows whose actions originally entered via ingress."
+- path: "apps/api/src/routes/conversations.ts"
+  reason: "Conversation log read/admin endpoints; conversation messages enter via the chat gateway, not this route."
+- path: "apps/api/src/routes/ad-optimizer.ts"
+  reason: "Meta CTWA lead webhook — inbound webhook receiver; lead intake is dispatched via LeadIntakeHandler through ingress on the worker side."
+- path: "apps/api/src/routes/creative-pipeline.ts"
+  reason: "Creative pipeline CRUD — async creative-job state managed by the creative-pipeline package's Inngest workers, not action ingress."
+- path: "apps/api/src/routes/website-scan.ts"
+  reason: "Website scan helper — calls Anthropic to extract structured business info during onboarding; read-only external fetch, no business state mutation."
+- path: "apps/api/src/routes/simulate.ts"
+  reason: "Simulation mode endpoint — explicitly does NOT take real actions (per SIMULATION_SYSTEM_PROMPT); read-only LLM preview."
+- path: "apps/chat/src/routes/managed-webhook.ts"
+  reason: "Managed inbound chat webhook (WhatsApp / Slack / Telegram) — handoff to gateway.handleIncoming which routes through ingress; pre-ingress channel receiver."
