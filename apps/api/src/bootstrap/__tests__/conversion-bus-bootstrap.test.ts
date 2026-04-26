@@ -239,6 +239,32 @@ describe("bootstrapConversionBus", () => {
     vi.doUnmock("@switchboard/db");
   });
 
+  it("does not log MetaCAPIDispatcher when env vars are missing", async () => {
+    delete process.env["META_PIXEL_ID"];
+    delete process.env["META_CAPI_ACCESS_TOKEN"];
+
+    vi.doMock("@switchboard/db", () => ({
+      PrismaOutboxStore: class {
+        fetchPending = vi.fn().mockResolvedValue([]);
+        markPublished = vi.fn();
+        recordFailure = vi.fn();
+      },
+      PrismaConversionRecordStore: class {
+        record = vi.fn();
+      },
+    }));
+
+    handle = await bootstrapConversionBus({
+      redis: null,
+      prisma: {} as never,
+      logger,
+    });
+
+    expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining("MetaCAPIDispatcher"));
+
+    vi.doUnmock("@switchboard/db");
+  });
+
   it("increments failure metric when record write throws", async () => {
     const failureInc = vi.fn();
     const fakeMetrics = {
