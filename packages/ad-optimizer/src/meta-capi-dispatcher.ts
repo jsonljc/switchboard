@@ -60,7 +60,21 @@ export class MetaCAPIDispatcher implements AdConversionDispatcher {
     let actionSource: string;
     let eventSourceUrlValue: string | undefined;
 
-    if (leadId) {
+    if (event.actionSource) {
+      actionSource = event.actionSource;
+      if (leadId) {
+        userData.lead_id = leadId;
+      }
+      if (fbclid) {
+        userData.fbc = buildFbc(fbclid, fbclidTimestamp ?? event.occurredAt);
+      }
+      if (eventSourceUrl) {
+        eventSourceUrlValue = eventSourceUrl;
+      }
+      if (clientUserAgent) {
+        userData.client_user_agent = clientUserAgent;
+      }
+    } else if (leadId) {
       actionSource = "crm";
       userData.lead_id = leadId;
     } else if (fbclid && eventSourceUrl && clientUserAgent) {
