@@ -99,7 +99,7 @@ if [[ -f "$DASHBOARD_ENV" ]]; then
       echo "  SKIP  ${var} (no value in root .env)"
       return
     fi
-    if grep -qE "^${var}=.\+" "$DASHBOARD_ENV" 2>/dev/null; then
+    if grep -qE "^${var}=.+" "$DASHBOARD_ENV" 2>/dev/null; then
       # replace existing line (may have placeholder like "same-value-as-api-server")
       local existing
       existing=$(grep -E "^${var}=" "$DASHBOARD_ENV" | head -1 | cut -d= -f2-)

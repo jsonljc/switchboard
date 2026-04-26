@@ -8,7 +8,12 @@ const SCRIPT = "scripts/check-prisma-drift.sh";
 const REAL_SCHEMA = "packages/db/prisma/schema.prisma";
 const REAL_MIGRATIONS = "packages/db/prisma/migrations";
 
-describe("check-prisma-drift", () => {
+// The drift check needs Prisma to provision a shadow database, which requires
+// a reachable Postgres. Skip when none is up (e.g. CI's test job has no DB
+// service container — the drift step runs in the setup job instead).
+const postgresReachable = spawnSync("pg_isready", { encoding: "utf-8" }).status === 0;
+
+describe.skipIf(!postgresReachable)("check-prisma-drift", () => {
   it("exits 0 when schema matches migrations", () => {
     const result = spawnSync("bash", [SCRIPT], {
       encoding: "utf-8",
@@ -21,16 +26,12 @@ describe("check-prisma-drift", () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "drift-test-"));
     const driftedSchemaPath = join(tmpDir, "schema.prisma");
     const real = readFileSync(REAL_SCHEMA, "utf-8");
-    writeFileSync(
-      driftedSchemaPath,
-      `${real}\n\nmodel TestDriftSentinel {\n  id String @id\n}\n`,
-    );
+    writeFileSync(driftedSchemaPath, `${real}\n\nmodel TestDriftSentinel {\n  id String @id\n}\n`);
 
-    const result = spawnSync(
-      "bash",
-      [SCRIPT, driftedSchemaPath, REAL_MIGRATIONS],
-      { encoding: "utf-8", cwd: process.cwd() },
-    );
+    const result = spawnSync("bash", [SCRIPT, driftedSchemaPath, REAL_MIGRATIONS], {
+      encoding: "utf-8",
+      cwd: process.cwd(),
+    });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("drift detected");
   }, 30_000);

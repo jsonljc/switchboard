@@ -102,9 +102,7 @@ psql -d switchboard -c "ALTER USER switchboard WITH PASSWORD 'switchboard';"
 git clone https://github.com/jsonljc/switchboard.git
 cd switchboard
 pnpm install
-./scripts/setup-env.sh                        # generates secrets into .env
-# manually create apps/dashboard/.env.local from apps/dashboard/.env.local.example
-# (DATABASE_URL and CREDENTIALS_ENCRYPTION_KEY must match the values in .env)
+./scripts/setup-env.sh                        # generates secrets into .env AND apps/dashboard/.env.local
 pnpm db:migrate                                # apply Prisma migrations
 pnpm db:seed                                   # seed admin@switchboard.local / admin123
 pnpm build
@@ -120,7 +118,7 @@ pnpm --filter @switchboard/dashboard dev      # http://localhost:3002
 pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires a channel token, see below)
 ```
 
-**Note:** `apps/chat` hard-fails to start without at least one of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`+`WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` set. For local dashboard-only work, run the API and dashboard individually rather than `pnpm dev`.
+**Note:** `apps/chat` warns (and starts with no inbound channels) when none of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`+`WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` is set in development; in production, the same condition is a hard error. Configure at least one channel token to actually receive messages.
 
 ### Working with the database
 
