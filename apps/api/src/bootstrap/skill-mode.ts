@@ -279,7 +279,7 @@ async function resolveCalendarProvider(
   let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
   const orgConfig = orgId
     ? await prismaClient.organizationConfig.findFirst({
-        where: { organizationId: orgId },
+        where: { id: orgId },
         select: { businessHours: true },
       })
     : await prismaClient.organizationConfig.findFirst({
