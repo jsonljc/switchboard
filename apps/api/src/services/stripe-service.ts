@@ -4,9 +4,16 @@
 
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2026-04-22.dahlia",
-});
+let _stripe: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
+    _stripe = new Stripe(key, { apiVersion: "2026-04-22.dahlia" as Stripe.LatestApiVersion });
+  }
+  return _stripe;
+}
 
 export interface CreateCheckoutInput {
   organizationId: string;
@@ -25,7 +32,7 @@ export interface BillingStatus {
 }
 
 export async function createCheckoutSession(input: CreateCheckoutInput): Promise<string> {
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     customer_email: input.email,
     mode: "subscription",
     line_items: [{ price: input.priceId, quantity: 1 }],
@@ -46,7 +53,7 @@ export async function createCheckoutSession(input: CreateCheckoutInput): Promise
 }
 
 export async function createPortalSession(customerId: string, returnUrl: string): Promise<string> {
-  const session = await stripe.billingPortal.sessions.create({
+  const session = await getStripe().billingPortal.sessions.create({
     customer: customerId,
     return_url: returnUrl,
   });
@@ -63,7 +70,7 @@ export async function handleWebhookEvent(body: string, signature: string): Promi
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET not configured");
 
-  const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  const event = getStripe().webhooks.constructEvent(body, signature, webhookSecret);
 
   let organizationId: string | undefined;
   const data: Record<string, unknown> = {};
@@ -107,4 +114,4 @@ export async function handleWebhookEvent(body: string, signature: string): Promi
   return { type: event.type, organizationId, data };
 }
 
-export { stripe };
+export { getStripe };

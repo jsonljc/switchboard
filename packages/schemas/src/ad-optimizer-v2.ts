@@ -1,6 +1,9 @@
 // packages/schemas/src/ad-optimizer-v2.ts
 import { z } from "zod";
-import { FunnelShapeSchema, LearningPhaseStatusSchema } from "./ad-optimizer.js";
+
+const FunnelPositionSchema = z.enum(["top", "mid", "bottom", "full", "unknown"]);
+
+const LearningStatusSchema = z.enum(["learning", "active", "limited", "unknown"]);
 
 // ── Metric Snapshot ──
 
@@ -145,9 +148,9 @@ export const AdSetDetailSchema = z.object({
   adSetName: z.string(),
   campaignId: z.string(),
   destinationType: z.string(),
-  funnelShape: FunnelShapeSchema,
+  funnelShape: FunnelPositionSchema,
   frequency: z.number(),
-  learningStatus: LearningPhaseStatusSchema,
+  learningStatus: LearningStatusSchema,
   hasFrequencyCap: z.boolean(),
 });
 export type AdSetDetailSchema = z.infer<typeof AdSetDetailSchema>;
