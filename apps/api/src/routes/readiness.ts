@@ -363,8 +363,12 @@ function checkBusinessIdentity(ctx: ReadinessContext): ReadinessCheck {
   const label = "Business identity complete";
   const blocking = true;
 
-  const identity = ctx.playbook.businessIdentity as { status?: string } | undefined;
-  const ok = identity?.status === "ready";
+  const identity = ctx.playbook.businessIdentity as
+    | { status?: string; businessName?: string }
+    | undefined;
+  const ok =
+    identity?.status === "ready" ||
+    (typeof identity?.businessName === "string" && identity.businessName.length > 0);
 
   return {
     id,
@@ -402,8 +406,10 @@ function checkHoursSet(ctx: ReadinessContext): ReadinessCheck {
   const label = "Operating hours set";
   const blocking = true;
 
-  const hours = ctx.playbook.hours as { status?: string } | undefined;
-  const ok = hours?.status === "ready";
+  const hours = ctx.playbook.hours as
+    | { status?: string; timezone?: string; schedule?: unknown }
+    | undefined;
+  const ok = hours?.status === "ready" || !!(hours?.timezone && hours?.schedule);
 
   return {
     id,
