@@ -43,6 +43,7 @@ export * from "./lead-intake/index.js";
 export * from "./outcome-dispatcher.js";
 export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
 export { compareSources } from "./analyzers/source-comparator.js";
+export * from "./onboarding/coverage-validator.js";
 export type {
   SourceComparisonRow,
   SourceComparisonInput,
