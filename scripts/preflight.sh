@@ -141,7 +141,7 @@ else
 fi
 
 # Drift check: schema models/fields without a matching migration?
-if bash scripts/check-prisma-drift.sh > /dev/null 2>&1; then
+if bash scripts/check-prisma-drift.sh > /dev/null; then
   ok "No Prisma schema drift (migrations cover schema)"
 else
   drift_status=$?
