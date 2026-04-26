@@ -57,6 +57,8 @@ Running `prisma migrate dev` on a fresh DB created a migration named `add_cancel
 
 **Manual fix:** Generate and commit the missing migration on `main` before any new dev tries to set up locally. Investigate process gap — likely a developer edited the schema directly without running `prisma migrate dev`, then `pnpm db:generate` regenerated the client without producing migration SQL.
 
+**Status:** Resolved on this branch. Catch-up migration committed (`408e7c16`) and recurrence guard wired into CI (`2da69310`) + preflight (`bd526179`). See `docs/superpowers/specs/2026-04-26-prisma-drift-fix-and-guard.md` for the implementation.
+
 ---
 
 ### F4 — CSP blocks Next.js dev mode hot reload
@@ -195,7 +197,7 @@ When the API server is down (or unconfigured), the entire dashboard root page sh
 | --- | ---------------------------------------------------------------------- | -------- | --------------------------- |
 | F1  | Chat app blocks `pnpm dev` without channel tokens                      | Blocker  | Low                         |
 | F2  | pgvector / Postgres 17+ undocumented                                   | Blocker  | Low (doc)                   |
-| F3  | Unmigrated schema changes on `main`                                    | Blocker  | Low (commit migration)      |
+| F3  | Unmigrated schema changes on `main`                                    | Blocker  | ✅ Resolved                 |
 | F4  | CSP breaks Next.js dev mode                                            | Blocker  | Low                         |
 | F5  | `setup-env.sh` doesn't seed dashboard env                              | High     | Low                         |
 | F6  | Shared secrets duplicated, no consistency check                        | High     | Medium                      |
@@ -213,7 +215,7 @@ When the API server is down (or unconfigured), the entire dashboard root page sh
 
 ## Recommended fix order
 
-1. **F3** — commit the missing migration so other devs don't hit it.
+1. ~~**F3** — commit the missing migration so other devs don't hit it.~~ ✅ Resolved.
 2. **F2 + F8** — document Postgres 17 + pgvector prerequisites in a new `docs/LOCAL-DEV.md`.
 3. **F4** — re-apply the conditional `'unsafe-eval'` fix in `next.config.mjs` (or implement a nonce-based alternative).
 4. **F1** — make chat startup tolerant of missing channel tokens in dev, or exclude it from default `pnpm dev`.
