@@ -38,16 +38,46 @@ Copy `.env.example` to `.env` and fill in:
 | `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business API         |
 | `TELEGRAM_BOT_TOKEN`                          | Telegram bot (via @BotFather) |
 
+**Billing (required for paid features):**
+
+| Variable                | For                              |
+| ----------------------- | -------------------------------- |
+| `STRIPE_SECRET_KEY`     | Stripe API secret key            |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret    |
+| `STRIPE_PRICE_STARTER`  | Stripe Price ID for Starter plan |
+| `STRIPE_PRICE_PRO`      | Stripe Price ID for Pro plan     |
+| `STRIPE_PRICE_SCALE`    | Stripe Price ID for Scale plan   |
+
+**Infrastructure:**
+
+| Variable       | For                            |
+| -------------- | ------------------------------ |
+| `SENTRY_DSN`   | Sentry error tracking DSN      |
+| `NGINX_DOMAIN` | Domain name for TLS cert paths |
+
 **Optional (enable when needed):**
 
 | Variable                                        | For                                                     |
 | ----------------------------------------------- | ------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`                             | Payment collection                                      |
 | `META_ADS_ACCESS_TOKEN` + `META_ADS_ACCOUNT_ID` | Ad optimizer agent                                      |
 | `EMAIL_SERVER_*`                                | Magic link login (credentials login works without SMTP) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`                   | Distributed tracing (Jaeger)                            |
 
-### 3. Configure skin + profile
+### 3. TLS setup
+
+1. Set `NGINX_DOMAIN` in your environment
+2. Run `docker compose run certbot certonly --webroot -w /var/www/certbot -d $NGINX_DOMAIN`
+3. Process nginx.conf: `envsubst '${NGINX_DOMAIN}' < nginx/nginx.conf > /etc/nginx/nginx.conf`
+4. Reload nginx: `nginx -s reload`
+
+### 4. Stripe webhook registration
+
+1. Go to [Stripe Dashboard > Webhooks](https://dashboard.stripe.com/webhooks)
+2. Add endpoint: `https://$NGINX_DOMAIN/api/billing/webhook`
+3. Subscribe to events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `customer.subscription.trial_will_end`
+4. Copy the signing secret to `STRIPE_WEBHOOK_SECRET`
+
+### 5. Configure skin + profile
 
 ```bash
 # In .env — pick the customer's vertical
