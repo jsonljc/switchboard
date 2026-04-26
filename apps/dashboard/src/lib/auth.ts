@@ -10,7 +10,11 @@ import { provisionDashboardUser } from "./provision-dashboard-user";
 /* ------------------------------------------------------------------ */
 /* Production guards                                                   */
 /* ------------------------------------------------------------------ */
-if (process.env.NODE_ENV === "production" && !process.env.NEXTAUTH_SECRET) {
+if (
+  process.env.NODE_ENV === "production" &&
+  !process.env.NEXTAUTH_SECRET &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
   throw new Error(
     "NEXTAUTH_SECRET must be set in production. Refusing to start without a signing secret.",
   );
