@@ -236,3 +236,11 @@ export { effortToSlotAndOptions, effortForTaskType, TASK_TYPE_EFFORT_MAP } from 
 
 // Memory (scoped store interfaces for three-channel privacy)
 export * from "./memory/index.js";
+
+// Intents (handler classes invoked by app routes for specific intent kinds)
+export {
+  LeadIntakeHandler,
+  type LeadIntakeStore,
+  type LeadIntakeHandlerDeps,
+  type LeadIntakeResult,
+} from "./intents/lead-intake-handler.js";
