@@ -8,6 +8,9 @@ export interface ManagedWebhookDeps {
     getGatewayByWebhookPath(path: string): GatewayEntry | null;
   };
   failedMessageStore?: FailedMessageStore | null;
+  dedup?: {
+    checkDedup(channel: string, messageId: string): Promise<boolean>;
+  };
   onStatusUpdate?: (
     status: {
       messageId: string;
@@ -82,9 +85,27 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
       }
     }
 
+    if (deps.dedup && gatewayEntry.adapter.extractMessageId) {
+      const msgId = gatewayEntry.adapter.extractMessageId(request.body);
+      if (msgId) {
+        const isNew = await deps.dedup.checkDedup(gatewayEntry.channel, msgId);
+        if (!isNew) {
+          return reply.code(200).send({ ok: true });
+        }
+      }
+    }
+
     const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
     if (!incoming) {
       return reply.code(200).send({ ok: true });
+    }
+
+    const rawMessageId = gatewayEntry.adapter.extractMessageId(request.body);
+    if (rawMessageId && gatewayEntry.channel === "whatsapp") {
+      const wa = gatewayEntry.adapter as import("../adapters/whatsapp.js").WhatsAppAdapter;
+      if (typeof wa.markAsRead === "function") {
+        wa.markAsRead(rawMessageId).catch(() => {});
+      }
     }
 
     const threadId = incoming.threadId ?? incoming.principalId;

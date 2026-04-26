@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 
 const adapter = new WhatsAppAdapter({
@@ -76,5 +76,55 @@ describe("WhatsAppAdapter — media receiving", () => {
     expect(msg).not.toBeNull();
     expect(msg!.attachments).toHaveLength(1);
     expect(msg!.attachments[0]!.type).toBe("audio");
+  });
+});
+
+describe("WhatsAppAdapter — media sending", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should send image by URL", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messages: [{ id: "wamid.sent1" }] }), { status: 200 }),
+      );
+
+    await adapter.sendMedia(
+      "15551234567",
+      "image",
+      { url: "https://example.com/photo.jpg" },
+      "Check this out",
+    );
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string);
+    expect(body).toEqual({
+      messaging_product: "whatsapp",
+      to: "15551234567",
+      type: "image",
+      image: { link: "https://example.com/photo.jpg", caption: "Check this out" },
+    });
+  });
+
+  it("should send document by URL", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ messages: [{ id: "wamid.sent2" }] }), { status: 200 }),
+      );
+
+    await adapter.sendMedia(
+      "15551234567",
+      "document",
+      { url: "https://example.com/receipt.pdf" },
+      "Your receipt",
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string);
+    expect(body.type).toBe("document");
+    expect(body.document.link).toBe("https://example.com/receipt.pdf");
+    expect(body.document.caption).toBe("Your receipt");
   });
 });

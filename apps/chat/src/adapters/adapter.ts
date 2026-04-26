@@ -11,6 +11,23 @@ export interface ChannelAdapter {
   sendApprovalCard(threadId: string, card: ApprovalCardPayload): Promise<void>;
   sendResultCard(threadId: string, card: ResultCardPayload): Promise<void>;
   answerCallbackQuery?(callbackQueryId: string, text?: string): Promise<void>;
+  sendMedia?(
+    threadId: string,
+    type: "image" | "audio" | "video" | "document",
+    source: { url: string } | { buffer: Buffer; mimeType: string; filename?: string },
+    caption?: string,
+  ): Promise<void>;
+  sendFlowMessage?(
+    threadId: string,
+    options: {
+      flowId: string;
+      flowToken: string;
+      ctaText: string;
+      bodyText: string;
+      screen: string;
+      data?: Record<string, unknown>;
+    },
+  ): Promise<void>;
   extractMessageId(rawPayload: unknown): string | null;
 }
 

@@ -56,6 +56,7 @@ describe("WhatsApp wiring — managed webhook", () => {
     await replySink.send(REPLY_TEXT);
   });
   let sendTextReply: ReturnType<typeof vi.fn>;
+  const seenMessages = new Set<string>();
   const onStatusUpdate: ReturnType<
     typeof vi.fn<NonNullable<ManagedWebhookDeps["onStatusUpdate"]>>
   > = vi.fn(async () => {});
@@ -88,8 +89,17 @@ describe("WhatsApp wiring — managed webhook", () => {
       },
     };
 
+    const dedup = {
+      async checkDedup(_channel: string, messageId: string): Promise<boolean> {
+        const key = `${_channel}:${messageId}`;
+        if (seenMessages.has(key)) return false;
+        seenMessages.add(key);
+        return true;
+      },
+    };
+
     app = Fastify({ logger: false });
-    registerManagedWebhookRoutes(app, { registry, onStatusUpdate });
+    registerManagedWebhookRoutes(app, { registry, onStatusUpdate, dedup });
     await app.ready();
   });
 
@@ -154,6 +164,28 @@ describe("WhatsApp wiring — managed webhook", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: "Invalid signature" });
+    expect(handleIncoming).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates repeated WhatsApp webhooks", async () => {
+    handleIncoming.mockClear();
+    seenMessages.clear();
+
+    const payload = buildTextPayload(SENDER_PHONE, "duplicate test");
+    const body = JSON.stringify(payload);
+    const signature = signBody(body, APP_SECRET);
+    const headers = { "x-hub-signature-256": signature };
+
+    // First request should process
+    const res1 = await app.inject({ method: "POST", url: WEBHOOK_PATH, payload, headers });
+    expect(res1.statusCode).toBe(200);
+    expect(handleIncoming).toHaveBeenCalledOnce();
+
+    handleIncoming.mockClear();
+
+    // Second request with same payload should be deduped
+    const res2 = await app.inject({ method: "POST", url: WEBHOOK_PATH, payload, headers });
+    expect(res2.statusCode).toBe(200);
     expect(handleIncoming).not.toHaveBeenCalled();
   });
 

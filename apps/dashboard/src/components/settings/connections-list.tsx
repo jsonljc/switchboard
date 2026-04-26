@@ -29,6 +29,7 @@ import {
 } from "@/hooks/use-connections";
 import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { SERVICE_FIELD_CONFIGS, SERVICE_CONNECTION_CONFIGS } from "@/lib/service-field-configs";
+import { WhatsAppEmbeddedSignup } from "./whatsapp-embedded-signup";
 
 const serviceOptions = [
   { id: "meta-ads", name: "Meta Ads" },
@@ -332,6 +333,22 @@ export function ConnectionsList() {
                     Or enter credentials manually below
                   </p>
                 )}
+              </div>
+            )}
+
+            {serviceId === "whatsapp" && process.env.NEXT_PUBLIC_META_APP_ID && (
+              <div className="space-y-3">
+                <WhatsAppEmbeddedSignup
+                  _metaAppId={process.env.NEXT_PUBLIC_META_APP_ID}
+                  metaConfigId={process.env.NEXT_PUBLIC_META_CONFIG_ID ?? ""}
+                  onSuccess={() => {
+                    setFormOpen(false);
+                    refetch();
+                  }}
+                />
+                <p className="text-xs text-center text-muted-foreground">
+                  Or enter credentials manually below
+                </p>
               </div>
             )}
 
