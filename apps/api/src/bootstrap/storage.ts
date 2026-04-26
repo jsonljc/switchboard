@@ -81,6 +81,14 @@ export async function bootstrapStorage(logger: {
   if (redisUrl) {
     const { default: IORedis } = await import("ioredis");
     redis = new IORedis(redisUrl);
+
+    redis.on("error", (err) => {
+      logger.error({ err }, "Redis connection error — operations using Redis will fail");
+    });
+
+    redis.on("reconnecting", () => {
+      logger.warn("Redis reconnecting...");
+    });
   }
 
   const guardrailStateStore = createGuardrailStateStore(redis ?? undefined);

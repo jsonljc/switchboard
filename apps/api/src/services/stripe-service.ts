@@ -104,6 +104,8 @@ export async function handleWebhookEvent(body: string, signature: string): Promi
     }
   }
 
+  data.eventId = event.id;
+
   return { type: event.type, organizationId, data };
 }
 

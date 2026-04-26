@@ -20,6 +20,7 @@ export interface ReconciliationCronDeps {
     dateRange: { from: Date; to: Date },
   ) => Promise<ReconciliationReport>;
   logActivity?: (orgId: string, action: string, detail: Record<string, unknown>) => Promise<void>;
+  logHeartbeat?: (cronId: string, result: Record<string, unknown>) => Promise<void>;
 }
 
 export interface StepTools {
@@ -65,7 +66,95 @@ export async function executeReconciliation(
     });
   }
 
+  if (deps.logHeartbeat) {
+    await deps.logHeartbeat("reconciliation-daily", {
+      processed: orgs.length,
+      healthy,
+      degraded,
+      failing,
+    });
+  }
+
   return { processed: orgs.length, healthy, degraded, failing };
+}
+
+export interface StripeReconciliationDeps {
+  listSubscribedOrganizations: () => Promise<
+    Array<{
+      id: string;
+      stripeSubscriptionId: string;
+      subscriptionStatus: string;
+      cancelAtPeriodEnd: boolean;
+    }>
+  >;
+  retrieveStripeSubscription: (subscriptionId: string) => Promise<{
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: Date | null;
+    trialEnd: Date | null;
+    priceId: string | null;
+  }>;
+  updateOrganization: (
+    orgId: string,
+    data: {
+      subscriptionStatus: string;
+      cancelAtPeriodEnd: boolean;
+      currentPeriodEnd: Date | null;
+      trialEndsAt: Date | null;
+      stripePriceId: string | null;
+    },
+  ) => Promise<void>;
+}
+
+export async function executeStripeReconciliation(
+  step: StepTools,
+  deps: StripeReconciliationDeps,
+): Promise<{ checked: number; corrected: number; failed: number }> {
+  const orgs = await step.run("list-subscribed-orgs", () => deps.listSubscribedOrganizations());
+
+  let corrected = 0;
+  let failed = 0;
+
+  for (const org of orgs) {
+    await step.run(`reconcile-stripe-${org.id}`, async () => {
+      try {
+        const sub = await deps.retrieveStripeSubscription(org.stripeSubscriptionId);
+        const needsUpdate =
+          sub.status !== org.subscriptionStatus || sub.cancelAtPeriodEnd !== org.cancelAtPeriodEnd;
+
+        if (needsUpdate) {
+          await deps.updateOrganization(org.id, {
+            subscriptionStatus: sub.status,
+            cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+            currentPeriodEnd: sub.currentPeriodEnd,
+            trialEndsAt: sub.trialEnd,
+            stripePriceId: sub.priceId,
+          });
+          corrected++;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[stripe-reconciliation] Failed for org ${org.id}: ${msg}`);
+        failed++;
+      }
+    });
+  }
+
+  return { checked: orgs.length, corrected, failed };
+}
+
+export function createStripeReconciliationCron(deps: StripeReconciliationDeps) {
+  return inngestClient.createFunction(
+    {
+      id: "stripe-reconciliation-hourly",
+      name: "Stripe Subscription Reconciliation",
+      retries: 2,
+      triggers: [{ cron: "0 * * * *" }],
+    },
+    async ({ step }) => {
+      return executeStripeReconciliation(step as unknown as StepTools, deps);
+    },
+  );
 }
 
 export function createReconciliationCron(deps: ReconciliationCronDeps) {

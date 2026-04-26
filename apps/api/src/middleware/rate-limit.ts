@@ -45,9 +45,36 @@ function authRateLimitPlugin(app: FastifyInstance, _opts: unknown, done: () => v
     if (!isSensitive) return;
 
     const ip = request.ip;
-    const key = `auth-rl:${ip}`;
     const now = Date.now();
 
+    // Try Redis-backed rate limiting if available
+    if (app.redis) {
+      try {
+        const redisKey = `auth-rl:${ip}`;
+        const count = await app.redis.incr(redisKey);
+        if (count === 1) {
+          await app.redis.pexpire(redisKey, AUTH_RATE_LIMIT_WINDOW_MS);
+        }
+
+        reply.header("X-RateLimit-Limit", AUTH_RATE_LIMIT_MAX);
+        reply.header("X-RateLimit-Remaining", Math.max(0, AUTH_RATE_LIMIT_MAX - count));
+
+        if (count > AUTH_RATE_LIMIT_MAX) {
+          const ttl = await app.redis.pttl(redisKey);
+          return reply.code(429).send({
+            error: "Too many requests",
+            statusCode: 429,
+            retryAfter: Math.ceil(Math.max(ttl, 0) / 1000),
+          });
+        }
+        return;
+      } catch {
+        // Redis failed — fall through to in-memory
+      }
+    }
+
+    // In-memory fallback
+    const key = `auth-rl:${ip}`;
     let entry = store.get(key);
     if (!entry || now > entry.resetAt) {
       entry = { count: 0, resetAt: now + AUTH_RATE_LIMIT_WINDOW_MS };

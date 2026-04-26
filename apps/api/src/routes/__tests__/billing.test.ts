@@ -26,10 +26,25 @@ vi.mock("stripe", () => {
 const mockFindUnique = vi.fn();
 const mockUpdate = vi.fn();
 
+const mockWebhookFindUnique = vi.fn();
+const mockWebhookCreate = vi.fn();
+const mockDeploymentUpdateMany = vi.fn();
+const mockChannelUpdateMany = vi.fn();
+
 const mockPrisma = {
   organizationConfig: {
     findUnique: mockFindUnique,
     update: mockUpdate,
+  },
+  webhookEventLog: {
+    findUnique: mockWebhookFindUnique,
+    create: mockWebhookCreate,
+  },
+  agentDeployment: {
+    updateMany: mockDeploymentUpdateMany,
+  },
+  managedChannel: {
+    updateMany: mockChannelUpdateMany,
   },
 };
 
@@ -38,10 +53,19 @@ const mockPrisma = {
 // ---------------------------------------------------------------------------
 
 import Fastify from "fastify";
+import rawBody from "fastify-raw-body";
 import { billingRoutes } from "../billing.js";
 
 async function buildTestApp() {
   const app = Fastify();
+
+  // Register raw body plugin (mirrors app.ts — needed for webhook signature verification)
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
 
   // Simulate auth middleware setting organizationIdFromAuth
   app.decorateRequest("organizationIdFromAuth", undefined);
@@ -65,6 +89,10 @@ describe("billing routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+    mockWebhookFindUnique.mockResolvedValue(null);
+    mockWebhookCreate.mockResolvedValue({});
+    mockDeploymentUpdateMany.mockResolvedValue({ count: 0 });
+    mockChannelUpdateMany.mockResolvedValue({ count: 0 });
   });
 
   // ── POST /api/billing/checkout ──────────────────────────────────────────
@@ -169,9 +197,11 @@ describe("billing routes", () => {
   it("GET /status returns billing status", async () => {
     mockFindUnique.mockResolvedValue({
       subscriptionStatus: "active",
+      stripeSubscriptionId: "sub_123",
       stripePriceId: "price_pro",
       trialEndsAt: new Date("2026-05-24T00:00:00Z"),
       currentPeriodEnd: new Date("2026-06-24T00:00:00Z"),
+      cancelAtPeriodEnd: false,
     });
 
     const app = await buildTestApp();
@@ -183,10 +213,12 @@ describe("billing routes", () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
-    expect(body.subscriptionStatus).toBe("active");
-    expect(body.currentPlan).toBe("price_pro");
-    expect(body.trialEndsAt).toBe("2026-05-24T00:00:00.000Z");
+    expect(body.status).toBe("active");
+    expect(body.subscriptionId).toBe("sub_123");
+    expect(body.priceId).toBe("price_pro");
+    expect(body.trialEnd).toBe("2026-05-24T00:00:00.000Z");
     expect(body.currentPeriodEnd).toBe("2026-06-24T00:00:00.000Z");
+    expect(body.cancelAtPeriodEnd).toBe(false);
   });
 
   it("GET /status returns 404 when org not found", async () => {
@@ -206,6 +238,7 @@ describe("billing routes", () => {
 
   it("webhook handles checkout.session.completed", async () => {
     mockConstructEvent.mockReturnValue({
+      id: "evt_1",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -242,6 +275,7 @@ describe("billing routes", () => {
 
   it("webhook handles customer.subscription.updated", async () => {
     mockConstructEvent.mockReturnValue({
+      id: "evt_2",
       type: "customer.subscription.updated",
       data: {
         object: {

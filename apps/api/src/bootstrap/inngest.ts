@@ -26,8 +26,14 @@ import {
 import type { CronDependencies } from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
-import { createReconciliationCron } from "../services/cron/reconciliation.js";
-import type { ReconciliationCronDeps } from "../services/cron/reconciliation.js";
+import {
+  createReconciliationCron,
+  createStripeReconciliationCron,
+} from "../services/cron/reconciliation.js";
+import type {
+  ReconciliationCronDeps,
+  StripeReconciliationDeps,
+} from "../services/cron/reconciliation.js";
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 
@@ -205,6 +211,51 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
     },
   };
 
+  // Stripe reconciliation cron dependencies
+  const stripeReconciliationDeps: StripeReconciliationDeps = {
+    listSubscribedOrganizations: async () => {
+      const orgs = await app.prisma!.organizationConfig.findMany({
+        where: {
+          stripeSubscriptionId: { not: null },
+          subscriptionStatus: { notIn: ["none", "canceled"] },
+        },
+        select: {
+          id: true,
+          stripeSubscriptionId: true,
+          subscriptionStatus: true,
+          cancelAtPeriodEnd: true,
+        },
+      });
+      return orgs
+        .filter((o): o is typeof o & { stripeSubscriptionId: string } => !!o.stripeSubscriptionId)
+        .map((o) => ({
+          id: o.id,
+          stripeSubscriptionId: o.stripeSubscriptionId,
+          subscriptionStatus: o.subscriptionStatus,
+          cancelAtPeriodEnd: o.cancelAtPeriodEnd ?? false,
+        }));
+    },
+    retrieveStripeSubscription: async (subscriptionId) => {
+      const { stripe } = await import("../services/stripe-service.js");
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      const firstItem = sub.items.data[0];
+      const periodEnd = firstItem?.current_period_end;
+      return {
+        status: sub.status,
+        cancelAtPeriodEnd: sub.cancel_at_period_end,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
+        priceId: firstItem?.price.id ?? null,
+      };
+    },
+    updateOrganization: async (orgId, data) => {
+      await app.prisma!.organizationConfig.update({
+        where: { id: orgId },
+        data,
+      });
+    },
+  };
+
   // Lead retry cron dependencies
   const leadRetryDeps: LeadRetryCronDeps = {
     findPendingLeads: async () => {
@@ -317,6 +368,7 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       createDailyCheckCron(adOptimizerDeps),
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createReconciliationCron(reconciliationDeps),
+      createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
     ],
   });

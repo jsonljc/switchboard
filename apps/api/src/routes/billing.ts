@@ -10,6 +10,15 @@ import {
   handleWebhookEvent,
 } from "../services/stripe-service.js";
 
+function resolvePlanName(priceId: string | null | undefined): string | null {
+  if (!priceId) return null;
+  const mapping: Record<string, string> = {};
+  if (process.env["STRIPE_PRICE_STARTER"]) mapping[process.env["STRIPE_PRICE_STARTER"]] = "Starter";
+  if (process.env["STRIPE_PRICE_PRO"]) mapping[process.env["STRIPE_PRICE_PRO"]] = "Pro";
+  if (process.env["STRIPE_PRICE_SCALE"]) mapping[process.env["STRIPE_PRICE_SCALE"]] = "Scale";
+  return mapping[priceId] ?? "Current Plan";
+}
+
 export const billingRoutes: FastifyPluginAsync = async (app) => {
   // --- POST /checkout — create Stripe checkout session ---
   app.post(
@@ -117,9 +126,11 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
         where: { id: orgId },
         select: {
           subscriptionStatus: true,
+          stripeSubscriptionId: true,
           stripePriceId: true,
           trialEndsAt: true,
           currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
         },
       });
 
@@ -131,10 +142,13 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       }
 
       return reply.code(200).send({
-        subscriptionStatus: orgConfig.subscriptionStatus,
-        currentPlan: orgConfig.stripePriceId ?? null,
-        trialEndsAt: orgConfig.trialEndsAt?.toISOString() ?? null,
+        subscriptionId: orgConfig.stripeSubscriptionId ?? null,
+        status: orgConfig.subscriptionStatus,
+        planName: resolvePlanName(orgConfig.stripePriceId),
+        priceId: orgConfig.stripePriceId ?? null,
         currentPeriodEnd: orgConfig.currentPeriodEnd?.toISOString() ?? null,
+        trialEnd: orgConfig.trialEndsAt?.toISOString() ?? null,
+        cancelAtPeriodEnd: orgConfig.cancelAtPeriodEnd ?? false,
       });
     },
   );
@@ -180,6 +194,18 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // Idempotency: check if event was already processed
+      const eventId = result.data.eventId as string | undefined;
+      if (eventId) {
+        const existing = await app.prisma.webhookEventLog.findUnique({
+          where: { eventId },
+        });
+        if (existing) {
+          app.log.info({ eventId }, "Duplicate webhook event, skipping");
+          return reply.code(200).send({ received: true });
+        }
+      }
+
       if (!result.organizationId) {
         return reply.code(200).send({ received: true });
       }
@@ -203,6 +229,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
           const updateData: Record<string, unknown> = {
             subscriptionStatus: result.data.status as string,
             stripePriceId: (result.data.priceId as string) ?? null,
+            cancelAtPeriodEnd: result.data.cancelAtPeriodEnd ?? false,
             currentPeriodEnd: result.data.currentPeriodEnd
               ? new Date(result.data.currentPeriodEnd as string)
               : null,
@@ -214,6 +241,19 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
             where: { id: orgId },
             data: updateData,
           });
+
+          // Side effect: deactivate resources on cancellation
+          if (result.data.status === "canceled") {
+            await app.prisma.agentDeployment.updateMany({
+              where: { organizationId: orgId, status: "active" },
+              data: { status: "suspended" },
+            });
+            await app.prisma.managedChannel.updateMany({
+              where: { organizationId: orgId, status: "active" },
+              data: { status: "suspended" },
+            });
+            app.log.info({ orgId }, "Subscription canceled — suspended agents and channels");
+          }
           break;
         }
         case "invoice.payment_failed": {
@@ -232,6 +272,20 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
           }
           break;
         }
+      }
+
+      // Record the event for idempotency
+      if (eventId) {
+        await app.prisma.webhookEventLog
+          .create({
+            data: { eventId, eventType: result.type, processedAt: new Date() },
+          })
+          .catch((err: unknown) => {
+            app.log.warn(
+              { err, eventId },
+              "Failed to record webhook event — duplicate may reprocess",
+            );
+          });
       }
 
       return reply.code(200).send({ received: true });

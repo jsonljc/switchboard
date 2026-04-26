@@ -4,6 +4,7 @@ import type { FastifyError } from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import rawBody from "fastify-raw-body";
 import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
 import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
 import { AuditLedger } from "@switchboard/core";
@@ -80,6 +81,19 @@ export async function buildServer() {
   const app = Fastify({
     logger: {
       level: logLevel,
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          'req.headers["stripe-signature"]',
+          "body.apiKey",
+          "body.password",
+          "body.secret",
+          "body.token",
+          "body.accessToken",
+        ],
+        censor: "[REDACTED]",
+      },
       // Structured JSON logging in production, pretty print in development
       ...(process.env.NODE_ENV === "production" ? {} : { transport: { target: "pino-pretty" } }),
     },
@@ -111,6 +125,14 @@ export async function buildServer() {
   await app.register(rateLimit, {
     max: parseInt(process.env["RATE_LIMIT_MAX"] ?? "100", 10),
     timeWindow: parseInt(process.env["RATE_LIMIT_WINDOW_MS"] ?? "60000", 10),
+  });
+
+  // Raw body support — needed for Stripe webhook signature verification
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false, // only on routes that opt in with { config: { rawBody: true } }
+    encoding: "utf8",
+    runFirst: true,
   });
 
   // OpenAPI documentation + optional Swagger UI
@@ -438,6 +460,10 @@ export async function buildServer() {
   await app.register(authRateLimit);
   await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
+
+  // Billing feature gate — blocks paid routes for free-tier orgs
+  const { billingGuard } = await import("./middleware/billing-guard.js");
+  await app.register(billingGuard);
 
   // Assign a traceId to every request (from X-Request-Id header or auto-generated)
   app.addHook("onRequest", async (request) => {

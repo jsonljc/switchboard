@@ -423,11 +423,20 @@ model OrganizationConfig {
   stripeSubscriptionId String?
   stripePriceId        String?
   subscriptionStatus   String    @default("none") // none, trialing, active, past_due, canceled
+  cancelAtPeriodEnd    Boolean   @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]
+}
+
+// ── Webhook Idempotency ──
+
+model WebhookEventLog {
+  eventId     String   @id
+  eventType   String
+  processedAt DateTime @default(now())
 }
 
 // ── Agent Roster & State (Mission Control dashboard) ──

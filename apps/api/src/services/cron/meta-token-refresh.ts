@@ -25,6 +25,7 @@ export interface MetaTokenRefreshDeps {
     expiresAt: Date,
   ) => Promise<TokenResult | null>;
   getOAuthConfig: () => FacebookOAuthConfig;
+  notifyOperator?: (message: string, context: Record<string, unknown>) => Promise<void>;
 }
 
 export interface StepTools {
@@ -81,6 +82,15 @@ export async function executeMetaTokenRefresh(
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[meta-token-refresh] Failed to refresh connection ${conn.id}: ${msg}`);
         await deps.updateStatus(conn.id, "needs_reauth");
+        if (deps.notifyOperator) {
+          await deps
+            .notifyOperator(`Meta token refresh failed for connection ${conn.id}`, {
+              connectionId: conn.id,
+              deploymentId: conn.deploymentId,
+              error: msg,
+            })
+            .catch(() => {}); // don't let notification failure break the cron
+        }
         failed++;
       }
     });
