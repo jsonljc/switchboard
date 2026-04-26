@@ -4,6 +4,16 @@
 
 Audit Switchboard architecture against product doctrine and runtime invariants.
 
+## Run first
+
+Before reasoning, run:
+
+```
+.agent/tools/check-routes
+```
+
+Treat each output line as a starting candidate for the audit. Lines reported as `N findings suppressed by allowlist` are intentionally exempted — do not reason about them unless explicitly asked.
+
 ## Use when
 
 - PlatformIngress is mentioned
@@ -33,6 +43,16 @@ Audit Switchboard architecture against product doctrine and runtime invariants.
 9. Check for bypass surfaces and architecture drift.
 10. Classify issues P0/P1/P2.
 11. Recommend minimal fix and tests.
+
+## Approval lifecycle deep trace
+
+When `check-routes` reports an `approval` finding, perform this deeper trace before classifying:
+
+1. Trace the call site upward. Does the mutation originate inside the route handler, or is the route only forwarding into `ApprovalLifecycleService`? Forwarding is fine; in-route mutation is a violation.
+2. For each create / resolve path, confirm the corresponding `WorkTrace` write exists.
+3. For each path, confirm a test exercises the full request → resolve → side effect chain, not just the route handler.
+
+This replaces the previously proposed standalone `approval-lifecycle-audit` skill — it is a section of architecture-audit, not a separate route.
 
 ## Output
 
