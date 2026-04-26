@@ -17,11 +17,13 @@
 ## File Structure
 
 **Files to create:**
+
 - `packages/db/prisma/migrations/<timestamp>_add_approval_lifecycle_and_lead_intake_drift/migration.sql` — the catch-up SQL (timestamp determined at generation time by Prisma)
 - `scripts/check-prisma-drift.sh` — wrapper around `prisma migrate diff --exit-code` with a clear error message
 - `scripts/__tests__/check-prisma-drift.test.ts` — vitest coverage for the wrapper (pass case + fail case)
 
 **Files to modify:**
+
 - `package.json` (root) — add `db:check-drift` script entry
 - `scripts/preflight.sh` — add the drift check inside the existing Prisma section
 - `.github/workflows/ci.yml` — add a CI step that runs the drift check
@@ -42,6 +44,7 @@ git branch --show-current
 ```
 
 Expected output:
+
 ```
 /Users/jasonli/switchboard/.worktrees/chore-local-dev-audit-clean
 chore/local-dev-audit-clean
@@ -70,6 +73,7 @@ If missing, run `pnpm install --no-frozen-lockfile` (the lockfile in this worktr
 ## Task 1: Generate the catch-up migration
 
 **Files:**
+
 - Create: `packages/db/prisma/migrations/<timestamp>_add_approval_lifecycle_and_lead_intake_drift/migration.sql`
 
 This task does NOT use TDD because the migration is verified end-to-end (Step 6) rather than via unit tests. The verification IS the test.
@@ -112,6 +116,7 @@ cat "packages/db/prisma/migrations/$(ls packages/db/prisma/migrations/ | tail -1
 ```
 
 The SQL should contain (in any order, with exact spelling):
+
 - `ALTER TABLE "Contact" ADD COLUMN "leadgenId"`
 - `ALTER TABLE "ConversationThread" ADD COLUMN "firstAgentMessageAt"`
 - `ALTER TABLE "OrganizationConfig" ADD COLUMN "cancelAtPeriodEnd"`
@@ -152,6 +157,7 @@ pnpm typecheck
 ```
 
 Expected:
+
 - `migrate deploy`: ends with "All migrations have been successfully applied."
 - `seed`: ends with "Seeded 5 knowledge entries for org_dev" and similar success lines, no errors.
 - `typecheck`: zero errors.
@@ -184,6 +190,7 @@ EOF
 ## Task 2: Write failing test for the drift check script
 
 **Files:**
+
 - Create: `scripts/__tests__/check-prisma-drift.test.ts`
 
 - [ ] **Step 1: Confirm where existing scripts/ tests live**
@@ -223,16 +230,12 @@ describe("check-prisma-drift", () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "drift-test-"));
     const driftedSchemaPath = join(tmpDir, "schema.prisma");
     const real = readFileSync(REAL_SCHEMA, "utf-8");
-    writeFileSync(
-      driftedSchemaPath,
-      `${real}\n\nmodel TestDriftSentinel {\n  id String @id\n}\n`,
-    );
+    writeFileSync(driftedSchemaPath, `${real}\n\nmodel TestDriftSentinel {\n  id String @id\n}\n`);
 
-    const result = spawnSync(
-      "bash",
-      [SCRIPT, driftedSchemaPath, REAL_MIGRATIONS],
-      { encoding: "utf-8", cwd: process.cwd() },
-    );
+    const result = spawnSync("bash", [SCRIPT, driftedSchemaPath, REAL_MIGRATIONS], {
+      encoding: "utf-8",
+      cwd: process.cwd(),
+    });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("drift detected");
   }, 30_000);
@@ -269,6 +272,7 @@ EOF
 ## Task 3: Implement the drift check script
 
 **Files:**
+
 - Create: `scripts/check-prisma-drift.sh`
 
 - [ ] **Step 1: Create the script**
@@ -362,8 +366,8 @@ feat(scripts): add prisma drift check wrapper
 
 Wraps `prisma migrate diff --exit-code` with a developer-friendly error
 message and stable exit codes (0 = OK, 2 = drift, other = unexpected).
-No database required — diff is computed in-memory from migrations dir
-and schema.prisma.
+Requires a running PostgreSQL; Prisma uses a shadow DB to compute the
+cumulative schema from migrations. The test Docker service provides this.
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 EOF
@@ -375,6 +379,7 @@ EOF
 ## Task 4: Add `pnpm db:check-drift` script entry
 
 **Files:**
+
 - Modify: `package.json` (root)
 
 - [ ] **Step 1: Inspect current `db:*` scripts in root package.json**
@@ -430,6 +435,7 @@ EOF
 ## Task 5: Wire drift check into `scripts/preflight.sh`
 
 **Files:**
+
 - Modify: `scripts/preflight.sh`
 
 - [ ] **Step 1: Find the existing Prisma section in preflight**
@@ -508,6 +514,7 @@ EOF
 ## Task 6: Wire drift check into CI
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Find the Prisma generate step in CI**
@@ -516,22 +523,22 @@ EOF
 grep -n "prisma generate\|prisma migrate" .github/workflows/ci.yml
 ```
 
-You'll see at minimum a `Generate Prisma client` step (running `prisma generate`) and a `prisma migrate deploy` step. The drift check belongs after `Generate Prisma client` and before any test step — it does not require the database, just the schema and migrations files.
+You'll see at minimum a `Generate Prisma client` step (running `prisma generate`) and a `prisma migrate deploy` step. The drift check belongs after `Generate Prisma client` and before any test step — it requires Postgres for the shadow DB Prisma uses to compute the cumulative migration schema; the existing setup job's Postgres service container provides this.
 
 - [ ] **Step 2: Add the drift check step**
 
 Open `.github/workflows/ci.yml`. Find the step:
 
 ```yaml
-      - name: Generate Prisma client
-        run: pnpm --filter @switchboard/db exec prisma generate
+- name: Generate Prisma client
+  run: pnpm --filter @switchboard/db exec prisma generate
 ```
 
 Add immediately after it:
 
 ```yaml
-      - name: Check Prisma schema drift
-        run: pnpm db:check-drift
+- name: Check Prisma schema drift
+  run: pnpm db:check-drift
 ```
 
 Indentation must match the surrounding steps exactly (4 spaces for the `- name`, 8 spaces for `run`). Validate by viewing the diff:
@@ -571,6 +578,7 @@ EOF
 ## Task 7: Update README and CLAUDE.md
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `CLAUDE.md`
 
@@ -586,8 +594,7 @@ Note the line numbers. The new "Working with the database" subsection will go af
 
 Find the closing of the `### Development` subsection in `README.md`. After the `Note:` paragraph about `apps/chat`, insert:
 
-```markdown
-
+````markdown
 ### Working with the database
 
 Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in the same commit. After editing the schema:
@@ -596,9 +603,11 @@ Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in t
 pnpm --filter @switchboard/db exec prisma migrate dev --name <descriptive-name>
 git add packages/db/prisma/migrations/
 ```
+````
 
 `pnpm db:check-drift` runs the same validation locally. CI runs it on every PR and blocks merges when drift is detected.
-```
+
+````
 
 (Three backticks on their own lines around the bash block; render the markdown carefully.)
 
@@ -606,7 +615,7 @@ git add packages/db/prisma/migrations/
 
 ```bash
 grep -n "## Code Basics" CLAUDE.md
-```
+````
 
 - [ ] **Step 4: Add the rule to CLAUDE.md**
 
@@ -638,6 +647,7 @@ EOF
 ## Task 8: Update audit doc bookkeeping
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-04-26-local-dev-environment-audit.md`
 
 - [ ] **Step 1: Find the F3 finding section**
@@ -734,6 +744,7 @@ git log main..HEAD --oneline
 ```
 
 Expected (from oldest to newest, top-down most recent):
+
 - `docs(audit): mark F3 resolved`
 - `docs: document the schema/migration coupling rule`
 - `ci: add prisma drift check to setup job`

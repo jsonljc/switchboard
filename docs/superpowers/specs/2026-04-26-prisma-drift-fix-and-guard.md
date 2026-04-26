@@ -73,7 +73,7 @@ pnpm --filter @switchboard/db exec prisma migrate diff \
   --exit-code
 ```
 
-`prisma migrate diff` computes the difference between the cumulative migration history and the current schema in-memory. With `--exit-code`, exit 2 means drift exists. **No database connection required.**
+`prisma migrate diff --from-migrations` requires a running PostgreSQL: Prisma uses a shadow database to apply the migration history and determine the cumulative schema. The script reads `DATABASE_URL` from the environment or `.env` file and derives a `_shadow` URL. With `--exit-code`, exit 2 means drift exists.
 
 On detected drift, the wrapper script prints:
 
@@ -127,14 +127,14 @@ This keeps the audit doc as an accurate point-in-time record.
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Pre-commit husky hook | Friction on every schema edit; bypassable; CI provides equivalent guarantee |
-| Squash all migrations into a baseline | Loses history; doesn't prevent recurrence; large unrelated diff |
-| Custom ESLint plugin | Heavy infra for a one-line `prisma migrate diff` check |
-| `prisma migrate status` | Wrong direction — checks DB-vs-migrations, not migrations-vs-schema |
-| Inline the diff command in three places (no shared script) | Duplication of error message; harder to keep in sync |
-| Reuse the SQL we generated in the audit session | Pre-generated SQL may be stale relative to current `main`; regenerating during implementation is cheap insurance |
+| Alternative                                                | Why rejected                                                                                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Pre-commit husky hook                                      | Friction on every schema edit; bypassable; CI provides equivalent guarantee                                      |
+| Squash all migrations into a baseline                      | Loses history; doesn't prevent recurrence; large unrelated diff                                                  |
+| Custom ESLint plugin                                       | Heavy infra for a one-line `prisma migrate diff` check                                                           |
+| `prisma migrate status`                                    | Wrong direction — checks DB-vs-migrations, not migrations-vs-schema                                              |
+| Inline the diff command in three places (no shared script) | Duplication of error message; harder to keep in sync                                                             |
+| Reuse the SQL we generated in the audit session            | Pre-generated SQL may be stale relative to current `main`; regenerating during implementation is cheap insurance |
 
 ---
 
