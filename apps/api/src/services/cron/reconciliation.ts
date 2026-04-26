@@ -20,6 +20,7 @@ export interface ReconciliationCronDeps {
     dateRange: { from: Date; to: Date },
   ) => Promise<ReconciliationReport>;
   logActivity?: (orgId: string, action: string, detail: Record<string, unknown>) => Promise<void>;
+  logHeartbeat?: (cronId: string, result: Record<string, unknown>) => Promise<void>;
 }
 
 export interface StepTools {
@@ -62,6 +63,15 @@ export async function executeReconciliation(
         console.warn(`[reconciliation] Failed for org ${org.id}: ${msg}`);
         failing++;
       }
+    });
+  }
+
+  if (deps.logHeartbeat) {
+    await deps.logHeartbeat("reconciliation-daily", {
+      processed: orgs.length,
+      healthy,
+      degraded,
+      failing,
     });
   }
 

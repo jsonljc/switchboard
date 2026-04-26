@@ -81,6 +81,19 @@ export async function buildServer() {
   const app = Fastify({
     logger: {
       level: logLevel,
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          'req.headers["stripe-signature"]',
+          "body.apiKey",
+          "body.password",
+          "body.secret",
+          "body.token",
+          "body.accessToken",
+        ],
+        censor: "[REDACTED]",
+      },
       // Structured JSON logging in production, pretty print in development
       ...(process.env.NODE_ENV === "production" ? {} : { transport: { target: "pino-pretty" } }),
     },
