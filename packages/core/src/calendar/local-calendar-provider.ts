@@ -10,6 +10,17 @@ import type {
 } from "@switchboard/schemas";
 import { generateAvailableSlots } from "./slot-generator.js";
 
+export interface BookingConfirmationEmail {
+  to: string;
+  attendeeName: string | null;
+  service: string;
+  startsAt: string;
+  endsAt: string;
+  bookingId: string;
+}
+
+export type EmailSender = (email: BookingConfirmationEmail) => Promise<void>;
+
 export interface LocalBookingStore {
   findOverlapping(
     orgId: string,
@@ -40,15 +51,21 @@ export interface LocalBookingStore {
 interface LocalCalendarProviderConfig {
   businessHours: BusinessHoursConfig;
   bookingStore: LocalBookingStore;
+  emailSender?: EmailSender;
+  onSendFailure?: (info: { bookingId: string; error: string }) => void;
 }
 
 export class LocalCalendarProvider implements CalendarProvider {
   private readonly businessHours: BusinessHoursConfig;
   private readonly store: LocalBookingStore;
+  private readonly emailSender?: EmailSender;
+  private readonly onSendFailure?: (info: { bookingId: string; error: string }) => void;
 
   constructor(config: LocalCalendarProviderConfig) {
     this.businessHours = config.businessHours;
     this.store = config.bookingStore;
+    this.emailSender = config.emailSender;
+    this.onSendFailure = config.onSendFailure;
   }
 
   async listAvailableSlots(query: SlotQuery): Promise<TimeSlot[]> {
@@ -90,6 +107,27 @@ export class LocalCalendarProvider implements CalendarProvider {
       sourceChannel: input.sourceChannel ?? null,
       workTraceId: input.workTraceId ?? null,
     });
+
+    // Send confirmation email (best-effort, non-blocking)
+    if (this.emailSender && input.attendeeEmail) {
+      try {
+        await this.emailSender({
+          to: input.attendeeEmail,
+          attendeeName: input.attendeeName ?? null,
+          service: input.service,
+          startsAt: input.slot.start,
+          endsAt: input.slot.end,
+          bookingId: result.id,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[LocalCalendarProvider] Email confirmation failed: ${msg}`);
+        if (this.onSendFailure) {
+          this.onSendFailure({ bookingId: result.id, error: msg });
+        }
+      }
+    }
+
     return {
       id: result.id,
       contactId: input.contactId,

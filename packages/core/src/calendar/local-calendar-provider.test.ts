@@ -148,4 +148,159 @@ describe("LocalCalendarProvider", () => {
       expect(store.findById).toHaveBeenCalledWith("b1");
     });
   });
+
+  describe("email confirmation", () => {
+    it("calls emailSender when attendeeEmail is provided on createBooking", async () => {
+      const emailSender = vi.fn().mockResolvedValue(undefined);
+      const providerWithEmail = new LocalCalendarProvider({
+        businessHours: BUSINESS_HOURS,
+        bookingStore: store,
+        emailSender,
+      });
+
+      const result = await providerWithEmail.createBooking({
+        contactId: "c1",
+        organizationId: "org1",
+        slot: {
+          start: "2026-04-27T09:00:00+08:00",
+          end: "2026-04-27T09:30:00+08:00",
+          calendarId: "local",
+          available: true,
+        },
+        service: "consultation",
+        attendeeName: "Sarah",
+        attendeeEmail: "sarah@example.com",
+        createdByType: "agent",
+      });
+
+      expect(result.status).toBe("confirmed");
+      expect(emailSender).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: "sarah@example.com",
+          attendeeName: "Sarah",
+          service: "consultation",
+          startsAt: "2026-04-27T09:00:00+08:00",
+          endsAt: "2026-04-27T09:30:00+08:00",
+          bookingId: "booking_1",
+        }),
+      );
+    });
+
+    it("does not call emailSender when no attendeeEmail", async () => {
+      const emailSender = vi.fn();
+      const providerWithEmail = new LocalCalendarProvider({
+        businessHours: BUSINESS_HOURS,
+        bookingStore: store,
+        emailSender,
+      });
+
+      await providerWithEmail.createBooking({
+        contactId: "c1",
+        organizationId: "org1",
+        slot: {
+          start: "2026-04-27T09:00:00+08:00",
+          end: "2026-04-27T09:30:00+08:00",
+          calendarId: "local",
+          available: true,
+        },
+        service: "consultation",
+        createdByType: "agent",
+      });
+
+      expect(emailSender).not.toHaveBeenCalled();
+    });
+
+    it("does not throw when emailSender fails (best-effort)", async () => {
+      const emailSender = vi.fn().mockRejectedValue(new Error("SMTP down"));
+      const providerWithEmail = new LocalCalendarProvider({
+        businessHours: BUSINESS_HOURS,
+        bookingStore: store,
+        emailSender,
+      });
+
+      const result = await providerWithEmail.createBooking({
+        contactId: "c1",
+        organizationId: "org1",
+        slot: {
+          start: "2026-04-27T09:00:00+08:00",
+          end: "2026-04-27T09:30:00+08:00",
+          calendarId: "local",
+          available: true,
+        },
+        service: "consultation",
+        attendeeEmail: "sarah@example.com",
+        createdByType: "agent",
+      });
+
+      // Booking still succeeds even if email fails
+      expect(result.status).toBe("confirmed");
+      expect(emailSender).toHaveBeenCalled();
+    });
+
+    it("works without emailSender (backwards compatible)", async () => {
+      // The default provider from beforeEach has no emailSender
+      const result = await provider.createBooking({
+        contactId: "c1",
+        organizationId: "org1",
+        slot: {
+          start: "2026-04-27T09:00:00+08:00",
+          end: "2026-04-27T09:30:00+08:00",
+          calendarId: "local",
+          available: true,
+        },
+        service: "consultation",
+        attendeeEmail: "sarah@example.com",
+        createdByType: "agent",
+      });
+      expect(result.status).toBe("confirmed");
+    });
+
+    it("calls onSendFailure callback when emailSender fails", async () => {
+      const onSendFailure = vi.fn();
+      const emailSender = vi.fn().mockRejectedValue(new Error("SMTP down"));
+      const providerWithEscalation = new LocalCalendarProvider({
+        businessHours: BUSINESS_HOURS,
+        bookingStore: store,
+        emailSender,
+        onSendFailure,
+      });
+
+      await providerWithEscalation.createBooking({
+        contactId: "c1",
+        organizationId: "org1",
+        slot: {
+          start: "2026-04-27T09:00:00+08:00",
+          end: "2026-04-27T09:30:00+08:00",
+          calendarId: "local",
+          available: true,
+        },
+        service: "consultation",
+        attendeeEmail: "sarah@example.com",
+        createdByType: "agent",
+      });
+
+      expect(onSendFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookingId: "booking_1",
+          error: "SMTP down",
+        }),
+      );
+    });
+  });
+
+  describe("org-scoped queries", () => {
+    it("passes empty orgId to findOverlapping", async () => {
+      const query: SlotQuery = {
+        dateFrom: "2026-04-27T00:00:00+08:00",
+        dateTo: "2026-04-27T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "consultation",
+        timezone: "Asia/Singapore",
+        bufferMinutes: 15,
+      };
+      await provider.listAvailableSlots(query);
+
+      expect(store.findOverlapping).toHaveBeenCalledWith("", expect.any(Date), expect.any(Date));
+    });
+  });
 });
