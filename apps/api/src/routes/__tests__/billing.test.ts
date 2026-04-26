@@ -38,10 +38,19 @@ const mockPrisma = {
 // ---------------------------------------------------------------------------
 
 import Fastify from "fastify";
+import rawBody from "fastify-raw-body";
 import { billingRoutes } from "../billing.js";
 
 async function buildTestApp() {
   const app = Fastify();
+
+  // Register raw body plugin (mirrors app.ts — needed for webhook signature verification)
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
 
   // Simulate auth middleware setting organizationIdFromAuth
   app.decorateRequest("organizationIdFromAuth", undefined);
