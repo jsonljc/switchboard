@@ -56,6 +56,18 @@ describe("CtwaAdapter", () => {
     );
   });
 
+  it("forwards parentWorkUnitId to the submit call when provided", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    await adapter.ingest(makeMessage(), { parentWorkUnitId: "parent_wu_1" });
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({ parentWorkUnitId: "parent_wu_1" }),
+    );
+  });
+
   it("skips submission for non-CTWA messages", async () => {
     const submit = vi.fn();
     const adapter = new CtwaAdapter({ ingress: { submit }, now: () => new Date() });

@@ -433,9 +433,10 @@ export async function buildServer() {
   app.decorate("platformIngress", platformIngress);
 
   // --- Contained workflow mode (creative pipeline, Meta lead intake) ---
+  let instantFormAdapter: import("@switchboard/ad-optimizer").InstantFormAdapter | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
-    await bootstrapContainedWorkflows({
+    const result = await bootstrapContainedWorkflows({
       prismaClient,
       intentRegistry,
       modeRegistry,
@@ -443,6 +444,7 @@ export async function buildServer() {
       deploymentResolver,
       logger: app.log,
     });
+    instantFormAdapter = result.instantFormAdapter;
   }
 
   const { PlatformLifecycle } = await import("@switchboard/core/platform");
@@ -543,7 +545,7 @@ export async function buildServer() {
   app.get("/metrics", metricsRoute);
 
   // --- Inngest serve handler (creative pipeline orchestration) ---
-  await registerInngest(app);
+  await registerInngest(app, { instantFormAdapter });
 
   // --- Register all API routes ---
   await registerRoutes(app);

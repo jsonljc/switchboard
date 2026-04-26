@@ -128,6 +128,29 @@ describe("InstantFormAdapter", () => {
     expect(out).toBeNull();
   });
 
+  it("forwards parentWorkUnitId to the submit call when provided", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_42", duplicate: false } },
+    });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    await adapter.ingest(makeLead(), { parentWorkUnitId: "parent_wu_1" });
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({ parentWorkUnitId: "parent_wu_1" }),
+    );
+  });
+
+  it("does not include parentWorkUnitId when not provided", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_42", duplicate: false } },
+    });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    await adapter.ingest(makeLead());
+    const call = submit.mock.calls[0]![0];
+    expect(call.parentWorkUnitId).toBeUndefined();
+  });
+
   it("returns null when ingress response lacks a contactId", async () => {
     const submit = vi.fn().mockResolvedValue({ ok: true, result: { outputs: {} } });
     const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });

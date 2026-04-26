@@ -7,6 +7,7 @@ import { WorkflowMode } from "@switchboard/core/platform";
 import type { IntentRegistry } from "@switchboard/core/platform";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
+import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 
 interface ContainedWorkflowBootstrapDeps {
@@ -18,9 +19,18 @@ interface ContainedWorkflowBootstrapDeps {
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
 }
 
+export interface ContainedWorkflowBootstrapResult {
+  /**
+   * The single InstantFormAdapter instance shared across all IF Contact-creation
+   * paths (workflow + lead-retry cron). Cron deps must reuse this instance to
+   * preserve the "no parallel mutation paths" doctrine.
+   */
+  instantFormAdapter: InstantFormAdapter;
+}
+
 export async function bootstrapContainedWorkflows(
   deps: ContainedWorkflowBootstrapDeps,
-): Promise<void> {
+): Promise<ContainedWorkflowBootstrapResult> {
   const {
     prismaClient,
     intentRegistry,
@@ -69,6 +79,7 @@ export async function bootstrapContainedWorkflows(
           surface: { surface: "api" },
           idempotencyKey: req.idempotencyKey,
           targetHint: { deploymentId: payload.deploymentId },
+          ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
         });
         if (!response.ok) {
           return { ok: false };
@@ -191,4 +202,6 @@ export async function bootstrapContainedWorkflows(
   }
 
   logger.info("Contained workflow mode registered");
+
+  return { instantFormAdapter };
 }

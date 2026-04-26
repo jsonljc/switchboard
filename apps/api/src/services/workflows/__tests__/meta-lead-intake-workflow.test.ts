@@ -67,6 +67,8 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     // The adapter is the SINGLE Contact-creation path.
     expect(ingest).toHaveBeenCalledOnce();
     const lead = ingest.mock.calls[0]![0];
+    const ingestOpts = ingest.mock.calls[0]![1];
+    expect(ingestOpts).toEqual({ parentWorkUnitId: "wu_1" });
     expect(lead.leadgenId).toBe("lead_1");
     expect(lead.adId).toBe("ad_1");
     expect(lead.campaignId).toBe("campaign_1");

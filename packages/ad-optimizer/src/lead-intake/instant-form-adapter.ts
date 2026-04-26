@@ -89,13 +89,17 @@ export interface InstantFormIngestResult {
 export class InstantFormAdapter {
   constructor(private readonly deps: InstantFormAdapterDeps) {}
 
-  async ingest(lead: InstantFormLead): Promise<InstantFormIngestResult | null> {
+  async ingest(
+    lead: InstantFormLead,
+    opts: { parentWorkUnitId?: string } = {},
+  ): Promise<InstantFormIngestResult | null> {
     const intake = buildInstantFormIntake(lead, { now: this.deps.now });
     if (!intake) return null;
     const response = await this.deps.ingress.submit({
       intent: "lead.intake",
       payload: intake,
       idempotencyKey: intake.idempotencyKey,
+      ...(opts.parentWorkUnitId ? { parentWorkUnitId: opts.parentWorkUnitId } : {}),
     });
     const outputs = (response.result as { outputs?: Record<string, unknown> } | undefined)?.outputs;
     const contactId = typeof outputs?.["contactId"] === "string" ? outputs["contactId"] : undefined;

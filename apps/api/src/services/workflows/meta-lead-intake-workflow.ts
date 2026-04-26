@@ -129,7 +129,9 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           fieldData,
         };
 
-        const ingestResult = await deps.instantFormAdapter.ingest(intakeLead);
+        const ingestResult = await deps.instantFormAdapter.ingest(intakeLead, {
+          parentWorkUnitId: workUnit.id,
+        });
         if (!ingestResult) continue;
         if (ingestResult.duplicate) {
           // Existing Contact for this lead — do NOT spawn greeting/inquiry

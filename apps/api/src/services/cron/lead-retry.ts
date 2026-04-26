@@ -1,4 +1,5 @@
 import { Inngest } from "inngest";
+import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 
@@ -29,8 +30,18 @@ export interface LeadRetryCronDeps {
     fields: Array<{ name: string; values: string[] }> | undefined,
     name: string,
   ) => string | undefined;
-  findExistingContact: (orgId: string, phone: string) => Promise<{ attribution?: unknown } | null>;
-  createContact: (data: Record<string, unknown>) => Promise<{ id: string }>;
+  /**
+   * Optional org→deployment lookup. Required by the InstantFormAdapter (LeadIntake
+   * payloads must carry a deploymentId). Implementations should return the active
+   * Meta-connected deployment for the org. When absent the lead remains pending.
+   */
+  resolveDeploymentId: (orgId: string) => Promise<string | null>;
+  /**
+   * Shared InstantFormAdapter — the SAME instance used by the meta.lead.intake
+   * workflow. Cron-triggered work units are legitimate trace roots so this path
+   * does NOT pass parentWorkUnitId.
+   */
+  instantFormAdapter: InstantFormAdapter;
   markResolved: (id: string) => Promise<void>;
   incrementAttempt: (id: string, nextRetryAt: Date) => Promise<void>;
   markExhausted: (id: string) => Promise<void>;
@@ -69,45 +80,46 @@ export async function executeLeadRetry(
       try {
         const detail = await deps.fetchLeadDetail(lead.leadId, token);
         const phone = deps.extractFieldValue(detail.field_data, "phone_number");
-
-        if (!phone) {
-          await deps.markResolved(lead.id);
-          resolved++;
-          return;
-        }
-
-        const existing = await deps.findExistingContact(lead.organizationId, phone);
-        const existingAdId = (existing?.attribution as Record<string, unknown> | null)?.sourceAdId;
-
-        if (existing && existingAdId === lead.adId) {
-          await deps.markResolved(lead.id);
-          resolved++;
-          return;
-        }
-
-        const name = deps.extractFieldValue(detail.field_data, "full_name");
         const email = deps.extractFieldValue(detail.field_data, "email");
-        const campaignId = detail.campaign_id;
 
-        await deps.createContact({
+        if (!phone && !email) {
+          // No primary identifier — adapter would skip anyway. Resolve to stop retrying.
+          await deps.markResolved(lead.id);
+          resolved++;
+          return;
+        }
+
+        const deploymentId = await deps.resolveDeploymentId(lead.organizationId);
+        if (!deploymentId) {
+          // Org no longer has an active Meta deployment — keep retrying via backoff.
+          const nextRetryAt = computeNextRetry(lead.attempts);
+          await deps.incrementAttempt(lead.id, nextRetryAt);
+          retried++;
+          return;
+        }
+
+        // Route through the SAME InstantFormAdapter used by the webhook workflow.
+        // No parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+        const ingestResult = await deps.instantFormAdapter.ingest({
+          leadgenId: lead.leadId,
+          adId: lead.adId,
+          formId: lead.formId,
+          ...(detail.campaign_id ? { campaignId: detail.campaign_id } : {}),
           organizationId: lead.organizationId,
-          name: name ?? null,
-          phone,
-          email: email ?? null,
-          primaryChannel: "whatsapp",
-          source: "meta-instant-form",
-          attribution: {
-            sourceAdId: lead.adId,
-            sourceCampaignId: campaignId ?? null,
-            fbclid: null,
-            gclid: null,
-            ttclid: null,
-            utmSource: null,
-            utmMedium: null,
-            utmCampaign: null,
-          },
+          deploymentId,
+          fieldData: detail.field_data ?? [],
         });
 
+        // ingestResult is null only when neither phone nor email was present
+        // (already handled above) or the handler did not return a contactId.
+        // In both cases the retry has done its job — mark resolved.
+        if (!ingestResult) {
+          await deps.markResolved(lead.id);
+          resolved++;
+          return;
+        }
+
+        // Duplicate or fresh — both indicate the Contact now exists for this org.
         await deps.markResolved(lead.id);
         resolved++;
       } catch {

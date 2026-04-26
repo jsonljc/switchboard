@@ -23,7 +23,7 @@ import {
   createDailyCheckCron,
   MetaAdsClient,
 } from "@switchboard/ad-optimizer";
-import type { CronDependencies } from "@switchboard/ad-optimizer";
+import type { CronDependencies, InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -37,7 +37,29 @@ import type {
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 
-export async function registerInngest(app: FastifyInstance): Promise<void> {
+function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
+  if (!adapter) {
+    throw new Error(
+      "lead-retry cron requires instantFormAdapter (shared singleton from bootstrapContainedWorkflows)",
+    );
+  }
+  return adapter;
+}
+
+export interface RegisterInngestOptions {
+  /**
+   * Shared singleton InstantFormAdapter from `bootstrapContainedWorkflows`.
+   * The lead-retry cron MUST use this same instance so retry-path Contact
+   * creation flows through the same PlatformIngress front door as the
+   * primary webhook path. No parallel mutation paths.
+   */
+  instantFormAdapter?: InstantFormAdapter;
+}
+
+export async function registerInngest(
+  app: FastifyInstance,
+  options: RegisterInngestOptions = {},
+): Promise<void> {
   if (!app.prisma) {
     app.log.warn("Inngest: skipping registration — no database connection");
     return;
@@ -311,16 +333,14 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       const f = fields?.find((x) => x.name === name);
       return f?.values?.[0];
     },
-    findExistingContact: async (orgId, phone) => {
-      const { PrismaContactStore } = await import("@switchboard/db");
-      const contactStore = new PrismaContactStore(app.prisma!);
-      return contactStore.findByPhone(orgId, phone);
+    resolveDeploymentId: async (orgId) => {
+      const deployment = await app.prisma!.agentDeployment.findFirst({
+        where: { organizationId: orgId, status: "active" },
+        select: { id: true },
+      });
+      return deployment?.id ?? null;
     },
-    createContact: async (data) => {
-      const { PrismaContactStore } = await import("@switchboard/db");
-      const store = new PrismaContactStore(app.prisma!);
-      return store.create(data as unknown as Parameters<typeof store.create>[0]);
-    },
+    instantFormAdapter: requireInstantFormAdapter(options.instantFormAdapter),
     markResolved: async (id) => {
       await app.prisma!.pendingLeadRetry.update({
         where: { id },

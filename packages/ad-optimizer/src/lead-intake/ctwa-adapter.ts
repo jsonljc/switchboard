@@ -27,6 +27,7 @@ export interface IngressLike {
     intent: string;
     payload: unknown;
     idempotencyKey: string;
+    parentWorkUnitId?: string;
   }): Promise<{ ok: boolean; result?: unknown }>;
 }
 
@@ -75,13 +76,17 @@ export function buildCtwaIntake(
 export class CtwaAdapter {
   constructor(private readonly deps: CtwaAdapterDeps) {}
 
-  async ingest(msg: ParsedWhatsappMessage): Promise<void> {
+  async ingest(
+    msg: ParsedWhatsappMessage,
+    opts: { parentWorkUnitId?: string } = {},
+  ): Promise<void> {
     const intake = buildCtwaIntake(msg, { now: this.deps.now });
     if (!intake) return;
     await this.deps.ingress.submit({
       intent: "lead.intake",
       payload: intake,
       idempotencyKey: intake.idempotencyKey,
+      ...(opts.parentWorkUnitId ? { parentWorkUnitId: opts.parentWorkUnitId } : {}),
     });
   }
 }
