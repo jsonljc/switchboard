@@ -32,6 +32,32 @@ describe("auth middleware webhook exemption", () => {
     }
   });
 
+  it("allows /api/leads/inbound/:token without auth (form tools authenticate via path token)", async () => {
+    const { default: Fastify } = await import("fastify");
+    const { authMiddleware } = await import("../auth.js");
+
+    const app = Fastify();
+    const origKeys = process.env["API_KEYS"];
+    process.env["API_KEYS"] = "test-key-12345";
+
+    try {
+      await app.register(authMiddleware);
+      app.post("/api/leads/inbound/:token", async () => ({ received: true }));
+      await app.ready();
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/leads/inbound/whk_anything",
+        payload: { test: true },
+      });
+
+      expect(res.statusCode).not.toBe(401);
+    } finally {
+      process.env["API_KEYS"] = origKeys;
+      await app.close();
+    }
+  });
+
   it("blocks unauthenticated requests to non-exempt paths", async () => {
     const { default: Fastify } = await import("fastify");
     const { authMiddleware } = await import("../auth.js");

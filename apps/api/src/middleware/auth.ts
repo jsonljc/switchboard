@@ -79,7 +79,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.url === "/docs" ||
       request.url.startsWith("/docs/") ||
       request.url.startsWith("/api/setup/") ||
-      request.url === "/api/billing/webhook"
+      request.url === "/api/billing/webhook" ||
+      request.url.startsWith("/api/leads/inbound/")
     ) {
       return;
     }
