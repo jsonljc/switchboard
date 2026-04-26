@@ -425,6 +425,7 @@ model OrganizationConfig {
   subscriptionStatus   String    @default("none") // none, trialing, active, past_due, canceled
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
+  escalationConfig     Json?    // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]
