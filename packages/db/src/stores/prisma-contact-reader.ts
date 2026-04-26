@@ -18,6 +18,8 @@ export interface ContactReader {
 /**
  * Prisma-backed ContactReader.
  *
+ * Used by future OutcomeDispatcher wiring; currently no production consumer.
+ *
  * NOTE: this reader queries by id WITHOUT an organizationId scope. It is
  * intended for system-level consumers (the lifecycle event bus subscriber)
  * that already trust the contactId originated from an in-system event. Do

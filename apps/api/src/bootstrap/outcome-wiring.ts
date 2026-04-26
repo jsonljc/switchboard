@@ -1,3 +1,16 @@
+// TODO(post-wedge): OutcomeDispatcher must REPLACE, not run beside, MetaCAPIDispatcher
+// after a dedicated event_name dependency audit:
+//   - Which CAPI event_names are currently sent (ConvertedLead, etc.)?
+//   - Which Meta datasets/custom conversions consume them?
+//   - Are campaigns optimizing against ConvertedLead, Schedule, Lead, or Purchase?
+//   - What breaks if booked transitions from ConvertedLead to Schedule?
+//   - Should OutcomeDispatcher preserve legacy event_names initially, then migrate?
+// Until that audit ships, this wiring stays dormant. The active CAPI path is
+// `MetaCAPIDispatcher` subscribed via `wireAdDispatchers` (or wherever it's wired).
+//
+// This module is currently UNUSED in production bootstrap; it exists as a building
+// block for the future re-wiring. The contract is exercised by the co-located
+// outcome-wiring.test.ts so the helper stays correct while dormant.
 import type { OutcomeDispatcher, OutcomeEvent } from "@switchboard/ad-optimizer";
 
 /**

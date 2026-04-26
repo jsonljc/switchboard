@@ -265,6 +265,61 @@ describe("bootstrapConversionBus", () => {
     vi.doUnmock("@switchboard/db");
   });
 
+  it("does NOT wire OutcomeDispatcher (dormant) — booked fires CAPI exactly once", async () => {
+    process.env["META_PIXEL_ID"] = "pix_1";
+    process.env["META_CAPI_ACCESS_TOKEN"] = "tok_1";
+
+    const metaDispatch = vi.fn().mockResolvedValue({ accepted: true });
+    const outcomeHandle = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@switchboard/ad-optimizer", () => ({
+      MetaCAPIDispatcher: class {
+        canDispatch() {
+          return true;
+        }
+        dispatch = metaDispatch;
+      },
+      OutcomeDispatcher: class {
+        handle = outcomeHandle;
+      },
+    }));
+
+    vi.doMock("@switchboard/db", () => ({
+      PrismaOutboxStore: class {
+        fetchPending = vi.fn().mockResolvedValue([]);
+        markPublished = vi.fn();
+        recordFailure = vi.fn();
+      },
+      PrismaConversionRecordStore: class {
+        record = vi.fn();
+      },
+      PrismaContactReader: class {
+        getContact = vi.fn();
+      },
+    }));
+
+    handle = await bootstrapConversionBus({
+      redis: null,
+      prisma: {} as never,
+      logger,
+    });
+
+    handle.bus.emit(makeEvent({ type: "booked" }));
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Exactly one CAPI dispatch path active: MetaCAPIDispatcher.
+    expect(metaDispatch).toHaveBeenCalledTimes(1);
+    // OutcomeDispatcher must remain dormant — no handler invocations.
+    expect(outcomeHandle).not.toHaveBeenCalled();
+    // And no log line announcing OutcomeDispatcher wiring.
+    expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining("OutcomeDispatcher"));
+
+    delete process.env["META_PIXEL_ID"];
+    delete process.env["META_CAPI_ACCESS_TOKEN"];
+    vi.doUnmock("@switchboard/ad-optimizer");
+    vi.doUnmock("@switchboard/db");
+  });
+
   it("increments failure metric when record write throws", async () => {
     const failureInc = vi.fn();
     const fakeMetrics = {

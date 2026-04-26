@@ -1,3 +1,5 @@
+// NOTE: This dispatcher is implemented but currently DORMANT in production. See
+// `apps/api/src/bootstrap/outcome-wiring.ts` for the migration plan.
 import type { ActionSource } from "@switchboard/schemas";
 import { z } from "zod";
 
