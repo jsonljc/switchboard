@@ -1,0 +1,18 @@
+{
+  "eventId": "evt_123",
+  "eventType": "FORM_RESPONSE",
+  "createdAt": "2026-04-26T10:00:00Z",
+  "data": {
+    "responseId": "r_abc",
+    "submissionId": "s_def",
+    "formId": "form_xyz",
+    "formName": "Contact Form",
+    "fields": [
+      { "key": "q1", "label": "Full Name", "type": "INPUT_TEXT", "value": "Sarah Tan" },
+      { "key": "q2", "label": "Phone", "type": "INPUT_PHONE_NUMBER", "value": "+6591234567" },
+      { "key": "q3", "label": "Email", "type": "INPUT_EMAIL", "value": "sarah@example.com" },
+      { "key": "q4", "label": "Notes", "type": "TEXTAREA", "value": "lash lift this week?" },
+      { "key": "q5", "label": "Favourite colour", "type": "INPUT_TEXT", "value": "blue" }
+    ]
+  }
+}

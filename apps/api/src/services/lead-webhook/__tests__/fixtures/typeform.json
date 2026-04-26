@@ -1,0 +1,33 @@
+{
+  "event_id": "01H...",
+  "event_type": "form_response",
+  "form_response": {
+    "form_id": "FORMID",
+    "token": "tok_abc",
+    "submitted_at": "2026-04-26T10:00:00Z",
+    "definition": { "id": "FORMID", "title": "Contact" },
+    "answers": [
+      {
+        "type": "text",
+        "text": "Sarah Tan",
+        "field": { "id": "f1", "ref": "name", "type": "short_text", "title": "Full name" }
+      },
+      {
+        "type": "phone_number",
+        "phone_number": "+6591234567",
+        "field": { "id": "f2", "ref": "phone", "type": "phone_number", "title": "Phone" }
+      },
+      {
+        "type": "email",
+        "email": "sarah@example.com",
+        "field": { "id": "f3", "ref": "email", "type": "email", "title": "Email" }
+      },
+      {
+        "type": "text",
+        "text": "lash lift this week?",
+        "field": { "id": "f4", "ref": "message", "type": "long_text", "title": "Message" }
+      }
+    ],
+    "hidden": { "page": "https://brand.com/contact", "utm_source": "google" }
+  }
+}
