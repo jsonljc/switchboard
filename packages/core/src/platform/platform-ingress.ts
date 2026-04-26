@@ -272,18 +272,23 @@ export class PlatformIngress {
     completedAt?: string,
   ): Promise<void> {
     if (!traceStore) return;
+    const trace = buildWorkTrace({
+      workUnit,
+      governanceDecision: decision,
+      governanceCompletedAt,
+      executionResult,
+      executionStartedAt,
+      completedAt,
+    });
     try {
-      const trace = buildWorkTrace({
-        workUnit,
-        governanceDecision: decision,
-        governanceCompletedAt,
-        executionResult,
-        executionStartedAt,
-        completedAt,
-      });
       await traceStore.persist(trace);
-    } catch (err) {
-      console.error("Failed to persist WorkTrace", err);
+    } catch (_firstErr) {
+      // Single retry
+      try {
+        await traceStore.persist(trace);
+      } catch (retryErr) {
+        console.error("Failed to persist WorkTrace after retry", retryErr);
+      }
     }
   }
 }
