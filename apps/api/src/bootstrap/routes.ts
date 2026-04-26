@@ -34,6 +34,7 @@ import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
 import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { whatsappOnboardingRoutes } from "../routes/whatsapp-onboarding.js";
+import { leadsInboundRoutes } from "../routes/leads-inbound.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
@@ -112,6 +113,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(deploymentMemoryRoutes, { prefix: "/api/marketplace" });
   await app.register(adOptimizerRoutes, { prefix: "/api/marketplace" });
   await app.register(revenueRoutes, { prefix: "/api" });
+  await app.register(leadsInboundRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });

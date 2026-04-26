@@ -55,6 +55,7 @@ declare module "fastify" {
     executionWorker: import("bullmq").Worker | null;
     simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
     simulationSkill: import("@switchboard/core/skill-runtime").SkillDefinition | null;
+    leadWebhookStore: import("@switchboard/db").PrismaLeadWebhookStore | null;
   }
   interface FastifyRequest {
     /** Set by auth when API_KEY_METADATA maps this key to an org. */
@@ -299,6 +300,10 @@ export async function buildServer() {
   app.decorate("redis", redis);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
+  const leadWebhookStore = prismaClient
+    ? new (await import("@switchboard/db")).PrismaLeadWebhookStore(prismaClient)
+    : null;
+  app.decorate("leadWebhookStore", leadWebhookStore);
   // Wire ProactiveSender if channel credentials are available
   let agentNotifier: AgentNotifier | null = null;
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
