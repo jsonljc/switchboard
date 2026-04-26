@@ -175,7 +175,7 @@ describe("provision route fixes", () => {
       };
 
       await expect(
-        mockPrisma.$transaction(async (tx) => {
+        mockPrisma.$transaction(async (tx: typeof mockTx) => {
           await tx.connection.create({ data: {} as never });
           await tx.managedChannel.create({ data: {} as never });
           await tx.agentListing.upsert({ where: {}, create: {} as never, update: {} });
