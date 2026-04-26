@@ -6,9 +6,22 @@ export interface SkillStores {
       orgId: string,
       contactId: string,
     ): Promise<Array<{ id: string; stage: string; createdAt: Date }>>;
+    create?(input: {
+      organizationId: string;
+      contactId: string;
+      serviceId: string;
+      serviceName: string;
+    }): Promise<{ id: string; stage: string; createdAt: Date }>;
   };
   contactStore: {
     findById(orgId: string, contactId: string): Promise<unknown>;
+    create?(input: {
+      organizationId: string;
+      phone?: string | null;
+      name?: string | null;
+      primaryChannel: "whatsapp" | "telegram" | "dashboard";
+      source?: string | null;
+    }): Promise<{ id: string }>;
   };
   activityStore: {
     listByDeployment(
@@ -34,7 +47,13 @@ export interface SkillStores {
  */
 export type ParameterBuilder = (
   ctx: AgentContext,
-  config: { deploymentId: string; orgId: string; contactId: string },
+  config: {
+    deploymentId: string;
+    orgId: string;
+    contactId: string;
+    phone?: string;
+    channel?: string;
+  },
   stores: SkillStores,
 ) => Promise<Record<string, unknown>>;
 

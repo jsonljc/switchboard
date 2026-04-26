@@ -218,10 +218,26 @@ export async function bootstrapSkillMode(
         opportunityStore: {
           findActiveByContact: async (orgId: string, contactId: string) =>
             opportunityStore.findActiveByContact(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            contactId: string;
+            serviceId: string;
+            serviceName: string;
+          }) => {
+            const created = await opportunityStore.create(input);
+            return { id: created.id, stage: "interested" as const, createdAt: new Date() };
+          },
         },
         contactStore: {
           findById: async (orgId: string, contactId: string) =>
             contactStore.findById(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            phone?: string | null;
+            name?: string | null;
+            primaryChannel: "whatsapp" | "telegram" | "dashboard";
+            source?: string | null;
+          }) => contactStore.create({ ...input, primaryChannel: input.primaryChannel }),
         },
         activityStore: {
           listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>

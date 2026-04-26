@@ -97,4 +97,87 @@ describe("alexBuilder", () => {
 
     expect(result).not.toHaveProperty("PIPELINE_STAGE");
   });
+
+  it("auto-creates Contact and Opportunity when none exists for a new lead", async () => {
+    const ctx = createMockCtx();
+    const createContact = vi.fn().mockResolvedValue({
+      id: "contact_new",
+      name: null,
+      phone: "+6599999999",
+      email: null,
+      source: "whatsapp",
+    });
+    const createOpportunity = vi.fn().mockResolvedValue({
+      id: "opp_auto",
+      stage: "interested",
+      createdAt: new Date(),
+    });
+    const stores = createMockStores({
+      opportunityStore: {
+        findActiveByContact: vi.fn().mockResolvedValue([]),
+        create: createOpportunity,
+      } as never,
+      contactStore: {
+        findById: vi.fn().mockResolvedValue(null),
+        create: createContact,
+      } as never,
+    });
+
+    const result = await alexBuilder(
+      ctx,
+      {
+        ...config,
+        phone: "+6599999999",
+        channel: "whatsapp",
+      },
+      stores,
+    );
+
+    expect(createContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_1",
+        phone: "+6599999999",
+        primaryChannel: "whatsapp",
+      }),
+    );
+    expect(createOpportunity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_1",
+        contactId: "contact_new",
+      }),
+    );
+    expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+  });
+
+  it("auto-creates Opportunity only when Contact exists but no Opportunity", async () => {
+    const ctx = createMockCtx();
+    const createOpportunity = vi.fn().mockResolvedValue({
+      id: "opp_auto",
+      stage: "interested",
+      createdAt: new Date(),
+    });
+    const stores = createMockStores({
+      opportunityStore: {
+        findActiveByContact: vi.fn().mockResolvedValue([]),
+        create: createOpportunity,
+      } as never,
+      contactStore: {
+        findById: vi.fn().mockResolvedValue({
+          id: "contact_1",
+          name: "Sarah",
+          phone: "+6591234567",
+        }),
+      } as never,
+    });
+
+    const result = await alexBuilder(ctx, config, stores);
+
+    expect(createOpportunity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_1",
+        contactId: "contact_1",
+      }),
+    );
+    expect(result.OPPORTUNITY_ID).toBe("opp_auto");
+  });
 });
