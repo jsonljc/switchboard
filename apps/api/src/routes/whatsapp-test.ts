@@ -106,6 +106,19 @@ export const whatsappTestRoutes: FastifyPluginAsync = async (app) => {
       const result = await testWhatsAppCredentials(token, phoneNumberId);
 
       if (result.success) {
+        // Update lastHealthCheck on the org's WhatsApp connections
+        const orgId = request.organizationIdFromAuth;
+        if (orgId && app.prisma) {
+          await app.prisma.connection.updateMany({
+            where: {
+              organizationId: orgId,
+              serviceId: "whatsapp",
+            },
+            data: {
+              lastHealthCheck: new Date(),
+            },
+          });
+        }
         return reply.code(200).send(result);
       }
       return reply.code(result.statusCode ?? 502).send(result);

@@ -198,94 +198,127 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
             verifyToken: ch.verifyToken,
           });
 
-          const connection = await app.prisma.connection.create({
-            data: {
-              id: `conn_${crypto.randomUUID().slice(0, 8)}`,
-              organizationId: orgId,
-              serviceId: ch.channel,
-              serviceName: ch.channel,
-              authType: "bot_token",
-              credentials: encrypted,
-              scopes: [],
-            },
-          });
+          const result = await app.prisma.$transaction(async (tx) => {
+            const connection = await tx.connection.create({
+              data: {
+                id: `conn_${crypto.randomUUID().slice(0, 8)}`,
+                organizationId: orgId,
+                serviceId: ch.channel,
+                serviceName: ch.channel,
+                authType: "bot_token",
+                credentials: encrypted,
+                scopes: [],
+              },
+            });
 
-          const webhookPath = `/webhooks/${ch.channel}/${crypto.randomUUID().slice(0, 12)}`;
+            const webhookPath = `/webhook/managed/${connection.id}`;
 
-          const managedChannel = await app.prisma.managedChannel.create({
-            data: {
-              organizationId: orgId,
-              channel: ch.channel,
-              connectionId: connection.id,
-              webhookPath,
-              botUsername: null,
-            },
-          });
+            const managedChannel = await tx.managedChannel.create({
+              data: {
+                organizationId: orgId,
+                channel: ch.channel,
+                connectionId: connection.id,
+                webhookPath,
+                botUsername: null,
+              },
+            });
 
-          // ── Beta compatibility bridge ──
-          // Create AgentDeployment + DeploymentConnection so
-          // PrismaDeploymentResolver.resolveByChannelToken() can resolve
-          // credentials from the ManagedChannel path.
-          const alexListing = await app.prisma.agentListing.findUnique({
-            where: { slug: "alex-conversion" },
-          });
+            // ── Beta compatibility bridge ──
+            const alexListing = await tx.agentListing.upsert({
+              where: { slug: "alex-conversion" },
+              create: {
+                slug: "alex-conversion",
+                name: "Alex",
+                description: "AI-powered lead conversion agent",
+                type: "ai-agent",
+                status: "active",
+                trustScore: 0,
+                autonomyLevel: "supervised",
+                priceTier: "free",
+                metadata: {},
+              },
+              update: {},
+            });
 
-          if (!alexListing) {
-            throw new Error(
-              `Cannot provision ${ch.channel}: Alex listing (alex-conversion) not found. Run database seed first.`,
-            );
-          }
-
-          const deployment = await app.prisma.agentDeployment.upsert({
-            where: {
-              organizationId_listingId: {
+            const deployment = await tx.agentDeployment.upsert({
+              where: {
+                organizationId_listingId: {
+                  organizationId: orgId,
+                  listingId: alexListing.id,
+                },
+              },
+              update: {},
+              create: {
                 organizationId: orgId,
                 listingId: alexListing.id,
+                status: "active",
+                skillSlug: "alex",
               },
-            },
-            update: {},
-            create: {
-              organizationId: orgId,
-              listingId: alexListing.id,
-              status: "active",
-              skillSlug: "alex",
-            },
-          });
+            });
 
-          const tokenHash = createHash("sha256").update(connection.id).digest("hex");
+            const tokenHash = createHash("sha256").update(connection.id).digest("hex");
 
-          await app.prisma.deploymentConnection.upsert({
-            where: {
-              deploymentId_type_slot: {
+            await tx.deploymentConnection.upsert({
+              where: {
+                deploymentId_type_slot: {
+                  deploymentId: deployment.id,
+                  type: ch.channel,
+                  slot: "default",
+                },
+              },
+              update: {
+                credentials: encrypted,
+                tokenHash,
+                status: "active",
+              },
+              create: {
                 deploymentId: deployment.id,
                 type: ch.channel,
                 slot: "default",
+                credentials: encrypted,
+                tokenHash,
               },
-            },
-            update: {
-              credentials: encrypted,
-              tokenHash,
-              status: "active",
-            },
-            create: {
-              deploymentId: deployment.id,
-              type: ch.channel,
-              slot: "default",
-              credentials: encrypted,
-              tokenHash,
-            },
+            });
+
+            return { connection, managedChannel };
           });
 
+          // Provision-notify (outside transaction — side effect)
+          const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
+          const internalSecret = process.env.INTERNAL_API_SECRET;
+          if (chatUrl && internalSecret) {
+            try {
+              const notifyRes = await fetch(`${chatUrl}/internal/provision-notify`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${internalSecret}`,
+                },
+                body: JSON.stringify({ managedChannelId: result.managedChannel.id }),
+              });
+              if (!notifyRes.ok) {
+                console.warn(
+                  `[provision] Chat server notify returned ${notifyRes.status} for channel ${result.managedChannel.id}`,
+                );
+              }
+            } catch (notifyErr) {
+              console.warn(
+                `[provision] Failed to notify chat server for channel ${result.managedChannel.id}:`,
+                notifyErr instanceof Error ? notifyErr.message : notifyErr,
+              );
+            }
+          }
+
           results.push({
-            id: managedChannel.id,
-            channel: managedChannel.channel,
-            botUsername: managedChannel.botUsername,
-            webhookPath: managedChannel.webhookPath,
-            webhookRegistered: managedChannel.webhookRegistered,
+            id: result.managedChannel.id,
+            channel: result.managedChannel.channel,
+            botUsername: result.managedChannel.botUsername,
+            webhookPath: result.managedChannel.webhookPath,
+            webhookRegistered: result.managedChannel.webhookRegistered,
             status: "active",
             statusDetail: null,
             lastHealthCheck: null,
-            createdAt: managedChannel.createdAt.toISOString(),
+            createdAt: result.managedChannel.createdAt.toISOString(),
           });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Unknown error";
