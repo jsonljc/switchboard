@@ -46,15 +46,12 @@ export async function POST(request: NextRequest) {
 
   let dashboardUser;
   try {
+    const autoVerify = !process.env.RESEND_API_KEY;
     dashboardUser = await provisionDashboardUser(prisma, {
       email,
       name: null,
-      emailVerified: null,
-    });
-
-    await prisma.dashboardUser.update({
-      where: { id: dashboardUser.id },
-      data: { passwordHash },
+      emailVerified: autoVerify ? new Date() : null,
+      passwordHash,
     });
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
