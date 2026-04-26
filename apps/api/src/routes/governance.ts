@@ -7,6 +7,7 @@ import {
   ResumeBodySchema,
 } from "../validation.js";
 import { checkReadiness, buildReadinessContext } from "./readiness.js";
+import { requireOrganizationScope } from "../utils/require-org.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -39,9 +40,11 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const authOrgId = requireOrganizationScope(request, reply);
+      if (!authOrgId) return;
 
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+      const { orgId } = request.params as { orgId: string };
+      if (orgId !== authOrgId) {
         return reply.code(403).send({
           error: "Forbidden: organization mismatch",
           hint: "Verify your API key is scoped to the correct organization.",
@@ -105,9 +108,11 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { orgId } = request.params as { orgId: string };
+      const authOrgId = requireOrganizationScope(request, reply);
+      if (!authOrgId) return;
 
-      if (request.organizationIdFromAuth && orgId !== request.organizationIdFromAuth) {
+      const { orgId } = request.params as { orgId: string };
+      if (orgId !== authOrgId) {
         return reply.code(403).send({
           error: "Forbidden: organization mismatch",
           hint: "Verify your API key is scoped to the correct organization.",
