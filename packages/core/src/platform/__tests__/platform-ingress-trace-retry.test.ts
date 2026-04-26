@@ -76,6 +76,7 @@ const baseRequest = {
   organizationId: "org_1",
   actor: { id: "actor_1", type: "user" as const },
   parameters: {},
+  surface: { surface: "api" as const, requestId: "req_test" },
 };
 
 describe("WorkTrace persistence retry", () => {
