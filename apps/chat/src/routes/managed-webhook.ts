@@ -3,6 +3,23 @@ import type { ReplySink } from "@switchboard/core";
 import type { GatewayEntry } from "../managed/runtime-registry.js";
 import type { FailedMessageStore } from "../dlq/failed-message-store.js";
 
+/**
+ * Minimal contract used by the managed webhook route to forward CTWA-tagged
+ * inbound WhatsApp messages into the lead intake pipeline. Matches the public
+ * surface of `CtwaAdapter` from `@switchboard/ad-optimizer`.
+ */
+export interface CtwaAdapterLike {
+  ingest(
+    msg: {
+      from: string;
+      metadata: Record<string, unknown>;
+      organizationId: string;
+      deploymentId: string;
+    },
+    opts?: { parentWorkUnitId?: string },
+  ): Promise<void>;
+}
+
 export interface ManagedWebhookDeps {
   registry: {
     getGatewayByWebhookPath(path: string): GatewayEntry | null;
@@ -11,6 +28,7 @@ export interface ManagedWebhookDeps {
   dedup?: {
     checkDedup(channel: string, messageId: string): Promise<boolean>;
   };
+  ctwaAdapter?: CtwaAdapterLike;
   onStatusUpdate?: (
     status: {
       messageId: string;
@@ -98,6 +116,34 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
     const incoming = gatewayEntry.adapter.parseIncomingMessage(request.body);
     if (!incoming) {
       return reply.code(200).send({ ok: true });
+    }
+
+    // Fire-and-forget CTWA lead intake: when an inbound WhatsApp message carries
+    // a `ctwa_clid` referral (Click-to-WhatsApp ad), dispatch it through the
+    // PlatformIngress lead.intake front door so a Contact gets created with
+    // sourceType="ctwa". Idempotent on the (phone, ctwa_clid) pair downstream,
+    // so ordering vs. Alex's reply does not matter. Failures must never block
+    // the existing message-handling flow.
+    if (
+      deps.ctwaAdapter &&
+      gatewayEntry.channel === "whatsapp" &&
+      gatewayEntry.orgId &&
+      typeof incoming.metadata?.["ctwaClid"] === "string" &&
+      (incoming.metadata["ctwaClid"] as string).length > 0
+    ) {
+      void deps.ctwaAdapter
+        .ingest({
+          from: incoming.principalId,
+          metadata: incoming.metadata,
+          organizationId: gatewayEntry.orgId,
+          deploymentId: gatewayEntry.deploymentConnectionId,
+        })
+        .catch((err: unknown) =>
+          console.warn("[managed-webhook] CTWA intake failed", {
+            err,
+            from: incoming.principalId,
+          }),
+        );
     }
 
     const rawMessageId = gatewayEntry.adapter.extractMessageId(request.body);
