@@ -20,26 +20,25 @@ Enforce Switchboard architecture invariants during code execution. Runs before a
 
 Answer these 3 questions explicitly in the session before touching any file:
 
-1. **Ingress path:** Does this step introduce any mutating action? If yes, does it enter through `PlatformIngress.submit()`? If not, stop and redesign before writing code.
+1. **Ingress path:** Does this step introduce any mutating action (create, update, delete, external write)? If yes, does it enter through `PlatformIngress.submit()`? If not — state the violation, propose the minimal routing fix, and do not write code until the plan or user explicitly resolves it.
 
-2. **Persistence layer:** Does this step write state? If yes, is `WorkTrace` the canonical store? If something else is written to instead, stop and redesign.
+2. **Persistence layer:** Does this step write durable state? If yes, is `WorkTrace` the canonical store? Caches and transient in-memory state are exempt. If durable state is written elsewhere — state the violation, propose the fix, and do not write code until resolved.
 
-3. **Governance:** Does this step require a governed action? If yes, is `GovernanceGate.evaluate()` called exactly once? If governance is missing or called multiple times, stop and redesign.
+3. **Governance:** Does this step require a governed action (external write, destructive operation, tool invocation)? If yes, is `GovernanceGate.evaluate()` called exactly once per governed request (not per function call, not zero times, not twice)? If governance is missing or duplicated — state the violation, propose the fix, and do not write code until resolved.
 
-If the answer to all three is "not applicable to this step" or "yes, correctly implemented" — proceed to write code.
-
-If any answer is "no" or "missing" — state the specific violation, propose the minimal fix, and do not write code until resolved.
+If all three answers are "not applicable to this step" or "yes, correctly handled" — proceed to write code.
 
 ## Post-write check (run after writing code, before marking step complete)
 
-Verify all 4 before marking the task step as done:
+Verify all 5 before marking the task step as done:
 
-1. Does the new route/service flow through `PlatformIngress` for mutating actions?
-2. Does it write canonical state to `WorkTrace`?
-3. Is there a co-located test file (`*.test.ts`) covering the new behavior?
-4. Does `pnpm typecheck` pass?
+1. **PlatformIngress:** For any mutating action, grep the edited file for `PlatformIngress` or `platformIngress`. If a route handles POST/PUT/DELETE/PATCH and has no reference to PlatformIngress — flag as violation.
+2. **WorkTrace:** For any durable state write, grep the edited file for `WorkTrace` or `workTrace`. If state is written to another model without a WorkTrace reference — flag as violation.
+3. **Idempotency:** Does the mutating action include an `idempotencyKey`? Check that `PlatformIngress.submit()` is called with an idempotency key parameter. If absent — flag as violation.
+4. **Co-located test:** Verify a test file exists at `<same-directory>/<filename>.test.ts`. Run `pnpm --filter <package> test` and confirm it passes.
+5. **Typecheck:** Run `pnpm typecheck`. Confirm it passes with no new errors.
 
-If any check fails: surface the specific failure, fix it, re-run the check. Do not move to the next step until all 4 pass.
+If any check fails: state the specific failure, fix it, re-run the check. Do not move to the next step until all 5 pass.
 
 ## Output
 
@@ -52,9 +51,11 @@ For each step:
 ## Quality bar
 
 - No step marked complete with a failing typecheck.
-- No step marked complete without a co-located test.
+- No step marked complete without a co-located test at `<same-dir>/<file>.test.ts`.
 - No mutating route that bypasses PlatformIngress.
-- No parallel persistence path outside WorkTrace.
+- No durable state write outside WorkTrace.
+- No mutating action without an idempotency key.
+- Coverage must not regress below project baseline (see CLAUDE.md for thresholds).
 
 ## Failure modes
 
