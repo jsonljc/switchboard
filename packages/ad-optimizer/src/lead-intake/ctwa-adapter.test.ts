@@ -23,6 +23,15 @@ describe("buildCtwaIntake", () => {
     expect(intake!.idempotencyKey).toBe("+6591234567:ARxx_abc");
   });
 
+  it("normalizes phone numbers without a + prefix to E.164", () => {
+    const intake = buildCtwaIntake(makeMessage({ from: "6591234567" }), {
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    expect(intake).not.toBeNull();
+    expect(intake!.contact.phone).toBe("+6591234567");
+    expect(intake!.idempotencyKey).toBe("+6591234567:ARxx_abc");
+  });
+
   it("returns null when message has no ctwa_clid", () => {
     const intake = buildCtwaIntake(makeMessage({ metadata: {} }), { now: () => new Date() });
     expect(intake).toBeNull();

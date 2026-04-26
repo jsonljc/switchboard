@@ -43,25 +43,27 @@ export function buildCtwaIntake(
   msg: ParsedWhatsappMessage,
   opts: { now: () => Date },
 ): LeadIntake | null {
-  const ctwaClid = msg.metadata["ctwaClid"];
-  if (typeof ctwaClid !== "string" || !ctwaClid) return null;
+  const stringOrUndefined = (v: unknown): string | undefined =>
+    typeof v === "string" && v ? v : undefined;
 
-  const sourceAdId = msg.metadata["sourceAdId"];
-  const referralUrl = msg.metadata["ctwaSourceUrl"];
+  const ctwaClid = stringOrUndefined(msg.metadata["ctwaClid"]);
+  if (!ctwaClid) return null;
+
+  const normalizedPhone = msg.from.startsWith("+") ? msg.from : `+${msg.from}`;
 
   return {
     source: "ctwa",
     organizationId: msg.organizationId,
     deploymentId: msg.deploymentId,
-    contact: { phone: msg.from, channel: "whatsapp" },
+    contact: { phone: normalizedPhone, channel: "whatsapp" },
     attribution: {
       ctwa_clid: ctwaClid,
-      referralUrl: typeof referralUrl === "string" ? referralUrl : undefined,
-      sourceAdId: typeof sourceAdId === "string" ? sourceAdId : undefined,
+      referralUrl: stringOrUndefined(msg.metadata["ctwaSourceUrl"]),
+      sourceAdId: stringOrUndefined(msg.metadata["sourceAdId"]),
       capturedAt: opts.now().toISOString(),
-      raw: msg.metadata,
+      raw: { ...msg.metadata },
     },
-    idempotencyKey: `${msg.from}:${ctwaClid}`,
+    idempotencyKey: `${normalizedPhone}:${ctwaClid}`,
   };
 }
 
