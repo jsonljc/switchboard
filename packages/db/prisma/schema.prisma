@@ -1649,6 +1649,7 @@ model ConversionRecord {
   sourceCampaignId  String?
   sourceChannel     String?
   agentDeploymentId String?
+  bookingId         String?
   metadata          Json     @default("{}")
   occurredAt        DateTime
   createdAt         DateTime @default(now())
@@ -1656,6 +1657,7 @@ model ConversionRecord {
   @@index([organizationId, type, occurredAt])
   @@index([organizationId, sourceCampaignId])
   @@index([contactId])
+  @@index([bookingId])
 }
 
 // ---------------------------------------------------------------------------

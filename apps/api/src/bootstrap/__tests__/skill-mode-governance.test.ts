@@ -25,7 +25,11 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   GovernanceHook,
   SimulationPolicyHook: vi.fn().mockImplementation(() => ({ name: "simulation" })),
   AnthropicToolCallingAdapter: vi.fn().mockImplementation(() => ({})),
-  BuilderRegistry: vi.fn().mockImplementation(() => ({})),
+  BuilderRegistry: vi.fn().mockImplementation(() => ({
+    register: vi.fn(),
+    get: vi.fn(),
+    slugs: vi.fn(() => []),
+  })),
   createCrmQueryTool: vi.fn(() => ({ operations: { get: { effectCategory: "read" } } })),
   createCrmWriteTool: vi.fn(() => ({ operations: { upsert: { effectCategory: "write" } } })),
   createCalendarBookTool: vi.fn(() => ({
@@ -35,6 +39,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
     operations: { owner: { effectCategory: "external_send" } },
   })),
   BookingFailureHandler: vi.fn().mockImplementation(() => ({})),
+  alexBuilder: vi.fn(async () => ({})),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({

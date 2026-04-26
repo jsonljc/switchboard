@@ -209,6 +209,18 @@ export async function bootstrapSkillMode(
 
   const builderRegistry = new BuilderRegistry();
 
+  const { alexBuilder } = await import("@switchboard/core/skill-runtime");
+
+  builderRegistry.register("alex", async (ctx) => {
+    const agentContext = ctx.workUnit.parameters._agentContext as Parameters<typeof alexBuilder>[0];
+    const config = {
+      deploymentId: ctx.deployment.deploymentId,
+      orgId: ctx.workUnit.organizationId,
+      contactId: ctx.workUnit.parameters.contactId as string,
+    };
+    return alexBuilder(agentContext, config, ctx.stores);
+  });
+
   modeRegistry.register(
     new SkillMode({
       executor: skillExecutor,
@@ -218,10 +230,26 @@ export async function bootstrapSkillMode(
         opportunityStore: {
           findActiveByContact: async (orgId: string, contactId: string) =>
             opportunityStore.findActiveByContact(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            contactId: string;
+            serviceId: string;
+            serviceName: string;
+          }) => {
+            const created = await opportunityStore.create(input);
+            return { id: created.id, stage: "interested" as const, createdAt: new Date() };
+          },
         },
         contactStore: {
           findById: async (orgId: string, contactId: string) =>
             contactStore.findById(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            phone?: string | null;
+            name?: string | null;
+            primaryChannel: "whatsapp" | "telegram" | "dashboard";
+            source?: string | null;
+          }) => contactStore.create({ ...input, primaryChannel: input.primaryChannel }),
         },
         activityStore: {
           listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>
@@ -245,12 +273,18 @@ export async function bootstrapSkillMode(
 async function resolveCalendarProvider(
   prismaClient: PrismaClient,
   logger: { info(msg: string): void; error(msg: string): void },
+  orgId?: string,
 ): Promise<CalendarProvider> {
-  // Read business hours from the first org config that has them
+  // Query org-specific config if orgId provided, otherwise fall back to first available
   let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
-  const orgConfig = await prismaClient.organizationConfig.findFirst({
-    select: { businessHours: true },
-  });
+  const orgConfig = orgId
+    ? await prismaClient.organizationConfig.findFirst({
+        where: { id: orgId },
+        select: { businessHours: true },
+      })
+    : await prismaClient.organizationConfig.findFirst({
+        select: { businessHours: true },
+      });
   if (orgConfig?.businessHours && typeof orgConfig.businessHours === "object") {
     businessHours = orgConfig.businessHours as import("@switchboard/schemas").BusinessHoursConfig;
   }
@@ -283,9 +317,10 @@ async function resolveCalendarProvider(
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
 
     const localStore = {
-      findOverlapping: async (_orgId: string, startsAt: Date, endsAt: Date) => {
+      findOverlapping: async (filterOrgId: string, startsAt: Date, endsAt: Date) => {
         const rows = await prismaClient.booking.findMany({
           where: {
+            organizationId: filterOrgId || undefined,
             startsAt: { lt: endsAt },
             endsAt: { gt: startsAt },
             status: { notIn: ["cancelled", "failed"] },
@@ -313,6 +348,7 @@ async function resolveCalendarProvider(
         return prismaClient.$transaction(async (tx) => {
           const conflicts = await tx.booking.findMany({
             where: {
+              organizationId: input.organizationId,
               startsAt: { lt: input.endsAt },
               endsAt: { gt: input.startsAt },
               status: { notIn: ["cancelled", "failed"] },

@@ -5,26 +5,60 @@ import { renderBusinessFacts } from "../context-resolver.js";
 
 export const alexBuilder: ParameterBuilder = async (ctx, config, stores) => {
   const contactId = config.contactId;
+  const orgId = config.orgId;
 
-  const opportunities = await stores.opportunityStore.findActiveByContact(config.orgId, contactId);
+  let opportunities = await stores.opportunityStore.findActiveByContact(orgId, contactId);
 
+  // Auto-create Contact + Opportunity for new leads
   if (opportunities.length === 0) {
-    throw new ParameterResolutionError(
-      "no-active-opportunity",
-      "I'd like to help, but there's no active deal found for this conversation. " +
-        "Let me connect you with the team to get things started.",
-    );
+    let resolvedContactId = contactId;
+
+    // Check if Contact exists; if not, create one
+    const existingContact = await stores.contactStore.findById(orgId, contactId);
+    if (!existingContact && stores.contactStore.create) {
+      const phone = config.phone;
+      const channel = config.channel ?? "whatsapp";
+      const newContact = await stores.contactStore.create({
+        organizationId: orgId,
+        phone: phone ?? null,
+        name: null,
+        primaryChannel: channel as "whatsapp" | "telegram" | "dashboard",
+        source: channel,
+      });
+      resolvedContactId = newContact.id;
+    } else if (existingContact) {
+      resolvedContactId = (existingContact as { id: string }).id;
+    }
+
+    // Auto-create Opportunity
+    if (stores.opportunityStore.create) {
+      const newOpp = await stores.opportunityStore.create({
+        organizationId: orgId,
+        contactId: resolvedContactId,
+        serviceId: "general-inquiry",
+        serviceName: "General Inquiry",
+      });
+      opportunities = [newOpp];
+    }
+
+    if (opportunities.length === 0) {
+      throw new ParameterResolutionError(
+        "no-active-opportunity",
+        "I'd like to help, but there's no active deal found for this conversation. " +
+          "Let me connect you with the team to get things started.",
+      );
+    }
   }
 
   const opportunity = opportunities.sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   )[0]!;
 
-  const leadProfile = await stores.contactStore.findById(config.orgId, contactId);
+  const leadProfile = await stores.contactStore.findById(orgId, contactId);
 
   let BUSINESS_FACTS = "";
   if (stores.businessFactsStore) {
-    const facts = (await stores.businessFactsStore.get(config.orgId)) as BusinessFacts | null;
+    const facts = (await stores.businessFactsStore.get(orgId)) as BusinessFacts | null;
     if (facts) {
       BUSINESS_FACTS = renderBusinessFacts(facts);
     }

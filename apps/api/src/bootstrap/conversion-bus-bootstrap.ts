@@ -50,6 +50,35 @@ export async function bootstrapConversionBus(opts: {
       }
     });
 
+    // Wire MetaCAPIDispatcher if Meta CAPI credentials are configured
+    const metaPixelId = process.env["META_PIXEL_ID"];
+    const metaCapiToken = process.env["META_CAPI_ACCESS_TOKEN"];
+
+    if (metaPixelId && metaCapiToken) {
+      const { MetaCAPIDispatcher } = await import("@switchboard/ad-optimizer");
+      const capiDispatcher = new MetaCAPIDispatcher({
+        pixelId: metaPixelId,
+        accessToken: metaCapiToken,
+      });
+
+      bus.subscribe("*", async (event: ConversionEvent) => {
+        if (!capiDispatcher.canDispatch(event)) return;
+        try {
+          const result = await capiDispatcher.dispatch(event);
+          if (!result.accepted) {
+            console.warn(
+              `[ConversionBus] MetaCAPI dispatch rejected: ${result.errorMessage}`,
+              event.eventId,
+            );
+          }
+        } catch (err) {
+          console.error("[ConversionBus] MetaCAPI dispatch failed:", err);
+        }
+      });
+
+      logger.info("ConversionBus: MetaCAPIDispatcher wired for Meta Conversions API");
+    }
+
     // Instrument the bus passed to the publisher to track publish metrics
     const instrumentedBus: ConversionBus = {
       subscribe: bus.subscribe.bind(bus),
