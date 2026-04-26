@@ -17,3 +17,7 @@ Traces frontend hook → proxy → backend route → store/service.
 ## context-compression
 
 Compacts long sessions into decisions, lessons, failures, and next actions.
+
+## implementation
+
+Enforces architecture invariants (PlatformIngress, WorkTrace, GovernanceGate, dead-letter) before and after each code step in executing-plans.

@@ -43,11 +43,10 @@ Match task to triggers. Load only the listed files.
 **Load:**
 
 - `docs/DOCTRINE.md`
+- `.agent/skills/implementation/SKILL.md`
 - `.agent/conventions/architecture-invariants.md`
 - `.agent/conventions/token-budget.md`
 - `.agent/conventions/source-of-truth.md`
-
-No dedicated implementation skill in Phase 1.
 
 ## Context compression
 
