@@ -1,0 +1,5 @@
+- path: apps/api/src/routes/auth/*.ts
+  reason: Auth handlers — not business-state mutations.
+
+- path: "**/*.test.ts"
+  reason: Test fixtures and mocks.
