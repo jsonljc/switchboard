@@ -76,6 +76,7 @@ pnpm db:migrate                   # Run migrations
 - Conventional Commits enforced by commitlint
 - Every new module must include co-located tests (`*.test.ts`)
 - Run `pnpm test` and `pnpm typecheck` before committing
+- Schema changes require a migration in the same commit. Run `pnpm db:check-drift` before committing schema changes (requires a running PostgreSQL).
 - File size: error at 600 lines, warn at 400 — split proactively
 - Coverage: global 55/50/52/55, core 65/65/70/65
 - Barrel files: flag if >40 exported symbols

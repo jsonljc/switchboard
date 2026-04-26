@@ -122,6 +122,17 @@ pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires 
 
 **Note:** `apps/chat` hard-fails to start without at least one of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`+`WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` set. For local dashboard-only work, run the API and dashboard individually rather than `pnpm dev`.
 
+### Working with the database
+
+Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in the same commit. After editing the schema:
+
+```bash
+pnpm --filter @switchboard/db exec prisma migrate dev --name <descriptive-name>
+git add packages/db/prisma/migrations/
+```
+
+`pnpm db:check-drift` runs the same validation locally (requires a running PostgreSQL — Prisma uses a shadow database to compare migrations against the schema). CI runs it on every PR and blocks merges when drift is detected.
+
 ### Docker
 
 ```bash
