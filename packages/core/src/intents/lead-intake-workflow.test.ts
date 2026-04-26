@@ -1,10 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { LeadIntake } from "@switchboard/schemas";
 import { LeadIntakeHandler, type LeadIntakeStore } from "./lead-intake-handler.js";
-import {
-  buildLeadIntakeWorkflow,
-  buildLeadIntakeWorkflowFromStore,
-} from "./lead-intake-workflow.js";
+import { buildLeadIntakeWorkflow } from "./lead-intake-workflow.js";
 import { PlatformIngress } from "../platform/platform-ingress.js";
 import { IntentRegistry } from "../platform/intent-registry.js";
 import { ExecutionModeRegistry } from "../platform/execution-mode-registry.js";
@@ -54,7 +51,7 @@ describe("buildLeadIntakeWorkflow (unit)", () => {
   });
 
   it("returns failed outcome on invalid payload", async () => {
-    const wf = buildLeadIntakeWorkflowFromStore(makeStore());
+    const wf = buildLeadIntakeWorkflow(new LeadIntakeHandler({ store: makeStore() }));
     const workUnit = { parameters: { bogus: true } } as unknown as WorkUnit;
 
     const result = await wf.execute(workUnit, { submitChildWork: vi.fn() });
@@ -67,7 +64,7 @@ describe("buildLeadIntakeWorkflow (unit)", () => {
 describe("lead.intake via PlatformIngress (integration)", () => {
   it("routes lead.intake through the workflow front door to LeadIntakeHandler", async () => {
     const store = makeStore();
-    const handler = buildLeadIntakeWorkflowFromStore(store);
+    const handler = buildLeadIntakeWorkflow(new LeadIntakeHandler({ store }));
 
     const handlers = new Map<string, WorkflowHandler>([["lead.intake", handler]]);
     const modeRegistry = new ExecutionModeRegistry();

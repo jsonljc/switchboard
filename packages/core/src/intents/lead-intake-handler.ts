@@ -2,6 +2,11 @@ import type { LeadIntake } from "@switchboard/schemas";
 
 export interface LeadIntakeStore {
   findContactByIdempotency(key: string): Promise<{ id: string } | null>;
+  /**
+   * MUST be atomic/upsert on `idempotencyKey` to close the TOCTOU window between
+   * `findContactByIdempotency` and this call. Implementations should back this
+   * with a unique constraint on `(organizationId, idempotencyKey)` at the DB layer.
+   */
   upsertContact(input: {
     organizationId: string;
     deploymentId: string;

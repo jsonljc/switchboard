@@ -246,9 +246,6 @@ export {
 } from "./intents/lead-intake-handler.js";
 // TODO(task-11): Wire `lead.intake` into IntentRegistry + WorkflowMode in apps/api
 // bootstrap (alongside the prisma-backed LeadIntakeStore from packages/db, task 5)
-// using buildLeadIntakeWorkflowFromStore. The wrapper itself lives here; concrete
-// store + registration belong at the composition root, not in core.
-export {
-  buildLeadIntakeWorkflow,
-  buildLeadIntakeWorkflowFromStore,
-} from "./intents/lead-intake-workflow.js";
+// using buildLeadIntakeWorkflow(new LeadIntakeHandler({ store })). The wrapper itself
+// lives here; concrete store + registration belong at the composition root, not in core.
+export { buildLeadIntakeWorkflow } from "./intents/lead-intake-workflow.js";

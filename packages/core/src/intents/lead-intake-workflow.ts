@@ -1,6 +1,6 @@
 import type { WorkflowHandler } from "../platform/modes/workflow-mode.js";
 import { LeadIntakeSchema, type LeadIntake } from "@switchboard/schemas";
-import { LeadIntakeHandler, type LeadIntakeStore } from "./lead-intake-handler.js";
+import { LeadIntakeHandler } from "./lead-intake-handler.js";
 
 /**
  * Wraps {@link LeadIntakeHandler} as a `workflow`-mode {@link WorkflowHandler} so that
@@ -33,12 +33,4 @@ export function buildLeadIntakeWorkflow(handler: LeadIntakeHandler): WorkflowHan
       };
     },
   };
-}
-
-/**
- * Convenience overload: build the wrapper directly from a {@link LeadIntakeStore}.
- * Useful when wiring without exposing the handler instance separately.
- */
-export function buildLeadIntakeWorkflowFromStore(store: LeadIntakeStore): WorkflowHandler {
-  return buildLeadIntakeWorkflow(new LeadIntakeHandler({ store }));
 }
