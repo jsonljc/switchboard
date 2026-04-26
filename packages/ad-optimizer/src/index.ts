@@ -41,3 +41,10 @@ export type { RawAdData } from "./creative-analyzer.js";
 export { detectSaturation } from "./saturation-detector.js";
 export * from "./lead-intake/index.js";
 export * from "./outcome-dispatcher.js";
+export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
+export type {
+  CrmFunnelStore,
+  CrmFunnelCountRow,
+  SourceFunnel,
+  CrmFunnelDataWithSources,
+} from "./crm-data-provider/real-provider.js";

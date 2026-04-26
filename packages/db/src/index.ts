@@ -99,4 +99,6 @@ export { PrismaLifecycleStore } from "./storage/prisma-lifecycle-store.js";
 export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";
 export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
 export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
+export { PrismaCrmFunnelStore } from "./stores/crm-funnel-store.js";
+export type { CrmFunnelCountRow, FunnelStage } from "./stores/crm-funnel-store.js";
 export { PrismaLeadIntakeStore } from "./stores/lead-intake-store.js";

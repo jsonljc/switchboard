@@ -8,6 +8,7 @@ import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/sch
 
 interface DeploymentInfo {
   id: string;
+  organizationId: string;
   inputConfig: {
     monthlyBudget?: number;
     targetCPA?: number;
@@ -71,7 +72,7 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       const adsClient = deps.createAdsClient(creds);
       const config: AuditConfig = {
         accountId: creds.accountId,
-        orgId: "TODO", // TODO: Extract from deployment when deployment model is updated
+        orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
         mediaBenchmarks: { ctr: 2.0, landingPageViewRate: 0.85, clickToLeadRate: 0.05 },

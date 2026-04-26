@@ -9,6 +9,7 @@ import {
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
   PrismaAssetRecordStore,
+  PrismaCrmFunnelStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -22,6 +23,7 @@ import {
   createWeeklyAuditCron,
   createDailyCheckCron,
   MetaAdsClient,
+  RealCrmDataProvider,
 } from "@switchboard/ad-optimizer";
 import type { CronDependencies, InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
@@ -96,6 +98,7 @@ export async function registerInngest(
       const deployments = await deploymentStore.listByListing(listing.id, "active");
       return deployments.map((d) => ({
         id: d.id,
+        organizationId: d.organizationId,
         inputConfig: (d.inputConfig as Record<string, unknown>) ?? {},
       }));
     },
@@ -110,37 +113,13 @@ export async function registerInngest(
       };
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
-    createCrmProvider: (_deploymentId) => ({
-      // Stub CRM provider — real implementation in Task 11 when CRM queries are built
-      getFunnelData: async () => ({
-        campaignIds: [],
-        leads: 0,
-        qualified: 0,
-        opportunities: 0,
-        bookings: 0,
-        closed: 0,
-        revenue: 0,
-        rates: {
-          leadToQualified: 0,
-          qualifiedToBooking: 0,
-          bookingToClosed: 0,
-          leadToClosed: 0,
-        },
-        coverage: {
-          attributedContacts: 0,
-          contactsWithEmailOrPhone: 0,
-          contactsWithOpportunity: 0,
-          contactsWithBooking: 0,
-          contactsWithRevenueEvent: 0,
-        },
-      }),
-      getBenchmarks: async () => ({
-        leadToQualifiedRate: 0.4,
-        qualifiedToBookingRate: 0.5,
-        bookingToClosedRate: 0.25,
-        leadToClosedRate: 0.06,
-      }),
-    }),
+    createCrmProvider: (_deploymentId) => {
+      // Real Prisma-backed provider. The Inngest function passes the resolved
+      // `orgId` from the deployment record on every call, so a single shared
+      // store + provider instance works for all deployments.
+      const funnelStore = new PrismaCrmFunnelStore(app.prisma!);
+      return new RealCrmDataProvider(funnelStore);
+    },
     createInsightsProvider: (_adsClient) => ({
       // Stub insights provider — real implementation delegates to MetaCampaignInsightsProvider
       getCampaignLearningData: async () => ({
