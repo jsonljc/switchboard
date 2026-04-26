@@ -209,6 +209,18 @@ export async function bootstrapSkillMode(
 
   const builderRegistry = new BuilderRegistry();
 
+  const { alexBuilder } = await import("@switchboard/core/skill-runtime");
+
+  builderRegistry.register("alex", async (ctx) => {
+    const agentContext = ctx.workUnit.parameters._agentContext as Parameters<typeof alexBuilder>[0];
+    const config = {
+      deploymentId: ctx.deployment.deploymentId,
+      orgId: ctx.workUnit.organizationId,
+      contactId: ctx.workUnit.parameters.contactId as string,
+    };
+    return alexBuilder(agentContext, config, ctx.stores);
+  });
+
   modeRegistry.register(
     new SkillMode({
       executor: skillExecutor,
