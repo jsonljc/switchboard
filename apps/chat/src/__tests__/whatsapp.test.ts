@@ -388,8 +388,8 @@ describe("WhatsAppAdapter", () => {
 
       const msg = adapter.parseIncomingMessage(payload);
       expect(msg).not.toBeNull();
-      expect(msg!.metadata["ctwaClid"]).toBeUndefined();
-      expect(msg!.metadata["ctwaSourceUrl"]).toBeUndefined();
+      expect(msg!.metadata?.["ctwaClid"]).toBeUndefined();
+      expect(msg!.metadata?.["ctwaSourceUrl"]).toBeUndefined();
     });
 
     it("should not include referral fields when referral is absent", () => {

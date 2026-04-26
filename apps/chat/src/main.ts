@@ -163,7 +163,7 @@ async function main() {
           idempotencyKey: req.idempotencyKey,
           targetHint: { deploymentId: payload.deploymentId },
           ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
-        } as never);
+        });
         if (!response.ok) {
           return { ok: false };
         }

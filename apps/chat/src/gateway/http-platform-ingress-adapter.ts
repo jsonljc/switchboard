@@ -1,4 +1,4 @@
-import type { SubmitWorkRequest, SubmitWorkResponse } from "@switchboard/core/platform";
+import type { CanonicalSubmitRequest, SubmitWorkResponse } from "@switchboard/core/platform";
 
 export class HttpPlatformIngressAdapter {
   private readonly baseUrl: string;
@@ -9,7 +9,10 @@ export class HttpPlatformIngressAdapter {
     this.apiKey = apiKey;
   }
 
-  async submit(request: SubmitWorkRequest): Promise<SubmitWorkResponse> {
+  // Accepts CanonicalSubmitRequest (not SubmitWorkRequest) because the
+  // `deployment: DeploymentContext` field is resolved server-side after the
+  // HTTP hop — callers on this side cannot supply it.
+  async submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
