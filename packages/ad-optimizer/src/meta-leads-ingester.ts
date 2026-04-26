@@ -11,6 +11,7 @@ interface LeadgenValue {
   leadgen_id: string;
   ad_id: string;
   form_id: string;
+  field_data?: LeadFieldData[];
 }
 
 interface WebhookChange {
@@ -49,11 +50,18 @@ export function parseLeadWebhook(payload: unknown): LeadData[] {
       if (change.field !== "leadgen") continue;
       const value = change.value as LeadgenValue;
       if (!value.leadgen_id) continue;
-      leads.push({
+      const name = extractFieldValue(value.field_data, "full_name");
+      const email = extractFieldValue(value.field_data, "email");
+      const phone = extractFieldValue(value.field_data, "phone_number");
+      const lead: LeadData = {
         leadId: value.leadgen_id,
         adId: value.ad_id,
         formId: value.form_id,
-      });
+      };
+      if (name !== undefined) lead.name = name;
+      if (email !== undefined) lead.email = email;
+      if (phone !== undefined) lead.phone = phone;
+      leads.push(lead);
     }
   }
   return leads;
