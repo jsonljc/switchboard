@@ -38,9 +38,18 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
     if [[ -f "$envfile" ]]; then
       _line=$(grep '^DATABASE_URL=' "$envfile" | head -1)
       DATABASE_URL="${_line#DATABASE_URL=}"
+      DATABASE_URL="${DATABASE_URL%\"}"; DATABASE_URL="${DATABASE_URL#\"}"
+      DATABASE_URL="${DATABASE_URL%\'}"; DATABASE_URL="${DATABASE_URL#\'}"
       break
     fi
   done
+fi
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  echo "ERROR: DATABASE_URL is not set and no .env file found." >&2
+  echo "       The drift check needs a Postgres URL so Prisma can use a shadow DB." >&2
+  echo "       Set DATABASE_URL in your environment or create a .env at the repo root." >&2
+  exit 3
 fi
 
 # Derive shadow DB URL (strip query params, append _shadow to db name).
@@ -51,12 +60,12 @@ fi
 
 PRISMA_BIN="$REPO_ROOT/packages/db/node_modules/.bin/prisma"
 
-DATABASE_URL="${DATABASE_URL:-}" \
+err=$(DATABASE_URL="${DATABASE_URL:-}" \
 "$PRISMA_BIN" migrate diff \
   --from-migrations "$MIGRATIONS" \
   --to-schema-datamodel "$SCHEMA" \
   --shadow-database-url "${SHADOW_DATABASE_URL:-}" \
-  --exit-code > /dev/null 2>&1
+  --exit-code 2>&1 >/dev/null)
 status=$?
 
 case $status in
@@ -78,7 +87,8 @@ MSG
     exit 2
     ;;
   *)
-    echo "ERROR: prisma migrate diff failed with unexpected status $status" >&2
+    echo "ERROR: prisma migrate diff failed with status $status" >&2
+    echo "$err" >&2
     exit "$status"
     ;;
 esac
