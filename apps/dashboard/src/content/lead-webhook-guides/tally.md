@@ -28,3 +28,10 @@ We match Tally fields by their **label**. Use these labels (or close variants â€
 - **Email** (optional)
 - **Full Name** or **Name** (or **First Name** + **Last Name**)
 - **Message** or **Notes** (optional, captured as the lead's first message to Alex)
+
+## Important: phone format
+
+Phone numbers MUST include the country code with a leading `+` (e.g., `+6591234567`, not `91234567`).
+The webhook will reject leads with bare local numbers because we can't reliably guess the country.
+
+If your form tool offers a phone-input component with country code, use it. Otherwise add a note in your form: "Please include country code (e.g., +65 for Singapore)."
