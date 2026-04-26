@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeReconciliation } from "../reconciliation.js";
-import type { ReconciliationCronDeps, StepTools } from "../reconciliation.js";
+import { executeReconciliation, executeStripeReconciliation } from "../reconciliation.js";
+import type {
+  ReconciliationCronDeps,
+  StripeReconciliationDeps,
+  StepTools,
+} from "../reconciliation.js";
 
 function makeStep(): StepTools {
   return {
@@ -89,5 +93,109 @@ describe("executeReconciliation", () => {
 
     expect(result.failing).toBe(1);
     expect(result.healthy).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stripe Reconciliation
+// ---------------------------------------------------------------------------
+
+function makeStripeDeps(
+  overrides: Partial<StripeReconciliationDeps> = {},
+): StripeReconciliationDeps {
+  return {
+    listSubscribedOrganizations: vi.fn().mockResolvedValue([]),
+    retrieveStripeSubscription: vi.fn().mockResolvedValue({
+      status: "active",
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: new Date(),
+      trialEnd: null,
+      priceId: "price_123",
+    }),
+    updateOrganization: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+describe("executeStripeReconciliation", () => {
+  it("returns zero counts when no subscribed orgs exist", async () => {
+    const result = await executeStripeReconciliation(makeStep(), makeStripeDeps());
+    expect(result).toEqual({ checked: 0, corrected: 0, failed: 0 });
+  });
+
+  it("corrects diverged subscription status", async () => {
+    const updateOrganization = vi.fn().mockResolvedValue(undefined);
+    const deps = makeStripeDeps({
+      listSubscribedOrganizations: vi.fn().mockResolvedValue([
+        {
+          id: "org_1",
+          stripeSubscriptionId: "sub_123",
+          subscriptionStatus: "active",
+          cancelAtPeriodEnd: false,
+        },
+      ]),
+      retrieveStripeSubscription: vi.fn().mockResolvedValue({
+        status: "past_due",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: new Date("2026-05-01"),
+        trialEnd: null,
+        priceId: "price_123",
+      }),
+      updateOrganization,
+    });
+
+    const result = await executeStripeReconciliation(makeStep(), deps);
+
+    expect(result.corrected).toBe(1);
+    expect(updateOrganization).toHaveBeenCalledWith(
+      "org_1",
+      expect.objectContaining({
+        subscriptionStatus: "past_due",
+      }),
+    );
+  });
+
+  it("skips orgs already in sync", async () => {
+    const updateOrganization = vi.fn().mockResolvedValue(undefined);
+    const deps = makeStripeDeps({
+      listSubscribedOrganizations: vi.fn().mockResolvedValue([
+        {
+          id: "org_1",
+          stripeSubscriptionId: "sub_123",
+          subscriptionStatus: "active",
+          cancelAtPeriodEnd: false,
+        },
+      ]),
+      retrieveStripeSubscription: vi.fn().mockResolvedValue({
+        status: "active",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: new Date(),
+        trialEnd: null,
+        priceId: "price_123",
+      }),
+      updateOrganization,
+    });
+
+    const result = await executeStripeReconciliation(makeStep(), deps);
+
+    expect(result.corrected).toBe(0);
+    expect(updateOrganization).not.toHaveBeenCalled();
+  });
+
+  it("counts failures when Stripe API throws", async () => {
+    const deps = makeStripeDeps({
+      listSubscribedOrganizations: vi.fn().mockResolvedValue([
+        {
+          id: "org_1",
+          stripeSubscriptionId: "sub_123",
+          subscriptionStatus: "active",
+          cancelAtPeriodEnd: false,
+        },
+      ]),
+      retrieveStripeSubscription: vi.fn().mockRejectedValue(new Error("Stripe unavailable")),
+    });
+
+    const result = await executeStripeReconciliation(makeStep(), deps);
+    expect(result.failed).toBe(1);
   });
 });
