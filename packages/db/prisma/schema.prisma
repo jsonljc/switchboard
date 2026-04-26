@@ -430,6 +430,7 @@ model OrganizationConfig {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]
+  leadWebhooks         LeadWebhook[]
 }
 
 // ── Webhook Idempotency ──
@@ -1713,5 +1714,27 @@ model PendingLeadRetry {
 
   @@index([organizationId, resolvedAt])
   @@index([nextRetryAt, resolvedAt])
+}
+
+// ---------------------------------------------------------------------------
+// LeadWebhook — website lead intake webhook configuration
+// ---------------------------------------------------------------------------
+
+model LeadWebhook {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  organization         OrganizationConfig  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  label                String
+  tokenHash            String              @unique
+  tokenPrefix          String
+  sourceType           String
+  greetingTemplateName String              @default("lead_welcome")
+  status               String              @default("active") // active | revoked
+  lastUsedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  revokedAt            DateTime?
+  updatedAt            DateTime            @updatedAt
+
+  @@index([organizationId, status])
 }
 
