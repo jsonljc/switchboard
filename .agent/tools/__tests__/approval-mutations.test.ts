@@ -27,4 +27,35 @@ describe("findApprovalMutations", () => {
     const found = findApprovalMutations(sf);
     expect(found).toHaveLength(0);
   });
+
+  it("flags every mutating method (create/createMany/update/updateMany/upsert/delete/deleteMany)", () => {
+    const p = project();
+    const sf = p.addSourceFileAtPath(fixture("approval-all-mutations.ts"));
+    const found = findApprovalMutations(sf);
+    const methods = found.map((m) => m.method).sort();
+    expect(methods).toEqual([
+      "create",
+      "createMany",
+      "delete",
+      "deleteMany",
+      "update",
+      "updateMany",
+      "upsert",
+    ]);
+  });
+
+  it("flags plural `approvals` receiver", () => {
+    const p = project();
+    const sf = p.addSourceFileAtPath(fixture("approval-plural-receiver.ts"));
+    const found = findApprovalMutations(sf);
+    expect(found).toHaveLength(1);
+    expect(found[0].method).toBe("update");
+  });
+
+  it("ignores mutating calls on non-approval receivers", () => {
+    const p = project();
+    const sf = p.addSourceFileAtPath(fixture("approval-other-receiver.ts"));
+    const found = findApprovalMutations(sf);
+    expect(found).toHaveLength(0);
+  });
 });

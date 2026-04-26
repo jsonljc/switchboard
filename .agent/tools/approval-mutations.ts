@@ -16,6 +16,22 @@ export interface ApprovalMutation {
   line: number;
 }
 
+/**
+ * Flag mutating calls whose immediate receiver is named `approval` or `approvals`.
+ *
+ * Intended use: pass route handler files (the caller scopes by path). The function
+ * itself does not filter by filename.
+ *
+ * Known false-negatives (the calling skill must cover these by reasoning):
+ * - Aliased receivers: `const a = db.approval; a.create(...)`
+ * - Element access: `db["approval"].create(...)`
+ * - Renamed properties: `approvalRepo.create(...)`, `pendingApprovals.update(...)`
+ * - Calls through helper functions or service classes that hide the prisma model.
+ *
+ * Known false-positives (treat findings as candidates to investigate, not violations):
+ * - Method-name collisions on unrelated `.approval`/`.approvals` properties
+ *   (e.g. an in-memory `Map.delete`).
+ */
 export function findApprovalMutations(sf: SourceFile): ApprovalMutation[] {
   const out: ApprovalMutation[] = [];
   sf.forEachDescendant((node) => {
