@@ -201,12 +201,88 @@ If any of these prove valuable later, they earn their slot with a real trigger.
 
 ---
 
-## Implementation Report (filled in by the implementer at end of work)
+## Implementation Report
 
-After the work is complete, the implementer reports:
+Filled in 2026-04-26.
 
-1. Files created or changed (full list, with line counts).
-2. Exact RESOLVER.md diff.
-3. Sample output from `check-routes` against current `main` (representative lines, including any `N findings suppressed by allowlist` summary).
-4. Final contents of `route-allowlist.yaml` — every entry, with its reason, called out.
-5. Result of the synthetic-fixture acceptance test (Acceptance Criterion 4).
+### 1. Files created or changed
+
+44 files, 4,108 insertions, on branch `feat/agent-operating-layer-phase3`.
+
+**`.agent/tools/` (new, standalone TypeScript package, outside pnpm workspace):**
+- `package.json` (25), `tsconfig.json` (16), `.gitignore` (2), `pnpm-lock.yaml` (1498)
+- `allowlist.ts` (39), `routes.ts` (78), `reachability.ts` (22), `approval-mutations.ts` (52)
+- `check-routes.ts` (123), `check-routes` (9, shell wrapper), `README.md` (47)
+- `route-allowlist.yaml` (150)
+- 5 test files (`__tests__/*.test.ts`) — 21 tests total
+- 19 fixture files under `__tests__/fixtures/`
+
+**`.agent/skills/architecture-audit/SKILL.md`:** +20 lines — `## Run first` and `## Approval lifecycle deep trace` sections added.
+
+**`.agent/RESOLVER.md`:** +4 lines — `**Run first:**` block on the Architecture audit route.
+
+**`.agent/evals/resolver-evals.json`:** +4 lines — one new prompt routing to `architecture-audit`.
+
+**Spec & plan documents** under `docs/superpowers/`.
+
+### 2. RESOLVER.md diff
+
+```
+@@ -6,6 +6,10 @@ Match task to triggers. Load only the listed files.
+
+ **Triggers:** PlatformIngress, WorkTrace, lifecycle state machine, mutating surface, runtime convergence, bypass path, canonical request
+
++**Run first:**
++
++- `.agent/tools/check-routes`
++
+ **Load:**
+
+ - `docs/DOCTRINE.md`
+```
+
+### 3. Sample `check-routes` output against `main`
+
+After populating the allowlist, the tool runs cleanly:
+
+```
+$ .agent/tools/check-routes
+87 findings suppressed by allowlist.
+exit=0
+```
+
+Pre-allowlist, ~85 findings spanned dashboard proxies, API auth/setup, approval/DLQ/escalation lifecycle routes, governance/policy/identity control-plane CRUD, and inbound channel receivers. All were classified into one of eight allowlist categories with documented reasons.
+
+### 4. `route-allowlist.yaml` — final contents
+
+32 entries across 8 commented sections (file is 150 lines including headers). Categories and example reasons:
+
+1. **Dashboard proxy** (1 entry): `apps/dashboard/src/app/api/dashboard/**` — Next App Router proxies forward to API tier via `getApiClient()`.
+2. **Dashboard auth/public** (2): NextAuth + waitlist lead capture (pre-platform).
+3. **API tier auth/session/setup/OAuth** (5): `setup.ts`, `sessions.ts`, three WhatsApp channel/onboarding routes — pre-ingress channel/credential lifecycle.
+4. **Approval/DLQ/escalation lifecycle** (3): `approvals.ts`, `dlq.ts`, `escalations.ts` — operate on lifecycle records via `transitionApproval`/`ApprovalLifecycleService`, not new ingress requests.
+5. **Governance/policy/identity control-plane** (5): `governance.ts`, `policies.ts`, `identity.ts`, `operator-config.ts`, `competence.ts` — config that ingress reads, not actions ingress evaluates.
+6. **Org/agent/connection/billing/marketplace config CRUD** (8): platform/org configuration; not governed business actions.
+7. **Knowledge/memory ingestion** (3): owner-supplied data; not agent-executed actions.
+8. **Revenue/scheduled-reports/outbound-webhooks** (3): integration data ingestion / cron config / webhook registry.
+9. **Ingress-equivalent / inbound / read-only** (8): `execute.ts` is a known false positive — it does call `app.platformIngress.submit` at line 88, but the conservative substring scan misses dynamic resolution through `@switchboard/core/platform`. Also covers async-job CRUD where ingress runs in workers (creative-pipeline, ad-optimizer), inbound channel receivers (managed-webhook), and read-only routes (simulate, website-scan).
+
+The full file lives at `.agent/tools/route-allowlist.yaml` with one-line reasons per entry.
+
+### 5. Acceptance criteria
+
+| Criterion | Result |
+|---|---|
+| 1. `check-routes` runs against `main`, every flagged file fixed or allowlisted | ✅ exit=0, 87 findings suppressed |
+| 2. Tool exits 0 after allowlist populated | ✅ `exit=0` |
+| 3. Architecture-audit skill references tool output before reasoning; new resolver-eval entry added | ✅ `## Run first` block + new eval prompt |
+| 4. Synthetic violation fixture produces non-zero exit + one `ingress` finding at correct line | ✅ `__tests__/check-routes.test.ts` "synthetic violation" test passing |
+| 5. Missing-reason allowlist entry fails loudly | ✅ `__tests__/allowlist.test.ts` "throws when an entry is missing a reason" test passing |
+
+All 21 tool tests pass: allowlist (4), approval-mutations (5), reachability (3), routes (6), check-routes (3).
+
+### Known limitations to revisit
+
+- 2-hop reachability misses cases like `app.platformIngress.submit` on a Fastify decorator (e.g., `execute.ts`). Tracked in the allowlist; could be improved by detecting Fastify decorator patterns in a future phase.
+- `findApprovalMutations` only catches direct `<x>.approval.<method>` calls. Aliased receivers, element access, and renamed model properties are documented false-negatives in the function's JSDoc; the architecture-audit skill's "Approval lifecycle deep trace" section is the manual safety net.
+- The allowlist's "Ingress-equivalent" category (8 entries) reflects judgment calls about whether async-job CRUD / read-only inspection / config CRUD should themselves enter `PlatformIngress.submit` for audit. Future architectural review may move some of these to "real concern" status.
