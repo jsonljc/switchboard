@@ -39,3 +39,4 @@ export { analyzeBudgetDistribution, detectCBO } from "./budget-analyzer.js";
 export { deduplicateCreatives, analyzeCreatives } from "./creative-analyzer.js";
 export type { RawAdData } from "./creative-analyzer.js";
 export { detectSaturation } from "./saturation-detector.js";
+export * from "./lead-intake/index.js";
