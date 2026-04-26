@@ -47,8 +47,8 @@ apps/mcp-server/   — MCP server for LLM tool use
 ```
 Layer 1: schemas             → No @switchboard/* imports
 Layer 2: cartridge-sdk, sdk, creative-pipeline, ad-optimizer → schemas only
-Layer 3: core                → schemas + cartridge-sdk + sdk
-Layer 4: db                  → schemas + core
+Layer 3: core                → schemas + cartridge-sdk + sdk (NOT db, creative-pipeline, ad-optimizer)
+Layer 4: db                  → schemas + core (NOT cartridge-sdk)
 Layer 5: apps/*              → May import anything
 ```
 
@@ -76,6 +76,10 @@ pnpm db:migrate                   # Run migrations
 - Conventional Commits enforced by commitlint
 - Every new module must include co-located tests (`*.test.ts`)
 - Run `pnpm test` and `pnpm typecheck` before committing
+- File size: error at 600 lines, warn at 400 — split proactively
+- Coverage: global 55/50/52/55, core 65/65/70/65
+- Barrel files: flag if >40 exported symbols
+- No premature abstractions — check existing utils first; >3 new files needs justification
 
 ## Environment Variables
 
