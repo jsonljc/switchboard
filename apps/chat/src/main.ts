@@ -20,6 +20,10 @@ import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
 
 async function main() {
+  // Initialize Sentry before anything else
+  const { initChatSentry, captureException } = await import("./bootstrap/sentry.js");
+  await initChatSentry();
+
   // Pre-boot validation — fail fast with clear error messages
   const checks = runStartupChecks();
   for (const warning of checks.warnings) {
@@ -37,6 +41,15 @@ async function main() {
   const app = Fastify({
     logger: {
       level: chatLogLevel,
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "body.token",
+          "body.accessToken",
+        ],
+        censor: "[REDACTED]",
+      },
       ...(process.env.NODE_ENV === "production" ? {} : { transport: { target: "pino-pretty" } }),
     },
   });
@@ -79,11 +92,17 @@ async function main() {
     conversationStore: new InMemoryGatewayConversationStore(),
   });
 
+  // Shared connections for health checks — avoid creating new ones on each call
+  let healthPrisma: import("@switchboard/db").PrismaClient | null = null;
+  let healthRedis: import("ioredis").default | null = null;
+
   // DLQ store
   let failedMessageStore: FailedMessageStore | null = null;
   if (process.env["DATABASE_URL"]) {
     const { getDb } = await import("@switchboard/db");
-    failedMessageStore = new FailedMessageStore(getDb());
+    const prisma = getDb();
+    healthPrisma = prisma;
+    failedMessageStore = new FailedMessageStore(prisma);
   }
 
   // Initialize Redis-backed security store if Redis is available
@@ -93,6 +112,7 @@ async function main() {
       const { RedisSecurityStore } = await import("./adapters/redis-security-store.js");
       const { initSecurityStore } = await import("./adapters/security.js");
       const redisClient = new Redis(process.env["REDIS_URL"]);
+      healthRedis = redisClient;
       initSecurityStore(new RedisSecurityStore(redisClient as never));
       initDedup(redisClient as never);
       app.log.info("Redis security store + dedup initialized");
@@ -111,6 +131,9 @@ async function main() {
   app.setErrorHandler((error: { statusCode?: number; message: string }, _request, reply) => {
     const statusCode = error.statusCode ?? 500;
     const message = statusCode >= 500 ? "Internal server error" : error.message;
+    if (statusCode >= 500) {
+      captureException(error, { url: _request.url, method: _request.method });
+    }
     app.log.error(error);
     return reply.code(statusCode).send({ error: message, statusCode });
   });
@@ -147,17 +170,21 @@ async function main() {
     }
   }
 
-  // Health check — report degraded if DB is configured but unreachable
+  // Health check — reuses existing connections (no leak per call)
   const chatBootTime = Date.now();
   app.get("/health", async (_request, reply) => {
     const checks: Record<string, string> = {};
     let healthy = true;
 
-    // DB check
-    if (process.env["DATABASE_URL"]) {
+    const timeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+      ]);
+
+    if (healthPrisma) {
       try {
-        const { getDb } = await import("@switchboard/db");
-        await getDb().$queryRaw`SELECT 1`;
+        await timeout(healthPrisma.$queryRaw`SELECT 1`, 3000);
         checks["db"] = "ok";
       } catch {
         checks["db"] = "unreachable";
@@ -165,13 +192,9 @@ async function main() {
       }
     }
 
-    // Redis check
-    if (process.env["REDIS_URL"]) {
+    if (healthRedis) {
       try {
-        const Redis = (await import("ioredis")).default;
-        const redisClient = new Redis(process.env["REDIS_URL"]);
-        await redisClient.ping();
-        await redisClient.quit();
+        await timeout(healthRedis.ping(), 3000);
         checks["redis"] = "ok";
       } catch {
         checks["redis"] = "unreachable";
@@ -317,10 +340,12 @@ async function main() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   process.on("unhandledRejection", (reason) => {
+    captureException(reason, { type: "unhandledRejection" });
     app.log.error({ err: reason }, "Unhandled promise rejection");
   });
 
   process.on("uncaughtException", (err) => {
+    captureException(err, { type: "uncaughtException" });
     app.log.error({ err }, "Uncaught exception — shutting down");
     shutdown("uncaughtException");
   });
