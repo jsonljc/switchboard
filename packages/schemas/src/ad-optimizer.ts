@@ -203,5 +203,19 @@ export const AuditReportSchema = z.object({
   budgetDistribution: BudgetAnalysisSchema.optional(),
   creativeBreakdown: z.array(CreativeAnalysisSchema).optional(),
   adSetDetails: z.array(AdSetDetailSchema).optional(),
+  sourceComparison: z
+    .object({
+      rows: z.array(
+        z.object({
+          source: z.string(),
+          cpl: z.number().nullable(),
+          costPerQualified: z.number().nullable(),
+          costPerBooked: z.number().nullable(),
+          closeRate: z.number().nullable(),
+          trueRoas: z.number().nullable(),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type AuditReportSchema = z.infer<typeof AuditReportSchema>;

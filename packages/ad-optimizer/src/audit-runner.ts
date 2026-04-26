@@ -26,6 +26,8 @@ import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
 import { diagnose } from "./metric-diagnostician.js";
 import { generateRecommendations } from "./recommendation-engine.js";
+import { compareSources } from "./analyzers/source-comparator.js";
+import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 
 // ── Interfaces ──
 
@@ -98,6 +100,76 @@ function insightToMetrics(insight: CampaignInsight): MetricSet {
     roas: safeDivide(revenue, spend),
     frequency,
   };
+}
+
+/**
+ * Map an ad-set `destinationType` to a per-source funnel key
+ * (`ctwa` | `instant_form`). Returns null for sources not currently surfaced
+ * by the per-source funnel (e.g. plain WEBSITE) so spend isn't double-counted.
+ */
+function destinationTypeToSource(destinationType: string | undefined): string | null {
+  if (!destinationType) return null;
+  if (destinationType === "ON_AD") return "instant_form";
+  if (destinationType === "WHATSAPP" || destinationType.includes("WHATSAPP")) return "ctwa";
+  return null;
+}
+
+/**
+ * Compute spend attributed to each source.
+ *
+ * Preferred path: ad-set-level data carries `destinationType`, which maps
+ * cleanly to a source. Sum each ad set's spend into the matched source.
+ *
+ * Fallback (when ad-set data is missing or no ad set in a campaign matched a
+ * known source): distribute that campaign's spend across sources in
+ * proportion to lead share (`bySource[s].received / sum(received)`). This
+ * assumes leads-per-dollar is roughly constant within a campaign — a coarse
+ * heuristic, but it keeps zero-spend sources zero and avoids attributing
+ * unrelated campaign spend to the wrong source.
+ */
+function computeSpendBySource(
+  insights: CampaignInsight[],
+  bySource: Record<string, SourceFunnel>,
+  adSetData: AdSetLearningInput[] | null,
+): Record<string, number> {
+  const sources = Object.keys(bySource);
+  const spendBySource: Record<string, number> = Object.fromEntries(sources.map((s) => [s, 0]));
+
+  // Track which campaigns had spend successfully attributed via ad-set destinationType.
+  const campaignsAttributed = new Set<string>();
+
+  if (adSetData) {
+    for (const adSet of adSetData) {
+      const source = destinationTypeToSource(adSet.destinationType);
+      if (!source || !(source in spendBySource)) continue;
+      spendBySource[source] = (spendBySource[source] ?? 0) + (adSet.spend ?? 0);
+      campaignsAttributed.add(adSet.campaignId);
+    }
+  }
+
+  // Fallback: for any campaign whose ad sets did not yield a destination-type
+  // match, distribute its spend by lead share. When lead-share totals are
+  // zero, the campaign's spend is left unattributed (otherwise we would
+  // arbitrarily pick a source).
+  const totalLeadsBySource = sources.reduce(
+    (acc, s) => {
+      acc[s] = bySource[s]?.received ?? 0;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const totalLeads = Object.values(totalLeadsBySource).reduce((a, b) => a + b, 0);
+
+  for (const insight of insights) {
+    if (campaignsAttributed.has(insight.campaignId)) continue;
+    if (totalLeads <= 0) continue;
+    for (const source of sources) {
+      const share = (totalLeadsBySource[source] ?? 0) / totalLeads;
+      spendBySource[source] = (spendBySource[source] ?? 0) + insight.spend * share;
+    }
+  }
+
+  return spendBySource;
 }
 
 function aggregateMetrics(insights: CampaignInsight[]): MetricSet {
@@ -388,6 +460,15 @@ export class AuditRunner {
       budgetDistribution = analyzeBudgetDistribution(budgetEntries, this.config.targetCPA, null);
     }
 
+    // Step 8b: Cross-source comparison (CTWA vs Instant Form on equal footing).
+    // Only computed when the CRM data provider returned a per-source funnel.
+    let sourceComparison: { rows: ReturnType<typeof compareSources>["rows"] } | undefined;
+    const bySource = (crmData as { bySource?: Record<string, SourceFunnel> }).bySource;
+    if (bySource && Object.keys(bySource).length > 0) {
+      const spendBySource = computeSpendBySource(currentInsights, bySource, adSetData);
+      sourceComparison = compareSources({ bySource, spendBySource });
+    }
+
     // Step 9: Assemble report
     const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
     const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
@@ -414,6 +495,7 @@ export class AuditRunner {
       ...(trends ? { trends } : {}),
       ...(budgetDistribution ? { budgetDistribution } : {}),
       ...(adSetDetails ? { adSetDetails } : {}),
+      ...(sourceComparison ? { sourceComparison } : {}),
     };
   }
 }
