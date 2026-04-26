@@ -47,7 +47,12 @@ describe("LeadIntakeHandler", () => {
   it("writes lead_received activity", async () => {
     await handler.handle(makeIntake());
     expect(store.createActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "lead_received", contactId: "contact_1" }),
+      expect.objectContaining({
+        kind: "lead_received",
+        contactId: "contact_1",
+        organizationId: "o1",
+        deploymentId: "d1",
+      }),
     );
   });
 

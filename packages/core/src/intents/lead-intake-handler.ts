@@ -22,6 +22,8 @@ export interface LeadIntakeStore {
   }): Promise<{ id: string }>;
   createActivity(input: {
     contactId: string;
+    organizationId: string;
+    deploymentId: string;
     kind: "lead_received";
     sourceType: string;
     metadata: Record<string, unknown>;
@@ -60,6 +62,8 @@ export class LeadIntakeHandler {
     });
     await this.deps.store.createActivity({
       contactId: contact.id,
+      organizationId: intake.organizationId,
+      deploymentId: intake.deploymentId,
       kind: "lead_received",
       sourceType: intake.source,
       metadata: { attribution: intake.attribution },

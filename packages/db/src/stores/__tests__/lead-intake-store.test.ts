@@ -147,6 +147,8 @@ describe("PrismaLeadIntakeStore (integration)", () => {
 
     const activity = await store.createActivity({
       contactId: contact.id,
+      organizationId: ORG_ID,
+      deploymentId: DEPLOYMENT_ID,
       kind: "lead_received",
       sourceType: "ctwa",
       metadata: { attribution: { ctwa_clid: "xyz" } },

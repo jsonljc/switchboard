@@ -17,6 +17,8 @@ interface UpsertContactInput {
 
 interface CreateActivityInput {
   contactId: string;
+  organizationId: string;
+  deploymentId: string;
   kind: "lead_received";
   sourceType: string;
   metadata: Record<string, unknown>;
@@ -55,13 +57,6 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
   }
 
   async upsertContact(input: UpsertContactInput): Promise<{ id: string }> {
-    // Persist deploymentId inside attribution so createActivity (which only
-    // receives a contactId) can recover it later for the ActivityLog row.
-    const attributionWithContext = {
-      ...input.attribution,
-      deploymentId: input.deploymentId,
-    };
-
     const primaryChannel = input.channel ?? "whatsapp";
     const now = new Date();
 
@@ -80,7 +75,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
         firstTouchChannel: primaryChannel,
         sourceType: input.sourceType,
         source: input.sourceType,
-        attribution: attributionWithContext as object,
+        attribution: input.attribution as object,
         idempotencyKey: input.idempotencyKey,
         firstContactAt: now,
         lastActivityAt: now,
@@ -98,22 +93,10 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
   }
 
   async createActivity(input: CreateActivityInput): Promise<{ id: string }> {
-    const contact = await this.prisma.contact.findUnique({
-      where: { id: input.contactId },
-      select: { organizationId: true, attribution: true },
-    });
-    if (!contact) {
-      throw new Error(`Contact not found: ${input.contactId}`);
-    }
-
-    const attribution = (contact.attribution ?? {}) as Record<string, unknown>;
-    const deploymentId =
-      typeof attribution.deploymentId === "string" ? attribution.deploymentId : "";
-
     const row = await this.prisma.activityLog.create({
       data: {
-        organizationId: contact.organizationId,
-        deploymentId,
+        organizationId: input.organizationId,
+        deploymentId: input.deploymentId,
         eventType: input.kind,
         description: `Lead received from ${input.sourceType}`,
         metadata: {
