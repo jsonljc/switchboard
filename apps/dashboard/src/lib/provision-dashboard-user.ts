@@ -7,6 +7,7 @@ interface ProvisionDashboardUserInput {
   name?: string | null;
   emailVerified?: Date | null;
   googleId?: string | null;
+  passwordHash?: string | null;
 }
 
 export async function provisionDashboardUser(
@@ -37,8 +38,8 @@ export async function provisionDashboardUser(
         type: "user",
         name: displayName,
         organizationId: orgId,
-        // New users start as operator only — admin/approver roles must be granted explicitly
-        roles: ["operator"],
+        // Org creator gets full admin roles for self-serve setup
+        roles: ["operator", "admin", "approver"],
       },
     });
 
@@ -80,6 +81,7 @@ export async function provisionDashboardUser(
         principalId,
         apiKeyEncrypted: encryptApiKey(apiKey),
         apiKeyHash: createHash("sha256").update(apiKey).digest("hex"),
+        ...(input.passwordHash ? { passwordHash: input.passwordHash } : {}),
       },
     });
   });

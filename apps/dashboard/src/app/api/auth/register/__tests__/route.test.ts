@@ -104,7 +104,8 @@ describe("POST /api/auth/register", () => {
     expect(data.email).toBe("test@example.com");
     expect(data.organizationId).toBe("org-1");
     expect(mockProvision).toHaveBeenCalledOnce();
-    expect(mockUpdate).toHaveBeenCalledOnce();
+    // passwordHash is now passed atomically through provisionDashboardUser
+    expect(mockUpdate).not.toHaveBeenCalled();
     expect(mockSendVerification).toHaveBeenCalledOnce();
   });
 

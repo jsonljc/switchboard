@@ -141,7 +141,11 @@ export function ChannelManagement() {
             resetForm();
           },
           onError: (err) => {
-            toast({ title: "Provisioning failed", description: err.message, variant: "destructive" });
+            toast({
+              title: "Provisioning failed",
+              description: err.message,
+              variant: "destructive",
+            });
           },
         },
       );
@@ -184,7 +188,11 @@ export function ChannelManagement() {
         toast({ title: "Channel removed", description: `${channelName} has been removed.` });
       },
       onError: (err) => {
-        toast({ title: "Failed to remove channel", description: err.message, variant: "destructive" });
+        toast({
+          title: "Failed to remove channel",
+          description: err.message,
+          variant: "destructive",
+        });
       },
     });
   };
@@ -200,18 +208,13 @@ export function ChannelManagement() {
         )}
 
         {channels.map((ch) => (
-          <div
-            key={ch.id}
-            className="flex items-center justify-between p-3 rounded-lg border"
-          >
+          <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg border">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium capitalize">{ch.channel}</span>
                 {statusBadge(ch.status)}
               </div>
-              {ch.botUsername && (
-                <p className="text-xs text-muted-foreground">{ch.botUsername}</p>
-              )}
+              {ch.botUsername && <p className="text-xs text-muted-foreground">{ch.botUsername}</p>}
               <p className="text-xs text-muted-foreground">
                 Last check: {relativeTime(ch.lastHealthCheck)}
               </p>
@@ -236,11 +239,7 @@ export function ChannelManagement() {
         ))}
 
         {!showAddForm && availableChannels.length > 0 && (
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => setShowAddForm(true)}
-          >
+          <Button variant="outline" className="w-full gap-2" onClick={() => setShowAddForm(true)}>
             <Plus className="h-4 w-4" />
             Add Channel
           </Button>
@@ -331,7 +330,7 @@ export function ChannelManagement() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="wa-app-secret">App Secret (optional)</Label>
+                  <Label htmlFor="wa-app-secret">App Secret (required for message delivery)</Label>
                   <Input
                     id="wa-app-secret"
                     type="password"
@@ -358,7 +357,9 @@ export function ChannelManagement() {
                 className="flex-1"
                 disabled={
                   !selectedChannel ||
-                  (selectedChannel === "whatsapp" ? (!waToken || !waPhoneNumberId) : !botToken) ||
+                  (selectedChannel === "whatsapp"
+                    ? !waToken || !waPhoneNumberId || !waAppSecret
+                    : !botToken) ||
                   (selectedChannel === "slack" && !signingSecret) ||
                   provision.isPending
                 }
