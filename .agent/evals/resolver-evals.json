@@ -21,7 +21,6 @@
   },
   {
     "input": "Turn this approved design into a coding execution plan",
-    "expected_skill": null,
-    "expected_behavior": "Use implementation/code-changes resolver path; no dedicated implementation skill in Phase 1"
+    "expected_skill": "implementation"
   }
 ]
