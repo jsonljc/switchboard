@@ -426,6 +426,7 @@ model OrganizationConfig {
   cancelAtPeriodEnd    Boolean   @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
+  escalationConfig     Json?    // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users                DashboardUser[]

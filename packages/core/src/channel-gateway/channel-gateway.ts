@@ -93,6 +93,24 @@ export class ChannelGateway {
     // 7. Submit through PlatformIngress
     const response = await platformIngress.submit(request);
 
+    // 7b. Re-check override status — operator may have toggled during skill execution
+    if (this.config.conversationStore.getConversationStatus) {
+      const postStatus = await this.config.conversationStore.getConversationStatus(
+        message.sessionId,
+      );
+      if (postStatus === "human_override") {
+        // Operator took over mid-flight — discard AI response, persist it silently
+        if (response.ok) {
+          const text =
+            typeof response.result.outputs.response === "string"
+              ? response.result.outputs.response
+              : response.result.summary;
+          await conversationStore.addMessage(conversationId, "assistant", `[suppressed] ${text}`);
+        }
+        return;
+      }
+    }
+
     // 8. Extract response and send
     if (response.ok) {
       const text =

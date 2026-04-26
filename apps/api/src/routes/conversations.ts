@@ -291,4 +291,87 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ id: updated.id, threadId: updated.threadId, status: updated.status });
     },
   );
+
+  // POST /api/conversations/:threadId/send — operator sends ad-hoc message
+  app.post(
+    "/:threadId/send",
+    {
+      schema: {
+        description: "Operator sends ad-hoc message to customer during human override.",
+        tags: ["Conversations"],
+        body: {
+          type: "object",
+          required: ["message"],
+          properties: {
+            message: { type: "string", minLength: 1 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const prisma = app.prisma;
+      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
+
+      const { threadId } = request.params as { threadId: string };
+      const { message } = request.body as { message: string };
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
+      }
+
+      const conversation = await (prisma as unknown as PrismaLike).conversationState.findFirst({
+        where: { threadId, organizationId: orgId },
+      });
+      if (!conversation) {
+        return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
+      }
+
+      if (conversation.status !== "human_override") {
+        return reply.code(409).send({
+          error: "Conversation must be in human_override status to send operator messages",
+          statusCode: 409,
+        });
+      }
+
+      // Append owner message to conversation
+      const currentMessages = safeParseMessages(conversation.messages);
+      const ownerMessage = {
+        role: "owner",
+        text: message,
+        timestamp: new Date().toISOString(),
+      };
+      await (prisma as unknown as PrismaLike).conversationState.update({
+        where: { id: conversation.id },
+        data: {
+          messages: [...currentMessages, ownerMessage],
+          lastActivityAt: new Date(),
+        },
+      });
+
+      // Deliver to channel
+      if (!app.agentNotifier) {
+        return reply.code(502).send({
+          error: "Channel delivery not configured (agentNotifier is null)",
+          statusCode: 502,
+        });
+      }
+
+      try {
+        await app.agentNotifier.sendProactive(
+          conversation.principalId,
+          conversation.channel,
+          message,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[conversations] Channel delivery failed for ${threadId}: ${msg}`);
+        return reply.code(502).send({
+          error: "Message saved but channel delivery failed",
+          statusCode: 502,
+        });
+      }
+
+      return reply.send({ sent: true, threadId });
+    },
+  );
 };
