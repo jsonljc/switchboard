@@ -50,9 +50,11 @@ The user is non-technical and works via slash commands (`/brainstorming`, `/writ
 3. Does any approval logic live in a route instead of the lifecycle service?
 4. Does any new async path lack dead-letter handling?
 
-**On violation:** Commit blocked. Surface exact file, line, violation, and recommended fix. Do not continue implementation until resolved.
+**Note:** The hook is **advisory**, not blocking. It prints the 4 questions to the agent's transcript as a reminder; the agent is expected to answer them before proceeding. True structural blocking would require static analysis tooling, not a markdown-driven layer.
 
-**On pass:** Silent. No output unless a violation is found.
+**On every triggered edit:** Print the 4 questions. Agent answers each before continuing. If any answer is "no" — state violation, propose fix, do not write more code until resolved.
+
+**On non-source files (docs, config, tests, fixtures):** Silent.
 
 **Performance:** Adds ~10-15 seconds per file edit on implementation tasks. Only fires on source file edits in `apps/` or `packages/`, not docs or config.
 
@@ -77,7 +79,10 @@ Context-compression currently extracts decisions and lessons from a session but 
 **Format for DECISIONS.md entries:**
 
 ```
-| <decision> | <Active/Shipped/Deferred> |
+## <title>
+
+**Decision:** <decision>
+**Status:** Active
 ```
 
 **Format for LESSONS.md entries:**
@@ -183,10 +188,10 @@ Add implementation skill to the "Implementation / code changes" resolver route:
 
 ## Acceptance Criteria
 
-1. A commit that adds a mutating route bypassing `PlatformIngress` is blocked with a specific error message
+1. After editing a source file in `apps/` or `packages/`, the architecture gate hook surfaces the 4 invariant questions to the agent transcript (advisory, not blocking)
 2. After a `/brainstorming` session, decisions appear in `.agent/memory/semantic/DECISIONS.md`
-3. At session start, the last 5 decisions from `.agent/memory/semantic/DECISIONS.md` are available without user prompting
-4. During executing-plans, each step explicitly answers the 3 pre-write questions before touching a file
+3. At session start, current Switchboard decisions and lessons load via the harness MEMORY.md pointers
+4. During executing-plans, each step explicitly answers the 4 pre-write questions before touching a file
 5. A step with a missing test or typecheck failure is not marked complete
 
 ---

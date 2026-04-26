@@ -18,7 +18,7 @@ Enforce Switchboard architecture invariants during code execution. Runs before a
 
 ## Pre-write check (run before writing any code)
 
-Answer these 3 questions explicitly in the session before touching any file:
+Answer these 4 questions explicitly in the session before touching any file:
 
 1. **Ingress path:** Does this step introduce any mutating action (create, update, delete, external write)? If yes, does it enter through `PlatformIngress.submit()`? If not — state the violation, propose the minimal routing fix, and do not write code until the plan or user explicitly resolves it.
 
@@ -26,7 +26,9 @@ Answer these 3 questions explicitly in the session before touching any file:
 
 3. **Governance:** Does this step require a governed action (external write, destructive operation, tool invocation)? If yes, is `GovernanceGate.evaluate()` called exactly once per governed request (not per function call, not zero times, not twice)? If governance is missing or duplicated — state the violation, propose the fix, and do not write code until resolved.
 
-If all three answers are "not applicable to this step" or "yes, correctly handled" — proceed to write code.
+4. **Dead-letter:** Does this step introduce any new async path (Inngest function, queue handler, scheduled job)? If yes, is there an `onFailure` / dead-letter handler? Per DOCTRINE Invariant 7, every async path must have a dead-letter route. If absent — state the violation, propose the fix, and do not write code until resolved.
+
+If all four answers are "not applicable to this step" or "yes, correctly handled" — proceed to write code.
 
 ## Post-write check (run after writing code, before marking step complete)
 
@@ -44,9 +46,9 @@ If any check fails: state the specific failure, fix it, re-run the check. Do not
 
 For each step:
 
-- Pre-write: explicit answers to the 3 questions (not implied — written out)
+- Pre-write: explicit answers to the 4 questions (not implied — written out)
 - Code: the implementation
-- Post-write: confirmation that all 4 checks pass, or the specific fix applied
+- Post-write: confirmation that all 5 checks pass, or the specific fix applied
 
 ## Quality bar
 
@@ -67,6 +69,10 @@ For each step:
 ## Done when
 
 - All plan steps are complete.
-- All 4 post-write checks passed for every step.
+- All 5 post-write checks passed for every step.
 - `pnpm test` passes.
 - `pnpm typecheck` passes.
+
+## Note on grep heuristics
+
+Post-write checks 1 and 2 use `grep` on the edited file as a quick heuristic. They produce false negatives when a route legitimately delegates to a service file that itself uses `PlatformIngress` or `WorkTrace`. When a check flags a violation, trace the call graph one level before concluding it's a real bypass.
