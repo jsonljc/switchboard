@@ -55,4 +55,21 @@ describe("OutcomeDispatcher", () => {
     await dispatcher.handle({ contactId: "c1", kind: "booked" });
     expect(capi.dispatch).not.toHaveBeenCalled();
   });
+
+  it("missing contact → no dispatch, warns", async () => {
+    store.getContact.mockResolvedValue(null);
+    await dispatcher.handle({ contactId: "missing", kind: "qualified" });
+    expect(capi.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("contact with null sourceType → no dispatch, warns", async () => {
+    store.getContact.mockResolvedValue({
+      id: "c1",
+      organizationId: "o1",
+      sourceType: null,
+      attribution: {},
+    });
+    await dispatcher.handle({ contactId: "c1", kind: "qualified" });
+    expect(capi.dispatch).not.toHaveBeenCalled();
+  });
 });

@@ -1,6 +1,9 @@
 import type { ActionSource } from "@switchboard/schemas";
+import { z } from "zod";
 
-export type OutcomeKind = "qualified" | "booked" | "showed" | "paid";
+export const OutcomeKindSchema = z.enum(["qualified", "booked", "showed", "paid"]);
+
+export type OutcomeKind = z.infer<typeof OutcomeKindSchema>;
 
 export interface OutcomeEvent {
   contactId: string;
@@ -60,6 +63,8 @@ export class OutcomeDispatcher {
       );
       return;
     }
+    // TODO(task-11+): Synthesize CAPI event_id from (contactId, kind, eventTimestamp)
+    // to make Inngest retries idempotent against Meta's CAPI deduplication.
     await this.deps.capi.dispatch({
       eventName: KIND_TO_EVENT[event.kind],
       actionSource,
