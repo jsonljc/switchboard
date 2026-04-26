@@ -38,16 +38,15 @@ Match task to triggers. Load only the listed files.
 
 ## Implementation / code changes
 
-**Triggers:** implement this, execution plan, build this, patch plan, code changes
+**Triggers:** implement this, execution plan, executing-plans, executing plan, subagent-driven-development, build this, patch plan, code changes
 
 **Load:**
 
 - `docs/DOCTRINE.md`
+- `.agent/skills/implementation/SKILL.md`
 - `.agent/conventions/architecture-invariants.md`
 - `.agent/conventions/token-budget.md`
 - `.agent/conventions/source-of-truth.md`
-
-No dedicated implementation skill in Phase 1.
 
 ## Context compression
 

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport json, sys, re\ntry:\n    data = json.load(sys.stdin)\n    fp = (data.get('tool_input') or {}).get('file_path', '') or data.get('file_path', '')\n    in_source_dir = bool(re.search(r'/(apps|packages)/', fp))\n    is_source_ext = fp.endswith(('.ts', '.tsx', '.js', '.jsx'))\n    is_test = '.test.' in fp or '.spec.' in fp or '/__tests__/' in fp or '/__fixtures__/' in fp\n    if in_source_dir and is_source_ext and not is_test:\n        print('=== SWITCHBOARD ARCHITECTURE GATE ===')\n        print('File: ' + fp)\n        print('')\n        print('Answer ALL 4 before continuing:')\n        print('1. Do NEW mutating actions use PlatformIngress.submit()?')\n        print('2. Is canonical persistence through WorkTrace only?')\n        print('3. Is approval lifecycle state (not a route-owned side effect)?')\n        print('4. Do new async paths have dead-letter handling?')\n        print('')\n        print('YES to all -> proceed. NO to any -> fix first.')\nexcept Exception as e:\n    import sys as _sys; print('[GATE ERROR] ' + str(e), file=_sys.stderr)\n\""
+          }
+        ]
+      }
+    ]
+  }
+}
