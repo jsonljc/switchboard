@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, BookOpen, Radio, Palette, Building2, CreditCard } from "lucide-react";
+import { Users, BookOpen, Radio, Palette, Building2, CreditCard, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const stripeEnabled = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
@@ -12,6 +12,7 @@ const ALL_SIDEBAR_ITEMS = [
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },
+  { href: "/settings/website-leads", label: "Website leads", icon: Globe },
   { href: "/settings/identity", label: "Identity", icon: Palette },
   { href: "/settings/billing", label: "Billing", icon: CreditCard, requiresStripe: true },
   { href: "/settings/account", label: "Account", icon: Building2 },
