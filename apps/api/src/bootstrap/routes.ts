@@ -47,6 +47,7 @@ import { simulateRoutes } from "../routes/simulate.js";
 import { readinessRoutes } from "../routes/readiness.js";
 import { billingRoutes } from "../routes/billing.js";
 import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
+import { leadWebhooksRoutes } from "../routes/lead-webhooks.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Setup routes are registered before auth — bootstrap needs to work pre-auth
@@ -114,6 +115,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(adOptimizerRoutes, { prefix: "/api/marketplace" });
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(leadsInboundRoutes, { prefix: "/api" });
+  await app.register(leadWebhooksRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });
