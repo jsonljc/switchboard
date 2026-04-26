@@ -221,6 +221,37 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         updatedAt: updatedHandoff.updatedAt.toISOString(),
       };
 
+      // Deliver reply to customer's channel
+      let channelDelivered = false;
+      if (handoff.sessionId) {
+        const conversation = await app.prisma.conversationState.findUnique({
+          where: { threadId: handoff.sessionId },
+        });
+
+        if (conversation && app.agentNotifier) {
+          try {
+            await app.agentNotifier.sendProactive(
+              conversation.principalId,
+              conversation.channel,
+              message,
+            );
+            channelDelivered = true;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[escalations] Channel delivery failed for ${handoff.sessionId}: ${msg}`);
+          }
+        }
+      }
+
+      if (!channelDelivered) {
+        return reply.code(502).send({
+          escalation,
+          replySent: false,
+          error: "Reply saved but channel delivery failed. Retry or contact customer directly.",
+          statusCode: 502,
+        });
+      }
+
       return reply.send({ escalation, replySent: true });
     },
   );
