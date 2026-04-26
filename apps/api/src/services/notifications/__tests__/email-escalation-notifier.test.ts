@@ -70,4 +70,62 @@ describe("EmailEscalationNotifier", () => {
     expect(callArgs.html).toContain("https://app.switchboard.app/escalations/approval_1");
     expect(callArgs.subject).toContain("HIGH");
   });
+
+  it("retries once on failure before recording as failed", async () => {
+    mockSend.mockRejectedValue(new Error("Resend API error: 500"));
+
+    const notifier = new EmailEscalationNotifier({
+      resendApiKey: "re_test_123",
+      fromAddress: "noreply@switchboard.app",
+      dashboardBaseUrl: "https://app.switchboard.app",
+    });
+
+    await notifier.notify(makeNotification({ approvers: ["fail@test.com"] }));
+
+    // Should have attempted 2 times (initial + 1 retry)
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(notifier.lastDeliveryResults).toHaveLength(1);
+    expect(notifier.lastDeliveryResults[0]?.status).toBe("failed");
+    expect(notifier.lastDeliveryResults[0]?.attempts).toBe(2);
+  });
+
+  it("records delivery status for each recipient", async () => {
+    // First call succeeds, second fails twice
+    mockSend
+      .mockResolvedValueOnce({ id: "email_1" })
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockRejectedValueOnce(new Error("fail again"));
+
+    const notifier = new EmailEscalationNotifier({
+      resendApiKey: "re_test_123",
+      fromAddress: "noreply@switchboard.app",
+      dashboardBaseUrl: "https://app.switchboard.app",
+    });
+
+    await notifier.notify(
+      makeNotification({ approvers: ["success@test.com", "fail@test.com"] }),
+    );
+
+    expect(notifier.lastDeliveryResults).toHaveLength(2);
+    expect(notifier.lastDeliveryResults[0]?.status).toBe("delivered");
+    expect(notifier.lastDeliveryResults[0]?.attempts).toBe(1);
+    expect(notifier.lastDeliveryResults[1]?.status).toBe("failed");
+    expect(notifier.lastDeliveryResults[1]?.attempts).toBe(2);
+  });
+
+  it("succeeds on retry after initial failure", async () => {
+    mockSend.mockRejectedValueOnce(new Error("transient")).mockResolvedValueOnce({ id: "ok" });
+
+    const notifier = new EmailEscalationNotifier({
+      resendApiKey: "re_test_123",
+      fromAddress: "noreply@switchboard.app",
+      dashboardBaseUrl: "https://app.switchboard.app",
+    });
+
+    await notifier.notify(makeNotification({ approvers: ["retry@test.com"] }));
+
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(notifier.lastDeliveryResults[0]?.status).toBe("delivered");
+    expect(notifier.lastDeliveryResults[0]?.attempts).toBe(2);
+  });
 });

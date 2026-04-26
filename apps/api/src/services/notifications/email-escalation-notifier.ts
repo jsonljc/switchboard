@@ -6,8 +6,17 @@ export interface EmailEscalationConfig {
   dashboardBaseUrl: string;
 }
 
+export interface DeliveryResult {
+  recipient: string;
+  status: "delivered" | "failed";
+  error?: string;
+  attempts: number;
+}
+
 export class EmailEscalationNotifier implements ApprovalNotifier {
   private config: EmailEscalationConfig;
+  /** Last notification's delivery results — exposed for testing and auditing. */
+  lastDeliveryResults: DeliveryResult[] = [];
 
   constructor(config: EmailEscalationConfig) {
     this.config = config;
@@ -15,7 +24,10 @@ export class EmailEscalationNotifier implements ApprovalNotifier {
 
   async notify(notification: ApprovalNotification): Promise<void> {
     const { approvers } = notification;
-    if (approvers.length === 0) return;
+    if (approvers.length === 0) {
+      this.lastDeliveryResults = [];
+      return;
+    }
 
     const { Resend } = await import("resend");
     const resend = new Resend(this.config.resendApiKey);
@@ -23,21 +35,38 @@ export class EmailEscalationNotifier implements ApprovalNotifier {
     const subject = `[Escalation] ${notification.riskCategory.toUpperCase()}: ${notification.summary}`;
     const html = this.buildEmailHtml(notification);
 
-    await Promise.allSettled(
-      approvers.map((approverEmail) =>
-        resend.emails
-          .send({
-            from: this.config.fromAddress,
-            to: approverEmail,
-            subject,
-            html,
-          })
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.warn(`[email-escalation] Failed to send to ${approverEmail}: ${msg}`);
-          }),
-      ),
+    this.lastDeliveryResults = await Promise.all(
+      approvers.map(async (approverEmail) => {
+        return this.sendWithRetry(resend, approverEmail, subject, html);
+      }),
     );
+  }
+
+  private async sendWithRetry(
+    resend: { emails: { send: (args: Record<string, string>) => Promise<unknown> } },
+    to: string,
+    subject: string,
+    html: string,
+    attempt = 1,
+  ): Promise<DeliveryResult> {
+    try {
+      await resend.emails.send({
+        from: this.config.fromAddress,
+        to,
+        subject,
+        html,
+      });
+      return { recipient: to, status: "delivered", attempts: attempt };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < 2) {
+        return this.sendWithRetry(resend, to, subject, html, attempt + 1);
+      }
+      console.error(
+        `[email-escalation] Failed to send to ${to} after ${attempt} attempts: ${msg}`,
+      );
+      return { recipient: to, status: "failed", error: msg, attempts: attempt };
+    }
   }
 
   private buildEmailHtml(n: ApprovalNotification): string {
