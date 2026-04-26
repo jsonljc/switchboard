@@ -82,6 +82,19 @@ Layer 5: apps/*                                     → may import anything
 
 - Node.js 20+
 - [pnpm](https://pnpm.io/) 9.x
+- **PostgreSQL 17 or 18** (the schema uses the `vector` extension, which Homebrew's `pgvector` formula only ships for these versions)
+- **pgvector** extension for Postgres
+- Redis (optional — dedup, rate-limiting, and BullMQ fall back to in-memory if absent)
+
+On macOS:
+
+```bash
+brew install postgresql@17 pgvector
+brew services start postgresql@17
+createuser -s switchboard
+createdb -O switchboard switchboard
+psql -d switchboard -c "ALTER USER switchboard WITH PASSWORD 'switchboard';"
+```
 
 ### Setup
 
@@ -89,9 +102,12 @@ Layer 5: apps/*                                     → may import anything
 git clone https://github.com/jsonljc/switchboard.git
 cd switchboard
 pnpm install
+./scripts/setup-env.sh                        # generates secrets into .env
+# manually create apps/dashboard/.env.local from apps/dashboard/.env.local.example
+# (DATABASE_URL and CREDENTIALS_ENCRYPTION_KEY must match the values in .env)
+pnpm db:migrate                                # apply Prisma migrations
+pnpm db:seed                                   # seed admin@switchboard.local / admin123
 pnpm build
-pnpm test
-pnpm typecheck
 ```
 
 ### Development
@@ -101,8 +117,10 @@ pnpm dev                                      # all services in watch mode
 
 pnpm --filter @switchboard/api dev            # http://localhost:3000
 pnpm --filter @switchboard/dashboard dev      # http://localhost:3002
-pnpm --filter @switchboard/chat dev           # http://localhost:3001
+pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires a channel token, see below)
 ```
+
+**Note:** `apps/chat` hard-fails to start without at least one of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`+`WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` set. For local dashboard-only work, run the API and dashboard individually rather than `pnpm dev`.
 
 ### Docker
 
