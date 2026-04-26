@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport json, sys\ntry:\n    data = json.load(sys.stdin)\n    fp = data.get('tool_input', {}).get('file_path', '') or data.get('file_path', '')\n    if '/apps/' in fp or '/packages/' in fp:\n        print('=== SWITCHBOARD ARCHITECTURE GATE ===')\n        print('File: ' + fp)\n        print('')\n        print('Answer ALL 4 before continuing:')\n        print('1. Do NEW mutating actions use PlatformIngress.submit()?')\n        print('2. Is canonical persistence through WorkTrace only?')\n        print('3. Is approval logic in the lifecycle service, not this route?')\n        print('4. Do new async paths have dead-letter handling?')\n        print('')\n        print('YES to all -> proceed. NO to any -> fix first.')\nexcept: pass\n\""
+          }
+        ]
+      }
+    ]
+  }
+}
