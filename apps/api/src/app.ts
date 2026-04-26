@@ -277,7 +277,33 @@ export async function buildServer() {
   app.decorate("redis", redis);
   app.decorate("prisma", prismaClient);
   app.decorate("governanceProfileStore", governanceProfileStore);
-  app.decorate("agentNotifier", null as AgentNotifier | null);
+  // Wire ProactiveSender if channel credentials are available
+  let agentNotifier: AgentNotifier | null = null;
+  const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+  const whatsappToken = process.env.WHATSAPP_TOKEN;
+  const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const slackBotToken = process.env.SLACK_BOT_TOKEN;
+
+  const hasAnyCreds = telegramBotToken || whatsappToken || slackBotToken;
+  if (hasAnyCreds) {
+    const { ProactiveSender } = await import("@switchboard/core/notifications");
+    agentNotifier = new ProactiveSender({
+      credentials: {
+        telegram: telegramBotToken ? { botToken: telegramBotToken } : undefined,
+        whatsapp:
+          whatsappToken && whatsappPhoneNumberId
+            ? { token: whatsappToken, phoneNumberId: whatsappPhoneNumberId }
+            : undefined,
+        slack: slackBotToken ? { botToken: slackBotToken } : undefined,
+      },
+    });
+  } else {
+    app.log.warn(
+      "No channel credentials found — agentNotifier disabled. " +
+        "Set TELEGRAM_BOT_TOKEN, WHATSAPP_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN.",
+    );
+  }
+  app.decorate("agentNotifier", agentNotifier);
   app.decorate("conversionBus", conversionBus);
 
   // --- PlatformIngress wiring ---
