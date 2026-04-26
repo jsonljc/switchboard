@@ -40,6 +40,44 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-greeting-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
+  const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
+  const { PrismaLeadIntakeStore } = await import("@switchboard/db");
+  const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
+
+  // Single source of truth for Contact creation from leads (CTWA + Instant Form).
+  // The meta.lead.intake workflow orchestrates the IF webhook (Graph fetch +
+  // child work dispatch), but delegates the actual Contact write to
+  // LeadIntakeHandler via the InstantFormAdapter, which goes through the
+  // PlatformIngress front door.
+  const leadIntakeStore = new PrismaLeadIntakeStore(
+    prismaClient as ConstructorParameters<typeof PrismaLeadIntakeStore>[0],
+  );
+  const leadIntakeHandler = new LeadIntakeHandler({ store: leadIntakeStore });
+  const instantFormAdapter = new InstantFormAdapter({
+    ingress: {
+      submit: async (req) => {
+        const payload = req.payload as {
+          organizationId: string;
+          deploymentId: string;
+        };
+        const response = await platformIngress.submit({
+          organizationId: payload.organizationId,
+          actor: { id: "system:meta-lead-intake", type: "system" },
+          intent: req.intent,
+          parameters: req.payload as Record<string, unknown>,
+          trigger: "internal",
+          surface: { surface: "api" },
+          idempotencyKey: req.idempotencyKey,
+          targetHint: { deploymentId: payload.deploymentId },
+        });
+        if (!response.ok) {
+          return { ok: false };
+        }
+        return { ok: true, result: response.result };
+      },
+    },
+    now: () => new Date(),
+  });
 
   const submitChildWork = async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
     const deployment = await resolveDeploymentForIntent(
@@ -69,7 +107,8 @@ export async function bootstrapContainedWorkflows(
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
-    ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient })],
+    ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
+    ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient, instantFormAdapter })],
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
   ]);
@@ -103,6 +142,13 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "standard",
       approvalPolicy: "threshold",
       allowedTriggers: ["api"],
+    },
+    {
+      intent: "lead.intake",
+      workflowId: "lead.intake",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["internal", "api"],
     },
     {
       intent: "meta.lead.intake",

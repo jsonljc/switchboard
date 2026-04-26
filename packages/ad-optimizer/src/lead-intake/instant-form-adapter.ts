@@ -70,20 +70,37 @@ export interface InstantFormAdapterDeps {
 }
 
 /**
+ * Result of a successful `lead.intake` submission. Mirrors
+ * `LeadIntakeHandler.LeadIntakeResult` so callers (e.g. the meta.lead.intake
+ * orchestrator workflow) can spawn child work units against the resolved
+ * Contact and short-circuit on duplicates.
+ */
+export interface InstantFormIngestResult {
+  contactId: string;
+  duplicate: boolean;
+}
+
+/**
  * Adapter that converts Meta Instant Form leads into `lead.intake`
  * submissions through `PlatformIngress`. Leads missing both email and phone
- * are silently skipped (no Contact can be created without a primary identifier).
+ * are silently skipped (no Contact can be created without a primary identifier);
+ * in that case `ingest` returns `null`.
  */
 export class InstantFormAdapter {
   constructor(private readonly deps: InstantFormAdapterDeps) {}
 
-  async ingest(lead: InstantFormLead): Promise<void> {
+  async ingest(lead: InstantFormLead): Promise<InstantFormIngestResult | null> {
     const intake = buildInstantFormIntake(lead, { now: this.deps.now });
-    if (!intake) return;
-    await this.deps.ingress.submit({
+    if (!intake) return null;
+    const response = await this.deps.ingress.submit({
       intent: "lead.intake",
       payload: intake,
       idempotencyKey: intake.idempotencyKey,
     });
+    const outputs = (response.result as { outputs?: Record<string, unknown> } | undefined)?.outputs;
+    const contactId = typeof outputs?.["contactId"] === "string" ? outputs["contactId"] : undefined;
+    const duplicate = outputs?.["duplicate"] === true;
+    if (!contactId) return null;
+    return { contactId, duplicate };
   }
 }

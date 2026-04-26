@@ -92,22 +92,46 @@ describe("buildInstantFormIntake", () => {
 });
 
 describe("InstantFormAdapter", () => {
-  it("submits via PlatformIngress", async () => {
-    const submit = vi.fn().mockResolvedValue({ ok: true });
+  it("submits via PlatformIngress and returns the resolved contactId", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_42", duplicate: false } },
+    });
     const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
-    await adapter.ingest(makeLead());
+    const out = await adapter.ingest(makeLead());
     expect(submit).toHaveBeenCalledWith(
       expect.objectContaining({
         intent: "lead.intake",
         payload: expect.objectContaining({ source: "instant_form" }),
       }),
     );
+    expect(out).toEqual({ contactId: "contact_42", duplicate: false });
   });
 
-  it("skips submission when lead has no email or phone", async () => {
+  it("propagates duplicate=true when the lead.intake handler reports a duplicate", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_42", duplicate: true } },
+    });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    const out = await adapter.ingest(makeLead());
+    expect(out).toEqual({ contactId: "contact_42", duplicate: true });
+  });
+
+  it("skips submission and returns null when lead has no email or phone", async () => {
     const submit = vi.fn();
     const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
-    await adapter.ingest(makeLead({ fieldData: [{ name: "full_name", values: ["Alice"] }] }));
+    const out = await adapter.ingest(
+      makeLead({ fieldData: [{ name: "full_name", values: ["Alice"] }] }),
+    );
     expect(submit).not.toHaveBeenCalled();
+    expect(out).toBeNull();
+  });
+
+  it("returns null when ingress response lacks a contactId", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: { outputs: {} } });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    const out = await adapter.ingest(makeLead());
+    expect(out).toBeNull();
   });
 });

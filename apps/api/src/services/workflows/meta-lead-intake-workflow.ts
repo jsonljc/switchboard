@@ -1,5 +1,5 @@
 import type { WorkflowHandler, WorkflowRuntimeServices } from "@switchboard/core/platform";
-import type { LeadData } from "@switchboard/ad-optimizer";
+import type { InstantFormAdapter, InstantFormLead, LeadData } from "@switchboard/ad-optimizer";
 
 interface PendingLeadRetryCreate {
   organizationId: string;
@@ -10,7 +10,14 @@ interface PendingLeadRetryCreate {
 }
 
 interface MetaLeadIntakeDeps {
-  prisma: unknown;
+  /**
+   * Required: the adapter that converts Meta Instant Form leads into
+   * `lead.intake` submissions through `PlatformIngress`. This is the SINGLE
+   * source of truth for IF Contact creation — the workflow no longer talks
+   * to `PrismaContactStore` directly.
+   */
+  instantFormAdapter: InstantFormAdapter;
+  prisma?: unknown;
   accessToken?: string;
   parseLeadWebhook?: (payload: unknown) => LeadData[];
   fetchLeadDetail?: (
@@ -20,12 +27,6 @@ interface MetaLeadIntakeDeps {
     field_data?: Array<{ name: string; values: string[] }>;
     campaign_id?: string;
   }>;
-  extractFieldValue?: (
-    fields: Array<{ name: string; values: string[] }> | undefined,
-    name: string,
-  ) => string | undefined;
-  findExistingContact?: (orgId: string, phone: string) => Promise<{ attribution?: unknown } | null>;
-  createContact?: (data: Record<string, unknown>) => Promise<{ id: string }>;
   savePendingRetry?: (data: PendingLeadRetryCreate) => Promise<void>;
 }
 
@@ -40,31 +41,23 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
       const adOptimizer = await import("@switchboard/ad-optimizer");
       const parseLeadWebhook = deps.parseLeadWebhook ?? adOptimizer.parseLeadWebhook;
       const fetchDetail = deps.fetchLeadDetail ?? adOptimizer.fetchLeadDetail;
-      const extractField = deps.extractFieldValue ?? adOptimizer.extractFieldValue;
 
-      let findExistingContact = deps.findExistingContact;
-      let createContact = deps.createContact;
       let savePendingRetry = deps.savePendingRetry;
-      if (!findExistingContact || !createContact || !savePendingRetry) {
-        const { PrismaContactStore } = await import("@switchboard/db");
-        const prisma = deps.prisma as import("@switchboard/db").PrismaClient;
-        const contactStore = new PrismaContactStore(prisma);
-        findExistingContact = findExistingContact ?? contactStore.findByPhone.bind(contactStore);
-        createContact =
-          createContact ??
-          (contactStore.create.bind(contactStore) as unknown as (
-            data: Record<string, unknown>,
-          ) => Promise<{ id: string }>);
-        savePendingRetry =
-          savePendingRetry ??
-          (async (data: PendingLeadRetryCreate) => {
-            type PrismaWithRetry = {
-              pendingLeadRetry: {
-                create: (args: { data: PendingLeadRetryCreate }) => Promise<unknown>;
-              };
+      if (!savePendingRetry) {
+        const prisma = deps.prisma as import("@switchboard/db").PrismaClient | undefined;
+        if (!prisma) {
+          throw new Error(
+            "meta.lead.intake workflow requires either savePendingRetry or prisma in deps",
+          );
+        }
+        savePendingRetry = async (data: PendingLeadRetryCreate) => {
+          type PrismaWithRetry = {
+            pendingLeadRetry: {
+              create: (args: { data: PendingLeadRetryCreate }) => Promise<unknown>;
             };
-            await (prisma as unknown as PrismaWithRetry).pendingLeadRetry.create({ data });
-          });
+          };
+          await (prisma as unknown as PrismaWithRetry).pendingLeadRetry.create({ data });
+        };
       }
 
       const webhookLeads = parseLeadWebhook(input.payload);
@@ -72,7 +65,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
       // Fail loudly when leads arrive but no access token is configured
       if (webhookLeads.length > 0 && !deps.accessToken) {
         for (const lead of webhookLeads) {
-          await savePendingRetry!({
+          await savePendingRetry({
             organizationId: workUnit.organizationId,
             leadId: lead.leadId,
             adId: lead.adId,
@@ -93,23 +86,20 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
       }
 
       let created = 0;
+      let duplicates = 0;
       const childFailures: Array<{ intent: string; leadId: string; error: string }> = [];
 
       for (const lead of webhookLeads) {
-        let name: string | undefined;
-        let email: string | undefined;
-        let phone: string | undefined;
+        let fieldData: Array<{ name: string; values: string[] }> | undefined;
         let campaignId: string | undefined;
 
         if (deps.accessToken) {
           try {
             const detail = await fetchDetail(lead.leadId, deps.accessToken);
-            name = extractField(detail.field_data, "full_name");
-            email = extractField(detail.field_data, "email");
-            phone = extractField(detail.field_data, "phone_number");
+            fieldData = detail.field_data;
             campaignId = detail.campaign_id;
           } catch {
-            await savePendingRetry!({
+            await savePendingRetry({
               organizationId: workUnit.organizationId,
               leadId: lead.leadId,
               adId: lead.adId,
@@ -120,39 +110,47 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           }
         }
 
-        if (!phone) continue;
+        if (!fieldData || fieldData.length === 0) continue;
 
-        const existing = await findExistingContact!(workUnit.organizationId, phone);
-        const existingAdId = (existing?.attribution as Record<string, unknown> | null)?.sourceAdId;
-        if (existing && existingAdId === lead.adId) continue;
+        const phone = fieldData.find((f) => f.name === "phone_number")?.values[0];
+        const email = fieldData.find((f) => f.name === "email")?.values[0];
+        // The InstantFormAdapter requires email or phone to ingest. Skip otherwise
+        // (preserves prior behavior for phone-less leads — IF without phone or
+        // email cannot be greeted via WhatsApp anyway).
+        if (!phone && !email) continue;
 
-        await createContact!({
+        const intakeLead: InstantFormLead = {
+          leadgenId: lead.leadId,
+          adId: lead.adId,
+          formId: lead.formId,
+          ...(campaignId ? { campaignId } : {}),
           organizationId: workUnit.organizationId,
-          name: name ?? null,
-          phone,
-          email: email ?? null,
-          primaryChannel: "whatsapp",
-          source: "meta-instant-form",
-          attribution: {
-            sourceAdId: lead.adId,
-            sourceCampaignId: campaignId ?? null,
-            fbclid: null,
-            gclid: null,
-            ttclid: null,
-            utmSource: null,
-            utmMedium: null,
-            utmCampaign: null,
-          },
-        });
+          deploymentId: workUnit.deployment.deploymentId,
+          fieldData,
+        };
+
+        const ingestResult = await deps.instantFormAdapter.ingest(intakeLead);
+        if (!ingestResult) continue;
+        if (ingestResult.duplicate) {
+          // Existing Contact for this lead — do NOT spawn greeting/inquiry
+          // a second time. Idempotency is enforced in LeadIntakeHandler via
+          // (organizationId, idempotencyKey=leadgen:<leadgenId>).
+          duplicates++;
+          continue;
+        }
+
         created++;
 
+        const name = fieldData.find((f) => f.name === "full_name")?.values[0];
+        const greetingPhone = phone ?? "";
         const greetingResult = await services.submitChildWork({
           intent: "meta.lead.greeting.send",
           organizationId: workUnit.organizationId,
           actor: workUnit.actor,
           parentWorkUnitId: workUnit.id,
           parameters: {
-            phone,
+            contactId: ingestResult.contactId,
+            phone: greetingPhone,
             firstName: name?.split(" ")[0] ?? "there",
             templateName: input.greetingTemplateName,
           },
@@ -171,6 +169,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           actor: workUnit.actor,
           parentWorkUnitId: workUnit.id,
           parameters: {
+            contactId: ingestResult.contactId,
             leadId: lead.leadId,
             organizationId: workUnit.organizationId,
             adId: lead.adId ?? null,
@@ -194,6 +193,7 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
         outputs: {
           received: webhookLeads.length,
           created,
+          duplicates,
           ...(hasFailures ? { childFailures } : {}),
         },
         ...(hasFailures
