@@ -40,6 +40,8 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-greeting-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
+  const { buildWebsiteLeadIntakeWorkflow } =
+    await import("../services/workflows/website-lead-intake-workflow.js");
 
   const submitChildWork = async (request: ChildWorkRequest): Promise<SubmitWorkResponse> => {
     const deployment = await resolveDeploymentForIntent(
@@ -72,6 +74,7 @@ export async function bootstrapContainedWorkflows(
     ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient })],
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
+    ["website.lead.intake", buildWebsiteLeadIntakeWorkflow({ prisma: prismaClient })],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -124,6 +127,13 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "standard",
       approvalPolicy: "none",
       allowedTriggers: ["internal"],
+    },
+    {
+      intent: "website.lead.intake",
+      workflowId: "website.lead.intake",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["api", "internal"],
     },
   ];
 
