@@ -33,6 +33,14 @@ describe("Governance API", () => {
     app.decorateRequest("organizationIdFromAuth", undefined);
     app.decorateRequest("principalIdFromAuth", undefined);
 
+    app.addHook("onRequest", async (request) => {
+      const params = request.params as { orgId?: string };
+      if (params.orgId) {
+        (request as Record<string, unknown>).organizationIdFromAuth = params.orgId;
+        (request as Record<string, unknown>).principalIdFromAuth = "test-principal";
+      }
+    });
+
     await app.register(governanceRoutes, { prefix: "/api/governance" });
   });
 
