@@ -62,6 +62,16 @@ export interface AuditReport {
   insights: AuditInsight[];
   watches: AuditWatch[];
   recommendations: AuditRecommendation[];
+  sourceComparison?: {
+    rows: Array<{
+      source: string;
+      cpl: number | null;
+      costPerQualified: number | null;
+      costPerBooked: number | null;
+      closeRate: number | null;
+      trueRoas: number | null;
+    }>;
+  };
 }
 
 interface TaskRecord {
