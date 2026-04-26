@@ -30,7 +30,7 @@ const SOURCE_OPTIONS: Array<{ value: SourceType; label: string }> = [
 ];
 
 async function fetchList(): Promise<LeadWebhookSummary[]> {
-  const r = await fetch("/api/lead-webhooks", { credentials: "include" });
+  const r = await fetch("/api/dashboard/lead-webhooks");
   if (!r.ok) throw new Error(`failed to load (${r.status})`);
   const data = (await r.json()) as { webhooks: LeadWebhookSummary[] };
   return data.webhooks;
@@ -41,9 +41,8 @@ async function fetchCreate(input: {
   sourceType: SourceType;
   greetingTemplateName?: string;
 }): Promise<CreatedResponse> {
-  const r = await fetch("/api/lead-webhooks", {
+  const r = await fetch("/api/dashboard/lead-webhooks", {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
@@ -52,9 +51,8 @@ async function fetchCreate(input: {
 }
 
 async function fetchRevoke(id: string): Promise<void> {
-  const r = await fetch(`/api/lead-webhooks/${id}/revoke`, {
+  const r = await fetch(`/api/dashboard/lead-webhooks/${id}/revoke`, {
     method: "POST",
-    credentials: "include",
   });
   if (!r.ok) throw new Error(`failed to revoke (${r.status})`);
 }
