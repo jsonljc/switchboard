@@ -1,0 +1,27 @@
+[
+  {
+    "input": "Audit Switchboard onboarding self-serve readiness",
+    "expected_skill": "self-serve-readiness-audit"
+  },
+  {
+    "input": "Check if PlatformIngress is being bypassed by any mutating route",
+    "expected_skill": "architecture-audit"
+  },
+  {
+    "input": "Trace this dashboard button from hook to backend store",
+    "expected_skill": "route-chain-audit"
+  },
+  {
+    "input": "This button works in the UI but nothing is saved",
+    "expected_skill": "route-chain-audit"
+  },
+  {
+    "input": "Compact this long Claude session into durable Switchboard memory",
+    "expected_skill": "context-compression"
+  },
+  {
+    "input": "Turn this approved design into a coding execution plan",
+    "expected_skill": null,
+    "expected_behavior": "Use implementation/code-changes resolver path; no dedicated implementation skill in Phase 1"
+  }
+]
