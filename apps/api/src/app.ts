@@ -448,6 +448,10 @@ export async function buildServer() {
   await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
 
+  // Billing feature gate — blocks paid routes for free-tier orgs
+  const { billingGuard } = await import("./middleware/billing-guard.js");
+  await app.register(billingGuard);
+
   // Assign a traceId to every request (from X-Request-Id header or auto-generated)
   app.addHook("onRequest", async (request) => {
     const headerVal = request.headers["x-request-id"];
