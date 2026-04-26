@@ -1,5 +1,6 @@
 // packages/core/src/ad-optimizer/recommendation-engine.ts
 import type { Diagnosis } from "./metric-diagnostician.js";
+import type { SourceComparisonRow } from "./analyzers/source-comparator.js";
 import type {
   RecommendationOutputSchema as RecommendationOutput,
   MetricDeltaSchema as MetricDelta,
@@ -10,6 +11,7 @@ import type {
 // ── Re-export types ──
 
 export type { RecommendationOutput };
+export type { SourceComparisonRow };
 
 // ── Constants ──
 
@@ -19,15 +21,6 @@ const PAUSE_CPA_MULTIPLIER = 3;
 const KILL_DAYS_THRESHOLD = 7;
 
 // ── Input type ──
-
-export interface SourceComparisonRow {
-  source: string;
-  cpl: number | null;
-  costPerQualified: number | null;
-  costPerBooked: number | null;
-  closeRate: number | null;
-  trueRoas: number | null;
-}
 
 export interface RecommendationInput {
   campaignId: string;
