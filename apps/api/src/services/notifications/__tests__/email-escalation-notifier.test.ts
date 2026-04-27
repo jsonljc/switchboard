@@ -102,9 +102,7 @@ describe("EmailEscalationNotifier", () => {
       dashboardBaseUrl: "https://app.switchboard.app",
     });
 
-    await notifier.notify(
-      makeNotification({ approvers: ["success@test.com", "fail@test.com"] }),
-    );
+    await notifier.notify(makeNotification({ approvers: ["success@test.com", "fail@test.com"] }));
 
     expect(notifier.lastDeliveryResults).toHaveLength(2);
     expect(notifier.lastDeliveryResults[0]?.status).toBe("delivered");

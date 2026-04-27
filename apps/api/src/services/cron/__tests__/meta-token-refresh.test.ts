@@ -60,18 +60,16 @@ describe("executeMetaTokenRefresh", () => {
     });
 
     const deps = makeDeps({
-      listMetaConnections: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            id: "conn_1",
-            deploymentId: "dep_1",
-            type: "meta-ads",
-            status: "active",
-            credentials: creds,
-            metadata: null,
-          },
-        ]),
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "active",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
     });
 
     const result = await executeMetaTokenRefresh(makeStep(), deps);
@@ -90,18 +88,16 @@ describe("executeMetaTokenRefresh", () => {
     });
 
     const deps = makeDeps({
-      listMetaConnections: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            id: "conn_1",
-            deploymentId: "dep_1",
-            type: "meta-ads",
-            status: "active",
-            credentials: creds,
-            metadata: null,
-          },
-        ]),
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "active",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
       refreshTokenIfNeeded: vi.fn().mockResolvedValue({
         accessToken: "new_token",
         expiresIn: 5184000,
@@ -123,18 +119,16 @@ describe("executeMetaTokenRefresh", () => {
     });
 
     const deps = makeDeps({
-      listMetaConnections: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            id: "conn_1",
-            deploymentId: "dep_1",
-            type: "meta-ads",
-            status: "active",
-            credentials: creds,
-            metadata: null,
-          },
-        ]),
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "active",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
       refreshTokenIfNeeded: vi.fn().mockRejectedValue(new Error("Token expired")),
     });
 
@@ -151,18 +145,16 @@ describe("executeMetaTokenRefresh", () => {
     });
 
     const deps = makeDeps({
-      listMetaConnections: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            id: "conn_1",
-            deploymentId: "dep_1",
-            type: "meta-ads",
-            status: "needs_reauth",
-            credentials: creds,
-            metadata: null,
-          },
-        ]),
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "needs_reauth",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
     });
 
     const result = await executeMetaTokenRefresh(makeStep(), deps);
