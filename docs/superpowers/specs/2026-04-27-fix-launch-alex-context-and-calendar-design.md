@@ -392,9 +392,22 @@ Per redline. Verify all assumptions. If any check fails, stop and revise the des
 
 6. **Resend integration shape** — read the existing escalation notifier's Resend usage at `apps/api/src/bootstrap/skill-mode.ts` ~lines 72–73 and surrounding helper. Confirm whether a sender-address env var already exists (so we may reuse it) or whether `BOOKING_FROM_EMAIL` is genuinely new. Adjust Section 3 accordingly.
 
+   **Hard stop for Section 3.** If no existing sender-address env var is found:
+   - Do **not** implement `emailSender` with a hardcoded from-address.
+   - Choose one of:
+     - **(A)** Introduce `BOOKING_FROM_EMAIL`, document it in `.env.example`, cover it in bootstrap tests (set / unset / both-set), and proceed with Section 3 in this branch.
+     - **(B)** Split email delivery into a follow-up branch. In this branch, wire the `emailSender` _seam_ into `LocalCalendarProvider` with a test double only (so the plumbing exists and is exercised by tests), but do not call Resend from production code.
+   - Surface the chosen path to the user **before** writing any Section 3 code. Do not silently hardcode a sender address under any circumstances.
+
 7. **Alex builder config TypeScript shape** — confirm `Parameters<typeof alexBuilder>[1]` (the `config` arg type) accepts `phone?: string | null` and `channel?: string`. Today it does (per `alex.ts:7–8, 19–20`). Pin in the plan that no `parameter-builder.ts` type widening is needed.
 
-If checks 1–4 and 7 pass, Section 1 + 2 unlock. If 5 passes, Section 4 unlocks. If 6 produces a clean answer, Section 3 unlocks. Sections are independent; Task 1 may unblock some and pause others.
+If checks 1–4 and 7 pass, Section 1 + 2 unlock. If 5 passes, Section 4 unlocks. If 6 produces a clean answer (existing sender env var, or user-approved option A/B above), Section 3 unlocks. Sections are independent; Task 1 may unblock some and pause others.
+
+### Hard stops
+
+- If any of checks **1–4** fail, **stop** before coding Section 1 or Section 2 and revise the design.
+- If check **5** finds a third real consumer of `LocalBookingStore.findOverlapping`, **stop** before coding Section 4 and revise.
+- If check **6** is ambiguous or no sender env var exists, **stop** before coding Section 3 and surface the A/B choice to the user.
 
 ---
 
