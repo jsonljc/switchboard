@@ -10,6 +10,7 @@ describe("whatsapp-meta helper", () => {
     it("calls /<wabaId>/subscribed_apps with the customer userToken (NOT the appToken)", async () => {
       const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
       const result = await registerWebhookOverride({
+        apiVersion: "v17.0",
         userToken: "CUSTOMER_TOKEN",
         wabaId: "WABA_1",
         webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
@@ -28,6 +29,7 @@ describe("whatsapp-meta helper", () => {
     it("sends override_callback_uri and verify_token in the request body", async () => {
       const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
       await registerWebhookOverride({
+        apiVersion: "v17.0",
         userToken: "CUSTOMER_TOKEN",
         wabaId: "WABA_1",
         webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
@@ -47,6 +49,7 @@ describe("whatsapp-meta helper", () => {
         json: async () => ({ error: { message: "bad token" } }),
       });
       const result = await registerWebhookOverride({
+        apiVersion: "v17.0",
         userToken: "CUSTOMER_TOKEN",
         wabaId: "WABA_1",
         webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
@@ -57,6 +60,52 @@ describe("whatsapp-meta helper", () => {
       if (!result.ok) {
         expect(result.reason).toContain("bad token");
       }
+    });
+
+    it("uses the apiVersion provided by the caller (v17.0)", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+      await registerWebhookOverride({
+        apiVersion: "v17.0",
+        userToken: "CUSTOMER_TOKEN",
+        wabaId: "WABA_1",
+        webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
+        verifyToken: "verify-secret",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url] = fetchSpy.mock.calls[0]!;
+      expect(url).toContain("/v17.0/");
+      expect(url).not.toContain("v21.0");
+    });
+
+    it("uses the apiVersion provided by the caller (v21.0)", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+      await registerWebhookOverride({
+        apiVersion: "v21.0",
+        userToken: "CUSTOMER_TOKEN",
+        wabaId: "WABA_1",
+        webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
+        verifyToken: "verify-secret",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url] = fetchSpy.mock.calls[0]!;
+      expect(url).toContain("/v21.0/");
+      expect(url).not.toContain("v17.0");
+    });
+
+    it("auth shape: uses Authorization: Bearer <userToken> header and NO access_token query param", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+      await registerWebhookOverride({
+        apiVersion: "v17.0",
+        userToken: "CUSTOMER_TOKEN",
+        wabaId: "WABA_1",
+        webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
+        verifyToken: "verify-secret",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      const headers = (init as { headers: Record<string, string> }).headers;
+      expect(headers["Authorization"]).toBe("Bearer CUSTOMER_TOKEN");
+      expect(String(url)).not.toContain("access_token=");
     });
   });
 
@@ -72,6 +121,7 @@ describe("whatsapp-meta helper", () => {
         }),
       });
       const result = await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
         appToken: "APP_TOKEN",
         userToken: "CUSTOMER_TOKEN",
         fetchImpl: fetchSpy as unknown as typeof fetch,
@@ -92,6 +142,7 @@ describe("whatsapp-meta helper", () => {
         json: async () => ({ error: { message: "invalid token" } }),
       });
       const result = await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
         appToken: "APP_TOKEN",
         userToken: "CUSTOMER_TOKEN",
         fetchImpl: fetchSpy as unknown as typeof fetch,
@@ -109,6 +160,7 @@ describe("whatsapp-meta helper", () => {
         json: async () => ({ data: { granular_scopes: [] } }),
       });
       const result = await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
         appToken: "APP_TOKEN",
         userToken: "CUSTOMER_TOKEN",
         fetchImpl: fetchSpy as unknown as typeof fetch,
@@ -127,6 +179,7 @@ describe("whatsapp-meta helper", () => {
         }),
       });
       const result = await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
         appToken: "APP_TOKEN",
         userToken: "CUSTOMER_TOKEN",
         fetchImpl: fetchSpy as unknown as typeof fetch,
@@ -145,6 +198,7 @@ describe("whatsapp-meta helper", () => {
         }),
       });
       await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
         appToken: "APP TOKEN/with+special",
         userToken: "USER TOKEN&more",
         fetchImpl: fetchSpy as unknown as typeof fetch,
@@ -152,6 +206,73 @@ describe("whatsapp-meta helper", () => {
       const [url] = fetchSpy.mock.calls[0]!;
       expect(url).toContain(encodeURIComponent("APP TOKEN/with+special"));
       expect(url).toContain(encodeURIComponent("USER TOKEN&more"));
+    });
+
+    it("uses the apiVersion provided by the caller (v17.0)", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA_1"] }],
+          },
+        }),
+      });
+      await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
+        appToken: "APP_TOKEN",
+        userToken: "CUSTOMER_TOKEN",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toContain("/v17.0/debug_token");
+      expect(String(url)).not.toContain("v21.0");
+    });
+
+    it("uses the apiVersion provided by the caller (v21.0)", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA_1"] }],
+          },
+        }),
+      });
+      await fetchWabaIdFromToken({
+        apiVersion: "v21.0",
+        appToken: "APP_TOKEN",
+        userToken: "CUSTOMER_TOKEN",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toContain("/v21.0/debug_token");
+      expect(String(url)).not.toContain("v17.0");
+    });
+
+    it("auth shape: passes appToken via access_token query param and sends NO Authorization header", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA_1"] }],
+          },
+        }),
+      });
+      await fetchWabaIdFromToken({
+        apiVersion: "v17.0",
+        appToken: "APP_TOKEN_123",
+        userToken: "CUSTOMER_TOKEN",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toContain("access_token=APP_TOKEN_123");
+      // No init at all is acceptable (default GET) — assert no Authorization header if init present.
+      const headers = (init as { headers?: Record<string, string> } | undefined)?.headers;
+      if (headers) {
+        expect(headers["Authorization"]).toBeUndefined();
+      }
     });
   });
 });

@@ -31,9 +31,6 @@
  * regress to a credential that has no access to the customer's WABA.
  */
 
-const GRAPH_API_VERSION = "v21.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-
 export type FetchWabaIdResult = { ok: true; wabaId: string } | { ok: false; reason: string };
 
 export type RegisterWebhookResult = { ok: true } | { ok: false; reason: string };
@@ -66,17 +63,23 @@ async function readErrorReason(res: {
  * Introspect a customer-asset Meta token to extract the WABA id it grants
  * access to.
  *
- * Calls `GET /debug_token?input_token=<userToken>&access_token=<appToken>`.
+ * Calls `GET /<apiVersion>/debug_token?input_token=<userToken>&access_token=<appToken>`.
  * The `appToken` (system app access token) authorizes the call; the
  * `userToken` is the subject of the introspection.
+ *
+ * @param args.apiVersion - Required Graph API version (e.g. `"v17.0"`). The
+ *   helper does not provide a default; callers SHOULD source this from a
+ *   single config point (env or app config) so all Meta calls use the same
+ *   version.
  */
 export async function fetchWabaIdFromToken(args: {
+  apiVersion: string;
   appToken: string;
   userToken: string;
   fetchImpl?: typeof fetch;
 }): Promise<FetchWabaIdResult> {
   const fetchImpl = args.fetchImpl ?? fetch;
-  const url = `${GRAPH_BASE}/debug_token?input_token=${encodeURIComponent(args.userToken)}&access_token=${encodeURIComponent(args.appToken)}`;
+  const url = `https://graph.facebook.com/${args.apiVersion}/debug_token?input_token=${encodeURIComponent(args.userToken)}&access_token=${encodeURIComponent(args.appToken)}`;
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
     res = await fetchImpl(url);
@@ -109,12 +112,18 @@ export async function fetchWabaIdFromToken(args: {
 /**
  * Register a per-WABA webhook override URL with Meta.
  *
- * Calls `POST /<wabaId>/subscribed_apps` with
+ * Calls `POST /<apiVersion>/<wabaId>/subscribed_apps` with
  * `Authorization: Bearer <userToken>`. The `userToken` MUST be a token with
  * access to the WABA — typically the customer's decrypted token in the
  * standard provision flow.
+ *
+ * @param args.apiVersion - Required Graph API version (e.g. `"v17.0"`). The
+ *   helper does not provide a default; callers SHOULD source this from a
+ *   single config point (env or app config) so all Meta calls use the same
+ *   version.
  */
 export async function registerWebhookOverride(args: {
+  apiVersion: string;
   userToken: string;
   wabaId: string;
   webhookUrl: string;
@@ -122,7 +131,7 @@ export async function registerWebhookOverride(args: {
   fetchImpl?: typeof fetch;
 }): Promise<RegisterWebhookResult> {
   const fetchImpl = args.fetchImpl ?? fetch;
-  const url = `${GRAPH_BASE}/${args.wabaId}/subscribed_apps`;
+  const url = `https://graph.facebook.com/${args.apiVersion}/${args.wabaId}/subscribed_apps`;
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
     res = await fetchImpl(url, {

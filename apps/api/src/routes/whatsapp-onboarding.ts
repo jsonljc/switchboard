@@ -72,6 +72,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       // appToken: system app token authorizes the introspection.
       // userToken: the customer's ESU token is the subject being introspected.
       const wabaResult = await fetchWabaIdFromToken({
+        apiVersion,
         appToken: metaSystemUserToken,
         userToken: esToken,
         fetchImpl: helperFetch,
@@ -131,6 +132,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       // customer's decrypted token is passed instead.
       const webhookUrl = `${webhookBaseUrl}${connection.webhookPath}`;
       const overrideResult = await registerWebhookOverride({
+        apiVersion,
         userToken: metaSystemUserToken,
         wabaId,
         webhookUrl,
