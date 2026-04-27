@@ -1,6 +1,6 @@
 // packages/schemas/src/ad-optimizer-v2.ts
 import { z } from "zod";
-import { FunnelShapeSchema, LearningPhaseStatusSchema } from "./ad-optimizer.js";
+import { FunnelShapeSchema, LearningPhaseStatusSchema } from "./ad-optimizer-shared.js";
 
 // ── Metric Snapshot ──
 
