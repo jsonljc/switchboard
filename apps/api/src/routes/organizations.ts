@@ -6,6 +6,7 @@ import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
 import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
+import { ensureAlexListingForOrg } from "../lib/ensure-alex-listing.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -66,6 +67,12 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
         },
         update: {},
       });
+
+      // Decision 10: seed the Alex listing+deployment on first lazy
+      // OrganizationConfig access so a brand-new org sees Alex before any
+      // channel is provisioned. Idempotent; the provision route also calls
+      // this as a safety net for pre-existing orgs.
+      await ensureAlexListingForOrg(orgId, app.prisma);
 
       return reply.send({ config });
     },
@@ -241,45 +248,21 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
               },
             });
 
-            // ── Beta compatibility bridge ──
-            const alexListing = await tx.agentListing.upsert({
-              where: { slug: "alex-conversion" },
-              create: {
-                slug: "alex-conversion",
-                name: "Alex",
-                description: "AI-powered lead conversion agent",
-                type: "ai-agent",
-                status: "active",
-                trustScore: 0,
-                autonomyLevel: "supervised",
-                priceTier: "free",
-                metadata: {},
-              },
-              update: {},
-            });
-
-            const deployment = await tx.agentDeployment.upsert({
-              where: {
-                organizationId_listingId: {
-                  organizationId: orgId,
-                  listingId: alexListing.id,
-                },
-              },
-              update: {},
-              create: {
-                organizationId: orgId,
-                listingId: alexListing.id,
-                status: "active",
-                skillSlug: "alex",
-              },
-            });
+            // ── Beta compatibility bridge (safety net for pre-existing orgs) ──
+            // The lazy OrganizationConfig upsert seeds this on first config
+            // access; this call is the safety net for orgs that provisioned
+            // before that path existed. Identical semantics either way.
+            const { listingId: _listingId, deploymentId } = await ensureAlexListingForOrg(
+              orgId,
+              tx,
+            );
 
             const tokenHash = createHash("sha256").update(connection.id).digest("hex");
 
             await tx.deploymentConnection.upsert({
               where: {
                 deploymentId_type_slot: {
-                  deploymentId: deployment.id,
+                  deploymentId,
                   type: ch.channel,
                   slot: "default",
                 },
@@ -290,7 +273,7 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
                 status: "active",
               },
               create: {
-                deploymentId: deployment.id,
+                deploymentId,
                 type: ch.channel,
                 slot: "default",
                 credentials: encrypted,
