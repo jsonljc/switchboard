@@ -1267,9 +1267,7 @@ export class TrustScoreEngine {
     return scoreToPriceTier(avgScore, this.thresholds);
   }
 
-  async getScoreBreakdown(
-    listingId: string,
-  ): Promise<
+  async getScoreBreakdown(listingId: string): Promise<
     {
       category: string;
       score: number;

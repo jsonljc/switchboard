@@ -84,6 +84,7 @@ src/app/team/[agentId]/page.tsx          — Moved to /settings/team/[agentId]
 ## Task 1: View Preference Hook
 
 **Files:**
+
 - Create: `src/hooks/use-view-preference.ts`
 - Create: `src/hooks/__tests__/use-view-preference.test.ts`
 
@@ -192,6 +193,7 @@ jf submit -m "feat: add useViewPreference hook for owner/staff view switching"
 ## Task 2: Owner Tabs Component
 
 **Files:**
+
 - Create: `src/components/layout/owner-tabs.tsx`
 - Create: `src/components/layout/__tests__/owner-tabs.test.tsx`
 
@@ -307,6 +309,7 @@ jf submit -m "feat: add OwnerTabs bottom tab bar component"
 ## Task 3: Staff Nav Component
 
 **Files:**
+
 - Create: `src/components/layout/staff-nav.tsx`
 - Create: `src/components/layout/__tests__/staff-nav.test.tsx`
 
@@ -481,6 +484,7 @@ jf submit -m "feat: add StaffNav top bar component with 5 nav items"
 ## Task 4: Staff Mobile Menu
 
 **Files:**
+
 - Create: `src/components/layout/staff-mobile-menu.tsx`
 
 - [ ] **Step 1: Write the implementation**
@@ -602,6 +606,7 @@ jf submit -m "feat: add StaffMobileMenu hamburger drawer"
 ## Task 5: Owner Shell & Staff Shell
 
 **Files:**
+
 - Create: `src/components/layout/owner-shell.tsx`
 - Create: `src/components/layout/staff-shell.tsx`
 
@@ -658,6 +663,7 @@ jf submit -m "feat: add OwnerShell and StaffShell layout components"
 ## Task 6: Wire View Routing in AppShell
 
 **Files:**
+
 - Modify: `src/components/layout/app-shell.tsx`
 - Modify: `src/providers/auth-provider.tsx` (add role to dev session)
 
@@ -757,6 +763,7 @@ jf submit -m "feat: wire view routing in AppShell (owner/staff shells)"
 ## Task 7: Settings Layout with Sidebar
 
 **Files:**
+
 - Create: `src/components/layout/settings-layout.tsx`
 - Create: `src/app/settings/layout.tsx`
 
@@ -900,6 +907,7 @@ jf submit -m "feat: add settings layout with sidebar navigation"
 This task moves existing pages into the settings area. Each is a thin wrapper that imports the existing components.
 
 **Files:**
+
 - Create: `src/app/settings/account/page.tsx`
 - Create: `src/app/settings/team/page.tsx`
 - Create: `src/app/settings/team/[agentId]/page.tsx`
@@ -985,6 +993,7 @@ jf submit -m "feat: migrate settings sub-pages (team, knowledge, channels, ident
 ## Task 9: CRM Tabs Component
 
 **Files:**
+
 - Create: `src/components/crm/crm-tabs.tsx`
 - Create: `src/components/crm/__tests__/crm-tabs.test.tsx`
 
@@ -1097,6 +1106,7 @@ jf submit -m "feat: add CrmTabs component for CRM page tab filtering"
 ## Task 10: Contact List Component
 
 **Files:**
+
 - Create: `src/components/crm/contact-list.tsx`
 
 This extracts the lead row pattern from the current leads page and the conversation row pattern from the conversations page into a unified contact list.
@@ -1267,6 +1277,7 @@ jf submit -m "feat: add ContactList component for unified CRM contact display"
 ## Task 11: Contact Detail Component
 
 **Files:**
+
 - Create: `src/components/crm/contact-detail.tsx`
 
 - [ ] **Step 1: Read current conversation detail pattern**
@@ -1400,6 +1411,7 @@ jf submit -m "feat: add ContactDetail component with info and conversation threa
 ## Task 12: CRM Page
 
 **Files:**
+
 - Create: `src/app/crm/page.tsx`
 - Create: `src/app/crm/[contactId]/page.tsx`
 
@@ -1618,6 +1630,7 @@ jf submit -m "feat: add CRM page with tabbed master-detail and contact detail ro
 > **IMPORTANT ordering note:** This task must be completed BEFORE Task 18 (redirect old routes), because it extracts content from the existing results and growth pages into reusable components. Task 18 will replace those pages with redirects.
 
 **Files:**
+
 - Create: `src/components/performance/results-content.tsx`
 - Create: `src/components/performance/growth-content.tsx`
 - Create: `src/app/performance/page.tsx`
@@ -1708,6 +1721,7 @@ jf submit -m "feat: add Performance page with extracted Results and Growth conte
 ## Task 14: Decide Page (Renamed Approvals)
 
 **Files:**
+
 - Create: `src/app/decide/page.tsx`
 - Create: `src/app/decide/[id]/page.tsx`
 
@@ -1734,6 +1748,7 @@ jf submit -m "feat: add Decide page (renamed approvals)"
 ## Task 15: Owner Me Page
 
 **Files:**
+
 - Create: `src/app/me/page.tsx`
 
 - [ ] **Step 1: Write the Me page**
@@ -1868,6 +1883,7 @@ jf submit -m "feat: add Owner Me page with team status and view toggle"
 ## Task 16: Dashboard Home Page (Today / Dashboard)
 
 **Files:**
+
 - Create: `src/components/dashboard/stat-cards.tsx`
 - Create: `src/components/dashboard/owner-today.tsx`
 - Create: `src/components/dashboard/staff-dashboard.tsx`
@@ -2320,6 +2336,7 @@ jf submit -m "feat: add Owner Today and Staff Dashboard home page views"
 ## Task 17: Dark Mode
 
 **Files:**
+
 - Modify: `src/app/globals.css`
 - Modify: `tailwind.config.ts`
 - Modify: `src/app/layout.tsx`
@@ -2529,6 +2546,7 @@ jf submit -m "feat: add dark mode with CSS variable swap, useTheme hook, and UI 
 ## Task 18: Redirect Old Routes
 
 **Files:**
+
 - Modify: `src/app/mission/page.tsx` → redirect to `/`
 - Modify: `src/app/leads/page.tsx` → redirect to `/crm`
 - Modify: `src/app/conversations/page.tsx` → redirect to `/crm`
@@ -2557,6 +2575,7 @@ export default function Page() {
 ```
 
 Specific mappings:
+
 - `/mission` → `/`
 - `/leads` → `/crm`
 - `/leads/[id]` → `/crm` (no 1:1 mapping for old lead IDs to new contact IDs)
@@ -2597,6 +2616,7 @@ jf submit -m "feat: redirect old routes to new locations"
 ## Task 19: Update AppShell Chrome-Hidden Paths
 
 **Files:**
+
 - Modify: `src/components/layout/app-shell.tsx`
 
 - [ ] **Step 1: Read current app-shell.tsx**
@@ -2649,6 +2669,7 @@ Expected: PASS (run `pnpm format` to fix if needed)
 Start the dashboard: `pnpm --filter @switchboard/dashboard dev`
 
 Verify:
+
 1. `/` renders Staff Dashboard by default
 2. Toggle to Owner view → renders Owner Today with stat cards
 3. Navigate to `/crm` → tabbed master-detail in Staff, compact list in Owner

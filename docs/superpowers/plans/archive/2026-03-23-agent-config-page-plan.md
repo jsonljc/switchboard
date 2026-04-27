@@ -37,6 +37,7 @@ apps/dashboard/src/
 ### Task 1: Behavior Options Data
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/team/agent-behavior-options.ts`
 - Test: `apps/dashboard/src/components/team/__tests__/agent-behavior-options.test.ts`
 
@@ -128,9 +129,19 @@ const RESPONDER_OPTIONS: BehaviorOption[] = [
     configKey: "qualificationThreshold",
     label: "How thorough?",
     choices: [
-      { id: "light", label: "Speed run", description: "Fewer questions, faster handoff", value: 25 },
+      {
+        id: "light",
+        label: "Speed run",
+        description: "Fewer questions, faster handoff",
+        value: 25,
+      },
       { id: "balanced", label: "Balanced", description: "Standard qualification", value: 40 },
-      { id: "deep", label: "Deep dive", description: "More questions, budget & timeline", value: 60 },
+      {
+        id: "deep",
+        label: "Deep dive",
+        description: "More questions, budget & timeline",
+        value: 60,
+      },
     ],
   },
 ];
@@ -142,7 +153,12 @@ const STRATEGIST_OPTIONS: BehaviorOption[] = [
     choices: [
       { id: "gentle", label: "Gentle", description: "Spaced out, low pressure", value: [2, 5, 10] },
       { id: "steady", label: "Steady", description: "Regular check-ins", value: [1, 3, 7] },
-      { id: "relentless", label: "Relentless", description: "Frequent, high urgency", value: [1, 2, 4] },
+      {
+        id: "relentless",
+        label: "Relentless",
+        description: "Frequent, high urgency",
+        value: [1, 2, 4],
+      },
     ],
   },
 ];
@@ -152,8 +168,18 @@ const OPTIMIZER_OPTIONS: BehaviorOption[] = [
     configKey: "approvalThreshold",
     label: "Spend authority",
     choices: [
-      { id: "cautious", label: "Check with me first", description: "Over $50 needs approval", value: 50 },
-      { id: "moderate", label: "I trust your judgment", description: "Over $200 needs approval", value: 200 },
+      {
+        id: "cautious",
+        label: "Check with me first",
+        description: "Over $50 needs approval",
+        value: 50,
+      },
+      {
+        id: "moderate",
+        label: "I trust your judgment",
+        description: "Over $200 needs approval",
+        value: 200,
+      },
       { id: "autonomous", label: "Go for it", description: "Over $500 needs approval", value: 500 },
     ],
   },
@@ -198,6 +224,7 @@ git commit -m "feat: add agent behavior options data module"
 ### Task 2: Preview Templates
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/team/agent-preview-templates.ts`
 - Test: `apps/dashboard/src/components/team/__tests__/agent-preview-templates.test.ts`
 - Modify: `apps/dashboard/src/components/onboarding/step-agent-style.tsx` (import from shared file)
@@ -227,17 +254,32 @@ describe("getPreviewMessage", () => {
   });
 
   it("includes qualification depth for responder with deep config", () => {
-    const msg = getPreviewMessage("responder", "warm-professional", { qualificationThreshold: 60 }, "Acme");
+    const msg = getPreviewMessage(
+      "responder",
+      "warm-professional",
+      { qualificationThreshold: 60 },
+      "Acme",
+    );
     expect(msg).toContain("budget");
   });
 
   it("includes follow-up timing for strategist", () => {
-    const msg = getPreviewMessage("strategist", "casual-conversational", { followUpDays: [1, 2, 4] }, "Acme");
+    const msg = getPreviewMessage(
+      "strategist",
+      "casual-conversational",
+      { followUpDays: [1, 2, 4] },
+      "Acme",
+    );
     expect(msg).toContain("tomorrow");
   });
 
   it("includes threshold for optimizer", () => {
-    const msg = getPreviewMessage("optimizer", "warm-professional", { approvalThreshold: 200 }, "Acme");
+    const msg = getPreviewMessage(
+      "optimizer",
+      "warm-professional",
+      { approvalThreshold: 200 },
+      "Acme",
+    );
     expect(msg).toContain("$200");
   });
 
@@ -258,7 +300,12 @@ describe("getPreviewMessage", () => {
   });
 
   it("handles onboarding agent IDs (sales-closer -> strategist)", () => {
-    const msg = getPreviewMessage("sales-closer", "casual-conversational", { followUpDays: [1, 3, 7] }, "Acme");
+    const msg = getPreviewMessage(
+      "sales-closer",
+      "casual-conversational",
+      { followUpDays: [1, 3, 7] },
+      "Acme",
+    );
     expect(msg).toContain("checking in");
   });
 });
@@ -281,8 +328,7 @@ const GREETINGS: Record<TonePreset, (name: string) => string> = {
     `"Hi there! Welcome to ${n}. I'd love to help you find the perfect service. What are you looking for today?"`,
   "casual-conversational": (n) =>
     `"Hey! Thanks for reaching out to ${n}. What can I help you with?"`,
-  "direct-efficient": (n) =>
-    `"Hello. How can I assist you with ${n}'s services today?"`,
+  "direct-efficient": (n) => `"Hello. How can I assist you with ${n}'s services today?"`,
 };
 
 const QUALIFICATION_SUFFIX: Record<string, string> = {
@@ -334,8 +380,10 @@ export function getPreviewMessage(
   if (role === "responder") {
     const greeting = GREETINGS[tone](name);
     const threshold = config.qualificationThreshold as number | undefined;
-    if (threshold !== undefined && threshold <= 25) return `${greeting}\n\n${QUALIFICATION_SUFFIX.light}`;
-    if (threshold !== undefined && threshold >= 60) return `${greeting}\n\n${QUALIFICATION_SUFFIX.deep}`;
+    if (threshold !== undefined && threshold <= 25)
+      return `${greeting}\n\n${QUALIFICATION_SUFFIX.light}`;
+    if (threshold !== undefined && threshold >= 60)
+      return `${greeting}\n\n${QUALIFICATION_SUFFIX.deep}`;
     return greeting;
   }
 
@@ -371,12 +419,17 @@ import { getPreviewMessage } from "@/components/team/agent-preview-templates";
 ```
 
 Then replace the usage at line 128:
+
 ```typescript
 // Before:
-{getPreviewGreeting(selectedTone, businessName)}
+{
+  getPreviewGreeting(selectedTone, businessName);
+}
 
 // After:
-{getPreviewMessage(agentId, selectedTone, {}, businessName)}
+{
+  getPreviewMessage(agentId, selectedTone, {}, businessName);
+}
 ```
 
 Delete the `getPreviewGreeting` function (lines 52-64).
@@ -397,6 +450,7 @@ git commit -m "feat: add agent preview templates with shared onboarding import"
 ### Task 3: Personality Column Component
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/team/agent-config-personality.tsx`
 
 - [ ] **Step 1: Create the component**
@@ -460,7 +514,6 @@ export function AgentConfigPersonality({
           ))}
         </div>
       </div>
-
     </div>
   );
 }
@@ -482,6 +535,7 @@ git commit -m "feat: add agent config personality column component"
 ### Task 4: Identity Column Component
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/team/agent-config-identity.tsx`
 
 - [ ] **Step 1: Create the component**
@@ -554,15 +608,9 @@ export function AgentConfigIdentity({
 
       {(activeConversations != null || actionsToday != null || lastActiveAt) && (
         <div className="flex flex-wrap justify-center gap-4 text-[12px] text-muted-foreground">
-          {activeConversations != null && (
-            <span>{activeConversations} active chats</span>
-          )}
-          {actionsToday != null && (
-            <span>{actionsToday} actions today</span>
-          )}
-          {lastActiveAt && (
-            <span>Last active {formatTimeAgo(lastActiveAt)}</span>
-          )}
+          {activeConversations != null && <span>{activeConversations} active chats</span>}
+          {actionsToday != null && <span>{actionsToday} actions today</span>}
+          {lastActiveAt && <span>Last active {formatTimeAgo(lastActiveAt)}</span>}
         </div>
       )}
 
@@ -596,6 +644,7 @@ git commit -m "feat: add agent config identity column component"
 ### Task 5: Behavior Column Component
 
 **Files:**
+
 - Create: `apps/dashboard/src/components/team/agent-config-behavior.tsx`
 
 - [ ] **Step 1: Create the component**
@@ -712,6 +761,7 @@ git commit -m "feat: add agent config behavior column component"
 ### Task 6: Config Page
 
 **Files:**
+
 - Create: `apps/dashboard/src/app/team/[agentId]/page.tsx`
 
 - [ ] **Step 1: Create the page**
@@ -823,7 +873,10 @@ export default function AgentConfigPage() {
   if (!agent) {
     return (
       <div className="space-y-4">
-        <button onClick={() => router.push("/team")} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onClick={() => router.push("/team")}
+          className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+        >
           <ArrowLeft className="h-4 w-4 inline mr-1" />
           Back to team
         </button>
@@ -908,6 +961,7 @@ git commit -m "feat: add agent config page at /team/[agentId]"
 ### Task 7: Update Team Page Navigation
 
 **Files:**
+
 - Modify: `apps/dashboard/src/app/team/page.tsx`
 
 - [ ] **Step 1: Update the team page**
@@ -917,6 +971,7 @@ Replace the `AgentDetailSheet` interaction with `router.push` navigation.
 Changes to `apps/dashboard/src/app/team/page.tsx`:
 
 1. Remove imports:
+
 ```typescript
 // REMOVE these lines:
 import { useState } from "react";
@@ -924,11 +979,13 @@ import { AgentDetailSheet } from "@/components/team/agent-detail-sheet";
 ```
 
 2. Add router import:
+
 ```typescript
 import { useRouter } from "next/navigation";
 ```
 
 3. Inside `TeamPage()`, replace:
+
 ```typescript
 // REMOVE:
 const [selectedAgent, setSelectedAgent] = useState<AgentRosterEntry | null>(null);
@@ -938,6 +995,7 @@ const router = useRouter();
 ```
 
 4. Update PrimaryCard onClick:
+
 ```typescript
 // BEFORE:
 <PrimaryCard agent={primaryOperator} onClick={() => setSelectedAgent(primaryOperator)} />
@@ -947,6 +1005,7 @@ const router = useRouter();
 ```
 
 5. Update AgentCard onClick:
+
 ```typescript
 // BEFORE:
 <AgentCard key={agent.id} agent={agent} onClick={() => setSelectedAgent(agent)} />
@@ -956,6 +1015,7 @@ const router = useRouter();
 ```
 
 6. Remove the `AgentDetailSheet` at the bottom of the JSX:
+
 ```typescript
 // REMOVE these lines:
 <AgentDetailSheet
@@ -966,6 +1026,7 @@ const router = useRouter();
 ```
 
 7. Remove `useState` from the React import if no longer used:
+
 ```typescript
 // BEFORE:
 import { useState, useEffect } from "react";
@@ -998,6 +1059,7 @@ git commit -m "feat: replace agent detail sheet with config page navigation"
 ### Task 8: Full Test Suite
 
 **Files:**
+
 - Test: `apps/dashboard/src/components/team/__tests__/agent-behavior-options.test.ts` (already created in Task 1)
 - Test: `apps/dashboard/src/components/team/__tests__/agent-preview-templates.test.ts` (already created in Task 2)
 
