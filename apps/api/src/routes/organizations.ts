@@ -7,6 +7,7 @@ import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-m
 import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
 import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
 import { ensureAlexListingForOrg } from "../lib/ensure-alex-listing.js";
+import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -300,18 +301,12 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           let customerToken: string | undefined;
           let customerPhoneNumberId: string | undefined;
 
-          // Chat config check applies to every channel (notify is channel-agnostic).
+          // Chat config: helper detects env gaps; we read env here only because
+          // the meta /subscribed_apps registration also needs `chatUrl` to build
+          // the webhook URL. Final chatConfig/chatNotify state is set by the
+          // helper call below.
           const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
           const internalSecret = process.env.INTERNAL_API_SECRET;
-          if (!chatUrl || !internalSecret) {
-            const missing: string[] = [];
-            if (!chatUrl) missing.push("CHAT_PUBLIC_URL");
-            if (!internalSecret) missing.push("INTERNAL_API_SECRET");
-            chatConfig = {
-              kind: "fail",
-              reason: `config_error_chat: missing ${missing.join(" / ")}`,
-            };
-          }
 
           // ── Meta webhook auto-registration (best-effort, WhatsApp only) ──
           if (ch.channel === "whatsapp") {
@@ -433,39 +428,22 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           }
 
           // ── Provision-notify (outside transaction, hardened with one retry) ──
-          if (chatConfig.kind === "ok" && chatUrl && internalSecret) {
-            let notifyAttempt = 0;
-            let notifyOk = false;
-            let lastNotifyError: string | null = null;
-            while (notifyAttempt < 2 && !notifyOk) {
-              if (notifyAttempt > 0) {
-                await new Promise((r) => setTimeout(r, 200));
-              }
-              notifyAttempt++;
-              try {
-                const notifyRes = await fetch(`${chatUrl}/internal/provision-notify`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${internalSecret}`,
-                  },
-                  body: JSON.stringify({ managedChannelId: result.managedChannel.id }),
-                });
-                if (notifyRes.ok) {
-                  notifyOk = true;
-                } else {
-                  lastNotifyError = `Provision-notify HTTP ${notifyRes.status}`;
-                }
-              } catch (notifyErr) {
-                lastNotifyError = notifyErr instanceof Error ? notifyErr.message : "fetch error";
-              }
-            }
-            if (!notifyOk) {
-              chatNotify = {
-                kind: "fail",
-                reason: `Provision-notify failed after retry: ${lastNotifyError}`,
-              };
-            }
+          // Shared helper owns both env-gap detection and the retry. We map its
+          // result to the existing chatConfig/chatNotify StepResult slots so the
+          // resolver behavior is unchanged. The `config_error_chat:` prefix is
+          // preserved here so the resolver's "both gaps" path still names both.
+          const notifyResult = await notifyChatProvisionedChannel({
+            managedChannelId: result.managedChannel.id,
+            chatPublicUrl: chatUrl,
+            internalApiSecret: internalSecret,
+          });
+          if (notifyResult.kind === "config_error") {
+            chatConfig = {
+              kind: "fail",
+              reason: `config_error_chat: ${notifyResult.reason}`,
+            };
+          } else if (notifyResult.kind === "fail") {
+            chatNotify = { kind: "fail", reason: notifyResult.reason };
           }
 
           const resolved = resolveProvisionStatus({

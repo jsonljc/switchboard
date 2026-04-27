@@ -249,3 +249,173 @@ describe("WhatsApp onboarding ESU integration (helper-extracted path)", () => {
     });
   });
 });
+
+describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
+  // Drives the new provision-notify wiring through Fastify inject() with a
+  // captured notifyFetch so we can assert: chatRegistration semantics, that
+  // notify happens iff env is configured, and that the connection.id from
+  // createConnection is the payload.
+
+  function makeGraphApiFetch() {
+    return vi.fn(async (url: string) => {
+      if (url.includes("/debug_token")) {
+        return {
+          data: {
+            granular_scopes: [
+              {
+                scope: "whatsapp_business_management",
+                target_ids: ["WABA_NOTIFY_1"],
+              },
+            ],
+          },
+        };
+      }
+      if (url.includes("/phone_numbers")) {
+        return {
+          data: [
+            {
+              id: "PHONE_NOTIFY_1",
+              verified_name: "Notify Biz",
+              display_phone_number: "+15555550100",
+            },
+          ],
+        };
+      }
+      return { success: true };
+    });
+  }
+
+  it("returns chatRegistration=active when notify succeeds; calls /internal/provision-notify once", async () => {
+    const notifyCalls: Array<{ url: string; init?: RequestInit }> = [];
+    const notifyFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      notifyCalls.push({ url: typeof url === "string" ? url : url.toString(), init });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const app = Fastify({ logger: false });
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "TKN",
+      metaSystemUserId: "SYS",
+      appSecret: "APPSEC",
+      apiVersion: "v17.0",
+      webhookBaseUrl: "https://chat.example.com",
+      chatPublicUrl: "https://chat.example.com",
+      internalApiSecret: "internal-secret",
+      notifyFetch,
+      graphApiFetch: makeGraphApiFetch(),
+      createConnection: async () => ({
+        id: "conn_notify_1",
+        webhookPath: "/webhook/managed/conn_notify_1",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "ESU_TOKEN" },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.chatRegistration).toBe("active");
+    expect(body.chatRegistrationDetail).toBeNull();
+
+    const notifyHits = notifyCalls.filter((c) => c.url.includes("/internal/provision-notify"));
+    expect(notifyHits).toHaveLength(1);
+    expect(notifyHits[0]!.url).toBe("https://chat.example.com/internal/provision-notify");
+    const headers = notifyHits[0]!.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer internal-secret");
+    const reqBody = JSON.parse(notifyHits[0]!.init!.body as string);
+    expect(reqBody).toEqual({ managedChannelId: "conn_notify_1" });
+
+    await app.close();
+  });
+
+  it("returns chatRegistration=pending_chat_register when notify fails twice; success stays true", async () => {
+    const notifyCalls: Array<{ url: string; init?: RequestInit }> = [];
+    const notifyFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      notifyCalls.push({ url: typeof url === "string" ? url : url.toString(), init });
+      return new Response("nope", { status: 500 });
+    }) as unknown as typeof fetch;
+
+    const app = Fastify({ logger: false });
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "TKN",
+      metaSystemUserId: "SYS",
+      appSecret: "APPSEC",
+      apiVersion: "v17.0",
+      webhookBaseUrl: "https://chat.example.com",
+      chatPublicUrl: "https://chat.example.com",
+      internalApiSecret: "internal-secret",
+      notifyFetch,
+      graphApiFetch: makeGraphApiFetch(),
+      createConnection: async () => ({
+        id: "conn_notify_2",
+        webhookPath: "/webhook/managed/conn_notify_2",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "ESU_TOKEN" },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    // Backward compatibility — `success` stays true even when notify fails.
+    // The new `chatRegistration` field is the truthy signal.
+    expect(body.success).toBe(true);
+    expect(body.chatRegistration).toBe("pending_chat_register");
+    expect(body.chatRegistrationDetail).toBeTruthy();
+    expect(body.chatRegistrationDetail).toMatch(/Provision-notify failed after retry/);
+
+    const notifyHits = notifyCalls.filter((c) => c.url.includes("/internal/provision-notify"));
+    expect(notifyHits).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("returns chatRegistration=config_error when chat env is missing; no /internal/provision-notify fetch", async () => {
+    const notifyCalls: Array<{ url: string; init?: RequestInit }> = [];
+    const notifyFetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      notifyCalls.push({ url: typeof url === "string" ? url : url.toString(), init });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const app = Fastify({ logger: false });
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "TKN",
+      metaSystemUserId: "SYS",
+      appSecret: "APPSEC",
+      apiVersion: "v17.0",
+      webhookBaseUrl: "https://chat.example.com",
+      // chatPublicUrl + internalApiSecret intentionally omitted
+      notifyFetch,
+      graphApiFetch: makeGraphApiFetch(),
+      createConnection: async () => ({
+        id: "conn_notify_3",
+        webhookPath: "/webhook/managed/conn_notify_3",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "ESU_TOKEN" },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.chatRegistration).toBe("config_error");
+    expect(body.chatRegistrationDetail).toMatch(/CHAT_PUBLIC_URL/);
+    expect(body.chatRegistrationDetail).toMatch(/INTERNAL_API_SECRET/);
+
+    const notifyHits = notifyCalls.filter((c) => c.url.includes("/internal/provision-notify"));
+    expect(notifyHits).toHaveLength(0);
+
+    await app.close();
+  });
+});

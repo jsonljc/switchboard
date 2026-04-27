@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
+import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 
 interface OnboardingOptions {
   metaSystemUserToken: string;
@@ -7,6 +8,18 @@ interface OnboardingOptions {
   appSecret: string;
   apiVersion: string;
   webhookBaseUrl: string;
+  /**
+   * Chat runtime base URL for the provision-notify call. Optional so existing
+   * callers (and tests) keep working; when missing, the helper surfaces a
+   * `config_error` and the route reports `chatRegistration: "config_error"`.
+   * Plumbed via opts (not read from process.env) to match the existing
+   * `webhookBaseUrl` pattern in this route.
+   */
+  chatPublicUrl?: string;
+  /** Internal API shared secret for provision-notify. Same opt-injection pattern. */
+  internalApiSecret?: string;
+  /** Test seam for the notify helper's fetch. Defaults to global fetch. */
+  notifyFetch?: typeof fetch;
   graphApiFetch: (url: string, init?: RequestInit) => Promise<Record<string, unknown>>;
   createConnection: (data: {
     wabaId: string;
@@ -149,6 +162,19 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
         automated_type: "3p_full",
       });
 
+      // 8. Notify the chat runtime that a managed channel was provisioned.
+      // Task 8.5: a channel must never be considered successfully provisioned
+      // without the chat runtime being notified (or the failure surfaced
+      // explicitly). Response shape stays additive — `success: true` is
+      // preserved for backward compatibility; `chatRegistration` is the new
+      // truthy signal callers should branch on.
+      const notifyResult = await notifyChatProvisionedChannel({
+        managedChannelId: connection.id,
+        chatPublicUrl: opts.chatPublicUrl,
+        internalApiSecret: opts.internalApiSecret,
+        fetchImpl: opts.notifyFetch,
+      });
+
       return reply.code(200).send({
         success: true,
         wabaId,
@@ -156,6 +182,13 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
         verifiedName: phone.verified_name,
         displayPhoneNumber: phone.display_phone_number,
         connectionId: connection.id,
+        chatRegistration:
+          notifyResult.kind === "ok"
+            ? "active"
+            : notifyResult.kind === "config_error"
+              ? "config_error"
+              : "pending_chat_register",
+        chatRegistrationDetail: notifyResult.kind === "ok" ? null : notifyResult.reason,
       });
     } catch (err) {
       app.log.error(err, "WhatsApp onboarding failed");

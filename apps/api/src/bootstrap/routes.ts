@@ -67,6 +67,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     appSecret: process.env.META_APP_SECRET ?? "",
     apiVersion: "v21.0",
     webhookBaseUrl: process.env.CHAT_PUBLIC_URL ?? "http://localhost:3001",
+    chatPublicUrl: process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL,
+    internalApiSecret: process.env.INTERNAL_API_SECRET,
     graphApiFetch: async (url: string, init?: RequestInit) => {
       const res = await fetch(url, init);
       return (await res.json()) as Record<string, unknown>;
