@@ -46,6 +46,13 @@ describe("provision route fixes", () => {
           headers: { "Content-Type": "application/json" },
         });
       }
+      // Health probe: GET https://graph.facebook.com/<apiVersion>/<phoneNumberId>
+      if (/graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(url)) {
+        return new Response(JSON.stringify({ id: "phone_1" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       throw new Error(`unexpected fetch ${url}`);
     }
 
@@ -79,6 +86,8 @@ describe("provision route fixes", () => {
       };
       return {
         $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
+        connection: { update: vi.fn().mockResolvedValue({ ...connection }) },
+        managedChannel: { update: vi.fn().mockResolvedValue({ ...managedChannel }) },
         _tx: tx,
       };
     }
@@ -219,6 +228,9 @@ describe("provision route fixes", () => {
         if (u.includes("provision-notify")) {
           return new Response("{}", { status: 200 });
         }
+        if (/graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(u)) {
+          return new Response(JSON.stringify({ id: "phone_1" }), { status: 200 });
+        }
         throw new Error(`unexpected fetch ${u}`);
       }) as typeof globalThis.fetch;
 
@@ -280,6 +292,175 @@ describe("provision route fixes", () => {
       // introduces "pending_meta_register".
       expect(ch0.status).toBe("active");
       expect(ch0.statusDetail).toBeNull();
+    });
+
+    // ── Task 5: synchronous WhatsApp health probe ──
+    it("writes Connection.lastHealthCheck and returns it as ISO string when probe succeeds", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; lastHealthCheck: string | null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("active");
+      expect(ch0.lastHealthCheck).toBeTruthy();
+      // ISO-8601 format check
+      expect(() => new Date(ch0.lastHealthCheck!).toISOString()).not.toThrow();
+      expect(new Date(ch0.lastHealthCheck!).toISOString()).toBe(ch0.lastHealthCheck);
+      // Prisma was called with a Date for connection.lastHealthCheck
+      expect(prisma.connection.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastHealthCheck: expect.any(Date) }),
+        }),
+      );
+      // ManagedChannel update with lastHealthCheck Date as well
+      expect(prisma.managedChannel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastHealthCheck: expect.any(Date) }),
+        }),
+      );
+    });
+
+    it("returns status=health_check_failed and lastHealthCheck=null when probe returns 401", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("debug_token")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                granular_scopes: [
+                  { scope: "whatsapp_business_management", target_ids: ["WABA_1"] },
+                ],
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (u.includes("subscribed_apps")) {
+          return new Response("{}", { status: 200 });
+        }
+        if (u.includes("provision-notify")) {
+          return new Response("{}", { status: 200 });
+        }
+        if (/graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(u)) {
+          return new Response("forbidden", { status: 401 });
+        }
+        throw new Error(`unexpected fetch ${u}`);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{
+          status: string;
+          statusDetail: string | null;
+          lastHealthCheck: string | null;
+        }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("health_check_failed");
+      expect(ch0.lastHealthCheck).toBeNull();
+      expect(ch0.statusDetail).toMatch(/401|health probe/i);
+    });
+
+    it("uses CUSTOMER_TOKEN (not the app token) for the health probe", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+      expect(res.statusCode).toBe(200);
+
+      const probeCall = fetchCalls.find((c) => /graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(c.url));
+      expect(probeCall).toBeDefined();
+      const auth = (probeCall!.init?.headers as Record<string, string> | undefined)?.Authorization;
+      expect(auth).toBe(`Bearer ${CUSTOMER_TOKEN}`);
+      expect(auth).not.toBe(`Bearer ${APP_TOKEN}`);
+    });
+
+    it("when health fails AND meta also failed, status reflects health_check_failed (precedence)", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("debug_token")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                granular_scopes: [
+                  { scope: "whatsapp_business_management", target_ids: ["WABA_1"] },
+                ],
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (u.includes("subscribed_apps")) {
+          return new Response(JSON.stringify({ error: { message: "bad token" } }), { status: 400 });
+        }
+        if (u.includes("provision-notify")) {
+          return new Response("{}", { status: 200 });
+        }
+        if (/graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(u)) {
+          return new Response("unauthorized", { status: 401 });
+        }
+        throw new Error(`unexpected fetch ${u}`);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; lastHealthCheck: string | null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("health_check_failed");
+      expect(ch0.lastHealthCheck).toBeNull();
     });
   });
 });

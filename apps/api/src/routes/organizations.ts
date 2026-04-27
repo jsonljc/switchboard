@@ -4,6 +4,7 @@ import { encryptCredentials, decryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
+import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -308,6 +309,10 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           // only this failure status; Task 6 wires the full precedence resolver.
           let metaStatus: "registered" | "skipped" | "failed" = "skipped";
           let metaReason: string | null = null;
+          // Lifted above the Meta block so the health-probe block (Task 5)
+          // can reuse the same customer-decrypted token + phoneNumberId.
+          let customerToken: string | undefined;
+          let customerPhoneNumberId: string | undefined;
 
           if (ch.channel === "whatsapp") {
             const appToken = process.env.WHATSAPP_GRAPH_TOKEN;
@@ -319,11 +324,19 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
               metaReason =
                 "Meta registration skipped: missing WHATSAPP_GRAPH_TOKEN / WHATSAPP_APP_SECRET / CHAT_PUBLIC_URL";
             } else {
-              let customerToken: string | undefined;
               try {
-                const decrypted = decryptCredentials(encrypted) as { token?: unknown };
+                const decrypted = decryptCredentials(encrypted) as {
+                  token?: unknown;
+                  phoneNumberId?: unknown;
+                };
                 if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
                   customerToken = decrypted.token;
+                }
+                if (
+                  typeof decrypted.phoneNumberId === "string" &&
+                  decrypted.phoneNumberId.length > 0
+                ) {
+                  customerPhoneNumberId = decrypted.phoneNumberId;
                 }
               } catch (decryptErr) {
                 metaStatus = "failed";
@@ -366,6 +379,39 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             }
           }
 
+          // ── Synchronous WhatsApp health probe (Task 5, best-effort) ──
+          // Probe success → write Connection.lastHealthCheck (and ManagedChannel.lastHealthCheck).
+          // Probe failure → keep records, surface status=health_check_failed below.
+          // Local 3-state precedence (health > meta > active); Task 6 owns the
+          // full 5-state resolver (config_error / pending_chat_register /
+          // health_check_failed / pending_meta_register / active).
+          let healthStatus: "ok" | "skipped" | "failed" = "skipped";
+          let healthReason: string | null = null;
+          let lastHealthCheckIso: string | null = null;
+
+          if (ch.channel === "whatsapp" && customerToken && customerPhoneNumberId) {
+            const probe = await probeWhatsAppHealth({
+              apiVersion,
+              userToken: customerToken,
+              phoneNumberId: customerPhoneNumberId,
+            });
+            if (probe.ok) {
+              healthStatus = "ok";
+              lastHealthCheckIso = probe.checkedAt.toISOString();
+              await app.prisma.connection.update({
+                where: { id: result.connection.id },
+                data: { lastHealthCheck: probe.checkedAt },
+              });
+              await app.prisma.managedChannel.update({
+                where: { id: result.managedChannel.id },
+                data: { lastHealthCheck: probe.checkedAt },
+              });
+            } else {
+              healthStatus = "failed";
+              healthReason = `Health probe failed: ${probe.reason}`;
+            }
+          }
+
           // Provision-notify (outside transaction — side effect)
           const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
           const internalSecret = process.env.INTERNAL_API_SECRET;
@@ -392,19 +438,27 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             }
           }
 
+          // Local 3-state precedence: health > meta > active.
+          // Task 6 will replace this with the full 5-state resolver.
+          let finalStatus: "active" | "health_check_failed" | "pending_meta_register" = "active";
+          let finalDetail: string | null = null;
+          if (healthStatus === "failed") {
+            finalStatus = "health_check_failed";
+            finalDetail = healthReason;
+          } else if (metaStatus === "failed") {
+            finalStatus = "pending_meta_register";
+            finalDetail = metaReason;
+          }
+
           results.push({
             id: result.managedChannel.id,
             channel: result.managedChannel.channel,
             botUsername: result.managedChannel.botUsername,
             webhookPath: result.managedChannel.webhookPath,
             webhookRegistered: metaStatus === "registered",
-            // Task 4 introduces only `pending_meta_register` for the Meta
-            // failure path. Tasks 5 & 6 will replace this branch with a full
-            // precedence resolver across config_error / pending_chat_register
-            // / health_check_failed / pending_meta_register / active.
-            status: metaStatus === "failed" ? "pending_meta_register" : "active",
-            statusDetail: metaStatus === "failed" ? metaReason : null,
-            lastHealthCheck: null,
+            status: finalStatus,
+            statusDetail: finalDetail,
+            lastHealthCheck: finalStatus === "active" ? lastHealthCheckIso : null,
             createdAt: result.managedChannel.createdAt.toISOString(),
           });
         } catch (err: unknown) {
