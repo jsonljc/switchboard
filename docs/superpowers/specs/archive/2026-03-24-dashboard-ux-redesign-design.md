@@ -33,12 +33,12 @@ The Switchboard dashboard has 12 top-bar navigation items and 25 routes serving 
 
 ### Owner View (mobile-first, 4 bottom tabs)
 
-| Tab | Route | Purpose |
-|-----|-------|---------|
-| Today | `/` | Outcome numbers, top approval, activity feed |
-| CRM | `/crm` | Simplified lead list, tap to view contact + conversation |
-| Decide | `/decide` | Approval cards with consequence context |
-| Me | `/me` | Identity summary, team status (read-only), quick settings |
+| Tab    | Route     | Purpose                                                   |
+| ------ | --------- | --------------------------------------------------------- |
+| Today  | `/`       | Outcome numbers, top approval, activity feed              |
+| CRM    | `/crm`    | Simplified lead list, tap to view contact + conversation  |
+| Decide | `/decide` | Approval cards with consequence context                   |
+| Me     | `/me`     | Identity summary, team status (read-only), quick settings |
 
 Owner routes:
 
@@ -53,14 +53,14 @@ Owner routes:
 
 ### Staff View (desktop-first, 5 top-bar items + gear)
 
-| Nav Item | Route | Purpose |
-|----------|-------|---------|
-| Dashboard | `/` | Outcome banner + activity feed + approvals + scorecard |
-| CRM | `/crm` | Master-detail, tabbed: Leads, Chats, Escalations, Inbox |
-| Campaigns | `/campaigns` | Campaign list + management |
-| Performance | `/performance` | Tabbed: Results, Growth |
-| Decide | `/decide` | Approvals with pending count |
-| Settings (gear) | `/settings` | Team, Knowledge, Channels, Identity, Test Chat, Account |
+| Nav Item        | Route          | Purpose                                                 |
+| --------------- | -------------- | ------------------------------------------------------- |
+| Dashboard       | `/`            | Outcome banner + activity feed + approvals + scorecard  |
+| CRM             | `/crm`         | Master-detail, tabbed: Leads, Chats, Escalations, Inbox |
+| Campaigns       | `/campaigns`   | Campaign list + management                              |
+| Performance     | `/performance` | Tabbed: Results, Growth                                 |
+| Decide          | `/decide`      | Approvals with pending count                            |
+| Settings (gear) | `/settings`    | Team, Knowledge, Channels, Identity, Test Chat, Account |
 
 Staff routes:
 
@@ -96,30 +96,30 @@ Staff routes:
 
 ## 4. Route Migration
 
-| Current Route | New Location | Notes |
-|--------------|-------------|-------|
-| `/` (identity) | `/settings/identity` | No longer landing page |
-| `/mission` | `/` | Becomes home for both views |
-| `/leads` | `/crm` (Leads tab) | Merged into CRM |
-| `/conversations` | `/crm` (Chats tab) | Merged into CRM |
-| `/inbox` | `/crm` (Inbox tab) | Merged into CRM |
-| `/escalations` | `/crm` (Escalations tab) | Merged into CRM |
-| `/results` | `/performance` (Results tab) | Merged into Performance |
-| `/growth` | `/performance` (Growth tab) | Merged into Performance |
-| `/agents` | `/settings/team` | Moved to settings |
-| `/knowledge` | `/settings/knowledge` | Moved to settings |
-| `/test-chat` | `/settings/test-chat` | Moved to settings |
-| `/connections` | `/settings/channels` | Moved to settings |
-| `/boundaries` | `/settings/account` | Moved to settings |
-| `/settings` | `/settings/account` | Moved under settings sidebar |
-| `/activity` | Removed | Absorbed into Dashboard feed |
-| `/team` | `/settings/team` | Moved to settings |
-| `/team/[agentId]` | `/settings/team/[agentId]` | Moved to settings |
-| `/approvals` | `/decide` | Renamed |
-| `/approvals/[id]` | `/decide/[id]` | Renamed |
-| `/setup/*` | Unchanged | Onboarding flow, chrome-hidden |
-| `/onboarding` | Unchanged | |
-| `/login` | Unchanged | |
+| Current Route     | New Location                 | Notes                          |
+| ----------------- | ---------------------------- | ------------------------------ |
+| `/` (identity)    | `/settings/identity`         | No longer landing page         |
+| `/mission`        | `/`                          | Becomes home for both views    |
+| `/leads`          | `/crm` (Leads tab)           | Merged into CRM                |
+| `/conversations`  | `/crm` (Chats tab)           | Merged into CRM                |
+| `/inbox`          | `/crm` (Inbox tab)           | Merged into CRM                |
+| `/escalations`    | `/crm` (Escalations tab)     | Merged into CRM                |
+| `/results`        | `/performance` (Results tab) | Merged into Performance        |
+| `/growth`         | `/performance` (Growth tab)  | Merged into Performance        |
+| `/agents`         | `/settings/team`             | Moved to settings              |
+| `/knowledge`      | `/settings/knowledge`        | Moved to settings              |
+| `/test-chat`      | `/settings/test-chat`        | Moved to settings              |
+| `/connections`    | `/settings/channels`         | Moved to settings              |
+| `/boundaries`     | `/settings/account`          | Moved to settings              |
+| `/settings`       | `/settings/account`          | Moved under settings sidebar   |
+| `/activity`       | Removed                      | Absorbed into Dashboard feed   |
+| `/team`           | `/settings/team`             | Moved to settings              |
+| `/team/[agentId]` | `/settings/team/[agentId]`   | Moved to settings              |
+| `/approvals`      | `/decide`                    | Renamed                        |
+| `/approvals/[id]` | `/decide/[id]`               | Renamed                        |
+| `/setup/*`        | Unchanged                    | Onboarding flow, chrome-hidden |
+| `/onboarding`     | Unchanged                    |                                |
+| `/login`          | Unchanged                    |                                |
 
 Old routes should redirect to new locations for bookmarks.
 
@@ -186,6 +186,7 @@ Flat contact list with filter chips (All, New, Qualified). No master-detail — 
 ### CRM Contact Detail (`/crm/[contactId]`)
 
 Shared between both views (different density). Sections:
+
 - **Info:** Name, phone, email, stage, source, created date
 - **Conversation:** Full chat thread (bubbles, same style as current)
 - **Timeline:** Stage changes, escalations, agent actions
@@ -197,6 +198,7 @@ Shared between both views (different density). Sections:
 ### Owner "Today" (mobile)
 
 Vertical stack, optimized for 10-second scan:
+
 1. **Greeting** — "Good morning, [name]"
 2. **Numbers** — leads today, booked, revenue (large type, 3 stat cards)
 3. **Needs you** — single most urgent approval (not 3 stacked). "1 more waiting" link.
@@ -220,14 +222,14 @@ TodayBanner (add compact variant), TodayActivityFeed, MonthlyScorecard, MissionA
 
 Sidebar layout at `/settings`:
 
-| Sidebar Item | Route | Absorbs |
-|-------------|-------|---------|
-| Team | `/settings/team` | `/team`, `/agents` |
-| Knowledge | `/settings/knowledge` | `/knowledge` |
-| Channels | `/settings/channels` | `/connections`, channel management |
-| Identity | `/settings/identity` | `/` (character customization) |
-| Test Chat | `/settings/test-chat` | `/test-chat` |
-| Account | `/settings/account` | `/settings`, `/boundaries` |
+| Sidebar Item | Route                 | Absorbs                            |
+| ------------ | --------------------- | ---------------------------------- |
+| Team         | `/settings/team`      | `/team`, `/agents`                 |
+| Knowledge    | `/settings/knowledge` | `/knowledge`                       |
+| Channels     | `/settings/channels`  | `/connections`, channel management |
+| Identity     | `/settings/identity`  | `/` (character customization)      |
+| Test Chat    | `/settings/test-chat` | `/test-chat`                       |
+| Account      | `/settings/account`   | `/settings`, `/boundaries`         |
 
 Desktop: 200px sidebar + content area. Mobile: stacked list, tap navigates to sub-page with back button.
 
@@ -238,6 +240,7 @@ Team sub-navigation: `/settings/team` shows roster, clicking agent navigates to 
 ## 9. Owner "Me" Page
 
 Single-column mobile page:
+
 - **Identity summary:** Name, tone, autonomy — editable inline. Condensed version of the 3-column identity page.
 - **Team status:** Read-only agent list with status dots (Ready/Working/Error).
 - **Quick actions:** Channels, Theme toggle, Sign out, "Switch to Staff view".
@@ -274,4 +277,4 @@ CSS variable swap using `.dark` class on `<html>`. Standard Tailwind dark mode.
 - **Operator Chat Widget:** Global, rendered in RootLayout, available in both views
 - **Onboarding flows:** `/setup/*`, `/onboarding`, `/login` — unchanged
 - **API layer:** No backend changes. All data hooks remain the same.
-- **Existing components:** TodayBanner, MonthlyScorecard, TodayActivityFeed, MissionApprovalCard, AgentCards, approval-card, agent-config-* — all reused
+- **Existing components:** TodayBanner, MonthlyScorecard, TodayActivityFeed, MissionApprovalCard, AgentCards, approval-card, agent-config-\* — all reused
