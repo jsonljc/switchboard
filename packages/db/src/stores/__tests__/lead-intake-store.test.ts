@@ -10,7 +10,7 @@ const TEST_KEY_PREFIX = "test:lead-intake:";
 const ORG_ID = "test-org:lead-intake-store";
 const DEPLOYMENT_ID = "test-dep:lead-intake-store";
 
-describe("PrismaLeadIntakeStore (integration)", () => {
+describe.skipIf(!process.env["DATABASE_URL"])("PrismaLeadIntakeStore (integration)", () => {
   const prisma = new PrismaClient();
   const store = new PrismaLeadIntakeStore(prisma);
 
