@@ -289,7 +289,7 @@ describe("LocalCalendarProvider", () => {
   });
 
   describe("org-scoped queries", () => {
-    it("passes empty orgId to findOverlapping", async () => {
+    it("calls findOverlapping with only date range (no orgId)", async () => {
       const query: SlotQuery = {
         dateFrom: "2026-04-27T00:00:00+08:00",
         dateTo: "2026-04-27T23:59:59+08:00",
@@ -300,8 +300,55 @@ describe("LocalCalendarProvider", () => {
       };
       await provider.listAvailableSlots(query);
 
-      expect(store.findOverlapping).toHaveBeenCalledWith("", expect.any(Date), expect.any(Date));
+      expect(store.findOverlapping).toHaveBeenCalledWith(expect.any(Date), expect.any(Date));
     });
+  });
+});
+
+import {
+  describe as describeOrgScope,
+  it as itOrgScope,
+  expect as expectOrgScope,
+  vi as viOrgScope,
+} from "vitest";
+import type { LocalBookingStore as LocalBookingStoreOrgScope } from "./local-calendar-provider.js";
+import { LocalCalendarProvider as LocalCalendarProviderOrgScope } from "./local-calendar-provider.js";
+
+const __businessHoursForOrgScope = {
+  timezone: "Asia/Singapore",
+  days: [{ day: 1, open: "09:00", close: "17:00" }],
+  defaultDurationMinutes: 30,
+  bufferMinutes: 0,
+  slotIncrementMinutes: 30,
+} as never;
+
+describeOrgScope("LocalCalendarProvider listAvailableSlots org scoping", () => {
+  itOrgScope("does not call findOverlapping with an orgId argument", async () => {
+    const findOverlapping = viOrgScope.fn().mockResolvedValue([]);
+    const store: LocalBookingStoreOrgScope = {
+      findOverlapping,
+      createInTransaction: viOrgScope.fn(),
+      findById: viOrgScope.fn(),
+      cancel: viOrgScope.fn(),
+      reschedule: viOrgScope.fn(),
+    };
+    const provider = new LocalCalendarProviderOrgScope({
+      businessHours: __businessHoursForOrgScope,
+      bookingStore: store,
+    });
+
+    await provider.listAvailableSlots({
+      dateFrom: "2026-05-01T00:00:00Z",
+      dateTo: "2026-05-02T00:00:00Z",
+      durationMinutes: 30,
+      bufferMinutes: 0,
+    } as never);
+
+    expectOrgScope(findOverlapping).toHaveBeenCalledTimes(1);
+    const args = findOverlapping.mock.calls[0]!;
+    expectOrgScope(args).toHaveLength(2);
+    expectOrgScope(args[0]).toBeInstanceOf(Date);
+    expectOrgScope(args[1]).toBeInstanceOf(Date);
   });
 });
 

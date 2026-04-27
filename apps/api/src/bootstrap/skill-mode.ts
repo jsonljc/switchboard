@@ -316,13 +316,16 @@ async function resolveCalendarProvider(
 
   // Option 2: Local provider if business hours configured
   if (businessHours) {
+    if (!orgId) {
+      throw new Error("resolveCalendarProvider: orgId required for LocalCalendarProvider path");
+    }
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
 
     const localStore = {
-      findOverlapping: async (filterOrgId: string, startsAt: Date, endsAt: Date) => {
+      findOverlapping: async (startsAt: Date, endsAt: Date) => {
         const rows = await prismaClient.booking.findMany({
           where: {
-            organizationId: filterOrgId || undefined,
+            organizationId: orgId,
             startsAt: { lt: endsAt },
             endsAt: { gt: startsAt },
             status: { notIn: ["cancelled", "failed"] },

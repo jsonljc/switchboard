@@ -107,18 +107,9 @@ describe("bootstrapSkillMode governance wiring", () => {
         ),
         escalationRecord: { findMany: vi.fn(async () => []) },
         organizationConfig: {
-          findFirst: vi.fn(async () => ({
-            businessHours: {
-              timezone: "UTC",
-              slots: [
-                { day: 1, start: "09:00", end: "17:00" },
-                { day: 2, start: "09:00", end: "17:00" },
-                { day: 3, start: "09:00", end: "17:00" },
-                { day: 4, start: "09:00", end: "17:00" },
-                { day: 5, start: "09:00", end: "17:00" },
-              ],
-            },
-          })),
+          // Bootstrap has no orgId; LocalCalendarProvider path now requires orgId.
+          // Return null so resolveCalendarProvider falls through to NoopCalendarProvider.
+          findFirst: vi.fn(async () => null),
         },
         booking: {
           findMany: vi.fn(async () => []),
