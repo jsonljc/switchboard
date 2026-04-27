@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
 import { encryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -211,7 +212,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
               },
             });
 
-            const webhookPath = `/webhook/managed/${connection.id}`;
+            const webhookPath = buildManagedWebhookPath(connection.id);
 
             const managedChannel = await tx.managedChannel.create({
               data: {

@@ -50,6 +50,20 @@ function signBody(body: string, secret: string): string {
   return "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 }
 
+describe("managed-webhook external contract pin", () => {
+  // External contract pinned: /webhook/managed/:connectionId
+  // Mirrored regex in apps/api/src/lib/__tests__/managed-webhook-path.test.ts.
+  // Duplication is intentional; do not introduce a cross-app import.
+  const MANAGED_WEBHOOK_PATH_REGEX = /^\/webhook\/managed\/[a-zA-Z0-9_-]+$/;
+
+  it("conforms to the contract regex (chat side)", () => {
+    expect("/webhook/managed/conn_abc12345").toMatch(MANAGED_WEBHOOK_PATH_REGEX);
+    expect("/webhook/managed/conn_xyz789").toMatch(MANAGED_WEBHOOK_PATH_REGEX);
+    expect("/webhook/managed/").not.toMatch(MANAGED_WEBHOOK_PATH_REGEX); // empty id rejected
+    expect("/webhooks/managed/x").not.toMatch(MANAGED_WEBHOOK_PATH_REGEX); // wrong prefix rejected
+  });
+});
+
 describe("WhatsApp wiring — managed webhook", () => {
   let app: FastifyInstance;
   const handleIncoming = vi.fn(async (_msg, replySink) => {

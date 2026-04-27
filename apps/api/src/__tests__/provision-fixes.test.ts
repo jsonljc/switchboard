@@ -2,10 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 
 describe("provision route fixes", () => {
   describe("P0-1: webhook path format", () => {
-    it("generates webhook paths matching /webhook/managed/:id pattern", () => {
-      const connectionId = "conn_abc12345";
-      const webhookPath = `/webhook/managed/${connectionId}`;
-      expect(webhookPath).toMatch(/^\/webhook\/managed\/conn_[a-z0-9]+$/);
+    it("uses the buildManagedWebhookPath helper that mirrors the chat-server route", async () => {
+      const { buildManagedWebhookPath } = await import("../lib/managed-webhook-path.js");
+      expect(buildManagedWebhookPath("conn_abc12345")).toBe("/webhook/managed/conn_abc12345");
     });
   });
 
