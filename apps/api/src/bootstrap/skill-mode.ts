@@ -317,7 +317,14 @@ async function resolveCalendarProvider(
   // Option 2: Local provider if business hours configured
   if (businessHours) {
     if (!orgId) {
-      throw new Error("resolveCalendarProvider: orgId required for LocalCalendarProvider path");
+      // LocalCalendarProvider needs a real org to scope booking lookups; the singleton
+      // bootstrap path has no orgId, so fall through to Noop. Per-request calendar
+      // resolution is tracked in the follow-up fix/launch-calendar-readiness-visibility.
+      logger.info(
+        "Calendar: business hours present but orgId not supplied; using NoopCalendarProvider for the bootstrap singleton",
+      );
+      const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
+      return new NoopCalendarProvider();
     }
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
 
