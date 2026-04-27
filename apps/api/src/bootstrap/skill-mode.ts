@@ -217,6 +217,8 @@ export async function bootstrapSkillMode(
       deploymentId: ctx.deployment.deploymentId,
       orgId: ctx.workUnit.organizationId,
       contactId: ctx.workUnit.parameters.contactId as string,
+      phone: ctx.workUnit.parameters.phone as string | undefined,
+      channel: ctx.workUnit.parameters.channel as string | undefined,
     };
     return alexBuilder(agentContext, config, ctx.stores);
   });
@@ -314,13 +316,23 @@ async function resolveCalendarProvider(
 
   // Option 2: Local provider if business hours configured
   if (businessHours) {
+    if (!orgId) {
+      // LocalCalendarProvider needs a real org to scope booking lookups; the singleton
+      // bootstrap path has no orgId, so fall through to Noop. Per-request calendar
+      // resolution is tracked in the follow-up fix/launch-calendar-readiness-visibility.
+      logger.info(
+        "Calendar: business hours present but orgId not supplied; using NoopCalendarProvider for the bootstrap singleton",
+      );
+      const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
+      return new NoopCalendarProvider();
+    }
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
 
     const localStore = {
-      findOverlapping: async (filterOrgId: string, startsAt: Date, endsAt: Date) => {
+      findOverlapping: async (startsAt: Date, endsAt: Date) => {
         const rows = await prismaClient.booking.findMany({
           where: {
-            organizationId: filterOrgId || undefined,
+            organizationId: orgId,
             startsAt: { lt: endsAt },
             endsAt: { gt: startsAt },
             status: { notIn: ["cancelled", "failed"] },
@@ -426,9 +438,33 @@ async function resolveCalendarProvider(
       },
     };
 
+    const resendKey = process.env["RESEND_API_KEY"];
+    const fromAddress = process.env["EMAIL_FROM"] ?? "noreply@switchboard.app";
+    let emailSender: import("@switchboard/core/calendar").EmailSender | undefined;
+    if (resendKey) {
+      const { sendBookingConfirmationEmail } = await import("../lib/booking-confirmation-email.js");
+      emailSender = async (email) => {
+        await sendBookingConfirmationEmail({
+          apiKey: resendKey,
+          fromAddress,
+          to: email.to,
+          attendeeName: email.attendeeName,
+          service: email.service,
+          startsAt: email.startsAt,
+          endsAt: email.endsAt,
+          bookingId: email.bookingId,
+        });
+      };
+    } else {
+      logger.info("Calendar: booking confirmation emails disabled (RESEND_API_KEY not set)");
+    }
+
     const provider = new LocalCalendarProvider({
       businessHours,
       bookingStore: localStore,
+      ...(emailSender ? { emailSender } : {}),
+      onSendFailure: ({ bookingId, error }) =>
+        logger.error(`Calendar: booking confirmation email failed for ${bookingId}: ${error}`),
     });
     logger.info(
       "Calendar: using LocalCalendarProvider (business hours configured, no Google creds)",

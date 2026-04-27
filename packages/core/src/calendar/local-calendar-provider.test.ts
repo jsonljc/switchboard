@@ -289,7 +289,7 @@ describe("LocalCalendarProvider", () => {
   });
 
   describe("org-scoped queries", () => {
-    it("passes empty orgId to findOverlapping", async () => {
+    it("calls findOverlapping with only date range (no orgId)", async () => {
       const query: SlotQuery = {
         dateFrom: "2026-04-27T00:00:00+08:00",
         dateTo: "2026-04-27T23:59:59+08:00",
@@ -300,7 +300,120 @@ describe("LocalCalendarProvider", () => {
       };
       await provider.listAvailableSlots(query);
 
-      expect(store.findOverlapping).toHaveBeenCalledWith("", expect.any(Date), expect.any(Date));
+      expect(store.findOverlapping).toHaveBeenCalledWith(expect.any(Date), expect.any(Date));
+    });
+  });
+});
+
+import {
+  describe as describeOrgScope,
+  it as itOrgScope,
+  expect as expectOrgScope,
+  vi as viOrgScope,
+} from "vitest";
+import type { LocalBookingStore as LocalBookingStoreOrgScope } from "./local-calendar-provider.js";
+import { LocalCalendarProvider as LocalCalendarProviderOrgScope } from "./local-calendar-provider.js";
+
+const __businessHoursForOrgScope = {
+  timezone: "Asia/Singapore",
+  days: [{ day: 1, open: "09:00", close: "17:00" }],
+  defaultDurationMinutes: 30,
+  bufferMinutes: 0,
+  slotIncrementMinutes: 30,
+} as never;
+
+describeOrgScope("LocalCalendarProvider listAvailableSlots org scoping", () => {
+  itOrgScope("does not call findOverlapping with an orgId argument", async () => {
+    const findOverlapping = viOrgScope.fn().mockResolvedValue([]);
+    const store: LocalBookingStoreOrgScope = {
+      findOverlapping,
+      createInTransaction: viOrgScope.fn(),
+      findById: viOrgScope.fn(),
+      cancel: viOrgScope.fn(),
+      reschedule: viOrgScope.fn(),
+    };
+    const provider = new LocalCalendarProviderOrgScope({
+      businessHours: __businessHoursForOrgScope,
+      bookingStore: store,
+    });
+
+    await provider.listAvailableSlots({
+      dateFrom: "2026-05-01T00:00:00Z",
+      dateTo: "2026-05-02T00:00:00Z",
+      durationMinutes: 30,
+      bufferMinutes: 0,
+    } as never);
+
+    expectOrgScope(findOverlapping).toHaveBeenCalledTimes(1);
+    const args = findOverlapping.mock.calls[0]!;
+    expectOrgScope(args).toHaveLength(2);
+    expectOrgScope(args[0]).toBeInstanceOf(Date);
+    expectOrgScope(args[1]).toBeInstanceOf(Date);
+  });
+});
+
+describe("LocalCalendarProvider emailSender wiring", () => {
+  function makeStoreForEmailTests() {
+    return {
+      findOverlapping: vi.fn().mockResolvedValue([]),
+      createInTransaction: vi.fn().mockResolvedValue({ id: "bk-1" }),
+      findById: vi.fn().mockResolvedValue(null),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      reschedule: vi.fn().mockResolvedValue({ id: "bk-1" }),
+    };
+  }
+
+  it("invokes emailSender exactly once when attendeeEmail set", async () => {
+    const emailSender = vi.fn().mockResolvedValue(undefined);
+    const provider = new LocalCalendarProvider({
+      businessHours: BUSINESS_HOURS,
+      bookingStore: makeStoreForEmailTests(),
+      emailSender,
+    });
+
+    await provider.createBooking({
+      organizationId: "org-1",
+      contactId: "contact-1",
+      service: "Consultation",
+      slot: { start: "2026-05-01T10:00:00Z", end: "2026-05-01T11:00:00Z" },
+      attendeeEmail: "lead@example.com",
+      attendeeName: "Jane",
+    } as never);
+
+    expect(emailSender).toHaveBeenCalledTimes(1);
+    expect(emailSender).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "lead@example.com",
+        attendeeName: "Jane",
+        service: "Consultation",
+        bookingId: "bk-1",
+      }),
+    );
+  });
+
+  it("calls onSendFailure when emailSender throws but still returns confirmed booking", async () => {
+    const emailSender = vi.fn().mockRejectedValue(new Error("boom"));
+    const onSendFailure = vi.fn();
+    const provider = new LocalCalendarProvider({
+      businessHours: BUSINESS_HOURS,
+      bookingStore: makeStoreForEmailTests(),
+      emailSender,
+      onSendFailure,
+    });
+
+    const result = await provider.createBooking({
+      organizationId: "org-1",
+      contactId: "contact-1",
+      service: "Consultation",
+      slot: { start: "2026-05-01T10:00:00Z", end: "2026-05-01T11:00:00Z" },
+      attendeeEmail: "lead@example.com",
+      attendeeName: "Jane",
+    } as never);
+
+    expect(result.status).toBe("confirmed");
+    expect(onSendFailure).toHaveBeenCalledWith({
+      bookingId: "bk-1",
+      error: "boom",
     });
   });
 });

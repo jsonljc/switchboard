@@ -22,11 +22,7 @@ export interface BookingConfirmationEmail {
 export type EmailSender = (email: BookingConfirmationEmail) => Promise<void>;
 
 export interface LocalBookingStore {
-  findOverlapping(
-    orgId: string,
-    startsAt: Date,
-    endsAt: Date,
-  ): Promise<Array<{ startsAt: Date; endsAt: Date }>>;
+  findOverlapping(startsAt: Date, endsAt: Date): Promise<Array<{ startsAt: Date; endsAt: Date }>>;
   createInTransaction(input: {
     organizationId: string;
     contactId: string;
@@ -70,7 +66,6 @@ export class LocalCalendarProvider implements CalendarProvider {
 
   async listAvailableSlots(query: SlotQuery): Promise<TimeSlot[]> {
     const existingBookings = await this.store.findOverlapping(
-      "",
       new Date(query.dateFrom),
       new Date(query.dateTo),
     );
