@@ -123,8 +123,11 @@ describe("provision route fixes", () => {
       process.env.CREDENTIALS_ENCRYPTION_KEY =
         process.env.CREDENTIALS_ENCRYPTION_KEY ?? "test-key-for-provision-fixes-12345678";
       delete process.env.SWITCHBOARD_CHAT_URL;
-      // Don't trigger provision-notify side effect by default to keep traces simple.
-      delete process.env.INTERNAL_API_SECRET;
+      // Task 6: chat config (CHAT_PUBLIC_URL + INTERNAL_API_SECRET) is now part
+      // of the precedence resolver. Missing INTERNAL_API_SECRET surfaces as
+      // config_error, so set it here. The default fetch mock handles
+      // provision-notify with a 200 response so it doesn't poison call traces.
+      process.env.INTERNAL_API_SECRET = "internal-secret-test";
     });
 
     afterEach(async () => {
@@ -461,6 +464,206 @@ describe("provision route fixes", () => {
       const ch0 = body.channels[0]!;
       expect(ch0.status).toBe("health_check_failed");
       expect(ch0.lastHealthCheck).toBeNull();
+    });
+
+    // ── Task 6: provision-notify hardening + status precedence resolver ──
+
+    it("returns config_error with statusDetail naming missing chat env vars", async () => {
+      delete process.env.INTERNAL_API_SECRET;
+      delete process.env.CHAT_PUBLIC_URL;
+
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; statusDetail: string | null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("config_error");
+      expect(ch0.statusDetail).toMatch(/CHAT_PUBLIC_URL/);
+      expect(ch0.statusDetail).toMatch(/INTERNAL_API_SECRET/);
+    });
+
+    it("returns config_error mentioning BOTH meta and chat gaps when all env is missing", async () => {
+      delete process.env.INTERNAL_API_SECRET;
+      delete process.env.CHAT_PUBLIC_URL;
+      delete process.env.WHATSAPP_GRAPH_TOKEN;
+      delete process.env.WHATSAPP_APP_SECRET;
+
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; statusDetail: string | null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("config_error");
+      expect(ch0.statusDetail).toMatch(/config_error_meta/);
+      expect(ch0.statusDetail).toMatch(/config_error_chat/);
+    });
+
+    it("returns active when notify succeeds on first try and all else green", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { channels: Array<{ status: string }> };
+      expect(body.channels[0]!.status).toBe("active");
+      const notifyCalls = fetchCalls.filter((c) => c.url.includes("provision-notify"));
+      expect(notifyCalls).toHaveLength(1);
+    });
+
+    it("retries notify once on failure and returns active when retry succeeds", async () => {
+      let notifyCount = 0;
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("provision-notify")) {
+          notifyCount++;
+          if (notifyCount === 1) {
+            return new Response("oops", { status: 503 });
+          }
+          return new Response("{}", { status: 200 });
+        }
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { channels: Array<{ status: string }> };
+      expect(body.channels[0]!.status).toBe("active");
+      const notifyCalls = fetchCalls.filter((c) => c.url.includes("provision-notify"));
+      expect(notifyCalls).toHaveLength(2);
+    });
+
+    it("returns pending_chat_register when notify fails on both attempts", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("provision-notify")) {
+          return new Response("nope", { status: 500 });
+        }
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; statusDetail: string | null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("pending_chat_register");
+      expect(ch0.statusDetail).toMatch(/Provision-notify failed after retry/);
+      const notifyCalls = fetchCalls.filter((c) => c.url.includes("provision-notify"));
+      expect(notifyCalls).toHaveLength(2);
+    });
+
+    it("notify failure wins over health failure (pending_chat_register)", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("debug_token")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                granular_scopes: [
+                  { scope: "whatsapp_business_management", target_ids: ["WABA_1"] },
+                ],
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (u.includes("subscribed_apps")) {
+          return new Response("{}", { status: 200 });
+        }
+        if (u.includes("provision-notify")) {
+          return new Response("nope", { status: 500 });
+        }
+        if (/graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(u)) {
+          return new Response("forbidden", { status: 401 });
+        }
+        throw new Error(`unexpected fetch ${u}`);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { channels: Array<{ status: string }> };
+      expect(body.channels[0]!.status).toBe("pending_chat_register");
     });
   });
 });

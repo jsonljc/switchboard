@@ -5,6 +5,7 @@ import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
+import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -300,165 +301,208 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             return { connection, managedChannel };
           });
 
-          // ── Meta webhook auto-registration (best-effort) ──
-          // Token model: customer-provided token (decrypted from credentials)
-          // is the userToken for /subscribed_apps. WHATSAPP_GRAPH_TOKEN is the
-          // app token used ONLY for /debug_token's access_token query param.
-          // Failure here keeps the channel record but surfaces
-          // status=pending_meta_register (Decisions 5 & 7). Task 4 introduces
-          // only this failure status; Task 6 wires the full precedence resolver.
-          let metaStatus: "registered" | "skipped" | "failed" = "skipped";
-          let metaReason: string | null = null;
-          // Lifted above the Meta block so the health-probe block (Task 5)
-          // can reuse the same customer-decrypted token + phoneNumberId.
+          // ── Task 6: per-step StepResult tracking, resolved at the end ──
+          // Each provision step collapses into a StepResult; resolveProvisionStatus
+          // applies the precedence (config_error > pending_chat_register >
+          // health_check_failed > pending_meta_register > active).
+          let metaConfig: StepResult = { kind: "ok", reason: null };
+          let chatConfig: StepResult = { kind: "ok", reason: null };
+          let metaRegister: StepResult = { kind: "ok", reason: null };
+          let healthProbe: StepResult = { kind: "ok", reason: null };
+          let chatNotify: StepResult = { kind: "ok", reason: null };
+          let webhookRegistered = false;
+          let lastHealthCheckIso: string | null = null;
+
+          // Lifted so the health probe block can reuse decrypted credentials.
           let customerToken: string | undefined;
           let customerPhoneNumberId: string | undefined;
 
+          // Chat config check applies to every channel (notify is channel-agnostic).
+          const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
+          const internalSecret = process.env.INTERNAL_API_SECRET;
+          if (!chatUrl || !internalSecret) {
+            const missing: string[] = [];
+            if (!chatUrl) missing.push("CHAT_PUBLIC_URL");
+            if (!internalSecret) missing.push("INTERNAL_API_SECRET");
+            chatConfig = {
+              kind: "fail",
+              reason: `config_error_chat: missing ${missing.join(" / ")}`,
+            };
+          }
+
+          // ── Meta webhook auto-registration (best-effort, WhatsApp only) ──
           if (ch.channel === "whatsapp") {
             const appToken = process.env.WHATSAPP_GRAPH_TOKEN;
             const verifyToken = process.env.WHATSAPP_APP_SECRET;
-            const webhookBaseUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
 
-            if (!appToken || !verifyToken || !webhookBaseUrl) {
-              metaStatus = "failed";
-              metaReason =
-                "Meta registration skipped: missing WHATSAPP_GRAPH_TOKEN / WHATSAPP_APP_SECRET / CHAT_PUBLIC_URL";
-            } else {
-              try {
-                const decrypted = decryptCredentials(encrypted) as {
-                  token?: unknown;
-                  phoneNumberId?: unknown;
-                };
-                if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
-                  customerToken = decrypted.token;
-                }
-                if (
-                  typeof decrypted.phoneNumberId === "string" &&
-                  decrypted.phoneNumberId.length > 0
-                ) {
-                  customerPhoneNumberId = decrypted.phoneNumberId;
-                }
-              } catch (decryptErr) {
-                metaStatus = "failed";
-                metaReason = `Failed to decrypt customer credentials: ${
-                  decryptErr instanceof Error ? decryptErr.message : "unknown error"
-                }`;
+            if (!appToken || !verifyToken) {
+              const missing: string[] = [];
+              if (!appToken) missing.push("WHATSAPP_GRAPH_TOKEN");
+              if (!verifyToken) missing.push("WHATSAPP_APP_SECRET");
+              metaConfig = {
+                kind: "fail",
+                reason: `config_error_meta: missing ${missing.join(" / ")}`,
+              };
+            }
+
+            // Always attempt to decrypt so the health probe can run even if
+            // meta env is missing (probe only needs customer token).
+            try {
+              const decrypted = decryptCredentials(encrypted) as {
+                token?: unknown;
+                phoneNumberId?: unknown;
+              };
+              if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
+                customerToken = decrypted.token;
               }
+              if (
+                typeof decrypted.phoneNumberId === "string" &&
+                decrypted.phoneNumberId.length > 0
+              ) {
+                customerPhoneNumberId = decrypted.phoneNumberId;
+              }
+            } catch (decryptErr) {
+              metaConfig = {
+                kind: "fail",
+                reason: `Failed to decrypt customer credentials: ${
+                  decryptErr instanceof Error ? decryptErr.message : "unknown error"
+                }`,
+              };
+            }
 
-              if (metaStatus === "skipped") {
-                if (!customerToken) {
-                  metaStatus = "failed";
-                  metaReason =
-                    "Meta registration skipped: customer credentials missing 'token' field";
+            // Run Meta registration only when we have meta env, chat url (for
+            // building the webhook URL), and a customer token.
+            if (metaConfig.kind === "ok" && appToken && verifyToken) {
+              if (!chatUrl) {
+                // chatConfig already failed above; skip meta call (no URL to register).
+                metaRegister = {
+                  kind: "fail",
+                  reason: "Meta registration skipped: chat config missing webhook base URL",
+                };
+              } else if (!customerToken) {
+                metaRegister = {
+                  kind: "fail",
+                  reason: "Meta registration skipped: customer credentials missing 'token' field",
+                };
+              } else {
+                const wabaResult = await fetchWabaIdFromToken({
+                  apiVersion,
+                  appToken,
+                  userToken: customerToken,
+                });
+                if (!wabaResult.ok) {
+                  metaRegister = {
+                    kind: "fail",
+                    reason: `Meta WABA lookup (/debug_token) failed: ${wabaResult.reason}`,
+                  };
                 } else {
-                  const wabaResult = await fetchWabaIdFromToken({
+                  const reg = await registerWebhookOverride({
                     apiVersion,
-                    appToken,
                     userToken: customerToken,
+                    wabaId: wabaResult.wabaId,
+                    webhookUrl: `${chatUrl}${result.managedChannel.webhookPath}`,
+                    verifyToken,
                   });
-                  if (!wabaResult.ok) {
-                    metaStatus = "failed";
-                    metaReason = `Meta WABA lookup (/debug_token) failed: ${wabaResult.reason}`;
+                  if (reg.ok) {
+                    metaRegister = { kind: "ok", reason: null };
+                    webhookRegistered = true;
                   } else {
-                    const reg = await registerWebhookOverride({
-                      apiVersion,
-                      userToken: customerToken,
-                      wabaId: wabaResult.wabaId,
-                      webhookUrl: `${webhookBaseUrl}${result.managedChannel.webhookPath}`,
-                      verifyToken,
-                    });
-                    if (reg.ok) {
-                      metaStatus = "registered";
-                    } else {
-                      metaStatus = "failed";
-                      metaReason = `Meta /subscribed_apps failed: ${reg.reason}`;
-                    }
+                    metaRegister = {
+                      kind: "fail",
+                      reason: `Meta /subscribed_apps failed: ${reg.reason}`,
+                    };
                   }
                 }
               }
+            } else if (metaConfig.kind === "fail") {
+              // Meta env missing — register can't run. Mark failed; resolver
+              // will pick config_error (precedes pending_meta_register).
+              metaRegister = {
+                kind: "fail",
+                reason: "Meta registration skipped: meta config missing",
+              };
             }
-          }
 
-          // ── Synchronous WhatsApp health probe (Task 5, best-effort) ──
-          // Probe success → write Connection.lastHealthCheck (and ManagedChannel.lastHealthCheck).
-          // Probe failure → keep records, surface status=health_check_failed below.
-          // Local 3-state precedence (health > meta > active); Task 6 owns the
-          // full 5-state resolver (config_error / pending_chat_register /
-          // health_check_failed / pending_meta_register / active).
-          let healthStatus: "ok" | "skipped" | "failed" = "skipped";
-          let healthReason: string | null = null;
-          let lastHealthCheckIso: string | null = null;
-
-          if (ch.channel === "whatsapp" && customerToken && customerPhoneNumberId) {
-            const probe = await probeWhatsAppHealth({
-              apiVersion,
-              userToken: customerToken,
-              phoneNumberId: customerPhoneNumberId,
-            });
-            if (probe.ok) {
-              healthStatus = "ok";
-              lastHealthCheckIso = probe.checkedAt.toISOString();
-              await app.prisma.connection.update({
-                where: { id: result.connection.id },
-                data: { lastHealthCheck: probe.checkedAt },
+            // ── Synchronous WhatsApp health probe (best-effort) ──
+            if (customerToken && customerPhoneNumberId) {
+              const probe = await probeWhatsAppHealth({
+                apiVersion,
+                userToken: customerToken,
+                phoneNumberId: customerPhoneNumberId,
               });
-              await app.prisma.managedChannel.update({
-                where: { id: result.managedChannel.id },
-                data: { lastHealthCheck: probe.checkedAt },
-              });
-            } else {
-              healthStatus = "failed";
-              healthReason = `Health probe failed: ${probe.reason}`;
-            }
-          }
-
-          // Provision-notify (outside transaction — side effect)
-          const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
-          const internalSecret = process.env.INTERNAL_API_SECRET;
-          if (chatUrl && internalSecret) {
-            try {
-              const notifyRes = await fetch(`${chatUrl}/internal/provision-notify`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${internalSecret}`,
-                },
-                body: JSON.stringify({ managedChannelId: result.managedChannel.id }),
-              });
-              if (!notifyRes.ok) {
-                console.warn(
-                  `[provision] Chat server notify returned ${notifyRes.status} for channel ${result.managedChannel.id}`,
-                );
+              if (probe.ok) {
+                lastHealthCheckIso = probe.checkedAt.toISOString();
+                await app.prisma.connection.update({
+                  where: { id: result.connection.id },
+                  data: { lastHealthCheck: probe.checkedAt },
+                });
+                await app.prisma.managedChannel.update({
+                  where: { id: result.managedChannel.id },
+                  data: { lastHealthCheck: probe.checkedAt },
+                });
+              } else {
+                healthProbe = {
+                  kind: "fail",
+                  reason: `Health probe failed: ${probe.reason}`,
+                };
               }
-            } catch (notifyErr) {
-              console.warn(
-                `[provision] Failed to notify chat server for channel ${result.managedChannel.id}:`,
-                notifyErr instanceof Error ? notifyErr.message : notifyErr,
-              );
             }
           }
 
-          // Local 3-state precedence: health > meta > active.
-          // Task 6 will replace this with the full 5-state resolver.
-          let finalStatus: "active" | "health_check_failed" | "pending_meta_register" = "active";
-          let finalDetail: string | null = null;
-          if (healthStatus === "failed") {
-            finalStatus = "health_check_failed";
-            finalDetail = healthReason;
-          } else if (metaStatus === "failed") {
-            finalStatus = "pending_meta_register";
-            finalDetail = metaReason;
+          // ── Provision-notify (outside transaction, hardened with one retry) ──
+          if (chatConfig.kind === "ok" && chatUrl && internalSecret) {
+            let notifyAttempt = 0;
+            let notifyOk = false;
+            let lastNotifyError: string | null = null;
+            while (notifyAttempt < 2 && !notifyOk) {
+              if (notifyAttempt > 0) {
+                await new Promise((r) => setTimeout(r, 200));
+              }
+              notifyAttempt++;
+              try {
+                const notifyRes = await fetch(`${chatUrl}/internal/provision-notify`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${internalSecret}`,
+                  },
+                  body: JSON.stringify({ managedChannelId: result.managedChannel.id }),
+                });
+                if (notifyRes.ok) {
+                  notifyOk = true;
+                } else {
+                  lastNotifyError = `Provision-notify HTTP ${notifyRes.status}`;
+                }
+              } catch (notifyErr) {
+                lastNotifyError = notifyErr instanceof Error ? notifyErr.message : "fetch error";
+              }
+            }
+            if (!notifyOk) {
+              chatNotify = {
+                kind: "fail",
+                reason: `Provision-notify failed after retry: ${lastNotifyError}`,
+              };
+            }
           }
+
+          const resolved = resolveProvisionStatus({
+            metaConfig,
+            chatConfig,
+            metaRegister,
+            healthProbe,
+            chatNotify,
+            channel: ch.channel as "whatsapp" | "telegram" | "slack",
+          });
 
           results.push({
             id: result.managedChannel.id,
             channel: result.managedChannel.channel,
             botUsername: result.managedChannel.botUsername,
             webhookPath: result.managedChannel.webhookPath,
-            webhookRegistered: metaStatus === "registered",
-            status: finalStatus,
-            statusDetail: finalDetail,
-            lastHealthCheck: finalStatus === "active" ? lastHealthCheckIso : null,
+            webhookRegistered,
+            status: resolved.status,
+            statusDetail: resolved.statusDetail,
+            lastHealthCheck: resolved.status === "active" ? lastHealthCheckIso : null,
             createdAt: result.managedChannel.createdAt.toISOString(),
           });
         } catch (err: unknown) {
