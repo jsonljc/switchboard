@@ -214,6 +214,33 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       const results = [];
       for (const ch of channels) {
         try {
+          // ── Input validation: WhatsApp requires both token + phoneNumberId ──
+          // Without this guard, a WhatsApp request with token-only would let
+          // metaRegister succeed (it derives WABA from /debug_token, not
+          // phoneNumberId) and silently skip the health probe (gated on
+          // phoneNumberId being truthy), producing a fake `active` channel
+          // whose inbound webhooks could never resolve. Fail fast at the
+          // boundary instead.
+          if (ch.channel === "whatsapp") {
+            const missing: string[] = [];
+            if (!ch.token || ch.token.length === 0) missing.push("token");
+            if (!ch.phoneNumberId || ch.phoneNumberId.length === 0) missing.push("phoneNumberId");
+            if (missing.length > 0) {
+              results.push({
+                id: null,
+                channel: "whatsapp",
+                botUsername: null,
+                webhookPath: null,
+                webhookRegistered: false,
+                status: "error",
+                statusDetail: `Missing required WhatsApp credentials: ${missing.join(", ")}.`,
+                lastHealthCheck: null,
+                createdAt: new Date().toISOString(),
+              });
+              continue;
+            }
+          }
+
           // ── Task 10: v1 channel-limit precheck ──
           // The schema enforces @@unique([organizationId, channel]) so without
           // this guard a same-channel retry surfaces as a Prisma 500. The

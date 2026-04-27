@@ -582,6 +582,74 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       expect(ch.statusDetail).toMatch(/401|health probe/i);
       expect(ch.lastHealthCheck).toBeNull();
     });
+
+    it("rejects WhatsApp request missing phoneNumberId before any side effects fire", async () => {
+      const sideEffectFetch = vi.fn(async () => {
+        throw new Error("no fetch should occur for an invalid input");
+      }) as typeof globalThis.fetch;
+      globalThis.fetch = sideEffectFetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/organizations/${ORG_ID}/provision`,
+        headers: { authorization: "Bearer test", "content-type": "application/json" },
+        payload: {
+          channels: [
+            {
+              channel: "whatsapp",
+              token: CUSTOMER_TOKEN, // phoneNumberId omitted
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      const ch = body.channels[0];
+      expect(ch.status).toBe("error");
+      expect(ch.statusDetail).toContain("phoneNumberId");
+      expect(ch.id).toBeNull();
+      expect(ch.lastHealthCheck).toBeNull();
+      // No managed channel created, no Meta calls, no health probe, no notify.
+      expect(prisma._tx.managedChannel.create).not.toHaveBeenCalled();
+      expect(prisma._tx.connection.create).not.toHaveBeenCalled();
+      expect(sideEffectFetch).not.toHaveBeenCalled();
+    });
+
+    it("rejects WhatsApp request missing token before any side effects fire", async () => {
+      const sideEffectFetch = vi.fn(async () => {
+        throw new Error("no fetch should occur for an invalid input");
+      }) as typeof globalThis.fetch;
+      globalThis.fetch = sideEffectFetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/organizations/${ORG_ID}/provision`,
+        headers: { authorization: "Bearer test", "content-type": "application/json" },
+        payload: {
+          channels: [
+            {
+              channel: "whatsapp",
+              phoneNumberId: PHONE_NUMBER_ID, // token omitted
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      const ch = body.channels[0];
+      expect(ch.status).toBe("error");
+      expect(ch.statusDetail).toContain("token");
+      expect(prisma._tx.managedChannel.create).not.toHaveBeenCalled();
+      expect(sideEffectFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe("Alex marketplace seeding (A7, standalone)", () => {
