@@ -217,6 +217,8 @@ export async function bootstrapSkillMode(
       deploymentId: ctx.deployment.deploymentId,
       orgId: ctx.workUnit.organizationId,
       contactId: ctx.workUnit.parameters.contactId as string,
+      phone: ctx.workUnit.parameters.phone as string | undefined,
+      channel: ctx.workUnit.parameters.channel as string | undefined,
     };
     return alexBuilder(agentContext, config, ctx.stores);
   });
