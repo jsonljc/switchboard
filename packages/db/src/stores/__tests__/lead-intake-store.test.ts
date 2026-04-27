@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "../../index.js";
 import { PrismaLeadIntakeStore } from "../lead-intake-store.js";
 
 // Integration test against a real Postgres. Requires DATABASE_URL to be set
@@ -11,7 +11,7 @@ const ORG_ID = "test-org:lead-intake-store";
 const DEPLOYMENT_ID = "test-dep:lead-intake-store";
 
 describe.skipIf(!process.env["DATABASE_URL"])("PrismaLeadIntakeStore (integration)", () => {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const store = new PrismaLeadIntakeStore(prisma);
 
   beforeAll(async () => {

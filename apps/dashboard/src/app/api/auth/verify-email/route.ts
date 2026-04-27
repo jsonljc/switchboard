@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { verifyEmailToken } from "@/lib/email";
 
 const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
-const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new PrismaClient());
+const prisma =
+  globalForPrisma.__prisma ??
+  (globalForPrisma.__prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
+  }));
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");

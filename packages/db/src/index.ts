@@ -1,22 +1,38 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+/**
+ * Create a fresh PrismaClient with the postgres driver adapter wired.
+ * Prisma 7 requires an adapter to be passed at instantiation time —
+ * `datasource.url` is no longer supported in schema files.
+ */
+export function createPrismaClient(): PrismaClient {
+  // Defer URL validation: the adapter accepts an empty connection string at
+  // construction; first query will fail at runtime if DATABASE_URL is missing.
+  // This keeps tests that mock @prisma/client free of env-stub plumbing.
+  const url = process.env.DATABASE_URL ?? "";
+  const adapter = new PrismaPg({ connectionString: url });
+  return new PrismaClient({
+    adapter,
+    log:
+      process.env.NODE_ENV === "production"
+        ? [
+            { emit: "event", level: "error" },
+            { emit: "event", level: "warn" },
+          ]
+        : [
+            { emit: "stdout", level: "query" },
+            { emit: "stdout", level: "error" },
+            { emit: "stdout", level: "warn" },
+          ],
+  });
+}
 
 let prisma: PrismaClient;
 
 export function getDb(): PrismaClient {
   if (!prisma) {
-    prisma = new PrismaClient({
-      log:
-        process.env.NODE_ENV === "production"
-          ? [
-              { emit: "event", level: "error" },
-              { emit: "event", level: "warn" },
-            ]
-          : [
-              { emit: "stdout", level: "query" },
-              { emit: "stdout", level: "error" },
-              { emit: "stdout", level: "warn" },
-            ],
-    });
+    prisma = createPrismaClient();
     if (process.env.NODE_ENV === "production") {
       prisma.$on("error" as never, (e: unknown) => {
         console.error("[prisma] Error:", e);

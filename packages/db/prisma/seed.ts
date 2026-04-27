@@ -1,11 +1,11 @@
 /* eslint-disable max-lines, no-console */
-import { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "../src/index.js";
 import { createCipheriv, createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
 import { seedKnowledge } from "./seed-knowledge.js";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 // ── Encryption for dev seed data ──
 // WARNING: This key is for dev seeding only. Never use a static key in production.

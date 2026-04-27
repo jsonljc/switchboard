@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "@/lib/password";
 import { provisionDashboardUser } from "@/lib/provision-dashboard-user";
 import { validateRegistration } from "@/lib/register";
 import { sendVerificationEmail, checkRegistrationRateLimit } from "@/lib/email";
 
 const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
-const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new PrismaClient());
+const prisma =
+  globalForPrisma.__prisma ??
+  (globalForPrisma.__prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
+  }));
 
 const OPEN_MODES = new Set(["beta", "public"]);
 

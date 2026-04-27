@@ -22,14 +22,16 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@prisma/client": "^6.3.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@switchboard/core": "workspace:*",
-    "@switchboard/schemas": "workspace:*"
+    "@switchboard/schemas": "workspace:*",
+    "pg": "^8"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "bcryptjs": "^3.0.3",
-    "prisma": "^6.3.0",
+    "prisma": "^7.8.0",
     "tsx": "^4.7.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"

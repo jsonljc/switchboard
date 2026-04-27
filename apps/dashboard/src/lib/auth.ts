@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { assertSafeDashboardAuthEnv } from "./dev-auth";
 import { verifyPassword } from "./password";
 import { provisionDashboardUser } from "./provision-dashboard-user";
@@ -20,7 +21,9 @@ if (
   );
 }
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
+});
 
 assertSafeDashboardAuthEnv();
 

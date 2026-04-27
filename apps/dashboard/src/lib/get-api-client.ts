@@ -1,11 +1,16 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { decryptApiKey } from "./crypto";
 import { SwitchboardClient } from "./api-client";
 import { isDevBypassEnabled } from "./dev-auth";
 import { requireSession } from "./session";
 
 const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
-const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new PrismaClient());
+const prisma =
+  globalForPrisma.__prisma ??
+  (globalForPrisma.__prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
+  }));
 
 export async function getApiClient(): Promise<SwitchboardClient> {
   const session = await requireSession();
