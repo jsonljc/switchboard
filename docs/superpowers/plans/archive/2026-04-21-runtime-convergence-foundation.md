@@ -291,16 +291,17 @@ Expected: PASS. The new test should prove deployment resolution now happens insi
 
 ### Step 6: Commit
 
-- [ ] ````bash
-          git add \
-            packages/core/src/platform/canonical-request.ts \
-            packages/core/src/platform/work-unit.ts \
-            packages/core/src/platform/platform-ingress.ts \
-            packages/core/src/platform/index.ts \
-            packages/core/src/platform/__tests__/platform-ingress.test.ts
-          git commit -m "feat: add canonical mutating request contract"
-          ```
-      ````
+- [ ] `````bash
+              git add \
+                packages/core/src/platform/canonical-request.ts \
+                packages/core/src/platform/work-unit.ts \
+                packages/core/src/platform/platform-ingress.ts \
+                packages/core/src/platform/index.ts \
+                packages/core/src/platform/__tests__/platform-ingress.test.ts
+              git commit -m "feat: add canonical mutating request contract"
+              ```
+          ````
+      `````
 
 ````
 
@@ -531,20 +532,21 @@ Expected: PASS. API mutation routes should no longer pass a pre-resolved deploym
 
 ### Step 5: Commit
 
-- [ ] ````bash
-          git add \
-            apps/api/src/routes/execute.ts \
-            apps/api/src/routes/actions.ts \
-            apps/api/src/routes/ingress.ts \
-            apps/api/src/app.ts \
-            apps/api/src/bootstrap/platform-deployment-resolver.ts \
-            apps/api/src/__tests__/runtime-convergence-api.test.ts \
-            apps/api/src/__tests__/ingress-boundary.test.ts \
-            apps/api/src/__tests__/test-server.ts
-          git rm apps/api/src/utils/resolve-deployment.ts
-          git commit -m "refactor: move deployment resolution into platform ingress"
-          ```
-      ````
+- [ ] `````bash
+              git add \
+                apps/api/src/routes/execute.ts \
+                apps/api/src/routes/actions.ts \
+                apps/api/src/routes/ingress.ts \
+                apps/api/src/app.ts \
+                apps/api/src/bootstrap/platform-deployment-resolver.ts \
+                apps/api/src/__tests__/runtime-convergence-api.test.ts \
+                apps/api/src/__tests__/ingress-boundary.test.ts \
+                apps/api/src/__tests__/test-server.ts
+              git rm apps/api/src/utils/resolve-deployment.ts
+              git commit -m "refactor: move deployment resolution into platform ingress"
+              ```
+          ````
+      `````
 
 ````
 
@@ -675,15 +677,16 @@ Expected: PASS. The API adapter test should still pass, and production mode shou
 
 ### Step 5: Commit
 
-- [ ] ````bash
-          git add \
-            apps/mcp-server/src/adapters/api-execution-adapter.ts \
-            apps/mcp-server/src/main.ts \
-            apps/mcp-server/src/__tests__/api-execution-adapter.test.ts \
-            apps/mcp-server/src/__tests__/production-mutation-guard.test.ts
-          git commit -m "fix: require api-backed mutation for mcp production mode"
-          ```
-      ````
+- [ ] `````bash
+              git add \
+                apps/mcp-server/src/adapters/api-execution-adapter.ts \
+                apps/mcp-server/src/main.ts \
+                apps/mcp-server/src/__tests__/api-execution-adapter.test.ts \
+                apps/mcp-server/src/__tests__/production-mutation-guard.test.ts
+              git commit -m "fix: require api-backed mutation for mcp production mode"
+              ```
+          ````
+      `````
 
 ````
 
@@ -763,14 +766,15 @@ Expected: PASS.
 
 ### Step 5: Commit
 
-- [ ] ````bash
-          git add \
-            apps/api/src/routes/ingress.ts \
-            apps/api/src/__tests__/ingress-boundary.test.ts \
-            apps/mcp-server/src/__tests__/dual-mode-integration.test.ts
-          git commit -m "test: add convergence guardrails for ingress-first mutation"
-          ```
-      ````
+- [ ] `````bash
+              git add \
+                apps/api/src/routes/ingress.ts \
+                apps/api/src/__tests__/ingress-boundary.test.ts \
+                apps/mcp-server/src/__tests__/dual-mode-integration.test.ts
+              git commit -m "test: add convergence guardrails for ingress-first mutation"
+              ```
+          ````
+      `````
 
 ````
 
@@ -820,11 +824,12 @@ Expected: PASS. API mutation semantics, approval state, and ingress trace behavi
 
 ### Step 3: Commit the verification checkpoint
 
-- [ ] ````bash
-          git add -A
-          git commit -m "test: verify runtime convergence foundation slice"
-          ```
-      ````
+- [ ] `````bash
+              git add -A
+              git commit -m "test: verify runtime convergence foundation slice"
+              ```
+          ````
+      `````
 
 ```
 

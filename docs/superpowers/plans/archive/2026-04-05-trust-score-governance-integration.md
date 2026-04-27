@@ -574,14 +574,12 @@ describe("resolveEffectiveIdentity with trustAdapter", () => {
     } as unknown as TrustScoreAdapter;
 
     const mockTracker = {
-      getAdjustment: vi
-        .fn()
-        .mockResolvedValue({
-          actionType: "send_email",
-          score: 85,
-          shouldTrust: true,
-          shouldEscalate: false,
-        }),
+      getAdjustment: vi.fn().mockResolvedValue({
+        actionType: "send_email",
+        score: 85,
+        shouldTrust: true,
+        shouldEscalate: false,
+      }),
     };
 
     const ctx = makeMinimalContext({

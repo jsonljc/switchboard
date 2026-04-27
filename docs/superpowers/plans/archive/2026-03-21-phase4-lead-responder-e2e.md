@@ -12,26 +12,27 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|------|--------|---------------|
-| `packages/agents/src/agents/lead-responder/tone-presets.ts` | Create | 3 tone preset system prompt templates + type |
-| `packages/agents/src/agents/lead-responder/language-directives.ts` | Create | 4 language directive strings + type |
-| `packages/agents/src/agents/lead-responder/prompt-builder.ts` | Create | Assembles `ConversationPrompt` from tone, language, KB chunks, history |
-| `packages/agents/src/agents/lead-responder/types.ts` | Modify | Add LLM/RAG/conversation deps to `LeadResponderDeps` |
-| `packages/agents/src/agents/lead-responder/handler.ts` | Modify | Rewrite to support LLM-powered `message.received` flow |
-| `packages/agents/src/agents/lead-responder/port.ts` | Modify | Add new config fields (tonePreset, language, confidenceThreshold, bookingLink) |
-| `packages/agents/src/agents/lead-responder/index.ts` | Modify | Re-export new types |
-| `packages/agents/src/agents/lead-responder/__tests__/tone-presets.test.ts` | Create | Tests for tone preset resolution |
-| `packages/agents/src/agents/lead-responder/__tests__/language-directives.test.ts` | Create | Tests for language directive resolution |
-| `packages/agents/src/agents/lead-responder/__tests__/prompt-builder.test.ts` | Create | Tests for prompt assembly |
-| `packages/agents/src/agents/lead-responder/__tests__/handler.test.ts` | Modify | Add LLM conversation flow tests, test mode tests |
-| `packages/agents/src/index.ts` | Modify | Re-export new types (TonePreset, SupportedLanguage) |
+| File                                                                              | Action | Responsibility                                                                 |
+| --------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| `packages/agents/src/agents/lead-responder/tone-presets.ts`                       | Create | 3 tone preset system prompt templates + type                                   |
+| `packages/agents/src/agents/lead-responder/language-directives.ts`                | Create | 4 language directive strings + type                                            |
+| `packages/agents/src/agents/lead-responder/prompt-builder.ts`                     | Create | Assembles `ConversationPrompt` from tone, language, KB chunks, history         |
+| `packages/agents/src/agents/lead-responder/types.ts`                              | Modify | Add LLM/RAG/conversation deps to `LeadResponderDeps`                           |
+| `packages/agents/src/agents/lead-responder/handler.ts`                            | Modify | Rewrite to support LLM-powered `message.received` flow                         |
+| `packages/agents/src/agents/lead-responder/port.ts`                               | Modify | Add new config fields (tonePreset, language, confidenceThreshold, bookingLink) |
+| `packages/agents/src/agents/lead-responder/index.ts`                              | Modify | Re-export new types                                                            |
+| `packages/agents/src/agents/lead-responder/__tests__/tone-presets.test.ts`        | Create | Tests for tone preset resolution                                               |
+| `packages/agents/src/agents/lead-responder/__tests__/language-directives.test.ts` | Create | Tests for language directive resolution                                        |
+| `packages/agents/src/agents/lead-responder/__tests__/prompt-builder.test.ts`      | Create | Tests for prompt assembly                                                      |
+| `packages/agents/src/agents/lead-responder/__tests__/handler.test.ts`             | Modify | Add LLM conversation flow tests, test mode tests                               |
+| `packages/agents/src/index.ts`                                                    | Modify | Re-export new types (TonePreset, SupportedLanguage)                            |
 
 ---
 
 ### Task 1: Tone Presets
 
 **Files:**
+
 - Create: `packages/agents/src/agents/lead-responder/tone-presets.ts`
 - Test: `packages/agents/src/agents/lead-responder/__tests__/tone-presets.test.ts`
 
@@ -130,6 +131,7 @@ sl commit -m "feat(agents): add tone preset templates for Lead Responder" --reas
 ### Task 2: Language Directives
 
 **Files:**
+
 - Create: `packages/agents/src/agents/lead-responder/language-directives.ts`
 - Test: `packages/agents/src/agents/lead-responder/__tests__/language-directives.test.ts`
 
@@ -203,7 +205,8 @@ export const LANGUAGE_DIRECTIVES: Record<SupportedLanguage, string> = {
 
   zh: "Respond in Mandarin Chinese (简体中文). Use natural, conversational Mandarin. If the client writes in English, you may respond in the language they used.",
 
-  "en-sg": "Respond in Singlish (Singapore English). Use natural Singlish expressions, particles (lah, leh, lor, meh), and local phrasing. Keep it authentic but understandable. If the client writes in formal English, match their register.",
+  "en-sg":
+    "Respond in Singlish (Singapore English). Use natural Singlish expressions, particles (lah, leh, lor, meh), and local phrasing. Keep it authentic but understandable. If the client writes in formal English, match their register.",
 };
 
 const DEFAULT_LANGUAGE: SupportedLanguage = "en";
@@ -230,6 +233,7 @@ sl commit -m "feat(agents): add language directive templates for Lead Responder"
 ### Task 3: Prompt Builder
 
 **Files:**
+
 - Create: `packages/agents/src/agents/lead-responder/prompt-builder.ts`
 - Test: `packages/agents/src/agents/lead-responder/__tests__/prompt-builder.test.ts`
 
@@ -419,6 +423,7 @@ sl commit -m "feat(agents): add prompt builder for Lead Responder LLM calls" --r
 ### Task 4: Update LeadResponderDeps and Port
 
 **Files:**
+
 - Modify: `packages/agents/src/agents/lead-responder/types.ts`
 - Modify: `packages/agents/src/agents/lead-responder/port.ts`
 - Modify: `packages/agents/src/agents/lead-responder/index.ts`
@@ -495,7 +500,11 @@ export type {
   FAQMatch,
 } from "./types.js";
 export { getTonePreset, TONE_PRESETS, type TonePreset } from "./tone-presets.js";
-export { getLanguageDirective, LANGUAGE_DIRECTIVES, type SupportedLanguage } from "./language-directives.js";
+export {
+  getLanguageDirective,
+  LANGUAGE_DIRECTIVES,
+  type SupportedLanguage,
+} from "./language-directives.js";
 export { buildConversationPrompt, type PromptBuildInput } from "./prompt-builder.js";
 ```
 
@@ -533,6 +542,7 @@ sl commit -m "feat(agents): add LLM conversation deps and config to Lead Respond
 ### Task 5: Rewrite Lead Responder Handler
 
 **Files:**
+
 - Modify: `packages/agents/src/agents/lead-responder/handler.ts`
 - Modify: `packages/agents/src/agents/lead-responder/__tests__/handler.test.ts`
 
@@ -556,7 +566,13 @@ Add the following tests to `packages/agents/src/agents/lead-responder/__tests__/
 
 ```typescript
 // ADD these imports at the top:
-import type { LLMAdapter, ConversationPrompt, LLMReply, ConversationStore, Message } from "@switchboard/core";
+import type {
+  LLMAdapter,
+  ConversationPrompt,
+  LLMReply,
+  ConversationStore,
+  Message,
+} from "@switchboard/core";
 import type { KnowledgeRetriever, RetrieveOptions } from "../../../knowledge/retrieval.js";
 import type { RetrievedChunk } from "@switchboard/core";
 import type { LeadResponderConversationDeps } from "../types.js";
@@ -625,9 +641,7 @@ describe("LLM conversation flow", () => {
     const result = await handler.handle(event, {}, { organizationId: "org-1" });
 
     // Should emit a messaging.whatsapp.send action
-    const sendAction = result.actions.find(
-      (a) => a.actionType === "messaging.whatsapp.send",
-    );
+    const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeDefined();
     expect(sendAction!.parameters.content).toContain("Thanks for your interest");
 
@@ -723,9 +737,11 @@ describe("LLM conversation flow", () => {
         generateReply: vi.fn().mockResolvedValue({ reply: "I'm not sure...", confidence: 0.3 }),
       },
       retriever: {
-        retrieve: vi.fn().mockResolvedValue([
-          { content: "Some info", sourceType: "document" as const, similarity: 0.5 },
-        ]),
+        retrieve: vi
+          .fn()
+          .mockResolvedValue([
+            { content: "Some info", sourceType: "document" as const, similarity: 0.5 },
+          ]),
       } as unknown as KnowledgeRetriever,
     });
 
@@ -735,14 +751,16 @@ describe("LLM conversation flow", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(event, { confidenceThreshold: 0.6 }, { organizationId: "org-1" });
+    const result = await handler.handle(
+      event,
+      { confidenceThreshold: 0.6 },
+      { organizationId: "org-1" },
+    );
 
     // Should escalate, not send reply
     const escalation = result.events.find((e) => e.eventType === "conversation.escalated");
     expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(
-      expect.objectContaining({ reason: "low_confidence" }),
-    );
+    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "low_confidence" }));
 
     // Should NOT send a WhatsApp message
     const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
@@ -857,9 +875,7 @@ describe("LLM conversation flow", () => {
 
     const escalation = result.events.find((e) => e.eventType === "conversation.escalated");
     expect(escalation).toBeDefined();
-    expect(escalation!.payload).toEqual(
-      expect.objectContaining({ reason: "max_turns_exceeded" }),
-    );
+    expect(escalation!.payload).toEqual(expect.objectContaining({ reason: "max_turns_exceeded" }));
   });
 
   it("falls back to scoring-only for message.received when no conversation deps", async () => {
@@ -1296,6 +1312,7 @@ sl commit -m "feat(agents): rewrite Lead Responder handler with LLM conversation
 ### Task 6: Test Mode and Correction Ingestion Tests
 
 **Files:**
+
 - Modify: `packages/agents/src/agents/lead-responder/__tests__/handler.test.ts`
 
 These tests validate the owner test chat mode (Phase 4 deliverable).
@@ -1314,11 +1331,7 @@ describe("test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "test" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "test" }, { organizationId: "org-1" });
 
     const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
@@ -1332,11 +1345,7 @@ describe("test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "draft" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "draft" }, { organizationId: "org-1" });
 
     const sendAction = result.actions.find((a) => a.actionType === "messaging.whatsapp.send");
     expect(sendAction).toBeUndefined();
@@ -1367,11 +1376,7 @@ describe("test mode", () => {
     });
 
     const event = makeMessageReceivedEvent();
-    const result = await handler.handle(
-      event,
-      { mode: "test" },
-      { organizationId: "org-1" },
-    );
+    const result = await handler.handle(event, { mode: "test" }, { organizationId: "org-1" });
 
     expect(result.state?.reply).toBeDefined();
     expect(result.state?.reply).toContain("Thanks for your interest");
