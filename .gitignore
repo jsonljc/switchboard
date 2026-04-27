@@ -21,3 +21,6 @@ PLAN-V1.md
 
 # Git worktrees — each session works in an isolated branch checkout
 .worktrees/
+
+# Obsidian editor state (workspace layout, view state, etc.)
+.obsidian/
