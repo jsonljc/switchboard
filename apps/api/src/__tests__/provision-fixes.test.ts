@@ -87,7 +87,14 @@ describe("provision route fixes", () => {
       return {
         $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
         connection: { update: vi.fn().mockResolvedValue({ ...connection }) },
-        managedChannel: { update: vi.fn().mockResolvedValue({ ...managedChannel }) },
+        managedChannel: {
+          update: vi.fn().mockResolvedValue({ ...managedChannel }),
+          // Task 10: route precheck calls findFirst at the top of the per-
+          // channel loop. These failure-path tests run on first-time
+          // provisions, so returning null short-circuits the precheck and
+          // preserves their existing semantics.
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
         _tx: tx,
       };
     }

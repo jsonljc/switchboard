@@ -98,8 +98,21 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       createdAt: new Date("2026-04-27T00:00:00.000Z"),
       updatedAt: new Date("2026-04-27T00:00:00.000Z"),
     };
+    // ── Task 10: v1-limit precheck state ──
+    // The route now calls managedChannel.findFirst at the top of the per-
+    // channel loop. We model "first request creates, second request finds"
+    // by tracking creates in a closure: findFirst returns null until the
+    // create runs, and afterwards returns the row with the encrypted creds
+    // that the route persisted (so the precheck can decrypt and compare
+    // phoneNumberId for the WhatsApp same-vs-different number distinction).
+    let storedCredentials: string | null = null;
     const tx = {
-      connection: { create: vi.fn().mockResolvedValue(connection) },
+      connection: {
+        create: vi.fn(async (args: { data: { credentials: string } }) => {
+          storedCredentials = args.data.credentials;
+          return connection;
+        }),
+      },
       managedChannel: { create: vi.fn().mockResolvedValue(managedChannel) },
       agentListing: {
         upsert: vi.fn().mockResolvedValue({ id: "listing_alex", slug: "alex-conversion" }),
@@ -109,8 +122,26 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
     };
     return {
       $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
-      connection: { update: vi.fn().mockResolvedValue({ ...connection }) },
-      managedChannel: { update: vi.fn().mockResolvedValue({ ...managedChannel }) },
+      connection: {
+        update: vi.fn().mockResolvedValue({ ...connection }),
+        // Task 10: precheck reads the existing Connection's encrypted
+        // credentials to decrypt + compare phoneNumberId. We resolve it from
+        // the closure populated by tx.connection.create above, so the second
+        // request sees the same encrypted blob the first request persisted.
+        findUnique: vi.fn(async () => {
+          if (storedCredentials === null) return null;
+          return { ...connection, credentials: storedCredentials };
+        }),
+      },
+      managedChannel: {
+        update: vi.fn().mockResolvedValue({ ...managedChannel }),
+        // findFirst returns null until tx.connection.create has run, then
+        // returns the persisted ManagedChannel row.
+        findFirst: vi.fn(async () => {
+          if (storedCredentials === null) return null;
+          return { ...managedChannel };
+        }),
+      },
       organizationConfig: {
         upsert: vi.fn().mockResolvedValue(orgConfig),
         findUnique: vi.fn().mockResolvedValue(orgConfig),
@@ -283,20 +314,7 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       expect(notifyBody.managedChannelId).toBe(ch.id);
     });
 
-    it("retrying provision for the same org/channel does not crash and returns a successful active response", async () => {
-      // DEVIATION FROM TASK 9 SCRIPT: the current organizations.ts route does
-      // NOT yet contain the v1-limit precheck (Task 10's responsibility).
-      // Task 10 will add a findFirst-based precheck that returns the existing
-      // ManagedChannel row idempotently. Because that code is not yet shipped,
-      // this test cannot honestly assert "managedChannel.create called exactly
-      // once across two requests" or "response[0].id === firstResponse[0].id
-      // via route-level dedupe". What we CAN assert today is that the per-
-      // channel try/catch in the route loop, the StepResult resolver, and the
-      // Prisma mock all tolerate a second identical request without crashing,
-      // and that both responses report status=active (the prisma mock
-      // resolves `tx.managedChannel.create` to a stable row, so the response
-      // shape is stable). Task 10 will tighten this assertion to enforce true
-      // route-level idempotency (no duplicate row insertion).
+    it("A4: same-(org,channel,phoneNumberId) retry returns existing row idempotently — no duplicate create, no re-run side effects", async () => {
       globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
         const u = typeof url === "string" ? url : url.toString();
         fetchCalls.push({ url: u, init });
@@ -323,13 +341,97 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
 
       expect(first.statusCode).toBe(200);
       expect(second.statusCode).toBe(200);
-      const firstBody = first.json() as { channels: Array<{ id: string; status: string }> };
-      const secondBody = second.json() as { channels: Array<{ id: string; status: string }> };
-      expect(firstBody.channels[0]!.status).toBe("active");
+
+      const firstBody = first.json() as {
+        channels: Array<{ id: string; status: string; statusDetail: string | null }>;
+      };
+      const secondBody = second.json() as {
+        channels: Array<{ id: string; status: string; statusDetail: string | null }>;
+      };
+
+      // Strict route-level idempotency: same id returned on retry.
+      expect(secondBody.channels[0]!.id).toBe(firstBody.channels[0]!.id);
+
+      // tx.managedChannel.create called exactly once across the two requests.
+      expect(prisma._tx.managedChannel.create).toHaveBeenCalledTimes(1);
+      expect(prisma._tx.connection.create).toHaveBeenCalledTimes(1);
+
+      // Explicit precheck signal.
       expect(secondBody.channels[0]!.status).toBe("active");
-      // Both responses report a managed-channel id (not null/undefined).
-      expect(firstBody.channels[0]!.id).toBeTruthy();
-      expect(secondBody.channels[0]!.id).toBeTruthy();
+      expect(secondBody.channels[0]!.statusDetail).toBe("existing channel returned");
+
+      // Side effects are NOT re-run for the second request: exactly one of
+      // each Meta call (debug_token + subscribed_apps), one provision-notify,
+      // and one health probe across both requests combined.
+      const debugCalls = fetchCalls.filter((c) => c.url.includes("debug_token"));
+      const subAppsCalls = fetchCalls.filter((c) => c.url.includes("subscribed_apps"));
+      const notifyCalls = fetchCalls.filter((c) => c.url.includes("provision-notify"));
+      const probeCalls = fetchCalls.filter((c) =>
+        /graph\.facebook\.com\/v[\d.]+\/PHONE_/.test(c.url),
+      );
+      expect(debugCalls).toHaveLength(1);
+      expect(subAppsCalls).toHaveLength(1);
+      expect(notifyCalls).toHaveLength(1);
+      expect(probeCalls).toHaveLength(1);
+    });
+
+    it("Task 10: different phoneNumberId for an org with an existing WhatsApp channel is rejected with v1-limit message — no overwrite, no new row, no Meta calls", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const first = await app.inject({
+        method: "POST",
+        url: `/api/organizations/${ORG_ID}/provision`,
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "1111" }],
+        },
+      });
+      expect(first.statusCode).toBe(200);
+
+      // Snapshot fetch counts after the first (successful) provision so we
+      // can assert the second request triggers no additional Meta/notify/probe
+      // traffic.
+      const callsAfterFirst = fetchCalls.length;
+
+      const second = await app.inject({
+        method: "POST",
+        url: `/api/organizations/${ORG_ID}/provision`,
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "2222" }],
+        },
+      });
+      expect(second.statusCode).toBe(200);
+
+      const secondBody = second.json() as {
+        channels: Array<{
+          id: string;
+          status: string;
+          statusDetail: string | null;
+          webhookRegistered: boolean;
+          lastHealthCheck: string | null;
+        }>;
+      };
+      const ch = secondBody.channels[0]!;
+      expect(ch.status).toBe("error");
+      const detail = ch.statusDetail ?? "";
+      expect(detail).toContain("v1 limit");
+      expect(detail).toContain("WhatsApp");
+      // statusDetail must NOT leak the phoneNumberId of either side.
+      expect(detail).not.toContain("2222");
+      expect(detail).not.toContain("1111");
+      expect(ch.webhookRegistered).toBe(false);
+      expect(ch.lastHealthCheck).toBeNull();
+
+      // No new row created; no fetch traffic from the second request.
+      expect(prisma._tx.managedChannel.create).toHaveBeenCalledTimes(1);
+      expect(prisma._tx.connection.create).toHaveBeenCalledTimes(1);
+      expect(fetchCalls.length).toBe(callsAfterFirst);
     });
   });
 
@@ -528,11 +630,13 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
 //       /^\/webhook\/managed\/[a-zA-Z0-9_-]+$/ and webhookRegistered=true.
 //       Cross-process inbound simulation deferred (see top-of-file scope note;
 //       chat-side route pin lives in apps/chat/src/__tests__/whatsapp-wiring.test.ts).
-// A4 — Retry-idempotency half: "retrying provision for the same org/channel
-//       does not crash and returns a successful active response". The full
-//       route-level idempotency assertion (no duplicate row insertion) is
-//       deferred to Task 10's precheck implementation; deviation documented
-//       inline in that test.
+// A4 — Strict retry-idempotency: same (orgId, channel, phoneNumberId) retry
+//       returns the existing row id, calls managedChannel.create exactly once
+//       across both requests, and re-runs zero side effects (Meta, notify,
+//       health probe). Plus the v1-limit replacement-attempt rejection test:
+//       a different phoneNumberId for an org with an existing WhatsApp
+//       channel returns status=error with a v1-limit statusDetail that does
+//       not leak the phoneNumberId of either side.
 // A5 — Golden-path test: lastHealthCheck is a valid ISO string in the
 //       response, and prisma.connection.update + prisma.managedChannel.update
 //       were called with a Date. Negative path: health-probe-failure test

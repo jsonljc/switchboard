@@ -15,11 +15,16 @@ describe("Organizations API — Config", () => {
     managedChannel: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      // Task 10: provision route precheck calls findFirst at the top of the
+      // per-channel loop. Default null so the precheck is a no-op for these
+      // first-time-provision tests.
+      findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn(),
       delete: vi.fn(),
     },
     connection: {
       create: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     agentListing: {
       upsert: vi.fn(),

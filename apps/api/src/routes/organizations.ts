@@ -214,6 +214,106 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       const results = [];
       for (const ch of channels) {
         try {
+          // ── Task 10: v1 channel-limit precheck ──
+          // The schema enforces @@unique([organizationId, channel]) so without
+          // this guard a same-channel retry surfaces as a Prisma 500. The
+          // precheck makes both retry and replacement attempts friendly:
+          //   - same (orgId, channel, phoneNumberId)  → return existing row
+          //     idempotently (no duplicate side effects);
+          //   - different phoneNumberId for an existing WhatsApp channel →
+          //     reject with a structured v1-limit message (no overwrite, no
+          //     new row).
+          // For non-WhatsApp channels we have no phone-number axis, so any
+          // second attempt collapses to the idempotent-retry branch.
+          const existing = await app.prisma.managedChannel.findFirst({
+            where: { organizationId: orgId, channel: ch.channel },
+          });
+          if (existing) {
+            const incomingPhoneNumberId =
+              ch.channel === "whatsapp" ? (ch.phoneNumberId ?? null) : null;
+            // ManagedChannel.connectionId is a String FK without a Prisma
+            // @relation, so we look up the Connection separately to read its
+            // encrypted credentials. We only ever read phoneNumberId from the
+            // decrypted blob — never log it, never echo it in statusDetail.
+            const existingConnection = await app.prisma.connection.findUnique({
+              where: { id: existing.connectionId },
+            });
+            if (ch.channel === "whatsapp" && incomingPhoneNumberId) {
+              let existingPhoneNumberId: string | null = null;
+              try {
+                if (!existingConnection) throw new Error("connection missing");
+                // Connection.credentials is Json in Prisma but stores the
+                // base64 string produced by encryptCredentials() — same shape
+                // the existing transactional create writes a few lines down.
+                if (typeof existingConnection.credentials !== "string") {
+                  throw new Error("credentials not a string");
+                }
+                const existingDecrypted = decryptCredentials(existingConnection.credentials) as {
+                  phoneNumberId?: unknown;
+                };
+                if (
+                  typeof existingDecrypted.phoneNumberId === "string" &&
+                  existingDecrypted.phoneNumberId.length > 0
+                ) {
+                  existingPhoneNumberId = existingDecrypted.phoneNumberId;
+                }
+              } catch {
+                // If existing creds can't be decrypted, fall through to the
+                // v1-limit reject branch (safer than overwriting). Never log
+                // the credential payload — only the failure mode matters here.
+                existingPhoneNumberId = null;
+              }
+              if (
+                existingPhoneNumberId !== null &&
+                existingPhoneNumberId === incomingPhoneNumberId
+              ) {
+                // Same number — idempotent retry. Return the existing row's
+                // current persisted state. Do NOT re-run Meta/health/notify.
+                results.push({
+                  id: existing.id,
+                  channel: existing.channel,
+                  botUsername: existing.botUsername,
+                  webhookPath: existing.webhookPath,
+                  webhookRegistered: existing.webhookRegistered,
+                  status: "active",
+                  statusDetail: "existing channel returned",
+                  lastHealthCheck: existing.lastHealthCheck?.toISOString() ?? null,
+                  createdAt: existing.createdAt.toISOString(),
+                });
+                continue;
+              }
+              // Different (or undecryptable) phoneNumberId — v1 limit reject.
+              // Do not include any credential value in statusDetail.
+              results.push({
+                id: existing.id,
+                channel: existing.channel,
+                botUsername: existing.botUsername,
+                webhookPath: existing.webhookPath,
+                webhookRegistered: false,
+                status: "error",
+                statusDetail:
+                  "v1 limit: this organization already has a WhatsApp channel connected. Multi-number support is not available in v1.",
+                lastHealthCheck: null,
+                createdAt: existing.createdAt.toISOString(),
+              });
+              continue;
+            }
+            // Non-WhatsApp existing channel (or WhatsApp with no incoming
+            // phoneNumberId): treat any second attempt as idempotent retry.
+            results.push({
+              id: existing.id,
+              channel: existing.channel,
+              botUsername: existing.botUsername,
+              webhookPath: existing.webhookPath,
+              webhookRegistered: existing.webhookRegistered,
+              status: "active",
+              statusDetail: "existing channel returned",
+              lastHealthCheck: existing.lastHealthCheck?.toISOString() ?? null,
+              createdAt: existing.createdAt.toISOString(),
+            });
+            continue;
+          }
+
           const encrypted = encryptCredentials({
             botToken: ch.botToken,
             webhookSecret: ch.webhookSecret,
