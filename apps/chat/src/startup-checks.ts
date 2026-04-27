@@ -25,16 +25,20 @@ export function runStartupChecks(): CheckResult {
     warnings.push("REDIS_URL is not set — dedup and session store will use in-memory fallbacks");
   }
 
-  // Require at least one channel token
+  // Require at least one channel token (downgraded to a warning in development
+  // so `pnpm dev` works on a fresh clone without third-party tokens configured)
   const hasTelegram = !!process.env["TELEGRAM_BOT_TOKEN"];
   const hasWhatsApp = !!process.env["WHATSAPP_TOKEN"] && !!process.env["WHATSAPP_PHONE_NUMBER_ID"];
   const hasSlack = !!process.env["SLACK_BOT_TOKEN"];
 
   if (!hasTelegram && !hasWhatsApp && !hasSlack) {
-    errors.push(
-      "At least one channel must be configured: " +
-        "TELEGRAM_BOT_TOKEN, WHATSAPP_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN",
-    );
+    const message =
+      "No channel configured: TELEGRAM_BOT_TOKEN, WHATSAPP_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN";
+    if (process.env.NODE_ENV === "production") {
+      errors.push(message);
+    } else {
+      warnings.push(`${message} — chat server will start with no inbound channels`);
+    }
   }
 
   // Credential encryption key in production

@@ -50,6 +50,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @switchboard/db exec prisma generate
 
+      - name: Check Prisma schema drift
+        run: pnpm db:check-drift
+
       - name: Run database migrations
         run: pnpm --filter @switchboard/db exec prisma migrate deploy
 

@@ -140,6 +140,21 @@ else
   fail "Prisma schema not found at $PRISMA_SCHEMA"
 fi
 
+# Drift check: schema models/fields without a matching migration?
+if bash scripts/check-prisma-drift.sh > /dev/null; then
+  ok "No Prisma schema drift (migrations cover schema)"
+else
+  drift_status=$?
+  if [[ $drift_status -eq 2 ]]; then
+    fail "Prisma schema drift detected — schema has fields/tables not in any migration"
+    echo -e "  ${YELLOW}→ Run: pnpm db:check-drift to see details${NC}"
+  elif [[ $drift_status -eq 3 ]]; then
+    warn "Prisma drift check skipped — DATABASE_URL not set"
+  else
+    fail "Prisma drift check errored unexpectedly (status $drift_status)"
+  fi
+fi
+
 step_end
 
 # ── 3. Build ──

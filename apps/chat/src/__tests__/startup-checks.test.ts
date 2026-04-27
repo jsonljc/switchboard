@@ -20,11 +20,20 @@ describe("runStartupChecks", () => {
     process.env = { ...originalEnv };
   });
 
-  it("fails when no channel tokens are configured", () => {
+  it("warns (not errors) when no channel tokens are configured outside production", () => {
+    const result = runStartupChecks();
+    expect(result.ok).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings.some((w) => w.includes("No channel configured"))).toBe(true);
+  });
+
+  it("fails in production when no channel tokens are configured", () => {
+    process.env.NODE_ENV = "production";
+    process.env["DATABASE_URL"] = "postgresql://localhost/test";
+    process.env["CREDENTIALS_ENCRYPTION_KEY"] = "fake-key";
     const result = runStartupChecks();
     expect(result.ok).toBe(false);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toContain("At least one channel");
+    expect(result.errors.some((e) => e.includes("No channel configured"))).toBe(true);
   });
 
   it("passes with just TELEGRAM_BOT_TOKEN", () => {

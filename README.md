@@ -82,6 +82,19 @@ Layer 5: apps/*                                     → may import anything
 
 - Node.js 20+
 - [pnpm](https://pnpm.io/) 9.x
+- **PostgreSQL 17 or 18** (the schema uses the `vector` extension, which Homebrew's `pgvector` formula only ships for these versions)
+- **pgvector** extension for Postgres
+- Redis (optional — dedup, rate-limiting, and BullMQ fall back to in-memory if absent)
+
+On macOS:
+
+```bash
+brew install postgresql@17 pgvector
+brew services start postgresql@17
+createuser -s switchboard
+createdb -O switchboard switchboard
+psql -d switchboard -c "ALTER USER switchboard WITH PASSWORD 'switchboard';"
+```
 
 ### Setup
 
@@ -89,9 +102,10 @@ Layer 5: apps/*                                     → may import anything
 git clone https://github.com/jsonljc/switchboard.git
 cd switchboard
 pnpm install
+./scripts/setup-env.sh                        # generates secrets into .env AND apps/dashboard/.env.local
+pnpm db:migrate                                # apply Prisma migrations
+pnpm db:seed                                   # seed admin@switchboard.local / admin123
 pnpm build
-pnpm test
-pnpm typecheck
 ```
 
 ### Development
@@ -101,8 +115,21 @@ pnpm dev                                      # all services in watch mode
 
 pnpm --filter @switchboard/api dev            # http://localhost:3000
 pnpm --filter @switchboard/dashboard dev      # http://localhost:3002
-pnpm --filter @switchboard/chat dev           # http://localhost:3001
+pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires a channel token, see below)
 ```
+
+**Note:** `apps/chat` warns (and starts with no inbound channels) when none of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN`+`WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` is set in development; in production, the same condition is a hard error. Configure at least one channel token to actually receive messages.
+
+### Working with the database
+
+Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in the same commit. After editing the schema:
+
+```bash
+pnpm --filter @switchboard/db exec prisma migrate dev --name <descriptive-name>
+git add packages/db/prisma/migrations/
+```
+
+`pnpm db:check-drift` runs the same validation locally (requires a running PostgreSQL — Prisma uses a shadow database to compare migrations against the schema). CI runs it on every PR and blocks merges when drift is detected.
 
 ### Docker
 

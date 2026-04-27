@@ -68,4 +68,59 @@ INTERNAL_SECRET=$(openssl rand -base64 32)
 set_secret "INTERNAL_API_SECRET" "$INTERNAL_SECRET" "INTERNAL_API_SECRET"
 
 echo ""
-echo "Done. Review $ENV_FILE and fill in remaining values (API keys, tokens, etc.)."
+
+# ---------------------------------------------------------------------------
+# Dashboard .env.local (NextAuth + shared secrets)
+# ---------------------------------------------------------------------------
+DASHBOARD_ENV="apps/dashboard/.env.local"
+DASHBOARD_EXAMPLE="apps/dashboard/.env.local.example"
+
+# Helper: read a value from the root .env so dashboard secrets stay in sync
+get_root() {
+  local var="$1"
+  grep -E "^${var}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2-
+}
+
+if [[ ! -f "$DASHBOARD_ENV" ]]; then
+  if [[ -f "$DASHBOARD_EXAMPLE" ]]; then
+    cp "$DASHBOARD_EXAMPLE" "$DASHBOARD_ENV"
+    echo "Created $DASHBOARD_ENV from $DASHBOARD_EXAMPLE"
+  fi
+fi
+
+if [[ -f "$DASHBOARD_ENV" ]]; then
+  echo "Syncing shared secrets into $DASHBOARD_ENV..."
+
+  # set_dashboard_secret: idempotent set of VAR=VALUE in the dashboard env file
+  set_dashboard_secret() {
+    local var="$1"
+    local value="$2"
+    if [[ -z "$value" ]]; then
+      echo "  SKIP  ${var} (no value in root .env)"
+      return
+    fi
+    if grep -qE "^${var}=.+" "$DASHBOARD_ENV" 2>/dev/null; then
+      # replace existing line (may have placeholder like "same-value-as-api-server")
+      local existing
+      existing=$(grep -E "^${var}=" "$DASHBOARD_ENV" | head -1 | cut -d= -f2-)
+      if [[ "$existing" == "$value" ]]; then
+        echo "  SKIP  ${var} (already in sync)"
+      else
+        # use a different sed delimiter to handle slashes/equals in values
+        sed -i.bak -E "s|^${var}=.*|${var}=${value}|" "$DASHBOARD_ENV"
+        rm -f "${DASHBOARD_ENV}.bak"
+        echo "  SYNC  ${var}"
+      fi
+    else
+      echo "${var}=${value}" >> "$DASHBOARD_ENV"
+      echo "  SET   ${var}"
+    fi
+  }
+
+  set_dashboard_secret "DATABASE_URL" "$(get_root DATABASE_URL)"
+  set_dashboard_secret "CREDENTIALS_ENCRYPTION_KEY" "$(get_root CREDENTIALS_ENCRYPTION_KEY)"
+  set_dashboard_secret "NEXTAUTH_SECRET" "$(get_root NEXTAUTH_SECRET)"
+fi
+
+echo ""
+echo "Done. Review $ENV_FILE and $DASHBOARD_ENV and fill in remaining values (API keys, tokens, etc.)."
