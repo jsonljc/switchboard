@@ -1,6 +1,7 @@
 import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "./types.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 import { DeploymentInactiveError } from "../platform/deployment-resolver.js";
+import { resolveContactIdentity } from "./resolve-contact-identity.js";
 
 const MAX_HISTORY_MESSAGES = 30;
 
@@ -60,6 +61,16 @@ export class ChannelGateway {
       }
     }
 
+    // 3c. Resolve contact identity (no-op when contactStore not wired or non-WhatsApp channel)
+    const identity = this.config.contactStore
+      ? await resolveContactIdentity({
+          channel: message.channel,
+          sessionId: message.sessionId,
+          organizationId: resolved.organizationId,
+          contactStore: this.config.contactStore,
+        })
+      : { contactId: null, phone: null, channel: message.channel };
+
     // 4. Signal typing
     replySink.onTyping?.();
 
@@ -79,6 +90,10 @@ export class ChannelGateway {
         message: message.text,
         conversation: { messages, sessionId: message.sessionId },
         persona: resolved.persona,
+        ...(identity.contactId ? { contactId: identity.contactId } : {}),
+        ...(identity.phone ? { phone: identity.phone } : {}),
+        channel: identity.channel,
+        _agentContext: { persona: resolved.persona },
       },
       trigger: "chat" as const,
       surface: { surface: "chat", sessionId: message.sessionId },

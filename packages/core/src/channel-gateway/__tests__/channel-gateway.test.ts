@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { ChannelGateway } from "../channel-gateway.js";
-import type { ChannelGatewayConfig, IncomingChannelMessage, ReplySink } from "../types.js";
+import type {
+  ChannelGatewayConfig,
+  GatewayContactStore,
+  IncomingChannelMessage,
+  ReplySink,
+} from "../types.js";
 import { DeploymentInactiveError } from "../../platform/deployment-resolver.js";
 import type { DeploymentResolverResult } from "../../platform/deployment-resolver.js";
 
@@ -324,5 +329,133 @@ describe("ChannelGateway", () => {
     // Should proceed normally for backward compatibility
     expect(submitSpy).toHaveBeenCalled();
     expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
+  });
+});
+
+function makeConfig(overrides: Partial<ChannelGatewayConfig> = {}): ChannelGatewayConfig {
+  const submit = vi.fn().mockResolvedValue({
+    ok: true,
+    result: { outputs: { response: "ok" }, summary: "ok" },
+  });
+  return {
+    deploymentResolver: {
+      resolveByChannelToken: vi.fn().mockResolvedValue({
+        organizationId: "org-1",
+        deploymentId: "dep-1",
+        listingId: "list-1",
+        skillSlug: "alex",
+        persona: { businessName: "Acme", tone: "friendly" },
+      }),
+      resolveByDeploymentId: vi.fn(),
+      resolveByOrgAndSlug: vi.fn(),
+    },
+    platformIngress: { submit },
+    conversationStore: {
+      getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
+      addMessage: vi.fn().mockResolvedValue(undefined),
+    },
+    ...overrides,
+  };
+}
+
+function makeContactStore(): GatewayContactStore {
+  return {
+    findByPhone: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue({ id: "contact-new" }),
+  };
+}
+
+const replySink: ReplySink = {
+  send: vi.fn().mockResolvedValue(undefined),
+};
+
+describe("ChannelGateway identity resolution", () => {
+  it("WhatsApp: same sessionId across two messages creates Contact exactly once", async () => {
+    const contactStore = makeContactStore();
+    let createdId: string | null = null;
+    contactStore.findByPhone = vi.fn(async (_org, _phone) =>
+      createdId ? { id: createdId } : null,
+    );
+    contactStore.create = vi.fn(async (_input) => {
+      createdId = "contact-1";
+      return { id: createdId };
+    });
+
+    const config = makeConfig({ contactStore });
+    const gateway = new ChannelGateway(config);
+
+    const msg: IncomingChannelMessage = {
+      channel: "whatsapp",
+      token: "tok",
+      sessionId: "+6599999999",
+      text: "hi",
+    };
+
+    await gateway.handleIncoming(msg, replySink);
+    await gateway.handleIncoming({ ...msg, text: "hi again" }, replySink);
+
+    expect(contactStore.create).toHaveBeenCalledTimes(1);
+    expect(config.platformIngress.submit).toHaveBeenCalledTimes(2);
+  });
+
+  it("WhatsApp: parameters include contactId, phone, channel, _agentContext", async () => {
+    const contactStore = makeContactStore();
+    const config = makeConfig({ contactStore });
+    const gateway = new ChannelGateway(config);
+
+    await gateway.handleIncoming(
+      {
+        channel: "whatsapp",
+        token: "tok",
+        sessionId: "+6599999999",
+        text: "hi",
+      },
+      replySink,
+    );
+
+    const submitCall = (config.platformIngress.submit as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(submitCall.parameters.contactId).toBe("contact-new");
+    expect(submitCall.parameters.phone).toBe("+6599999999");
+    expect(submitCall.parameters.channel).toBe("whatsapp");
+    expect(submitCall.parameters._agentContext).toEqual({
+      persona: { businessName: "Acme", tone: "friendly" },
+    });
+  });
+
+  it("Telegram: parameters omit contactId and phone, channel still set", async () => {
+    const contactStore = makeContactStore();
+    const config = makeConfig({ contactStore });
+    const gateway = new ChannelGateway(config);
+
+    await gateway.handleIncoming(
+      { channel: "telegram", token: "tok", sessionId: "tg-1", text: "hi" },
+      replySink,
+    );
+
+    expect(contactStore.findByPhone).not.toHaveBeenCalled();
+    expect(contactStore.create).not.toHaveBeenCalled();
+
+    const submitCall = (config.platformIngress.submit as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(submitCall.parameters.contactId).toBeUndefined();
+    expect(submitCall.parameters.phone).toBeUndefined();
+    expect(submitCall.parameters.channel).toBe("telegram");
+  });
+
+  it("no contactStore configured: identity step is skipped, parameters stay channel+_agentContext", async () => {
+    const config = makeConfig(); // contactStore is undefined
+    const gateway = new ChannelGateway(config);
+
+    await gateway.handleIncoming(
+      { channel: "whatsapp", token: "tok", sessionId: "+6599999999", text: "hi" },
+      replySink,
+    );
+
+    const submitCall = (config.platformIngress.submit as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(submitCall.parameters.contactId).toBeUndefined();
+    expect(submitCall.parameters.phone).toBeUndefined();
+    expect(submitCall.parameters.channel).toBe("whatsapp");
   });
 });
