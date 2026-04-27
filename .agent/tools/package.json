@@ -1,0 +1,25 @@
+{
+  "name": "agent-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Local TypeScript tools for the .agent operating layer. Not part of the pnpm workspace.",
+  "scripts": {
+    "check-routes": "tsx check-routes.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@types/glob": "^9.0.0",
+    "glob": "^13.0.6",
+    "micromatch": "^4.0.7",
+    "ts-morph": "^22.0.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/micromatch": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

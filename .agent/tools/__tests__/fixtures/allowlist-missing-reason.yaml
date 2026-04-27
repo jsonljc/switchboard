@@ -1,0 +1,4 @@
+- path: apps/api/src/routes/auth/*.ts
+  reason: Auth handlers — not business-state mutations.
+
+- path: apps/api/src/routes/health.ts

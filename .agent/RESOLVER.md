@@ -6,6 +6,10 @@ Match task to triggers. Load only the listed files.
 
 **Triggers:** PlatformIngress, WorkTrace, lifecycle state machine, mutating surface, runtime convergence, bypass path, canonical request
 
+**Run first:**
+
+- `.agent/tools/check-routes`
+
 **Load:**
 
 - `docs/DOCTRINE.md`
