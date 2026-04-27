@@ -8,7 +8,10 @@ function makeEvent(overrides?: Partial<ConversionEvent>): ConversionEvent {
     type: "booked",
     contactId: "ct_1",
     organizationId: "org_1",
-    occurredAt: new Date("2026-04-20T10:00:00Z"),
+    // Relative date — the dispatcher rejects events older than 7 days as
+    // event_time_too_old, so a hardcoded past date silently breaks fixtures
+    // once the calendar passes. Use "1 minute ago" to stay within the window.
+    occurredAt: new Date(Date.now() - 60_000),
     source: "Booking",
     metadata: {},
     customer: { email: "test@example.com", phone: "+6591234567" },

@@ -67,6 +67,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     appSecret: process.env.META_APP_SECRET ?? "",
     apiVersion: "v21.0",
     webhookBaseUrl: process.env.CHAT_PUBLIC_URL ?? "http://localhost:3001",
+    chatPublicUrl: process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL,
+    internalApiSecret: process.env.INTERNAL_API_SECRET,
     graphApiFetch: async (url: string, init?: RequestInit) => {
       const res = await fetch(url, init);
       return (await res.json()) as Record<string, unknown>;
@@ -116,7 +118,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(ingressRoutes, { prefix: "/api" });
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });
   await app.register(ownerTaskRoutes, { prefix: "/api" });
-  await app.register(organizationsRoutes, { prefix: "/api/organizations" });
+  await app.register(organizationsRoutes, { prefix: "/api/organizations", apiVersion: "v21.0" });
   await app.register(billingRoutes, { prefix: "/api/billing" });
   // playbook, simulate, and website-scan routes define their own full paths including /api prefix
   await app.register(playbookRoutes);

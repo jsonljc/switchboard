@@ -15,6 +15,7 @@ import { TestCenter } from "@/components/onboarding/test-center";
 import { GoLive } from "@/components/onboarding/go-live";
 import { BusinessFactsStep } from "@/components/onboarding/business-facts-step";
 import { createEmptyPlaybook, type Playbook } from "@switchboard/schemas";
+import { provisionStatusMessage } from "@/lib/provision-status-message";
 
 export default function OnboardingPage() {
   const { data: session, status } = useSession();
@@ -73,6 +74,15 @@ export default function OnboardingPage() {
         ],
       },
       {
+        onSuccess: (data: { results?: Array<{ status: string; statusDetail: string | null }> }) => {
+          const first = data?.results?.[0];
+          if (!first) return;
+          const message = provisionStatusMessage({
+            status: first.status,
+            statusDetail: first.statusDetail ?? null,
+          });
+          if (message) setConnectError(message);
+        },
         onError: (err: Error) => {
           setConnectError(
             err.message || "Connection failed — check your credentials and try again",

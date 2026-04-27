@@ -108,6 +108,34 @@ Switchboard tracks `lastInboundAt` per conversation and respects this window aut
 
 Send a message to your WhatsApp Business number. You should get a response with a slight typing delay (1.5-4 seconds).
 
+### 7. Controlled-beta operator flow
+
+In the controlled beta an operator can attach a WhatsApp channel two ways:
+
+- **Embedded Signup (ESU)** — recommended when available. The dashboard
+  exchanges the short-lived ESU token for the WABA id and the first phone
+  number id, then registers the per-WABA webhook override automatically.
+- **Manual entry** — operator pastes a Meta access token and phone number id
+  into the dashboard form. Useful when ESU is not yet enabled for the app.
+
+On success the channel reports `status: active`. Otherwise the dashboard
+surfaces a `statusDetail` describing the blocker. Common values:
+
+- `config_error` — required platform env var missing on the API tier.
+- `pending_chat_register` — chat server didn't acknowledge the new channel
+  (retryable; check chat server health).
+- `health_check_failed` — Meta rejected the token or phone number id during
+  the post-provision health probe.
+- `pending_meta_register` — `POST /<waba>/subscribed_apps` failed; usually
+  transient and clears on retry.
+
+**v1 limit:** one managed WhatsApp number per organization. Multi-number
+support is a future schema-migration branch.
+
+> Follow-up note: the ESU route currently returns success once the Meta side
+> is wired but does not itself trigger the chat-server provision-notify path
+> that the manual flow exercises. Tracking separately.
+
 ---
 
 ## Managed Channels (Multi-Tenant)

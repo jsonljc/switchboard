@@ -1,7 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
-import { encryptCredentials } from "@switchboard/db";
+import { encryptCredentials, decryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
+import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
+import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
+import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
+import { ensureAlexListingForOrg } from "../lib/ensure-alex-listing.js";
+import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
+import { checkV1ChannelLimit } from "../lib/check-v1-channel-limit.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -11,7 +18,21 @@ const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "onboardingComplete",
 ]);
 
-export const organizationsRoutes: FastifyPluginAsync = async (app) => {
+export interface OrganizationsRoutesOptions {
+  /**
+   * Meta Graph API version used for WhatsApp webhook auto-registration.
+   * Sourced from a single bootstrap config point (see bootstrap/routes.ts) so
+   * all Meta calls in this app stay on the same version. No default — the
+   * caller MUST plumb this through.
+   */
+  apiVersion?: string;
+}
+
+export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions> = async (
+  app,
+  opts,
+) => {
+  const apiVersion = opts.apiVersion ?? "v21.0";
   // GET /api/organizations/:orgId/config
   app.get(
     "/:orgId/config",
@@ -48,6 +69,12 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
         },
         update: {},
       });
+
+      // Decision 10: seed the Alex listing+deployment on first lazy
+      // OrganizationConfig access so a brand-new org sees Alex before any
+      // channel is provisioned. Idempotent; the provision route also calls
+      // this as a safety net for pre-existing orgs.
+      await ensureAlexListingForOrg(orgId, app.prisma);
 
       return reply.send({ config });
     },
@@ -188,6 +215,45 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
       const results = [];
       for (const ch of channels) {
         try {
+          // ── Input validation: WhatsApp requires both token + phoneNumberId ──
+          // Without this guard, a WhatsApp request with token-only would let
+          // metaRegister succeed (it derives WABA from /debug_token, not
+          // phoneNumberId) and silently skip the health probe (gated on
+          // phoneNumberId being truthy), producing a fake `active` channel
+          // whose inbound webhooks could never resolve. Fail fast at the
+          // boundary instead.
+          if (ch.channel === "whatsapp") {
+            const missing: string[] = [];
+            if (!ch.token || ch.token.length === 0) missing.push("token");
+            if (!ch.phoneNumberId || ch.phoneNumberId.length === 0) missing.push("phoneNumberId");
+            if (missing.length > 0) {
+              results.push({
+                id: null,
+                channel: "whatsapp",
+                botUsername: null,
+                webhookPath: null,
+                webhookRegistered: false,
+                status: "error",
+                statusDetail: `Missing required WhatsApp credentials: ${missing.join(", ")}.`,
+                lastHealthCheck: null,
+                createdAt: new Date().toISOString(),
+              });
+              continue;
+            }
+          }
+
+          // Task 10: v1 channel-limit precheck. See lib/check-v1-channel-limit.ts.
+          const limitCheck = await checkV1ChannelLimit({
+            prisma: app.prisma,
+            organizationId: orgId,
+            channel: ch.channel,
+            incomingPhoneNumberId: ch.channel === "whatsapp" ? (ch.phoneNumberId ?? null) : null,
+          });
+          if (limitCheck.kind !== "no_existing") {
+            results.push(limitCheck.result);
+            continue;
+          }
+
           const encrypted = encryptCredentials({
             botToken: ch.botToken,
             webhookSecret: ch.webhookSecret,
@@ -211,7 +277,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
               },
             });
 
-            const webhookPath = `/webhook/managed/${connection.id}`;
+            const webhookPath = buildManagedWebhookPath(connection.id);
 
             const managedChannel = await tx.managedChannel.create({
               data: {
@@ -223,45 +289,21 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
               },
             });
 
-            // ── Beta compatibility bridge ──
-            const alexListing = await tx.agentListing.upsert({
-              where: { slug: "alex-conversion" },
-              create: {
-                slug: "alex-conversion",
-                name: "Alex",
-                description: "AI-powered lead conversion agent",
-                type: "ai-agent",
-                status: "active",
-                trustScore: 0,
-                autonomyLevel: "supervised",
-                priceTier: "free",
-                metadata: {},
-              },
-              update: {},
-            });
-
-            const deployment = await tx.agentDeployment.upsert({
-              where: {
-                organizationId_listingId: {
-                  organizationId: orgId,
-                  listingId: alexListing.id,
-                },
-              },
-              update: {},
-              create: {
-                organizationId: orgId,
-                listingId: alexListing.id,
-                status: "active",
-                skillSlug: "alex",
-              },
-            });
+            // ── Beta compatibility bridge (safety net for pre-existing orgs) ──
+            // The lazy OrganizationConfig upsert seeds this on first config
+            // access; this call is the safety net for orgs that provisioned
+            // before that path existed. Identical semantics either way.
+            const { listingId: _listingId, deploymentId } = await ensureAlexListingForOrg(
+              orgId,
+              tx,
+            );
 
             const tokenHash = createHash("sha256").update(connection.id).digest("hex");
 
             await tx.deploymentConnection.upsert({
               where: {
                 deploymentId_type_slot: {
-                  deploymentId: deployment.id,
+                  deploymentId,
                   type: ch.channel,
                   slot: "default",
                 },
@@ -272,7 +314,7 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
                 status: "active",
               },
               create: {
-                deploymentId: deployment.id,
+                deploymentId,
                 type: ch.channel,
                 slot: "default",
                 credentials: encrypted,
@@ -283,41 +325,185 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
             return { connection, managedChannel };
           });
 
-          // Provision-notify (outside transaction — side effect)
+          // ── Task 6: per-step StepResult tracking, resolved at the end ──
+          // Each provision step collapses into a StepResult; resolveProvisionStatus
+          // applies the precedence (config_error > pending_chat_register >
+          // health_check_failed > pending_meta_register > active).
+          let metaConfig: StepResult = { kind: "ok", reason: null };
+          let chatConfig: StepResult = { kind: "ok", reason: null };
+          let metaRegister: StepResult = { kind: "ok", reason: null };
+          let healthProbe: StepResult = { kind: "ok", reason: null };
+          let chatNotify: StepResult = { kind: "ok", reason: null };
+          let webhookRegistered = false;
+          let lastHealthCheckIso: string | null = null;
+
+          // Lifted so the health probe block can reuse decrypted credentials.
+          let customerToken: string | undefined;
+          let customerPhoneNumberId: string | undefined;
+
+          // Chat config: helper detects env gaps; we read env here only because
+          // the meta /subscribed_apps registration also needs `chatUrl` to build
+          // the webhook URL. Final chatConfig/chatNotify state is set by the
+          // helper call below.
           const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
           const internalSecret = process.env.INTERNAL_API_SECRET;
-          if (chatUrl && internalSecret) {
+
+          // ── Meta webhook auto-registration (best-effort, WhatsApp only) ──
+          if (ch.channel === "whatsapp") {
+            const appToken = process.env.WHATSAPP_GRAPH_TOKEN;
+            const verifyToken = process.env.WHATSAPP_APP_SECRET;
+
+            if (!appToken || !verifyToken) {
+              const missing: string[] = [];
+              if (!appToken) missing.push("WHATSAPP_GRAPH_TOKEN");
+              if (!verifyToken) missing.push("WHATSAPP_APP_SECRET");
+              metaConfig = {
+                kind: "fail",
+                reason: `config_error_meta: missing ${missing.join(" / ")}`,
+              };
+            }
+
+            // Always attempt to decrypt so the health probe can run even if
+            // meta env is missing (probe only needs customer token).
             try {
-              const notifyRes = await fetch(`${chatUrl}/internal/provision-notify`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${internalSecret}`,
-                },
-                body: JSON.stringify({ managedChannelId: result.managedChannel.id }),
-              });
-              if (!notifyRes.ok) {
-                console.warn(
-                  `[provision] Chat server notify returned ${notifyRes.status} for channel ${result.managedChannel.id}`,
-                );
+              const decrypted = decryptCredentials(encrypted) as {
+                token?: unknown;
+                phoneNumberId?: unknown;
+              };
+              if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
+                customerToken = decrypted.token;
               }
-            } catch (notifyErr) {
-              console.warn(
-                `[provision] Failed to notify chat server for channel ${result.managedChannel.id}:`,
-                notifyErr instanceof Error ? notifyErr.message : notifyErr,
-              );
+              if (
+                typeof decrypted.phoneNumberId === "string" &&
+                decrypted.phoneNumberId.length > 0
+              ) {
+                customerPhoneNumberId = decrypted.phoneNumberId;
+              }
+            } catch (decryptErr) {
+              metaConfig = {
+                kind: "fail",
+                reason: `Failed to decrypt customer credentials: ${
+                  decryptErr instanceof Error ? decryptErr.message : "unknown error"
+                }`,
+              };
+            }
+
+            // Run Meta registration only when we have meta env, chat url (for
+            // building the webhook URL), and a customer token.
+            if (metaConfig.kind === "ok" && appToken && verifyToken) {
+              if (!chatUrl) {
+                // chatConfig already failed above; skip meta call (no URL to register).
+                metaRegister = {
+                  kind: "fail",
+                  reason: "Meta registration skipped: chat config missing webhook base URL",
+                };
+              } else if (!customerToken) {
+                metaRegister = {
+                  kind: "fail",
+                  reason: "Meta registration skipped: customer credentials missing 'token' field",
+                };
+              } else {
+                const wabaResult = await fetchWabaIdFromToken({
+                  apiVersion,
+                  appToken,
+                  userToken: customerToken,
+                });
+                if (!wabaResult.ok) {
+                  metaRegister = {
+                    kind: "fail",
+                    reason: `Meta WABA lookup (/debug_token) failed: ${wabaResult.reason}`,
+                  };
+                } else {
+                  const reg = await registerWebhookOverride({
+                    apiVersion,
+                    userToken: customerToken,
+                    wabaId: wabaResult.wabaId,
+                    webhookUrl: `${chatUrl}${result.managedChannel.webhookPath}`,
+                    verifyToken,
+                  });
+                  if (reg.ok) {
+                    metaRegister = { kind: "ok", reason: null };
+                    webhookRegistered = true;
+                  } else {
+                    metaRegister = {
+                      kind: "fail",
+                      reason: `Meta /subscribed_apps failed: ${reg.reason}`,
+                    };
+                  }
+                }
+              }
+            } else if (metaConfig.kind === "fail") {
+              // Meta env missing — register can't run. Mark failed; resolver
+              // will pick config_error (precedes pending_meta_register).
+              metaRegister = {
+                kind: "fail",
+                reason: "Meta registration skipped: meta config missing",
+              };
+            }
+
+            // ── Synchronous WhatsApp health probe (best-effort) ──
+            if (customerToken && customerPhoneNumberId) {
+              const probe = await probeWhatsAppHealth({
+                apiVersion,
+                userToken: customerToken,
+                phoneNumberId: customerPhoneNumberId,
+              });
+              if (probe.ok) {
+                lastHealthCheckIso = probe.checkedAt.toISOString();
+                await app.prisma.connection.update({
+                  where: { id: result.connection.id },
+                  data: { lastHealthCheck: probe.checkedAt },
+                });
+                await app.prisma.managedChannel.update({
+                  where: { id: result.managedChannel.id },
+                  data: { lastHealthCheck: probe.checkedAt },
+                });
+              } else {
+                healthProbe = {
+                  kind: "fail",
+                  reason: `Health probe failed: ${probe.reason}`,
+                };
+              }
             }
           }
+
+          // ── Provision-notify (outside transaction, hardened with one retry) ──
+          // Shared helper owns both env-gap detection and the retry. We map its
+          // result to the existing chatConfig/chatNotify StepResult slots so the
+          // resolver behavior is unchanged. The `config_error_chat:` prefix is
+          // preserved here so the resolver's "both gaps" path still names both.
+          const notifyResult = await notifyChatProvisionedChannel({
+            managedChannelId: result.managedChannel.id,
+            chatPublicUrl: chatUrl,
+            internalApiSecret: internalSecret,
+          });
+          if (notifyResult.kind === "config_error") {
+            chatConfig = {
+              kind: "fail",
+              reason: `config_error_chat: ${notifyResult.reason}`,
+            };
+          } else if (notifyResult.kind === "fail") {
+            chatNotify = { kind: "fail", reason: notifyResult.reason };
+          }
+
+          const resolved = resolveProvisionStatus({
+            metaConfig,
+            chatConfig,
+            metaRegister,
+            healthProbe,
+            chatNotify,
+            channel: ch.channel as "whatsapp" | "telegram" | "slack",
+          });
 
           results.push({
             id: result.managedChannel.id,
             channel: result.managedChannel.channel,
             botUsername: result.managedChannel.botUsername,
             webhookPath: result.managedChannel.webhookPath,
-            webhookRegistered: result.managedChannel.webhookRegistered,
-            status: "active",
-            statusDetail: null,
-            lastHealthCheck: null,
+            webhookRegistered,
+            status: resolved.status,
+            statusDetail: resolved.statusDetail,
+            lastHealthCheck: resolved.status === "active" ? lastHealthCheckIso : null,
             createdAt: result.managedChannel.createdAt.toISOString(),
           });
         } catch (err: unknown) {
