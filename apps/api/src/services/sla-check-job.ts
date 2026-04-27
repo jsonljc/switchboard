@@ -2,7 +2,7 @@
 // SLA Check Job — scans all orgs for breached handoff SLAs
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@switchboard/db";
 
 export interface BreachedHandoff {
   id: string;
