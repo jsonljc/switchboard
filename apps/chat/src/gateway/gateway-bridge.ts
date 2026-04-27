@@ -3,6 +3,7 @@ import {
   PrismaAgentTaskStore,
   PrismaInteractionSummaryStore,
   PrismaDeploymentMemoryStore,
+  PrismaContactStore,
 } from "@switchboard/db";
 import { ChannelGateway, ConversationLifecycleTracker } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
@@ -95,6 +96,7 @@ export function createGatewayBridge(
     deploymentResolver,
     platformIngress,
     conversationStore: new PrismaGatewayConversationStore(prisma),
+    contactStore: new PrismaContactStore(prisma),
     onMessageRecorded: (info) => {
       taskRecorder.recordMessage(info);
       lifecycleTracker.recordMessage({
