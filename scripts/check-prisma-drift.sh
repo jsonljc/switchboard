@@ -60,7 +60,7 @@ PRISMA_BIN="$REPO_ROOT/packages/db/node_modules/.bin/prisma"
 err=$(DATABASE_URL="${DATABASE_URL:-}" \
 "$PRISMA_BIN" migrate diff \
   --from-migrations "$MIGRATIONS" \
-  --to-schema-datamodel "$SCHEMA" \
+  --to-schema "$SCHEMA" \
   --exit-code 2>&1 >/dev/null)
 status=$?
 
