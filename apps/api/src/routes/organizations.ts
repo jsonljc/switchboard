@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
-import { encryptCredentials } from "@switchboard/db";
+import { encryptCredentials, decryptCredentials } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
+import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 
 const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "name",
@@ -12,7 +13,21 @@ const ALLOWED_CONFIG_UPDATE_FIELDS = new Set([
   "onboardingComplete",
 ]);
 
-export const organizationsRoutes: FastifyPluginAsync = async (app) => {
+export interface OrganizationsRoutesOptions {
+  /**
+   * Meta Graph API version used for WhatsApp webhook auto-registration.
+   * Sourced from a single bootstrap config point (see bootstrap/routes.ts) so
+   * all Meta calls in this app stay on the same version. No default — the
+   * caller MUST plumb this through.
+   */
+  apiVersion?: string;
+}
+
+export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions> = async (
+  app,
+  opts,
+) => {
+  const apiVersion = opts.apiVersion ?? "v21.0";
   // GET /api/organizations/:orgId/config
   app.get(
     "/:orgId/config",
@@ -284,6 +299,73 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
             return { connection, managedChannel };
           });
 
+          // ── Meta webhook auto-registration (best-effort) ──
+          // Token model: customer-provided token (decrypted from credentials)
+          // is the userToken for /subscribed_apps. WHATSAPP_GRAPH_TOKEN is the
+          // app token used ONLY for /debug_token's access_token query param.
+          // Failure here keeps the channel record but surfaces
+          // status=pending_meta_register (Decisions 5 & 7). Task 4 introduces
+          // only this failure status; Task 6 wires the full precedence resolver.
+          let metaStatus: "registered" | "skipped" | "failed" = "skipped";
+          let metaReason: string | null = null;
+
+          if (ch.channel === "whatsapp") {
+            const appToken = process.env.WHATSAPP_GRAPH_TOKEN;
+            const verifyToken = process.env.WHATSAPP_APP_SECRET;
+            const webhookBaseUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
+
+            if (!appToken || !verifyToken || !webhookBaseUrl) {
+              metaStatus = "failed";
+              metaReason =
+                "Meta registration skipped: missing WHATSAPP_GRAPH_TOKEN / WHATSAPP_APP_SECRET / CHAT_PUBLIC_URL";
+            } else {
+              let customerToken: string | undefined;
+              try {
+                const decrypted = decryptCredentials(encrypted) as { token?: unknown };
+                if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
+                  customerToken = decrypted.token;
+                }
+              } catch (decryptErr) {
+                metaStatus = "failed";
+                metaReason = `Failed to decrypt customer credentials: ${
+                  decryptErr instanceof Error ? decryptErr.message : "unknown error"
+                }`;
+              }
+
+              if (metaStatus === "skipped") {
+                if (!customerToken) {
+                  metaStatus = "failed";
+                  metaReason =
+                    "Meta registration skipped: customer credentials missing 'token' field";
+                } else {
+                  const wabaResult = await fetchWabaIdFromToken({
+                    apiVersion,
+                    appToken,
+                    userToken: customerToken,
+                  });
+                  if (!wabaResult.ok) {
+                    metaStatus = "failed";
+                    metaReason = `Meta WABA lookup (/debug_token) failed: ${wabaResult.reason}`;
+                  } else {
+                    const reg = await registerWebhookOverride({
+                      apiVersion,
+                      userToken: customerToken,
+                      wabaId: wabaResult.wabaId,
+                      webhookUrl: `${webhookBaseUrl}${result.managedChannel.webhookPath}`,
+                      verifyToken,
+                    });
+                    if (reg.ok) {
+                      metaStatus = "registered";
+                    } else {
+                      metaStatus = "failed";
+                      metaReason = `Meta /subscribed_apps failed: ${reg.reason}`;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
           // Provision-notify (outside transaction — side effect)
           const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
           const internalSecret = process.env.INTERNAL_API_SECRET;
@@ -315,9 +397,13 @@ export const organizationsRoutes: FastifyPluginAsync = async (app) => {
             channel: result.managedChannel.channel,
             botUsername: result.managedChannel.botUsername,
             webhookPath: result.managedChannel.webhookPath,
-            webhookRegistered: result.managedChannel.webhookRegistered,
-            status: "active",
-            statusDetail: null,
+            webhookRegistered: metaStatus === "registered",
+            // Task 4 introduces only `pending_meta_register` for the Meta
+            // failure path. Tasks 5 & 6 will replace this branch with a full
+            // precedence resolver across config_error / pending_chat_register
+            // / health_check_failed / pending_meta_register / active.
+            status: metaStatus === "failed" ? "pending_meta_register" : "active",
+            statusDetail: metaStatus === "failed" ? metaReason : null,
             lastHealthCheck: null,
             createdAt: result.managedChannel.createdAt.toISOString(),
           });

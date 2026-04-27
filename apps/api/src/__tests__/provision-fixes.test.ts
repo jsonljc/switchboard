@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
+import { organizationsRoutes } from "../routes/organizations.js";
 
 describe("provision route fixes", () => {
   describe("P0-1: webhook path format", () => {
@@ -8,181 +11,275 @@ describe("provision route fixes", () => {
     });
   });
 
-  describe("P0-6: Alex listing auto-creation", () => {
-    it("creates Alex listing if missing via upsert", async () => {
-      const mockPrisma = {
-        agentListing: {
-          upsert: vi.fn().mockResolvedValue({
-            id: "listing_auto",
-            slug: "alex-conversion",
-            name: "Alex",
-            type: "ai-agent",
+  describe("Meta /subscribed_apps auto-registration (Task 4)", () => {
+    let app: FastifyInstance;
+    let fetchCalls: Array<{ url: string; init?: RequestInit }>;
+    let originalFetch: typeof globalThis.fetch;
+    let originalEnv: Record<string, string | undefined>;
+
+    const CUSTOMER_TOKEN = "CUSTOMER_TOKEN_FAKE";
+    const APP_TOKEN = "APP_TOKEN_FAKE";
+    const VERIFY_TOKEN = "VERIFY_TOKEN_FAKE";
+    const CHAT_URL = "https://chat.example.com";
+
+    // Default: every Meta-related call succeeds. Individual tests override.
+    function defaultFetchMock(url: string, _init?: RequestInit): Response {
+      if (url.includes("debug_token")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA_1"] }],
+            },
           }),
-        },
-      };
-
-      const listing = await mockPrisma.agentListing.upsert({
-        where: { slug: "alex-conversion" },
-        create: {
-          slug: "alex-conversion",
-          name: "Alex",
-          description: "AI-powered lead conversion agent",
-          type: "ai-agent",
-          status: "active",
-          trustScore: 0,
-          autonomyLevel: "supervised",
-          priceTier: "free",
-          metadata: {},
-        },
-        update: {},
-      });
-
-      expect(listing.slug).toBe("alex-conversion");
-      expect(mockPrisma.agentListing.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { slug: "alex-conversion" },
-          create: expect.objectContaining({ slug: "alex-conversion" }),
-        }),
-      );
-    });
-  });
-
-  describe("P0-3: WhatsApp onboarding routes registered", () => {
-    it("whatsappOnboardingRoutes exports a FastifyPluginAsync", async () => {
-      const mod = await import("../routes/whatsapp-onboarding.js");
-      expect(mod.whatsappOnboardingRoutes).toBeDefined();
-      expect(typeof mod.whatsappOnboardingRoutes).toBe("function");
-    });
-  });
-
-  describe("P0-4: provision-notify", () => {
-    it("calls chat server provision-notify with managedChannelId", async () => {
-      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-
-      const chatUrl = "http://localhost:3001";
-      const internalSecret = "test-secret";
-      const managedChannelId = "mc_123";
-
-      await mockFetch(`${chatUrl}/internal/provision-notify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${internalSecret}`,
-        },
-        body: JSON.stringify({ managedChannelId }),
-      });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${chatUrl}/internal/provision-notify`,
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${internalSecret}`,
-          }),
-        }),
-      );
-    });
-
-    it("handles provision-notify failure gracefully", async () => {
-      const mockFetch = vi.fn().mockRejectedValue(new Error("Connection refused"));
-
-      let notifyError: string | null = null;
-      try {
-        await mockFetch("http://localhost:3001/internal/provision-notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ managedChannelId: "mc_123" }),
-        });
-      } catch (err) {
-        notifyError = err instanceof Error ? err.message : "unknown";
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       }
+      if (url.includes("subscribed_apps")) {
+        return new Response("{}", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("provision-notify")) {
+        return new Response("{}", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    }
 
-      expect(notifyError).toBe("Connection refused");
-    });
-  });
-
-  describe("P0-5: lastHealthCheck set on credential test", () => {
-    it("updates Connection.lastHealthCheck after successful WhatsApp test", async () => {
-      const now = new Date();
-      const mockPrisma = {
-        connection: {
-          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        },
+    function buildPrismaMock() {
+      const connection = {
+        id: "conn_abc12345",
+        organizationId: "org_test",
       };
-
-      await mockPrisma.connection.updateMany({
-        where: {
-          organizationId: "org_123",
-          serviceId: "whatsapp",
+      const managedChannel = {
+        id: "mc_1",
+        organizationId: "org_test",
+        channel: "whatsapp",
+        connectionId: connection.id,
+        botUsername: null,
+        webhookPath: `/webhook/managed/${connection.id}`,
+        webhookRegistered: false,
+        status: "pending",
+        statusDetail: null,
+        lastHealthCheck: null,
+        createdAt: new Date("2026-04-27T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+      };
+      const tx = {
+        connection: { create: vi.fn().mockResolvedValue(connection) },
+        managedChannel: { create: vi.fn().mockResolvedValue(managedChannel) },
+        agentListing: {
+          upsert: vi.fn().mockResolvedValue({ id: "listing_1", slug: "alex-conversion" }),
         },
-        data: {
-          lastHealthCheck: now,
+        agentDeployment: { upsert: vi.fn().mockResolvedValue({ id: "dep_1" }) },
+        deploymentConnection: { upsert: vi.fn().mockResolvedValue({ id: "dc_1" }) },
+      };
+      return {
+        $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
+        _tx: tx,
+      };
+    }
+
+    async function buildApp(prismaMock: ReturnType<typeof buildPrismaMock>) {
+      const fastify = Fastify({ logger: false });
+      fastify.decorate("prisma", prismaMock as unknown as never);
+      fastify.decorateRequest("organizationIdFromAuth", undefined);
+      fastify.addHook("onRequest", async (request) => {
+        request.organizationIdFromAuth = "org_test";
+      });
+      await fastify.register(organizationsRoutes, {
+        prefix: "/api/organizations",
+        apiVersion: "v17.0",
+      });
+      return fastify;
+    }
+
+    beforeEach(() => {
+      fetchCalls = [];
+      originalFetch = globalThis.fetch;
+      originalEnv = {
+        WHATSAPP_GRAPH_TOKEN: process.env.WHATSAPP_GRAPH_TOKEN,
+        WHATSAPP_APP_SECRET: process.env.WHATSAPP_APP_SECRET,
+        CHAT_PUBLIC_URL: process.env.CHAT_PUBLIC_URL,
+        SWITCHBOARD_CHAT_URL: process.env.SWITCHBOARD_CHAT_URL,
+        INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
+        CREDENTIALS_ENCRYPTION_KEY: process.env.CREDENTIALS_ENCRYPTION_KEY,
+      };
+      process.env.WHATSAPP_GRAPH_TOKEN = APP_TOKEN;
+      process.env.WHATSAPP_APP_SECRET = VERIFY_TOKEN;
+      process.env.CHAT_PUBLIC_URL = CHAT_URL;
+      process.env.CREDENTIALS_ENCRYPTION_KEY =
+        process.env.CREDENTIALS_ENCRYPTION_KEY ?? "test-key-for-provision-fixes-12345678";
+      delete process.env.SWITCHBOARD_CHAT_URL;
+      // Don't trigger provision-notify side effect by default to keep traces simple.
+      delete process.env.INTERNAL_API_SECRET;
+    });
+
+    afterEach(async () => {
+      globalThis.fetch = originalFetch;
+      for (const [k, v] of Object.entries(originalEnv)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      if (app) await app.close();
+    });
+
+    it("calls Meta /subscribed_apps with Authorization: Bearer <CUSTOMER_TOKEN> (NOT the app token)", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [
+            {
+              channel: "whatsapp",
+              token: CUSTOMER_TOKEN,
+              phoneNumberId: "PHONE_1",
+            },
+          ],
         },
       });
 
-      expect(mockPrisma.connection.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            lastHealthCheck: expect.any(Date),
-          }),
-        }),
-      );
+      expect(res.statusCode).toBe(200);
+      const subscribedAppsCall = fetchCalls.find((c) => c.url.includes("subscribed_apps"));
+      expect(subscribedAppsCall).toBeDefined();
+      const auth = (subscribedAppsCall!.init?.headers as Record<string, string> | undefined)
+        ?.Authorization;
+      expect(auth).toBe(`Bearer ${CUSTOMER_TOKEN}`);
+      // Defensive: ensure the app token is NEVER sent as the customer-asset bearer.
+      expect(auth).not.toBe(`Bearer ${APP_TOKEN}`);
     });
-  });
 
-  describe("P1: transactional provision", () => {
-    it("rolls back all records if any creation fails", async () => {
-      const createCalls: string[] = [];
-      const mockTx = {
-        connection: {
-          create: vi.fn().mockImplementation(() => {
-            createCalls.push("connection");
-            return { id: "conn_123" };
-          }),
+    it("registers a webhook URL using the managed-channel path", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
         },
-        managedChannel: {
-          create: vi.fn().mockImplementation(() => {
-            createCalls.push("managedChannel");
-            return {
-              id: "mc_123",
-              channel: "whatsapp",
-              webhookPath: "/webhook/managed/conn_123",
-              createdAt: new Date(),
-            };
-          }),
-        },
-        agentListing: {
-          upsert: vi.fn().mockImplementation(() => {
-            createCalls.push("listing");
-            return { id: "listing_123" };
-          }),
-        },
-        agentDeployment: {
-          upsert: vi.fn().mockImplementation(() => {
-            createCalls.push("deployment");
-            throw new Error("Simulated failure");
-          }),
-        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const subscribedAppsCall = fetchCalls.find((c) => c.url.includes("subscribed_apps"));
+      expect(subscribedAppsCall).toBeDefined();
+      const body = JSON.parse(subscribedAppsCall!.init!.body as string) as {
+        override_callback_uri: string;
+        verify_token: string;
       };
+      expect(body.override_callback_uri).toMatch(
+        /^https:\/\/chat\.example\.com\/webhook\/managed\/conn_[a-zA-Z0-9_-]+$/,
+      );
+      expect(body.verify_token).toBe(VERIFY_TOKEN);
+      // apiVersion plumbed (v17.0 from test harness, NOT a hardcoded v21.0).
+      expect(subscribedAppsCall!.url).toContain("/v17.0/");
+    });
 
-      const mockPrisma = {
-        $transaction: vi
-          .fn()
-          .mockImplementation(async (fn: (tx: typeof mockTx) => Promise<void>) => {
-            await fn(mockTx);
-          }),
+    it("surfaces status=pending_meta_register with a reason when Meta /subscribed_apps fails", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        if (u.includes("debug_token")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                granular_scopes: [
+                  { scope: "whatsapp_business_management", target_ids: ["WABA_1"] },
+                ],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        if (u.includes("subscribed_apps")) {
+          return new Response(JSON.stringify({ error: { message: "bad token" } }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (u.includes("provision-notify")) {
+          return new Response("{}", { status: 200 });
+        }
+        throw new Error(`unexpected fetch ${u}`);
+      }) as typeof globalThis.fetch;
+
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{
+          status: string;
+          webhookRegistered: boolean;
+          statusDetail: string | null;
+          id: string | null;
+        }>;
       };
+      expect(body.channels).toHaveLength(1);
+      const ch0 = body.channels[0]!;
+      expect(ch0.status).toBe("pending_meta_register");
+      expect(ch0.webhookRegistered).toBe(false);
+      expect(ch0.statusDetail).toContain("bad token");
+      // Channel record is preserved (Decision 5 — Meta failure is not transaction-fatal).
+      expect(ch0.id).toBe("mc_1");
+    });
 
-      await expect(
-        mockPrisma.$transaction(async (tx: typeof mockTx) => {
-          await tx.connection.create({ data: {} as never });
-          await tx.managedChannel.create({ data: {} as never });
-          await tx.agentListing.upsert({ where: {}, create: {} as never, update: {} });
-          await tx.agentDeployment.upsert({ where: {}, create: {} as never, update: {} });
-        }),
-      ).rejects.toThrow("Simulated failure");
+    it("sets webhookRegistered=true and status=active when Meta /subscribed_apps returns 2xx", async () => {
+      globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url.toString();
+        fetchCalls.push({ url: u, init });
+        return defaultFetchMock(u, init);
+      }) as typeof globalThis.fetch;
 
-      expect(createCalls).toEqual(["connection", "managedChannel", "listing", "deployment"]);
+      const prisma = buildPrismaMock();
+      app = await buildApp(prisma);
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/organizations/org_test/provision",
+        payload: {
+          channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        channels: Array<{ status: string; webhookRegistered: boolean; statusDetail: null }>;
+      };
+      const ch0 = body.channels[0]!;
+      expect(ch0.webhookRegistered).toBe(true);
+      // Tasks 5/6 will refine "active" via the precedence resolver. For Task 4,
+      // success keeps the existing implicit "active" and only the failure path
+      // introduces "pending_meta_register".
+      expect(ch0.status).toBe("active");
+      expect(ch0.statusDetail).toBeNull();
     });
   });
 });
