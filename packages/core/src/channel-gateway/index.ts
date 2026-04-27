@@ -2,10 +2,13 @@ export { ChannelGateway } from "./channel-gateway.js";
 export type {
   ChannelGatewayConfig,
   GatewayConversationStore,
+  GatewayContactStore,
   IncomingChannelMessage,
   ReplySink,
 } from "./types.js";
 export { UnknownChannelError, InactiveDeploymentError } from "./types.js";
+export { resolveContactIdentity } from "./resolve-contact-identity.js";
+export type { ResolvedContactIdentity } from "./resolve-contact-identity.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {
   ConversationEndEvent,
