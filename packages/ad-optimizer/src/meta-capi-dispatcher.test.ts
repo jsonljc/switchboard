@@ -123,6 +123,28 @@ describe("MetaCAPIDispatcher", () => {
     expect(body.data[0].user_data.fbc).toMatch(/^fb\.1\.\d+\.fb_partial$/);
   });
 
+  // ── Explicit actionSource override ──
+
+  it("uses explicit actionSource override when provided", async () => {
+    const event = makeEvent({
+      actionSource: "business_messaging",
+      attribution: { fbclid: "fb_ctwa" },
+      customer: { phone: "+6591234567" },
+    });
+    await dispatcher.dispatch(event);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
+    expect(body.data[0].action_source).toBe("business_messaging");
+  });
+
+  it("falls back to inferred action_source when override absent", async () => {
+    const event = makeEvent({ attribution: { lead_id: "lead_123" } });
+    await dispatcher.dispatch(event);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body ?? "{}");
+    expect(body.data[0].action_source).toBe("crm");
+  });
+
   // ── Stage-to-event-name mapping ──
 
   it.each([

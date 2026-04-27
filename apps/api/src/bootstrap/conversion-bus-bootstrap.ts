@@ -77,6 +77,13 @@ export async function bootstrapConversionBus(opts: {
       });
 
       logger.info("ConversionBus: MetaCAPIDispatcher wired for Meta Conversions API");
+
+      // OutcomeDispatcher subscription intentionally absent — see TODO in
+      // `outcome-wiring.ts`. The active CAPI path is `MetaCAPIDispatcher` above;
+      // running both would double-fire one business event into two governed CAPI
+      // decisions, violating doctrine. The OutcomeDispatcher implementation and
+      // its `subscribeOutcomeDispatcher` helper remain as building blocks for the
+      // post-wedge migration once the event_name dependency audit ships.
     }
 
     // Instrument the bus passed to the publisher to track publish metrics

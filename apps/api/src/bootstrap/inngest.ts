@@ -9,6 +9,7 @@ import {
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
   PrismaAssetRecordStore,
+  PrismaCrmFunnelStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -22,8 +23,9 @@ import {
   createWeeklyAuditCron,
   createDailyCheckCron,
   MetaAdsClient,
+  RealCrmDataProvider,
 } from "@switchboard/ad-optimizer";
-import type { CronDependencies } from "@switchboard/ad-optimizer";
+import type { CronDependencies, InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -37,7 +39,29 @@ import type {
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
 
-export async function registerInngest(app: FastifyInstance): Promise<void> {
+function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
+  if (!adapter) {
+    throw new Error(
+      "lead-retry cron requires instantFormAdapter (shared singleton from bootstrapContainedWorkflows)",
+    );
+  }
+  return adapter;
+}
+
+export interface RegisterInngestOptions {
+  /**
+   * Shared singleton InstantFormAdapter from `bootstrapContainedWorkflows`.
+   * The lead-retry cron MUST use this same instance so retry-path Contact
+   * creation flows through the same PlatformIngress front door as the
+   * primary webhook path. No parallel mutation paths.
+   */
+  instantFormAdapter?: InstantFormAdapter;
+}
+
+export async function registerInngest(
+  app: FastifyInstance,
+  options: RegisterInngestOptions = {},
+): Promise<void> {
   if (!app.prisma) {
     app.log.warn("Inngest: skipping registration — no database connection");
     return;
@@ -74,6 +98,7 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       const deployments = await deploymentStore.listByListing(listing.id, "active");
       return deployments.map((d) => ({
         id: d.id,
+        organizationId: d.organizationId,
         inputConfig: (d.inputConfig as Record<string, unknown>) ?? {},
       }));
     },
@@ -88,37 +113,13 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       };
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
-    createCrmProvider: (_deploymentId) => ({
-      // Stub CRM provider — real implementation in Task 11 when CRM queries are built
-      getFunnelData: async () => ({
-        campaignIds: [],
-        leads: 0,
-        qualified: 0,
-        opportunities: 0,
-        bookings: 0,
-        closed: 0,
-        revenue: 0,
-        rates: {
-          leadToQualified: 0,
-          qualifiedToBooking: 0,
-          bookingToClosed: 0,
-          leadToClosed: 0,
-        },
-        coverage: {
-          attributedContacts: 0,
-          contactsWithEmailOrPhone: 0,
-          contactsWithOpportunity: 0,
-          contactsWithBooking: 0,
-          contactsWithRevenueEvent: 0,
-        },
-      }),
-      getBenchmarks: async () => ({
-        leadToQualifiedRate: 0.4,
-        qualifiedToBookingRate: 0.5,
-        bookingToClosedRate: 0.25,
-        leadToClosedRate: 0.06,
-      }),
-    }),
+    createCrmProvider: (_deploymentId) => {
+      // Real Prisma-backed provider. The Inngest function passes the resolved
+      // `orgId` from the deployment record on every call, so a single shared
+      // store + provider instance works for all deployments.
+      const funnelStore = new PrismaCrmFunnelStore(app.prisma!);
+      return new RealCrmDataProvider(funnelStore);
+    },
     createInsightsProvider: (_adsClient) => ({
       // Stub insights provider — real implementation delegates to MetaCampaignInsightsProvider
       getCampaignLearningData: async () => ({
@@ -311,16 +312,14 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
       const f = fields?.find((x) => x.name === name);
       return f?.values?.[0];
     },
-    findExistingContact: async (orgId, phone) => {
-      const { PrismaContactStore } = await import("@switchboard/db");
-      const contactStore = new PrismaContactStore(app.prisma!);
-      return contactStore.findByPhone(orgId, phone);
+    resolveDeploymentId: async (orgId) => {
+      const deployment = await app.prisma!.agentDeployment.findFirst({
+        where: { organizationId: orgId, status: "active" },
+        select: { id: true },
+      });
+      return deployment?.id ?? null;
     },
-    createContact: async (data) => {
-      const { PrismaContactStore } = await import("@switchboard/db");
-      const store = new PrismaContactStore(app.prisma!);
-      return store.create(data as unknown as Parameters<typeof store.create>[0]);
-    },
+    instantFormAdapter: requireInstantFormAdapter(options.instantFormAdapter),
     markResolved: async (id) => {
       await app.prisma!.pendingLeadRetry.update({
         where: { id },

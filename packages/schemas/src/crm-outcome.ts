@@ -28,10 +28,10 @@ export interface CrmFunnelData {
 // ── Funnel Benchmarks (CRM-only) ──
 
 export interface FunnelBenchmarks {
-  leadToQualifiedRate: number;
-  qualifiedToBookingRate: number;
-  bookingToClosedRate: number;
-  leadToClosedRate: number;
+  leadToQualifiedRate: number | null;
+  qualifiedToBookingRate: number | null;
+  bookingToClosedRate: number | null;
+  leadToClosedRate: number | null;
 }
 
 // ── Media Benchmarks ──

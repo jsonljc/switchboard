@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import Fastify, { type FastifyInstance } from "fastify";
+import { createHmac } from "node:crypto";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
+import { registerManagedWebhookRoutes, type CtwaAdapterLike } from "../routes/managed-webhook.js";
+import type { GatewayEntry } from "../managed/runtime-registry.js";
 
 describe("WhatsAppAdapter", () => {
   const adapter = new WhatsAppAdapter({
@@ -315,6 +319,79 @@ describe("WhatsAppAdapter", () => {
       expect(msg!.metadata).toHaveProperty("interactiveType", "button_reply");
     });
 
+    it("should extract ctwa_clid and source_url from CTWA referral", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "CTWA User" }, wa_id: "6591234567" }],
+                  messages: [
+                    {
+                      from: "6591234567",
+                      id: "wamid.ctwa001",
+                      timestamp: "1700000000",
+                      text: { body: "hi" },
+                      type: "text",
+                      referral: {
+                        source_id: "120000000",
+                        source_type: "ad",
+                        source_url: "https://fb.me/abc",
+                        ctwa_clid: "ARxx_clickid_abc",
+                        headline: "Book now",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("ctwaClid", "ARxx_clickid_abc");
+      expect(msg!.metadata).toHaveProperty("ctwaSourceUrl", "https://fb.me/abc");
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "120000000");
+    });
+
+    it("should omit ctwaClid when referral lacks it", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: "6591234567",
+                      id: "wamid.noctwa",
+                      timestamp: "1700000000",
+                      text: { body: "hi" },
+                      type: "text",
+                      referral: {
+                        source_id: "ad_123",
+                        source_type: "ad",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata?.["ctwaClid"]).toBeUndefined();
+      expect(msg!.metadata?.["ctwaSourceUrl"]).toBeUndefined();
+    });
+
     it("should not include referral fields when referral is absent", () => {
       const payload = {
         object: "whatsapp_business_account",
@@ -366,5 +443,172 @@ describe("WhatsAppAdapter", () => {
 
       fetchSpy.mockRestore();
     });
+  });
+});
+
+describe("WhatsApp managed webhook — CTWA adapter wiring", () => {
+  const APP_SECRET = "ctwa_test_secret";
+  const WEBHOOK_ID = "wa-ctwa-1";
+  const WEBHOOK_PATH = `/webhook/managed/${WEBHOOK_ID}`;
+  const ORG_ID = "org_test_ctwa";
+  const CONNECTION_ID = "conn_wa_ctwa";
+  const SENDER_PHONE = "6591234567";
+  let app: FastifyInstance;
+  const ingest = vi.fn<CtwaAdapterLike["ingest"]>(async () => {});
+  const handleIncoming = vi.fn(async () => {});
+
+  function buildPayload(referral?: Record<string, unknown>): Record<string, unknown> {
+    const message: Record<string, unknown> = {
+      from: SENDER_PHONE,
+      id: `wamid.ctwa-${Date.now()}-${Math.random()}`,
+      timestamp: String(Math.floor(Date.now() / 1000)),
+      text: { body: "Hi from the ad" },
+      type: "text",
+    };
+    if (referral) message["referral"] = referral;
+    return {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          id: "entry-1",
+          changes: [
+            {
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { display_phone_number: "1", phone_number_id: "2" },
+                contacts: [{ profile: { name: "Lead" }, wa_id: SENDER_PHONE }],
+                messages: [message],
+              },
+              field: "messages",
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function sign(body: string): string {
+    return "sha256=" + createHmac("sha256", APP_SECRET).update(body).digest("hex");
+  }
+
+  beforeAll(async () => {
+    const adapter = new WhatsAppAdapter({
+      token: "t",
+      phoneNumberId: "2",
+      appSecret: APP_SECRET,
+    });
+    const spied = Object.create(adapter);
+    spied.sendTextReply = vi.fn(async () => {});
+    spied.markAsRead = vi.fn(async () => {});
+
+    const gatewayEntry: GatewayEntry = {
+      gateway: { handleIncoming } as never,
+      adapter: spied,
+      deploymentConnectionId: CONNECTION_ID,
+      channel: "whatsapp",
+      orgId: ORG_ID,
+    };
+    const registry = {
+      getGatewayByWebhookPath: (path: string) => (path === WEBHOOK_PATH ? gatewayEntry : null),
+    };
+
+    app = Fastify({ logger: false });
+    registerManagedWebhookRoutes(app, {
+      registry,
+      ctwaAdapter: { ingest },
+    });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("invokes CtwaAdapter.ingest for messages with ctwa_clid", async () => {
+    ingest.mockClear();
+    handleIncoming.mockClear();
+
+    const payload = buildPayload({
+      source_id: "ad_1",
+      source_type: "ad",
+      source_url: "https://fb.me/abc",
+      ctwa_clid: "ARxx_test_clid",
+    });
+    const body = JSON.stringify(payload);
+    const response = await app.inject({
+      method: "POST",
+      url: WEBHOOK_PATH,
+      payload,
+      headers: { "x-hub-signature-256": sign(body) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ingest).toHaveBeenCalledOnce();
+    const [arg] = ingest.mock.calls[0]!;
+    expect(arg).toMatchObject({
+      from: SENDER_PHONE,
+      organizationId: ORG_ID,
+      deploymentId: CONNECTION_ID,
+    });
+    expect(arg.metadata).toMatchObject({ ctwaClid: "ARxx_test_clid" });
+    // Existing dispatch must still happen — CTWA wiring does not short-circuit.
+    expect(handleIncoming).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT call CtwaAdapter.ingest for messages without ctwa_clid", async () => {
+    ingest.mockClear();
+    handleIncoming.mockClear();
+
+    const payload = buildPayload(); // no referral at all
+    const body = JSON.stringify(payload);
+    const response = await app.inject({
+      method: "POST",
+      url: WEBHOOK_PATH,
+      payload,
+      headers: { "x-hub-signature-256": sign(body) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ingest).not.toHaveBeenCalled();
+    expect(handleIncoming).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT call CtwaAdapter.ingest when referral is present but ctwa_clid is missing", async () => {
+    ingest.mockClear();
+
+    const payload = buildPayload({ source_id: "ad_2", source_type: "ad" });
+    const body = JSON.stringify(payload);
+    const response = await app.inject({
+      method: "POST",
+      url: WEBHOOK_PATH,
+      payload,
+      headers: { "x-hub-signature-256": sign(body) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it("does not block the message flow when CTWA ingest rejects", async () => {
+    ingest.mockClear();
+    handleIncoming.mockClear();
+    // Pending promise that never resolves — verifies fire-and-forget.
+    ingest.mockImplementationOnce(() => new Promise(() => {}));
+
+    const payload = buildPayload({
+      source_id: "ad_3",
+      source_type: "ad",
+      ctwa_clid: "ARxx_pending_clid",
+    });
+    const body = JSON.stringify(payload);
+    const response = await app.inject({
+      method: "POST",
+      url: WEBHOOK_PATH,
+      payload,
+      headers: { "x-hub-signature-256": sign(body) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(handleIncoming).toHaveBeenCalledOnce();
   });
 });

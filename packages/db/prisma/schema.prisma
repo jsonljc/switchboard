@@ -1403,10 +1403,12 @@ model Contact {
   firstTouchChannel String?
   stage             String    @default("new")
   source            String?
+  sourceType        String?   // "ctwa" | "instant_form" | "organic" | "web"
   attribution       Json?
   qualificationData Json?
   roles             String[]  @default(["lead"])
   leadgenId         String?
+  idempotencyKey    String?
   firstContactAt    DateTime  @default(now())
   lastActivityAt    DateTime  @default(now())
   createdAt         DateTime  @default(now())
@@ -1422,6 +1424,8 @@ model Contact {
   @@index([organizationId, phone])
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
+  @@index([organizationId, sourceType, createdAt])
+  @@unique([organizationId, idempotencyKey])
 }
 
 model Opportunity {

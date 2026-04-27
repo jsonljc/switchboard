@@ -24,10 +24,12 @@ describe("executeWeeklyAudit", () => {
       listActiveDeployments: vi.fn().mockResolvedValue([
         {
           id: "dep-1",
+          organizationId: "org-1",
           inputConfig: { monthlyBudget: 1000, targetCPA: 100, targetROAS: 3.0 },
         },
         {
           id: "dep-2",
+          organizationId: "org-2",
           inputConfig: { monthlyBudget: 500, targetCPA: 50, targetROAS: 2.0 },
         },
       ]),
@@ -123,6 +125,7 @@ describe("executeDailyCheck", () => {
       listActiveDeployments: vi.fn().mockResolvedValue([
         {
           id: "dep-1",
+          organizationId: "org-1",
           inputConfig: { monthlyBudget: 1000, targetCPA: 100, targetROAS: 3.0 },
         },
       ]),

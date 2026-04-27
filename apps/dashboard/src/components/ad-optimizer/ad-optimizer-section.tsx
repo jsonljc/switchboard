@@ -4,6 +4,7 @@ import { useAdOptimizerAudit } from "@/hooks/use-ad-optimizer";
 import { AuditSummaryCard } from "./audit-summary-card";
 import { OutputFeed } from "./output-feed";
 import { MetricTrendChart } from "./metric-trend-chart";
+import { SourceComparisonCard } from "./source-comparison-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface AdOptimizerSectionProps {
@@ -54,6 +55,9 @@ export function AdOptimizerSection({ deploymentId, inputConfig }: AdOptimizerSec
         watches={report.watches}
         recommendations={report.recommendations}
       />
+      {report.sourceComparison && report.sourceComparison.rows.length > 0 && (
+        <SourceComparisonCard rows={report.sourceComparison.rows} />
+      )}
       {report.periodDeltas.length > 0 && <MetricTrendChart periodDeltas={report.periodDeltas} />}
     </div>
   );

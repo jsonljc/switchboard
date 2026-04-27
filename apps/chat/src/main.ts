@@ -18,6 +18,7 @@ import { StaticDeploymentResolver } from "./single-tenant/static-deployment-reso
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
+import { CtwaAdapter } from "@switchboard/ad-optimizer";
 
 async function main() {
   // Initialize Sentry before anything else
@@ -136,6 +137,40 @@ async function main() {
     }
     app.log.error(error);
     return reply.code(statusCode).send({ error: message, statusCode });
+  });
+
+  // CTWA lead intake adapter — singleton. Inbound WhatsApp messages tagged with
+  // `ctwa_clid` are forwarded through PlatformIngress.submit(intent="lead.intake")
+  // so a Contact gets created with sourceType="ctwa". The shim below adapts the
+  // adapter's narrow `IngressLike` contract to the chat app's HTTP ingress
+  // adapter, supplying the synthetic actor + chat surface metadata required by
+  // the canonical request envelope. Same pattern as
+  // apps/api/src/bootstrap/contained-workflows.ts:66-91.
+  const ctwaAdapter = new CtwaAdapter({
+    ingress: {
+      submit: async (req) => {
+        const payload = req.payload as {
+          organizationId: string;
+          deploymentId: string;
+        };
+        const response = await platformIngressAdapter.submit({
+          organizationId: payload.organizationId,
+          actor: { id: "system:whatsapp-ctwa-inbound", type: "system" },
+          intent: req.intent,
+          parameters: req.payload as Record<string, unknown>,
+          trigger: "internal",
+          surface: { surface: "chat" },
+          idempotencyKey: req.idempotencyKey,
+          targetHint: { deploymentId: payload.deploymentId },
+          ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
+        });
+        if (!response.ok) {
+          return { ok: false };
+        }
+        return { ok: true, result: response.result };
+      },
+    },
+    now: () => new Date(),
   });
 
   // --- Managed runtime registry (multi-tenant) + widget endpoints ---
@@ -272,7 +307,7 @@ async function main() {
 
   // --- Managed channel webhook routes (GET verification + POST messages) ---
   if (registry) {
-    registerManagedWebhookRoutes(app, { registry, failedMessageStore });
+    registerManagedWebhookRoutes(app, { registry, failedMessageStore, ctwaAdapter });
   }
 
   // --- Internal provision-notify endpoint ---

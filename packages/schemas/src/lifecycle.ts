@@ -69,12 +69,19 @@ export const AttributionChainSchema = z.object({
   utmSource: z.string().nullable(),
   utmMedium: z.string().nullable(),
   utmCampaign: z.string().nullable(),
+  ctwa_clid: z.string().optional(),
+  leadgen_id: z.string().optional(),
+  referralUrl: z.string().optional(),
+  capturedAt: z.string().datetime().optional(),
 });
 export type AttributionChain = z.infer<typeof AttributionChainSchema>;
 
 // ---------------------------------------------------------------------------
 // Contact
 // ---------------------------------------------------------------------------
+
+export const LeadSourceTypeSchema = z.enum(["ctwa", "instant_form", "organic", "web"]);
+export type LeadSourceType = z.infer<typeof LeadSourceTypeSchema>;
 
 export const ContactSchema = z.object({
   id: z.string().min(1),
@@ -86,6 +93,7 @@ export const ContactSchema = z.object({
   firstTouchChannel: z.string().nullable().optional(),
   stage: ContactStageSchema.default("new"),
   source: z.string().nullable().optional(),
+  sourceType: LeadSourceTypeSchema.optional(),
   attribution: AttributionChainSchema.nullable().optional(),
   roles: z.array(z.string()).default(["lead"]),
   qualificationData: z.record(z.unknown()).nullable().optional(),

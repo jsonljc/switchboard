@@ -318,6 +318,203 @@ describe("generateRecommendations", () => {
     expect(pause?.confidence).toBe(0.9);
   });
 
+  it("recommends shift_budget_to_source when one source has much better trueRoas", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-shift",
+      campaignName: "Shift Source",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: {
+        rows: [
+          {
+            source: "ctwa",
+            cpl: 4,
+            costPerQualified: 10,
+            costPerBooked: 30,
+            closeRate: 0.12,
+            trueRoas: 3.2,
+          },
+          {
+            source: "instant_form",
+            cpl: 2,
+            costPerQualified: 12,
+            costPerBooked: 50,
+            closeRate: 0.03,
+            trueRoas: 0.9,
+          },
+        ],
+      },
+    };
+
+    const result = generateRecommendations(input);
+
+    const shift = result.find((r) => r.action === "shift_budget_to_source");
+    expect(shift).toBeDefined();
+    expect(shift?.params?.from).toBe("instant_form");
+    expect(shift?.params?.to).toBe("ctwa");
+  });
+
+  it("recommends switch_optimization_event for CTWA optimizing on chats", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-ctwa",
+      campaignName: "CTWA Campaign",
+      diagnoses: [makeDiagnosis("ctwa_drive_by_clickers")],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.some((r) => r.action === "switch_optimization_event")).toBe(true);
+  });
+
+  it("does NOT recommend shift_budget_to_source when only one source exists", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-shift-1",
+      campaignName: "Single Source",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: {
+        rows: [
+          {
+            source: "ctwa",
+            cpl: 4,
+            costPerQualified: 10,
+            costPerBooked: 30,
+            closeRate: 0.12,
+            trueRoas: 3.2,
+          },
+        ],
+      },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeUndefined();
+  });
+
+  it("recommends shift_budget_to_source when trueRoas is exactly 2x", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-shift-2x",
+      campaignName: "Exact 2x ROAS",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: {
+        rows: [
+          {
+            source: "ctwa",
+            cpl: 4,
+            costPerQualified: 10,
+            costPerBooked: 30,
+            closeRate: 0.1,
+            trueRoas: 2.0,
+          },
+          {
+            source: "instant_form",
+            cpl: 2,
+            costPerQualified: 12,
+            costPerBooked: 50,
+            closeRate: 0.05,
+            trueRoas: 1.0,
+          },
+        ],
+      },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeDefined();
+  });
+
+  it("does NOT recommend shift_budget_to_source when best closeRate is below 0.05", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-shift-low-close",
+      campaignName: "Low Close Rate",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: {
+        rows: [
+          {
+            source: "ctwa",
+            cpl: 4,
+            costPerQualified: 10,
+            costPerBooked: 30,
+            closeRate: 0.04,
+            trueRoas: 5.0,
+          },
+          {
+            source: "instant_form",
+            cpl: 2,
+            costPerQualified: 12,
+            costPerBooked: 50,
+            closeRate: 0.01,
+            trueRoas: 1.0,
+          },
+        ],
+      },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeUndefined();
+  });
+
+  it("emits harden_capi_attribution when capiAttributionStale flag is true", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-capi-stale",
+      campaignName: "Stale CAPI",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: { rows: [] },
+      capiAttributionStale: true,
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.find((r) => r.action === "harden_capi_attribution")).toBeDefined();
+  });
+
+  it("does NOT emit harden_capi_attribution when capiAttributionStale is unset", () => {
+    const input: RecommendationInput = {
+      campaignId: "camp-capi-fresh",
+      campaignName: "Fresh CAPI",
+      diagnoses: [],
+      deltas: [],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 5000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      sourceComparison: { rows: [] },
+    };
+
+    const result = generateRecommendations(input);
+
+    expect(result.find((r) => r.action === "harden_capi_attribution")).toBeUndefined();
+  });
+
   it("adds learning phase reset warning to restructure recommendations", () => {
     const input: RecommendationInput = {
       campaignId: "camp-restructure",

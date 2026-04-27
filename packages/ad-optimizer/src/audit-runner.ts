@@ -26,6 +26,9 @@ import { detectTrends } from "./trend-engine.js";
 import { analyzeBudgetDistribution } from "./budget-analyzer.js";
 import { diagnose } from "./metric-diagnostician.js";
 import { generateRecommendations } from "./recommendation-engine.js";
+import { compareSources } from "./analyzers/source-comparator.js";
+import { computeSpendBySource } from "./analyzers/spend-attributor.js";
+import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 
 // ── Interfaces ──
 
@@ -388,6 +391,15 @@ export class AuditRunner {
       budgetDistribution = analyzeBudgetDistribution(budgetEntries, this.config.targetCPA, null);
     }
 
+    // Step 8b: Cross-source comparison (CTWA vs Instant Form on equal footing).
+    // Only computed when the CRM data provider returned a per-source funnel.
+    let sourceComparison: { rows: ReturnType<typeof compareSources>["rows"] } | undefined;
+    const bySource = (crmData as { bySource?: Record<string, SourceFunnel> }).bySource;
+    if (bySource && Object.keys(bySource).length > 0) {
+      const spendBySource = computeSpendBySource(currentInsights, bySource, adSetData);
+      sourceComparison = compareSources({ bySource, spendBySource });
+    }
+
     // Step 9: Assemble report
     const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
     const totalLeads = currentInsights.reduce((sum, i) => sum + i.conversions, 0);
@@ -414,6 +426,7 @@ export class AuditRunner {
       ...(trends ? { trends } : {}),
       ...(budgetDistribution ? { budgetDistribution } : {}),
       ...(adSetDetails ? { adSetDetails } : {}),
+      ...(sourceComparison ? { sourceComparison } : {}),
     };
   }
 }

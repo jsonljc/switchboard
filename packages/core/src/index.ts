@@ -236,3 +236,16 @@ export { effortToSlotAndOptions, effortForTaskType, TASK_TYPE_EFFORT_MAP } from 
 
 // Memory (scoped store interfaces for three-channel privacy)
 export * from "./memory/index.js";
+
+// Intents (handler classes invoked by app routes for specific intent kinds)
+export {
+  LeadIntakeHandler,
+  type LeadIntakeStore,
+  type LeadIntakeHandlerDeps,
+  type LeadIntakeResult,
+} from "./intents/lead-intake-handler.js";
+// TODO(task-11): Wire `lead.intake` into IntentRegistry + WorkflowMode in apps/api
+// bootstrap (alongside the prisma-backed LeadIntakeStore from packages/db, task 5)
+// using buildLeadIntakeWorkflow(new LeadIntakeHandler({ store })). The wrapper itself
+// lives here; concrete store + registration belong at the composition root, not in core.
+export { buildLeadIntakeWorkflow } from "./intents/lead-intake-workflow.js";

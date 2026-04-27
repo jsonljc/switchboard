@@ -88,6 +88,9 @@ export * from "./ad-optimizer.js";
 // Ad Optimizer V2 (trends, budget, creative, saturation)
 export * from "./ad-optimizer-v2.js";
 
+// Lead Intake (CTWA + Instant Form attributed lead events)
+export * from "./lead-intake.js";
+
 // Knowledge entries (curated playbooks, policies, domain guidance)
 export * from "./knowledge.js";
 

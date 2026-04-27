@@ -26,6 +26,8 @@ export function extractReferralData(msg: Record<string, unknown>): Record<string
   if (referral) {
     if (referral["source_id"]) metadata["sourceAdId"] = referral["source_id"];
     if (referral["source_type"]) metadata["adSourceType"] = referral["source_type"];
+    if (referral["source_url"]) metadata["ctwaSourceUrl"] = referral["source_url"];
+    if (referral["ctwa_clid"]) metadata["ctwaClid"] = referral["ctwa_clid"];
     if (referral["headline"]) metadata["adHeadline"] = referral["headline"];
     if (referral["body"]) metadata["adBody"] = referral["body"];
   }
