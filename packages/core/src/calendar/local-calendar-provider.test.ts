@@ -304,3 +304,69 @@ describe("LocalCalendarProvider", () => {
     });
   });
 });
+
+describe("LocalCalendarProvider emailSender wiring", () => {
+  function makeStoreForEmailTests() {
+    return {
+      findOverlapping: vi.fn().mockResolvedValue([]),
+      createInTransaction: vi.fn().mockResolvedValue({ id: "bk-1" }),
+      findById: vi.fn().mockResolvedValue(null),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      reschedule: vi.fn().mockResolvedValue({ id: "bk-1" }),
+    };
+  }
+
+  it("invokes emailSender exactly once when attendeeEmail set", async () => {
+    const emailSender = vi.fn().mockResolvedValue(undefined);
+    const provider = new LocalCalendarProvider({
+      businessHours: BUSINESS_HOURS,
+      bookingStore: makeStoreForEmailTests(),
+      emailSender,
+    });
+
+    await provider.createBooking({
+      organizationId: "org-1",
+      contactId: "contact-1",
+      service: "Consultation",
+      slot: { start: "2026-05-01T10:00:00Z", end: "2026-05-01T11:00:00Z" },
+      attendeeEmail: "lead@example.com",
+      attendeeName: "Jane",
+    } as never);
+
+    expect(emailSender).toHaveBeenCalledTimes(1);
+    expect(emailSender).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "lead@example.com",
+        attendeeName: "Jane",
+        service: "Consultation",
+        bookingId: "bk-1",
+      }),
+    );
+  });
+
+  it("calls onSendFailure when emailSender throws but still returns confirmed booking", async () => {
+    const emailSender = vi.fn().mockRejectedValue(new Error("boom"));
+    const onSendFailure = vi.fn();
+    const provider = new LocalCalendarProvider({
+      businessHours: BUSINESS_HOURS,
+      bookingStore: makeStoreForEmailTests(),
+      emailSender,
+      onSendFailure,
+    });
+
+    const result = await provider.createBooking({
+      organizationId: "org-1",
+      contactId: "contact-1",
+      service: "Consultation",
+      slot: { start: "2026-05-01T10:00:00Z", end: "2026-05-01T11:00:00Z" },
+      attendeeEmail: "lead@example.com",
+      attendeeName: "Jane",
+    } as never);
+
+    expect(result.status).toBe("confirmed");
+    expect(onSendFailure).toHaveBeenCalledWith({
+      bookingId: "bk-1",
+      error: "boom",
+    });
+  });
+});

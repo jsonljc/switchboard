@@ -428,9 +428,33 @@ async function resolveCalendarProvider(
       },
     };
 
+    const resendKey = process.env["RESEND_API_KEY"];
+    const fromAddress = process.env["EMAIL_FROM"] ?? "noreply@switchboard.app";
+    let emailSender: import("@switchboard/core/calendar").EmailSender | undefined;
+    if (resendKey) {
+      const { sendBookingConfirmationEmail } = await import("../lib/booking-confirmation-email.js");
+      emailSender = async (email) => {
+        await sendBookingConfirmationEmail({
+          apiKey: resendKey,
+          fromAddress,
+          to: email.to,
+          attendeeName: email.attendeeName,
+          service: email.service,
+          startsAt: email.startsAt,
+          endsAt: email.endsAt,
+          bookingId: email.bookingId,
+        });
+      };
+    } else {
+      logger.info("Calendar: booking confirmation emails disabled (RESEND_API_KEY not set)");
+    }
+
     const provider = new LocalCalendarProvider({
       businessHours,
       bookingStore: localStore,
+      ...(emailSender ? { emailSender } : {}),
+      onSendFailure: ({ bookingId, error }) =>
+        logger.error(`Calendar: booking confirmation email failed for ${bookingId}: ${error}`),
     });
     logger.info(
       "Calendar: using LocalCalendarProvider (business hours configured, no Google creds)",
