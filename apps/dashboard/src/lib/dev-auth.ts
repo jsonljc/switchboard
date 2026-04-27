@@ -14,6 +14,14 @@ export function assertSafeDashboardAuthEnv(): void {
     return;
   }
 
+  // Skip during `next build` page-data collection, which loads route modules
+  // (and the auth.ts that calls this assert) under NODE_ENV=production but
+  // before NEXTAUTH_SECRET is needed. PR #260 added the same guard to auth.ts
+  // but missed this call site.
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return;
+  }
+
   if (process.env.DEV_BYPASS_AUTH === "true") {
     throw new Error("DEV_BYPASS_AUTH cannot be enabled in production");
   }
