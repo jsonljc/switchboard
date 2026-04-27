@@ -2,6 +2,16 @@ import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 
+export interface GatewayContactStore {
+  findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
+  create(input: {
+    organizationId: string;
+    phone: string;
+    primaryChannel: "whatsapp";
+    source: string;
+  }): Promise<{ id: string }>;
+}
+
 export interface ChannelGatewayConfig {
   conversationStore: GatewayConversationStore;
   /** Called after each message is persisted. MUST be synchronous — async callbacks are not awaited. */
@@ -18,6 +28,8 @@ export interface ChannelGatewayConfig {
   deploymentResolver: DeploymentResolver;
   /** Platform ingress for converged execution path */
   platformIngress: { submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> };
+  /** Optional contact-identity store. When set, the gateway resolves Contact identity for WhatsApp inbound before ingress.submit. */
+  contactStore?: GatewayContactStore;
 }
 
 export interface GatewayConversationStore {
