@@ -52,29 +52,15 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 3
 fi
 
-# Derive shadow DB URL (strip query params, append _shadow to db name).
-# Prisma's `migrate diff --from-migrations` requires --shadow-database-url
-# AND assumes the database already exists (it doesn't auto-create).
-_base="${DATABASE_URL%%\?*}"
-SHADOW_DATABASE_URL="${SHADOW_DATABASE_URL:-${_base%/*}/${_base##*/}_shadow}"
-shadow_db_name="${SHADOW_DATABASE_URL##*/}"
-admin_url="${_base%/*}/postgres"
-
-# Pre-create the shadow DB if it doesn't exist (idempotent, requires CREATEDB).
-# Connect to the maintenance `postgres` DB to issue the CREATE.
-if command -v psql > /dev/null; then
-  psql "$admin_url" -tAc "SELECT 1 FROM pg_database WHERE datname='${shadow_db_name}'" 2>/dev/null | grep -q 1 \
-    || psql "$admin_url" -c "CREATE DATABASE \"${shadow_db_name}\"" > /dev/null 2>&1 \
-    || true
-fi
-
+# Prisma 7's `migrate diff` performs the comparison in-process and no longer
+# requires (or accepts) --shadow-database-url. The from-migrations → to-schema
+# comparison still works; just drop the shadow DB plumbing.
 PRISMA_BIN="$REPO_ROOT/packages/db/node_modules/.bin/prisma"
 
 err=$(DATABASE_URL="${DATABASE_URL:-}" \
 "$PRISMA_BIN" migrate diff \
   --from-migrations "$MIGRATIONS" \
   --to-schema-datamodel "$SCHEMA" \
-  --shadow-database-url "$SHADOW_DATABASE_URL" \
   --exit-code 2>&1 >/dev/null)
 status=$?
 
