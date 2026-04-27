@@ -37,18 +37,42 @@ grep -rn "prisma.organization" apps/api/src --include="*.ts" | grep -v node_modu
 
 Expected: identifies the single (or multiple) call sites. Note them.
 
-- [ ] **Step 2: Check ManagedChannel uniqueness**
+- [ ] **Step 2: Check ManagedChannel natural key for `(orgId, channel, phoneNumberId)`**
 
-Read `packages/db/prisma/schema.prisma` for the `ManagedChannel` model. Confirm whether there is a `@@unique` on `(organizationId, channel)` or `(organizationId, phoneNumberId)`. Note the answer.
+Read `packages/db/prisma/schema.prisma` for the `ManagedChannel` model. Determine:
+
+- Is there a field that stores `phoneNumberId` for WhatsApp channels? If so, where (top-level field, embedded in `metadata` JSON, on the related `Connection.credentials` encrypted blob)?
+- Is there any `@@unique` constraint? If yes, on which fields?
+
+Choose the **natural key** for "this org already has this WhatsApp number connected":
+
+- **Preferred:** `(organizationId, channel, phoneNumberId)` so an org can have multiple WhatsApp numbers.
+- **Fallback only if `phoneNumberId` isn't persisted on `ManagedChannel`:** use the closest persisted credential/metadata field that uniquely identifies the customer asset; document the limitation.
+
+**Do NOT default to `(organizationId, channel)` only** — that prevents an org from ever adding a second WhatsApp number, which is not the product behavior we want even for v1.
+
+Note the chosen key and the lookup query that will be used in Task 10.
 
 - [ ] **Step 3: Check health-checker probe export shape**
 
-Read `apps/chat/src/managed/health-checker.ts` and identify the function that performs the Meta probe for WhatsApp. Note its name, exports, dependencies. Decide:
+Read `apps/chat/src/managed/health-checker.ts` and identify the function that performs the Meta probe for WhatsApp. Note its name, exports, dependencies. **Default decision: duplicate** the small probe function into `apps/api/src/lib/whatsapp-health-probe.ts` rather than cross-app import. Override only if there's an existing factor-out in `packages/schemas` or a shared package — and note the override explicitly. Reason: `apps/api` MUST NOT import from `apps/chat`.
 
-- (a) reusable from `apps/api` directly, or
-- (b) needs a parallel implementation in `apps/api/src/lib/whatsapp-health-probe.ts`
+- [ ] **Step 4: Confirm token model — CRITICAL**
 
-- [ ] **Step 4: Check for existing Meta helper module**
+Read `apps/api/src/routes/whatsapp-onboarding.ts` carefully and identify:
+
+1. Which token does each Meta `graphCall` actually use as `Authorization: Bearer …`? (The ESU flow likely passes the user's signup token through, but verify against the actual code.)
+2. Is `WHATSAPP_GRAPH_TOKEN` (env) used as: (a) the Meta **app** access token (system-level, e.g. for `/debug_token` validation), (b) a customer-asset access token (which would only work in dev with dev-owned assets), or (c) something else?
+3. For each Meta endpoint we'll call from the new helper:
+   - `GET /debug_token?input_token=<USER_TOKEN>&access_token=<APP_TOKEN>` — **app token in `access_token`, customer's user token as `input_token`**
+   - `POST /<wabaId>/subscribed_apps` — **customer user token (the one that has access to the WABA)**, NOT the app token
+   - `GET /v17.0/{phoneNumberId}` (health probe) — **customer user token**
+
+Document the mapping. The Meta helper signatures in Task 3 MUST take separate parameters with documented purposes (e.g. `appToken: string` for the `debug_token` call, `userToken: string` for everything else). The provision route MUST pass the **decrypted customer-provided Meta token** as `userToken`.
+
+**Do NOT silently use `WHATSAPP_GRAPH_TOKEN` as the customer-asset access token.** If WABA-id extraction needs the app token (it does, for `debug_token`), document that one specific call as the only legitimate use — and surface a `config_error` if the env var is missing.
+
+- [ ] **Step 5: Check for existing Meta helper module**
 
 Run:
 
@@ -56,21 +80,27 @@ Run:
 grep -rln "graph.facebook.com\|graphCall\|debug_token\|subscribed_apps" apps/api/src packages/core/src --include="*.ts" | grep -v node_modules | grep -v __tests__
 ```
 
-Expected: identifies any existing wrapper. If `whatsapp-onboarding.ts` has `graphCall` as a private helper, decide whether to extract it.
+Expected: identifies any existing wrapper. If `whatsapp-onboarding.ts` has `graphCall` as a private helper, plan its extraction.
 
-- [ ] **Step 5: Write findings**
+- [ ] **Step 6: Identify the dashboard component that consumes the provision response**
+
+Trace the dashboard call chain that handles a successful provision response. The natural starting point is `apps/dashboard/src/components/onboarding/channel-connect-card.tsx` (per the trace doc). Find the parent that consumes `onConnect`'s result and renders status. Note the file:line where `status === "active"` is currently assumed. This is the single component scoped for the minimal UI change in Task 11.
+
+- [ ] **Step 7: Write findings**
 
 Create `.audit/10-fix-prep-notes.md` with:
 
 - org-creation call site(s) — file:line
-- ManagedChannel uniqueness state (yes/no — if no, choice: guard-at-runtime vs migration)
-- health-checker decision (a or b)
-- Meta helper extraction plan
+- ManagedChannel natural key chosen for idempotency — fields + lookup query
+- health-checker decision (default: duplicate; if override, why)
+- **Token model mapping** — for each Meta endpoint we call, which token is required, with citations to ESU code
+- Meta helper extraction plan (function signatures, parameter names, purposes)
+- Dashboard provision-consumer component — file:line of the status-rendering point
 - Any plan-modifying surprises
 
-- [ ] **Step 6: Stop and surface to controller**
+- [ ] **Step 8: Stop and surface to controller**
 
-If any finding contradicts the spec (e.g., org creation is in dashboard not api, or schema requires migration), pause and update the plan before continuing. Otherwise, proceed to Task 2.
+If any finding contradicts the spec — particularly if the token model isn't what the spec assumes — **stop and report**. Do not proceed to Task 2 until the controller acknowledges the findings. Otherwise, proceed.
 
 ---
 
@@ -114,9 +144,18 @@ export function buildManagedWebhookPath(connectionId: string): string {
 
 Replace `const webhookPath = `/webhook/managed/${connection.id}`;` with `const webhookPath = buildManagedWebhookPath(connection.id);`. Add the import.
 
-- [ ] **Step 5: Add cross-side pin in chat tests**
+- [ ] **Step 5: Add cross-side pin in chat tests (NO cross-app import)**
 
-In `apps/chat/src/__tests__/whatsapp-wiring.test.ts`, add a test asserting that the route registered by `app.post("/webhook/managed/:webhookId", …)` matches a path produced by `buildManagedWebhookPath`. Import the helper from apps/api via a relative path or duplicate the regex pin (avoid cross-app import). Document the choice in the test file with a one-line comment if duplicating.
+In `apps/chat/src/__tests__/whatsapp-wiring.test.ts`, add a test asserting that the route registered by `app.post("/webhook/managed/:webhookId", …)` accepts a path matching the regex `^/webhook/managed/[a-zA-Z0-9_-]+$`. **Do NOT import from `apps/api`** — apps must not depend on each other, even in tests. Both sides assert the same regex independently with a comment in each test naming the external contract:
+
+```ts
+// External contract pinned: /webhook/managed/:connectionId
+// Mirrored regex in apps/api/src/__tests__/provision-fixes.test.ts.
+// Duplication is intentional; do not introduce a cross-app import.
+const MANAGED_WEBHOOK_PATH = /^\/webhook\/managed\/[a-zA-Z0-9_-]+$/;
+```
+
+If the pinned format ever changes, both tests fail simultaneously — the breakage is loud and contained.
 
 - [ ] **Step 6: Run all tests in both apps**
 
@@ -147,6 +186,14 @@ git commit -m "fix(api): lift managed webhook path into shared helper, pin forma
 - Create: `apps/api/src/lib/__tests__/whatsapp-meta.test.ts`
 - Modify: `apps/api/src/routes/whatsapp-onboarding.ts` (replace inline calls with helper)
 
+**Token-model contract (locked from Task 1 Step 4):**
+
+- `fetchWabaIdFromToken({ appToken, userToken, fetchImpl? })` — calls `GET /debug_token?input_token=<userToken>&access_token=<appToken>`. The customer's `userToken` is the input being introspected; the system `appToken` authorizes the call. Both required, distinct, and named for purpose. **Do NOT collapse them into one `graphToken` parameter.**
+- `registerWebhookOverride({ userToken, wabaId, webhookUrl, verifyToken, fetchImpl? })` — calls `POST /<wabaId>/subscribed_apps` with `Authorization: Bearer <userToken>`. **The customer's userToken is the credential** because only the customer's token has access to their WABA.
+- `probeWhatsAppHealth({ userToken, phoneNumberId, fetchImpl? })` (Task 5, but reaffirmed here for symmetry) — calls `GET /v17.0/{phoneNumberId}` with the customer's `userToken`.
+
+If Task 1 Step 4 reveals the actual ESU flow uses a different mapping, **stop and reconcile** — do not implement until the spec and helper match Meta reality.
+
 - [ ] **Step 1: Write failing test**
 
 `apps/api/src/lib/__tests__/whatsapp-meta.test.ts`:
@@ -161,19 +208,20 @@ describe("whatsapp-meta helper", () => {
   });
 
   describe("registerWebhookOverride", () => {
-    it("calls /<wabaId>/subscribed_apps with override_callback_uri and verify_token", async () => {
+    it("calls /<wabaId>/subscribed_apps with the customer userToken (NOT the appToken)", async () => {
       const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
       const result = await registerWebhookOverride({
-        graphToken: "TOKEN",
+        userToken: "CUSTOMER_TOKEN",
         wabaId: "WABA_1",
         webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
         verifyToken: "verify-secret",
         fetchImpl: fetchSpy,
       });
       expect(result.ok).toBe(true);
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("/WABA_1/subscribed_apps"),
-        expect.objectContaining({ method: "POST" }),
+      const [url, init] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/WABA_1/subscribed_apps");
+      expect((init as { headers: Record<string, string> }).headers["Authorization"]).toBe(
+        "Bearer CUSTOMER_TOKEN",
       );
     });
 
@@ -184,7 +232,7 @@ describe("whatsapp-meta helper", () => {
         json: async () => ({ error: { message: "bad token" } }),
       });
       const result = await registerWebhookOverride({
-        graphToken: "TOKEN",
+        userToken: "CUSTOMER_TOKEN",
         wabaId: "WABA_1",
         webhookUrl: "https://chat.example.com/webhook/managed/conn_1",
         verifyToken: "v",
@@ -196,18 +244,21 @@ describe("whatsapp-meta helper", () => {
   });
 
   describe("fetchWabaIdFromToken", () => {
-    it("extracts WABA ID from debug_token response", async () => {
+    it("calls /debug_token with userToken as input_token and appToken as access_token", async () => {
       const fetchSpy = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ data: { granular_scopes: [{ target_ids: ["WABA_42"] }] } }),
       });
       const result = await fetchWabaIdFromToken({
-        graphToken: "TOKEN",
-        userToken: "USER_TOKEN",
+        appToken: "APP_TOKEN",
+        userToken: "CUSTOMER_TOKEN",
         fetchImpl: fetchSpy,
       });
       expect(result.ok).toBe(true);
       expect(result.wabaId).toBe("WABA_42");
+      const [url] = fetchSpy.mock.calls[0];
+      expect(url).toContain("input_token=CUSTOMER_TOKEN");
+      expect(url).toContain("access_token=APP_TOKEN");
     });
   });
 });
@@ -296,45 +347,106 @@ it("calls Meta /subscribed_apps with the managed webhook URL after provision", a
 
 Test fails because route doesn't call `subscribed_apps`. Capture the failure message.
 
-- [ ] **Step 3: Add Meta registration to provision flow**
+- [ ] **Step 3: Add Meta registration to provision flow (customer-token primary, app-token only for debug_token)**
 
-In `organizations.ts`, after the transaction (around line 285, before provision-notify):
+In `organizations.ts`, after the transaction (around line 285, before provision-notify). Note: `decryptedToken` is the customer-provided Meta token (decrypted from `Connection.credentials`); `appToken` is the system app access token used **only** for `debug_token` introspection. If `appToken` is unset, the route surfaces `config_error` rather than silently substituting it for `decryptedToken`:
 
 ```ts
+// Decrypt the customer-provided Meta token (the access token for the customer's WABA).
+const decryptedToken: string = decryptCredentialsField(encrypted, "token");
+//   ^ exact decrypt helper name confirmed in Task 1 Step 4
+
 // Meta webhook registration (best-effort; sets status accordingly)
 let metaStatus: "registered" | "skipped" | "failed" = "skipped";
 let metaReason: string | null = null;
-const graphToken = process.env.WHATSAPP_GRAPH_TOKEN;
-const appSecret = process.env.WHATSAPP_APP_SECRET;
+const appToken = process.env.WHATSAPP_GRAPH_TOKEN; // Meta APP access token, used ONLY for debug_token
+const verifyToken = process.env.WHATSAPP_APP_SECRET; // verify token Meta posts back
 const webhookBaseUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
-if (ch.channel === "whatsapp" && graphToken && appSecret && webhookBaseUrl) {
-  const wabaResult = await fetchWabaIdFromToken({
-    graphToken,
-    userToken: decryptedToken,
-  });
-  if (!wabaResult.ok) {
+
+if (ch.channel === "whatsapp") {
+  if (!appToken || !verifyToken || !webhookBaseUrl) {
     metaStatus = "failed";
-    metaReason = `WABA lookup failed: ${wabaResult.reason}`;
+    metaReason =
+      "config_error: missing WHATSAPP_GRAPH_TOKEN / WHATSAPP_APP_SECRET / CHAT_PUBLIC_URL";
+    // Will be promoted to status: "config_error" by the precedence resolver.
   } else {
-    const reg = await registerWebhookOverride({
-      graphToken,
-      wabaId: wabaResult.wabaId,
-      webhookUrl: `${webhookBaseUrl}${result.managedChannel.webhookPath}`,
-      verifyToken: appSecret,
+    const wabaResult = await fetchWabaIdFromToken({
+      appToken, // system app token authorizes the introspection call
+      userToken: decryptedToken, // customer's token is the subject of introspection
     });
-    if (reg.ok) {
-      metaStatus = "registered";
-    } else {
+    if (!wabaResult.ok) {
       metaStatus = "failed";
-      metaReason = `Meta /subscribed_apps failed: ${reg.reason}`;
+      metaReason = `WABA lookup failed: ${wabaResult.reason}`;
+    } else {
+      const reg = await registerWebhookOverride({
+        userToken: decryptedToken, // customer's token — only this has access to the customer's WABA
+        wabaId: wabaResult.wabaId,
+        webhookUrl: `${webhookBaseUrl}${result.managedChannel.webhookPath}`,
+        verifyToken,
+      });
+      if (reg.ok) {
+        metaStatus = "registered";
+      } else {
+        metaStatus = "failed";
+        metaReason = `Meta /subscribed_apps failed: ${reg.reason}`;
+      }
     }
   }
 }
 ```
 
-(`decryptedToken` requires decrypting credentials; check whether the existing flow already has this in scope. If not, decrypt here using the same `encryptCredentials` helper inverse.)
+Update the response push to include `webhookRegistered: metaStatus === "registered"`. Defer the final `status` and `statusDetail` resolution to the precedence step in Task 6 — for this task, attach the `metaReason` to a working `pendingMetaReason` variable that Task 6 reads.
 
-Update the response push to include `webhookRegistered: metaStatus === "registered"` and propagate `metaReason` into `statusDetail` per the new status-shape in the spec.
+- [ ] **Step 4: Add a test that fails if the route uses `appToken` for `subscribed_apps`**
+
+Defensive test:
+
+```ts
+it("does NOT use the app token for /subscribed_apps; uses the customer-decrypted token", async () => {
+  const subscribedAppsCalls: Array<{ url: string; init: RequestInit }> = [];
+  globalThis.fetch = vi.fn(async (url: string, init: RequestInit) => {
+    if (url.includes("subscribed_apps")) {
+      subscribedAppsCalls.push({ url, init });
+      return new Response("{}", { status: 200 });
+    }
+    if (url.includes("debug_token")) {
+      // assert appToken used here as access_token
+      expect(url).toContain("access_token=APP_TOKEN_FAKE");
+      return new Response(
+        JSON.stringify({ data: { granular_scopes: [{ target_ids: ["WABA_1"] }] } }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("graph.facebook.com"))
+      return new Response(JSON.stringify({ id: "phone_1" }), { status: 200 });
+    if (url.includes("provision-notify")) return new Response("{}", { status: 200 });
+    throw new Error("unexpected fetch " + url);
+  }) as never;
+
+  process.env.WHATSAPP_GRAPH_TOKEN = "APP_TOKEN_FAKE";
+  process.env.WHATSAPP_APP_SECRET = "VERIFY_TOKEN_FAKE";
+  // Customer's token is what the user submitted in the provision payload.
+  // Plaintext flowing through encrypt/decrypt round-trip — must arrive at /subscribed_apps as Bearer.
+  const CUSTOMER_TOKEN = "CUSTOMER_TOKEN_FAKE";
+  const app = await buildTestApp(/* ... */);
+  await app.inject({
+    method: "POST",
+    url: `/api/organizations/${ORG_ID}/provision`,
+    payload: {
+      channels: [
+        { channel: "whatsapp", credentials: { token: CUSTOMER_TOKEN, phoneNumberId: "P" } },
+      ],
+    },
+    headers: { authorization: "Bearer test" },
+  });
+  expect(subscribedAppsCalls).toHaveLength(1);
+  expect(
+    (subscribedAppsCalls[0].init as { headers: Record<string, string> }).headers["Authorization"],
+  ).toBe(`Bearer ${CUSTOMER_TOKEN}`);
+});
+```
+
+This test is the regression net for Redline 2: if anyone ever changes the registration call to use `appToken`, this test fails loudly.
 
 - [ ] **Step 4: Run test, verify PASS**
 
@@ -384,9 +496,9 @@ it("returns status=health_check_failed when probe fails", async () => {
 
 - [ ] **Step 2: Run test, verify FAIL**
 
-- [ ] **Step 3: Implement probe wrapper**
+- [ ] **Step 3: Implement probe wrapper (default: duplicate, no cross-app import)**
 
-Per Task 1 Step 3 decision: if reusable, import; if not, create `apps/api/src/lib/whatsapp-health-probe.ts`:
+Per Task 1 Step 3, default decision is duplicate the small probe in `apps/api`. Create `apps/api/src/lib/whatsapp-health-probe.ts`:
 
 ```ts
 export interface HealthProbeResult {
@@ -394,15 +506,26 @@ export interface HealthProbeResult {
   reason: string | null;
   checkedAt: Date;
 }
+
+/**
+ * Sync health probe used at provision time.
+ * userToken: the customer's Meta access token (decrypted from Connection.credentials).
+ * phoneNumberId: the customer's WABA phone number id.
+ *
+ * Mirrors the probe in apps/chat/src/managed/health-checker.ts (function name confirmed in Task 1).
+ * Duplication intentional — apps/api MUST NOT import from apps/chat.
+ * Parity test: parity-pin in __tests__/whatsapp-health-probe.test.ts asserts identical
+ * URL + auth header shape on identical inputs.
+ */
 export async function probeWhatsAppHealth(args: {
-  token: string;
+  userToken: string;
   phoneNumberId: string;
   fetchImpl?: typeof fetch;
 }): Promise<HealthProbeResult> {
   const fetchImpl = args.fetchImpl ?? fetch;
   try {
     const res = await fetchImpl(`https://graph.facebook.com/v17.0/${args.phoneNumberId}`, {
-      headers: { Authorization: `Bearer ${args.token}` },
+      headers: { Authorization: `Bearer ${args.userToken}` },
     });
     if (!res.ok) {
       return { ok: false, reason: `graph ${res.status}`, checkedAt: new Date() };
@@ -417,6 +540,8 @@ export async function probeWhatsAppHealth(args: {
   }
 }
 ```
+
+Add a parity-pin test that loads the apps/chat probe code as a string (via fs read, not import) and asserts both pieces of code produce the same URL and auth header for the same inputs. This is a regression net for "the two probes drifted apart silently."
 
 - [ ] **Step 4: Wire into provision flow**
 
@@ -461,9 +586,44 @@ Replace `organizations.ts:286-310` with a function that:
 - Tries notify once; on non-ok, waits 200ms and tries once more
 - On final failure, sets status to `"pending_chat_register"` and propagates the reason
 
-- [ ] **Step 4: Verify status precedence**
+- [ ] **Step 4: Implement status precedence resolver (locked from spec)**
 
-Decide and document the precedence when multiple post-create steps fail (e.g., Meta failed AND notify failed). Suggested order, most blocking first: `config_error` > `health_check_failed` > `pending_meta_register` > `pending_chat_register` > `active`. Add a unit test for this ordering.
+The locked precedence (most blocking first): `config_error` > `pending_chat_register` > `health_check_failed` > `pending_meta_register` > `active`.
+
+Implement as a small pure function in the route:
+
+```ts
+type StepResult = { kind: "ok" } | { kind: "fail"; reason: string };
+type ResolvedStatus =
+  | { status: "active"; statusDetail: null }
+  | {
+      status:
+        | "config_error"
+        | "pending_chat_register"
+        | "health_check_failed"
+        | "pending_meta_register";
+      statusDetail: string;
+    };
+
+function resolveStatus(input: {
+  config: StepResult;
+  notify: StepResult;
+  health: StepResult;
+  meta: StepResult;
+}): ResolvedStatus {
+  if (input.config.kind === "fail")
+    return { status: "config_error", statusDetail: input.config.reason };
+  if (input.notify.kind === "fail")
+    return { status: "pending_chat_register", statusDetail: input.notify.reason };
+  if (input.health.kind === "fail")
+    return { status: "health_check_failed", statusDetail: input.health.reason };
+  if (input.meta.kind === "fail")
+    return { status: "pending_meta_register", statusDetail: input.meta.reason };
+  return { status: "active", statusDetail: null };
+}
+```
+
+Add a unit test exhausting the 16 combinations or at minimum: all-ok → active; meta+notify both fail → `pending_chat_register` (notify wins by precedence); config fail dominates everything; health fail dominates only meta.
 
 - [ ] **Step 5: Run tests, verify PASS**
 
@@ -577,19 +737,29 @@ git commit -m "test(api): end-to-end provisioning flow integration test"
 - Modify: `apps/api/src/routes/organizations.ts`
 - Modify: `apps/api/src/__tests__/provision-end-to-end.test.ts`
 
-- [ ] **Step 1: Confirm Task 1 Step 2 finding**
+The natural key is `(organizationId, channel, phoneNumberId)` per the spec. **Do not collapse to `(organizationId, channel)` only** — that would block an org from ever adding a second WhatsApp number, which is not the v1 product behavior.
 
-If a unique constraint exists on ManagedChannel for `(organizationId, channel)` or `(organizationId, phoneNumberId)`, the upsert path naturally handles retry. Skip to Step 3.
+- [ ] **Step 1: Read Task 1 Step 2 finding**
 
-If no constraint exists, proceed to Step 2.
+Use the natural key + lookup query confirmed in `.audit/10-fix-prep-notes.md`. If `phoneNumberId` is not persisted on `ManagedChannel`, the prep notes already named the closest persisted credential/metadata field — use that.
 
-- [ ] **Step 2: Add a runtime guard (no migration)**
+If Task 1 found that a Prisma migration is unavoidable to support this lookup, **stop and surface to the controller before adding it**. Do not silently add a migration.
 
-At the top of the provision per-channel loop:
+- [ ] **Step 2: Add a runtime guard at the top of the provision per-channel loop**
+
+Pseudocode (replace field path per Task 1 finding):
 
 ```ts
+// Natural key: (organizationId, channel, phoneNumberId).
+// phoneNumberId comes from ch.credentials.phoneNumberId for WhatsApp.
 const existing = await app.prisma.managedChannel.findFirst({
-  where: { organizationId: orgId, channel: ch.channel },
+  where: {
+    organizationId: orgId,
+    channel: ch.channel,
+    // Field path TBD by Task 1 — example if it lives on metadata JSON:
+    // metadata: { path: ["phoneNumberId"], equals: ch.credentials.phoneNumberId },
+    // — or on a top-level field if migrated, or on Connection.credentials encrypted blob (decrypt+match)
+  },
 });
 if (existing) {
   results.push({
@@ -601,20 +771,57 @@ if (existing) {
 }
 ```
 
-- [ ] **Step 3: Add idempotency test in provision-end-to-end.test.ts**
+- [ ] **Step 3: Add tests in provision-end-to-end.test.ts**
 
-Already in Task 9 list — verify it passes. If failing, fix the guard.
+Two tests, both required:
+
+1. **Retry idempotency:** call provision twice with the **same** `(orgId, channel, phoneNumberId)`; assert exactly one `ManagedChannel` row exists and the second response returns the existing one.
+2. **Multi-number support:** call provision twice with the **same** `(orgId, channel)` but **different** `phoneNumberId`; assert two distinct `ManagedChannel` rows exist and both succeed.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add apps/api/src/routes/organizations.ts apps/api/src/__tests__/provision-end-to-end.test.ts
-git commit -m "fix(api): idempotency guard on duplicate provision calls"
+git commit -m "fix(api): idempotency by (org, channel, phoneNumberId); allow multi-number orgs"
 ```
 
 ---
 
-### Task 11: Final verification
+### Task 11: Minimal UI surfacing of `statusDetail`
+
+**Files:**
+
+- Modify: dashboard provision-consumer component (file:line confirmed in Task 1 Step 6)
+- Modify: a corresponding component test (extend if exists, create if not)
+
+Scope is **one** component: the existing provision-consumer that currently assumes `status === "active"`. No redesign, no new navigation, no module card work.
+
+- [ ] **Step 1: Write failing component test**
+
+The test renders the component with a provision response of `{ status: "pending_chat_register", statusDetail: "chat server returned 502", ... }` and asserts:
+
+- The success state is NOT rendered.
+- The `statusDetail` string appears verbatim in the DOM.
+- A retry affordance (button or link) exists.
+
+- [ ] **Step 2: Run test, verify FAIL**
+
+- [ ] **Step 3: Implement minimal UI change**
+
+In the component identified by Task 1 Step 6, replace the implicit `status === "active"` assumption with a switch on the new status enum. For any non-`active` status, render the `statusDetail` string and a retry affordance. **Do not redesign.** The display can be one inline error block.
+
+- [ ] **Step 4: Run tests, verify PASS**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add <component file> <test file>
+git commit -m "feat(dashboard): surface provision statusDetail when status !== active"
+```
+
+---
+
+### Task 12: Final verification
 
 **Files:**
 
@@ -651,7 +858,18 @@ Invoke `superpowers:finishing-a-development-branch` to decide PR vs merge.
 
 ## Self-Review
 
-- **Spec coverage:** Every spec acceptance criterion (A1–A8) maps to a test added in Tasks 2/4/5/6/7/8/9/10. Risks #1 (idempotency), #2 (cross-app imports), #4 (Meta rate) are addressed in Task 1 prep notes and Task 5/10. Risk #3 (probe latency) is acknowledged but not addressed in code — acceptable per spec.
+- **Spec coverage:** Every spec acceptance criterion (A1–A8) maps to a test added in Tasks 2/4/5/6/7/8/9/10/11. A2 in particular is covered by both an integration test (Task 9) and a component test (Task 11). Risks #1 (idempotency, multi-number support), #2 (cross-app boundary), #6 (token model) all addressed in Task 1 prep notes and Tasks 3/4/5/10.
 - **Placeholder scan:** No "TBD"/"TODO"/"figure out later" left. Task 1 explicitly produces missing facts before code changes start.
-- **Type consistency:** `buildManagedWebhookPath`, `registerWebhookOverride`, `fetchWabaIdFromToken`, `probeWhatsAppHealth`, status enum values consistent across tasks.
-- **Out-of-scope fence:** No task touches platform-ingress, governance, creative-pipeline, ad-optimizer, billing, calendar, or WorkTrace. Schema changes only happen if Task 1 Step 2 reveals a missing unique constraint AND the team prefers a migration over the runtime guard in Task 10. If a migration is opened, surface to user before running.
+- **Type consistency:** `buildManagedWebhookPath`, `registerWebhookOverride({ userToken, … })`, `fetchWabaIdFromToken({ appToken, userToken, … })`, `probeWhatsAppHealth({ userToken, … })`, status enum values consistent across tasks. Token parameters are named for purpose, not type.
+- **App boundary fence:** No task imports `apps/api` from `apps/chat` or vice versa. Webhook path contract is pinned by independent regex on each side. Health probe is duplicated in `apps/api` with a parity-pin test rather than imported.
+- **Token-model fence:** Customer-provided decrypted token is the sole credential for `/subscribed_apps` and the health probe. `WHATSAPP_GRAPH_TOKEN` (app token) is used only for `debug_token` introspection. A defensive test in Task 4 fails if anyone ever changes the registration call to use the app token.
+- **Out-of-scope fence:** No task touches platform-ingress, governance, creative-pipeline, ad-optimizer, billing, calendar, or WorkTrace. Schema changes only happen if Task 1 proves the runtime guard cannot work. If a migration is needed, the plan stops and surfaces to the user before running.
+- **Status precedence locked:** `config_error` > `pending_chat_register` > `health_check_failed` > `pending_meta_register` > `active`. Implemented as a pure function in Task 6 with a dedicated combinatorial test.
+
+## Redlines applied (vs original draft)
+
+1. **Cross-app imports forbidden** — Task 2 chat-side test pins regex independently; no `apps/api` import. Health probe duplicated in `apps/api` with parity-pin test.
+2. **Token model split** — Helper takes `appToken` + `userToken` separately; provision uses customer-decrypted token; defensive test fails if app token is ever used for `/subscribed_apps`.
+3. **Idempotency natural key** — `(organizationId, channel, phoneNumberId)`, with explicit multi-number test. Schema change requires user approval.
+4. **Status precedence** — `pending_chat_register` ranked above `health_check_failed` and `pending_meta_register` (chat unreachable = inbound dead).
+5. **UI surfacing in scope** — Task 11 added: minimal change to the existing provision-consumer component to render `statusDetail` when not `active`. No redesign.
