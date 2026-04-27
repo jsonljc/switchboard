@@ -1,5 +1,6 @@
 // packages/schemas/src/ad-optimizer.ts
 import { z } from "zod";
+import { FunnelShapeSchema } from "./ad-optimizer-shared.js";
 import {
   TrendAnalysisSchema,
   BudgetAnalysisSchema,
@@ -32,11 +33,11 @@ export type UrgencySchema = z.infer<typeof UrgencySchema>;
 export const MetricDirectionSchema = z.enum(["up", "down", "stable"]);
 export type MetricDirectionSchema = z.infer<typeof MetricDirectionSchema>;
 
-export const FunnelShapeSchema = z.enum(["website", "instant_form", "whatsapp"]);
-export type FunnelShapeSchema = z.infer<typeof FunnelShapeSchema>;
-
-export const LearningStateSchema = z.enum(["learning", "learning_limited", "success", "unknown"]);
-export type LearningStateSchema = z.infer<typeof LearningStateSchema>;
+export {
+  FunnelShapeSchema,
+  LearningStateSchema,
+  LearningPhaseStatusSchema,
+} from "./ad-optimizer-shared.js";
 
 // ── Campaign & Ad Set Insights ──
 
@@ -119,35 +120,6 @@ export const MetricDeltaSchema = z.object({
   significant: z.boolean(),
 });
 export type MetricDeltaSchema = z.infer<typeof MetricDeltaSchema>;
-
-// ── Learning Phase Status ──
-
-export const LearningPhaseStatusSchema = z.object({
-  adSetId: z.string(),
-  adSetName: z.string(),
-  campaignId: z.string(),
-  state: LearningStateSchema,
-  metricsSnapshot: z
-    .object({
-      cpa: z.number(),
-      roas: z.number(),
-      ctr: z.number(),
-      spend: z.number(),
-      conversions: z.number(),
-    })
-    .nullable(),
-  postExitSnapshot: z
-    .object({
-      cpa: z.number(),
-      roas: z.number(),
-      ctr: z.number(),
-      spend: z.number(),
-      conversions: z.number(),
-    })
-    .nullable(),
-  exitStability: z.enum(["healthy", "unstable", "pending"]).nullable(),
-});
-export type LearningPhaseStatusSchema = z.infer<typeof LearningPhaseStatusSchema>;
 
 // ── CAPI Event ──
 
