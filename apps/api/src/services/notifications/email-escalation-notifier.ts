@@ -1,3 +1,4 @@
+import type { Resend } from "resend";
 import type { ApprovalNotifier, ApprovalNotification } from "@switchboard/core/notifications";
 
 export interface EmailEscalationConfig {
@@ -43,7 +44,7 @@ export class EmailEscalationNotifier implements ApprovalNotifier {
   }
 
   private async sendWithRetry(
-    resend: { emails: { send: (args: Record<string, string>) => Promise<unknown> } },
+    resend: Resend,
     to: string,
     subject: string,
     html: string,
@@ -62,9 +63,7 @@ export class EmailEscalationNotifier implements ApprovalNotifier {
       if (attempt < 2) {
         return this.sendWithRetry(resend, to, subject, html, attempt + 1);
       }
-      console.error(
-        `[email-escalation] Failed to send to ${to} after ${attempt} attempts: ${msg}`,
-      );
+      console.error(`[email-escalation] Failed to send to ${to} after ${attempt} attempts: ${msg}`);
       return { recipient: to, status: "failed", error: msg, attempts: attempt };
     }
   }

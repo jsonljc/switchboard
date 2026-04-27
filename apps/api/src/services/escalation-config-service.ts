@@ -2,7 +2,7 @@
 // Escalation Config Service — per-org escalation settings with env var fallback
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@switchboard/db";
 
 export interface EscalationConfig {
   emailRecipients: string[];

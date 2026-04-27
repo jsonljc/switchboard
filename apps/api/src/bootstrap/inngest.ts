@@ -236,8 +236,8 @@ export async function registerInngest(app: FastifyInstance): Promise<void> {
         }));
     },
     retrieveStripeSubscription: async (subscriptionId) => {
-      const { stripe } = await import("../services/stripe-service.js");
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      const { getStripe } = await import("../services/stripe-service.js");
+      const sub = await getStripe().subscriptions.retrieve(subscriptionId);
       const firstItem = sub.items.data[0];
       const periodEnd = firstItem?.current_period_end;
       return {
