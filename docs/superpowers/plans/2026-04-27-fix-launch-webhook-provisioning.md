@@ -636,32 +636,120 @@ git commit -m "fix(api): structured statuses + retry for provision-notify failur
 
 ---
 
-### Task 7: Alex listing on org creation (Blocker #6)
+### Task 7: Alex listing seeded at lazy OrganizationConfig upsert (Blocker #6)
+
+**Target locked by Task 1 (Decision 10 in spec):** `apps/api/src/routes/organizations.ts:37–50` (the `GET /api/organizations/:orgId/config` upsert path). This is the boundary at which an org first becomes operationally visible to the dashboard. Seeding here covers pre-existing orgs without a backfill.
 
 **Files:**
 
-- Modify: `<org-creation file>` (confirmed in Task 1 Step 1)
-- Create: `<corresponding test file>`
+- Modify: `apps/api/src/routes/organizations.ts` — extend the lazy `OrganizationConfig` upsert with an idempotent Alex `agentListing.upsert` + `agentDeployment.upsert` block.
+- Modify or create: `apps/api/src/routes/__tests__/organizations.test.ts` (extend the closest existing test file for this route — confirm path before creating).
 
-- [ ] **Step 1: Write failing test**
+- [ ] **Step 1: Write failing tests (three of them)**
 
-Test name: "new org has Alex in marketplace listings without provisioning a channel".
+```ts
+it("first dashboard config access creates OrganizationConfig and Alex listing+deployment", async () => {
+  const app = await buildTestApp(/* fresh org id, no prior config */);
+  const res = await app.inject({
+    method: "GET",
+    url: `/api/organizations/${ORG_ID}/config`,
+    headers: { authorization: "Bearer test" },
+  });
+  expect(res.statusCode).toBe(200);
+  const listings = await app.prisma.agentListing.findMany({ where: { slug: "alex-conversion" } });
+  expect(listings).toHaveLength(1);
+  const deployments = await app.prisma.agentDeployment.findMany({
+    where: { organizationId: ORG_ID, listingId: listings[0].id },
+  });
+  expect(deployments).toHaveLength(1);
+});
 
-- [ ] **Step 2: Run test, verify FAIL**
+it("repeated config access does not duplicate listing or deployment", async () => {
+  const app = await buildTestApp();
+  await app.inject({
+    method: "GET",
+    url: `/api/organizations/${ORG_ID}/config`,
+    headers: { authorization: "Bearer test" },
+  });
+  await app.inject({
+    method: "GET",
+    url: `/api/organizations/${ORG_ID}/config`,
+    headers: { authorization: "Bearer test" },
+  });
+  await app.inject({
+    method: "GET",
+    url: `/api/organizations/${ORG_ID}/config`,
+    headers: { authorization: "Bearer test" },
+  });
+  const listings = await app.prisma.agentListing.findMany({ where: { slug: "alex-conversion" } });
+  expect(listings).toHaveLength(1);
+  const deployments = await app.prisma.agentDeployment.findMany({
+    where: { organizationId: ORG_ID },
+  });
+  expect(deployments).toHaveLength(1);
+});
 
-- [ ] **Step 3: Move the upsert**
+it("provision-time upsert remains idempotent after lazy seed", async () => {
+  // Touch /config first (seeds Alex), then run provision. Assert listing count stays at 1.
+});
+```
 
-In the org-creation handler, after creating the organization row, perform the same `agentListing.upsert` + `agentDeployment.upsert` pair currently in `organizations.ts:227-257`. Use the same data shape verbatim. Keep the upsert in the provision route as a safety net for orgs that pre-date this change.
+- [ ] **Step 2: Run tests, verify FAIL**
 
-- [ ] **Step 4: Verify provision still idempotent**
+`pnpm --filter @switchboard/api test -- organizations`
+Expected: first two fail (no Alex seed in lazy upsert yet); third may pass already.
 
-Run the existing provision tests. They should still pass — the upsert in provision is idempotent.
+- [ ] **Step 3: Add the seed to the lazy OrganizationConfig upsert**
 
-- [ ] **Step 5: Commit**
+In `organizations.ts:37–50`, after the `OrganizationConfig` upsert, perform:
+
+```ts
+const alexListing = await app.prisma.agentListing.upsert({
+  where: { slug: "alex-conversion" },
+  update: {},
+  create: {
+    slug: "alex-conversion",
+    name: "Alex",
+    description: "AI-powered lead conversion agent",
+    type: "ai-agent",
+    status: "active",
+    trustScore: 0,
+    autonomyLevel: "supervised",
+    priceTier: "free",
+    metadata: {},
+  },
+});
+await app.prisma.agentDeployment.upsert({
+  where: {
+    organizationId_listingId: { organizationId: orgId, listingId: alexListing.id },
+  },
+  update: {},
+  create: {
+    organizationId: orgId,
+    listingId: alexListing.id,
+    status: "active",
+    skillSlug: "alex",
+  },
+});
+```
+
+(Use the **exact same data shape** as the current provision-time upsert at `organizations.ts:227–257` — copy verbatim.)
+
+- [ ] **Step 4: Confirm provision-time upsert remains as safety net**
+
+Do **not** remove the upsert from the provision route. Leave it in place — both sites become idempotent no-ops once an org is seeded, and the safety net protects against any future code path that creates an org without going through the lazy `/config` upsert.
+
+- [ ] **Step 5: Run tests, verify PASS**
 
 ```bash
-git add <org-creation file> <test file>
-git commit -m "feat(api): seed Alex listing on org creation, not on first provision"
+pnpm --filter @switchboard/api test -- organizations
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add apps/api/src/routes/organizations.ts apps/api/src/routes/__tests__/organizations.test.ts
+git commit -m "feat(api): seed Alex at lazy OrganizationConfig upsert; covers pre-existing orgs"
 ```
 
 ---
@@ -730,38 +818,56 @@ git commit -m "test(api): end-to-end provisioning flow integration test"
 
 ---
 
-### Task 10: Idempotency guard on retry (Acceptance A4)
+### Task 10: v1 channel limit — retry idempotent, second number rejected (Acceptance A4)
+
+**v1 limit (Decision 9 in spec):** one managed channel per `(organizationId, channel)`. The existing `@@unique([organizationId, channel])` enforces this. **No schema migration in this branch.** Multi-number support is deferred.
 
 **Files:**
 
 - Modify: `apps/api/src/routes/organizations.ts`
 - Modify: `apps/api/src/__tests__/provision-end-to-end.test.ts`
 
-The natural key is `(organizationId, channel, phoneNumberId)` per the spec. **Do not collapse to `(organizationId, channel)` only** — that would block an org from ever adding a second WhatsApp number, which is not the v1 product behavior.
+- [ ] **Step 1: Add a precheck at the top of the provision per-channel loop**
 
-- [ ] **Step 1: Read Task 1 Step 2 finding**
+For WhatsApp specifically, before creating any rows, look up an existing `ManagedChannel` by `(organizationId, channel)`. If one exists:
 
-Use the natural key + lookup query confirmed in `.audit/10-fix-prep-notes.md`. If `phoneNumberId` is not persisted on `ManagedChannel`, the prep notes already named the closest persisted credential/metadata field — use that.
-
-If Task 1 found that a Prisma migration is unavoidable to support this lookup, **stop and surface to the controller before adding it**. Do not silently add a migration.
-
-- [ ] **Step 2: Add a runtime guard at the top of the provision per-channel loop**
-
-Pseudocode (replace field path per Task 1 finding):
+- **Same `phoneNumberId`** (decrypt the existing `Connection.credentials` and compare to the new `ch.credentials.phoneNumberId`) → return the existing row idempotently with `status: "active"` and `statusDetail: "existing channel returned"`.
+- **Different `phoneNumberId`** → return `status: "error"` with `statusDetail: "v1 limit: one WhatsApp number per organization. Existing number: …<masked>… To connect a different number, contact support."` Do NOT throw; do NOT create new rows.
 
 ```ts
-// Natural key: (organizationId, channel, phoneNumberId).
-// phoneNumberId comes from ch.credentials.phoneNumberId for WhatsApp.
+// v1 limit: one managed channel per (organizationId, channel). Schema-enforced.
 const existing = await app.prisma.managedChannel.findFirst({
-  where: {
-    organizationId: orgId,
-    channel: ch.channel,
-    // Field path TBD by Task 1 — example if it lives on metadata JSON:
-    // metadata: { path: ["phoneNumberId"], equals: ch.credentials.phoneNumberId },
-    // — or on a top-level field if migrated, or on Connection.credentials encrypted blob (decrypt+match)
-  },
+  where: { organizationId: orgId, channel: ch.channel },
+  include: { connection: true },
 });
 if (existing) {
+  if (ch.channel === "whatsapp") {
+    const existingPhoneNumberId = decryptCredentialsField(
+      existing.connection.credentials,
+      "phoneNumberId",
+    );
+    if (existingPhoneNumberId === ch.credentials.phoneNumberId) {
+      results.push({
+        ...mapToResponse(existing),
+        status: "active",
+        statusDetail: "existing channel returned",
+      });
+      continue;
+    }
+    results.push({
+      id: existing.id,
+      channel: "whatsapp",
+      botUsername: existing.botUsername,
+      webhookPath: existing.webhookPath,
+      webhookRegistered: existing.webhookRegistered,
+      status: "error",
+      statusDetail: `v1 limit: one WhatsApp number per organization. Existing number ends in ${maskPhoneNumberId(existingPhoneNumberId)}. To connect a different number, contact support.`,
+      lastHealthCheck: existing.lastHealthCheck?.toISOString() ?? null,
+      createdAt: existing.createdAt.toISOString(),
+    });
+    continue;
+  }
+  // For telegram/slack: same channel exists → idempotent return.
   results.push({
     ...mapToResponse(existing),
     status: "active",
@@ -771,18 +877,44 @@ if (existing) {
 }
 ```
 
-- [ ] **Step 3: Add tests in provision-end-to-end.test.ts**
+`decryptCredentialsField` and `maskPhoneNumberId` helper names will match what Task 1 prep notes confirmed exists. If a masking helper doesn't exist, add a tiny one inline (`return id.slice(-4).padStart(id.length, "•");`).
 
-Two tests, both required:
+- [ ] **Step 2: Add three tests in provision-end-to-end.test.ts**
 
-1. **Retry idempotency:** call provision twice with the **same** `(orgId, channel, phoneNumberId)`; assert exactly one `ManagedChannel` row exists and the second response returns the existing one.
-2. **Multi-number support:** call provision twice with the **same** `(orgId, channel)` but **different** `phoneNumberId`; assert two distinct `ManagedChannel` rows exist and both succeed.
+```ts
+it("retry with same (orgId, channel, phoneNumberId) is idempotent", async () => {
+  // Provision twice with same payload.
+  // Assert exactly one ManagedChannel row exists.
+  // Assert second response.results[0] === existing channel id.
+  // Assert second response status === "active", statusDetail === "existing channel returned".
+});
+
+it("attempting a second WhatsApp number for the same org is rejected with v1 limit message", async () => {
+  // Provision (orgId, "whatsapp", phoneNumberId="1111").
+  // Provision (orgId, "whatsapp", phoneNumberId="2222").
+  // Assert exactly one ManagedChannel row exists.
+  // Assert second response status === "error".
+  // Assert statusDetail contains "v1 limit" and "one WhatsApp number per organization".
+  // Assert statusDetail mentions the masked existing number ending in "1111".
+});
+
+it("dashboard component renders the v1-limit message verbatim", async () => {
+  // Component test in apps/dashboard: render with status="error", statusDetail="v1 limit: …".
+  // Assert the limit message appears in the DOM.
+  // Assert no success state is rendered.
+});
+```
+
+- [ ] **Step 3: Run tests, verify PASS**
+
+`pnpm --filter @switchboard/api test -- provision-end-to-end`
+`pnpm --filter @switchboard/dashboard test -- channel-connect-card` (or whichever component test file Task 11 created)
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add apps/api/src/routes/organizations.ts apps/api/src/__tests__/provision-end-to-end.test.ts
-git commit -m "fix(api): idempotency by (org, channel, phoneNumberId); allow multi-number orgs"
+git commit -m "fix(api): v1 channel limit — retry idempotent, second WhatsApp number rejected with clear message"
 ```
 
 ---
@@ -869,7 +1001,15 @@ Invoke `superpowers:finishing-a-development-branch` to decide PR vs merge.
 ## Redlines applied (vs original draft)
 
 1. **Cross-app imports forbidden** — Task 2 chat-side test pins regex independently; no `apps/api` import. Health probe duplicated in `apps/api` with parity-pin test.
-2. **Token model split** — Helper takes `appToken` + `userToken` separately; provision uses customer-decrypted token; defensive test fails if app token is ever used for `/subscribed_apps`.
-3. **Idempotency natural key** — `(organizationId, channel, phoneNumberId)`, with explicit multi-number test. Schema change requires user approval.
+2. **Token model split** — Helper takes `appToken` + `userToken` separately; provision uses customer-decrypted token for `/subscribed_apps`; defensive test fails if app token is ever used for that endpoint.
+3. **v1 channel limit accepted (was: multi-number support)** — Per Task 1 prep notes, `phoneNumberId` is encrypted-only on `Connection.credentials`; supporting `(orgId, channel, phoneNumberId)` would require a migration. Decision 9 in the spec accepts v1 = one managed channel per `(orgId, channel)`. Existing `@@unique([organizationId, channel])` is preserved. **No schema migration in this branch.** Task 10 reframed: retry idempotent + second-number rejection with a clear v1-limit `statusDetail`.
 4. **Status precedence** — `pending_chat_register` ranked above `health_check_failed` and `pending_meta_register` (chat unreachable = inbound dead).
-5. **UI surfacing in scope** — Task 11 added: minimal change to the existing provision-consumer component to render `statusDetail` when not `active`. No redesign.
+5. **UI surfacing in scope** — Task 11: minimal change to render `statusDetail` when not `active`. No redesign. The v1-limit message from Task 10 is exactly what this UI surfaces — same code path.
+
+## Post-Task-1 amendments
+
+- **Decision 9 added (spec):** v1 = one managed channel per `(orgId, channel)`. No migration.
+- **Decision 10 added (spec):** Task 7 target retargeted from `setup.ts` to the lazy `OrganizationConfig` upsert at `apps/api/src/routes/organizations.ts:37–50`. Covers pre-existing orgs without a backfill.
+- **A4 reframed:** retry idempotency + clear v1-limit rejection on second-number attempt; multi-number test removed.
+- **A7 retargeted:** lazy-upsert tests, not setup.ts tests.
+- **Open questions 1 and 2 closed** by Task 1 findings.
