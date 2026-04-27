@@ -88,6 +88,7 @@ async function buildTestApp() {
 describe("billing routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_dummy");
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
     mockWebhookFindUnique.mockResolvedValue(null);
     mockWebhookCreate.mockResolvedValue({});
