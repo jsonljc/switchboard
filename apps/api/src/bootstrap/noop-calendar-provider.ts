@@ -78,3 +78,7 @@ export class NoopCalendarProvider implements CalendarProvider {
     return { status: "disconnected", latencyMs: 0 };
   }
 }
+
+export function isNoopCalendarProvider(provider: CalendarProvider): boolean {
+  return provider instanceof NoopCalendarProvider;
+}

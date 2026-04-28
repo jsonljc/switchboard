@@ -53,6 +53,8 @@ function makeFailureHandler() {
 
 describe("createCalendarBookTool", () => {
   let calendarProvider: ReturnType<typeof makeCalendarProvider>;
+  let calendarProviderFactory: ReturnType<typeof vi.fn>;
+  let isCalendarProviderConfigured: ReturnType<typeof vi.fn>;
   let bookingStore: ReturnType<typeof makeBookingStore>;
   let opportunityStore: ReturnType<typeof makeOpportunityStore>;
   let runTransaction: ReturnType<typeof makeRunTransaction>;
@@ -61,12 +63,15 @@ describe("createCalendarBookTool", () => {
 
   beforeEach(() => {
     calendarProvider = makeCalendarProvider();
+    calendarProviderFactory = vi.fn(async (_orgId: string) => calendarProvider as never);
+    isCalendarProviderConfigured = vi.fn(() => true);
     bookingStore = makeBookingStore();
     opportunityStore = makeOpportunityStore();
     runTransaction = makeRunTransaction();
     failureHandler = makeFailureHandler();
     tool = createCalendarBookTool({
-      calendarProvider: calendarProvider as never,
+      calendarProviderFactory: calendarProviderFactory as never,
+      isCalendarProviderConfigured: isCalendarProviderConfigured as never,
       bookingStore: bookingStore as never,
       opportunityStore: opportunityStore as never,
       runTransaction: runTransaction as never,
@@ -106,6 +111,7 @@ describe("createCalendarBookTool", () => {
     calendarProvider.listAvailableSlots.mockResolvedValue(mockSlots);
 
     const result = await tool.operations["slots.query"]!.execute({
+      orgId: "org_1",
       dateFrom: "2026-04-20T00:00:00+08:00",
       dateTo: "2026-04-20T23:59:59+08:00",
       durationMinutes: 30,
@@ -114,6 +120,7 @@ describe("createCalendarBookTool", () => {
     });
 
     expect(calendarProvider.listAvailableSlots).toHaveBeenCalled();
+    expect(calendarProviderFactory).toHaveBeenCalledWith("org_1");
     expect(result.status).toBe("success");
     expect(result.data?.slots).toEqual(mockSlots);
   });
@@ -253,5 +260,138 @@ describe("createCalendarBookTool", () => {
         retryable: true,
       }),
     );
+  });
+
+  describe("slots.query failure paths", () => {
+    it("fails ORG_ID_REQUIRED when orgId missing", async () => {
+      const result = await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "consultation",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
+      expect(calendarProviderFactory).not.toHaveBeenCalled();
+    });
+
+    it("fails ORG_ID_REQUIRED when orgId is whitespace", async () => {
+      const result = await tool.operations["slots.query"]!.execute({
+        orgId: "   ",
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "consultation",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
+    });
+
+    it("fails CALENDAR_NOT_CONFIGURED when provider is unconfigured (no slots leak)", async () => {
+      isCalendarProviderConfigured.mockReturnValue(false);
+
+      const result = await tool.operations["slots.query"]!.execute({
+        orgId: "org_1",
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "consultation",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CALENDAR_NOT_CONFIGURED");
+      expect(result.error?.modelRemediation).toMatch(/Escalate to the operator/);
+      expect(result.data?.slots).toBeUndefined();
+      expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
+    });
+
+    it("fails CALENDAR_PROVIDER_ERROR when factory rejects", async () => {
+      calendarProviderFactory.mockRejectedValue(new Error("Boom"));
+
+      const result = await tool.operations["slots.query"]!.execute({
+        orgId: "org_1",
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "consultation",
+        timezone: "Asia/Singapore",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
+      expect(calendarProvider.listAvailableSlots).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("booking.create failure paths", () => {
+    it("fails ORG_ID_REQUIRED when orgId missing", async () => {
+      const result = await tool.operations["booking.create"]!.execute({
+        contactId: "ct_1",
+        service: "consultation",
+        slotStart: "2026-04-20T10:00:00+08:00",
+        slotEnd: "2026-04-20T10:30:00+08:00",
+        calendarId: "primary",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
+      expect(calendarProviderFactory).not.toHaveBeenCalled();
+      expect(bookingStore.create).not.toHaveBeenCalled();
+    });
+
+    it("fails ORG_ID_REQUIRED when orgId whitespace", async () => {
+      const result = await tool.operations["booking.create"]!.execute({
+        orgId: "   ",
+        contactId: "ct_1",
+        service: "consultation",
+        slotStart: "2026-04-20T10:00:00+08:00",
+        slotEnd: "2026-04-20T10:30:00+08:00",
+        calendarId: "primary",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("ORG_ID_REQUIRED");
+    });
+
+    it("fails CALENDAR_NOT_CONFIGURED when provider is unconfigured", async () => {
+      isCalendarProviderConfigured.mockReturnValue(false);
+
+      const result = await tool.operations["booking.create"]!.execute({
+        orgId: "org_1",
+        contactId: "ct_1",
+        service: "consultation",
+        slotStart: "2026-04-20T10:00:00+08:00",
+        slotEnd: "2026-04-20T10:30:00+08:00",
+        calendarId: "primary",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CALENDAR_NOT_CONFIGURED");
+      expect(result.error?.modelRemediation).toMatch(/Escalate to the operator/);
+      expect(bookingStore.create).not.toHaveBeenCalled();
+      expect(calendarProvider.createBooking).not.toHaveBeenCalled();
+    });
+
+    it("fails CALENDAR_PROVIDER_ERROR when factory rejects", async () => {
+      calendarProviderFactory.mockRejectedValue(new Error("Boom"));
+
+      const result = await tool.operations["booking.create"]!.execute({
+        orgId: "org_1",
+        contactId: "ct_1",
+        service: "consultation",
+        slotStart: "2026-04-20T10:00:00+08:00",
+        slotEnd: "2026-04-20T10:30:00+08:00",
+        calendarId: "primary",
+      });
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
+      expect(bookingStore.create).not.toHaveBeenCalled();
+    });
   });
 });

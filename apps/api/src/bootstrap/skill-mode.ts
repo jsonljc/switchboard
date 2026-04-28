@@ -1,7 +1,8 @@
 import type { PrismaClient } from "@switchboard/db";
 import type { IntentRegistry, ExecutionModeRegistry } from "@switchboard/core/platform";
-import type { CalendarProvider } from "@switchboard/schemas";
 import type { SkillExecutor, SkillDefinition } from "@switchboard/core/skill-runtime";
+import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
+import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 
 export interface SkillModeBootstrapResult {
   simulationExecutor: SkillExecutor;
@@ -62,7 +63,7 @@ export async function bootstrapSkillMode(
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
   const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
-  const calendarProvider = await resolveCalendarProvider(prismaClient, logger);
+  const calendarProviderFactory = createCalendarProviderFactory({ prismaClient, logger });
 
   const handoffStore = new PrismaHandoffStore(prismaClient);
   const handoffAssembler = new HandoffPackageAssembler();
@@ -152,7 +153,8 @@ export async function bootstrapSkillMode(
     [
       "calendar-book",
       createCalendarBookTool({
-        calendarProvider,
+        calendarProviderFactory,
+        isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
         bookingStore,
         opportunityStore: {
           findActiveByContact: async (orgId: string, contactId: string) => {
@@ -270,210 +272,4 @@ export async function bootstrapSkillMode(
   const simulationExecutor = new SkillExecutorImpl(adapter, toolsMap, undefined, simulationHooks);
 
   return { simulationExecutor, alexSkill };
-}
-
-async function resolveCalendarProvider(
-  prismaClient: PrismaClient,
-  logger: { info(msg: string): void; error(msg: string): void },
-  orgId?: string,
-): Promise<CalendarProvider> {
-  // Query org-specific config if orgId provided, otherwise fall back to first available
-  let businessHours: import("@switchboard/schemas").BusinessHoursConfig | null = null;
-  const orgConfig = orgId
-    ? await prismaClient.organizationConfig.findFirst({
-        where: { id: orgId },
-        select: { businessHours: true },
-      })
-    : await prismaClient.organizationConfig.findFirst({
-        select: { businessHours: true },
-      });
-  if (orgConfig?.businessHours && typeof orgConfig.businessHours === "object") {
-    businessHours = orgConfig.businessHours as import("@switchboard/schemas").BusinessHoursConfig;
-  }
-
-  const credentials = process.env["GOOGLE_CALENDAR_CREDENTIALS"];
-  const calendarId = process.env["GOOGLE_CALENDAR_ID"];
-
-  // Option 1: Google Calendar if credentials present
-  if (credentials && calendarId) {
-    try {
-      const { createGoogleCalendarProvider } = await import("./google-calendar-factory.js");
-      const provider = await createGoogleCalendarProvider({
-        credentials,
-        calendarId,
-        businessHours,
-      });
-
-      const health = await provider.healthCheck();
-      logger.info(`Calendar: Google Calendar connected (${health.status}, ${health.latencyMs}ms)`);
-      return provider;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`Calendar: failed to initialize Google Calendar: ${msg}`);
-      // Fall through to local provider if business hours available
-    }
-  }
-
-  // Option 2: Local provider if business hours configured
-  if (businessHours) {
-    if (!orgId) {
-      // LocalCalendarProvider needs a real org to scope booking lookups; the singleton
-      // bootstrap path has no orgId, so fall through to Noop. Per-request calendar
-      // resolution is tracked in the follow-up fix/launch-calendar-readiness-visibility.
-      logger.info(
-        "Calendar: business hours present but orgId not supplied; using NoopCalendarProvider for the bootstrap singleton",
-      );
-      const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
-      return new NoopCalendarProvider();
-    }
-    const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
-
-    const localStore = {
-      findOverlapping: async (startsAt: Date, endsAt: Date) => {
-        const rows = await prismaClient.booking.findMany({
-          where: {
-            organizationId: orgId,
-            startsAt: { lt: endsAt },
-            endsAt: { gt: startsAt },
-            status: { notIn: ["cancelled", "failed"] },
-          },
-          select: { startsAt: true, endsAt: true },
-        });
-        return rows;
-      },
-      createInTransaction: async (input: {
-        organizationId: string;
-        contactId: string;
-        opportunityId?: string | null;
-        service: string;
-        startsAt: Date;
-        endsAt: Date;
-        timezone: string;
-        status: string;
-        calendarEventId: string;
-        attendeeName?: string | null;
-        attendeeEmail?: string | null;
-        createdByType: string;
-        sourceChannel?: string | null;
-        workTraceId?: string | null;
-      }) => {
-        return prismaClient.$transaction(async (tx) => {
-          const conflicts = await tx.booking.findMany({
-            where: {
-              organizationId: input.organizationId,
-              startsAt: { lt: input.endsAt },
-              endsAt: { gt: input.startsAt },
-              status: { notIn: ["cancelled", "failed"] },
-            },
-            select: { id: true },
-            take: 1,
-          });
-          if (conflicts.length > 0) {
-            throw new Error("SLOT_CONFLICT");
-          }
-          return tx.booking.create({
-            data: {
-              organizationId: input.organizationId,
-              contactId: input.contactId,
-              opportunityId: input.opportunityId ?? null,
-              service: input.service,
-              startsAt: input.startsAt,
-              endsAt: input.endsAt,
-              timezone: input.timezone,
-              status: input.status,
-              calendarEventId: input.calendarEventId,
-              attendeeName: input.attendeeName ?? null,
-              attendeeEmail: input.attendeeEmail ?? null,
-              createdByType: input.createdByType,
-              sourceChannel: input.sourceChannel ?? null,
-              workTraceId: input.workTraceId ?? null,
-            },
-            select: { id: true },
-          });
-        });
-      },
-      findById: async (bookingId: string) => {
-        const row = await prismaClient.booking.findUnique({ where: { id: bookingId } });
-        if (!row) return null;
-        return {
-          id: row.id,
-          contactId: row.contactId,
-          organizationId: row.organizationId,
-          opportunityId: row.opportunityId ?? null,
-          service: row.service,
-          status: row.status as "confirmed" | "cancelled" | "pending_confirmation",
-          calendarEventId: row.calendarEventId ?? null,
-          attendeeName: row.attendeeName ?? null,
-          attendeeEmail: row.attendeeEmail ?? null,
-          notes: null,
-          createdByType: (row.createdByType ?? "agent") as "agent" | "human" | "contact",
-          sourceChannel: row.sourceChannel ?? null,
-          workTraceId: row.workTraceId ?? null,
-          rescheduledAt: null,
-          rescheduleCount: 0,
-          startsAt: row.startsAt.toISOString(),
-          endsAt: row.endsAt.toISOString(),
-          timezone: row.timezone ?? "Asia/Singapore",
-          createdAt: row.createdAt.toISOString(),
-          updatedAt: row.updatedAt.toISOString(),
-        };
-      },
-      cancel: async (bookingId: string) => {
-        await prismaClient.booking.update({
-          where: { id: bookingId },
-          data: { status: "cancelled" },
-        });
-      },
-      reschedule: async (bookingId: string, newSlot: { start: string; end: string }) => {
-        const updated = await prismaClient.booking.update({
-          where: { id: bookingId },
-          data: {
-            startsAt: new Date(newSlot.start),
-            endsAt: new Date(newSlot.end),
-            rescheduleCount: { increment: 1 },
-          },
-          select: { id: true },
-        });
-        return { id: updated.id };
-      },
-    };
-
-    const resendKey = process.env["RESEND_API_KEY"];
-    const fromAddress = process.env["EMAIL_FROM"] ?? "noreply@switchboard.app";
-    let emailSender: import("@switchboard/core/calendar").EmailSender | undefined;
-    if (resendKey) {
-      const { sendBookingConfirmationEmail } = await import("../lib/booking-confirmation-email.js");
-      emailSender = async (email) => {
-        await sendBookingConfirmationEmail({
-          apiKey: resendKey,
-          fromAddress,
-          to: email.to,
-          attendeeName: email.attendeeName,
-          service: email.service,
-          startsAt: email.startsAt,
-          endsAt: email.endsAt,
-          bookingId: email.bookingId,
-        });
-      };
-    } else {
-      logger.info("Calendar: booking confirmation emails disabled (RESEND_API_KEY not set)");
-    }
-
-    const provider = new LocalCalendarProvider({
-      businessHours,
-      bookingStore: localStore,
-      ...(emailSender ? { emailSender } : {}),
-      onSendFailure: ({ bookingId, error }) =>
-        logger.error(`Calendar: booking confirmation email failed for ${bookingId}: ${error}`),
-    });
-    logger.info(
-      "Calendar: using LocalCalendarProvider (business hours configured, no Google creds)",
-    );
-    return provider;
-  }
-
-  // Option 3: No provider available — use noop so the app still works
-  const { NoopCalendarProvider } = await import("./noop-calendar-provider.js");
-  logger.info("Calendar: using NoopCalendarProvider (no calendar configured, bookings disabled)");
-  return new NoopCalendarProvider();
 }
