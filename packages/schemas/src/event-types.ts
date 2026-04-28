@@ -5,7 +5,9 @@
 import type { AttributionChain } from "./lifecycle.js";
 
 const uuid = (): string => {
-  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  // TS 6 tightened globalThis access; assert through unknown then index.
+  const g = globalThis as unknown as { crypto?: { randomUUID?: () => string } };
+  const c = g.crypto;
   return typeof c?.randomUUID === "function"
     ? c.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
