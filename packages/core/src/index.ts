@@ -33,6 +33,9 @@ export * from "./audit/index.js";
 // Telemetry (tracing, metrics, LLM cost table)
 export * from "./telemetry/index.js";
 
+// Observability (operator alerter, infrastructure failure tracking)
+export * from "./observability/index.js";
+
 // Execution Guard
 export { GuardedCartridge, beginExecution, endExecution } from "./execution-guard.js";
 

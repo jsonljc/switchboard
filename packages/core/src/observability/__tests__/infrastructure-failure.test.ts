@@ -73,7 +73,7 @@ describe("buildInfrastructureFailureAuditParams", () => {
       retryable: false,
     });
 
-    const snap = ledgerParams.snapshot as Record<string, unknown>;
+    const snap = ledgerParams.snapshot as unknown as Record<string, unknown>;
     expect("intent" in snap).toBe(false);
     expect("traceId" in snap).toBe(false);
     expect("deploymentId" in snap).toBe(false);
