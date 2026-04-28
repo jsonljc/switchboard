@@ -15,6 +15,8 @@ import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js"
 import type { ApprovalRoutingConfig } from "../approval/router.js";
 import type { AuditLedger } from "../audit/ledger.js";
 import type { OperatorAlerter } from "../observability/operator-alerter.js";
+import { NoopOperatorAlerter, safeAlert } from "../observability/operator-alerter.js";
+import { buildInfrastructureFailureAuditParams } from "../observability/infrastructure-failure.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
@@ -53,9 +55,11 @@ export type SubmitWorkResponse =
 
 export class PlatformIngress {
   private readonly config: PlatformIngressConfig;
+  private readonly alerter: OperatorAlerter;
 
   constructor(config: PlatformIngressConfig) {
     this.config = config;
+    this.alerter = config.operatorAlerter ?? new NoopOperatorAlerter();
   }
 
   async submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> {
@@ -179,13 +183,20 @@ export class PlatformIngress {
     const governanceCompletedAt = new Date().toISOString();
     try {
       decision = await governanceGate.evaluate(workUnit, registration);
-    } catch {
+    } catch (governanceErr) {
       decision = {
         outcome: "deny",
         reasonCode: "GOVERNANCE_ERROR",
         riskScore: 1,
         matchedPolicies: [],
       };
+
+      await this.recordInfrastructureFailure({
+        errorType: "governance_eval_exception",
+        error: governanceErr,
+        workUnit,
+        retryable: false,
+      });
 
       const result = this.buildFailedResult(
         workUnit,
@@ -321,5 +332,46 @@ export class PlatformIngress {
         console.error("Failed to persist WorkTrace after retry", retryErr);
       }
     }
+  }
+
+  private async recordInfrastructureFailure(input: {
+    errorType: "governance_eval_exception" | "trace_persist_failed";
+    error: unknown;
+    workUnit?: WorkUnit;
+    retryable: boolean;
+  }): Promise<void> {
+    const { ledgerParams, alert } = buildInfrastructureFailureAuditParams({
+      errorType: input.errorType,
+      error: input.error,
+      workUnit: input.workUnit
+        ? {
+            id: input.workUnit.id,
+            intent: input.workUnit.intent,
+            traceId: input.workUnit.traceId,
+            organizationId: input.workUnit.organizationId,
+            deployment: input.workUnit.deployment
+              ? { deploymentId: input.workUnit.deployment.deploymentId }
+              : undefined,
+          }
+        : undefined,
+      retryable: input.retryable,
+    });
+
+    if (this.config.auditLedger) {
+      try {
+        await this.config.auditLedger.record({
+          ...ledgerParams,
+          snapshot: ledgerParams.snapshot as unknown as Record<string, unknown>,
+        });
+      } catch (auditErr) {
+        // Invariant: no recursive failure logging.
+        console.error(
+          "[PlatformIngress] failed to record infrastructure-failure audit entry",
+          auditErr,
+        );
+      }
+    }
+
+    await safeAlert(this.alerter, alert);
   }
 }
