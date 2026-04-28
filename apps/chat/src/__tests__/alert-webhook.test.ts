@@ -33,7 +33,7 @@ describe("sendHealthCheckAlert", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://hooks.example/test");
     expect(init.method).toBe("POST");
     expect(init.headers).toMatchObject({ "content-type": "application/json" });
@@ -48,7 +48,7 @@ describe("sendHealthCheckAlert", () => {
     const { sendHealthCheckAlert } = await import("../managed/alert-webhook.js");
     await sendHealthCheckAlert("recovery", { channel: "whatsapp", channelId: "ch-2" });
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
     expect(body.text).toBe("✅ Chat health recovered: whatsapp/ch-2");
   });
 
@@ -59,7 +59,7 @@ describe("sendHealthCheckAlert", () => {
     const { sendHealthCheckAlert } = await import("../managed/alert-webhook.js");
     await sendHealthCheckAlert("failure", { channel: "slack", channelId: "ch-3" });
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
     expect(body.text).toBe("🚨 Chat health check failed: slack/ch-3 — unknown");
   });
 
