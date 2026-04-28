@@ -23,41 +23,18 @@ export function hasRuntimeEligibleBusinessHours(value: unknown): boolean {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function makeCheck(status: "pass" | "fail", message: string): ReadinessCheck {
+  return { id: "calendar", label: "Calendar", status, blocking: false, message };
+}
+
 export function describeCalendarReadiness(input: CalendarReadinessInput): CalendarReadinessResult {
   if (input.hasGoogleCredentials && input.hasGoogleCalendarId) {
-    return {
-      state: "google",
-      check: {
-        id: "calendar",
-        label: "Calendar",
-        status: "pass",
-        blocking: false,
-        message: MESSAGES.google,
-      },
-    };
+    return { state: "google", check: makeCheck("pass", MESSAGES.google) };
   }
 
   if (hasRuntimeEligibleBusinessHours(input.businessHours)) {
-    return {
-      state: "local",
-      check: {
-        id: "calendar",
-        label: "Calendar",
-        status: "pass",
-        blocking: false,
-        message: MESSAGES.local,
-      },
-    };
+    return { state: "local", check: makeCheck("pass", MESSAGES.local) };
   }
 
-  return {
-    state: "unconfigured",
-    check: {
-      id: "calendar",
-      label: "Calendar",
-      status: "fail",
-      blocking: false,
-      message: MESSAGES.unconfigured,
-    },
-  };
+  return { state: "unconfigured", check: makeCheck("fail", MESSAGES.unconfigured) };
 }
