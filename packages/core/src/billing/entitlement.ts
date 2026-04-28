@@ -1,8 +1,6 @@
-export interface OrganizationEntitlement {
-  entitled: boolean;
-  reason: "active" | "trialing" | "override" | "blocked";
-  blockedStatus?: string;
-}
+export type OrganizationEntitlement =
+  | { entitled: true; reason: "active" | "trialing" | "override" }
+  | { entitled: false; reason: "blocked"; blockedStatus: string };
 
 export interface EntitlementInputs {
   subscriptionStatus: string;

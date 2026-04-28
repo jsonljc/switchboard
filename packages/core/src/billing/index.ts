@@ -1,6 +1,6 @@
-export type {
-  BillingEntitlementResolver,
-  OrganizationEntitlement,
-  EntitlementInputs,
+export {
+  evaluateEntitlement,
+  type BillingEntitlementResolver,
+  type OrganizationEntitlement,
+  type EntitlementInputs,
 } from "./entitlement.js";
-export { evaluateEntitlement } from "./entitlement.js";
