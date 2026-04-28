@@ -97,6 +97,10 @@
     "./calendar": {
       "types": "./dist/calendar/index.d.ts",
       "import": "./dist/calendar/index.js"
+    },
+    "./billing": {
+      "types": "./dist/billing/index.d.ts",
+      "import": "./dist/billing/index.js"
     }
   },
   "scripts": {
