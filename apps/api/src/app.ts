@@ -422,6 +422,15 @@ export async function buildServer() {
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
 
+  const { PrismaBillingEntitlementResolver } =
+    await import("./services/billing-entitlement-resolver.js");
+  const billingEntitlementResolver = prismaClient
+    ? new PrismaBillingEntitlementResolver(prismaClient)
+    : undefined;
+  if (billingEntitlementResolver) {
+    app.decorate("billingEntitlementResolver", billingEntitlementResolver);
+  }
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -429,6 +438,7 @@ export async function buildServer() {
     deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,
+    entitlementResolver: billingEntitlementResolver,
   });
   app.decorate("platformIngress", platformIngress);
 
