@@ -38,7 +38,8 @@ export type { ExecutionContext, ExecutionMode } from "./execution-context.js";
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
 export { buildWorkTrace } from "./work-trace-recorder.js";
-export type { TraceInput, WorkTraceStore } from "./work-trace-recorder.js";
+export type { TraceInput, WorkTraceStore, WorkTraceUpdateResult } from "./work-trace-recorder.js";
+export * from "./work-trace-lock.js";
 
 // Errors
 export type { IngressError } from "./ingress-error.js";

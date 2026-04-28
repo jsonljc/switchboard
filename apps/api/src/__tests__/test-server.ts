@@ -33,6 +33,7 @@ import type {
   CartridgeManifestForRegistration,
   WorkTrace,
   WorkTraceStore,
+  WorkTraceUpdateResult,
 } from "@switchboard/core/platform";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 
@@ -47,11 +48,12 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
     return this.traces.get(workUnitId) ?? null;
   }
 
-  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void> {
+  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<WorkTraceUpdateResult> {
     const existing = this.traces.get(workUnitId);
     if (existing) {
       this.traces.set(workUnitId, { ...existing, ...fields });
     }
+    return { ok: true, trace: this.traces.get(workUnitId) ?? ({} as never) };
   }
 
   async getByIdempotencyKey(key: string): Promise<WorkTrace | null> {

@@ -178,6 +178,7 @@ function createMockStores() {
       if (existing) {
         traces.set(id, { ...existing, ...fields });
       }
+      return { ok: true as const, trace: traces.get(id) ?? ({} as never) };
     }),
     getByIdempotencyKey: vi.fn().mockResolvedValue(null),
   };
@@ -359,6 +360,7 @@ describe("PlatformLifecycle", () => {
           approvalOutcome: "approved",
           approvalRespondedBy: "approver-1",
         }),
+        expect.objectContaining({ caller: expect.any(String) }),
       );
 
       // Trace was updated with execution result
@@ -367,6 +369,7 @@ describe("PlatformLifecycle", () => {
         expect.objectContaining({
           outcome: "completed",
         }),
+        expect.objectContaining({ caller: expect.any(String) }),
       );
 
       // Audit ledger recorded the approval and execution events
@@ -407,6 +410,7 @@ describe("PlatformLifecycle", () => {
           approvalRespondedBy: "approver-1",
           outcome: "failed",
         }),
+        expect.objectContaining({ caller: expect.any(String) }),
       );
 
       // modeRegistry.dispatch was NOT called
@@ -445,6 +449,7 @@ describe("PlatformLifecycle", () => {
       expect(stores.traceStore.update).toHaveBeenCalledWith(
         envelopeId,
         expect.objectContaining({ outcome: "failed" }),
+        expect.objectContaining({ caller: expect.any(String) }),
       );
     });
   });

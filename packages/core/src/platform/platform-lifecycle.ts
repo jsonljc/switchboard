@@ -357,15 +357,31 @@ export class PlatformLifecycle {
       await envelopeStore.update(workUnitId, { status: newStatus });
     }
 
-    await traceStore.update(workUnitId, {
-      outcome: executionResult.outcome,
-      durationMs: executionResult.durationMs,
-      error: executionResult.error,
-      executionSummary: executionResult.summary,
-      executionOutputs: executionResult.outputs,
-      executionStartedAt,
-      completedAt,
-    });
+    const updateResult = await traceStore.update(
+      workUnitId,
+      {
+        outcome: executionResult.outcome,
+        durationMs: executionResult.durationMs,
+        error: executionResult.error,
+        executionSummary: executionResult.summary,
+        executionOutputs: executionResult.outputs,
+        executionStartedAt,
+        completedAt,
+      },
+      { caller: "platform_lifecycle.executeAfterApproval" },
+    );
+    if (!updateResult.ok) {
+      console.error(`[platform-lifecycle] WorkTrace update rejected: ${updateResult.reason}`);
+      return {
+        success: false,
+        summary: `WorkTrace update rejected: ${updateResult.reason}`,
+        externalRefs: {},
+        rollbackAvailable: false,
+        partialFailures: [{ step: "trace_update", error: updateResult.reason }],
+        durationMs: 0,
+        undoRecipe: null,
+      };
+    }
 
     await ledger.record({
       eventType: executionResult.outcome === "completed" ? "action.executed" : "action.failed",
@@ -534,16 +550,34 @@ export class PlatformLifecycle {
     // Temporary guard (PR2 deletes this method entirely).
     // Trace update MUST succeed before execution proceeds — silent failure
     // would cause executeAfterApproval to use stale parameters.
-    await this.config.traceStore.update(workUnitId, fields);
+    const updateResult = await this.config.traceStore.update(workUnitId, fields, {
+      caller: "platform_lifecycle.updateWorkTraceApproval",
+    });
+    if (!updateResult.ok) {
+      console.error(
+        `[platform-lifecycle] WorkTrace update rejected in updateWorkTraceApproval: ${updateResult.reason}`,
+      );
+      throw new Error(`WorkTrace update rejected: ${updateResult.reason}`);
+    }
   }
 
   private async updateWorkTraceOutcome(
     workUnitId: string,
     outcome: WorkTrace["outcome"],
   ): Promise<void> {
-    await this.config.traceStore.update(workUnitId, {
-      outcome,
-      completedAt: new Date().toISOString(),
-    });
+    const updateResult = await this.config.traceStore.update(
+      workUnitId,
+      {
+        outcome,
+        completedAt: new Date().toISOString(),
+      },
+      { caller: "platform_lifecycle.updateWorkTraceOutcome" },
+    );
+    if (!updateResult.ok) {
+      console.error(
+        `[platform-lifecycle] WorkTrace update rejected in updateWorkTraceOutcome: ${updateResult.reason}`,
+      );
+      throw new Error(`WorkTrace update rejected: ${updateResult.reason}`);
+    }
   }
 }

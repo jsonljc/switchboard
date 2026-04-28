@@ -150,6 +150,7 @@ describe("Convergence E2E", () => {
       update: vi.fn(async (id: string, fields: Partial<WorkTrace>) => {
         const idx = traceStore.traces.findIndex((t) => t.workUnitId === id);
         if (idx >= 0) traceStore.traces[idx] = { ...traceStore.traces[idx]!, ...fields };
+        return { ok: true as const, trace: traceStore.traces[idx >= 0 ? idx : 0] ?? ({} as never) };
       }),
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };

@@ -484,7 +484,7 @@ export async function buildServer() {
     traceStore: workTraceStore ?? {
       persist: async () => {},
       getByWorkUnitId: async () => null,
-      update: async () => {},
+      update: async () => ({ ok: true as const, trace: {} as never }),
       getByIdempotencyKey: async () => null,
     },
     ledger,
