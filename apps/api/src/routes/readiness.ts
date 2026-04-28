@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import { describeCalendarReadiness } from "../lib/calendar-readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
@@ -274,6 +275,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
   // 9. meta-ads-token
   checks.push(checkMetaAdsToken(ctx));
 
+  // 10. calendar (advisory)
+  checks.push(checkCalendar(ctx));
+
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
   return { ready, checks };
@@ -472,6 +476,10 @@ function checkApprovalModeReviewed(ctx: ReadinessContext): ReadinessCheck {
       ? "Approval mode has been reviewed"
       : "Approval mode not reviewed. Review your approval settings.",
   };
+}
+
+function checkCalendar(ctx: ReadinessContext): ReadinessCheck {
+  return describeCalendarReadiness(ctx.calendar).check;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;

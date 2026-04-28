@@ -66,7 +66,7 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(10);
+    expect(report.checks).toHaveLength(11);
   });
 
   // ── email-verified ──────────────────────────────────────────────────────
@@ -307,6 +307,7 @@ describe("checkReadiness", () => {
       "test-scenarios-run",
       "approval-mode-reviewed",
       "meta-ads-token",
+      "calendar",
     ]);
   });
 
@@ -360,5 +361,67 @@ describe("checkReadiness", () => {
     const check = report.checks.find((c) => c.id === "meta-ads-token")!;
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Meta Ads token is valid");
+  });
+
+  // ── calendar (advisory) ─────────────────────────────────────────────────
+
+  it("calendar passes (google) when both Google env vars are present in context", () => {
+    const report = checkReadiness(
+      makeContext({
+        calendar: { hasGoogleCredentials: true, hasGoogleCalendarId: true, businessHours: null },
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "calendar")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toBe(
+      "Google Calendar configuration detected. Bookings should create real calendar events.",
+    );
+    expect(report.ready).toBe(true);
+  });
+
+  it("calendar passes (local) when no Google env and businessHours is an object", () => {
+    const report = checkReadiness(
+      makeContext({
+        calendar: {
+          hasGoogleCredentials: false,
+          hasGoogleCalendarId: false,
+          businessHours: { mon: [{ start: "09:00", end: "17:00" }] },
+        },
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "calendar")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toBe(
+      "Local business hours detected. Bookings may not create external calendar events.",
+    );
+    expect(report.ready).toBe(true);
+  });
+
+  it("calendar fails (unconfigured) when no Google env and no businessHours", () => {
+    const report = checkReadiness(
+      makeContext({
+        calendar: {
+          hasGoogleCredentials: false,
+          hasGoogleCalendarId: false,
+          businessHours: null,
+        },
+      }),
+    );
+    const check = report.checks.find((c) => c.id === "calendar")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(false);
+    expect(check.message).toBe(
+      "Calendar not configured. Booking flows may fall back to stub behavior.",
+    );
+    // Calendar fail is non-blocking — ready stays true (regression pin).
+    expect(report.ready).toBe(true);
+  });
+
+  it("calendar check appears exactly once in checks[]", () => {
+    const report = checkReadiness(makeContext());
+    const calendarChecks = report.checks.filter((c) => c.id === "calendar");
+    expect(calendarChecks).toHaveLength(1);
   });
 });
