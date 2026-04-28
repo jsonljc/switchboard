@@ -107,3 +107,5 @@ export type {
   CreateProductIdentityInput,
   AddProductImageInput,
 } from "./stores/prisma-product-identity-store.js";
+export { PrismaConsentRecordStore } from "./stores/prisma-consent-record-store.js";
+export type { CreateConsentRecordInput } from "./stores/prisma-consent-record-store.js";
