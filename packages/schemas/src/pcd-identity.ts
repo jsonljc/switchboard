@@ -99,6 +99,7 @@ export const ProductQcResultSchema = z.object({
   assetRecordId: z.string(),
   logoSimilarityScore: z.number().min(0).max(1).nullable().optional(),
   packageOcrMatchScore: z.number().min(0).max(1).nullable().optional(),
+  // Unbounded delta (CIE76 ΔE etc.), not a 0–1 ratio like the other scores.
   colorDeltaScore: z.number().min(0).nullable().optional(),
   geometryMatchScore: z.number().min(0).max(1).nullable().optional(),
   scaleConfidence: z.number().min(0).max(1).nullable().optional(),

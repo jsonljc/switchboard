@@ -120,6 +120,24 @@ describe("ConsentRecordSchema", () => {
   it("rejects missing required fields", () => {
     expect(() => ConsentRecordSchema.parse({ id: "cr_1" })).toThrow();
   });
+
+  it("rejects empty scopeOfUse array", () => {
+    expect(() =>
+      ConsentRecordSchema.parse({
+        id: "cr_1",
+        orgId: "org_1",
+        personName: "Julia Doe",
+        scopeOfUse: [],
+        territory: ["US"],
+        mediaTypes: ["video"],
+        revocable: true,
+        revoked: false,
+        effectiveAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    ).toThrow();
+  });
 });
 
 describe("ProductQcResultSchema", () => {
