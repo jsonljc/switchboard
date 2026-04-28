@@ -13,6 +13,8 @@ import type {
 import type { BillingEntitlementResolver } from "../billing/entitlement.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
+import type { AuditLedger } from "../audit/ledger.js";
+import type { OperatorAlerter } from "../observability/operator-alerter.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
@@ -31,6 +33,10 @@ export interface PlatformIngressConfig {
   lifecycleService?: ApprovalLifecycleService;
   approvalRoutingConfig?: ApprovalRoutingConfig;
   entitlementResolver?: BillingEntitlementResolver;
+  auditLedger?: AuditLedger;
+  operatorAlerter?: OperatorAlerter;
+  /** Injectable for tests — defaults to setTimeout-based delay. */
+  delayFn?: (ms: number) => Promise<void>;
 }
 
 export type SubmitWorkResponse =
