@@ -16,16 +16,31 @@ interface GraphApiError {
   };
 }
 
+// Meta phone-number IDs are numeric strings. Reject anything else at the boundary
+// so the value can never escape the path segment in the constructed URL.
+const PHONE_NUMBER_ID_PATTERN = /^\d{1,32}$/;
+
 export async function testWhatsAppCredentials(
   token: string,
   phoneNumberId: string,
 ): Promise<TestResult> {
-  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}?access_token=${token}`;
+  if (!PHONE_NUMBER_ID_PATTERN.test(phoneNumberId)) {
+    return {
+      success: false,
+      error: "Phone Number ID must be a numeric Meta identifier.",
+      statusCode: 400,
+    };
+  }
+
+  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (res.ok) {
       const data = (await res.json()) as {

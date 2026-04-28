@@ -27,9 +27,22 @@ describe("testWhatsAppCredentials", () => {
       displayPhoneNumber: "+1234567890",
     });
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://graph.facebook.com/v21.0/123456?access_token=valid-token",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      "https://graph.facebook.com/v21.0/123456",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: { Authorization: "Bearer valid-token" },
+      }),
     );
+  });
+
+  it("rejects non-numeric phoneNumberId without making a network call", async () => {
+    const result = await testWhatsAppCredentials("valid-token", "../../evil");
+    expect(result).toEqual({
+      success: false,
+      error: "Phone Number ID must be a numeric Meta identifier.",
+      statusCode: 400,
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("returns invalid-token error for Graph API code 190", async () => {
