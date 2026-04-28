@@ -368,6 +368,7 @@ export async function registerInngest(
     stores: {
       productStore: {
         findOrCreateForJob: async (job) => {
+          // Dedup: jobs in the same org with identical productDescription share one ProductIdentity row.
           const existing = await app.prisma!.productIdentity.findFirst({
             where: { orgId: job.organizationId, title: job.productDescription },
             select: { id: true },
@@ -389,6 +390,7 @@ export async function registerInngest(
             select: { id: true },
           });
           if (existing) return existing;
+          // Placeholder values are safe because Tier-1 stock avatars are gated to scripts/storyboards only — never reach video generation that would require a real heroImageAssetId or voice sample.
           const created = await creatorStore.create({
             deploymentId,
             name: "Stock Avatar (backfill)",
