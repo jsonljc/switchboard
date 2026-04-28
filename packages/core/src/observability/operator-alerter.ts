@@ -1,4 +1,7 @@
-export type InfrastructureErrorType = "governance_eval_exception" | "trace_persist_failed";
+export type InfrastructureErrorType =
+  | "governance_eval_exception"
+  | "trace_persist_failed"
+  | "work_trace_locked_violation";
 
 export interface InfrastructureFailureAlert {
   errorType: InfrastructureErrorType;
