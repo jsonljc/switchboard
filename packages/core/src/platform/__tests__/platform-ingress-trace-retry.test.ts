@@ -140,6 +140,51 @@ describe("WorkTrace persist — exponential backoff", () => {
     expect(alerter.alert).not.toHaveBeenCalled();
   });
 
+  it("does not emit console.error when persist eventually succeeds", async () => {
+    const persistFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transient"))
+      .mockResolvedValueOnce(undefined);
+    const traceStore = { persist: persistFn, getByIdempotencyKey: vi.fn().mockResolvedValue(null) };
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await new PlatformIngress({
+      intentRegistry: makeIntentRegistry() as never,
+      modeRegistry: makeModeRegistry() as never,
+      governanceGate: makeGate(),
+      deploymentResolver: makeDeploymentResolver() as never,
+      traceStore: traceStore as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) },
+      delayFn: zeroDelay,
+    }).submit(baseRequest);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("populates errorName and a truncated errorStack on terminal audit snapshot", async () => {
+    const persistFn = vi.fn().mockRejectedValue(new TypeError("permanent"));
+    const traceStore = { persist: persistFn, getByIdempotencyKey: vi.fn().mockResolvedValue(null) };
+    const auditLedger = { record: vi.fn().mockResolvedValue(undefined) };
+
+    await new PlatformIngress({
+      intentRegistry: makeIntentRegistry() as never,
+      modeRegistry: makeModeRegistry() as never,
+      governanceGate: makeGate(),
+      deploymentResolver: makeDeploymentResolver() as never,
+      traceStore: traceStore as never,
+      auditLedger: auditLedger as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) },
+      delayFn: zeroDelay,
+    }).submit(baseRequest);
+
+    expect(auditLedger.record).toHaveBeenCalledTimes(1);
+    const snap = auditLedger.record.mock.calls[0]![0].snapshot as Record<string, unknown>;
+    expect(snap.errorName).toBe("TypeError");
+    expect(typeof snap.errorStack).toBe("string");
+    expect((snap.errorStack as string).length).toBeLessThanOrEqual(2000);
+  });
+
   it("after 3 terminal failures: writes one audit entry, fires one alert, does not throw", async () => {
     const persistFn = vi.fn().mockRejectedValue(new Error("permanent"));
     const traceStore = { persist: persistFn, getByIdempotencyKey: vi.fn().mockResolvedValue(null) };

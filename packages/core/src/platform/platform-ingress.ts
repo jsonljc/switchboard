@@ -37,7 +37,7 @@ function jitteredDelayMs(attempt: number): number {
   const { baseDelayMs, factor, jitterRatio } = TRACE_PERSIST_RETRY_POLICY;
   const base = baseDelayMs * Math.pow(factor, attempt - 2);
   const jitter = base * jitterRatio;
-  return base + (Math.random() * 2 - 1) * jitter;
+  return Math.max(0, base + (Math.random() * 2 - 1) * jitter);
 }
 
 export interface GovernanceGateInterface {
@@ -332,6 +332,8 @@ export class PlatformIngress {
     completedAt?: string,
   ): Promise<void> {
     if (!traceStore) return;
+    // Built once outside the retry loop: every attempt persists the same logical
+    // WorkTrace (same traceId/workUnitId/idempotencyKey). Do not move inside the loop.
     const trace = buildWorkTrace({
       workUnit,
       governanceDecision: decision,

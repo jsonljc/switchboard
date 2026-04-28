@@ -439,7 +439,12 @@ export async function buildServer() {
   }
 
   const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
-    ? new WebhookOperatorAlerter({ webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL })
+    ? new WebhookOperatorAlerter({
+        webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL,
+        headers: process.env.OPERATOR_ALERT_WEBHOOK_SECRET
+          ? { Authorization: `Bearer ${process.env.OPERATOR_ALERT_WEBHOOK_SECRET}` }
+          : undefined,
+      })
     : new NoopOperatorAlerter();
 
   const platformIngress = new PlatformIngress({

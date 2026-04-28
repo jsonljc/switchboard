@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildInfrastructureFailureAuditParams,
   extractErrorMessage,
+  extractErrorMetadata,
 } from "../infrastructure-failure.js";
 
 const baseWorkUnit = {
@@ -20,6 +21,48 @@ describe("extractErrorMessage", () => {
     expect(extractErrorMessage("oops")).toBe("oops");
     expect(extractErrorMessage({ code: 42 })).toBe('{"code":42}');
     expect(extractErrorMessage(null)).toBe("null");
+  });
+});
+
+describe("extractErrorMetadata", () => {
+  it("returns name and stack for Error instances", () => {
+    const meta = extractErrorMetadata(new TypeError("boom"));
+    expect(meta.name).toBe("TypeError");
+    expect(typeof meta.stack).toBe("string");
+  });
+  it("truncates stack to 2000 chars", () => {
+    const longStack = "x".repeat(5000);
+    const err = new Error("long");
+    err.stack = longStack;
+    expect(extractErrorMetadata(err).stack?.length).toBe(2000);
+  });
+  it("returns empty object for non-Error throws", () => {
+    expect(extractErrorMetadata("oops")).toEqual({});
+    expect(extractErrorMetadata(null)).toEqual({});
+  });
+});
+
+describe("buildInfrastructureFailureAuditParams — error metadata", () => {
+  it("populates errorName and errorStack on snapshot, omits from alert", () => {
+    const { ledgerParams, alert } = buildInfrastructureFailureAuditParams({
+      errorType: "trace_persist_failed",
+      error: new TypeError("db down"),
+      retryable: false,
+    });
+    expect(ledgerParams.snapshot.errorName).toBe("TypeError");
+    expect(typeof ledgerParams.snapshot.errorStack).toBe("string");
+    // Alert payload stays small — name/stack live only in the audit ledger.
+    expect("errorName" in alert).toBe(false);
+    expect("errorStack" in alert).toBe(false);
+  });
+  it("omits errorName/errorStack when error is not an Error instance", () => {
+    const { ledgerParams } = buildInfrastructureFailureAuditParams({
+      errorType: "trace_persist_failed",
+      error: "string error",
+      retryable: false,
+    });
+    expect("errorName" in ledgerParams.snapshot).toBe(false);
+    expect("errorStack" in ledgerParams.snapshot).toBe(false);
   });
 });
 
