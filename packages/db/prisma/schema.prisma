@@ -1117,6 +1117,16 @@ model CreativeJob {
   stoppedAt       String?
   productionTier  String?
 
+  // PCD identity registry (SP1)
+  productIdentityId           String?
+  productIdentity             ProductIdentity? @relation(fields: [productIdentityId], references: [id])
+  creatorIdentityId           String?
+  effectiveTier               Int?
+  allowedOutputTier           Int?
+  shotSpecVersion             String?
+  registryBackfilled          Boolean  @default(false)
+  fidelityTierAtGeneration    Int?
+
   // Pipeline mode
   mode                    String   @default("polished")
 
@@ -1136,6 +1146,9 @@ model CreativeJob {
   @@index([organizationId])
   @@index([deploymentId])
   @@index([mode])
+  @@index([productIdentityId])
+  @@index([creatorIdentityId])
+  @@index([registryBackfilled])
 }
 
 model CreatorIdentity {
@@ -1160,12 +1173,21 @@ model CreatorIdentity {
   bibleVersion        String   @default("1.0")
   previousVersionId   String?
 
+  qualityTier         String?
+  consentRecordId     String?
+  consentRecord       ConsentRecord? @relation(fields: [consentRecordId], references: [id])
+  identityAdapter     Json?
+
+  identitySnapshots   PcdIdentitySnapshot[]
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   assets              AssetRecord[]
 
   @@index([deploymentId])
+  @@index([qualityTier])
+  @@index([consentRecordId])
 }
 
 model AssetRecord {
