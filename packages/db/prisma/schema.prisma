@@ -9,7 +9,7 @@ datasource db {
 
 model Principal {
   id             String   @id @default(uuid())
-  type           String   // user, agent, service_account, system
+  type           String // user, agent, service_account, system
   name           String
   organizationId String?
   roles          String[] // requester, approver, operator, admin
@@ -43,16 +43,16 @@ model IdentitySpec {
   organizationId       String?
   name                 String
   description          String
-  riskTolerance        Json     // RiskTolerance object
-  globalSpendLimits    Json     // SpendLimits object
-  cartridgeSpendLimits Json     // Record<string, SpendLimits>
+  riskTolerance        Json // RiskTolerance object
+  globalSpendLimits    Json // SpendLimits object
+  cartridgeSpendLimits Json // Record<string, SpendLimits>
   forbiddenBehaviors   String[]
   trustBehaviors       String[]
   delegatedApprovers   String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  overlays  RoleOverlay[]
+  overlays RoleOverlay[]
 
   @@index([principalId])
   @@index([organizationId])
@@ -63,11 +63,11 @@ model RoleOverlay {
   identitySpecId String
   name           String
   description    String
-  mode           String   // restrict, extend
+  mode           String // restrict, extend
   priority       Int
   active         Boolean  @default(true)
-  conditions     Json     // overlay conditions
-  overrides      Json     // overlay overrides
+  conditions     Json // overlay conditions
+  overrides      Json // overlay overrides
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -84,10 +84,10 @@ model Policy {
   cartridgeId          String?
   priority             Int
   active               Boolean  @default(true)
-  rule                 Json     // PolicyRule
-  effect               String   // allow, deny, modify, require_approval
+  rule                 Json // PolicyRule
+  effect               String // allow, deny, modify, require_approval
   effectParams         Json?
-  approvalRequirement  String?  // none, standard, elevated, mandatory
+  approvalRequirement  String? // none, standard, elevated, mandatory
   riskCategoryOverride String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -103,12 +103,12 @@ model ActionEnvelope {
   incomingMessage  Json?
   conversationId   String?
   organizationId   String?
-  proposals        Json     // ActionProposal[]
-  resolvedEntities Json     // ResolvedEntity[]
-  plan             Json?    // ActionPlan
-  decisions        Json     // DecisionTrace[]
-  approvalRequests Json     // ApprovalRequest[]
-  executionResults Json     // ExecutionResult[]
+  proposals        Json // ActionProposal[]
+  resolvedEntities Json // ResolvedEntity[]
+  plan             Json? // ActionPlan
+  decisions        Json // DecisionTrace[]
+  approvalRequests Json // ApprovalRequest[]
+  executionResults Json // ExecutionResult[]
   auditEntryIds    String[]
   status           String
   parentEnvelopeId String?
@@ -116,8 +116,8 @@ model ActionEnvelope {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  parentEnvelope   ActionEnvelope?  @relation("EnvelopeChain", fields: [parentEnvelopeId], references: [id])
-  childEnvelopes   ActionEnvelope[] @relation("EnvelopeChain")
+  parentEnvelope ActionEnvelope?  @relation("EnvelopeChain", fields: [parentEnvelopeId], references: [id])
+  childEnvelopes ActionEnvelope[] @relation("EnvelopeChain")
 
   @@index([status])
   @@index([conversationId])
@@ -159,7 +159,7 @@ model AuditEntry {
   visibilityLevel   String   @default("public")
   summary           String
   snapshot          Json
-  evidencePointers  Json     // EvidencePointer[]
+  evidencePointers  Json // EvidencePointer[]
   redactionApplied  Boolean  @default(false)
   redactedFields    String[]
   chainHashVersion  Int      @default(1)
@@ -168,7 +168,7 @@ model AuditEntry {
   previousEntryHash String?
   envelopeId        String?
   organizationId    String?
-  traceId           String?  // optional correlation id (not part of chain hash)
+  traceId           String? // optional correlation id (not part of chain hash)
   createdAt         DateTime @default(now())
 
   @@index([eventType])
@@ -191,20 +191,20 @@ model CartridgeRegistration {
 }
 
 model Connection {
-  id              String   @id @default(uuid())
-  serviceId       String
-  serviceName     String
-  organizationId  String?
-  authType        String   // oauth2, api_key, service_account
-  credentials     Json     // encrypted credentials
-  scopes          String[]
-  refreshStrategy String   @default("auto")
-  status          String   @default("connected")
+  id                   String    @id @default(uuid())
+  serviceId            String
+  serviceName          String
+  organizationId       String?
+  authType             String // oauth2, api_key, service_account
+  credentials          Json // encrypted credentials
+  scopes               String[]
+  refreshStrategy      String    @default("auto")
+  status               String    @default("connected")
   lastHealthCheck      DateTime?
-  externalAccountId    String?   // Meta page/ad account ID for webhook matching
-  greetingTemplateName String?   // WhatsApp template name for lead greeting
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  externalAccountId    String? // Meta page/ad account ID for webhook matching
+  greetingTemplateName String? // WhatsApp template name for lead greeting
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@unique([serviceId, organizationId])
   @@index([organizationId])
@@ -253,17 +253,17 @@ model ApprovalRecord {
 // ---------------------------------------------------------------------------
 
 model ApprovalLifecycle {
-  id                         String    @id @default(uuid())
-  actionEnvelopeId           String    @unique
-  organizationId             String?
-  status                     String    @default("pending") // pending | approved | rejected | expired | superseded | recovery_required
-  currentRevisionId          String?
+  id                          String   @id @default(uuid())
+  actionEnvelopeId            String   @unique
+  organizationId              String?
+  status                      String   @default("pending") // pending | approved | rejected | expired | superseded | recovery_required
+  currentRevisionId           String?
   currentExecutableWorkUnitId String?
-  expiresAt                  DateTime
-  pausedSessionId            String?
-  version                    Int       @default(1)
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
+  expiresAt                   DateTime
+  pausedSessionId             String?
+  version                     Int      @default(1)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
   @@index([status])
   @@index([organizationId, status])
@@ -275,16 +275,16 @@ model ApprovalLifecycle {
 // ---------------------------------------------------------------------------
 
 model ApprovalRevision {
-  id                   String   @id @default(uuid())
-  lifecycleId          String
-  revisionNumber       Int
-  parametersSnapshot   Json     // frozen action parameters
-  approvalScopeSnapshot Json    // approvers, risk, routing config
-  bindingHash          String
-  rationale            String?
-  supersedesRevisionId String?
-  createdBy            String
-  createdAt            DateTime @default(now())
+  id                    String   @id @default(uuid())
+  lifecycleId           String
+  revisionNumber        Int
+  parametersSnapshot    Json // frozen action parameters
+  approvalScopeSnapshot Json // approvers, risk, routing config
+  bindingHash           String
+  rationale             String?
+  supersedesRevisionId  String?
+  createdBy             String
+  createdAt             DateTime @default(now())
 
   @@unique([lifecycleId, revisionNumber])
   @@index([lifecycleId])
@@ -295,15 +295,15 @@ model ApprovalRevision {
 // ---------------------------------------------------------------------------
 
 model ExecutableWorkUnit {
-  id                     String   @id @default(uuid())
-  lifecycleId            String
-  approvalRevisionId     String   @unique
-  actionEnvelopeId       String
-  frozenPayload          Json     // frozen WorkUnit snapshot
-  frozenBinding          Json     // frozen deployment + resolver target
-  frozenExecutionPolicy  Json     // frozen constraints
-  executableUntil        DateTime
-  createdAt              DateTime @default(now())
+  id                    String   @id @default(uuid())
+  lifecycleId           String
+  approvalRevisionId    String   @unique
+  actionEnvelopeId      String
+  frozenPayload         Json // frozen WorkUnit snapshot
+  frozenBinding         Json // frozen deployment + resolver target
+  frozenExecutionPolicy Json // frozen constraints
+  executableUntil       DateTime
+  createdAt             DateTime @default(now())
 
   @@index([lifecycleId])
 }
@@ -313,35 +313,35 @@ model ExecutableWorkUnit {
 // ---------------------------------------------------------------------------
 
 model DispatchRecord {
-  id                     String    @id @default(uuid())
-  executableWorkUnitId   String
-  attemptNumber          Int
-  idempotencyKey         String    @unique
-  state                  String    @default("dispatching") // dispatching | succeeded | failed | terminal_failed
-  dispatchedAt           DateTime  @default(now())
-  completedAt            DateTime?
-  outcome                String?
-  errorMessage           String?
-  durationMs             Int?
+  id                   String    @id @default(uuid())
+  executableWorkUnitId String
+  attemptNumber        Int
+  idempotencyKey       String    @unique
+  state                String    @default("dispatching") // dispatching | succeeded | failed | terminal_failed
+  dispatchedAt         DateTime  @default(now())
+  completedAt          DateTime?
+  outcome              String?
+  errorMessage         String?
+  durationMs           Int?
 
   @@unique([executableWorkUnitId, attemptNumber])
   @@index([executableWorkUnitId])
 }
 
 model CompetenceRecord {
-  id                    String   @id @default(uuid())
-  principalId           String
-  actionType            String
-  successCount          Int      @default(0)
-  failureCount          Int      @default(0)
-  rollbackCount         Int      @default(0)
-  consecutiveSuccesses  Int      @default(0)
-  score                 Float    @default(0)
-  lastActivityAt        DateTime @default(now())
-  lastDecayAppliedAt    DateTime @default(now())
-  history               Json     @default("[]")
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  principalId          String
+  actionType           String
+  successCount         Int      @default(0)
+  failureCount         Int      @default(0)
+  rollbackCount        Int      @default(0)
+  consecutiveSuccesses Int      @default(0)
+  score                Float    @default(0)
+  lastActivityAt       DateTime @default(now())
+  lastDecayAppliedAt   DateTime @default(now())
+  history              Json     @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@unique([principalId, actionType])
   @@index([principalId])
@@ -371,25 +371,25 @@ model CompetencePolicy {
 // Dashboard authentication models
 
 model DashboardUser {
-  id              String    @id @default(uuid())
-  email           String    @unique
+  id              String             @id @default(uuid())
+  email           String             @unique
   name            String?
   emailVerified   DateTime?
   organizationId  String
   principalId     String
   apiKeyEncrypted String
   passwordHash    String?
-  apiKeyHash      String?   @unique
-  googleId        String?   @unique
+  apiKeyHash      String?            @unique
+  googleId        String?            @unique
   org             OrganizationConfig @relation(fields: [organizationId], references: [id])
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
   sessions        DashboardSession[]
 }
 
 model DashboardSession {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique
+  id           String        @id @default(uuid())
+  sessionToken String        @unique
   userId       String
   expires      DateTime
   user         DashboardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -406,33 +406,33 @@ model DashboardVerificationToken {
 }
 
 model OrganizationConfig {
-  id                   String   @id // orgId
+  id                   String          @id // orgId
   name                 String
-  runtimeType          String   @default("http") // mcp, http, managed
-  runtimeConfig        Json     @default("{}")
-  governanceProfile    String   @default("guarded") // observe, guarded, strict, locked
-  onboardingComplete   Boolean  @default(false)
-  managedChannels      String[] @default([])
-  provisioningStatus   String   @default("pending")
-  purchasedAgents      String[] @default([])
+  runtimeType          String          @default("http") // mcp, http, managed
+  runtimeConfig        Json            @default("{}")
+  governanceProfile    String          @default("guarded") // observe, guarded, strict, locked
+  onboardingComplete   Boolean         @default(false)
+  managedChannels      String[]        @default([])
+  provisioningStatus   String          @default("pending")
+  purchasedAgents      String[]        @default([])
   businessHours        Json?
   onboardingPlaybook   Json?
-  onboardingStep       Int      @default(1)
+  onboardingStep       Int             @default(1)
   firstRunPhase        Json?
-  stripeCustomerId     String?   @unique
+  stripeCustomerId     String?         @unique
   stripeSubscriptionId String?
   stripePriceId        String?
-  subscriptionStatus   String    @default("none") // none, trialing, active, past_due, canceled
-  cancelAtPeriodEnd    Boolean   @default(false)
+  subscriptionStatus   String          @default("none") // none, trialing, active, past_due, canceled
+  cancelAtPeriodEnd    Boolean         @default(false)
   /// Manual override that allows an org to execute paid mutable actions without
   /// an active Stripe subscription. Intended for internal beta, comped pilots,
   /// or manually approved exceptions.
-  entitlementOverride  Boolean   @default(false)
+  entitlementOverride  Boolean         @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
-  escalationConfig     Json?    // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  escalationConfig     Json? // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
   users                DashboardUser[]
 }
 
@@ -449,7 +449,7 @@ model WebhookEventLog {
 model AgentRoster {
   id             String   @id @default(uuid())
   organizationId String
-  agentRole      String   // strategist, monitor, responder, optimizer, booker, guardian, primary_operator
+  agentRole      String // strategist, monitor, responder, optimizer, booker, guardian, primary_operator
   displayName    String
   description    String
   status         String   @default("active") // active, locked, disabled
@@ -480,14 +480,13 @@ model AgentState {
   @@index([organizationId])
 }
 
-
 model ManagedChannel {
   id                String    @id @default(uuid())
   organizationId    String
-  channel           String    // "telegram" | "slack" | "whatsapp"
-  connectionId      String    // FK to Connection.id (encrypted bot token)
-  botUsername        String?   // display name, e.g. "@MyCompanyBot"
-  webhookPath       String    @unique  // "/webhook/managed/<uuid>"
+  channel           String // "telegram" | "slack" | "whatsapp"
+  connectionId      String // FK to Connection.id (encrypted bot token)
+  botUsername       String? // display name, e.g. "@MyCompanyBot"
+  webhookPath       String    @unique // "/webhook/managed/<uuid>"
   webhookRegistered Boolean   @default(false)
   status            String    @default("provisioning") // provisioning | active | error | disabled
   statusDetail      String?
@@ -506,7 +505,7 @@ model FailedMessage {
   webhookPath    String?
   organizationId String?
   rawPayload     Json
-  stage          String    // parse, interpret, propose, execute, unknown
+  stage          String // parse, interpret, propose, execute, unknown
   errorMessage   String
   errorStack     String?
   retryCount     Int       @default(0)
@@ -521,16 +520,15 @@ model FailedMessage {
   @@index([createdAt])
 }
 
-
 // ── AI Agent System: Business Config Persistence ──
 
 model BusinessConfig {
-  id              String    @id @default(uuid())
-  organizationId  String    @unique
-  config          Json      // Full BusinessProfile JSON
+  id              String   @id @default(uuid())
+  organizationId  String   @unique
+  config          Json // Full BusinessProfile JSON
   activeVersionId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   versions ConfigVersion[]
 
@@ -538,14 +536,14 @@ model BusinessConfig {
 }
 
 model ConfigVersion {
-  id               String   @id @default(uuid())
-  businessConfigId String
-  version          String
-  config           Json
-  changedBy        String
+  id                String   @id @default(uuid())
+  businessConfigId  String
+  version           String
+  config            Json
+  changedBy         String
   changeDescription String?
-  status           String   @default("draft") // draft, active, archived
-  createdAt        DateTime @default(now())
+  status            String   @default("draft") // draft, active, archived
+  createdAt         DateTime @default(now())
 
   businessConfig BusinessConfig @relation(fields: [businessConfigId], references: [id], onDelete: Cascade)
 
@@ -555,7 +553,6 @@ model ConfigVersion {
 
 // ── AI Agent System: Outcome Tracking ──
 
-
 // ── AI Agent System: Human Handoff ──
 
 model Handoff {
@@ -564,7 +561,7 @@ model Handoff {
   organizationId        String
   leadId                String?
   status                String    @default("pending") // pending, assigned, active, released
-  reason                String    // human_requested, max_turns_exceeded, etc.
+  reason                String // human_requested, max_turns_exceeded, etc.
   leadSnapshot          Json      @default("{}")
   qualificationSnapshot Json      @default("{}")
   conversationSummary   Json      @default("{}")
@@ -588,18 +585,18 @@ model Handoff {
 // This is acceptable — embedding provider changes are rare and deliberate.
 
 model KnowledgeChunk {
-  id              String   @id @default(uuid())
-  organizationId  String
-  agentId         String
-  deploymentId    String?
-  documentId      String
-  content         String
-  sourceType      String   // "correction" | "wizard" | "document"
-  embedding       Unsupported("vector(1024)")
-  chunkIndex      Int
-  metadata        Json     @default("{}")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String                      @id @default(uuid())
+  organizationId String
+  agentId        String
+  deploymentId   String?
+  documentId     String
+  content        String
+  sourceType     String // "correction" | "wizard" | "document"
+  embedding      Unsupported("vector(1024)")
+  chunkIndex     Int
+  metadata       Json                        @default("{}")
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
   draftStatus    String?
   draftExpiresAt DateTime?
 
@@ -610,34 +607,34 @@ model KnowledgeChunk {
 }
 
 model InteractionSummary {
-  id              String   @id @default(uuid())
-  organizationId  String
-  deploymentId    String
-  channelType     String
-  contactId       String?
-  summary         String
-  outcome         String   @default("info_request")
-  extractedFacts  Json     @default("[]")
-  questionsAsked  Json     @default("[]")
-  duration        Int
-  messageCount    Int
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  organizationId String
+  deploymentId   String
+  channelType    String
+  contactId      String?
+  summary        String
+  outcome        String   @default("info_request")
+  extractedFacts Json     @default("[]")
+  questionsAsked Json     @default("[]")
+  duration       Int
+  messageCount   Int
+  createdAt      DateTime @default(now())
 
   @@index([organizationId, deploymentId])
   @@index([createdAt])
 }
 
 model DeploymentMemory {
-  id              String   @id @default(uuid())
-  organizationId  String
-  deploymentId    String
-  category        String
-  content         String
-  confidence      Float    @default(0.5)
-  sourceCount     Int      @default(1)
-  lastSeenAt      DateTime
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  organizationId String
+  deploymentId   String
+  category       String
+  content        String
+  confidence     Float    @default(0.5)
+  sourceCount    Int      @default(1)
+  lastSeenAt     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([organizationId, deploymentId, category, content])
   @@index([organizationId, deploymentId])
@@ -649,28 +646,28 @@ model DeploymentMemory {
 // ---------------------------------------------------------------------------
 
 model AgentEvent {
-  id              String    @id @default(uuid())
-  organizationId  String
-  deploymentId    String
-  eventType       String
-  payload         Json
-  status          String    @default("pending")
-  retryCount      Int       @default(0)
-  createdAt       DateTime  @default(now())
-  processedAt     DateTime?
+  id             String    @id @default(uuid())
+  organizationId String
+  deploymentId   String
+  eventType      String
+  payload        Json
+  status         String    @default("pending")
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
 
   @@index([status, createdAt])
   @@index([organizationId, deploymentId])
 }
 
 model ActivityLog {
-  id              String   @id @default(uuid())
-  organizationId  String
-  deploymentId    String
-  eventType       String
-  description     String
-  metadata        Json     @default("{}")
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  organizationId String
+  deploymentId   String
+  eventType      String
+  description    String
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
 
   @@index([organizationId, deploymentId])
   @@index([createdAt])
@@ -681,33 +678,33 @@ model ActivityLog {
 // ---------------------------------------------------------------------------
 
 model ExecutionTrace {
-  id                   String    @id @default(cuid())
-  deploymentId         String
-  organizationId       String
-  skillSlug            String
-  skillVersion         String
+  id             String @id @default(cuid())
+  deploymentId   String
+  organizationId String
+  skillSlug      String
+  skillVersion   String
 
-  trigger              String    @default("chat_message")
-  sessionId            String
-  inputParametersHash  String
+  trigger             String @default("chat_message")
+  sessionId           String
+  inputParametersHash String
 
-  toolCalls            Json      @default("[]")
-  governanceDecisions  Json      @default("[]")
-  tokenUsage           Json      @default("{}")
-  durationMs           Int
-  turnCount            Int
+  toolCalls           Json @default("[]")
+  governanceDecisions Json @default("[]")
+  tokenUsage          Json @default("{}")
+  durationMs          Int
+  turnCount           Int
 
-  status               String
-  error                String?
-  responseSummary      String
+  status          String
+  error           String?
+  responseSummary String
 
-  linkedOutcomeId      String?
-  linkedOutcomeType    String?
-  linkedOutcomeResult  String?
+  linkedOutcomeId     String?
+  linkedOutcomeType   String?
+  linkedOutcomeResult String?
 
-  writeCount           Int       @default(0)
+  writeCount Int @default(0)
 
-  createdAt            DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([deploymentId, createdAt])
   @@index([organizationId, createdAt])
@@ -720,21 +717,21 @@ model ExecutionTrace {
 // ---------------------------------------------------------------------------
 
 model AgentSession {
-  id                String    @id @default(uuid())
-  organizationId    String
-  roleId            String
-  principalId       String
-  status            String    @default("running")
-  safetyEnvelope    Json
-  toolCallCount     Int       @default(0)
-  mutationCount     Int       @default(0)
-  dollarsAtRisk     Float     @default(0)
-  currentStep       Int       @default(0)
-  toolHistory       Json      @default("[]")
-  checkpoint        Json?
-  traceId           String
-  startedAt         DateTime  @default(now())
-  completedAt       DateTime?
+  id             String    @id @default(uuid())
+  organizationId String
+  roleId         String
+  principalId    String
+  status         String    @default("running")
+  safetyEnvelope Json
+  toolCallCount  Int       @default(0)
+  mutationCount  Int       @default(0)
+  dollarsAtRisk  Float     @default(0)
+  currentStep    Int       @default(0)
+  toolHistory    Json      @default("[]")
+  checkpoint     Json?
+  traceId        String
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
 
   runs       AgentRun[]
   pauses     AgentPause[]
@@ -783,18 +780,18 @@ model AgentPause {
 }
 
 model ToolEvent {
-  id                    String   @id @default(uuid())
-  sessionId             String
-  runId                 String
-  stepIndex             Int
-  toolName              String
-  parameters            Json
-  result                Json?
-  isMutation            Boolean  @default(false)
-  dollarsAtRisk         Float    @default(0)
-  durationMs            Int?
-  envelopeId            String?
-  timestamp             DateTime @default(now())
+  id            String   @id @default(uuid())
+  sessionId     String
+  runId         String
+  stepIndex     Int
+  toolName      String
+  parameters    Json
+  result        Json?
+  isMutation    Boolean  @default(false)
+  dollarsAtRisk Float    @default(0)
+  durationMs    Int?
+  envelopeId    String?
+  timestamp     DateTime @default(now())
 
   session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -824,9 +821,9 @@ model ConversationMessage {
   id        String   @id @default(uuid())
   contactId String
   orgId     String
-  direction String   // "inbound" | "outbound"
+  direction String // "inbound" | "outbound"
   content   String
-  channel   String   // "whatsapp" | "telegram" | "dashboard"
+  channel   String // "whatsapp" | "telegram" | "dashboard"
   metadata  Json     @default("{}")
   createdAt DateTime @default(now())
 
@@ -848,23 +845,23 @@ model ContactLifecycle {
 }
 
 model ConversationThread {
-  id               String    @id @default(uuid())
-  contactId        String
-  organizationId   String
-  stage            String    @default("new") // ThreadStage enum
-  assignedAgent    String    @default("")
-  agentContext     Json      @default("{}")  // AgentContextData JSON
-  currentSummary   String    @default("")
-  followUpSchedule Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
-  lastOutcomeAt    DateTime?
-  messageCount     Int       @default(0)
+  id                  String    @id @default(uuid())
+  contactId           String
+  organizationId      String
+  stage               String    @default("new") // ThreadStage enum
+  assignedAgent       String    @default("")
+  agentContext        Json      @default("{}") // AgentContextData JSON
+  currentSummary      String    @default("")
+  followUpSchedule    Json      @default("{\"nextFollowUpAt\":null,\"reason\":null,\"cadenceId\":null}")
+  lastOutcomeAt       DateTime?
+  messageCount        Int       @default(0)
   firstAgentMessageAt DateTime?
-  threadStatus     String    @default("open")
-  opportunityId    String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  threadStatus        String    @default("open")
+  opportunityId       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  lifecycleContact Contact?  @relation(fields: [contactId], references: [id])
+  lifecycleContact Contact? @relation(fields: [contactId], references: [id])
 
   @@unique([contactId, organizationId])
   @@index([organizationId])
@@ -892,27 +889,27 @@ model AgentRegistration {
 // ── Marketplace: Agent Listings (global catalog) ──
 
 model AgentListing {
-  id              String   @id @default(cuid())
-  name            String
-  slug            String   @unique
-  description     String
-  type            String   @default("switchboard_native") // open_source, third_party, switchboard_native
-  status          String   @default("pending_review") // pending_review, listed, suspended, deprecated
-  taskCategories  String[] @default([])
-  trustScore      Float    @default(0)
-  autonomyLevel   String   @default("supervised") // supervised, guided, autonomous
-  priceTier       String   @default("free") // free, basic, pro, elite
-  priceMonthly    Float    @default(0)
-  webhookUrl      String?
-  webhookSecret   String?
-  vettingNotes    String?
-  sourceUrl       String?
-  metadata        Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  description    String
+  type           String   @default("switchboard_native") // open_source, third_party, switchboard_native
+  status         String   @default("pending_review") // pending_review, listed, suspended, deprecated
+  taskCategories String[] @default([])
+  trustScore     Float    @default(0)
+  autonomyLevel  String   @default("supervised") // supervised, guided, autonomous
+  priceTier      String   @default("free") // free, basic, pro, elite
+  priceMonthly   Float    @default(0)
+  webhookUrl     String?
+  webhookSecret  String?
+  vettingNotes   String?
+  sourceUrl      String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  deployments      AgentDeployment[]
-  tasks            AgentTask[]
+  deployments       AgentDeployment[]
+  tasks             AgentTask[]
   trustScoreRecords TrustScoreRecord[]
 
   @@index([status])
@@ -922,23 +919,23 @@ model AgentListing {
 // ── Marketplace: Agent Deployments (founder's instance) ──
 
 model AgentDeployment {
-  id                  String   @id @default(cuid())
-  organizationId      String
-  listingId           String
-  status              String   @default("provisioning") // provisioning, active, paused, deactivated
-  slug                String?  @unique
-  inputConfig         Json     @default("{}")
-  governanceSettings  Json     @default("{}")
-  outputDestination   Json?
-  connectionIds       String[] @default([])
-  skillSlug           String?  // When set, use skill executor instead of TypeScript handler
-  circuitBreakerThreshold  Int?
-  maxWritesPerHour          Int?
+  id                      String   @id @default(cuid())
+  organizationId          String
+  listingId               String
+  status                  String   @default("provisioning") // provisioning, active, paused, deactivated
+  slug                    String?  @unique
+  inputConfig             Json     @default("{}")
+  governanceSettings      Json     @default("{}")
+  outputDestination       Json?
+  connectionIds           String[] @default([])
+  skillSlug               String? // When set, use skill executor instead of TypeScript handler
+  circuitBreakerThreshold Int?
+  maxWritesPerHour        Int?
   allowedModelTiers       String[] @default([])
   trustLevel              String   @default("observe")
   spendApprovalThreshold  Float    @default(50)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   listing               AgentListing           @relation(fields: [listingId], references: [id])
   tasks                 AgentTask[]
@@ -970,8 +967,8 @@ model AgentTask {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  deployment AgentDeployment @relation(fields: [deploymentId], references: [id])
-  listing    AgentListing    @relation(fields: [listingId], references: [id])
+  deployment  AgentDeployment @relation(fields: [deploymentId], references: [id])
+  listing     AgentListing    @relation(fields: [listingId], references: [id])
   creativeJob CreativeJob?
 
   @@index([deploymentId])
@@ -983,17 +980,17 @@ model AgentTask {
 // ── Marketplace: Trust Score Records (per-listing per-category) ──
 
 model TrustScoreRecord {
-  id                    String   @id @default(cuid())
-  listingId             String
-  taskCategory          String
-  score                 Float    @default(0)
-  totalApprovals        Int      @default(0)
-  totalRejections       Int      @default(0)
-  consecutiveApprovals  Int      @default(0)
-  lastActivityAt        DateTime @default(now())
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  deploymentId          String?
+  id                   String   @id @default(cuid())
+  listingId            String
+  taskCategory         String
+  score                Float    @default(0)
+  totalApprovals       Int      @default(0)
+  totalRejections      Int      @default(0)
+  consecutiveApprovals Int      @default(0)
+  lastActivityAt       DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  deploymentId         String?
 
   listing AgentListing @relation(fields: [listingId], references: [id])
 
@@ -1007,8 +1004,8 @@ model TrustScoreRecord {
 model ActionRequest {
   id               String    @id @default(cuid())
   deploymentId     String
-  type             String    // send_message, browse_url, write_file, api_call
-  surface          String    // telegram, web_widget, google_drive, browser
+  type             String // send_message, browse_url, write_file, api_call
+  surface          String // telegram, web_widget, google_drive, browser
   payload          Json
   status           String    @default("pending") // pending, approved, rejected, executed, blocked
   governanceResult Json?
@@ -1046,7 +1043,7 @@ model DeploymentConnection {
   type         String
   slot         String   @default("default")
   status       String   @default("active") // active, expired, revoked
-  credentials  String   // encrypted
+  credentials  String // encrypted
   metadata     Json?
   tokenHash    String?  @unique
   createdAt    DateTime @default(now())
@@ -1100,51 +1097,51 @@ model AgentPersona {
 // ── Creative Pipeline: Creative Jobs (PCD per-job data) ──
 
 model CreativeJob {
-  id              String   @id @default(cuid())
-  taskId          String   @unique
-  organizationId  String
-  deploymentId    String
+  id             String @id @default(cuid())
+  taskId         String @unique
+  organizationId String
+  deploymentId   String
 
   // Brief (input)
-  productDescription  String
-  targetAudience      String
-  platforms           String[]
-  brandVoice          String?
-  productImages       String[]   @default([])
-  references          String[]   @default([])
-  pastPerformance     Json?
-  generateReferenceImages  Boolean  @default(false)
+  productDescription      String
+  targetAudience          String
+  platforms               String[]
+  brandVoice              String?
+  productImages           String[] @default([])
+  references              String[] @default([])
+  pastPerformance         Json?
+  generateReferenceImages Boolean  @default(false)
 
   // Pipeline state (polished)
-  currentStage    String   @default("trends")
-  stageOutputs    Json     @default("{}")
-  stoppedAt       String?
-  productionTier  String?
+  currentStage   String  @default("trends")
+  stageOutputs   Json    @default("{}")
+  stoppedAt      String?
+  productionTier String?
 
   // PCD identity registry (SP1)
-  productIdentityId           String?
-  productIdentity             ProductIdentity? @relation(fields: [productIdentityId], references: [id])
-  creatorIdentityId           String?
-  effectiveTier               Int?
-  allowedOutputTier           Int?
-  shotSpecVersion             String?
-  registryBackfilled          Boolean  @default(false)
-  fidelityTierAtGeneration    Int?
+  productIdentityId        String?
+  productIdentity          ProductIdentity? @relation(fields: [productIdentityId], references: [id])
+  creatorIdentityId        String?
+  effectiveTier            Int?
+  allowedOutputTier        Int?
+  shotSpecVersion          String?
+  registryBackfilled       Boolean          @default(false)
+  fidelityTierAtGeneration Int?
 
   // Pipeline mode
-  mode                    String   @default("polished")
+  mode String @default("polished")
 
   // UGC pipeline state (nullable — only populated when mode = "ugc")
-  ugcPhase                String?
-  ugcPhaseOutputs         Json?
-  ugcPhaseOutputsVersion  String?  @default("v1")
-  ugcConfig               Json?
-  ugcFailure              Json?
+  ugcPhase               String?
+  ugcPhaseOutputs        Json?
+  ugcPhaseOutputsVersion String? @default("v1")
+  ugcConfig              Json?
+  ugcFailure             Json?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  task AgentTask @relation(fields: [taskId], references: [id])
+  task   AgentTask     @relation(fields: [taskId], references: [id])
   assets AssetRecord[]
 
   @@index([organizationId])
@@ -1156,38 +1153,38 @@ model CreativeJob {
 }
 
 model CreatorIdentity {
-  id                  String   @id @default(cuid())
-  deploymentId        String
-  name                String
+  id           String @id @default(cuid())
+  deploymentId String
+  name         String
 
   identityRefIds      String[]
   heroImageAssetId    String
   identityDescription String
 
-  identityObjects     Json?
+  identityObjects Json?
 
-  voice               Json
-  personality         Json
-  appearanceRules     Json
+  voice           Json
+  personality     Json
+  appearanceRules Json
 
-  environmentSet      String[]
+  environmentSet String[]
 
-  approved            Boolean  @default(false)
-  isActive            Boolean  @default(true)
-  bibleVersion        String   @default("1.0")
-  previousVersionId   String?
+  approved          Boolean @default(false)
+  isActive          Boolean @default(true)
+  bibleVersion      String  @default("1.0")
+  previousVersionId String?
 
-  qualityTier         String?
-  consentRecordId     String?
-  consentRecord       ConsentRecord? @relation(fields: [consentRecordId], references: [id])
-  identityAdapter     Json?
+  qualityTier     String?
+  consentRecordId String?
+  consentRecord   ConsentRecord? @relation(fields: [consentRecordId], references: [id])
+  identityAdapter Json?
 
-  identitySnapshots   PcdIdentitySnapshot[]
+  identitySnapshots PcdIdentitySnapshot[]
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  assets              AssetRecord[]
+  assets AssetRecord[]
 
   @@index([deploymentId])
   @@index([qualityTier])
@@ -1195,37 +1192,37 @@ model CreatorIdentity {
 }
 
 model AssetRecord {
-  id                  String   @id @default(cuid())
-  jobId               String
-  job                 CreativeJob @relation(fields: [jobId], references: [id])
-  specId              String
-  creatorId           String?
-  creator             CreatorIdentity? @relation(fields: [creatorId], references: [id])
+  id        String           @id @default(cuid())
+  jobId     String
+  job       CreativeJob      @relation(fields: [jobId], references: [id])
+  specId    String
+  creatorId String?
+  creator   CreatorIdentity? @relation(fields: [creatorId], references: [id])
 
-  provider            String
-  modelId             String
-  modelVersion        String?
-  seed                Int?
+  provider     String
+  modelId      String
+  modelVersion String?
+  seed         Int?
 
-  inputHashes         Json
-  outputs             Json
+  inputHashes Json
+  outputs     Json
 
-  qaMetrics           Json?
-  qaHistory           Json?
+  qaMetrics Json?
+  qaHistory Json?
 
-  identityDriftScore  Float?
-  baselineAssetId     String?
+  identityDriftScore Float?
+  baselineAssetId    String?
 
-  latencyMs           Int?
-  costEstimate        Float?
-  attemptNumber       Int?
+  latencyMs     Int?
+  costEstimate  Float?
+  attemptNumber Int?
 
-  approvalState       String   @default("pending")
-  lockedDerivativeOf  String?
+  approvalState      String  @default("pending")
+  lockedDerivativeOf String?
 
-  createdAt           DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  identitySnapshot    PcdIdentitySnapshot?
+  identitySnapshot PcdIdentitySnapshot?
 
   @@unique([specId, attemptNumber, provider])
   @@index([jobId])
@@ -1267,7 +1264,7 @@ model EscalationRecord {
   id                  String    @id @default(uuid())
   orgId               String
   contactId           String
-  reason              String    // low_confidence, booking_question, pricing_exception, etc.
+  reason              String // low_confidence, booking_question, pricing_exception, etc.
   reasonDetails       String?
   sourceAgent         String
   priority            String    @default("medium") // low, medium, high, urgent
@@ -1304,9 +1301,9 @@ model WorkflowExecution {
   startedAt        DateTime  @default(now())
   completedAt      DateTime?
 
-  pendingActions        PendingActionRecord[]
-  approvalCheckpoints   ApprovalCheckpointRecord[]
-  triggers              ScheduledTriggerRecord[]
+  pendingActions      PendingActionRecord[]
+  approvalCheckpoints ApprovalCheckpointRecord[]
+  triggers            ScheduledTriggerRecord[]
 
   @@index([organizationId, status])
   @@index([traceId])
@@ -1338,7 +1335,7 @@ model PendingActionRecord {
   resolvedAt           DateTime?
   resolvedBy           String?
 
-  workflow   WorkflowExecution? @relation(fields: [workflowId], references: [id])
+  workflow WorkflowExecution? @relation(fields: [workflowId], references: [id])
 
   @@index([organizationId, status])
   @@index([workflowId])
@@ -1360,26 +1357,26 @@ model ApprovalCheckpointRecord {
   createdAt        DateTime @default(now())
   expiresAt        DateTime
 
-  workflow   WorkflowExecution @relation(fields: [workflowId], references: [id])
+  workflow WorkflowExecution @relation(fields: [workflowId], references: [id])
 
   @@unique([workflowId, stepIndex])
   @@index([status])
 }
 
 model ScheduledTriggerRecord {
-  id                String    @id @default(uuid())
-  organizationId    String
-  type              String    // "timer" | "cron" | "event_match"
-  fireAt            DateTime?
-  cronExpression    String?
-  eventPattern      Json?     // { type: string, filters: Record<string, unknown> }
-  action            Json      // { type: string, payload: Record<string, unknown> }
-  sourceWorkflowId  String?
-  status            String    @default("active") // "active" | "fired" | "cancelled" | "expired"
-  createdAt         DateTime  @default(now())
-  expiresAt         DateTime?
+  id               String    @id @default(uuid())
+  organizationId   String
+  type             String // "timer" | "cron" | "event_match"
+  fireAt           DateTime?
+  cronExpression   String?
+  eventPattern     Json? // { type: string, filters: Record<string, unknown> }
+  action           Json // { type: string, payload: Record<string, unknown> }
+  sourceWorkflowId String?
+  status           String    @default("active") // "active" | "fired" | "cancelled" | "expired"
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime?
 
-  workflow          WorkflowExecution? @relation(fields: [sourceWorkflowId], references: [id])
+  workflow WorkflowExecution? @relation(fields: [sourceWorkflowId], references: [id])
 
   @@index([organizationId, status])
   @@index([status, type])
@@ -1422,38 +1419,38 @@ model OperatorCommandRecord {
 // ── Lifecycle Management (Revenue Growth Phase 6) ──
 
 model Contact {
-  id                String    @id @default(uuid())
+  id                String   @id @default(uuid())
   organizationId    String
   name              String?
   phone             String?
   email             String?
-  primaryChannel    String    @default("whatsapp")
+  primaryChannel    String   @default("whatsapp")
   firstTouchChannel String?
-  stage             String    @default("new")
+  stage             String   @default("new")
   source            String?
-  sourceType        String?   // "ctwa" | "instant_form" | "organic" | "web"
+  sourceType        String? // "ctwa" | "instant_form" | "organic" | "web"
   attribution       Json?
   qualificationData Json?
-  roles             String[]  @default(["lead"])
+  roles             String[] @default(["lead"])
   leadgenId         String?
   idempotencyKey    String?
-  firstContactAt    DateTime  @default(now())
-  lastActivityAt    DateTime  @default(now())
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  firstContactAt    DateTime @default(now())
+  lastActivityAt    DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  opportunities     Opportunity[]
-  revenueEvents     LifecycleRevenueEvent[]
-  ownerTasks        OwnerTask[]
-  threads           ConversationThread[]
+  opportunities Opportunity[]
+  revenueEvents LifecycleRevenueEvent[]
+  ownerTasks    OwnerTask[]
+  threads       ConversationThread[]
 
+  @@unique([organizationId, idempotencyKey])
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([organizationId, phone])
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
   @@index([organizationId, sourceType, createdAt])
-  @@unique([organizationId, idempotencyKey])
 }
 
 model Opportunity {
@@ -1479,8 +1476,8 @@ model Opportunity {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  revenueEvents         LifecycleRevenueEvent[]
-  ownerTasks            OwnerTask[]
+  revenueEvents LifecycleRevenueEvent[]
+  ownerTasks    OwnerTask[]
 
   @@index([organizationId])
   @@index([organizationId, stage])
@@ -1488,23 +1485,23 @@ model Opportunity {
 }
 
 model LifecycleRevenueEvent {
-  id                String    @id @default(uuid())
+  id                String      @id @default(uuid())
   organizationId    String
   contactId         String
-  contact           Contact   @relation(fields: [contactId], references: [id])
+  contact           Contact     @relation(fields: [contactId], references: [id])
   opportunityId     String
   opportunity       Opportunity @relation(fields: [opportunityId], references: [id])
   amount            Int
-  currency          String    @default("SGD")
+  currency          String      @default("SGD")
   type              String
-  status            String    @default("confirmed")
+  status            String      @default("confirmed")
   recordedBy        String
   externalReference String?
-  verified          Boolean   @default(false)
+  verified          Boolean     @default(false)
   sourceCampaignId  String?
   sourceAdId        String?
-  recordedAt        DateTime  @default(now())
-  createdAt         DateTime  @default(now())
+  recordedAt        DateTime    @default(now())
+  createdAt         DateTime    @default(now())
 
   @@index([organizationId])
   @@index([opportunityId])
@@ -1512,24 +1509,24 @@ model LifecycleRevenueEvent {
 }
 
 model OwnerTask {
-  id              String    @id @default(uuid())
+  id              String       @id @default(uuid())
   organizationId  String
   contactId       String?
-  contact         Contact?  @relation(fields: [contactId], references: [id])
+  contact         Contact?     @relation(fields: [contactId], references: [id])
   opportunityId   String?
   opportunity     Opportunity? @relation(fields: [opportunityId], references: [id])
   type            String
   title           String
   description     String
   suggestedAction String?
-  status          String    @default("pending")
-  priority        String    @default("medium")
+  status          String       @default("pending")
+  priority        String       @default("medium")
   triggerReason   String
   sourceAgent     String?
   fallbackReason  String?
   dueAt           DateTime?
   completedAt     DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime     @default(now())
 
   @@index([organizationId, status])
   @@index([organizationId, priority])
@@ -1567,50 +1564,51 @@ model KnowledgeEntry {
 // ---------------------------------------------------------------------------
 
 model WorkTrace {
-  id                    String    @id @default(cuid())
-  workUnitId            String    @unique
-  traceId               String
-  parentWorkUnitId      String?
-  intent                String
-  mode                  String
-  organizationId        String
-  actorId               String
-  actorType             String
-  trigger               String
-  idempotencyKey        String?   @unique
+  id               String  @id @default(cuid())
+  workUnitId       String  @unique
+  traceId          String
+  parentWorkUnitId String?
+  intent           String
+  mode             String
+  organizationId   String
+  actorId          String
+  actorType        String
+  trigger          String
+  idempotencyKey   String? @unique
 
   // Lifecycle state — the canonical operational record
-  parameters            String?   @db.Text    // JSON: original action parameters
-  deploymentContext     String?   @db.Text    // JSON: DeploymentContext snapshot at submit
+  parameters        String? @db.Text // JSON: original action parameters
+  deploymentContext String? @db.Text // JSON: DeploymentContext snapshot at submit
 
   // Governance — decided once at submit, reused on continuation
   governanceOutcome     String
   riskScore             Float
-  matchedPolicies       String    @db.Text
-  governanceConstraints String?   @db.Text    // JSON: ExecutionConstraints from GovernanceDecision
+  matchedPolicies       String  @db.Text
+  governanceConstraints String? @db.Text // JSON: ExecutionConstraints from GovernanceDecision
 
   // Approval lifecycle — tracks the continuation from pending → approved/rejected
-  approvalId            String?
-  approvalOutcome       String?               // "approved" | "rejected" | "patched" | "expired"
-  approvalRespondedBy   String?
-  approvalRespondedAt   DateTime?
+  approvalId          String?
+  approvalOutcome     String? // "approved" | "rejected" | "patched" | "expired"
+  approvalRespondedBy String?
+  approvalRespondedAt DateTime?
 
   // Execution
-  outcome               String
-  durationMs            Int
-  errorCode             String?
-  errorMessage          String?
-  executionSummary      String?   @db.Text
-  executionOutputs      String?   @db.Text    // JSON: execution result outputs
+  outcome          String
+  durationMs       Int
+  errorCode        String?
+  errorMessage     String?
+  executionSummary String? @db.Text
+  executionOutputs String? @db.Text // JSON: execution result outputs
 
   // Observability
-  modeMetrics           String?   @db.Text
+  modeMetrics String? @db.Text
 
   // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime
   executionStartedAt    DateTime?
   completedAt           DateTime?
+  lockedAt              DateTime?
 
   @@index([organizationId, intent])
   @@index([traceId])
@@ -1715,13 +1713,13 @@ model DispatchLog {
 // ---------------------------------------------------------------------------
 
 model ReconciliationReport {
-  id              String   @id @default(uuid())
-  organizationId  String
-  dateRangeFrom   DateTime
-  dateRangeTo     DateTime
-  overallStatus   String
-  checks          Json
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  organizationId String
+  dateRangeFrom  DateTime
+  dateRangeTo    DateTime
+  overallStatus  String
+  checks         Json
+  createdAt      DateTime @default(now())
 
   @@index([organizationId, createdAt])
 }
@@ -1736,7 +1734,7 @@ model PendingLeadRetry {
   leadId         String
   adId           String
   formId         String
-  reason         String    // "missing_token", "fetch_failed"
+  reason         String // "missing_token", "fetch_failed"
   attempts       Int       @default(0)
   maxAttempts    Int       @default(5)
   nextRetryAt    DateTime  @default(now())
@@ -1752,20 +1750,20 @@ model PendingLeadRetry {
 // ---------------------------------------------------------------------------
 
 model ConsentRecord {
-  id            String    @id @default(cuid())
-  orgId         String
-  personName    String
-  scopeOfUse    String[]
-  territory     String[]
-  mediaTypes    String[]
-  revocable     Boolean   @default(true)
-  revoked       Boolean   @default(false)
-  recordingUri  String?
-  effectiveAt   DateTime
-  expiresAt     DateTime?
-  revokedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  orgId        String
+  personName   String
+  scopeOfUse   String[]
+  territory    String[]
+  mediaTypes   String[]
+  revocable    Boolean   @default(true)
+  revoked      Boolean   @default(false)
+  recordingUri String?
+  effectiveAt  DateTime
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   creatorIdentities CreatorIdentity[]
 
@@ -1774,28 +1772,28 @@ model ConsentRecord {
 }
 
 model ProductIdentity {
-  id                    String   @id @default(cuid())
-  orgId                 String
-  sourceUrl             String?
-  title                 String
-  description           String?
-  brandName             String?
-  sku                   String?
-  packageType           String?
-  canonicalPackageText  String?
-  dimensionsMm          Json?
-  colorSpec             Json?
-  logoAssetId           String?
-  qualityTier           String   @default("url_imported")
-  lockStatus            String   @default("draft")
+  id                   String  @id @default(cuid())
+  orgId                String
+  sourceUrl            String?
+  title                String
+  description          String?
+  brandName            String?
+  sku                  String?
+  packageType          String?
+  canonicalPackageText String?
+  dimensionsMm         Json?
+  colorSpec            Json?
+  logoAssetId          String?
+  qualityTier          String  @default("url_imported")
+  lockStatus           String  @default("draft")
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  images                ProductImage[]
-  qcResults             ProductQcResult[]
-  creativeJobs          CreativeJob[]
-  identitySnapshots     PcdIdentitySnapshot[]
+  images            ProductImage[]
+  qcResults         ProductQcResult[]
+  creativeJobs      CreativeJob[]
+  identitySnapshots PcdIdentitySnapshot[]
 
   @@unique([orgId, title])
   @@index([orgId])
@@ -1804,35 +1802,35 @@ model ProductIdentity {
 }
 
 model ProductImage {
-  id                     String          @id @default(cuid())
-  productIdentityId      String
-  productIdentity        ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
-  viewType               String
-  uri                    String
-  resolution             Json?
-  hasReadableLabel       Boolean?
-  ocrText                String?
-  backgroundType         String?
-  approvedForGeneration  Boolean         @default(false)
-  createdAt              DateTime        @default(now())
+  id                    String          @id @default(cuid())
+  productIdentityId     String
+  productIdentity       ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
+  viewType              String
+  uri                   String
+  resolution            Json?
+  hasReadableLabel      Boolean?
+  ocrText               String?
+  backgroundType        String?
+  approvedForGeneration Boolean         @default(false)
+  createdAt             DateTime        @default(now())
 
   @@index([productIdentityId])
   @@index([viewType])
 }
 
 model ProductQcResult {
-  id                    String          @id @default(cuid())
-  productIdentityId     String
-  productIdentity       ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
-  assetRecordId         String
-  logoSimilarityScore   Float?
-  packageOcrMatchScore  Float?
-  colorDeltaScore       Float?
-  geometryMatchScore    Float?
-  scaleConfidence       Float?
-  passFail              String
-  warnings              String[]
-  createdAt             DateTime        @default(now())
+  id                   String          @id @default(cuid())
+  productIdentityId    String
+  productIdentity      ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
+  assetRecordId        String
+  logoSimilarityScore  Float?
+  packageOcrMatchScore Float?
+  colorDeltaScore      Float?
+  geometryMatchScore   Float?
+  scaleConfidence      Float?
+  passFail             String
+  warnings             String[]
+  createdAt            DateTime        @default(now())
 
   @@index([productIdentityId])
   @@index([assetRecordId])
@@ -1840,32 +1838,32 @@ model ProductQcResult {
 }
 
 model PcdIdentitySnapshot {
-  id                          String          @id @default(cuid())
-  assetRecordId               String          @unique
-  assetRecord                 AssetRecord     @relation(fields: [assetRecordId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  assetRecordId String      @unique
+  assetRecord   AssetRecord @relation(fields: [assetRecordId], references: [id], onDelete: Cascade)
 
-  productIdentityId           String
-  productIdentity             ProductIdentity @relation(fields: [productIdentityId], references: [id])
-  productTierAtGeneration     Int
-  productImageAssetIds        String[]
-  productCanonicalTextHash    String
-  productLogoAssetId          String?
+  productIdentityId        String
+  productIdentity          ProductIdentity @relation(fields: [productIdentityId], references: [id])
+  productTierAtGeneration  Int
+  productImageAssetIds     String[]
+  productCanonicalTextHash String
+  productLogoAssetId       String?
 
-  creatorIdentityId           String
-  creatorIdentity             CreatorIdentity @relation(fields: [creatorIdentityId], references: [id])
-  avatarTierAtGeneration      Int
-  avatarReferenceAssetIds     String[]
-  voiceAssetId                String?
-  consentRecordId             String?
+  creatorIdentityId       String
+  creatorIdentity         CreatorIdentity @relation(fields: [creatorIdentityId], references: [id])
+  avatarTierAtGeneration  Int
+  avatarReferenceAssetIds String[]
+  voiceAssetId            String?
+  consentRecordId         String?
 
-  policyVersion               String
-  providerCapabilityVersion   String
-  selectedProvider            String
-  providerModelSnapshot       String
-  seedOrNoSeed                String
-  rewrittenPromptText         String?
+  policyVersion             String
+  providerCapabilityVersion String
+  selectedProvider          String
+  providerModelSnapshot     String
+  seedOrNoSeed              String
+  rewrittenPromptText       String?
 
-  createdAt                   DateTime        @default(now())
+  createdAt DateTime @default(now())
 
   @@index([productIdentityId])
   @@index([creatorIdentityId])
