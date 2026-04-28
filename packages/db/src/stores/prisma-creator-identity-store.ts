@@ -1,5 +1,5 @@
 import type { PrismaDbClient } from "../prisma-db.js";
-import type { CreatorIdentity } from "@switchboard/schemas";
+import type { AvatarQualityTier, CreatorIdentity } from "@switchboard/schemas";
 
 interface CreateCreatorIdentityInput {
   deploymentId: string;
@@ -68,6 +68,20 @@ export class PrismaCreatorIdentityStore {
     return this.prisma.creatorIdentity.update({
       where: { id },
       data: { isActive: false },
+    }) as unknown as CreatorIdentity;
+  }
+
+  async setQualityTier(id: string, tier: AvatarQualityTier): Promise<CreatorIdentity> {
+    return this.prisma.creatorIdentity.update({
+      where: { id },
+      data: { qualityTier: tier },
+    }) as unknown as CreatorIdentity;
+  }
+
+  async attachConsentRecord(id: string, consentRecordId: string): Promise<CreatorIdentity> {
+    return this.prisma.creatorIdentity.update({
+      where: { id },
+      data: { consentRecordId },
     }) as unknown as CreatorIdentity;
   }
 }
