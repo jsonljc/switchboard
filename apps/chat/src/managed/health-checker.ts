@@ -42,6 +42,8 @@ async function updateAndAlert(
 export async function runHealthCheck(prisma: PrismaClient): Promise<void> {
   const connectionStore = new PrismaConnectionStore(prisma);
   try {
+    // `disabled` is excluded: operator-disabled channels are intentionally
+    // offline and should not be probed or alert-on-transition.
     const channels = await prisma.managedChannel.findMany({
       where: { status: { in: ["active", "error", "provisioning"] } },
     });
