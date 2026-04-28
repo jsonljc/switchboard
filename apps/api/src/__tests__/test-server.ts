@@ -283,6 +283,7 @@ export async function buildTestServer(): Promise<TestContext> {
     governanceGate: platformGovernanceGate,
     deploymentResolver: resolveAuthoritativeDeployment(null),
     traceStore: workTraceStore,
+    entitlementResolver: undefined,
   });
   app.decorate("platformIngress", platformIngress);
 

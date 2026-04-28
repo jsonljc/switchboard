@@ -422,6 +422,21 @@ export async function buildServer() {
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
 
+  const { PrismaBillingEntitlementResolver } =
+    await import("./services/billing-entitlement-resolver.js");
+  if (process.env["NODE_ENV"] === "production" && !prismaClient) {
+    throw new Error(
+      "Billing entitlement enforcement requires a Prisma client in production. " +
+        "Refusing to start the API without it — this would silently bypass billing on mutating actions.",
+    );
+  }
+  const billingEntitlementResolver = prismaClient
+    ? new PrismaBillingEntitlementResolver(prismaClient)
+    : undefined;
+  if (billingEntitlementResolver) {
+    app.decorate("billingEntitlementResolver", billingEntitlementResolver);
+  }
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -429,6 +444,7 @@ export async function buildServer() {
     deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,
+    entitlementResolver: billingEntitlementResolver,
   });
   app.decorate("platformIngress", platformIngress);
 
@@ -489,7 +505,9 @@ export async function buildServer() {
   await app.register(apiVersionPlugin);
   await app.register(idempotencyMiddleware);
 
-  // Billing feature gate — blocks paid routes for free-tier orgs
+  // Billing entitlement gate — blocks unpaid/canceled/past_due/incomplete orgs from
+  // mutating actions. Active and trialing subscriptions, plus orgs with the
+  // entitlementOverride flag (internal beta / comped pilots), pass through.
   const { billingGuard } = await import("./middleware/billing-guard.js");
   await app.register(billingGuard);
 
