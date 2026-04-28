@@ -134,4 +134,36 @@ describe("PrismaCreatorIdentityStore", () => {
       expect(result.isActive).toBe(false);
     });
   });
+
+  describe("tier setters", () => {
+    it("setQualityTier updates qualityTier field", async () => {
+      prisma.creatorIdentity.update.mockResolvedValue({
+        id: "cr_1",
+        qualityTier: "soul_id",
+      });
+
+      const result = await store.setQualityTier("cr_1", "soul_id");
+
+      expect(prisma.creatorIdentity.update).toHaveBeenCalledWith({
+        where: { id: "cr_1" },
+        data: { qualityTier: "soul_id" },
+      });
+      expect(result.qualityTier).toBe("soul_id");
+    });
+
+    it("attachConsentRecord updates consentRecordId field", async () => {
+      prisma.creatorIdentity.update.mockResolvedValue({
+        id: "cr_1",
+        consentRecordId: "cr_consent_1",
+      });
+
+      const result = await store.attachConsentRecord("cr_1", "cr_consent_1");
+
+      expect(prisma.creatorIdentity.update).toHaveBeenCalledWith({
+        where: { id: "cr_1" },
+        data: { consentRecordId: "cr_consent_1" },
+      });
+      expect(result.consentRecordId).toBe("cr_consent_1");
+    });
+  });
 });

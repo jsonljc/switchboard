@@ -356,4 +356,68 @@ describe("PrismaCreativeJobStore", () => {
       );
     });
   });
+
+  describe("registry methods", () => {
+    it("attachIdentityRefs calls update with all identity fields", async () => {
+      const input = {
+        productIdentityId: "prod_id_1",
+        creatorIdentityId: "creator_id_1",
+        effectiveTier: 2,
+        allowedOutputTier: 3,
+        shotSpecVersion: "v1.0",
+        fidelityTierAtGeneration: 2,
+      };
+
+      const mockResult = { id: "cj_1", ...input };
+      prisma.creativeJob.update.mockResolvedValue(mockResult);
+
+      const result = await store.attachIdentityRefs("cj_1", input);
+
+      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
+        where: { id: "cj_1" },
+        data: {
+          productIdentityId: "prod_id_1",
+          creatorIdentityId: "creator_id_1",
+          effectiveTier: 2,
+          allowedOutputTier: 3,
+          shotSpecVersion: "v1.0",
+          fidelityTierAtGeneration: 2,
+        },
+      });
+      expect(result.id).toBe("cj_1");
+    });
+
+    it("markRegistryBackfilled sets fixed tiers and backfilled flag", async () => {
+      const input = {
+        productIdentityId: "prod_id_1",
+        creatorIdentityId: "creator_id_1",
+      };
+
+      const mockResult = {
+        id: "cj_1",
+        productIdentityId: "prod_id_1",
+        creatorIdentityId: "creator_id_1",
+        effectiveTier: 1,
+        allowedOutputTier: 1,
+        registryBackfilled: true,
+        fidelityTierAtGeneration: 1,
+      };
+      prisma.creativeJob.update.mockResolvedValue(mockResult);
+
+      const result = await store.markRegistryBackfilled("cj_1", input);
+
+      expect(prisma.creativeJob.update).toHaveBeenCalledWith({
+        where: { id: "cj_1" },
+        data: {
+          productIdentityId: "prod_id_1",
+          creatorIdentityId: "creator_id_1",
+          effectiveTier: 1,
+          allowedOutputTier: 1,
+          registryBackfilled: true,
+          fidelityTierAtGeneration: 1,
+        },
+      });
+      expect(result.id).toBe("cj_1");
+    });
+  });
 });

@@ -8,6 +8,7 @@ import {
   PrismaDeploymentConnectionStore,
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
+  PrismaProductIdentityStore,
   PrismaAssetRecordStore,
   PrismaCrmFunnelStore,
   decryptCredentials,
@@ -38,6 +39,8 @@ import type {
 } from "../services/cron/reconciliation.js";
 import { createLeadRetryCron } from "../services/cron/lead-retry.js";
 import type { LeadRetryCronDeps } from "../services/cron/lead-retry.js";
+import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
+import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
   if (!adapter) {
@@ -340,6 +343,87 @@ export async function registerInngest(
     },
   };
 
+  // PCD Registry backfill cron dependencies
+  const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
+
+  const pcdRegistryBackfillDeps: PcdRegistryBackfillDeps = {
+    fetchJobsBatch: async (limit, orgId) => {
+      const rows = await app.prisma!.creativeJob.findMany({
+        where: {
+          registryBackfilled: false,
+          ...(orgId ? { organizationId: orgId } : {}),
+        },
+        take: limit,
+        select: {
+          id: true,
+          organizationId: true,
+          deploymentId: true,
+          productDescription: true,
+          productImages: true,
+          registryBackfilled: true,
+        },
+      });
+      return rows.map((r) => ({ ...r }));
+    },
+    stores: {
+      productStore: {
+        findOrCreateForJob: async (job) => {
+          // Dedup: jobs in the same org with identical productDescription share one ProductIdentity row.
+          const existing = await app.prisma!.productIdentity.findFirst({
+            where: { orgId: job.organizationId, title: job.productDescription },
+            select: { id: true },
+          });
+          if (existing) return existing;
+          const created = await productIdentityStore.create({
+            orgId: job.organizationId,
+            title: job.productDescription,
+            qualityTier: "url_imported",
+            lockStatus: "draft",
+          });
+          return { id: created.id };
+        },
+      },
+      creatorStore: {
+        findOrCreateStockForDeployment: async (deploymentId) => {
+          const existing = await app.prisma!.creatorIdentity.findFirst({
+            where: { deploymentId, qualityTier: "stock" },
+            select: { id: true },
+          });
+          if (existing) return existing;
+          // Placeholder values are safe because Tier-1 stock avatars are gated to scripts/storyboards only — never reach video generation that would require a real heroImageAssetId or voice sample.
+          const created = await creatorStore.create({
+            deploymentId,
+            name: "Stock Avatar (backfill)",
+            identityRefIds: [],
+            heroImageAssetId: "backfill_placeholder",
+            identityDescription: "Backfilled stock avatar (Tier 1).",
+            voice: {
+              voiceId: "stock",
+              provider: "elevenlabs",
+              tone: "neutral",
+              pace: "moderate",
+              sampleUrl: "",
+            },
+            personality: { energy: "conversational", deliveryStyle: "natural" },
+            appearanceRules: { hairStates: [], wardrobePalette: [] },
+            environmentSet: [],
+          });
+          await creatorStore.setQualityTier(created.id, "stock");
+          return { id: created.id };
+        },
+      },
+      jobStore: {
+        markRegistryBackfilled: (jobId, input) =>
+          jobStore.markRegistryBackfilled(jobId, input) as unknown as Promise<{
+            id: string;
+            registryBackfilled: boolean;
+            productIdentityId: string;
+            creatorIdentityId: string;
+          }>,
+      },
+    },
+  };
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -369,6 +453,7 @@ export async function registerInngest(
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
+      createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
     ],
   });
 
