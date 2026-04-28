@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
+import { describeCalendarReadiness } from "../lib/calendar-readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
@@ -57,6 +58,11 @@ export interface ReadinessContext {
   scenariosTestedCount: number;
   metaAdsConnection: MetaAdsConnectionInfo;
   emailVerified: boolean;
+  calendar: {
+    hasGoogleCredentials: boolean;
+    hasGoogleCalendarId: boolean;
+    businessHours: unknown;
+  };
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -109,10 +115,11 @@ export interface PrismaLike {
   organizationConfig: {
     findUnique(args: {
       where: { id: string };
-      select: { onboardingPlaybook: true; runtimeConfig: true };
+      select: { onboardingPlaybook: true; runtimeConfig: true; businessHours: true };
     }): Promise<{
       onboardingPlaybook: unknown;
       runtimeConfig: unknown;
+      businessHours: unknown;
     } | null>;
   };
   deploymentConnection: {
@@ -169,7 +176,7 @@ export async function buildReadinessContext(
     }),
     prisma.organizationConfig.findUnique({
       where: { id: orgId },
-      select: { onboardingPlaybook: true, runtimeConfig: true },
+      select: { onboardingPlaybook: true, runtimeConfig: true, businessHours: true },
     }),
     prisma.dashboardUser.findFirst({
       where: { organizationId: orgId, emailVerified: { not: null } },
@@ -187,6 +194,10 @@ export async function buildReadinessContext(
   const runtimeConfig = (orgConfig?.runtimeConfig as Record<string, unknown>) ?? {};
   const scenariosTestedCount =
     typeof runtimeConfig.scenariosTestedCount === "number" ? runtimeConfig.scenariosTestedCount : 0;
+
+  const hasGoogleCredentials = Boolean(process.env["GOOGLE_CALENDAR_CREDENTIALS"]);
+  const hasGoogleCalendarId = Boolean(process.env["GOOGLE_CALENDAR_ID"]);
+  const calendarBusinessHours = orgConfig?.businessHours ?? null;
 
   const mappedConnections = connections.map((c) => ({
     ...c,
@@ -221,6 +232,11 @@ export async function buildReadinessContext(
     scenariosTestedCount,
     metaAdsConnection,
     emailVerified: verifiedUser !== null,
+    calendar: {
+      hasGoogleCredentials,
+      hasGoogleCalendarId,
+      businessHours: calendarBusinessHours,
+    },
   };
 }
 
@@ -258,6 +274,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 9. meta-ads-token
   checks.push(checkMetaAdsToken(ctx));
+
+  // 10. calendar (advisory)
+  checks.push(checkCalendar(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -499,6 +518,10 @@ function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
   }
 
   return { id, label, blocking, status: "pass", message: "Meta Ads token is valid" };
+}
+
+function checkCalendar(ctx: ReadinessContext): ReadinessCheck {
+  return describeCalendarReadiness(ctx.calendar).check;
 }
 
 // ── Fastify route ───────────────────────────────────────────────────────────
