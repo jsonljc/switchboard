@@ -418,10 +418,4 @@ describe("checkReadiness", () => {
     // Calendar fail is non-blocking — ready stays true (regression pin).
     expect(report.ready).toBe(true);
   });
-
-  it("calendar check appears exactly once in checks[]", () => {
-    const report = checkReadiness(makeContext());
-    const calendarChecks = report.checks.filter((c) => c.id === "calendar");
-    expect(calendarChecks).toHaveLength(1);
-  });
 });

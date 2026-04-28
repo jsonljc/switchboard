@@ -478,10 +478,6 @@ function checkApprovalModeReviewed(ctx: ReadinessContext): ReadinessCheck {
   };
 }
 
-function checkCalendar(ctx: ReadinessContext): ReadinessCheck {
-  return describeCalendarReadiness(ctx.calendar).check;
-}
-
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
@@ -522,6 +518,10 @@ function checkMetaAdsToken(ctx: ReadinessContext): ReadinessCheck {
   }
 
   return { id, label, blocking, status: "pass", message: "Meta Ads token is valid" };
+}
+
+function checkCalendar(ctx: ReadinessContext): ReadinessCheck {
+  return describeCalendarReadiness(ctx.calendar).check;
 }
 
 // ── Fastify route ───────────────────────────────────────────────────────────
