@@ -108,3 +108,30 @@ export const ProductQcResultSchema = z.object({
   createdAt: z.coerce.date(),
 });
 export type ProductQcResult = z.infer<typeof ProductQcResultSchema>;
+
+export const PcdIdentitySnapshotSchema = z.object({
+  id: z.string(),
+  assetRecordId: z.string(),
+
+  productIdentityId: z.string(),
+  productTierAtGeneration: IdentityTierSchema,
+  productImageAssetIds: z.array(z.string()),
+  productCanonicalTextHash: z.string(),
+  productLogoAssetId: z.string().nullable(),
+
+  creatorIdentityId: z.string(),
+  avatarTierAtGeneration: IdentityTierSchema,
+  avatarReferenceAssetIds: z.array(z.string()),
+  voiceAssetId: z.string().nullable(),
+  consentRecordId: z.string().nullable(),
+
+  policyVersion: z.string(),
+  providerCapabilityVersion: z.string(),
+  selectedProvider: z.string(),
+  providerModelSnapshot: z.string(),
+  seedOrNoSeed: z.string(),
+  rewrittenPromptText: z.string().nullable(),
+
+  createdAt: z.coerce.date(),
+});
+export type PcdIdentitySnapshot = z.infer<typeof PcdIdentitySnapshotSchema>;

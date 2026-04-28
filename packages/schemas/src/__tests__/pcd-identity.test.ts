@@ -5,6 +5,7 @@ import {
   ProductImageSchema,
   ConsentRecordSchema,
   ProductQcResultSchema,
+  PcdIdentitySnapshotSchema,
 } from "../pcd-identity.js";
 
 describe("IdentityTierSchema", () => {
@@ -166,5 +167,58 @@ describe("ProductQcResultSchema", () => {
         createdAt: new Date(),
       }).warnings.length,
     ).toBe(2);
+  });
+});
+
+describe("PcdIdentitySnapshotSchema", () => {
+  it("accepts a fully populated snapshot", () => {
+    const snap = PcdIdentitySnapshotSchema.parse({
+      id: "snap_1",
+      assetRecordId: "asset_1",
+      productIdentityId: "prd_1",
+      productTierAtGeneration: 3,
+      productImageAssetIds: ["img_1", "img_2"],
+      productCanonicalTextHash: "sha256:abc",
+      productLogoAssetId: "asset_logo_1",
+      creatorIdentityId: "cr_1",
+      avatarTierAtGeneration: 3,
+      avatarReferenceAssetIds: ["ref_1", "ref_2"],
+      voiceAssetId: "v_1",
+      consentRecordId: "cr_consent_1",
+      policyVersion: "tier-policy@1.0.0",
+      providerCapabilityVersion: "matrix@1.0.0",
+      selectedProvider: "runway",
+      providerModelSnapshot: "gen4.5-2026-04-01",
+      seedOrNoSeed: "2147483648",
+      rewrittenPromptText: null,
+      createdAt: new Date(),
+    });
+    expect(snap.productTierAtGeneration).toBe(3);
+  });
+
+  it("rejects mismatched tier values", () => {
+    expect(() =>
+      PcdIdentitySnapshotSchema.parse({
+        id: "snap_2",
+        assetRecordId: "asset_1",
+        productIdentityId: "prd_1",
+        productTierAtGeneration: 5,
+        productImageAssetIds: [],
+        productCanonicalTextHash: "sha256:x",
+        productLogoAssetId: null,
+        creatorIdentityId: "cr_1",
+        avatarTierAtGeneration: 1,
+        avatarReferenceAssetIds: [],
+        voiceAssetId: null,
+        consentRecordId: null,
+        policyVersion: "p",
+        providerCapabilityVersion: "c",
+        selectedProvider: "kling",
+        providerModelSnapshot: "v1",
+        seedOrNoSeed: "no-seed",
+        rewrittenPromptText: null,
+        createdAt: new Date(),
+      }),
+    ).toThrow();
   });
 });
