@@ -377,7 +377,7 @@
 
 ---
 
-### 17. **Governance errors swallowed in critical path**
+### 17. **Governance errors swallowed in critical path** ✅ DONE (PR #290, merged 2026-04-28)
 
 **Problem:** `platform-ingress.ts` catches governance eval exceptions and silently converts to deny. `platform-ingress.ts` retries trace persist once with console.error fallback. Operators blind to governance engine failures; approvals mysteriously denied.
 
@@ -393,6 +393,8 @@
 **Branch slug:** `fix/launch-governance-error-visibility`
 
 **Acceptance:** Governance eval failures logged to AuditEntry (error_type field). Trace persist retry upgraded to exponential backoff + alerting. Operator receives notification on governance failure.
+
+**Resolution:** Reuses `action.failed` event type with a typed `InfrastructureFailureSnapshot` (`errorType`, `failureClass: "infrastructure"`, severity, errorName/Stack, etc.) via `buildInfrastructureFailureAuditParams`. New `OperatorAlerter` interface (`Noop`/`Webhook` impls, 2s timeout, best-effort, optional `OPERATOR_ALERT_WEBHOOK_SECRET` Bearer auth) — separate from approval notifiers. Trace persist now uses 3-attempt exponential backoff (`100ms / ×4 / ±25% jitter`, ~500ms worst-case) on the same `WorkTrace` object; exactly one terminal audit + alert. Governance not retried. See `docs/superpowers/specs/2026-04-28-launch-governance-error-visibility-design.md`.
 
 ---
 
