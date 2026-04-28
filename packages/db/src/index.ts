@@ -102,3 +102,8 @@ export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
 export { PrismaCrmFunnelStore } from "./stores/crm-funnel-store.js";
 export type { CrmFunnelCountRow, FunnelStage } from "./stores/crm-funnel-store.js";
 export { PrismaLeadIntakeStore } from "./stores/lead-intake-store.js";
+export { PrismaProductIdentityStore } from "./stores/prisma-product-identity-store.js";
+export type {
+  CreateProductIdentityInput,
+  AddProductImageInput,
+} from "./stores/prisma-product-identity-store.js";
