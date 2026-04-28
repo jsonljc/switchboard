@@ -95,6 +95,14 @@ export type { CartridgeManifestForRegistration } from "./cartridge-intent-regist
 export { registerPipelineIntents } from "./pipeline-intent-registrar.js";
 export type { PipelineDefinition } from "./pipeline-intent-registrar.js";
 
+// Billing entitlement (canonical home is core/billing; re-exported here for convenience)
+export type {
+  BillingEntitlementResolver,
+  OrganizationEntitlement,
+  EntitlementInputs,
+} from "../billing/entitlement.js";
+export { evaluateEntitlement } from "../billing/entitlement.js";
+
 // Deployment Resolution
 export type {
   DeploymentContext,

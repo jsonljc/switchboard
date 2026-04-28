@@ -5,10 +5,12 @@ export interface IngressError {
     | "trigger_not_allowed"
     | "deployment_not_found"
     | "upstream_error"
-    | "network_error";
+    | "network_error"
+    | "entitlement_required";
   intent: string;
   message: string;
   retryable?: boolean;
+  blockedStatus?: string;
 }
 
 export function isIngressError(value: unknown): value is IngressError {

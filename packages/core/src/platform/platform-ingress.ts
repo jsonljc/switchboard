@@ -10,6 +10,7 @@ import type {
   AuthoritativeDeploymentResolver,
   CanonicalSubmitRequest,
 } from "./canonical-request.js";
+import type { BillingEntitlementResolver } from "../billing/entitlement.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
@@ -29,6 +30,7 @@ export interface PlatformIngressConfig {
   traceStore?: WorkTraceStore;
   lifecycleService?: ApprovalLifecycleService;
   approvalRoutingConfig?: ApprovalRoutingConfig;
+  entitlementResolver?: BillingEntitlementResolver;
 }
 
 export type SubmitWorkResponse =
@@ -100,6 +102,23 @@ export class PlatformIngress {
           message: `Intent not found: ${request.intent}`,
         },
       };
+    }
+
+    // 1.5. Entitlement check — block unpaid/canceled/etc. orgs at the canonical chokepoint.
+    // No generic actor.kind="system" bypass: every real action checks the org's entitlement.
+    if (this.config.entitlementResolver) {
+      const entitlement = await this.config.entitlementResolver.resolve(request.organizationId);
+      if (!entitlement.entitled) {
+        return {
+          ok: false,
+          error: {
+            type: "entitlement_required",
+            intent: request.intent,
+            message: `Organization ${request.organizationId} is not entitled to execute paid actions (status: ${entitlement.blockedStatus})`,
+            blockedStatus: entitlement.blockedStatus,
+          },
+        };
+      }
     }
 
     // 2. Validate trigger
