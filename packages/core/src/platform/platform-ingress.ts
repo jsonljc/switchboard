@@ -13,10 +13,32 @@ import type {
 import type { BillingEntitlementResolver } from "../billing/entitlement.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
+import type { AuditLedger } from "../audit/ledger.js";
+import type { OperatorAlerter } from "../observability/operator-alerter.js";
+import { NoopOperatorAlerter, safeAlert } from "../observability/operator-alerter.js";
+import { buildInfrastructureFailureAuditParams } from "../observability/infrastructure-failure.js";
 import { DEFAULT_ROUTING_CONFIG } from "../approval/router.js";
 import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
+
+export const TRACE_PERSIST_RETRY_POLICY = {
+  maxAttempts: 3,
+  baseDelayMs: 100,
+  factor: 4,
+  jitterRatio: 0.25,
+} as const;
+
+const defaultDelayFn = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+function jitteredDelayMs(attempt: number): number {
+  // attempt is 1-indexed; delay applies BEFORE attempt 2 and BEFORE attempt 3.
+  const { baseDelayMs, factor, jitterRatio } = TRACE_PERSIST_RETRY_POLICY;
+  const base = baseDelayMs * Math.pow(factor, attempt - 2);
+  const jitter = base * jitterRatio;
+  return Math.max(0, base + (Math.random() * 2 - 1) * jitter);
+}
 
 export interface GovernanceGateInterface {
   evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
@@ -31,6 +53,10 @@ export interface PlatformIngressConfig {
   lifecycleService?: ApprovalLifecycleService;
   approvalRoutingConfig?: ApprovalRoutingConfig;
   entitlementResolver?: BillingEntitlementResolver;
+  auditLedger?: AuditLedger;
+  operatorAlerter?: OperatorAlerter;
+  /** Injectable for tests — defaults to setTimeout-based delay. */
+  delayFn?: (ms: number) => Promise<void>;
 }
 
 export type SubmitWorkResponse =
@@ -47,9 +73,11 @@ export type SubmitWorkResponse =
 
 export class PlatformIngress {
   private readonly config: PlatformIngressConfig;
+  private readonly alerter: OperatorAlerter;
 
   constructor(config: PlatformIngressConfig) {
     this.config = config;
+    this.alerter = config.operatorAlerter ?? new NoopOperatorAlerter();
   }
 
   async submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> {
@@ -173,13 +201,20 @@ export class PlatformIngress {
     const governanceCompletedAt = new Date().toISOString();
     try {
       decision = await governanceGate.evaluate(workUnit, registration);
-    } catch {
+    } catch (governanceErr) {
       decision = {
         outcome: "deny",
         reasonCode: "GOVERNANCE_ERROR",
         riskScore: 1,
         matchedPolicies: [],
       };
+
+      await this.recordInfrastructureFailure({
+        errorType: "governance_eval_exception",
+        error: governanceErr,
+        workUnit,
+        retryable: false,
+      });
 
       const result = this.buildFailedResult(
         workUnit,
@@ -297,6 +332,8 @@ export class PlatformIngress {
     completedAt?: string,
   ): Promise<void> {
     if (!traceStore) return;
+    // Built once outside the retry loop: every attempt persists the same logical
+    // WorkTrace (same traceId/workUnitId/idempotencyKey). Do not move inside the loop.
     const trace = buildWorkTrace({
       workUnit,
       governanceDecision: decision,
@@ -305,15 +342,71 @@ export class PlatformIngress {
       executionStartedAt,
       completedAt,
     });
-    try {
-      await traceStore.persist(trace);
-    } catch (_firstErr) {
-      // Single retry
+
+    const delayFn = this.config.delayFn ?? defaultDelayFn;
+    const { maxAttempts } = TRACE_PERSIST_RETRY_POLICY;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        await delayFn(jitteredDelayMs(attempt));
+      }
       try {
         await traceStore.persist(trace);
-      } catch (retryErr) {
-        console.error("Failed to persist WorkTrace after retry", retryErr);
+        return; // success — no audit, no alert
+      } catch (err) {
+        lastError = err;
       }
     }
+
+    // Terminal failure — exactly one infra-failure audit + one alert via the existing helper.
+    await this.recordInfrastructureFailure({
+      errorType: "trace_persist_failed",
+      error: lastError,
+      workUnit,
+      retryable: false,
+    });
+  }
+
+  private async recordInfrastructureFailure(input: {
+    errorType: "governance_eval_exception" | "trace_persist_failed";
+    error: unknown;
+    workUnit?: WorkUnit;
+    retryable: boolean;
+  }): Promise<void> {
+    const { ledgerParams, alert } = buildInfrastructureFailureAuditParams({
+      errorType: input.errorType,
+      error: input.error,
+      workUnit: input.workUnit
+        ? {
+            id: input.workUnit.id,
+            intent: input.workUnit.intent,
+            traceId: input.workUnit.traceId,
+            organizationId: input.workUnit.organizationId,
+            deployment: input.workUnit.deployment
+              ? { deploymentId: input.workUnit.deployment.deploymentId }
+              : undefined,
+          }
+        : undefined,
+      retryable: input.retryable,
+    });
+
+    if (this.config.auditLedger) {
+      try {
+        await this.config.auditLedger.record({
+          ...ledgerParams,
+          // Typed snapshot widened to ledger's generic Record<string, unknown> envelope.
+          snapshot: ledgerParams.snapshot as unknown as Record<string, unknown>,
+        });
+      } catch (auditErr) {
+        // Invariant: no recursive failure logging.
+        console.error(
+          "[PlatformIngress] failed to record infrastructure-failure audit entry",
+          auditErr,
+        );
+      }
+    }
+
+    await safeAlert(this.alerter, alert);
   }
 }
