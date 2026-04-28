@@ -1793,6 +1793,7 @@ model ProductIdentity {
   creativeJobs          CreativeJob[]
   identitySnapshots     PcdIdentitySnapshot[]
 
+  @@unique([orgId, title])
   @@index([orgId])
   @@index([qualityTier])
   @@index([lockStatus])
