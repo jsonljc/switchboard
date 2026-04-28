@@ -1,40 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { resolveTier, requiresPaidPlan } from "../billing-guard.js";
+import { isPublicRoute, MUTATING_METHODS } from "../billing-guard.js";
 
-describe("billing-guard", () => {
-  describe("resolveTier", () => {
-    it("returns free for status=none", () => {
-      expect(resolveTier("price_123", "none")).toBe("free");
-    });
-
-    it("returns free for status=canceled", () => {
-      expect(resolveTier("price_123", "canceled")).toBe("free");
-    });
-
-    it("returns free when no priceId", () => {
-      expect(resolveTier(null, "active")).toBe("free");
-    });
-
-    it("returns starter for unknown price with active status", () => {
-      expect(resolveTier("price_unknown", "active")).toBe("starter");
+describe("billing-guard helpers", () => {
+  describe("MUTATING_METHODS", () => {
+    it("includes POST/PUT/PATCH/DELETE", () => {
+      expect(MUTATING_METHODS).toEqual(new Set(["POST", "PUT", "PATCH", "DELETE"]));
     });
   });
 
-  describe("requiresPaidPlan", () => {
-    it("returns true for deploy routes", () => {
-      expect(requiresPaidPlan("/api/agents/deploy")).toBe(true);
-    });
-
-    it("returns true for creative pipeline", () => {
-      expect(requiresPaidPlan("/api/creative-pipeline/jobs")).toBe(true);
-    });
-
-    it("returns false for billing routes", () => {
-      expect(requiresPaidPlan("/api/billing/status")).toBe(false);
-    });
-
-    it("returns false for health", () => {
-      expect(requiresPaidPlan("/health")).toBe(false);
+  describe("isPublicRoute", () => {
+    it.each([
+      ["/health", true],
+      ["/api/health", true],
+      ["/api/health/db", true],
+      ["/api/setup/start", true],
+      ["/api/setup/finish", true],
+      ["/api/sessions", true],
+      ["/api/sessions/refresh", true],
+      ["/api/billing/checkout", true],
+      ["/api/billing/portal", true],
+      ["/api/billing/webhook", true],
+      ["/api/webhooks/meta", true],
+      ["/api/webhooks/stripe", true],
+      ["/api/actions/propose", false],
+      ["/api/agents/deploy", false],
+      ["/api/conversations/123/reply", false],
+      ["/api/ingress", false],
+    ])("isPublicRoute(%s) === %s", (url, expected) => {
+      expect(isPublicRoute(url)).toBe(expected);
     });
   });
 });
