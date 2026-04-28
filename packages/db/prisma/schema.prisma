@@ -424,6 +424,10 @@ model OrganizationConfig {
   stripePriceId        String?
   subscriptionStatus   String    @default("none") // none, trialing, active, past_due, canceled
   cancelAtPeriodEnd    Boolean   @default(false)
+  /// Manual override that allows an org to execute paid mutable actions without
+  /// an active Stripe subscription. Intended for internal beta, comped pilots,
+  /// or manually approved exceptions.
+  entitlementOverride  Boolean   @default(false)
   trialEndsAt          DateTime?
   currentPeriodEnd     DateTime?
   escalationConfig     Json?    // { emailRecipients: string[], slaMinutes: number, notifyOnBreach: boolean }
