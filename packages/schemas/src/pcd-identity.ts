@@ -74,3 +74,36 @@ export const ProductImageSchema = z.object({
   createdAt: z.coerce.date(),
 });
 export type ProductImage = z.infer<typeof ProductImageSchema>;
+
+export const ConsentRecordSchema = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  personName: z.string(),
+  scopeOfUse: z.array(z.string()).min(1),
+  territory: z.array(z.string()).min(1),
+  mediaTypes: z.array(z.string()).min(1),
+  revocable: z.boolean(),
+  revoked: z.boolean(),
+  recordingUri: z.string().nullable().optional(),
+  effectiveAt: z.coerce.date(),
+  expiresAt: z.coerce.date().nullable().optional(),
+  revokedAt: z.coerce.date().nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type ConsentRecord = z.infer<typeof ConsentRecordSchema>;
+
+export const ProductQcResultSchema = z.object({
+  id: z.string(),
+  productIdentityId: z.string(),
+  assetRecordId: z.string(),
+  logoSimilarityScore: z.number().min(0).max(1).nullable().optional(),
+  packageOcrMatchScore: z.number().min(0).max(1).nullable().optional(),
+  colorDeltaScore: z.number().min(0).nullable().optional(),
+  geometryMatchScore: z.number().min(0).max(1).nullable().optional(),
+  scaleConfidence: z.number().min(0).max(1).nullable().optional(),
+  passFail: z.enum(["pass", "fail", "warn"]),
+  warnings: z.array(z.string()),
+  createdAt: z.coerce.date(),
+});
+export type ProductQcResult = z.infer<typeof ProductQcResultSchema>;

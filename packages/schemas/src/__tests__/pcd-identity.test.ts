@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { IdentityTierSchema, ProductIdentitySchema, ProductImageSchema } from "../pcd-identity.js";
+import {
+  IdentityTierSchema,
+  ProductIdentitySchema,
+  ProductImageSchema,
+  ConsentRecordSchema,
+  ProductQcResultSchema,
+} from "../pcd-identity.js";
 
 describe("IdentityTierSchema", () => {
   it("accepts 1, 2, 3", () => {
@@ -90,5 +96,57 @@ describe("ProductImageSchema", () => {
         createdAt: new Date(),
       }),
     ).toThrow();
+  });
+});
+
+describe("ConsentRecordSchema", () => {
+  it("accepts a valid consent record", () => {
+    const r = ConsentRecordSchema.parse({
+      id: "cr_1",
+      orgId: "org_1",
+      personName: "Julia Doe",
+      scopeOfUse: ["paid_social", "owned_channels"],
+      territory: ["US"],
+      mediaTypes: ["video", "image"],
+      revocable: true,
+      revoked: false,
+      effectiveAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(r.revoked).toBe(false);
+  });
+
+  it("rejects missing required fields", () => {
+    expect(() => ConsentRecordSchema.parse({ id: "cr_1" })).toThrow();
+  });
+});
+
+describe("ProductQcResultSchema", () => {
+  it("accepts a pass result", () => {
+    const r = ProductQcResultSchema.parse({
+      id: "qc_1",
+      productIdentityId: "prd_1",
+      assetRecordId: "asset_1",
+      passFail: "pass",
+      warnings: [],
+      createdAt: new Date(),
+    });
+    expect(r.passFail).toBe("pass");
+  });
+
+  it("accepts a fail result with scores", () => {
+    expect(
+      ProductQcResultSchema.parse({
+        id: "qc_2",
+        productIdentityId: "prd_1",
+        assetRecordId: "asset_2",
+        logoSimilarityScore: 0.42,
+        packageOcrMatchScore: 0.6,
+        passFail: "fail",
+        warnings: ["ocr_mismatch", "logo_drift"],
+        createdAt: new Date(),
+      }).warnings.length,
+    ).toBe(2);
   });
 });
