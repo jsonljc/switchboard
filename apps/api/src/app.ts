@@ -7,7 +7,8 @@ import rateLimit from "@fastify/rate-limit";
 import rawBody from "fastify-raw-body";
 import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
 import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
-import { AuditLedger } from "@switchboard/core";
+import { AuditLedger, NoopOperatorAlerter, WebhookOperatorAlerter } from "@switchboard/core";
+import type { OperatorAlerter } from "@switchboard/core";
 import {
   IntentRegistry,
   ExecutionModeRegistry,
@@ -437,6 +438,10 @@ export async function buildServer() {
     app.decorate("billingEntitlementResolver", billingEntitlementResolver);
   }
 
+  const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
+    ? new WebhookOperatorAlerter({ webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL })
+    : new NoopOperatorAlerter();
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -445,6 +450,8 @@ export async function buildServer() {
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,
     entitlementResolver: billingEntitlementResolver,
+    auditLedger: ledger,
+    operatorAlerter,
   });
   app.decorate("platformIngress", platformIngress);
 
