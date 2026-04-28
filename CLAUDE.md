@@ -16,6 +16,14 @@ Before architecture work, audits, or implementation planning:
 
 `.agent/` is a build layer for AI agents. It is not product code, not loaded by the app, and does not replace the product `skills/` directory.
 
+## Branch & Worktree Doctrine
+
+- **Specs and plans land on `main` via focused PRs**, not on feature branches. A `docs/superpowers/specs/*` or `docs/superpowers/plans/*` change should be its own small PR to `main`. Implementation branches **consume** specs that already live on `main` — they do not accumulate planning docs for unrelated workstreams.
+- **One branch per worktree.** Never check out a long-lived branch in two worktrees.
+- **Worktrees have a teardown step.** When the underlying branch merges or is deleted, remove the worktree the same day: `git worktree remove <path> && git worktree prune`.
+- **Before every commit, verify branch context.** Run `git branch --show-current` and `git status --short` to confirm the active branch matches the work, especially in agent sessions where the active branch may not match assumptions.
+- A pre-commit hook (`scripts/check-branch-relevance.sh`) warns when a docs-only commit references a different feature than the active branch's slug. The hook is non-blocking: warnings are signals, not gates.
+
 ## Core Invariants
 
 - Mutating actions enter through `PlatformIngress.submit()`.
@@ -64,7 +72,10 @@ pnpm typecheck                    # TypeScript type checking
 pnpm --filter @switchboard/core test  # Single package
 pnpm db:generate                  # Generate Prisma client
 pnpm db:migrate                   # Run migrations
+pnpm reset                        # Clean + regenerate Prisma + rebuild schemas/db/core
 ```
+
+If `pnpm typecheck` reports missing exports from `@switchboard/schemas`, `@switchboard/db`, or `@switchboard/core` — or unknown Prisma fields like `entitlementOverride` — run `pnpm reset` first. Stale generated artifacts (Prisma client, dist outputs) cause false-alarm "main is broken" diagnostics. `pnpm reset` is the canonical clean rebuild.
 
 ## Code Basics
 
