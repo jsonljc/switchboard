@@ -371,13 +371,18 @@ export class PlatformLifecycle {
       { caller: "platform_lifecycle.executeAfterApproval" },
     );
     if (!updateResult.ok) {
+      // The action has already executed (mode dispatch ran above). We cannot
+      // un-execute it. Return success:false so the caller surfaces the failure,
+      // but the work_trace_locked_violation audit + operator alert (emitted
+      // inside the store) is the canonical operator-facing record.
+      // rollbackAvailable:false is intentional — any side effects already happened.
       console.error(`[platform-lifecycle] WorkTrace update rejected: ${updateResult.reason}`);
       return {
         success: false,
         summary: `WorkTrace update rejected: ${updateResult.reason}`,
         externalRefs: {},
         rollbackAvailable: false,
-        partialFailures: [{ step: "trace_update", error: updateResult.reason }],
+        partialFailures: [{ step: "trace_update_post_execution", error: updateResult.reason }],
         durationMs: 0,
         undoRecipe: null,
       };

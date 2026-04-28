@@ -30,6 +30,9 @@ const ALWAYS_IMMUTABLE_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([
   "matchedPolicies",
   "requestedAt",
   "governanceCompletedAt",
+  // Store-managed: callers must never write lockedAt directly. The store stamps
+  // it automatically on terminal transition.
+  "lockedAt",
 ]);
 
 const ONE_SHOT_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([
@@ -43,6 +46,8 @@ const ONE_SHOT_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([
 export interface WorkTraceLockDiagnostic {
   traceId: string;
   workUnitId: string;
+  intent: string;
+  organizationId: string;
   currentOutcome: WorkOutcome;
   lockedAt: string | null;
   rejectedFields: string[];
@@ -159,6 +164,8 @@ function rejection(args: {
     diagnostic: {
       traceId: args.current.traceId,
       workUnitId: args.current.workUnitId,
+      intent: args.current.intent,
+      organizationId: args.current.organizationId,
       currentOutcome: args.current.outcome,
       lockedAt: args.current.lockedAt ?? null,
       rejectedFields: args.rejectedFields,

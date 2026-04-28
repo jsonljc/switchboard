@@ -254,6 +254,8 @@ describe("WorkTraceLockedError", () => {
     const err = new WorkTraceLockedError({
       traceId: "t_1",
       workUnitId: "wu_1",
+      intent: "test.intent",
+      organizationId: "org_1",
       currentOutcome: "completed",
       lockedAt: "2026-04-28T00:00:02.000Z",
       rejectedFields: ["executionOutputs"],
@@ -261,6 +263,37 @@ describe("WorkTraceLockedError", () => {
     });
     expect(err.code).toBe("WORK_TRACE_LOCKED");
     expect(err.diagnostic.workUnitId).toBe("wu_1");
+    expect(err.diagnostic.intent).toBe("test.intent");
+    expect(err.diagnostic.organizationId).toBe("org_1");
     expect(err.message).toContain("Trace locked");
+  });
+});
+
+describe("validateUpdate — lockedAt is store-managed (caller cannot write)", () => {
+  it("rejects caller-supplied lockedAt as a forbidden field", () => {
+    const current = makeTrace({ outcome: "running" });
+    const result = validateUpdate({
+      current,
+      update: { lockedAt: "2099-01-01T00:00:00.000Z" },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.diagnostic.rejectedFields).toContain("lockedAt");
+  });
+});
+
+describe("validateUpdate — diagnostic carries intent + organizationId", () => {
+  it("populates intent and organizationId from current trace", () => {
+    const current = makeTrace({
+      outcome: "completed",
+      lockedAt: "2026-04-28T00:00:02.000Z",
+      intent: "test.intent",
+      organizationId: "org_1",
+    });
+    const result = validateUpdate({ current, update: { durationMs: 999 } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostic.intent).toBe("test.intent");
+      expect(result.diagnostic.organizationId).toBe("org_1");
+    }
   });
 });

@@ -224,9 +224,9 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       retryable: false,
       workUnit: {
         id: diagnostic.workUnitId,
-        intent: "",
+        intent: diagnostic.intent,
         traceId: diagnostic.traceId,
-        organizationId: "",
+        organizationId: diagnostic.organizationId,
       },
     });
     // Augment snapshot with rich diagnostic per spec §6.
