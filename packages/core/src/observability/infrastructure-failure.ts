@@ -59,7 +59,7 @@ export function buildInfrastructureFailureAuditParams(input: BuildInfrastructure
 } {
   const occurredAt = new Date().toISOString();
   const errorMessage = extractErrorMessage(input.error);
-  const severity: "critical" | "warning" = "critical";
+  const severity = "critical" as const;
 
   const snapshot: InfrastructureFailureSnapshot = {
     errorType: input.errorType,

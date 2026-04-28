@@ -393,6 +393,7 @@ export class PlatformIngress {
       try {
         await this.config.auditLedger.record({
           ...ledgerParams,
+          // Typed snapshot widened to ledger's generic Record<string, unknown> envelope.
           snapshot: ledgerParams.snapshot as unknown as Record<string, unknown>,
         });
       } catch (auditErr) {

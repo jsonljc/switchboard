@@ -68,11 +68,11 @@ export class WebhookOperatorAlerter implements OperatorAlerter {
         );
       }
     } catch (err) {
-      const e = err as Error;
-      if (e.name === "AbortError") {
-        console.error("[OperatorAlerter] webhook request timed out", e);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      if (isAbort) {
+        console.error("[OperatorAlerter] webhook request timed out", err);
       } else {
-        console.error("[OperatorAlerter] webhook delivery error", e);
+        console.error("[OperatorAlerter] webhook delivery error", err);
       }
     } finally {
       clearTimeout(timeout);
