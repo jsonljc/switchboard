@@ -10,7 +10,7 @@
     "test:unit": "turbo test:unit",
     "test:integration": "turbo test:integration",
     "clean": "turbo clean",
-    "reset": "pnpm clean && pnpm db:generate && turbo build --filter=@switchboard/db^... --filter=@switchboard/db",
+    "reset": "pnpm clean && rm -rf packages/db/node_modules/.prisma node_modules/.prisma && pnpm db:generate && turbo build --filter=@switchboard/db^... --filter=@switchboard/db",
     "typecheck": "turbo typecheck",
     "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\"",
     "db:generate": "pnpm --filter @switchboard/db generate",

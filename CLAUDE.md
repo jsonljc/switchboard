@@ -75,7 +75,7 @@ pnpm db:migrate                   # Run migrations
 pnpm reset                        # Clean + regenerate Prisma + rebuild schemas/db/core
 ```
 
-If `pnpm typecheck` reports missing exports from `@switchboard/schemas`, `@switchboard/db`, or `@switchboard/core` — or unknown Prisma fields like `entitlementOverride` — run `pnpm reset` first. Stale generated artifacts (Prisma client, dist outputs) cause false-alarm "main is broken" diagnostics. `pnpm reset` is the canonical clean rebuild.
+If `pnpm typecheck` reports missing exports from `@switchboard/schemas`, `@switchboard/db`, or `@switchboard/core` — or unknown Prisma fields like `entitlementOverride` — run `pnpm reset` first. It clears each package's `dist/` (`turbo clean`), purges the generated Prisma client, regenerates it, and rebuilds the schemas → core → db chain. Stale lower-layer artifacts cause false-alarm "main is broken" diagnostics. App packages (api, chat, dashboard, mcp-server) are not rebuilt by `reset` — `pnpm typecheck` will pick up their needs from there.
 
 ## Code Basics
 
