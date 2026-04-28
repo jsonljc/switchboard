@@ -107,6 +107,10 @@ Wording deliberately hedges ("detected", "should", "may"): PR 1 only checks env-
 }
 ```
 
+### Type-import direction
+
+The helper imports `ReadinessCheck` from `apps/api/src/routes/readiness.ts`. This points `lib/` at `routes/`, which is mildly inverted but acceptable for this PR — the route file is the canonical home for readiness types today. A future refactor could lift `ReadinessCheck` into a neutral `apps/api/src/types/readiness-types.ts`, but **only do so if TypeScript or lint complains during implementation**. Out of scope for this PR otherwise.
+
 ### Why a helper instead of inlining in the route
 
 PR 2 (per-request resolution) will need the same precedence rules to decide Google vs. Local vs. Noop per-org at tool invocation time. A pure helper pins the semantics in tests and prevents the same drift that motivated this branch in the first place. PR 1 wires the helper only into the readiness route; PR 2 may adopt it inside `resolveCalendarProvider`.
@@ -149,7 +153,7 @@ PR 2 (per-request resolution) will need the same precedence rules to decide Goog
    }
    ```
 
-2. **Extend `PrismaLike`** to declare the existing `organizationConfig.findFirst({ where: { id }, select: { businessHours: true } })` shape used at `skill-mode.ts:resolveCalendarProvider`. Reuse the exact same query so readiness sees what runtime sees.
+2. **Extend `PrismaLike`** to declare the `organizationConfig.findFirst({ where: <runtime-shape>, select: { businessHours: true } })` call. **Mirror whatever shape `skill-mode.ts:resolveCalendarProvider` actually uses** — the spec's earlier reference to `where: { id: orgId }` is provisional and must be confirmed against runtime in Task 1 (check 3). If runtime uses `where: { organizationId: orgId }` (the more typical Prisma shape), readiness uses that. The invariant is parity with runtime, not any specific field name. Do **not** "clean up" the runtime call during this PR.
 
 3. **Loader** (the function that builds `ReadinessContext` from Prisma + env): add the `OrganizationConfig` lookup for the org, read `process.env["GOOGLE_CALENDAR_CREDENTIALS"]` and `process.env["GOOGLE_CALENDAR_ID"]` (presence-only, never logged), populate `context.calendar`.
 
@@ -189,7 +193,7 @@ Per process discipline. If any check fails, stop and revise.
 
 1. **Confirm `ReadinessCheck` interface and export site.** Verify `id`, `label`, `status`, `message`, `blocking` field names and types in `apps/api/src/routes/readiness.ts`. Confirm it is exported (helper imports it from this file).
 2. **Confirm `ReadinessContext` and `PrismaLike` are extension-safe.** Verify there are no other consumers in the repo that construct a `ReadinessContext` literal and would break on the new `calendar` field. Grep: `ReadinessContext` and `PrismaLike` across `apps/`, `packages/`, excluding `.worktrees/`.
-3. **Confirm the existing `OrganizationConfig.businessHours` query shape.** Read the exact `findFirst` call at `skill-mode.ts:resolveCalendarProvider` (`where: { id: orgId }, select: { businessHours: true }`) and reuse it verbatim in the readiness loader so runtime + readiness see identical data.
+3. **Confirm the existing `OrganizationConfig.businessHours` query shape — primary assumption to verify.** Read the exact `findFirst` call at `skill-mode.ts:resolveCalendarProvider` and reuse the `where` clause verbatim in the readiness loader so runtime + readiness see identical data. The spec mentions `where: { id: orgId }` provisionally; the more typical Prisma shape is `where: { organizationId: orgId }`. Whatever runtime actually does, readiness mirrors. Do **not** modify the runtime call in this PR even if the field name looks wrong.
 4. **Confirm `ready` aggregation only considers `blocking: true` checks.** Read the aggregation logic in `readiness.ts`. If a non-blocking `fail` would flip `ready`, the spec's claim is wrong and Section 2 needs a re-think before coding.
 5. **Confirm `AdvisoryCheckRow` rendering.** Re-verify `go-live.tsx:213–225` renders `advisoryChecks` non-conditionally (other than the `length > 0` wrapper). Already spot-checked; pin in plan to prevent surprises.
 6. **Confirm env-var read pattern in tests.** Verify the existing `readiness.test.ts` setup pattern for setting/unsetting `process.env` per-test (so the new tests follow the same pattern).
