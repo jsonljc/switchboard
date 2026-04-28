@@ -134,11 +134,11 @@ describe("runHealthCheck — transition matrix", () => {
     expect(webhookCallCount()).toBe(0);
   });
 
-  it("unknown → error fires one failure webhook", async () => {
+  it("provisioning → error fires one failure webhook", async () => {
     setupConnectionStoreMock();
     mockTelegramHealth(false);
     const prisma = makePrisma([
-      { id: "ch-e", channel: "telegram", status: "unknown", connectionId: "c1" },
+      { id: "ch-e", channel: "telegram", status: "provisioning", connectionId: "c1" },
     ]);
 
     const { runHealthCheck } = await import("../managed/health-checker.js");
@@ -148,38 +148,11 @@ describe("runHealthCheck — transition matrix", () => {
     expect(webhookBodies()[0]?.text).toContain("🚨 Chat health check failed: telegram/ch-e");
   });
 
-  it("unknown → active fires no webhook", async () => {
+  it("provisioning → active fires no webhook", async () => {
     setupConnectionStoreMock();
     mockTelegramHealth(true);
     const prisma = makePrisma([
-      { id: "ch-f", channel: "telegram", status: "unknown", connectionId: "c1" },
-    ]);
-
-    const { runHealthCheck } = await import("../managed/health-checker.js");
-    await runHealthCheck(prisma as never);
-
-    expect(webhookCallCount()).toBe(0);
-  });
-
-  it("pending → error fires one failure webhook", async () => {
-    setupConnectionStoreMock();
-    mockTelegramHealth(false);
-    const prisma = makePrisma([
-      { id: "ch-g", channel: "telegram", status: "pending", connectionId: "c1" },
-    ]);
-
-    const { runHealthCheck } = await import("../managed/health-checker.js");
-    await runHealthCheck(prisma as never);
-
-    expect(webhookCallCount()).toBe(1);
-    expect(webhookBodies()[0]?.text).toContain("🚨 Chat health check failed: telegram/ch-g");
-  });
-
-  it("pending → active fires no webhook", async () => {
-    setupConnectionStoreMock();
-    mockTelegramHealth(true);
-    const prisma = makePrisma([
-      { id: "ch-h", channel: "telegram", status: "pending", connectionId: "c1" },
+      { id: "ch-f", channel: "telegram", status: "provisioning", connectionId: "c1" },
     ]);
 
     const { runHealthCheck } = await import("../managed/health-checker.js");

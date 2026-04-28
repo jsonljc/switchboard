@@ -43,7 +43,7 @@ export async function runHealthCheck(prisma: PrismaClient): Promise<void> {
   const connectionStore = new PrismaConnectionStore(prisma);
   try {
     const channels = await prisma.managedChannel.findMany({
-      where: { status: { in: ["active", "error", "unknown", "pending"] } },
+      where: { status: { in: ["active", "error", "provisioning"] } },
     });
 
     for (const channel of channels) {
