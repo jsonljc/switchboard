@@ -1,104 +1,137 @@
 import type { PrismaClient } from "@switchboard/db";
 import { PrismaConnectionStore } from "@switchboard/db";
+import { sendHealthCheckAlert } from "./alert-webhook.js";
 
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+type NextStatus = "active" | "error";
+
+async function updateAndAlert(
+  prisma: PrismaClient,
+  channelId: string,
+  channelType: string,
+  previousStatus: string,
+  nextStatus: NextStatus,
+  statusDetail: string | null,
+): Promise<void> {
+  await prisma.managedChannel.update({
+    where: { id: channelId },
+    data: { status: nextStatus, statusDetail, lastHealthCheck: new Date() },
+  });
+
+  const wasError = previousStatus === "error";
+  const nowError = nextStatus === "error";
+  if (!wasError && nowError) {
+    void sendHealthCheckAlert("failure", {
+      channel: channelType,
+      channelId,
+      statusDetail,
+    });
+  } else if (wasError && !nowError) {
+    void sendHealthCheckAlert("recovery", {
+      channel: channelType,
+      channelId,
+    });
+  }
+}
+
+/**
+ * Run a single pass of the health check across all candidate managed channels.
+ * Exported for tests; the long-running scheduler calls this on an interval.
+ */
+export async function runHealthCheck(prisma: PrismaClient): Promise<void> {
+  const connectionStore = new PrismaConnectionStore(prisma);
+  try {
+    const channels = await prisma.managedChannel.findMany({
+      where: { status: { in: ["active", "error", "unknown", "pending"] } },
+    });
+
+    for (const channel of channels) {
+      try {
+        const previousStatus = channel.status;
+        const connection = await connectionStore.getById(channel.connectionId);
+        if (!connection) {
+          await updateAndAlert(
+            prisma,
+            channel.id,
+            channel.channel,
+            previousStatus,
+            "error",
+            "Connection not found",
+          );
+          continue;
+        }
+
+        let healthy = false;
+        if (channel.channel === "telegram") {
+          const botToken = connection.credentials["botToken"] as string;
+          if (!botToken) {
+            await updateAndAlert(
+              prisma,
+              channel.id,
+              channel.channel,
+              previousStatus,
+              "error",
+              "Missing bot token",
+            );
+            continue;
+          }
+          healthy = await checkTelegram(botToken);
+        } else if (channel.channel === "slack") {
+          const botToken = connection.credentials["botToken"] as string;
+          if (!botToken) {
+            await updateAndAlert(
+              prisma,
+              channel.id,
+              channel.channel,
+              previousStatus,
+              "error",
+              "Missing bot token",
+            );
+            continue;
+          }
+          healthy = await checkSlack(botToken);
+        } else if (channel.channel === "whatsapp") {
+          const token = connection.credentials["token"] as string;
+          const phoneNumberId = connection.credentials["phoneNumberId"] as string;
+          if (!token || !phoneNumberId) {
+            await updateAndAlert(
+              prisma,
+              channel.id,
+              channel.channel,
+              previousStatus,
+              "error",
+              "Missing WhatsApp credentials",
+            );
+            continue;
+          }
+          healthy = await checkWhatsApp(token, phoneNumberId);
+        }
+
+        await updateAndAlert(
+          prisma,
+          channel.id,
+          channel.channel,
+          previousStatus,
+          healthy ? "active" : "error",
+          healthy ? null : "Health check failed",
+        );
+      } catch (err) {
+        console.error(`[HealthChecker] Error checking channel ${channel.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[HealthChecker] Error during health check run:", err);
+  }
+}
 
 /**
  * Start a background health checker that periodically validates managed bot tokens.
  * Returns a cleanup function for graceful shutdown.
  */
 export function startHealthChecker(prisma: PrismaClient): () => void {
-  const connectionStore = new PrismaConnectionStore(prisma);
-
-  const checkAll = async () => {
-    try {
-      const channels = await prisma.managedChannel.findMany({
-        where: { status: { in: ["active", "error"] } },
-      });
-
-      for (const channel of channels) {
-        try {
-          const connection = await connectionStore.getById(channel.connectionId);
-          if (!connection) {
-            await prisma.managedChannel.update({
-              where: { id: channel.id },
-              data: {
-                status: "error",
-                statusDetail: "Connection not found",
-                lastHealthCheck: new Date(),
-              },
-            });
-            continue;
-          }
-
-          let healthy = false;
-          if (channel.channel === "telegram") {
-            const botToken = connection.credentials["botToken"] as string;
-            if (!botToken) {
-              await prisma.managedChannel.update({
-                where: { id: channel.id },
-                data: {
-                  status: "error",
-                  statusDetail: "Missing bot token",
-                  lastHealthCheck: new Date(),
-                },
-              });
-              continue;
-            }
-            healthy = await checkTelegram(botToken);
-          } else if (channel.channel === "slack") {
-            const botToken = connection.credentials["botToken"] as string;
-            if (!botToken) {
-              await prisma.managedChannel.update({
-                where: { id: channel.id },
-                data: {
-                  status: "error",
-                  statusDetail: "Missing bot token",
-                  lastHealthCheck: new Date(),
-                },
-              });
-              continue;
-            }
-            healthy = await checkSlack(botToken);
-          } else if (channel.channel === "whatsapp") {
-            const token = connection.credentials["token"] as string;
-            const phoneNumberId = connection.credentials["phoneNumberId"] as string;
-            if (!token || !phoneNumberId) {
-              await prisma.managedChannel.update({
-                where: { id: channel.id },
-                data: {
-                  status: "error",
-                  statusDetail: "Missing WhatsApp credentials",
-                  lastHealthCheck: new Date(),
-                },
-              });
-              continue;
-            }
-            healthy = await checkWhatsApp(token, phoneNumberId);
-          }
-
-          await prisma.managedChannel.update({
-            where: { id: channel.id },
-            data: {
-              status: healthy ? "active" : "error",
-              statusDetail: healthy ? null : "Health check failed",
-              lastHealthCheck: new Date(),
-            },
-          });
-        } catch (err) {
-          console.error(`[HealthChecker] Error checking channel ${channel.id}:`, err);
-        }
-      }
-    } catch (err) {
-      console.error("[HealthChecker] Error during health check run:", err);
-    }
-  };
-
-  const timer = setInterval(checkAll, HEALTH_CHECK_INTERVAL_MS);
-
-  // Run first check after a short delay
-  setTimeout(checkAll, 10_000);
-
+  const timer = setInterval(() => void runHealthCheck(prisma), HEALTH_CHECK_INTERVAL_MS);
+  setTimeout(() => void runHealthCheck(prisma), 10_000);
   return () => {
     clearInterval(timer);
   };
