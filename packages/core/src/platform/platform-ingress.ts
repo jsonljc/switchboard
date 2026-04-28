@@ -22,6 +22,24 @@ import { normalizeWorkUnit } from "./work-unit.js";
 import { buildWorkTrace } from "./work-trace-recorder.js";
 import { computeBindingHash, hashObject } from "../approval/binding.js";
 
+export const TRACE_PERSIST_RETRY_POLICY = {
+  maxAttempts: 3,
+  baseDelayMs: 100,
+  factor: 4,
+  jitterRatio: 0.25,
+} as const;
+
+const defaultDelayFn = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+function jitteredDelayMs(attempt: number): number {
+  // attempt is 1-indexed; delay applies BEFORE attempt 2 and BEFORE attempt 3.
+  const { baseDelayMs, factor, jitterRatio } = TRACE_PERSIST_RETRY_POLICY;
+  const base = baseDelayMs * Math.pow(factor, attempt - 2);
+  const jitter = base * jitterRatio;
+  return base + (Math.random() * 2 - 1) * jitter;
+}
+
 export interface GovernanceGateInterface {
   evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
 }
@@ -322,16 +340,30 @@ export class PlatformIngress {
       executionStartedAt,
       completedAt,
     });
-    try {
-      await traceStore.persist(trace);
-    } catch (_firstErr) {
-      // Single retry
+
+    const delayFn = this.config.delayFn ?? defaultDelayFn;
+    const { maxAttempts } = TRACE_PERSIST_RETRY_POLICY;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        await delayFn(jitteredDelayMs(attempt));
+      }
       try {
         await traceStore.persist(trace);
-      } catch (retryErr) {
-        console.error("Failed to persist WorkTrace after retry", retryErr);
+        return; // success — no audit, no alert
+      } catch (err) {
+        lastError = err;
       }
     }
+
+    // Terminal failure — exactly one infra-failure audit + one alert via the existing helper.
+    await this.recordInfrastructureFailure({
+      errorType: "trace_persist_failed",
+      error: lastError,
+      workUnit,
+      retryable: false,
+    });
   }
 
   private async recordInfrastructureFailure(input: {
