@@ -43,6 +43,19 @@ export const ImperfectionProfileSchema = z.object({
 });
 export type ImperfectionProfile = z.infer<typeof ImperfectionProfileSchema>;
 
+export const AvatarQualityTierSchema = z.enum(["stock", "anchored", "soul_id"]);
+export type AvatarQualityTier = z.infer<typeof AvatarQualityTierSchema>;
+
+export const TrainedIdentityAdapterSchema = z.object({
+  provider: z.enum(["internal_lora", "ip_adapter", "instantid", "provider_native"]),
+  modelRef: z.string(),
+  trainedAt: z.coerce.date(),
+  trainedFromAssetIds: z.array(z.string()),
+  tenantId: z.string(),
+  status: z.enum(["training", "ready", "deprecated"]),
+});
+export type TrainedIdentityAdapter = z.infer<typeof TrainedIdentityAdapterSchema>;
+
 export const CreatorIdentitySchema = z.object({
   id: z.string(),
   deploymentId: z.string(),
@@ -61,5 +74,8 @@ export const CreatorIdentitySchema = z.object({
   previousVersionId: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  qualityTier: AvatarQualityTierSchema.optional(),
+  consentRecordId: z.string().nullable().optional(),
+  identityAdapter: TrainedIdentityAdapterSchema.nullable().optional(),
 });
 export type CreatorIdentity = z.infer<typeof CreatorIdentitySchema>;
