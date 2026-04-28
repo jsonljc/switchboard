@@ -9,7 +9,12 @@ export interface CalendarProviderFactoryDeps {
   // Matches the existing bootstrap logger shape (verified in Task 1).
   logger: { info(msg: string): void; error(msg: string): void };
   // Optional env injection for tests; falls back to process.env.
-  env?: { GOOGLE_CALENDAR_CREDENTIALS?: string; GOOGLE_CALENDAR_ID?: string };
+  env?: {
+    GOOGLE_CALENDAR_CREDENTIALS?: string;
+    GOOGLE_CALENDAR_ID?: string;
+    RESEND_API_KEY?: string;
+    EMAIL_FROM?: string;
+  };
 }
 
 export function createCalendarProviderFactory(
@@ -47,6 +52,8 @@ async function resolveForOrg(
   const env = deps.env ?? {
     GOOGLE_CALENDAR_CREDENTIALS: process.env["GOOGLE_CALENDAR_CREDENTIALS"],
     GOOGLE_CALENDAR_ID: process.env["GOOGLE_CALENDAR_ID"],
+    RESEND_API_KEY: process.env["RESEND_API_KEY"],
+    EMAIL_FROM: process.env["EMAIL_FROM"],
   };
 
   // Mirrors today's runtime query shape (skill-mode.ts resolveCalendarProvider,
@@ -90,7 +97,39 @@ async function resolveForOrg(
   if (businessHours) {
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
     const localStore = buildLocalStore(deps.prismaClient, orgId);
-    const provider = new LocalCalendarProvider({ businessHours, bookingStore: localStore });
+
+    const resendKey = env.RESEND_API_KEY;
+    const fromAddress = env.EMAIL_FROM ?? "noreply@switchboard.app";
+    let emailSender: import("@switchboard/core/calendar").EmailSender | undefined;
+    if (resendKey) {
+      const { sendBookingConfirmationEmail } = await import("../lib/booking-confirmation-email.js");
+      emailSender = async (email) => {
+        await sendBookingConfirmationEmail({
+          apiKey: resendKey,
+          fromAddress,
+          to: email.to,
+          attendeeName: email.attendeeName,
+          service: email.service,
+          startsAt: email.startsAt,
+          endsAt: email.endsAt,
+          bookingId: email.bookingId,
+        });
+      };
+    } else {
+      deps.logger.info(
+        `Calendar[${orgId}]: booking confirmation emails disabled (RESEND_API_KEY not set)`,
+      );
+    }
+
+    const provider = new LocalCalendarProvider({
+      businessHours,
+      bookingStore: localStore,
+      ...(emailSender ? { emailSender } : {}),
+      onSendFailure: ({ bookingId, error }) =>
+        deps.logger.error(
+          `Calendar[${orgId}]: booking confirmation email failed for ${bookingId}: ${error}`,
+        ),
+    });
     deps.logger.info(
       `Calendar[${orgId}]: using LocalCalendarProvider (business hours configured, no Google creds)`,
     );

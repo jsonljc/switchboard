@@ -166,3 +166,50 @@ describe("createCalendarProviderFactory: memoization", () => {
     expect(prisma.organizationConfig.findFirst).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("createCalendarProviderFactory: Local provider email wiring (#9a regression)", () => {
+  it("wires emailSender on the Local provider when RESEND_API_KEY is set", async () => {
+    const prisma = makePrisma({
+      "org-local": { businessHours: { mon: [{ start: "09:00", end: "17:00" }] } },
+    });
+    const factory = createCalendarProviderFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      env: { RESEND_API_KEY: "re_test_key", EMAIL_FROM: "noreply@example.com" },
+    });
+
+    const provider = (await factory("org-local")) as unknown as { emailSender?: unknown };
+
+    expect(provider.emailSender).toBeTypeOf("function");
+  });
+
+  it("leaves emailSender undefined when RESEND_API_KEY is absent", async () => {
+    const prisma = makePrisma({
+      "org-local": { businessHours: { mon: [{ start: "09:00", end: "17:00" }] } },
+    });
+    const factory = createCalendarProviderFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      env: {},
+    });
+
+    const provider = (await factory("org-local")) as unknown as { emailSender?: unknown };
+
+    expect(provider.emailSender).toBeUndefined();
+  });
+
+  it("always wires onSendFailure for operator visibility", async () => {
+    const prisma = makePrisma({
+      "org-local": { businessHours: { mon: [{ start: "09:00", end: "17:00" }] } },
+    });
+    const factory = createCalendarProviderFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      env: {},
+    });
+
+    const provider = (await factory("org-local")) as unknown as { onSendFailure?: unknown };
+
+    expect(provider.onSendFailure).toBeTypeOf("function");
+  });
+});
