@@ -175,4 +175,47 @@ describe("billingGuard integration", () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(200);
   });
+
+  it("returns 503 in production when resolver is undecorated (fail-closed)", async () => {
+    const prevEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      const app2 = Fastify();
+      // Stub auth, but do NOT decorate billingEntitlementResolver.
+      app2.addHook("onRequest", async (req) => {
+        req.organizationIdFromAuth = "org_test";
+      });
+      await app2.register(billingGuard);
+      app2.post("/api/actions/propose", async () => ({ ok: true }));
+      const res = await app2.inject({ method: "POST", url: "/api/actions/propose" });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({
+        error: "Billing enforcement unavailable",
+        statusCode: 503,
+      });
+      await app2.close();
+    } finally {
+      if (prevEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevEnv;
+    }
+  });
+
+  it("fails open in dev when resolver is undecorated (preserves existing test behavior)", async () => {
+    const prevEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "test";
+    try {
+      const app2 = Fastify();
+      app2.addHook("onRequest", async (req) => {
+        req.organizationIdFromAuth = "org_test";
+      });
+      await app2.register(billingGuard);
+      app2.post("/api/actions/propose", async () => ({ ok: true }));
+      const res = await app2.inject({ method: "POST", url: "/api/actions/propose" });
+      expect(res.statusCode).toBe(200);
+      await app2.close();
+    } finally {
+      if (prevEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevEnv;
+    }
+  });
 });

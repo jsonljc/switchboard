@@ -53,7 +53,20 @@ const billingGuardPlugin: FastifyPluginAsync = async (app) => {
     if (!orgId) return;
 
     const resolver = app.billingEntitlementResolver;
-    if (!resolver) return; // Resolver not wired (legacy / certain test setups) — fail open.
+    if (!resolver) {
+      // Defense-in-depth: in production the resolver MUST be wired (app.ts hard-fails
+      // at startup if it isn't). Reaching this branch in production means something
+      // disabled the decoration — refuse to serve mutating traffic rather than
+      // silently bypass billing. In dev/test, fail open so existing tests that don't
+      // wire the resolver keep passing.
+      if (process.env["NODE_ENV"] === "production") {
+        return reply.code(503).send({
+          error: "Billing enforcement unavailable",
+          statusCode: 503,
+        });
+      }
+      return;
+    }
 
     const entitlement = await resolver.resolve(orgId);
     if (entitlement.entitled) return;
