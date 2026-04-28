@@ -50,12 +50,4 @@ describe("skill-mode builder registration", () => {
       channel: "whatsapp",
     });
   });
-
-  describe("per-org calendar provider", () => {
-    it("resolveCalendarProvider accepts orgId parameter", () => {
-      // The function signature must accept an optional orgId
-      // This is verified by TypeScript compilation
-      expect(true).toBe(true);
-    });
-  });
 });
