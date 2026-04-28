@@ -52,6 +52,11 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
     },
     emailVerified: true,
+    calendar: {
+      hasGoogleCredentials: false,
+      hasGoogleCalendarId: false,
+      businessHours: { mon: [{ start: "09:00", end: "17:00" }] },
+    },
     ...overrides,
   };
 }
