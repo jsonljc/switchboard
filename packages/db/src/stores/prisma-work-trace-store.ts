@@ -1,8 +1,24 @@
 import type { PrismaClient } from "@prisma/client";
-import type { WorkTrace, WorkTraceStore } from "@switchboard/core/platform";
+import type {
+  WorkTrace,
+  WorkTraceStore,
+  WorkTraceUpdateResult,
+  WorkTraceLockDiagnostic,
+} from "@switchboard/core/platform";
+import { validateUpdate, WorkTraceLockedError } from "@switchboard/core/platform";
+import type { AuditLedger, OperatorAlerter } from "@switchboard/core";
+import { buildInfrastructureFailureAuditParams, safeAlert } from "@switchboard/core";
+
+export interface PrismaWorkTraceStoreConfig {
+  auditLedger?: AuditLedger;
+  operatorAlerter?: OperatorAlerter;
+}
 
 export class PrismaWorkTraceStore implements WorkTraceStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly observability: PrismaWorkTraceStoreConfig = {},
+  ) {}
 
   async persist(trace: WorkTrace): Promise<void> {
     try {
@@ -133,36 +149,109 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       governanceCompletedAt: row.governanceCompletedAt.toISOString(),
       executionStartedAt: row.executionStartedAt?.toISOString(),
       completedAt: row.completedAt?.toISOString(),
+      lockedAt: row.lockedAt?.toISOString(),
     };
   }
 
-  async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void> {
-    const data: Record<string, unknown> = {};
+  async update(
+    workUnitId: string,
+    fields: Partial<WorkTrace>,
+    options?: { caller?: string },
+  ): Promise<WorkTraceUpdateResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.workTrace.findUnique({ where: { workUnitId } });
+      if (!row) {
+        throw new Error(`WorkTrace not found: ${workUnitId}`);
+      }
+      const current = this.mapRowToTrace(row);
+      const validation = validateUpdate({
+        current,
+        update: fields,
+        caller: options?.caller,
+      });
+      if (!validation.ok) {
+        await this.handleViolation(validation.diagnostic);
+        if (process.env.NODE_ENV !== "production") {
+          throw new WorkTraceLockedError(validation.diagnostic);
+        }
+        return {
+          ok: false as const,
+          code: "WORK_TRACE_LOCKED" as const,
+          traceUnchanged: true as const,
+          reason: validation.diagnostic.reason,
+        };
+      }
 
-    if (fields.outcome !== undefined) data.outcome = fields.outcome;
-    if (fields.durationMs !== undefined) data.durationMs = fields.durationMs;
-    if (fields.error !== undefined) {
-      data.errorCode = fields.error?.code ?? null;
-      data.errorMessage = fields.error?.message ?? null;
+      const data: Record<string, unknown> = {};
+      if (fields.outcome !== undefined) data.outcome = fields.outcome;
+      if (fields.durationMs !== undefined) data.durationMs = fields.durationMs;
+      if (fields.error !== undefined) {
+        data.errorCode = fields.error?.code ?? null;
+        data.errorMessage = fields.error?.message ?? null;
+      }
+      if (fields.executionSummary !== undefined) data.executionSummary = fields.executionSummary;
+      if (fields.executionOutputs !== undefined)
+        data.executionOutputs = JSON.stringify(fields.executionOutputs);
+      if (fields.executionStartedAt !== undefined)
+        data.executionStartedAt = new Date(fields.executionStartedAt);
+      if (fields.completedAt !== undefined) data.completedAt = new Date(fields.completedAt);
+      if (fields.approvalId !== undefined) data.approvalId = fields.approvalId;
+      if (fields.approvalOutcome !== undefined) data.approvalOutcome = fields.approvalOutcome;
+      if (fields.approvalRespondedBy !== undefined)
+        data.approvalRespondedBy = fields.approvalRespondedBy;
+      if (fields.approvalRespondedAt !== undefined)
+        data.approvalRespondedAt = new Date(fields.approvalRespondedAt);
+      if (fields.modeMetrics !== undefined) data.modeMetrics = JSON.stringify(fields.modeMetrics);
+      if (fields.parameters !== undefined) data.parameters = JSON.stringify(fields.parameters);
+
+      if (validation.computedLockedAt !== null) {
+        data.lockedAt = new Date(validation.computedLockedAt);
+      }
+
+      let updatedRow = row;
+      if (Object.keys(data).length > 0) {
+        updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
+      }
+      return { ok: true as const, trace: this.mapRowToTrace(updatedRow) };
+    });
+  }
+
+  private async handleViolation(diagnostic: WorkTraceLockDiagnostic): Promise<void> {
+    const { auditLedger, operatorAlerter } = this.observability;
+    const { ledgerParams, alert } = buildInfrastructureFailureAuditParams({
+      errorType: "work_trace_locked_violation",
+      error: new Error(diagnostic.reason),
+      retryable: false,
+      workUnit: {
+        id: diagnostic.workUnitId,
+        intent: diagnostic.intent,
+        traceId: diagnostic.traceId,
+        organizationId: diagnostic.organizationId,
+      },
+    });
+    // Augment snapshot with rich diagnostic per spec §6.
+    const enrichedSnapshot = {
+      ...ledgerParams.snapshot,
+      currentOutcome: diagnostic.currentOutcome,
+      lockedAt: diagnostic.lockedAt,
+      rejectedFields: diagnostic.rejectedFields,
+      caller: diagnostic.caller,
+    };
+    if (auditLedger) {
+      try {
+        await auditLedger.record({
+          ...ledgerParams,
+          snapshot: enrichedSnapshot as unknown as Record<string, unknown>,
+        });
+      } catch (auditErr) {
+        console.error(
+          "[PrismaWorkTraceStore] failed to record work_trace_locked_violation audit",
+          auditErr,
+        );
+      }
     }
-    if (fields.executionSummary !== undefined) data.executionSummary = fields.executionSummary;
-    if (fields.executionOutputs !== undefined)
-      data.executionOutputs = JSON.stringify(fields.executionOutputs);
-    if (fields.executionStartedAt !== undefined)
-      data.executionStartedAt = new Date(fields.executionStartedAt);
-    if (fields.completedAt !== undefined) data.completedAt = new Date(fields.completedAt);
-
-    if (fields.approvalId !== undefined) data.approvalId = fields.approvalId;
-    if (fields.approvalOutcome !== undefined) data.approvalOutcome = fields.approvalOutcome;
-    if (fields.approvalRespondedBy !== undefined)
-      data.approvalRespondedBy = fields.approvalRespondedBy;
-    if (fields.approvalRespondedAt !== undefined)
-      data.approvalRespondedAt = new Date(fields.approvalRespondedAt);
-
-    if (fields.modeMetrics !== undefined) data.modeMetrics = JSON.stringify(fields.modeMetrics);
-
-    if (Object.keys(data).length > 0) {
-      await this.prisma.workTrace.update({ where: { workUnitId }, data });
+    if (operatorAlerter) {
+      await safeAlert(operatorAlerter, alert);
     }
   }
 }

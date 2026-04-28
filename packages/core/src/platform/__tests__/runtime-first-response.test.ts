@@ -276,7 +276,10 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Runtime First Response", () => 
     const traceStore: WorkTraceStore = {
       persist: vi.fn(async (_trace: WorkTrace) => {}),
       getByWorkUnitId: vi.fn(async (_id: string) => null),
-      update: vi.fn(async (_id: string, _fields: Partial<WorkTrace>) => {}),
+      update: vi.fn(async (_id: string, _fields: Partial<WorkTrace>) => ({
+        ok: true as const,
+        trace: {} as never,
+      })),
       getByIdempotencyKey: vi.fn().mockResolvedValue(null),
     };
 

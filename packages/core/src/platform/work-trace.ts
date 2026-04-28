@@ -38,4 +38,9 @@ export interface WorkTrace {
   governanceCompletedAt: string;
   executionStartedAt?: string;
   completedAt?: string;
+  /**
+   * Set automatically by the store when outcome transitions into a terminal value.
+   * Once non-null, the trace is sealed: see work-trace-lock.ts for invariants.
+   */
+  lockedAt?: string;
 }

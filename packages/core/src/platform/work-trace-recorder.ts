@@ -13,10 +13,18 @@ export interface TraceInput {
   modeMetrics?: Record<string, unknown>;
 }
 
+export type WorkTraceUpdateResult =
+  | { ok: true; trace: WorkTrace }
+  | { ok: false; code: "WORK_TRACE_LOCKED"; traceUnchanged: true; reason: string };
+
 export interface WorkTraceStore {
   persist(trace: WorkTrace): Promise<void>;
   getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null>;
-  update(workUnitId: string, fields: Partial<WorkTrace>): Promise<void>;
+  update(
+    workUnitId: string,
+    fields: Partial<WorkTrace>,
+    options?: { caller?: string },
+  ): Promise<WorkTraceUpdateResult>;
   getByIdempotencyKey(key: string): Promise<WorkTrace | null>;
 }
 

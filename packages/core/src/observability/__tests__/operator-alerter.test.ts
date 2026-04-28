@@ -98,3 +98,18 @@ describe("WebhookOperatorAlerter", () => {
     expect(consoleSpy).toHaveBeenCalled();
   });
 });
+
+describe("InfrastructureErrorType — work_trace_locked_violation variant", () => {
+  it("accepts the new variant in alert payloads", async () => {
+    const alerter = new NoopOperatorAlerter();
+    const payload: InfrastructureFailureAlert = {
+      errorType: "work_trace_locked_violation",
+      severity: "warning",
+      errorMessage: "Forbidden mutation rejected",
+      retryable: false,
+      occurredAt: new Date().toISOString(),
+      source: "platform_ingress",
+    };
+    await expect(alerter.alert(payload)).resolves.toBeUndefined();
+  });
+});
