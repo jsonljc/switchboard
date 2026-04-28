@@ -1199,6 +1199,8 @@ model AssetRecord {
 
   createdAt           DateTime @default(now())
 
+  identitySnapshot    PcdIdentitySnapshot?
+
   @@unique([specId, attemptNumber, provider])
   @@index([jobId])
   @@index([specId])
@@ -1719,3 +1721,126 @@ model PendingLeadRetry {
   @@index([nextRetryAt, resolvedAt])
 }
 
+// ---------------------------------------------------------------------------
+// PCD Identity Registry (SP1)
+// ---------------------------------------------------------------------------
+
+model ConsentRecord {
+  id            String    @id @default(cuid())
+  orgId         String
+  personName    String
+  scopeOfUse    String[]
+  territory     String[]
+  mediaTypes    String[]
+  revocable     Boolean   @default(true)
+  revoked       Boolean   @default(false)
+  recordingUri  String?
+  effectiveAt   DateTime
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  creatorIdentities CreatorIdentity[]
+
+  @@index([orgId])
+  @@index([revoked])
+}
+
+model ProductIdentity {
+  id                    String   @id @default(cuid())
+  orgId                 String
+  sourceUrl             String?
+  title                 String
+  description           String?
+  brandName             String?
+  sku                   String?
+  packageType           String?
+  canonicalPackageText  String?
+  dimensionsMm          Json?
+  colorSpec             Json?
+  logoAssetId           String?
+  qualityTier           String   @default("url_imported")
+  lockStatus            String   @default("draft")
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  images                ProductImage[]
+  qcResults             ProductQcResult[]
+  creativeJobs          CreativeJob[]
+  identitySnapshots     PcdIdentitySnapshot[]
+
+  @@index([orgId])
+  @@index([qualityTier])
+  @@index([lockStatus])
+}
+
+model ProductImage {
+  id                     String          @id @default(cuid())
+  productIdentityId      String
+  productIdentity        ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
+  viewType               String
+  uri                    String
+  resolution             Json?
+  hasReadableLabel       Boolean?
+  ocrText                String?
+  backgroundType         String?
+  approvedForGeneration  Boolean         @default(false)
+  createdAt              DateTime        @default(now())
+
+  @@index([productIdentityId])
+  @@index([viewType])
+}
+
+model ProductQcResult {
+  id                    String          @id @default(cuid())
+  productIdentityId     String
+  productIdentity       ProductIdentity @relation(fields: [productIdentityId], references: [id], onDelete: Cascade)
+  assetRecordId         String
+  logoSimilarityScore   Float?
+  packageOcrMatchScore  Float?
+  colorDeltaScore       Float?
+  geometryMatchScore    Float?
+  scaleConfidence       Float?
+  passFail              String
+  warnings              String[]
+  createdAt             DateTime        @default(now())
+
+  @@index([productIdentityId])
+  @@index([assetRecordId])
+  @@index([passFail])
+}
+
+model PcdIdentitySnapshot {
+  id                          String          @id @default(cuid())
+  assetRecordId               String          @unique
+  assetRecord                 AssetRecord     @relation(fields: [assetRecordId], references: [id], onDelete: Cascade)
+
+  productIdentityId           String
+  productIdentity             ProductIdentity @relation(fields: [productIdentityId], references: [id])
+  productTierAtGeneration     Int
+  productImageAssetIds        String[]
+  productCanonicalTextHash    String
+  productLogoAssetId          String?
+
+  creatorIdentityId           String
+  creatorIdentity             CreatorIdentity @relation(fields: [creatorIdentityId], references: [id])
+  avatarTierAtGeneration      Int
+  avatarReferenceAssetIds     String[]
+  voiceAssetId                String?
+  consentRecordId             String?
+
+  policyVersion               String
+  providerCapabilityVersion   String
+  selectedProvider            String
+  providerModelSnapshot       String
+  seedOrNoSeed                String
+  rewrittenPromptText         String?
+
+  createdAt                   DateTime        @default(now())
+
+  @@index([productIdentityId])
+  @@index([creatorIdentityId])
+  @@index([selectedProvider])
+}
