@@ -2,6 +2,20 @@ import { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
 import type { CreativeJob } from "@switchboard/schemas";
 
+export interface AttachIdentityRefsInput {
+  productIdentityId: string;
+  creatorIdentityId: string;
+  effectiveTier: number;
+  allowedOutputTier: number;
+  shotSpecVersion: string;
+  fidelityTierAtGeneration?: number;
+}
+
+export interface MarkRegistryBackfilledInput {
+  productIdentityId: string;
+  creatorIdentityId: string;
+}
+
 interface CreateCreativeJobInput {
   taskId: string;
   organizationId: string;
@@ -173,6 +187,39 @@ export class PrismaCreativeJobStore {
     return this.prisma.creativeJob.update({
       where: { id },
       data: { stoppedAt: phase, ugcPhase: phase },
+    }) as unknown as CreativeJob;
+  }
+
+  // ── Registry methods ──
+
+  async attachIdentityRefs(jobId: string, input: AttachIdentityRefsInput): Promise<CreativeJob> {
+    return this.prisma.creativeJob.update({
+      where: { id: jobId },
+      data: {
+        productIdentityId: input.productIdentityId,
+        creatorIdentityId: input.creatorIdentityId,
+        effectiveTier: input.effectiveTier,
+        allowedOutputTier: input.allowedOutputTier,
+        shotSpecVersion: input.shotSpecVersion,
+        fidelityTierAtGeneration: input.fidelityTierAtGeneration,
+      },
+    }) as unknown as CreativeJob;
+  }
+
+  async markRegistryBackfilled(
+    jobId: string,
+    input: MarkRegistryBackfilledInput,
+  ): Promise<CreativeJob> {
+    return this.prisma.creativeJob.update({
+      where: { id: jobId },
+      data: {
+        productIdentityId: input.productIdentityId,
+        creatorIdentityId: input.creatorIdentityId,
+        effectiveTier: 1,
+        allowedOutputTier: 1,
+        registryBackfilled: true,
+        fidelityTierAtGeneration: 1,
+      },
     }) as unknown as CreativeJob;
   }
 }
