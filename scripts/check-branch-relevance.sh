@@ -7,7 +7,10 @@
 # while sitting on `fix/launch-webhook-provisioning`, polluting that branch's
 # diff with twelve unrelated spec commits.
 #
-# Behavior: warning only (does not block). Skips main and chore/* branches.
+# Behavior: warning only (does not block). Skips main, chore/*, and docs/*
+# branches — those are where hygiene and standalone spec/plan PRs land, so
+# spec/plan commits are expected. Feature branches (fix/*, feat/*) are the
+# leak surface this hook guards.
 set -euo pipefail
 
 branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
@@ -45,7 +48,7 @@ if [ -n "$mismatch" ]; then
   echo ""
   echo "warning: docs-only commit on branch '$branch' touches spec/plan files"
   echo "         that don't reference its slug ('$slug'):"
-  printf "$mismatch"
+  printf '%b' "$mismatch"
   echo "         If these specs belong to other workstreams, switch branches"
   echo "         before committing. To proceed anyway, re-run the commit."
   echo ""
