@@ -56,7 +56,13 @@ export class PlatformIngress {
     const { intentRegistry, modeRegistry, governanceGate, traceStore, deploymentResolver } =
       this.config;
 
-    // 0. Idempotency check — return existing result if key matches prior trace
+    // 0. Idempotency check — return existing result if key matches prior trace.
+    // Note: this runs before the entitlement check (step 1.5), so a replay of a
+    // previously-authorized request returns the cached response even if the org
+    // has since become unentitled. This is intentional: idempotency guarantees
+    // identical replay, and the original mutation was already authorized at the
+    // time of first submission. Entitlement is enforced for new (non-cached)
+    // submissions, not re-evaluated on replays.
     if (request.idempotencyKey && traceStore) {
       const existingTrace = await traceStore.getByIdempotencyKey(request.idempotencyKey);
       if (existingTrace) {

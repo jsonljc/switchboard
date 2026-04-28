@@ -107,7 +107,9 @@ describe("PlatformIngress entitlement enforcement", () => {
     if (!result.ok) {
       expect(result.error.type).toBe("entitlement_required");
       expect(result.error.intent).toBe("noop.intent");
-      expect(result.error.blockedStatus).toBe("canceled");
+      if (result.error.type === "entitlement_required") {
+        expect(result.error.blockedStatus).toBe("canceled");
+      }
     }
   });
 
@@ -129,5 +131,16 @@ describe("PlatformIngress entitlement enforcement", () => {
     const ingress = buildIngress({});
     const result = await ingress.submit(makeRequest());
     expect(result.ok).toBe(true);
+  });
+
+  it("propagates resolver errors instead of swallowing them", async () => {
+    const resolver: BillingEntitlementResolver = {
+      resolve: async () => {
+        throw new Error("upstream resolver failure");
+      },
+    };
+    const ingress = buildIngress({ resolver });
+
+    await expect(ingress.submit(makeRequest())).rejects.toThrow("upstream resolver failure");
   });
 });
