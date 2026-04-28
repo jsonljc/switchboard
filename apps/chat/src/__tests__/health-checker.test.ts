@@ -46,7 +46,7 @@ describe("runHealthCheck — transition matrix", () => {
 
   function mockTelegramHealth(ok: boolean) {
     fetchMock.mockImplementation(async (url: string) => {
-      if (url.includes("api.telegram.org")) {
+      if (new URL(url).host === "api.telegram.org") {
         return {
           ok,
           status: ok ? 200 : 401,
@@ -58,15 +58,17 @@ describe("runHealthCheck — transition matrix", () => {
     });
   }
 
+  function isWebhookCall(url: unknown): url is string {
+    return typeof url === "string" && new URL(url).host === "hooks.example";
+  }
+
   function webhookCallCount(): number {
-    return fetchMock.mock.calls.filter(
-      ([url]) => typeof url === "string" && url.startsWith("https://hooks.example"),
-    ).length;
+    return fetchMock.mock.calls.filter(([url]) => isWebhookCall(url)).length;
   }
 
   function webhookBodies(): Array<{ text: string }> {
     return fetchMock.mock.calls
-      .filter(([url]) => typeof url === "string" && url.startsWith("https://hooks.example"))
+      .filter(([url]) => isWebhookCall(url))
       .map(([, init]) => JSON.parse((init as { body: string }).body));
   }
 
