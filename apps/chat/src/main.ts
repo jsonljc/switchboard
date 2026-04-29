@@ -91,8 +91,10 @@ async function main() {
     deploymentResolver: new StaticDeploymentResolver({}),
     platformIngress: platformIngressAdapter,
     conversationStore: new InMemoryGatewayConversationStore(),
-    // Single-tenant path is used in dev/no-DB environments. Approval payloads
-    // are not expected on this path; the store is a no-op to satisfy the required field.
+    // Single-tenant path is used in dev/no-DB environments where no real approvals
+    // exist. If an approval-shaped payload arrives, the gateway intercepts it and
+    // getById returns null → the caller receives a NOT_FOUND_MSG and the message is
+    // dropped before reaching PlatformIngress.submit() or the LLM.
     approvalStore: {
       save: async () => {},
       getById: async () => null,

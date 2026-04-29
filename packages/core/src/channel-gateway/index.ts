@@ -6,6 +6,8 @@ export type {
   IncomingChannelMessage,
   ReplySink,
 } from "./types.js";
+// Re-exported from ../storage/interfaces.js (not types.js) because ApprovalStore
+// is the canonical storage interface, and ChannelGatewayConfig depends on it.
 export type { ApprovalStore } from "../storage/interfaces.js";
 export { UnknownChannelError, InactiveDeploymentError } from "./types.js";
 export { resolveContactIdentity } from "./resolve-contact-identity.js";

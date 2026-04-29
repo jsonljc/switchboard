@@ -50,10 +50,10 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
       }),
     },
     approvalStore: {
-      save: vi.fn(),
+      save: vi.fn().mockResolvedValue(undefined),
       getById: vi.fn().mockResolvedValue(null),
-      updateState: vi.fn(),
-      listPending: vi.fn(),
+      updateState: vi.fn().mockResolvedValue(undefined),
+      listPending: vi.fn().mockResolvedValue([]),
     },
     ...overrides,
   };
@@ -361,10 +361,10 @@ function makeConfig(overrides: Partial<ChannelGatewayConfig> = {}): ChannelGatew
       addMessage: vi.fn().mockResolvedValue(undefined),
     },
     approvalStore: {
-      save: vi.fn(),
+      save: vi.fn().mockResolvedValue(undefined),
       getById: vi.fn().mockResolvedValue(null),
-      updateState: vi.fn(),
-      listPending: vi.fn(),
+      updateState: vi.fn().mockResolvedValue(undefined),
+      listPending: vi.fn().mockResolvedValue([]),
     },
     ...overrides,
   };

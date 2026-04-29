@@ -31,9 +31,11 @@ export interface ChannelGatewayConfig {
   platformIngress: { submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> };
   /** Optional contact-identity store. When set, the gateway resolves Contact identity for WhatsApp inbound before ingress.submit. */
   contactStore?: GatewayContactStore;
-  /** Read-only approval lookup for binding-hash verification of
-      approval-shaped channel payloads. Required so verification
-      cannot be silently skipped by misconfiguration. */
+  /**
+   * Read-only approval lookup for binding-hash verification of
+   * approval-shaped channel payloads. Required so verification
+   * cannot be silently skipped by misconfiguration.
+   */
   approvalStore: ApprovalStore;
 }
 
