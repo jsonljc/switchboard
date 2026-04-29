@@ -13,23 +13,19 @@ describe("PrismaWorkTraceStore — construction", () => {
   });
 
   it("throws when auditLedger is missing", () => {
+    const config = { operatorAlerter: new NoopOperatorAlerter() };
     expect(
-      () =>
-        new PrismaWorkTraceStore(fakePrisma, {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          operatorAlerter: new NoopOperatorAlerter(),
-        } as any),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => new PrismaWorkTraceStore(fakePrisma, config as any),
     ).toThrow(/requires auditLedger and operatorAlerter/);
   });
 
   it("throws when operatorAlerter is missing", () => {
     const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const config = { auditLedger: ledger };
     expect(
-      () =>
-        new PrismaWorkTraceStore(fakePrisma, {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          auditLedger: ledger,
-        } as any),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => new PrismaWorkTraceStore(fakePrisma, config as any),
     ).toThrow(/requires auditLedger and operatorAlerter/);
   });
 
