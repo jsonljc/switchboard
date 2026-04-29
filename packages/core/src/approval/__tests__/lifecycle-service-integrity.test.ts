@@ -1,11 +1,18 @@
 /**
  * Admission gate integration tests for ApprovalLifecycleService.rejectLifecycle.
  *
- * Verifies that the call site at lifecycle-service.ts:151 (getByWorkUnitId +
- * assertExecutionAdmissible) fires correctly:
- *   - "ok" verdict → traceStore.update() is called, lifecycle proceeds.
+ * Verifies the correct ordering of the fixed implementation:
+ *   1. getLifecycleById (pre-mutation lookup, no state change)
+ *   2. getByWorkUnitId + assertExecutionAdmissible (integrity check, no state change)
+ *   3. rejectRevision / updateLifecycleStatus (lifecycle mutation — only if integrity passes)
+ *   4. traceStore.update (WorkTrace mutation — only if lifecycle reject succeeds)
+ *
+ * Key invariants:
+ *   - "ok" verdict → updateLifecycleStatus called, traceStore.update() called, lifecycle proceeds.
  *   - Non-"ok" verdict (without override) → WorkTraceIntegrityError thrown,
- *     traceStore.update() is NOT called.
+ *     updateLifecycleStatus NOT called, traceStore.update() NOT called.
+ *   - Locked WorkTrace (update returns ok:false) → lifecycle is rejected but error is thrown
+ *     so the caller knows about the divergence.
  *
  * Uses the same fixture pattern as lifecycle-service.test.ts.
  */
@@ -127,7 +134,9 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
   });
 
   describe("when integrity verdict is mismatch", () => {
-    it("throws WorkTraceIntegrityError and does NOT call traceStore.update()", async () => {
+    it("throws WorkTraceIntegrityError and does NOT mutate lifecycle or WorkTrace", async () => {
+      const store = makeStore(lifecycleRecord);
+      const localService = new ApprovalLifecycleService({ store });
       const traceStore = makeTraceStore({
         status: "mismatch",
         expected: "hash-expected",
@@ -135,51 +144,59 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
       });
 
       await expect(
-        service.rejectLifecycle({
+        localService.rejectLifecycle({
           lifecycleId: "lc-integrity",
           respondedBy: "approver-1",
           traceStore,
         }),
       ).rejects.toThrow(WorkTraceIntegrityError);
 
+      // Lifecycle must NOT be mutated — integrity check must fire before rejectRevision
+      expect(store.updateLifecycleStatus).not.toHaveBeenCalled();
       expect(traceStore.update).not.toHaveBeenCalled();
     });
   });
 
   describe("when integrity verdict is missing_anchor", () => {
-    it("throws WorkTraceIntegrityError and does NOT call traceStore.update()", async () => {
+    it("throws WorkTraceIntegrityError and does NOT mutate lifecycle or WorkTrace", async () => {
+      const store = makeStore(lifecycleRecord);
+      const localService = new ApprovalLifecycleService({ store });
       const traceStore = makeTraceStore({
         status: "missing_anchor",
         expectedAtVersion: 3,
       });
 
       await expect(
-        service.rejectLifecycle({
+        localService.rejectLifecycle({
           lifecycleId: "lc-integrity",
           respondedBy: "approver-1",
           traceStore,
         }),
       ).rejects.toThrow(WorkTraceIntegrityError);
 
+      expect(store.updateLifecycleStatus).not.toHaveBeenCalled();
       expect(traceStore.update).not.toHaveBeenCalled();
     });
   });
 
   describe("when integrity verdict is skipped (pre-migration)", () => {
-    it("throws WorkTraceIntegrityError and does NOT call traceStore.update()", async () => {
+    it("throws WorkTraceIntegrityError and does NOT mutate lifecycle or WorkTrace", async () => {
+      const store = makeStore(lifecycleRecord);
+      const localService = new ApprovalLifecycleService({ store });
       const traceStore = makeTraceStore({
         status: "skipped",
         reason: "pre_migration",
       });
 
       await expect(
-        service.rejectLifecycle({
+        localService.rejectLifecycle({
           lifecycleId: "lc-integrity",
           respondedBy: "approver-1",
           traceStore,
         }),
       ).rejects.toThrow(WorkTraceIntegrityError);
 
+      expect(store.updateLifecycleStatus).not.toHaveBeenCalled();
       expect(traceStore.update).not.toHaveBeenCalled();
     });
   });
@@ -203,6 +220,44 @@ describe("ApprovalLifecycleService.rejectLifecycle — admission gate", () => {
 
       expect(result.status).toBe("rejected");
       expect(traceStore.update).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("when traceStore.update returns ok:false (locked WorkTrace)", () => {
+    it("throws so the caller knows lifecycle and WorkTrace have diverged", async () => {
+      const trace = makeBaseTrace();
+      const lockedRecord = makeLifecycleRecord();
+      const lifecycleStore = makeStore(lockedRecord);
+      const lockedService = new ApprovalLifecycleService({ store: lifecycleStore });
+
+      const traceStore: WorkTraceStore = {
+        persist: vi.fn().mockResolvedValue(undefined),
+        getByWorkUnitId: vi.fn().mockResolvedValue({ trace, integrity: { status: "ok" } }),
+        getByIdempotencyKey: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({
+          ok: false as const,
+          code: "WORK_TRACE_LOCKED" as const,
+          traceUnchanged: true as const,
+          reason: "WorkTrace is in a terminal state and cannot be updated",
+        }),
+      };
+
+      // rejectRevision DOES get called (lifecycle is committed to rejected)
+      // but the lock failure surfaces as a thrown error so the caller is informed
+      await expect(
+        lockedService.rejectLifecycle({
+          lifecycleId: "lc-integrity",
+          respondedBy: "approver-1",
+          traceStore,
+        }),
+      ).rejects.toThrow(/WorkTrace update failed during rejectLifecycle/);
+
+      // Lifecycle was rejected (rejectRevision ran before the lock was hit)
+      expect(lifecycleStore.updateLifecycleStatus).toHaveBeenCalledWith(
+        "lc-integrity",
+        "rejected",
+        1,
+      );
     });
   });
 });

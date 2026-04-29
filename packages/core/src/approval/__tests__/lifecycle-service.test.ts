@@ -585,8 +585,9 @@ describe("ApprovalLifecycleService", () => {
       vi.mocked(store.updateLifecycleStatus).mockResolvedValue(rejectedLifecycle);
 
       const mockTraceStore = {
-        update: vi.fn().mockResolvedValue(undefined),
-        getByWorkUnitId: vi.fn(),
+        // No existing trace — admission check is skipped (no WorkTrace to verify)
+        getByWorkUnitId: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({ ok: true as const, trace: {} }),
         persist: vi.fn(),
         getByIdempotencyKey: vi.fn(),
       };
