@@ -1611,6 +1611,8 @@ model WorkTrace {
   lockedAt              DateTime?
   contentHash           String?
   traceVersion          Int       @default(0)
+  ingressPath      String @default("platform_ingress") @map("ingress_path")
+  hashInputVersion Int    @default(1) @map("hash_input_version")
 
   @@index([organizationId, intent])
   @@index([traceId])
