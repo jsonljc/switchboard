@@ -95,7 +95,61 @@ Naming inconsistency: schema mixes `orgId` and `organizationId`. Increases audit
 
 ## Section 2: AI / Skill-Runtime Security
 
-_Pending — see Task 2 of plan._
+### Scope
+
+The skill runtime, tool registry, agent runtime, and tool implementations: `packages/core/src/skill-runtime/`, `packages/core/src/tool-registry/`, `packages/core/src/agent-runtime/`. Specifically the tool execution boundary (where LLM output flows into side-effect-producing functions) and the system-prompt assembly (where operator-controlled data flows into model context).
+
+### Method
+
+- Catalogued every tool in `packages/core/src/skill-runtime/tools/` and noted side-effect class, idempotency, and how each tool sources its `orgId`.
+- Read `packages/core/src/skill-runtime/skill-executor.ts` to confirm how LLM-produced `toolUse.input` is dispatched to tool `execute()` functions.
+- Read `packages/core/src/agent-runtime/system-prompt-assembler.ts` to assess injection surface.
+- Read `packages/core/src/skill-runtime/governance.ts`, `governance-injector.ts`, and the trust-level resolver to confirm what governance does and does not enforce.
+- Read `packages/core/src/skill-runtime/reinjection-filter.ts` to assess output-as-input contamination risk.
+- Searched for any tool/op that uses a trusted `SkillRequestContext` (only `escalate.ts` does — it's the documented "target shape").
+
+### Tool catalog (high-level)
+
+| Tool          | Operation         | Effect class        | Idempotent | orgId source                                                                                       |
+| ------------- | ----------------- | ------------------- | ---------- | --------------------------------------------------------------------------------------------------- |
+| calendar-book | slots.query       | read                | yes        | **LLM input** (`params.orgId`) — flagged TODO in source                                            |
+| calendar-book | booking.create    | external_mutation   | yes        | **LLM input** (`params.orgId`) — flagged TODO in source                                            |
+| crm-write     | stage.update      | write               | yes        | **LLM input** (`params.orgId`)                                                                      |
+| crm-write     | activity.log      | write               | no         | **LLM input** (`params.organizationId`)                                                             |
+| crm-query     | (read ops)        | read                | yes        | (read-only; analyzed lower-risk)                                                                    |
+| escalate      | handoff.create    | write               | no         | **Trusted `ctx.orgId`** via `SkillRequestContext` factory closure — **the correct pattern**          |
+| web-scanner   | various           | tier-dependent      | varies     | (scoped read; analyzed lower-risk)                                                                  |
+| booking-failure-handler | various | write/external_mutation | varies | (handler invoked from calendar-book; inherits the upstream orgId)                                  |
+
+### Items checked
+
+- [✓] Every tool catalogued and classified.
+- [✗] Every mutating tool routes through PlatformIngress. *(See AI-3 — calendar-book and crm-write call stores directly. They produce side effects without going through the canonical mutation pipeline.)*
+- [✗] System prompts cannot be extracted via crafted input. *(Not directly verified, but no sentinels or output-filtering exist; depends on Anthropic's model behavior.)*
+- [✗] No tool can be invoked outside the approval policy via prompt injection. *(See AI-1: orgId in tool input is LLM-controlled — even if governance allows the action, it can target the wrong tenant.)*
+- [✗] Tool outputs are sanitized before re-entering LLM context. *(Reinjection-filter handles size/truncation but not adversarial-content marking — see AI-4.)*
+- [✓] DeploymentMemory / ConversationState writes from skill execution cannot escalate trust on later turns. *(Trust level is derived from `deployment.trustLevel` via `skill-runtime-policy-resolver.ts:22`, not from conversation state; LLM cannot rewrite it.)*
+- [✗] Skill execution cannot reach cross-tenant data. *(Same root cause as AI-1: LLM-controlled orgId in tool input bypasses tenant binding.)*
+- [✓] No credentials or secrets are placed in LLM prompts. *(Verified `system-prompt-assembler.ts` does not include credentials. Operator persona fields are interpolated, not credentials.)*
+
+### Findings
+
+| ID   | Severity | Title                                                                                                | Evidence (file:line)                                                                                                                                            | Recommended fix                                                                                                                                                                                                                                                                                                                                                | Status      |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| AI-1 | CRITICAL | `calendar-book` and `crm-write` tools take `orgId` from LLM-controlled tool input                    | `packages/core/src/skill-runtime/tools/calendar-book.ts:79-82, 122-138, 152-180` (TODO); `packages/core/src/skill-runtime/tools/crm-write.ts:53-61, 73-80`     | Convert calendar-book and crm-write to factory-based tools that close over a trusted `SkillRequestContext` (matching `escalate.ts:22-23, 67`). Remove `orgId` from `inputSchema` so the LLM cannot supply it. The TODO comment in calendar-book.ts:79-81 already names this fix and references the executor-contract follow-up PR — ship it before launch. | _untriaged_ |
+| AI-2 | HIGH     | `op.execute(toolUse.input)` passes raw LLM output to tool with no runtime schema validation          | `packages/core/src/skill-runtime/skill-executor.ts:221, 247`                                                                                                    | Validate `toolUse.input` against `op.inputSchema` (Zod or JSON-Schema) before calling `op.execute`. Currently the schema is only used to advertise the contract to the LLM; tools must defensively re-parse. Defense-in-depth alongside AI-1.                                                                                                                  | _untriaged_ |
+| AI-3 | HIGH     | `system-prompt-assembler.ts` interpolates operator-controlled persona fields directly with no sentinels | `packages/core/src/agent-runtime/system-prompt-assembler.ts:21-54`                                                                                              | Wrap operator-controlled fields (businessName, productService, valueProposition, tone, customInstructions, qualificationCriteria) in clear sentinel markers (e.g., `<|operator-content|>...<|/operator-content|>`) and instruct the model to treat sentinel-wrapped content as data, not instructions. Verify that no upstream flow accepts these fields from customer input. | _untriaged_ |
+| AI-4 | MEDIUM   | Tool outputs are reinjected to LLM context with no adversarial-content marking                       | `packages/core/src/skill-runtime/reinjection-filter.ts:1-80`, `packages/core/src/skill-runtime/skill-executor.ts:274-280`                                       | Wrap tool results in sentinels too (e.g., `<|tool-output|>...<|/tool-output|>`). Mitigates the case where an external tool (web-scanner, crm-query) returns content containing fake "system" markers that the LLM might re-interpret as instructions.                                                                                                          | _untriaged_ |
+| AI-5 | MEDIUM   | `console.warn` logs first 200 chars of `toolUse.input` JSON unredacted                               | `packages/core/src/skill-runtime/skill-executor.ts:208-210`                                                                                                     | Apply a redaction filter to known sensitive keys (orgId, attendeeEmail, anything matching `*token*`/`*secret*`/`*key*`). Slice limits exposure but does not redact.                                                                                                                                                                                            | _untriaged_ |
+| AI-6 | MEDIUM   | Mutating tools bypass `PlatformIngress.submit()` and write directly to stores                        | `packages/core/src/skill-runtime/tools/calendar-book.ts:204-213, 274-282`; `packages/core/src/skill-runtime/tools/crm-write.ts:55-64`                          | This is a DOCTRINE §1 deviation that the architecture has tolerated as "tool-internal mutations" but it means WorkTrace anchoring, idempotency, and governance one-time evaluation invariants don't apply uniformly. Confirm this is intentional under DOCTRINE; if so, document the exception. If not, route through PlatformIngress.                          | _untriaged_ |
+| AI-7 | INFO     | No AI-specific monitoring (prompt-injection detection, anomalous tool-call patterns)                 | (architectural)                                                                                                                                                 | Track post-launch. Sentry integration could log structured events for `unexpected_tool_orgid_mismatch`, `tool_call_count_spike`, `system_prompt_extraction_pattern`. Out of scope pre-launch.                                                                                                                                                                  | _untriaged_ |
+
+### Coverage gaps
+
+- **Live prompt-injection probing** was not performed (no live LLM session in this audit). Findings AI-1 through AI-3 are based on code reading. A fix-now spec for AI-1 should include an automated test that simulates an LLM tool_use block with a mismatched `orgId` and asserts the tool refuses (or, post-fix, proves the tool ignores `params.orgId` and uses `ctx.orgId` instead).
+- **Memory poisoning paths** were not traced end-to-end. The architecture has DeploymentMemory and ConversationState; LLM writes to these must not be able to escalate trust on later turns. Trust resolution from `deployment.trustLevel` (server-side) was verified; verifying that no path uses memory-derived trust signals is left as a follow-up under AI-7's post-launch monitoring scope.
+- **Output-redaction in error responses to the LLM**: the `fail()` function (e.g., `tool-result.ts`) was not reviewed for whether failure messages might leak server-side state to the LLM. Spot check showed messages like "Calendar provider could not be initialized" — generic enough — but a full sweep was not performed.
+- **Conversation-history role tampering**: the path that translates inbound chat messages into `role: "user"` LLM messages was not traced. If any path ever produces `role: "assistant"` from customer-controlled content, that is a prompt-injection primitive. Out of scope of this audit's depth; recommend a focused spec if launch blockers in chat-ingress reveal the relevant code.
 
 ---
 
