@@ -45,6 +45,7 @@ export type { ConnectionRecord } from "./storage/index.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
+export { WORK_TRACE_INTEGRITY_CUTOFF_AT } from "./integrity-cutoff.js";
 export { deriveAgentStates } from "./storage/agent-state-deriver.js";
 export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
