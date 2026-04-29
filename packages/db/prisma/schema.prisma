@@ -1609,6 +1609,8 @@ model WorkTrace {
   executionStartedAt    DateTime?
   completedAt           DateTime?
   lockedAt              DateTime?
+  contentHash           String?
+  traceVersion          Int       @default(0)
 
   @@index([organizationId, intent])
   @@index([traceId])

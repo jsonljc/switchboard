@@ -39,56 +39,70 @@ export class PrismaLedgerStorage implements LedgerStorage {
   /**
    * Atomically get latest entry hash + build + append within a PostgreSQL advisory lock.
    * This prevents race conditions when multiple instances write to the audit chain concurrently.
+   *
+   * If options.externalTx is provided, joins that transaction instead of opening a new one.
+   * This ensures WorkTrace + AuditEntry writes commit/roll back together.
    */
   async appendAtomic(
     buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+    options?: { externalTx?: unknown },
   ): Promise<AuditEntry> {
-    return this.prisma.$transaction(
-      async (
-        tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">,
-      ) => {
-        // Acquire advisory lock — blocks other writers until this transaction commits
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
+    const writeWithTx = async (
+      tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">,
+    ) => {
+      // Acquire advisory lock — blocks other writers until this transaction commits
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
 
-        // Get latest within the lock
-        const latest = await tx.auditEntry.findFirst({
-          orderBy: { timestamp: "desc" },
-        });
-        const previousEntryHash = latest?.entryHash ?? null;
+      // Get latest within the lock
+      const latest = await tx.auditEntry.findFirst({
+        orderBy: { timestamp: "desc" },
+      });
+      const previousEntryHash = latest?.entryHash ?? null;
 
-        // Build the entry with the correct previousEntryHash
-        const entry = await buildEntry(previousEntryHash);
+      // Build the entry with the correct previousEntryHash
+      const entry = await buildEntry(previousEntryHash);
 
-        // Append within the same transaction
-        await tx.auditEntry.create({
-          data: {
-            id: entry.id,
-            eventType: entry.eventType,
-            timestamp: entry.timestamp,
-            actorType: entry.actorType,
-            actorId: entry.actorId,
-            entityType: entry.entityType,
-            entityId: entry.entityId,
-            riskCategory: entry.riskCategory,
-            visibilityLevel: entry.visibilityLevel,
-            summary: entry.summary,
-            snapshot: entry.snapshot as object,
-            evidencePointers: entry.evidencePointers as object[],
-            redactionApplied: entry.redactionApplied,
-            redactedFields: entry.redactedFields,
-            chainHashVersion: entry.chainHashVersion,
-            schemaVersion: entry.schemaVersion,
-            entryHash: entry.entryHash,
-            previousEntryHash: entry.previousEntryHash,
-            envelopeId: entry.envelopeId,
-            organizationId: entry.organizationId,
-            traceId: entry.traceId ?? undefined,
-          },
-        });
+      // Append within the same transaction
+      await tx.auditEntry.create({
+        data: {
+          id: entry.id,
+          eventType: entry.eventType,
+          timestamp: entry.timestamp,
+          actorType: entry.actorType,
+          actorId: entry.actorId,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          riskCategory: entry.riskCategory,
+          visibilityLevel: entry.visibilityLevel,
+          summary: entry.summary,
+          snapshot: entry.snapshot as object,
+          evidencePointers: entry.evidencePointers as object[],
+          redactionApplied: entry.redactionApplied,
+          redactedFields: entry.redactedFields,
+          chainHashVersion: entry.chainHashVersion,
+          schemaVersion: entry.schemaVersion,
+          entryHash: entry.entryHash,
+          previousEntryHash: entry.previousEntryHash,
+          envelopeId: entry.envelopeId,
+          organizationId: entry.organizationId,
+          traceId: entry.traceId ?? undefined,
+        },
+      });
 
-        return entry;
-      },
-    );
+      return entry;
+    };
+
+    if (options?.externalTx) {
+      // Run on the parent transaction. Same advisory-lock semantics apply
+      // because pg_advisory_xact_lock is per-tx — held until parent commits.
+      return writeWithTx(
+        options.externalTx as Omit<
+          PrismaClient,
+          "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+        >,
+      );
+    }
+    return this.prisma.$transaction(writeWithTx);
   }
 
   async getLatest(): Promise<AuditEntry | null> {
@@ -129,6 +143,32 @@ export class PrismaLedgerStorage implements LedgerStorage {
     });
 
     return rows.map(toAuditEntry);
+  }
+
+  async findBySnapshotField(params: {
+    entityType: string;
+    entityId: string;
+    eventType: string;
+    field: string;
+    value: unknown;
+  }): Promise<AuditEntry | null> {
+    // JSONB equality predicate. Prisma's `path` filter compares the
+    // value at the specified JSON path. No arbitrary limit — relies on
+    // (entityType, entityId, eventType) selectivity.
+    const row = await this.prisma.auditEntry.findFirst({
+      where: {
+        entityType: params.entityType,
+        entityId: params.entityId,
+        eventType: params.eventType,
+        snapshot: {
+          path: [params.field],
+          equals: params.value as never,
+        },
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row) return null;
+    return toAuditEntry(row);
   }
 }
 

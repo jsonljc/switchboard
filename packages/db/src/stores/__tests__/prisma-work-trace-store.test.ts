@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaWorkTraceStore } from "../prisma-work-trace-store.js";
+import { AuditLedger, InMemoryLedgerStorage, NoopOperatorAlerter } from "@switchboard/core";
 
 function makeTrace(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,13 +29,18 @@ describe("PrismaWorkTraceStore", () => {
     workTrace: {
       create: vi.fn().mockResolvedValue({}),
     },
+    $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
   };
 
   let store: PrismaWorkTraceStore;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    store = new PrismaWorkTraceStore(mockPrisma as never);
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    store = new PrismaWorkTraceStore(mockPrisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
   });
 
   it("persists a work trace with all fields", async () => {

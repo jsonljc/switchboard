@@ -92,8 +92,9 @@ export class PlatformIngress {
     // time of first submission. Entitlement is enforced for new (non-cached)
     // submissions, not re-evaluated on replays.
     if (request.idempotencyKey && traceStore) {
-      const existingTrace = await traceStore.getByIdempotencyKey(request.idempotencyKey);
-      if (existingTrace) {
+      const existingResult = await traceStore.getByIdempotencyKey(request.idempotencyKey);
+      if (existingResult) {
+        const existingTrace = existingResult.trace;
         const result: ExecutionResult = {
           workUnitId: existingTrace.workUnitId,
           outcome: existingTrace.outcome,

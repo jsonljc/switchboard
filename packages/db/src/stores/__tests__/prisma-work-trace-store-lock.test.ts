@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { PrismaWorkTraceStore } from "../prisma-work-trace-store.js";
 import { WorkTraceLockedError } from "@switchboard/core/platform";
+import { AuditLedger, InMemoryLedgerStorage, NoopOperatorAlerter } from "@switchboard/core";
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 
@@ -68,7 +69,11 @@ function makePrismaMock(currentRow: Record<string, unknown>) {
 describe("PrismaWorkTraceStore.update — lock enforcement", () => {
   it("returns ok and stamps lockedAt on terminal transition", async () => {
     const prisma = makePrismaMock(makeRow({ outcome: "running", lockedAt: null }));
-    const store = new PrismaWorkTraceStore(prisma as never);
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
     const result = await store.update("wu_1", {
       outcome: "completed",
       executionOutputs: { ok: true },
@@ -121,7 +126,11 @@ describe("PrismaWorkTraceStore.update — lock enforcement", () => {
       lockedAt: new Date("2026-04-28T00:00:02Z"),
     });
     const prisma = makePrismaMock(locked);
-    const store = new PrismaWorkTraceStore(prisma as never);
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
 
     await expect(
       store.update("wu_1", { executionOutputs: { tampered: true } }),
@@ -129,14 +138,18 @@ describe("PrismaWorkTraceStore.update — lock enforcement", () => {
     expect(prisma._updateFn).not.toHaveBeenCalled();
   });
 
-  it("typed conflict in prod even without auditLedger/alerter (never silently drops)", async () => {
+  it("typed conflict in prod (noop alerter + real ledger, never silently drops)", async () => {
     process.env.NODE_ENV = "production";
     const locked = makeRow({
       outcome: "completed",
       lockedAt: new Date("2026-04-28T00:00:02Z"),
     });
     const prisma = makePrismaMock(locked);
-    const store = new PrismaWorkTraceStore(prisma as never);
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
 
     const result = await store.update("wu_1", { executionOutputs: { tampered: true } });
     expect(result.ok).toBe(false);
@@ -146,7 +159,11 @@ describe("PrismaWorkTraceStore.update — lock enforcement", () => {
 
   it("read-modify-write inside a single transaction", async () => {
     const prisma = makePrismaMock(makeRow({ outcome: "running" }));
-    const store = new PrismaWorkTraceStore(prisma as never);
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma as never, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
     await store.update("wu_1", { outcome: "running", durationMs: 50 });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });

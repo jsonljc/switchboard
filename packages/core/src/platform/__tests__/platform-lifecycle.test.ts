@@ -6,7 +6,7 @@ import { createApprovalState } from "../../approval/state-machine.js";
 import type { ApprovalState } from "../../approval/state-machine.js";
 import type { ActionEnvelope, ApprovalRequest, Principal } from "@switchboard/schemas";
 import type { WorkTrace } from "../work-trace.js";
-import type { WorkTraceStore } from "../work-trace-recorder.js";
+import type { WorkTraceStore, WorkTraceReadResult } from "../work-trace-recorder.js";
 import type {
   ApprovalStore as CoreApprovalStore,
   EnvelopeStore as CoreEnvelopeStore,
@@ -172,7 +172,11 @@ function createMockStores() {
     persist: vi.fn(async (t) => {
       traces.set(t.workUnitId, t);
     }),
-    getByWorkUnitId: vi.fn(async (id: string) => traces.get(id) ?? null),
+    getByWorkUnitId: vi.fn(async (id: string): Promise<WorkTraceReadResult | null> => {
+      const trace = traces.get(id);
+      if (!trace) return null;
+      return { trace, integrity: { status: "ok" as const } };
+    }),
     update: vi.fn(async (id: string, fields: Partial<WorkTrace>) => {
       const existing = traces.get(id);
       if (existing) {

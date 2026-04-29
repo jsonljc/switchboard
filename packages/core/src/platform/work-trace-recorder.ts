@@ -2,6 +2,7 @@ import type { WorkTrace } from "./work-trace.js";
 import type { WorkUnit } from "./work-unit.js";
 import type { GovernanceDecision } from "./governance-types.js";
 import type { ExecutionResult } from "./execution-result.js";
+import type { IntegrityVerdict } from "./work-trace-integrity.js";
 
 export interface TraceInput {
   workUnit: WorkUnit;
@@ -17,15 +18,20 @@ export type WorkTraceUpdateResult =
   | { ok: true; trace: WorkTrace }
   | { ok: false; code: "WORK_TRACE_LOCKED"; traceUnchanged: true; reason: string };
 
+export interface WorkTraceReadResult {
+  trace: WorkTrace;
+  integrity: IntegrityVerdict;
+}
+
 export interface WorkTraceStore {
   persist(trace: WorkTrace): Promise<void>;
-  getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null>;
+  getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null>;
   update(
     workUnitId: string,
     fields: Partial<WorkTrace>,
     options?: { caller?: string },
   ): Promise<WorkTraceUpdateResult>;
-  getByIdempotencyKey(key: string): Promise<WorkTrace | null>;
+  getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null>;
 }
 
 export function buildWorkTrace(input: TraceInput): WorkTrace {

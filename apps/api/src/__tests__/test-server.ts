@@ -34,6 +34,7 @@ import type {
   WorkTrace,
   WorkTraceStore,
   WorkTraceUpdateResult,
+  WorkTraceReadResult,
 } from "@switchboard/core/platform";
 import { TestCartridge, createTestManifest } from "@switchboard/cartridge-sdk";
 
@@ -44,8 +45,10 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
     this.traces.set(trace.workUnitId, { ...trace });
   }
 
-  async getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null> {
-    return this.traces.get(workUnitId) ?? null;
+  async getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null> {
+    const trace = this.traces.get(workUnitId);
+    if (!trace) return null;
+    return { trace, integrity: { status: "ok" as const } };
   }
 
   async update(workUnitId: string, fields: Partial<WorkTrace>): Promise<WorkTraceUpdateResult> {
@@ -56,9 +59,9 @@ class InMemoryWorkTraceStore implements WorkTraceStore {
     return { ok: true, trace: this.traces.get(workUnitId) ?? ({} as never) };
   }
 
-  async getByIdempotencyKey(key: string): Promise<WorkTrace | null> {
+  async getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null> {
     for (const trace of this.traces.values()) {
-      if (trace.idempotencyKey === key) return trace;
+      if (trace.idempotencyKey === key) return { trace, integrity: { status: "ok" as const } };
     }
     return null;
   }

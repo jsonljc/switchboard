@@ -8,6 +8,8 @@ import type { WorkUnit } from "../platform/work-unit.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import { buildMaterializationInput } from "./executable-materializer.js";
 import { validateDispatchAdmission } from "./dispatch-admission.js";
+import { assertExecutionAdmissible } from "../platform/work-trace-integrity.js";
+import type { AuditLedger } from "../audit/ledger.js";
 
 export interface ApprovalLifecycleServiceConfig {
   store: ApprovalLifecycleStore;
@@ -138,19 +140,49 @@ export class ApprovalLifecycleService {
     lifecycleId: string;
     respondedBy: string;
     traceStore: WorkTraceStore;
+    auditLedger?: AuditLedger;
   }): Promise<LifecycleRecord> {
+    // 1. Pre-mutation lookup: fetch the lifecycle to get actionEnvelopeId WITHOUT mutating state.
+    //    If admission fails, no state has changed and the caller can retry.
+    const existing = await this.store.getLifecycleById(params.lifecycleId);
+    if (!existing) {
+      throw new Error(`Lifecycle not found: ${params.lifecycleId}`);
+    }
+
+    // 2. Read + assert integrity BEFORE any mutation. assertExecutionAdmissible
+    //    throws on non-ok verdicts without override; the lifecycle and WorkTrace
+    //    both remain in their pre-call state if this throws.
+    const readResult = await params.traceStore.getByWorkUnitId(existing.actionEnvelopeId);
+    if (readResult) {
+      await assertExecutionAdmissible({
+        trace: readResult.trace,
+        integrity: readResult.integrity,
+        auditLedger: params.auditLedger,
+      });
+    }
+
+    // 3. Commit lifecycle reject. rejectRevision does its own lookup internally;
+    //    the duplicate read is a small cost for the safety of admission-before-mutation.
     const lifecycle = await this.rejectRevision({
       lifecycleId: params.lifecycleId,
       respondedBy: params.respondedBy,
     });
 
-    await params.traceStore.update(lifecycle.actionEnvelopeId, {
+    // 4. Update the WorkTrace. Surface lock-violation failures so the caller knows
+    //    the lifecycle and WorkTrace have diverged — silent failure would leave
+    //    canonical persistence inconsistent with lifecycle state.
+    const updateResult = await params.traceStore.update(lifecycle.actionEnvelopeId, {
       outcome: "failed",
       completedAt: new Date().toISOString(),
       approvalOutcome: "rejected",
       approvalRespondedBy: params.respondedBy,
       approvalRespondedAt: new Date().toISOString(),
     });
+    if (!updateResult.ok) {
+      throw new Error(
+        `WorkTrace update failed during rejectLifecycle (${params.lifecycleId}): ${updateResult.reason}`,
+      );
+    }
 
     return lifecycle;
   }

@@ -64,14 +64,19 @@ describe("Persistence truth invariants", () => {
 
       const traceStore = (
         app.platformIngress as unknown as {
-          config: { traceStore: { getByWorkUnitId: (id: string) => Promise<unknown> } };
+          config: {
+            traceStore: {
+              getByWorkUnitId: (id: string) => Promise<{ trace: Record<string, unknown> } | null>;
+            };
+          };
         }
       ).config.traceStore;
-      const trace = (await traceStore.getByWorkUnitId(body.workUnitId)) as Record<string, unknown>;
+      const traceResult = await traceStore.getByWorkUnitId(body.workUnitId);
+      const trace = traceResult?.trace ?? null;
       expect(trace).not.toBeNull();
-      expect(trace.parameters).toBeDefined();
-      expect((trace.parameters as Record<string, unknown>).campaignId).toBe("camp_params");
-      expect(trace.governanceConstraints).toBeDefined();
+      expect(trace!.parameters).toBeDefined();
+      expect((trace!.parameters as Record<string, unknown>).campaignId).toBe("camp_params");
+      expect(trace!.governanceConstraints).toBeDefined();
     });
 
     it("approval continuation updates the same WorkTrace", async () => {
@@ -104,12 +109,17 @@ describe("Persistence truth invariants", () => {
 
       const traceStore = (
         app.platformIngress as unknown as {
-          config: { traceStore: { getByWorkUnitId: (id: string) => Promise<unknown> } };
+          config: {
+            traceStore: {
+              getByWorkUnitId: (id: string) => Promise<{ trace: Record<string, unknown> } | null>;
+            };
+          };
         }
       ).config.traceStore;
-      const traceBefore = (await traceStore.getByWorkUnitId(workUnitId)) as Record<string, unknown>;
+      const traceBeforeResult = await traceStore.getByWorkUnitId(workUnitId);
+      const traceBefore = traceBeforeResult?.trace ?? null;
       expect(traceBefore).not.toBeNull();
-      expect(traceBefore.outcome).toBe("pending_approval");
+      expect(traceBefore!.outcome).toBe("pending_approval");
 
       const approveRes = await app.inject({
         method: "POST",
@@ -123,11 +133,12 @@ describe("Persistence truth invariants", () => {
 
       expect(approveRes.statusCode).toBe(200);
 
-      const traceAfter = (await traceStore.getByWorkUnitId(workUnitId)) as Record<string, unknown>;
+      const traceAfterResult = await traceStore.getByWorkUnitId(workUnitId);
+      const traceAfter = traceAfterResult?.trace ?? null;
       expect(traceAfter).not.toBeNull();
-      expect(traceAfter.approvalOutcome).toBe("approved");
-      expect(traceAfter.approvalRespondedBy).toBe("reviewer_1");
-      expect(traceAfter.outcome).toBe("completed");
+      expect(traceAfter!.approvalOutcome).toBe("approved");
+      expect(traceAfter!.approvalRespondedBy).toBe("reviewer_1");
+      expect(traceAfter!.outcome).toBe("completed");
     });
 
     it("rejection updates WorkTrace outcome to failed", async () => {
@@ -168,16 +179,18 @@ describe("Persistence truth invariants", () => {
 
       const traceStore = (
         app.platformIngress as unknown as {
-          config: { traceStore: { getByWorkUnitId: (id: string) => Promise<unknown> } };
+          config: {
+            traceStore: {
+              getByWorkUnitId: (id: string) => Promise<{ trace: Record<string, unknown> } | null>;
+            };
+          };
         }
       ).config.traceStore;
-      const trace = (await traceStore.getByWorkUnitId(proposeBody.workUnitId)) as Record<
-        string,
-        unknown
-      >;
+      const traceResult = await traceStore.getByWorkUnitId(proposeBody.workUnitId);
+      const trace = traceResult?.trace ?? null;
       expect(trace).not.toBeNull();
-      expect(trace.approvalOutcome).toBe("rejected");
-      expect(trace.outcome).toBe("failed");
+      expect(trace!.approvalOutcome).toBe("rejected");
+      expect(trace!.outcome).toBe("failed");
     });
 
     it("undo creates a child WorkTrace linked to parent", async () => {
@@ -264,16 +277,18 @@ describe("Persistence truth invariants", () => {
 
       const traceStore = (
         app.platformIngress as unknown as {
-          config: { traceStore: { getByWorkUnitId: (id: string) => Promise<unknown> } };
+          config: {
+            traceStore: {
+              getByWorkUnitId: (id: string) => Promise<{ trace: Record<string, unknown> } | null>;
+            };
+          };
         }
       ).config.traceStore;
-      const childTrace = (await traceStore.getByWorkUnitId(undoBody.undoWorkUnitId)) as Record<
-        string,
-        unknown
-      >;
+      const childTraceResult = await traceStore.getByWorkUnitId(undoBody.undoWorkUnitId);
+      const childTrace = childTraceResult?.trace ?? null;
       expect(childTrace).not.toBeNull();
-      expect(childTrace.parentWorkUnitId).toBe(parentId);
-      expect(childTrace.intent).toBe("digital-ads.campaign.resume");
+      expect(childTrace!.parentWorkUnitId).toBe(parentId);
+      expect(childTrace!.intent).toBe("digital-ads.campaign.resume");
     });
   });
 });

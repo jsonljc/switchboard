@@ -25,11 +25,30 @@ export interface LedgerStorage {
   /**
    * Optional: atomically get latest + append within a serialized lock.
    * Prevents race conditions on previousEntryHash in multi-instance deployments.
+   * If options.externalTx is provided, the storage MUST run the chain append
+   * on that transaction rather than opening its own. This lets callers join
+   * the audit write to a parent transaction (e.g. WorkTrace + AuditEntry).
    * If not implemented, AuditLedger falls back to non-atomic getLatest() + append().
    */
   appendAtomic?(
     buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+    options?: { externalTx?: unknown },
   ): Promise<AuditEntry>;
+  /**
+   * Optional capability: deterministic version-exact anchor lookup.
+   * Returns the AuditEntry matching entityType + entityId + eventType
+   * whose snapshot has the specified field set to the specified value.
+   * Implementations MUST NOT impose an arbitrary result limit — the
+   * lookup must succeed regardless of how many entries exist for the
+   * (entityType, entityId, eventType) tuple.
+   */
+  findBySnapshotField?(params: {
+    entityType: string;
+    entityId: string;
+    eventType: string;
+    field: string;
+    value: unknown;
+  }): Promise<AuditEntry | null>;
 }
 
 export interface AuditQueryFilter {
@@ -60,26 +79,29 @@ export class AuditLedger {
     this.redactionConfig = redactionConfig;
   }
 
-  async record(params: {
-    eventType: AuditEventType;
-    actorType: ActorType;
-    actorId: string;
-    entityType: string;
-    entityId: string;
-    riskCategory: RiskCategory;
-    summary: string;
-    snapshot: Record<string, unknown>;
-    evidence?: unknown[];
-    envelopeId?: string;
-    organizationId?: string;
-    visibilityLevel?: VisibilityLevel;
-    /** Optional correlation id; not part of chain hash. */
-    traceId?: string | null;
-  }): Promise<AuditEntry> {
-    // Use atomic append if available (prevents race on previousEntryHash)
+  async record(
+    params: {
+      eventType: AuditEventType;
+      actorType: ActorType;
+      actorId: string;
+      entityType: string;
+      entityId: string;
+      riskCategory: RiskCategory;
+      summary: string;
+      snapshot: Record<string, unknown>;
+      evidence?: unknown[];
+      envelopeId?: string;
+      organizationId?: string;
+      visibilityLevel?: VisibilityLevel;
+      /** Optional correlation id; not part of chain hash. */
+      traceId?: string | null;
+    },
+    options?: { tx?: unknown },
+  ): Promise<AuditEntry> {
     if (this.storage.appendAtomic) {
-      return this.storage.appendAtomic((previousEntryHash) =>
-        this.buildEntry(params, previousEntryHash),
+      return this.storage.appendAtomic(
+        (previousEntryHash) => this.buildEntry(params, previousEntryHash),
+        options?.tx !== undefined ? { externalTx: options.tx } : undefined,
       );
     }
 
@@ -169,6 +191,35 @@ export class AuditLedger {
       organizationId: params.organizationId ?? null,
       traceId: params.traceId ?? null,
     };
+  }
+
+  async findAnchor(params: {
+    entityType: string;
+    entityId: string;
+    eventType: AuditEventType;
+    traceVersion: number;
+  }): Promise<AuditEntry | null> {
+    if (this.storage.findBySnapshotField) {
+      return this.storage.findBySnapshotField({
+        entityType: params.entityType,
+        entityId: params.entityId,
+        eventType: params.eventType,
+        field: "traceVersion",
+        value: params.traceVersion,
+      });
+    }
+    // Fallback: query then in-memory filter. No arbitrary limit.
+    const entries = await this.storage.query({
+      eventType: params.eventType,
+      entityType: params.entityType,
+      entityId: params.entityId,
+    });
+    return (
+      entries.find((e) => {
+        const v = e.snapshot["traceVersion"];
+        return typeof v === "number" && v === params.traceVersion;
+      }) ?? null
+    );
   }
 
   async query(filter: AuditQueryFilter): Promise<AuditEntry[]> {
@@ -328,6 +379,34 @@ export class InMemoryLedgerStorage implements LedgerStorage {
     }
 
     return result;
+  }
+
+  async appendAtomic(
+    buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+    _options?: { externalTx?: unknown },
+  ): Promise<AuditEntry> {
+    const latest = this.entries[this.entries.length - 1] ?? null;
+    const entry = await buildEntry(latest?.entryHash ?? null);
+    this.entries.push(entry);
+    return entry;
+  }
+
+  async findBySnapshotField(params: {
+    entityType: string;
+    entityId: string;
+    eventType: string;
+    field: string;
+    value: unknown;
+  }): Promise<AuditEntry | null> {
+    return (
+      this.entries.find(
+        (e) =>
+          e.entityType === params.entityType &&
+          e.entityId === params.entityId &&
+          e.eventType === params.eventType &&
+          e.snapshot[params.field] === params.value,
+      ) ?? null
+    );
   }
 
   getAll(): AuditEntry[] {

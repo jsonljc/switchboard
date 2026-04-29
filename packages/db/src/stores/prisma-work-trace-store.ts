@@ -4,69 +4,122 @@ import type {
   WorkTraceStore,
   WorkTraceUpdateResult,
   WorkTraceLockDiagnostic,
+  WorkTraceReadResult,
+  IntegrityVerdict,
 } from "@switchboard/core/platform";
-import { validateUpdate, WorkTraceLockedError } from "@switchboard/core/platform";
+import {
+  validateUpdate,
+  WorkTraceLockedError,
+  computeWorkTraceContentHash,
+  verifyWorkTraceIntegrity,
+} from "@switchboard/core/platform";
 import type { AuditLedger, OperatorAlerter } from "@switchboard/core";
 import { buildInfrastructureFailureAuditParams, safeAlert } from "@switchboard/core";
+import type { InfrastructureFailureAlert } from "@switchboard/core";
+import { WORK_TRACE_INTEGRITY_CUTOFF_AT } from "../integrity-cutoff.js";
 
 export interface PrismaWorkTraceStoreConfig {
-  auditLedger?: AuditLedger;
-  operatorAlerter?: OperatorAlerter;
+  auditLedger: AuditLedger;
+  operatorAlerter: OperatorAlerter;
 }
 
 export class PrismaWorkTraceStore implements WorkTraceStore {
+  private readonly auditLedger: AuditLedger;
+  private readonly operatorAlerter: OperatorAlerter;
+
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly observability: PrismaWorkTraceStoreConfig = {},
-  ) {}
+    config: PrismaWorkTraceStoreConfig,
+  ) {
+    if (!config || !config.auditLedger || !config.operatorAlerter) {
+      throw new Error("PrismaWorkTraceStore requires auditLedger and operatorAlerter");
+    }
+    this.auditLedger = config.auditLedger;
+    this.operatorAlerter = config.operatorAlerter;
+  }
 
   async persist(trace: WorkTrace): Promise<void> {
+    const traceVersion = 1;
+    const contentHash = computeWorkTraceContentHash(trace, traceVersion);
+
     try {
-      await this.prisma.workTrace.create({
-        data: {
-          workUnitId: trace.workUnitId,
-          traceId: trace.traceId,
-          parentWorkUnitId: trace.parentWorkUnitId ?? null,
-          intent: trace.intent,
-          mode: trace.mode,
-          organizationId: trace.organizationId,
-          actorId: trace.actor.id,
-          actorType: trace.actor.type,
-          trigger: trace.trigger,
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workTrace.create({
+          data: {
+            workUnitId: trace.workUnitId,
+            traceId: trace.traceId,
+            parentWorkUnitId: trace.parentWorkUnitId ?? null,
+            intent: trace.intent,
+            mode: trace.mode,
+            organizationId: trace.organizationId,
+            actorId: trace.actor.id,
+            actorType: trace.actor.type,
+            trigger: trace.trigger,
 
-          parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
-          deploymentContext: trace.deploymentContext
-            ? JSON.stringify(trace.deploymentContext)
-            : null,
+            parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
+            deploymentContext: trace.deploymentContext
+              ? JSON.stringify(trace.deploymentContext)
+              : null,
 
-          governanceOutcome: trace.governanceOutcome,
-          riskScore: trace.riskScore,
-          matchedPolicies: JSON.stringify(trace.matchedPolicies),
-          governanceConstraints: trace.governanceConstraints
-            ? JSON.stringify(trace.governanceConstraints)
-            : null,
+            governanceOutcome: trace.governanceOutcome,
+            riskScore: trace.riskScore,
+            matchedPolicies: JSON.stringify(trace.matchedPolicies),
+            governanceConstraints: trace.governanceConstraints
+              ? JSON.stringify(trace.governanceConstraints)
+              : null,
 
-          approvalId: trace.approvalId ?? null,
-          approvalOutcome: trace.approvalOutcome ?? null,
-          approvalRespondedBy: trace.approvalRespondedBy ?? null,
-          approvalRespondedAt: trace.approvalRespondedAt
-            ? new Date(trace.approvalRespondedAt)
-            : null,
+            approvalId: trace.approvalId ?? null,
+            approvalOutcome: trace.approvalOutcome ?? null,
+            approvalRespondedBy: trace.approvalRespondedBy ?? null,
+            approvalRespondedAt: trace.approvalRespondedAt
+              ? new Date(trace.approvalRespondedAt)
+              : null,
 
-          outcome: trace.outcome,
-          durationMs: trace.durationMs,
-          errorCode: trace.error?.code ?? null,
-          errorMessage: trace.error?.message ?? null,
-          executionSummary: trace.executionSummary ?? null,
-          executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
+            outcome: trace.outcome,
+            durationMs: trace.durationMs,
+            errorCode: trace.error?.code ?? null,
+            errorMessage: trace.error?.message ?? null,
+            executionSummary: trace.executionSummary ?? null,
+            executionOutputs: trace.executionOutputs
+              ? JSON.stringify(trace.executionOutputs)
+              : null,
 
-          modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
-          requestedAt: new Date(trace.requestedAt),
-          governanceCompletedAt: new Date(trace.governanceCompletedAt),
-          executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
-          idempotencyKey: trace.idempotencyKey ?? null,
-          completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
-        },
+            modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
+            requestedAt: new Date(trace.requestedAt),
+            governanceCompletedAt: new Date(trace.governanceCompletedAt),
+            executionStartedAt: trace.executionStartedAt
+              ? new Date(trace.executionStartedAt)
+              : null,
+            idempotencyKey: trace.idempotencyKey ?? null,
+            completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
+            contentHash,
+            traceVersion,
+          },
+        });
+
+        await this.auditLedger.record(
+          {
+            eventType: "work_trace.persisted",
+            actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
+            actorId: trace.actor.id,
+            entityType: "work_trace",
+            entityId: trace.workUnitId,
+            riskCategory: "low",
+            visibilityLevel: "system",
+            summary: `WorkTrace ${trace.workUnitId} persisted at v${traceVersion}`,
+            organizationId: trace.organizationId,
+            traceId: trace.traceId,
+            snapshot: {
+              workUnitId: trace.workUnitId,
+              traceId: trace.traceId,
+              contentHash,
+              traceVersion,
+              hashAlgorithm: "sha256",
+              hashVersion: 1,
+            },
+          },
+          { tx },
+        );
       });
     } catch (err: unknown) {
       if (this.isUniqueConstraintError(err) && trace.idempotencyKey) {
@@ -85,16 +138,93 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     );
   }
 
-  async getByWorkUnitId(workUnitId: string): Promise<WorkTrace | null> {
+  async getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null> {
     const row = await this.prisma.workTrace.findUnique({ where: { workUnitId } });
     if (!row) return null;
-    return this.mapRowToTrace(row);
+    return this.verifyAndWrap(row);
   }
 
-  async getByIdempotencyKey(key: string): Promise<WorkTrace | null> {
+  async getByIdempotencyKey(key: string): Promise<WorkTraceReadResult | null> {
     const row = await this.prisma.workTrace.findUnique({ where: { idempotencyKey: key } });
     if (!row) return null;
-    return this.mapRowToTrace(row);
+    return this.verifyAndWrap(row);
+  }
+
+  private async verifyAndWrap(
+    row: NonNullable<Awaited<ReturnType<typeof this.prisma.workTrace.findUnique>>>,
+  ): Promise<WorkTraceReadResult> {
+    const trace = this.mapRowToTrace(row);
+    let anchor = null;
+    try {
+      if (row.contentHash !== null && row.traceVersion > 0) {
+        anchor = await this.auditLedger.findAnchor({
+          entityType: "work_trace",
+          entityId: row.workUnitId,
+          eventType: row.traceVersion === 1 ? "work_trace.persisted" : "work_trace.updated",
+          traceVersion: row.traceVersion,
+        });
+      }
+    } catch (err) {
+      console.error("[PrismaWorkTraceStore] findAnchor failed", err);
+      await safeAlert(
+        this.operatorAlerter,
+        this.buildIntegrityAlert("integrity_check_unavailable", trace, null, null),
+      );
+      return {
+        trace,
+        integrity: { status: "missing_anchor", expectedAtVersion: row.traceVersion },
+      };
+    }
+
+    const integrity = verifyWorkTraceIntegrity({
+      trace,
+      rowContentHash: row.contentHash,
+      rowTraceVersion: row.traceVersion,
+      rowRequestedAt: row.requestedAt.toISOString(),
+      anchor,
+      cutoffAt: WORK_TRACE_INTEGRITY_CUTOFF_AT,
+    });
+
+    if (integrity.status === "mismatch" || integrity.status === "missing_anchor") {
+      const errorType =
+        integrity.status === "mismatch"
+          ? "work_trace_integrity_mismatch"
+          : "work_trace_integrity_missing_anchor";
+      await safeAlert(
+        this.operatorAlerter,
+        this.buildIntegrityAlert(errorType, trace, row.contentHash, integrity),
+      );
+    }
+
+    return { trace, integrity };
+  }
+
+  private buildIntegrityAlert(
+    errorType:
+      | "work_trace_integrity_mismatch"
+      | "work_trace_integrity_missing_anchor"
+      | "integrity_check_unavailable",
+    trace: WorkTrace,
+    _storedHash: string | null,
+    integrity: IntegrityVerdict | null,
+  ): InfrastructureFailureAlert {
+    const message =
+      integrity && integrity.status === "mismatch"
+        ? `WorkTrace contentHash mismatch (expected ${integrity.expected}, got ${integrity.actual})`
+        : integrity && integrity.status === "missing_anchor"
+          ? `WorkTrace anchor missing at version ${integrity.expectedAtVersion}`
+          : "WorkTrace integrity check unavailable";
+    return {
+      errorType,
+      severity: errorType === "work_trace_integrity_mismatch" ? "critical" : "warning",
+      errorMessage: message,
+      intent: trace.intent,
+      traceId: trace.traceId,
+      organizationId: trace.organizationId,
+      retryable: false,
+      occurredAt: new Date().toISOString(),
+      source: "platform_ingress",
+    };
   }
 
   private mapRowToTrace(
@@ -150,6 +280,8 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       executionStartedAt: row.executionStartedAt?.toISOString(),
       completedAt: row.completedAt?.toISOString(),
       lockedAt: row.lockedAt?.toISOString(),
+      contentHash: row.contentHash ?? undefined,
+      traceVersion: row.traceVersion,
     };
   }
 
@@ -208,16 +340,66 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         data.lockedAt = new Date(validation.computedLockedAt);
       }
 
-      let updatedRow = row;
-      if (Object.keys(data).length > 0) {
-        updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
+      // Hash-relevance check: lockedAt is excluded from the hash, so a
+      // lockedAt-only write does not bump version or anchor.
+      const hashRelevantKeys = Object.keys(data).filter(
+        (k) => k !== "lockedAt" && k !== "contentHash" && k !== "traceVersion",
+      );
+
+      if (hashRelevantKeys.length === 0) {
+        if (Object.keys(data).length === 0) {
+          // No-op: caller passed no actionable fields.
+          return { ok: true as const, trace: this.mapRowToTrace(row) };
+        }
+        // lockedAt-only: persist the lock, skip version bump + anchor.
+        const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
+        return { ok: true as const, trace: this.mapRowToTrace(updatedRow) };
       }
+
+      const previousVersion = row.traceVersion;
+      const nextVersion = previousVersion + 1;
+
+      // Build merged trace to compute the new hash.
+      const merged: WorkTrace = { ...current, ...fields };
+      const nextHash = computeWorkTraceContentHash(merged, nextVersion);
+
+      data.contentHash = nextHash;
+      data.traceVersion = nextVersion;
+
+      const updatedRow = await tx.workTrace.update({ where: { workUnitId }, data });
+
+      await this.auditLedger.record(
+        {
+          eventType: "work_trace.updated",
+          actorType: "system",
+          actorId: options?.caller ?? "unknown",
+          entityType: "work_trace",
+          entityId: workUnitId,
+          riskCategory: "low",
+          visibilityLevel: "system",
+          summary: `WorkTrace ${workUnitId} updated to v${nextVersion}`,
+          organizationId: current.organizationId,
+          traceId: current.traceId,
+          snapshot: {
+            workUnitId,
+            traceId: current.traceId,
+            contentHash: nextHash,
+            traceVersion: nextVersion,
+            previousHash: row.contentHash ?? null,
+            previousVersion,
+            changedFields: hashRelevantKeys,
+            hashAlgorithm: "sha256",
+            hashVersion: 1,
+          },
+        },
+        { tx },
+      );
+
       return { ok: true as const, trace: this.mapRowToTrace(updatedRow) };
     });
   }
 
   private async handleViolation(diagnostic: WorkTraceLockDiagnostic): Promise<void> {
-    const { auditLedger, operatorAlerter } = this.observability;
     const { ledgerParams, alert } = buildInfrastructureFailureAuditParams({
       errorType: "work_trace_locked_violation",
       error: new Error(diagnostic.reason),
@@ -229,7 +411,6 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         organizationId: diagnostic.organizationId,
       },
     });
-    // Augment snapshot with rich diagnostic per spec §6.
     const enrichedSnapshot = {
       ...ledgerParams.snapshot,
       currentOutcome: diagnostic.currentOutcome,
@@ -237,21 +418,17 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       rejectedFields: diagnostic.rejectedFields,
       caller: diagnostic.caller,
     };
-    if (auditLedger) {
-      try {
-        await auditLedger.record({
-          ...ledgerParams,
-          snapshot: enrichedSnapshot as unknown as Record<string, unknown>,
-        });
-      } catch (auditErr) {
-        console.error(
-          "[PrismaWorkTraceStore] failed to record work_trace_locked_violation audit",
-          auditErr,
-        );
-      }
+    try {
+      await this.auditLedger.record({
+        ...ledgerParams,
+        snapshot: enrichedSnapshot as unknown as Record<string, unknown>,
+      });
+    } catch (auditErr) {
+      console.error(
+        "[PrismaWorkTraceStore] failed to record work_trace_locked_violation audit",
+        auditErr,
+      );
     }
-    if (operatorAlerter) {
-      await safeAlert(operatorAlerter, alert);
-    }
+    await safeAlert(this.operatorAlerter, alert);
   }
 }
