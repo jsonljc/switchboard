@@ -15,7 +15,7 @@ import type {
 } from "../../skill-runtime/types.js";
 import type { GovernanceGateInterface } from "../platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../canonical-request.js";
-import type { WorkTraceStore } from "../work-trace-recorder.js";
+import type { WorkTraceStore, WorkTraceReadResult } from "../work-trace-recorder.js";
 import type { WorkTrace } from "../work-trace.js";
 
 const AGENTS = ["alex", "sales-pipeline", "website-profiler", "ad-optimizer"] as const;
@@ -144,8 +144,10 @@ describe("Convergence E2E", () => {
       persist: vi.fn(async (trace: WorkTrace) => {
         traceStore.traces.push(trace);
       }),
-      getByWorkUnitId: vi.fn(async (id: string) => {
-        return traceStore.traces.find((t) => t.workUnitId === id) ?? null;
+      getByWorkUnitId: vi.fn(async (id: string): Promise<WorkTraceReadResult | null> => {
+        const trace = traceStore.traces.find((t) => t.workUnitId === id);
+        if (!trace) return null;
+        return { trace, integrity: { status: "ok" as const } };
       }),
       update: vi.fn(async (id: string, fields: Partial<WorkTrace>) => {
         const idx = traceStore.traces.findIndex((t) => t.workUnitId === id);
