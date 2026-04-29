@@ -41,6 +41,8 @@ const baseTrace: WorkTrace = {
   durationMs: 0,
   requestedAt: "2026-04-29T12:00:00.000Z",
   governanceCompletedAt: "2026-04-29T12:00:00.050Z",
+  ingressPath: "platform_ingress",
+  hashInputVersion: 2,
 };
 
 function instrumentedStore(log: CallLog, base: WorkTrace): WorkTraceStore {

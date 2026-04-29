@@ -26,6 +26,10 @@ function baseTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     durationMs: 100,
     requestedAt: "2026-04-29T12:00:00.000Z",
     governanceCompletedAt: "2026-04-29T12:00:00.050Z",
+    // hashInputVersion: 1 — fixture exercises pre-v2 hash path
+    // (computeWorkTraceContentHash is called with version 1 throughout this file)
+    ingressPath: "platform_ingress",
+    hashInputVersion: 1,
     ...overrides,
   };
 }

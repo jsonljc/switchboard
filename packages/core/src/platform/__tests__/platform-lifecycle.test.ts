@@ -100,6 +100,8 @@ function makeWorkTrace(workUnitId: string, overrides: Partial<WorkTrace> = {}): 
     durationMs: overrides.durationMs ?? 0,
     requestedAt: overrides.requestedAt ?? new Date().toISOString(),
     governanceCompletedAt: overrides.governanceCompletedAt ?? new Date().toISOString(),
+    ingressPath: overrides.ingressPath ?? "platform_ingress",
+    hashInputVersion: overrides.hashInputVersion ?? 2,
     ...overrides,
   };
 }
