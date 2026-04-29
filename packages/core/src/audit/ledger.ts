@@ -25,10 +25,14 @@ export interface LedgerStorage {
   /**
    * Optional: atomically get latest + append within a serialized lock.
    * Prevents race conditions on previousEntryHash in multi-instance deployments.
+   * If options.externalTx is provided, the storage MUST run the chain append
+   * on that transaction rather than opening its own. This lets callers join
+   * the audit write to a parent transaction (e.g. WorkTrace + AuditEntry).
    * If not implemented, AuditLedger falls back to non-atomic getLatest() + append().
    */
   appendAtomic?(
     buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+    options?: { externalTx?: unknown },
   ): Promise<AuditEntry>;
 }
 
@@ -60,26 +64,29 @@ export class AuditLedger {
     this.redactionConfig = redactionConfig;
   }
 
-  async record(params: {
-    eventType: AuditEventType;
-    actorType: ActorType;
-    actorId: string;
-    entityType: string;
-    entityId: string;
-    riskCategory: RiskCategory;
-    summary: string;
-    snapshot: Record<string, unknown>;
-    evidence?: unknown[];
-    envelopeId?: string;
-    organizationId?: string;
-    visibilityLevel?: VisibilityLevel;
-    /** Optional correlation id; not part of chain hash. */
-    traceId?: string | null;
-  }): Promise<AuditEntry> {
-    // Use atomic append if available (prevents race on previousEntryHash)
+  async record(
+    params: {
+      eventType: AuditEventType;
+      actorType: ActorType;
+      actorId: string;
+      entityType: string;
+      entityId: string;
+      riskCategory: RiskCategory;
+      summary: string;
+      snapshot: Record<string, unknown>;
+      evidence?: unknown[];
+      envelopeId?: string;
+      organizationId?: string;
+      visibilityLevel?: VisibilityLevel;
+      /** Optional correlation id; not part of chain hash. */
+      traceId?: string | null;
+    },
+    options?: { tx?: unknown },
+  ): Promise<AuditEntry> {
     if (this.storage.appendAtomic) {
-      return this.storage.appendAtomic((previousEntryHash) =>
-        this.buildEntry(params, previousEntryHash),
+      return this.storage.appendAtomic(
+        (previousEntryHash) => this.buildEntry(params, previousEntryHash),
+        options?.tx !== undefined ? { externalTx: options.tx } : undefined,
       );
     }
 
@@ -328,6 +335,16 @@ export class InMemoryLedgerStorage implements LedgerStorage {
     }
 
     return result;
+  }
+
+  async appendAtomic(
+    buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
+    _options?: { externalTx?: unknown },
+  ): Promise<AuditEntry> {
+    const latest = this.entries[this.entries.length - 1] ?? null;
+    const entry = await buildEntry(latest?.entryHash ?? null);
+    this.entries.push(entry);
+    return entry;
   }
 
   getAll(): AuditEntry[] {
