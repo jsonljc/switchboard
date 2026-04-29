@@ -300,7 +300,7 @@ export function V6BeatNova() {
         </Reveal>
       </div>
 
-      <p className="font-mono-v6 mx-auto mt-4 max-w-none text-center text-[10.5px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
+      <p className="font-mono-v6 mx-auto mt-4 w-full max-w-[78rem] px-4 text-center text-[10.5px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
         Illustrative example. Actual numbers vary by account.
       </p>
 
