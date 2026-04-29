@@ -38,8 +38,25 @@ export type { ExecutionContext, ExecutionMode } from "./execution-context.js";
 // Tracing
 export type { WorkTrace } from "./work-trace.js";
 export { buildWorkTrace } from "./work-trace-recorder.js";
-export type { TraceInput, WorkTraceStore, WorkTraceUpdateResult } from "./work-trace-recorder.js";
+export type {
+  TraceInput,
+  WorkTraceStore,
+  WorkTraceUpdateResult,
+  WorkTraceReadResult,
+} from "./work-trace-recorder.js";
 export * from "./work-trace-lock.js";
+export {
+  WorkTraceIntegrityError,
+  assertExecutionAdmissible,
+  verifyWorkTraceIntegrity,
+} from "./work-trace-integrity.js";
+export type { IntegrityVerdict, IntegrityOverride } from "./work-trace-integrity.js";
+export {
+  WORK_TRACE_HASH_VERSION,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS,
+  computeWorkTraceContentHash,
+  buildWorkTraceHashInput,
+} from "./work-trace-hash.js";
 
 // Errors
 export type { IngressError } from "./ingress-error.js";
