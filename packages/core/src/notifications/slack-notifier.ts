@@ -62,6 +62,7 @@ export class SlackApprovalNotifier implements ApprovalNotifier {
             value: JSON.stringify({
               action: "reject",
               approvalId: n.approvalId,
+              bindingHash: n.bindingHash,
             }),
           },
         ],
