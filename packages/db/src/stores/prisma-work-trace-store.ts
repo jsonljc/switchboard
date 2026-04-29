@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   WorkTrace,
   WorkTraceStore,
@@ -47,58 +47,11 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.workTrace.create({
-          data: {
-            workUnitId: trace.workUnitId,
-            traceId: trace.traceId,
-            parentWorkUnitId: trace.parentWorkUnitId ?? null,
-            intent: trace.intent,
-            mode: trace.mode,
-            organizationId: trace.organizationId,
-            actorId: trace.actor.id,
-            actorType: trace.actor.type,
-            trigger: trace.trigger,
-
-            parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
-            deploymentContext: trace.deploymentContext
-              ? JSON.stringify(trace.deploymentContext)
-              : null,
-
-            governanceOutcome: trace.governanceOutcome,
-            riskScore: trace.riskScore,
-            matchedPolicies: JSON.stringify(trace.matchedPolicies),
-            governanceConstraints: trace.governanceConstraints
-              ? JSON.stringify(trace.governanceConstraints)
-              : null,
-
-            approvalId: trace.approvalId ?? null,
-            approvalOutcome: trace.approvalOutcome ?? null,
-            approvalRespondedBy: trace.approvalRespondedBy ?? null,
-            approvalRespondedAt: trace.approvalRespondedAt
-              ? new Date(trace.approvalRespondedAt)
-              : null,
-
-            outcome: trace.outcome,
-            durationMs: trace.durationMs,
-            errorCode: trace.error?.code ?? null,
-            errorMessage: trace.error?.message ?? null,
-            executionSummary: trace.executionSummary ?? null,
-            executionOutputs: trace.executionOutputs
-              ? JSON.stringify(trace.executionOutputs)
-              : null,
-
-            modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
-            requestedAt: new Date(trace.requestedAt),
-            governanceCompletedAt: new Date(trace.governanceCompletedAt),
-            executionStartedAt: trace.executionStartedAt
-              ? new Date(trace.executionStartedAt)
-              : null,
-            idempotencyKey: trace.idempotencyKey ?? null,
-            completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
-            contentHash,
+          data: this.buildWorkTraceCreateData(trace, {
             traceVersion,
-            ingressPath: trace.ingressPath, // explicit; should always be set by buildWorkTrace
-            hashInputVersion: trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST,
-          },
+            contentHash,
+            hashInputVersion,
+          }),
         });
 
         await this.auditLedger.record(
@@ -131,6 +84,114 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       }
       throw err;
     }
+  }
+
+  /**
+   * Atomically insert a WorkTrace row inside a caller-owned transaction.
+   *
+   * Used by callers that need the WorkTrace insert to commit/rollback alongside
+   * their own state mutation (e.g., ConversationStateStore writes). The audit-ledger
+   * insert is intentionally OUTSIDE the caller's tx: it is observability and must
+   * not block the caller's atomic state-mutation commit. The state mutation +
+   * WorkTrace insert is what must be atomic.
+   */
+  async recordOperatorMutation(
+    trace: WorkTrace,
+    ctx: { tx: Prisma.TransactionClient },
+  ): Promise<void> {
+    if (trace.ingressPath !== "store_recorded_operator_mutation") {
+      throw new Error(
+        `recordOperatorMutation requires trace.ingressPath === "store_recorded_operator_mutation" (got ${
+          trace.ingressPath ?? "undefined"
+        })`,
+      );
+    }
+
+    const traceVersion = 1;
+    const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
+    const contentHash = computeWorkTraceContentHash(trace, traceVersion);
+
+    await ctx.tx.workTrace.create({
+      data: this.buildWorkTraceCreateData(trace, {
+        traceVersion,
+        contentHash,
+        hashInputVersion,
+      }),
+    });
+
+    // Audit-ledger record is intentionally outside the caller's tx — observability
+    // must not block the caller's atomic state-mutation tx.
+    await this.auditLedger.record({
+      eventType: "work_trace.persisted",
+      actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
+      actorId: trace.actor.id,
+      entityType: "work_trace",
+      entityId: trace.workUnitId,
+      riskCategory: "low",
+      visibilityLevel: "system",
+      summary: `WorkTrace ${trace.workUnitId} persisted at v${traceVersion} (operator mutation)`,
+      organizationId: trace.organizationId,
+      traceId: trace.traceId,
+      snapshot: {
+        workUnitId: trace.workUnitId,
+        traceId: trace.traceId,
+        contentHash,
+        traceVersion,
+        hashAlgorithm: "sha256",
+        hashVersion: hashInputVersion,
+        ingressPath: trace.ingressPath,
+      },
+    });
+  }
+
+  private buildWorkTraceCreateData(
+    trace: WorkTrace,
+    opts: { traceVersion: number; contentHash: string; hashInputVersion: number },
+  ): Prisma.WorkTraceUncheckedCreateInput {
+    return {
+      workUnitId: trace.workUnitId,
+      traceId: trace.traceId,
+      parentWorkUnitId: trace.parentWorkUnitId ?? null,
+      intent: trace.intent,
+      mode: trace.mode,
+      organizationId: trace.organizationId,
+      actorId: trace.actor.id,
+      actorType: trace.actor.type,
+      trigger: trace.trigger,
+
+      parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
+      deploymentContext: trace.deploymentContext ? JSON.stringify(trace.deploymentContext) : null,
+
+      governanceOutcome: trace.governanceOutcome,
+      riskScore: trace.riskScore,
+      matchedPolicies: JSON.stringify(trace.matchedPolicies),
+      governanceConstraints: trace.governanceConstraints
+        ? JSON.stringify(trace.governanceConstraints)
+        : null,
+
+      approvalId: trace.approvalId ?? null,
+      approvalOutcome: trace.approvalOutcome ?? null,
+      approvalRespondedBy: trace.approvalRespondedBy ?? null,
+      approvalRespondedAt: trace.approvalRespondedAt ? new Date(trace.approvalRespondedAt) : null,
+
+      outcome: trace.outcome,
+      durationMs: trace.durationMs,
+      errorCode: trace.error?.code ?? null,
+      errorMessage: trace.error?.message ?? null,
+      executionSummary: trace.executionSummary ?? null,
+      executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
+
+      modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
+      requestedAt: new Date(trace.requestedAt),
+      governanceCompletedAt: new Date(trace.governanceCompletedAt),
+      executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
+      idempotencyKey: trace.idempotencyKey ?? null,
+      completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
+      contentHash: opts.contentHash,
+      traceVersion: opts.traceVersion,
+      ingressPath: trace.ingressPath, // explicit; should always be set by buildWorkTrace
+      hashInputVersion: opts.hashInputVersion,
+    };
   }
 
   private isUniqueConstraintError(err: unknown): boolean {

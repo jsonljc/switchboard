@@ -184,3 +184,59 @@ describe("PrismaWorkTraceStore.persist — new columns", () => {
     expect(result!.trace.ingressPath).toBe("platform_ingress");
   });
 });
+
+describe("PrismaWorkTraceStore.recordOperatorMutation", () => {
+  it("inserts via the provided tx client (not the outer prisma)", async () => {
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const outerCreate = vi.fn().mockResolvedValue(undefined);
+    const prisma = {
+      workTrace: { create: outerCreate },
+      $transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await store.recordOperatorMutation(
+      makeTrace({
+        ingressPath: "store_recorded_operator_mutation",
+        mode: "operator_mutation",
+      }),
+      { tx: tx as never },
+    );
+
+    expect(txCreate).toHaveBeenCalledTimes(1);
+    expect(outerCreate).not.toHaveBeenCalled();
+    const data = txCreate.mock.calls[0]![0].data;
+    expect(data.ingressPath).toBe("store_recorded_operator_mutation");
+    expect(data.hashInputVersion).toBe(2);
+    expect(data.traceVersion).toBe(1);
+    expect(typeof data.contentHash).toBe("string");
+    expect((data.contentHash as string).length).toBeGreaterThan(0);
+  });
+
+  it("rejects an explicitly missing ingressPath", async () => {
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const prisma = {
+      workTrace: { create: vi.fn() },
+      $transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    const trace = makeTrace();
+    // @ts-expect-error force-clear to ensure runtime guard catches it
+    delete trace.ingressPath;
+
+    await expect(store.recordOperatorMutation(trace as never, { tx: tx as never })).rejects.toThrow(
+      /ingressPath/,
+    );
+    // Guard must run BEFORE any side effect — no tx.workTrace.create should fire.
+    expect(txCreate).not.toHaveBeenCalled();
+  });
+});
