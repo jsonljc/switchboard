@@ -54,4 +54,20 @@ export interface WorkTrace {
    * 0 on pre-migration rows (treated as missing_anchor when contentHash is non-null).
    */
   traceVersion?: number;
+  /**
+   * Discriminator: how the row entered persistence.
+   * - "platform_ingress": persisted by PlatformIngress.submit() after governance evaluation.
+   * - "store_recorded_operator_mutation": persisted by a Store as an operator mutation;
+   *   the row did NOT pass through PlatformIngress and matches none of the standard
+   *   governance modes. See ConversationStateStore (packages/core/src/platform/
+   *   conversation-state-store.ts) for the only current writer of this kind.
+   * Defaults to "platform_ingress" on existing rows via the DB column default.
+   */
+  ingressPath: "platform_ingress" | "store_recorded_operator_mutation";
+  /**
+   * Hash-input shape version. v1 = pre-ingressPath (rows persisted before this column
+   * existed); v2 = includes ingressPath in canonical hash input. Pre-migration backfill
+   * sets 1 so original contentHash values continue to verify; new persists set 2.
+   */
+  hashInputVersion: number;
 }
