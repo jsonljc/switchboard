@@ -257,12 +257,12 @@ const baseTrace: WorkTrace = {
   mode: "skill",
   organizationId: "org_1",
   actor: { type: "service", id: "svc_test" },
-  trigger: "manual",
+  trigger: "api",
   parameters: { a: 1 },
   governanceOutcome: "execute",
   riskScore: 0,
   matchedPolicies: [],
-  outcome: "succeeded",
+  outcome: "completed",
   durationMs: 1,
   modeMetrics: undefined,
   requestedAt: "2026-04-29T00:00:00.000Z",
@@ -394,7 +394,11 @@ Expected: PASS. The pinned-fixture test will populate its inline snapshot on fir
 Run: `pnpm --filter @switchboard/core typecheck && pnpm --filter @switchboard/db typecheck`
 Expected: PASS. The `WORK_TRACE_HASH_VERSION` re-export keeps any existing callers compiling.
 
-- [ ] **Step 6: Update the audit-ledger snapshot in `PrismaWorkTraceStore`** — `prisma-work-trace-store.ts` has a snapshot with `hashVersion: 1` (line ~118 in the current file). Replace with `hashVersion: hashInputVersion` (computed locally; new rows = 2). This keeps the audit-ledger snapshot honest.
+- [ ] **Step 6: Update BOTH audit-ledger snapshots in `PrismaWorkTraceStore`** — `prisma-work-trace-store.ts` has TWO snapshots with `hashVersion: 1`:
+  - `persist()` snapshot at line ~118
+  - `update()` snapshot at line ~392
+
+  Replace BOTH with `hashVersion: hashInputVersion` (computed locally from the trace; new rows = 2; pre-migration backfilled rows = 1). Use `const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;` near the top of each method, then reference it. This keeps the audit-ledger observability honest about which canonical-input shape was used.
 
 - [ ] **Step 7: Commit**
 
@@ -426,7 +430,7 @@ const baseInput = {
     resolvedMode: "skill" as const,
     organizationId: "org_1",
     actor: { type: "service" as const, id: "svc_1" },
-    trigger: "manual" as const,
+    trigger: "api" as const,
     parameters: {},
     requestedAt: "2026-04-29T00:00:00.000Z",
   },
@@ -547,12 +551,12 @@ function buildTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     mode: "skill",
     organizationId: "org_1",
     actor: { type: "service", id: "svc_1" },
-    trigger: "manual",
+    trigger: "api",
     parameters: {},
     governanceOutcome: "execute",
     riskScore: 0,
     matchedPolicies: [],
-    outcome: "succeeded",
+    outcome: "completed",
     durationMs: 1,
     requestedAt: "2026-04-29T00:00:00.000Z",
     governanceCompletedAt: "2026-04-29T00:00:00.001Z",
@@ -974,7 +978,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaConversationStateStore } from "../prisma-conversation-state-store.js";
 import { ConversationStateNotFoundError } from "@switchboard/core/platform";
 
-const operator = { type: "operator" as const, id: "user_op_1" };
+// Note: ActorType is "user" | "agent" | "system" | "service". We use "user"
+// for operator-driven mutations (operators are humans). The id is whatever the
+// API request can attribute — see Task 13 for resolveOperatorActor.
+const operator = { type: "user" as const, id: "user_op_1" };
 
 function makeStore() {
   const txConvUpdate = vi.fn();
@@ -990,9 +997,21 @@ function makeStore() {
   const recordOperatorMutation = vi.fn(async (_trace: unknown, ctx: { tx: typeof tx }) => {
     await ctx.tx.workTrace.create({ data: {} });
   });
-  const workTraceStore = { recordOperatorMutation } as never;
+  // Mocks WorkTraceStore.update used for the post-tx finalize step (spec §4.7.1).
+  const workTraceStoreUpdate = vi.fn(async (_workUnitId: string, _patch: unknown) => ({
+    ok: true as const,
+    trace: {} as never,
+  }));
+  const workTraceStore = { recordOperatorMutation, update: workTraceStoreUpdate } as never;
   const store = new PrismaConversationStateStore(prisma, workTraceStore);
-  return { store, tx, txConvFindFirst, txConvUpdate, recordOperatorMutation };
+  return {
+    store,
+    tx,
+    txConvFindFirst,
+    txConvUpdate,
+    recordOperatorMutation,
+    workTraceStoreUpdate,
+  };
 }
 
 describe("PrismaConversationStateStore.setOverride", () => {
@@ -1022,22 +1041,40 @@ describe("PrismaConversationStateStore.setOverride", () => {
     });
     expect(harness.recordOperatorMutation).toHaveBeenCalledTimes(1);
     const [trace] = harness.recordOperatorMutation.mock.calls[0]!;
+    // Initial trace persists as non-terminal "running" (see spec §4.7.1).
+    // Finalize to "completed" happens via workTraceStore.update after tx commits.
     expect(trace).toMatchObject({
       intent: "conversation.override.set",
       mode: "operator_mutation",
       ingressPath: "store_recorded_operator_mutation",
+      hashInputVersion: 2,
       governanceOutcome: "execute",
       riskScore: 0,
       matchedPolicies: [],
-      actor: { type: "operator", id: "user_op_1" },
+      actor: { type: "user", id: "user_op_1" },
+      trigger: "api",
+      outcome: "running",
+      durationMs: 0,
       modeMetrics: expect.objectContaining({ governanceMode: "operator_auto_allow" }),
     });
+    expect(trace.executionStartedAt).toBeUndefined();
+    expect(trace.completedAt).toBeUndefined();
     expect(trace.parameters).toMatchObject({
       actionKind: "conversation.override.set",
       orgId: "org_1",
       conversationId: "conv_1",
       before: { status: "active" },
       after: { status: "human_override" },
+    });
+    // Finalize update is called AFTER the outer tx commits, with terminal fields.
+    expect(harness.workTraceStoreUpdate).toHaveBeenCalledTimes(1);
+    const [finalizeWorkUnitId, finalizePatch] = harness.workTraceStoreUpdate.mock.calls[0]!;
+    expect(finalizeWorkUnitId).toBe(trace.workUnitId);
+    expect(finalizePatch).toMatchObject({
+      outcome: "completed",
+      executionStartedAt: expect.any(String),
+      completedAt: expect.any(String),
+      durationMs: expect.any(Number),
     });
     expect(result.status).toBe("human_override");
     expect(result.workTraceId).toBe(trace.workUnitId);
@@ -1104,7 +1141,13 @@ export class PrismaConversationStateStore implements ConversationStateStore {
   ) {}
 
   async setOverride(input: SetOverrideInput): Promise<SetOverrideResult> {
-    return this.prisma.$transaction(async (tx) => {
+    // Per spec §4.7.1: persist initial trace as outcome="running" inside the
+    // outer tx (atomic with the conversation mutation), then finalize via
+    // workTraceStore.update AFTER the tx commits. The finalize update is what
+    // stamps lockedAt and seals the row.
+    const requestedAt = new Date();
+    const executionStartedAt = new Date();
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.conversationState.findFirst({
         where: { threadId: input.threadId, organizationId: input.organizationId },
       });
@@ -1114,13 +1157,10 @@ export class PrismaConversationStateStore implements ConversationStateStore {
       const nextStatus = input.override ? "human_override" : "active";
       const after = { status: nextStatus };
 
-      const requestedAt = new Date();
-      const executionStartedAt = new Date();
       const updated = await tx.conversationState.update({
         where: { id: existing.id },
         data: { status: nextStatus, lastActivityAt: requestedAt },
       });
-      const completedAt = new Date();
 
       const workUnitId = randomUUID();
       const trace: WorkTrace = {
@@ -1130,7 +1170,7 @@ export class PrismaConversationStateStore implements ConversationStateStore {
         mode: "operator_mutation",
         organizationId: input.organizationId,
         actor: input.operator,
-        trigger: "manual",
+        trigger: "api",
         parameters: {
           actionKind: "conversation.override.set",
           orgId: input.organizationId,
@@ -1141,29 +1181,50 @@ export class PrismaConversationStateStore implements ConversationStateStore {
         governanceOutcome: "execute",
         riskScore: 0,
         matchedPolicies: [],
-        outcome: "succeeded",
-        durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+        outcome: "running", // non-terminal at persist; finalized below
+        durationMs: 0, // finalized below
         executionSummary: `operator ${input.operator.id} set override=${input.override} on conversation ${existing.id}`,
         modeMetrics: { governanceMode: "operator_auto_allow" },
         ingressPath: "store_recorded_operator_mutation",
         hashInputVersion: 2,
         requestedAt: requestedAt.toISOString(),
         governanceCompletedAt: requestedAt.toISOString(),
-        executionStartedAt: executionStartedAt.toISOString(),
-        completedAt: completedAt.toISOString(),
+        // executionStartedAt + completedAt left undefined; set on finalize
       };
 
       await this.workTraceStore.recordOperatorMutation(trace, {
         tx: tx as Prisma.TransactionClient,
       });
 
-      return {
-        conversationId: updated.id,
-        threadId: updated.threadId,
-        status: updated.status,
-        workTraceId: workUnitId,
-      };
+      return { workUnitId, updated };
     });
+
+    // Finalize: separate transaction. If this fails, the trace row exists as
+    // "running" permanently (the conversation mutation already happened, which
+    // is the audit-critical invariant). See spec §4.7.1 and §10.2.
+    const completedAt = new Date();
+    const finalizeResult = await this.workTraceStore.update(
+      txResult.workUnitId,
+      {
+        outcome: "completed",
+        executionStartedAt: executionStartedAt.toISOString(),
+        completedAt: completedAt.toISOString(),
+        durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+      },
+      { caller: "ConversationStateStore.setOverride" },
+    );
+    if (!finalizeResult.ok) {
+      console.warn(
+        `[conversation-state-store] setOverride finalize rejected for ${txResult.workUnitId}: ${finalizeResult.reason}`,
+      );
+    }
+
+    return {
+      conversationId: txResult.updated.id,
+      threadId: txResult.updated.threadId,
+      status: txResult.updated.status,
+      workTraceId: txResult.workUnitId,
+    };
   }
 
   sendOperatorMessage(_input: SendOperatorMessageInput): Promise<SendOperatorMessageResult> {
@@ -1308,7 +1369,13 @@ function bodyHash(text: string): string {
 function redactedPreview(text: string, max = 80): string {
   // Strip ASCII control chars; the persisted message text in messages JSON is
   // unaltered — only the trace preview is sanitized.
-  const stripped = text.replace(/[ -]/g, "");
+  // CONTROL_CHARS strips ASCII control codes (0x00-0x1F and 0x7F DEL).
+  // Built via RegExp(string, "g") so the source file stays plain ASCII
+  // and tooling (file(1), prettier, grep) treats it as text. Note: the
+  // direct regex literal /[\u0000-\u001F\u007F]/g works too, but is
+  // typed in some editors as literal control bytes.
+  const CONTROL_CHARS = new RegExp("[\u0000-\u001F\u007F]", "g");
+  const stripped = text.replace(CONTROL_CHARS, "");
   return stripped.length > max ? `${stripped.slice(0, max)}…` : stripped;
 }
 function safeMessages(raw: unknown): Array<Record<string, unknown>> {
@@ -1343,12 +1410,10 @@ async sendOperatorMessage(input: SendOperatorMessageInput): Promise<SendOperator
     };
     const nextMessages = [...safeMessages(existing.messages), ownerMessage];
 
-    const executionStartedAt = new Date();
     await tx.conversationState.update({
       where: { id: existing.id },
       data: { messages: nextMessages, lastActivityAt: requestedAt },
     });
-    const completedAt = new Date();
 
     const workUnitId = randomUUID();
     const trace: WorkTrace = {
@@ -1358,7 +1423,7 @@ async sendOperatorMessage(input: SendOperatorMessageInput): Promise<SendOperator
       mode: "operator_mutation",
       organizationId: input.organizationId,
       actor: input.operator,
-      trigger: "manual",
+      trigger: "api",
       parameters: {
         actionKind: "conversation.message.send",
         orgId: input.organizationId,
@@ -1376,16 +1441,15 @@ async sendOperatorMessage(input: SendOperatorMessageInput): Promise<SendOperator
       governanceOutcome: "execute",
       riskScore: 0,
       matchedPolicies: [],
-      outcome: "succeeded",
-      durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+      outcome: "running", // non-terminal at persist; finalized via WorkTraceStore.update from route
+      durationMs: 0,
       executionSummary: `operator ${input.operator.id} sent message on conversation ${existing.id}`,
       modeMetrics: { governanceMode: "operator_auto_allow" },
       ingressPath: "store_recorded_operator_mutation",
       hashInputVersion: 2,
       requestedAt: requestedAt.toISOString(),
       governanceCompletedAt: requestedAt.toISOString(),
-      executionStartedAt: executionStartedAt.toISOString(),
-      completedAt: completedAt.toISOString(),
+      // executionStartedAt + completedAt left undefined; route sets them on finalize
     };
 
     await this.workTraceStore.recordOperatorMutation(trace, { tx: tx as Prisma.TransactionClient });
@@ -1396,6 +1460,8 @@ async sendOperatorMessage(input: SendOperatorMessageInput): Promise<SendOperator
       channel: existing.channel,
       destinationPrincipalId: existing.principalId,
       workTraceId: workUnitId,
+      // executionStartedAt is the route-side stamp. The store records requestedAt;
+      // the route stamps executionStartedAt at the moment it's about to do delivery.
       appendedMessage: ownerMessage,
     };
   });
@@ -1511,12 +1577,10 @@ async releaseEscalationToAi(input: ReleaseEscalationInput): Promise<ReleaseEscal
     const after = { status: "active" };
     const nextMessages = [...safeMessages(existing.messages), ownerReply];
 
-    const executionStartedAt = new Date();
     await tx.conversationState.update({
       where: { id: existing.id },
       data: { status: "active", messages: nextMessages, lastActivityAt: requestedAt },
     });
-    const completedAt = new Date();
 
     const workUnitId = randomUUID();
     const trace: WorkTrace = {
@@ -1526,7 +1590,7 @@ async releaseEscalationToAi(input: ReleaseEscalationInput): Promise<ReleaseEscal
       mode: "operator_mutation",
       organizationId: input.organizationId,
       actor: input.operator,
-      trigger: "manual",
+      trigger: "api",
       parameters: {
         actionKind: "escalation.reply.release_to_ai",
         orgId: input.organizationId,
@@ -1545,16 +1609,15 @@ async releaseEscalationToAi(input: ReleaseEscalationInput): Promise<ReleaseEscal
       governanceOutcome: "execute",
       riskScore: 0,
       matchedPolicies: [],
-      outcome: "succeeded",
-      durationMs: Math.max(0, completedAt.getTime() - executionStartedAt.getTime()),
+      outcome: "running", // non-terminal at persist; finalized via WorkTraceStore.update from route
+      durationMs: 0,
       executionSummary: `operator ${input.operator.id} released escalation ${input.handoffId} on conversation ${existing.id}`,
       modeMetrics: { governanceMode: "operator_auto_allow" },
       ingressPath: "store_recorded_operator_mutation",
       hashInputVersion: 2,
       requestedAt: requestedAt.toISOString(),
       governanceCompletedAt: requestedAt.toISOString(),
-      executionStartedAt: executionStartedAt.toISOString(),
-      completedAt: completedAt.toISOString(),
+      // executionStartedAt + completedAt left undefined; route sets them on finalize
     };
 
     await this.workTraceStore.recordOperatorMutation(trace, { tx: tx as Prisma.TransactionClient });
@@ -1726,7 +1789,7 @@ describe("PATCH /api/conversations/:threadId/override", () => {
       organizationId: "org_1",
       threadId: "t1",
       override: true,
-      operator: expect.objectContaining({ type: "operator" }),
+      operator: expect.objectContaining({ type: "user" }),
     });
   });
 
@@ -1794,9 +1857,24 @@ app.patch(
 );
 ```
 
-`resolveOperatorActor(request)` is a small helper that returns `{ type: "operator", id: <userIdFromAuth> }` from existing auth context. If no such helper exists, add one in this file (small, ≤ 10 lines) — the user id comes from whatever the dashboard auth flow already attaches to the request.
+`resolveOperatorActor(request)` is a small file-local helper:
 
-Add the import: `import { ConversationStateNotFoundError } from "@switchboard/core/platform";`
+```ts
+function resolveOperatorActor(request: FastifyRequest): { type: "user"; id: string } {
+  // Per spec §4.4 + §10.1: the API uses API-key auth with no per-user
+  // identifier today. We record the API key's principal id as the actor and
+  // accept the documented limitation that this attributes to the org-scoped
+  // dashboard service account, not to the specific human who clicked. A
+  // follow-up Risk (see spec §10.1) will introduce per-user attribution via
+  // either per-user API keys or a dashboard-signed user-id header.
+  const id = request.principalIdFromAuth ?? "operator";
+  return { type: "user", id };
+}
+```
+
+Add it once in `apps/api/src/routes/conversations.ts` (or a small `apps/api/src/routes/operator-actor.ts` shared file if both `conversations.ts` and `escalations.ts` need it). The plan picks the shared file approach since both routes need it (Tasks 13–15).
+
+Add the imports: `import { ConversationStateNotFoundError } from "@switchboard/core/platform";` and `import type { FastifyRequest } from "fastify";` (if not already imported).
 
 - [ ] **Step 5: Run, expect PASS.**
 
@@ -1863,6 +1941,8 @@ describe("POST /api/conversations/:threadId/send", () => {
     expect(res.statusCode).toBe(200);
     expect(sendOperatorMessage).toHaveBeenCalledTimes(1);
     expect(sendProactive).toHaveBeenCalledWith("p1", "telegram", "hi");
+    // The finalize call atomically enriches parameters AND transitions the
+    // trace to terminal "completed" (which stamps lockedAt automatically).
     expect(update).toHaveBeenCalledWith(
       "wt_1",
       expect.objectContaining({
@@ -1872,6 +1952,10 @@ describe("POST /api/conversations/:threadId/send", () => {
             deliveryResult: expect.any(String),
           }),
         }),
+        outcome: "completed",
+        executionStartedAt: expect.any(String),
+        completedAt: expect.any(String),
+        durationMs: expect.any(Number),
       }),
       expect.any(Object),
     );
@@ -1924,10 +2008,14 @@ app.post(
       throw err;
     }
 
+    const executionStartedAt = new Date(); // route-side stamp, set just before delivery
     if (!app.agentNotifier) {
-      await enrichTraceDelivery(app.workTraceStore, storeResult.workTraceId, {
+      await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
         deliveryAttempted: false,
         deliveryResult: "no_notifier",
+        executionStartedAt,
+        completedAt: new Date(),
+        caller: "conversations.send",
       });
       return reply.code(502).send({
         error: "Channel delivery not configured (agentNotifier is null)",
@@ -1954,38 +2042,82 @@ app.post(
         body: { error: "Message saved but channel delivery failed", statusCode: 502 },
       };
     }
-    await enrichTraceDelivery(app.workTraceStore, storeResult.workTraceId, {
+    await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
       deliveryAttempted: true,
       deliveryResult,
+      executionStartedAt,
+      completedAt: new Date(),
+      caller: "conversations.send",
     });
     return reply.code(httpResult.code).send(httpResult.body);
   },
 );
 ```
 
-`enrichTraceDelivery` is a small file-local helper that fetches the existing WorkTrace via `getByWorkUnitId`, mutates `parameters.message.deliveryAttempted`/`deliveryResult`, and calls `workTraceStore.update(workUnitId, { parameters: nextParameters }, { caller: "conversations.send" })`. If `update` returns `{ ok: false, code: "WORK_TRACE_LOCKED" }`, log a warning (`console.warn`) and continue — the WorkTrace was sealed mid-flight, which is rare but not an HTTP-failure-worthy event.
+`finalizeOperatorTrace` is a small shared helper at `apps/api/src/routes/work-trace-delivery-enrichment.ts` (new file). It:
+
+1. Fetches the existing WorkTrace via `getByWorkUnitId`.
+2. Merges the delivery patch into `parameters.message`.
+3. Calls `workTraceStore.update(workUnitId, { parameters: merged, outcome: "completed", executionStartedAt, completedAt, durationMs }, { caller })` — finalizing **both** the trace's terminal outcome AND the enrichment data in one call. The `running → completed` transition stamps `lockedAt` automatically (validator §4.7.1).
+4. On rejection (soft `{ ok: false, code: "WORK_TRACE_LOCKED" }` in production, or thrown `WorkTraceLockedError` in dev/test per `prisma-work-trace-store.ts:306-308`), wraps the throw in try/catch, logs `console.warn`, and continues. Mid-flight seal by another writer is extremely rare and not worth failing the operator's HTTP request, which already mutated state.
 
 ```ts
-async function enrichTraceDelivery(
+// apps/api/src/routes/work-trace-delivery-enrichment.ts
+import type { WorkTraceStore } from "@switchboard/core/platform";
+import { WorkTraceLockedError } from "@switchboard/core/platform";
+
+export interface FinalizePatch {
+  deliveryAttempted: boolean;
+  deliveryResult: string;
+  executionStartedAt: Date;
+  completedAt: Date;
+  caller: string;
+}
+
+export async function finalizeOperatorTrace(
   store: WorkTraceStore,
   workUnitId: string,
-  patch: { deliveryAttempted: boolean; deliveryResult: string },
+  patch: FinalizePatch,
 ): Promise<void> {
   const existing = await store.getByWorkUnitId(workUnitId);
   if (!existing) {
-    console.warn(`[conversations] WorkTrace ${workUnitId} missing on delivery enrichment`);
+    console.warn(`[${patch.caller}] WorkTrace ${workUnitId} missing on finalize`);
     return;
   }
   const params = (existing.trace.parameters ?? {}) as Record<string, unknown>;
   const message = (params.message ?? {}) as Record<string, unknown>;
-  const nextParameters = { ...params, message: { ...message, ...patch } };
-  const result = await store.update(
-    workUnitId,
-    { parameters: nextParameters },
-    { caller: "conversations.send" },
-  );
-  if (!result.ok) {
-    console.warn(`[conversations] WorkTrace ${workUnitId} update rejected: ${result.reason}`);
+  const nextParameters = {
+    ...params,
+    message: {
+      ...message,
+      deliveryAttempted: patch.deliveryAttempted,
+      deliveryResult: patch.deliveryResult,
+    },
+  };
+  const durationMs = Math.max(0, patch.completedAt.getTime() - patch.executionStartedAt.getTime());
+  try {
+    const result = await store.update(
+      workUnitId,
+      {
+        parameters: nextParameters,
+        outcome: "completed",
+        executionStartedAt: patch.executionStartedAt.toISOString(),
+        completedAt: patch.completedAt.toISOString(),
+        durationMs,
+      },
+      { caller: patch.caller },
+    );
+    if (!result.ok) {
+      console.warn(`[${patch.caller}] WorkTrace ${workUnitId} finalize rejected: ${result.reason}`);
+    }
+  } catch (err) {
+    if (err instanceof WorkTraceLockedError) {
+      console.warn(
+        `[${patch.caller}] WorkTrace ${workUnitId} sealed mid-flight: ${err.diagnostic.reason}`,
+      );
+      return;
+    }
+    throw err;
   }
 }
 ```
@@ -2053,6 +2185,7 @@ if (handoff.sessionId) {
 
 // channel delivery — use storeResult to find principalId/channel; fall back to
 // fetching the conversation directly only if storeResult is null (sessionId was null).
+const executionStartedAt = new Date(); // route-side stamp, set just before delivery
 let channelDelivered = false;
 if (storeResult && app.agentNotifier) {
   try {
@@ -2067,15 +2200,19 @@ if (storeResult && app.agentNotifier) {
     console.error(`[escalations] Channel delivery failed for ${handoff.sessionId}: ${msg}`);
   }
   if (app.workTraceStore) {
-    await enrichTraceDelivery(app.workTraceStore, storeResult.workTraceId, {
+    // finalize: enrich + transition to "completed" + stamp lockedAt
+    await finalizeOperatorTrace(app.workTraceStore, storeResult.workTraceId, {
       deliveryAttempted: true,
       deliveryResult: channelDelivered ? "delivered" : "failed",
+      executionStartedAt,
+      completedAt: new Date(),
+      caller: "escalations.reply",
     });
   }
 }
 ```
 
-`enrichTraceDelivery` is the same helper from Task 14 — extract it to a small shared module (`apps/api/src/routes/work-trace-delivery-enrichment.ts`) and import it from both `conversations.ts` and `escalations.ts`. DRY.
+`finalizeOperatorTrace` is imported from `apps/api/src/routes/work-trace-delivery-enrichment.ts` (the shared helper introduced in Task 14). Both routes use the same import.
 
 The redundant post-update `app.prisma.conversationState.findUnique` lookup at line 227 is removed — `storeResult.channel` and `storeResult.destinationPrincipalId` already carry that info.
 
@@ -2113,14 +2250,12 @@ describe("Routes never call prisma.conversationState.update directly", () => {
       // Wire mockPrisma so .update throws if anyone calls it
       prismaOverrides: { conversationState: { update: updateSpy } },
       conversationStateStore: {
-        setOverride: vi
-          .fn()
-          .mockResolvedValue({
-            conversationId: "c",
-            threadId: "t",
-            status: "human_override",
-            workTraceId: "wt",
-          }),
+        setOverride: vi.fn().mockResolvedValue({
+          conversationId: "c",
+          threadId: "t",
+          status: "human_override",
+          workTraceId: "wt",
+        }),
         sendOperatorMessage: vi.fn(),
         releaseEscalationToAi: vi.fn(),
       },
@@ -2201,7 +2336,7 @@ describe.skipIf(!process.env["DATABASE_URL"])("PrismaConversationStateStore (int
         organizationId: seed.organizationId!,
         threadId: seed.threadId,
         override: true,
-        operator: { type: "operator", id: "user_op_int" },
+        operator: { type: "user", id: "user_op_int" },
       });
 
       const after = await prisma.conversationState.findUnique({ where: { id: seed.id } });
@@ -2215,6 +2350,18 @@ describe.skipIf(!process.env["DATABASE_URL"])("PrismaConversationStateStore (int
       expect(traceRow?.intent).toBe("conversation.override.set");
       expect(traceRow?.hashInputVersion).toBe(2);
       expect(traceRow?.contentHash).toBeTruthy();
+      // After setOverride() returns, the post-tx finalize update has run:
+      // outcome MUST be "completed" and lockedAt MUST be stamped (the
+      // running → completed transition triggers automatic locking via the
+      // validator; spec §4.7.1).
+      expect(traceRow?.outcome).toBe("completed");
+      expect(traceRow?.lockedAt).not.toBeNull();
+      expect(traceRow?.executionStartedAt).not.toBeNull();
+      expect(traceRow?.completedAt).not.toBeNull();
+      // Per CLAUDE.md ActorType convention, operator mutations record the
+      // human-friendly type "user" (not the (non-existent) "operator").
+      expect(traceRow?.actorType).toBe("user");
+      expect(traceRow?.trigger).toBe("api");
 
       // Cleanup
       await prisma.workTrace.delete({ where: { workUnitId: result.workTraceId } });

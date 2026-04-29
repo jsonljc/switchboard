@@ -14,11 +14,11 @@
 
 `apps/api/src/routes/conversations.ts` and `apps/api/src/routes/escalations.ts` mutate `prisma.conversationState` directly. Three operator-driven mutations bypass any persistence boundary and are not recorded in `WorkTrace`:
 
-| # | Callsite | Mutation | Operator semantic |
-|---|---|---|---|
-| 1 | `conversations.ts` ~286 | `conversationState.update` toggling `status` between `"active"` and `"human_override"` | Operator removes the AI from the conversation |
-| 2 | `conversations.ts` ~343 | `conversationState.update` appending an owner message and bumping `lastActivityAt` | Operator sends an ad-hoc message during human override |
-| 3 | `escalations.ts` ~198 | `conversationState.update` appending owner reply and setting `status: "active"` | Operator releases an escalation back to the AI |
+| #   | Callsite                | Mutation                                                                               | Operator semantic                                      |
+| --- | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 1   | `conversations.ts` ~286 | `conversationState.update` toggling `status` between `"active"` and `"human_override"` | Operator removes the AI from the conversation          |
+| 2   | `conversations.ts` ~343 | `conversationState.update` appending an owner message and bumping `lastActivityAt`     | Operator sends an ad-hoc message during human override |
+| 3   | `escalations.ts` ~198   | `conversationState.update` appending owner reply and setting `status: "active"`        | Operator releases an escalation back to the AI         |
 
 These violate two doctrine invariants from `CLAUDE.md`:
 
@@ -40,7 +40,7 @@ This is the **B-now, A-later** path. A future slice may register these as first-
 - **Not** routing operator mutations through `PlatformIngress.submit()` in this slice.
 - **Not** introducing a separate `ActivityLog` audit surface for these events.
 - **Not** refactoring `WorkTrace` consumers into a discriminated `runtimeAction | operatorMutation` union.
-- **Not** moving `ConversationState` *reads* through the Store. Reads stay direct-Prisma in `apps/api/src/routes/conversations.ts` (`findMany`, `findUnique`, `count`, `findFirst`) and in `apps/api/src/routes/escalations.ts` (`findUnique`). The audit calls out *mutations* explicitly.
+- **Not** moving `ConversationState` _reads_ through the Store. Reads stay direct-Prisma in `apps/api/src/routes/conversations.ts` (`findMany`, `findUnique`, `count`, `findFirst`) and in `apps/api/src/routes/escalations.ts` (`findUnique`). The audit calls out _mutations_ explicitly.
 - **Not** changing the existing channel-delivery side-effect order: routes still call `app.agentNotifier.sendProactive(...)` after the store call returns.
 - **Not** broadening the generic core `WorkTraceStore` interface unless it can express tx-aware persistence honestly today.
 - **Not** adding any new mutation methods beyond the three named action kinds.
@@ -141,18 +141,19 @@ The route passes the plain text the operator typed. The store derives `redactedP
 
 Centralizing redaction + hashing in the store guarantees both routes hash and redact identically, and prevents drift if a future caller appears.
 
-### 4.2 `WorkTrace.ingressPath` discriminator
+### 4.2 `WorkTrace.ingressPath` discriminator and `hashInputVersion`
 
-Add a top-level field to `WorkTrace`:
+Add two top-level fields to `WorkTrace`:
 
 ```ts
 ingressPath: "platform_ingress" | "store_recorded_operator_mutation";
+hashInputVersion: number; // 1 = pre-this-slice canonicalization; 2 = includes ingressPath
 ```
 
-- **Existing rows default to `"platform_ingress"`** via the migration default.
-- **`buildWorkTrace` defaults `ingressPath` to `"platform_ingress"`** unless the caller passes a different value via `TraceInput`.
+- **Existing rows default to `ingressPath = "platform_ingress"` and `hashInputVersion = 1`** via migration column defaults.
+- **`buildWorkTrace` defaults `ingressPath` to `"platform_ingress"` and `hashInputVersion` to the latest version (2).**
 - **Operator-mutation traces set `ingressPath = "store_recorded_operator_mutation"`.**
-- **`buildWorkTraceHashInput` must include `ingressPath`** in the canonical hash input. This is a one-field extension to the v1 hash input shipped in PR #308. The hash version stays at v1; the operator-mutation rows are the first rows that carry a non-default value, so existing-row hashes remain stable as long as the canonicalization treats `"platform_ingress"` identically across pre- and post-migration reads.
+- **Versioned hash input strategy:** `buildWorkTraceHashInput` switches its excluded-field set on `trace.hashInputVersion`. v1 excludes both `ingressPath` and `hashInputVersion` (matching the canonical input shape in PR #308). v2 includes `ingressPath` but still excludes `hashInputVersion` (which would self-reference). This keeps pre-existing locked rows verifiable against their original `contentHash` (they read back as `hashInputVersion = 1`, so their hash is recomputed with the v1 shape — bit-for-bit identical to what was stored). New persists carry `hashInputVersion = 2`, so their canonical input includes `ingressPath` and the hash binds the discriminator. **The hash is tamper-evident on `ingressPath` for every row written after this slice ships.** See §6.4 for the integrity preservation argument.
 - **Filterable at row level:** dashboards, integrity replays, and queries can filter by `ingress_path = 'store_recorded_operator_mutation'` without parsing JSON.
 
 ### 4.3 `ExecutionModeName` extension
@@ -174,17 +175,29 @@ export type ExecutionModeName =
 
 Operator-mutation traces use `mode = "operator_mutation"`. Validators / exhaustive switches that consume `ExecutionModeName` will be updated to handle the new variant. The `WorkTrace.mode` Prisma column is already `String` (not an enum), so no DB enum migration is needed.
 
-### 4.4 `governanceMode` (clarification)
+### 4.4 `governanceMode`, actor type, and trigger (verified literals)
 
-`WorkTrace` has no top-level `governanceMode` field today. The "operator_auto_allow" signal is recorded inside `modeMetrics`:
+The repo's existing literal unions constrain three fields. The spec must honor them:
 
-```ts
-modeMetrics: { governanceMode: "operator_auto_allow" }
-```
+- **`WorkTrace` has no top-level `governanceMode` field today.** The "operator_auto_allow" signal is recorded inside `modeMetrics`:
 
-The row stays honest because the **triple** (`ingressPath = "store_recorded_operator_mutation"` ∧ `mode = "operator_mutation"` ∧ `governanceOutcome = "execute"`) makes it unmistakable that the mutation did not pass through `PlatformIngress` policy evaluation. `governanceMode` is a soft annotation for reviewers; the row-level discriminator is `ingressPath`.
+  ```ts
+  modeMetrics: {
+    governanceMode: "operator_auto_allow";
+  }
+  ```
 
-`governanceOutcome` uses the existing literal `"execute"` (the `WorkTrace` type only allows `"execute" | "require_approval" | "deny"`; `"allow"` is not a valid literal today and is **not** added in this slice).
+  The row stays honest because the **triple** (`ingressPath = "store_recorded_operator_mutation"` ∧ `mode = "operator_mutation"` ∧ `governanceOutcome = "execute"`) makes it unmistakable that the mutation did not pass through `PlatformIngress` policy evaluation. `governanceMode` is a soft annotation for reviewers; the row-level discriminator is `ingressPath`.
+
+- **`governanceOutcome`** uses the literal `"execute"` (`WorkTrace.governanceOutcome` is `"execute" | "require_approval" | "deny"`; `"allow"` is not valid and is **not** added in this slice).
+
+- **`Actor.type`** is `"user" | "agent" | "system" | "service"` (`packages/core/src/platform/types.ts:2`). There is **no** `"operator"` literal. Operators are humans; the trace records `actor.type = "user"`.
+
+- **`Actor.id`** comes from the API request. The Switchboard API uses API-key auth (`organizationIdFromAuth`, `principalIdFromAuth`, `runtimeIdFromAuth`); there is no per-user identifier on the request today. The spec records `actor.id = principalIdFromAuth ?? "operator"`. **Limitation acknowledged:** because the API key is org-scoped (often shared by the dashboard service account), `actor.id` is not a per-user identifier. Per-user attribution requires either per-user API keys or a dashboard-issued user-id header — both are out of scope for this slice and tracked as a follow-up. This slice ships honest at the level of "an operator on this organization's dashboard performed the mutation"; it does not falsely attribute to a specific human.
+
+- **`Trigger`** is `"chat" | "api" | "schedule" | "internal"` (`packages/core/src/platform/types.ts:3`). There is **no** `"manual"` literal. Operator dashboard mutations enter via HTTP API; the trace records `trigger = "api"`.
+
+- **`WorkOutcome`** is `"completed" | "failed" | "pending_approval" | "queued" | "running"` (`packages/core/src/platform/types.ts:5`). There is **no** `"succeeded"` literal. Successful operator mutations terminate at `outcome = "completed"`. See §4.7.1 for why operator-mutation rows initially persist as `"running"` and transition to `"completed"` via the finalize update.
 
 ### 4.5 PrismaWorkTraceStore — tx-aware operator-mutation write path
 
@@ -229,7 +242,9 @@ Each public method opens `prisma.$transaction(async (tx) => { ... })`. Inside th
 
 The transaction boundary stays inside the store. Routes never see `tx`.
 
-### 4.7 Operator-mutation `WorkTrace` payload shape
+### 4.7 Operator-mutation `WorkTrace` payload shape (initial persist)
+
+The store persists the trace **initially as a non-terminal `outcome: "running"` row** with `executionStartedAt` and `completedAt` left undefined. This is required by the WorkTrace lock validator (`packages/core/src/platform/work-trace-lock.ts`) — see §4.7.1 for the full reasoning. The route (or, for `setOverride`, the store's own post-tx finalize step) transitions the row to `"completed"` via a separate `WorkTraceStore.update(...)` call, which stamps `lockedAt`.
 
 ```ts
 {
@@ -240,8 +255,8 @@ The transaction boundary stays inside the store. Routes never see `tx`.
   intent: <ConversationOperatorActionKind>,    // "conversation.override.set" | …
   mode: "operator_mutation",
   organizationId,
-  actor: input.operator,            // { type: "operator", id: <userId>, … }
-  trigger: { source: "operator_dashboard" },
+  actor: input.operator,            // { type: "user", id: principalIdFromAuth ?? "operator" }
+  trigger: "api",                   // operator dashboard → HTTP API
   idempotencyKey: undefined,
   parameters: {
     actionKind,
@@ -253,54 +268,73 @@ The transaction boundary stays inside the store. Routes never see `tx`.
     message: {                      // sendOperatorMessage / releaseEscalationToAi only
       channel,
       destination,
-      redactedPreview,
-      bodyHash,
-      deliveryAttempted: false,     // updated post-delivery via WorkTraceStore.update
-      deliveryResult: undefined,
+      redactedPreview,              // store-derived from input.message.text
+      bodyHash,                     // store-derived from input.message.text
+      deliveryAttempted: false,     // route updates this on enrich+finalize
+      deliveryResult: undefined,    // route updates this on enrich+finalize
     },
   },
   governanceOutcome: "execute",
   riskScore: 0,
   matchedPolicies: [],
   governanceConstraints: undefined,
-  outcome: "succeeded",
-  durationMs: <measured>,
+  outcome: "running",               // <-- non-terminal at persist; finalized to "completed" via update()
+  durationMs: 0,                    // <-- finalized later
   executionSummary: "<one-line human description>",
   executionOutputs: undefined,
   modeMetrics: { governanceMode: "operator_auto_allow" },
   ingressPath: "store_recorded_operator_mutation",
+  hashInputVersion: 2,
   requestedAt:           <ISO at store entry>,
   governanceCompletedAt: <same as requestedAt>,
-  executionStartedAt:    <ISO before tx.conversationState.update>,
-  completedAt:           <ISO after tx.conversationState.update>,
+  executionStartedAt:    undefined, // set on finalize update
+  completedAt:           undefined, // set on finalize update
 }
 ```
 
-### 4.8 Channel delivery and post-mutation enrichment
+### 4.7.1 Why "persist as running, finalize via update": the lock-validator constraint
 
-For `sendOperatorMessage` and `releaseEscalationToAi`, the route owns the network side-effect and any subsequent enrichment:
+The WorkTrace lock validator (`work-trace-lock.ts:120-125`) enforces:
 
-1. Route calls `app.conversationStateStore.<method>(...)` → state + initial trace, transactional.
-2. Route calls `app.agentNotifier.sendProactive(principalId, channel, message)` outside any DB transaction.
-3. Route calls a delivery-enrichment method on `WorkTraceStore` (existing or to be added) to update the same `workTraceId` with `parameters.message.deliveryAttempted = true` and `parameters.message.deliveryResult = …`.
+```ts
+if (update.parameters !== undefined && !isEqual(update.parameters, current.parameters)) {
+  const sealed = current.approvalOutcome !== undefined || current.executionStartedAt !== undefined;
+  if (sealed) rejectedFields.push("parameters");
+}
+```
 
-The delivery-enrichment method is owned by `WorkTraceStore`, **not** `ConversationStateStore`. `ConversationStateStore` is not a generic `WorkTrace` update surface.
+If we persisted the trace with `executionStartedAt` set (as an originally-tempting "this happened just now" stamp), the next `update()` call from the route's enrichment step would find `current.executionStartedAt` set, mark `sealed = true`, and reject the `parameters` mutation. Worse: in non-production environments the lock validator throws `WorkTraceLockedError` rather than returning a soft `{ ok: false, code: "WORK_TRACE_LOCKED" }` (`prisma-work-trace-store.ts:306-308`). Every send/reply route would 500 in tests.
 
-The exact delivery-enrichment surface depends on what `WorkTraceStore.update(workUnitId, fields)` already supports. The plan PR will pick the smallest surface:
+**Resolution:** persist with `executionStartedAt = undefined` and `outcome = "running"`. The finalize update sets `outcome = "completed"` (a permitted `running → completed` transition), `executionStartedAt` (one-shot first-set, allowed), `completedAt`, `durationMs`, and (for message-bearing methods) the enriched `parameters`. The validator's `enteringTerminal` clause (`work-trace-lock.ts:152-156`) sees `running → completed` and stamps `lockedAt` automatically.
 
-- **Preferred:** reuse the existing `WorkTraceStore.update(workUnitId, fields)` from `work-trace-recorder.ts` to overwrite `parameters` with the enriched object. This is hash-relevant (parameters enter the hash) so the existing path bumps `traceVersion` and re-anchors `contentHash`. Verified-honest by construction.
-- **Fallback only if needed:** add a thin `recordDeliveryOutcome(workUnitId, { deliveryAttempted, deliveryResult })` helper on `PrismaWorkTraceStore` that wraps the same call. Add only if route ergonomics require it; do not broaden the core interface.
+**Atomicity caveat:** the conversation state mutation and the **initial** trace persist remain transactional. The **finalize** update is a separate transaction. If the finalize update fails (network hiccup, DB blip), the trace exists permanently as `outcome: "running"` with `lockedAt: null`. That row is queryable and recoverable; the conversation state mutation still happened and is still attributable. This is an acceptable trade-off — the audit invariant ("no operator mutation without a trace") is upheld; only the trace's terminal status is best-effort post-tx. An operator-side reconciliation job could detect long-running stalled operator-mutation traces and finalize them as `failed`. Out of scope for this slice; recorded as future work in §10.
 
-If `app.workTraceStore` is not currently decorated on the Fastify instance, the plan PR adds the decorator rather than coupling delivery enrichment to `ConversationStateStore`.
+### 4.8 Finalize-and-enrich via `WorkTraceStore.update`
+
+`app.workTraceStore` is **already** decorated on the Fastify instance (`apps/api/src/app.ts:54, 424`, shipped in PR #308 for the WorkTrace integrity gate). The plan uses it directly. No new `workTraceStore` decorator is added.
+
+All three mutations end with a single `WorkTraceStore.update(workUnitId, fields)` call that finalizes the trace from `running → completed` and stamps `lockedAt`. Whether enrichment data accompanies the finalize depends on the action kind:
+
+- **`setOverride`** (no external side-effect): the store itself, **after its outer `$transaction` commits**, calls `workTraceStore.update(workUnitId, { outcome: "completed", executionStartedAt, completedAt, durationMs })`. No `parameters` patch (no enrichment data exists). The validator allows the `running → completed` transition and stamps `lockedAt`.
+
+- **`sendOperatorMessage` / `releaseEscalationToAi`** (external channel delivery): the store returns the `workTraceId` (and `executionStartedAt` stamp from before tx commit) to the route. The route performs `app.agentNotifier.sendProactive(...)` outside any DB transaction. After delivery completes (success or failure), the route calls a small file-local helper `finalizeOperatorTrace(app.workTraceStore, workTraceId, { parameters: enriched, outcome: "completed", executionStartedAt, completedAt, durationMs })` — a thin wrapper around `WorkTraceStore.update`. The same call atomically updates `parameters` (mutable because `current.executionStartedAt` is still undefined per §4.7.1), sets `executionStartedAt` (one-shot first-set, allowed), and transitions `outcome: running → completed` (which stamps `lockedAt`).
+
+The finalize-enrich helper lives at `apps/api/src/routes/work-trace-delivery-enrichment.ts` (new file), shared between `conversations.ts` and `escalations.ts`. The helper:
+
+1. Calls `workTraceStore.getByWorkUnitId(workTraceId)` to read current `parameters`.
+2. Merges the delivery patch into `parameters.message`.
+3. Calls `workTraceStore.update(workTraceId, { parameters: merged, outcome: "completed", executionStartedAt, completedAt, durationMs }, { caller: "<route_name>" })`.
+4. If `update` returns `{ ok: false, code: "WORK_TRACE_LOCKED" }` (production path) or throws `WorkTraceLockedError` (dev/test path — `prisma-work-trace-store.ts:306-308`), wraps the throw in a try/catch, logs `console.warn` with the diagnostic, and continues. The trace was sealed mid-flight by another writer — extremely rare; not worth failing the operator's HTTP request, which already mutated state successfully.
+
+This helper is owned by the route layer and uses `WorkTraceStore`. It is **not** a method on `ConversationStateStore`. The store's responsibility ends at "mutation + initial running-state trace, transactional"; finalize is the route's responsibility (and, for `setOverride`, the store's own post-tx step within the same store method).
 
 ### 4.9 Bootstrap wiring
 
-`apps/api/src/server.ts` (or wherever `app.prisma` is decorated):
+`apps/api/src/app.ts` (where `app.prisma` and `app.workTraceStore` are already decorated):
 
-- Construct a single `PrismaWorkTraceStore` instance (existing or to be exposed).
-- Construct `new PrismaConversationStateStore(prisma, workTraceStore)`.
-- Decorate `app.conversationStateStore` and (if missing today) `app.workTraceStore`.
-- Add Fastify type augmentation in the API package so `request.server.conversationStateStore` is typed.
+- Construct `new PrismaConversationStateStore(prisma, workTraceStore)` after `workTraceStore` is constructed (around `app.ts:424`).
+- Decorate `app.conversationStateStore`. **Do not** redecorate `app.workTraceStore`; it already exists.
+- Add a Fastify type augmentation in the same file extending the existing `declare module "fastify"` block so `app.conversationStateStore` is typed `ConversationStateStore | null`.
 
 Routes `import { ConversationStateStore } from "@switchboard/core/platform"` for the type only. Routes do **not** import `PrismaConversationStateStore` from `@switchboard/db` — that import would couple routes to the implementation and is a lint smell to flag during review.
 
@@ -309,7 +343,7 @@ Routes `import { ConversationStateStore } from "@switchboard/core/platform"` for
 #### `apps/api/src/routes/conversations.ts`
 
 - PATCH `/:threadId/override` (~line 286): replace direct `findFirst` + `conversationState.update` with `app.conversationStateStore.setOverride(...)`. The route still does the auth check, parses the body, and maps store errors to HTTP codes.
-- POST `/:threadId/send` (~line 343): replace direct `findFirst` + `conversationState.update` with `app.conversationStateStore.sendOperatorMessage(...)`. After the store call returns, perform `app.agentNotifier.sendProactive(...)` and the delivery-enrichment update.
+- POST `/:threadId/send` (~line 343): replace direct `findFirst` + `conversationState.update` with `app.conversationStateStore.sendOperatorMessage(...)`. After the store call returns, perform `app.agentNotifier.sendProactive(...)` and the finalize-and-enrich update via `finalizeOperatorTrace(app.workTraceStore, workTraceId, { parameters: enriched, outcome: "completed", executionStartedAt, completedAt, durationMs })`.
 - The `PrismaLike` test interface in this file shrinks — `update` is removed from the typed surface; only `findMany`, `count`, `findFirst`, `findUnique` remain. `buildConversationList` and `buildConversationDetail` (read paths) are untouched.
 
 #### `apps/api/src/routes/escalations.ts`
@@ -421,9 +455,10 @@ Either way, **no pre-existing locked row is allowed to fail integrity verificati
 - [ ] `WorkTrace.ingressPath` exists as a top-level field; existing rows default to `"platform_ingress"`; new operator-mutation rows set `"store_recorded_operator_mutation"`.
 - [ ] `buildWorkTrace` defaults `ingressPath` to `"platform_ingress"`; `buildWorkTraceHashInput` includes `ingressPath` in the canonical input; pre-existing locked rows still verify their original `contentHash` (per §6.4).
 - [ ] `ExecutionModeName` includes `"operator_mutation"`.
-- [ ] Each of the three operator mutations produces a `WorkTrace` row with `ingressPath = "store_recorded_operator_mutation"`, `mode = "operator_mutation"`, `governanceOutcome = "execute"`, operator `actor`, action-kind `intent`, before/after `parameters`, and (for message kinds) `parameters.message` with `redactedPreview` + `bodyHash` + `deliveryAttempted` + (after route enrichment) `deliveryResult`.
-- [ ] `ConversationState` mutation and the operator-mutation `WorkTrace` insert occur in the same Prisma `$transaction`.
-- [ ] Channel-delivery enrichment happens via `WorkTraceStore.update`/`recordDeliveryOutcome`, **not** via a method on `ConversationStateStore`.
+- [ ] Each of the three operator mutations produces a `WorkTrace` row that ultimately reaches `outcome = "completed"` with `ingressPath = "store_recorded_operator_mutation"`, `mode = "operator_mutation"`, `governanceOutcome = "execute"`, `actor.type = "user"`, `trigger = "api"`, action-kind `intent`, before/after `parameters`, and (for message kinds) `parameters.message` with `redactedPreview` + `bodyHash` + `deliveryAttempted` + `deliveryResult`. The row is initially persisted as `outcome = "running"` and finalized via `WorkTraceStore.update` (which stamps `lockedAt` automatically).
+- [ ] `ConversationState` mutation and the **initial** operator-mutation `WorkTrace` insert occur in the same Prisma `$transaction`. The finalize update is a separate transaction; if it fails, the trace exists as `running` permanently (the conversation mutation is still recorded; this is the documented atomicity trade-off in §4.7.1).
+- [ ] Finalize and enrichment happen via `WorkTraceStore.update` (the existing surface from PR #308), **not** via any method on `ConversationStateStore`.
+- [ ] `WorkTrace.hashInputVersion` exists; existing rows default to `1`; new operator-mutation rows persist with `2`. `buildWorkTraceHashInput` switches excluded-field set on `hashInputVersion`. The pinned-fixture test in the implementation locks down the v1 hash for a representative pre-migration row shape.
 - [ ] Tests cover: `ingressPath` defaulting, hash input inclusion, transactional ordering, all three mutation methods, the regression harness asserting routes do not touch `prisma.conversationState.update`.
 - [ ] Schema migration `20260429120000_add_worktrace_ingress_path` lands in the same commit as the schema change.
 - [ ] Implementation PR test plan lists `pnpm db:check-drift` as a pre-merge follow-up the merger must run.
@@ -435,7 +470,22 @@ Either way, **no pre-existing locked row is allowed to fail integrity verificati
 - No feature flag is necessary: routes either call the store or they don't, and the store is the only writer of operator-mutation rows. There is no "old vs new" coexistence period.
 - Rollback is the standard `git revert` of the implementation PR plus a `DROP COLUMN ingress_path` if the column itself needs to be removed (unlikely in practice).
 
-## 10. Future migration to `PlatformIngress.submit()` (deferred)
+## 10. Future migration to `PlatformIngress.submit()` (deferred) and other follow-ups
+
+### 10.1 Per-user actor attribution
+
+The current `actor.id = principalIdFromAuth ?? "operator"` is org-scoped, not per-user. To attribute mutations to the specific human who clicked the button:
+
+1. Either: dashboard issues per-user API keys and the API key's `metadata.userId` flows into `principalIdFromAuth`.
+2. Or: dashboard adds a custom header (e.g. `x-operator-user-id`) signed by the dashboard's NextAuth session, the API verifies the signature in middleware and exposes `request.operatorUserIdFromAuth`, and the spec records `actor.id` from that.
+
+This is a separate Risk and out of scope for Launch-Risk #1. The acceptance for this slice is "honest at the org level"; per-user attribution is a launch-adjacent improvement.
+
+### 10.2 Operator-mutation reconciliation
+
+If the post-tx finalize update fails for a `setOverride` (or the route's finalize call fails post-delivery), the `WorkTrace` row exists permanently as `outcome: "running"` with `lockedAt: null`. A reconciliation job can detect long-running stalled operator-mutation rows (e.g. `outcome = "running" AND mode = "operator_mutation" AND requestedAt < now() - 5 minutes`) and finalize them as `failed` with an audit-visible diagnostic. Out of scope for this slice; recorded here so the reviewer knows this isn't a hidden gap.
+
+### 10.3 Migration to `PlatformIngress.submit()`
 
 Once operator-dashboard mutations become first-class governed actions:
 
@@ -445,4 +495,4 @@ Once operator-dashboard mutations become first-class governed actions:
 4. `ConversationStateStore.setOverride` etc. can either be deprecated or kept as the persistence-layer implementation invoked by the action handler. The Store boundary is preserved either way.
 5. The `"operator_mutation"` `ExecutionModeName` literal can be retired or repurposed.
 
-This slice does **not** make any of those changes. The `ingressPath` discriminator is the entirety of the bridge.
+This slice does **not** make any of those changes. The `ingressPath` discriminator + the `mode = "operator_mutation"` + the `running → completed` lifecycle (with `lockedAt` stamped on terminal transition) is the entirety of the bridge.
