@@ -46,6 +46,8 @@ function makeBaseTrace(): WorkTrace {
     durationMs: 0,
     requestedAt: "2026-04-29T12:00:00.000Z",
     governanceCompletedAt: "2026-04-29T12:00:05.000Z",
+    ingressPath: "platform_ingress",
+    hashInputVersion: 2,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
   WorkTrace,
   WorkTraceStore,
@@ -12,6 +12,7 @@ import {
   WorkTraceLockedError,
   computeWorkTraceContentHash,
   verifyWorkTraceIntegrity,
+  WORK_TRACE_HASH_VERSION_LATEST,
 } from "@switchboard/core/platform";
 import type { AuditLedger, OperatorAlerter } from "@switchboard/core";
 import { buildInfrastructureFailureAuditParams, safeAlert } from "@switchboard/core";
@@ -40,61 +41,17 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
 
   async persist(trace: WorkTrace): Promise<void> {
     const traceVersion = 1;
+    const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
     const contentHash = computeWorkTraceContentHash(trace, traceVersion);
 
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.workTrace.create({
-          data: {
-            workUnitId: trace.workUnitId,
-            traceId: trace.traceId,
-            parentWorkUnitId: trace.parentWorkUnitId ?? null,
-            intent: trace.intent,
-            mode: trace.mode,
-            organizationId: trace.organizationId,
-            actorId: trace.actor.id,
-            actorType: trace.actor.type,
-            trigger: trace.trigger,
-
-            parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
-            deploymentContext: trace.deploymentContext
-              ? JSON.stringify(trace.deploymentContext)
-              : null,
-
-            governanceOutcome: trace.governanceOutcome,
-            riskScore: trace.riskScore,
-            matchedPolicies: JSON.stringify(trace.matchedPolicies),
-            governanceConstraints: trace.governanceConstraints
-              ? JSON.stringify(trace.governanceConstraints)
-              : null,
-
-            approvalId: trace.approvalId ?? null,
-            approvalOutcome: trace.approvalOutcome ?? null,
-            approvalRespondedBy: trace.approvalRespondedBy ?? null,
-            approvalRespondedAt: trace.approvalRespondedAt
-              ? new Date(trace.approvalRespondedAt)
-              : null,
-
-            outcome: trace.outcome,
-            durationMs: trace.durationMs,
-            errorCode: trace.error?.code ?? null,
-            errorMessage: trace.error?.message ?? null,
-            executionSummary: trace.executionSummary ?? null,
-            executionOutputs: trace.executionOutputs
-              ? JSON.stringify(trace.executionOutputs)
-              : null,
-
-            modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
-            requestedAt: new Date(trace.requestedAt),
-            governanceCompletedAt: new Date(trace.governanceCompletedAt),
-            executionStartedAt: trace.executionStartedAt
-              ? new Date(trace.executionStartedAt)
-              : null,
-            idempotencyKey: trace.idempotencyKey ?? null,
-            completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
-            contentHash,
+          data: this.buildWorkTraceCreateData(trace, {
             traceVersion,
-          },
+            contentHash,
+            hashInputVersion,
+          }),
         });
 
         await this.auditLedger.record(
@@ -115,7 +72,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
               contentHash,
               traceVersion,
               hashAlgorithm: "sha256",
-              hashVersion: 1,
+              hashVersion: hashInputVersion,
             },
           },
           { tx },
@@ -127,6 +84,128 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       }
       throw err;
     }
+  }
+
+  /**
+   * Atomically insert a WorkTrace row inside a caller-owned transaction.
+   *
+   * Used by callers that need the WorkTrace insert to commit/rollback alongside
+   * their own state mutation (e.g., ConversationStateStore writes). The audit-ledger
+   * insert is intentionally OUTSIDE the caller's tx — and its failures are swallowed
+   * (logged via console.error, not thrown) because this method is called inside the
+   * caller's $transaction callback: a thrown audit-ledger error would propagate up
+   * and roll back the caller's state mutation, defeating the design. The state
+   * mutation + WorkTrace insert atomicity is the load-bearing invariant; the
+   * audit-ledger row is observability and degrades gracefully — a missing anchor
+   * surfaces on next read via verifyAndWrap's findAnchor path.
+   */
+  async recordOperatorMutation(
+    trace: WorkTrace,
+    ctx: { tx: Prisma.TransactionClient },
+  ): Promise<void> {
+    if (trace.ingressPath !== "store_recorded_operator_mutation") {
+      throw new Error(
+        `recordOperatorMutation requires trace.ingressPath === "store_recorded_operator_mutation" (got ${
+          trace.ingressPath ?? "undefined"
+        })`,
+      );
+    }
+
+    const traceVersion = 1;
+    const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
+    const contentHash = computeWorkTraceContentHash(trace, traceVersion);
+
+    await ctx.tx.workTrace.create({
+      data: this.buildWorkTraceCreateData(trace, {
+        traceVersion,
+        contentHash,
+        hashInputVersion,
+      }),
+    });
+
+    // Audit-ledger record is observability and must not block the caller's tx.
+    // We are still inside the caller's $transaction callback at this point, so a
+    // thrown error here would reject the callback and roll back the caller's state
+    // mutation. Swallow ledger failures (log + continue) — the missing anchor is
+    // surfaced on next read via verifyAndWrap's findAnchor path.
+    try {
+      await this.auditLedger.record({
+        eventType: "work_trace.persisted",
+        actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
+        actorId: trace.actor.id,
+        entityType: "work_trace",
+        entityId: trace.workUnitId,
+        riskCategory: "low",
+        visibilityLevel: "system",
+        summary: `WorkTrace ${trace.workUnitId} persisted at v${traceVersion} (operator mutation)`,
+        organizationId: trace.organizationId,
+        traceId: trace.traceId,
+        snapshot: {
+          workUnitId: trace.workUnitId,
+          traceId: trace.traceId,
+          contentHash,
+          traceVersion,
+          hashAlgorithm: "sha256",
+          hashVersion: hashInputVersion,
+          ingressPath: trace.ingressPath,
+        },
+      });
+    } catch (auditErr) {
+      console.error(
+        `[PrismaWorkTraceStore] recordOperatorMutation audit-ledger record failed for ${trace.workUnitId}; WorkTrace row was inserted in caller's tx`,
+        auditErr,
+      );
+    }
+  }
+
+  private buildWorkTraceCreateData(
+    trace: WorkTrace,
+    opts: { traceVersion: number; contentHash: string; hashInputVersion: number },
+  ): Prisma.WorkTraceUncheckedCreateInput {
+    return {
+      workUnitId: trace.workUnitId,
+      traceId: trace.traceId,
+      parentWorkUnitId: trace.parentWorkUnitId ?? null,
+      intent: trace.intent,
+      mode: trace.mode,
+      organizationId: trace.organizationId,
+      actorId: trace.actor.id,
+      actorType: trace.actor.type,
+      trigger: trace.trigger,
+
+      parameters: trace.parameters ? JSON.stringify(trace.parameters) : null,
+      deploymentContext: trace.deploymentContext ? JSON.stringify(trace.deploymentContext) : null,
+
+      governanceOutcome: trace.governanceOutcome,
+      riskScore: trace.riskScore,
+      matchedPolicies: JSON.stringify(trace.matchedPolicies),
+      governanceConstraints: trace.governanceConstraints
+        ? JSON.stringify(trace.governanceConstraints)
+        : null,
+
+      approvalId: trace.approvalId ?? null,
+      approvalOutcome: trace.approvalOutcome ?? null,
+      approvalRespondedBy: trace.approvalRespondedBy ?? null,
+      approvalRespondedAt: trace.approvalRespondedAt ? new Date(trace.approvalRespondedAt) : null,
+
+      outcome: trace.outcome,
+      durationMs: trace.durationMs,
+      errorCode: trace.error?.code ?? null,
+      errorMessage: trace.error?.message ?? null,
+      executionSummary: trace.executionSummary ?? null,
+      executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
+
+      modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
+      requestedAt: new Date(trace.requestedAt),
+      governanceCompletedAt: new Date(trace.governanceCompletedAt),
+      executionStartedAt: trace.executionStartedAt ? new Date(trace.executionStartedAt) : null,
+      idempotencyKey: trace.idempotencyKey ?? null,
+      completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
+      contentHash: opts.contentHash,
+      traceVersion: opts.traceVersion,
+      ingressPath: trace.ingressPath, // explicit; should always be set by buildWorkTrace
+      hashInputVersion: opts.hashInputVersion,
+    };
   }
 
   private isUniqueConstraintError(err: unknown): boolean {
@@ -282,6 +361,12 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       lockedAt: row.lockedAt?.toISOString(),
       contentHash: row.contentHash ?? undefined,
       traceVersion: row.traceVersion,
+      // Integrity invariant: pre-migration rows have hashInputVersion = 1 from the
+      // migration default; copying it through preserves their contentHash verification
+      // path. Without this, update() would silently re-hash pre-migration rows at v2
+      // (LATEST) and break round-trip integrity for those rows.
+      ingressPath: (row.ingressPath ?? "platform_ingress") as WorkTrace["ingressPath"],
+      hashInputVersion: row.hashInputVersion ?? 1,
     };
   }
 
@@ -361,6 +446,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
 
       // Build merged trace to compute the new hash.
       const merged: WorkTrace = { ...current, ...fields };
+      const hashInputVersion = merged.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
       const nextHash = computeWorkTraceContentHash(merged, nextVersion);
 
       data.contentHash = nextHash;
@@ -389,7 +475,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
             previousVersion,
             changedFields: hashRelevantKeys,
             hashAlgorithm: "sha256",
-            hashVersion: 1,
+            hashVersion: hashInputVersion,
           },
         },
         { tx },

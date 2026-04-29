@@ -24,6 +24,8 @@ function makeTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     durationMs: 100,
     requestedAt: new Date().toISOString(),
     governanceCompletedAt: new Date().toISOString(),
+    ingressPath: "platform_ingress",
+    hashInputVersion: 2,
     ...overrides,
   };
 }

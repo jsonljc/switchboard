@@ -3,6 +3,7 @@ import type { WorkUnit } from "./work-unit.js";
 import type { GovernanceDecision } from "./governance-types.js";
 import type { ExecutionResult } from "./execution-result.js";
 import type { IntegrityVerdict } from "./work-trace-integrity.js";
+import { WORK_TRACE_HASH_VERSION_LATEST } from "./work-trace-hash.js";
 
 export interface TraceInput {
   workUnit: WorkUnit;
@@ -12,6 +13,13 @@ export interface TraceInput {
   executionStartedAt?: string;
   completedAt?: string;
   modeMetrics?: Record<string, unknown>;
+  /**
+   * How this row enters persistence. Defaults to "platform_ingress" — the
+   * standard PlatformIngress.submit() path. Stores that record operator
+   * mutations outside ingress (see ConversationStateStore) pass
+   * "store_recorded_operator_mutation".
+   */
+  ingressPath?: WorkTrace["ingressPath"];
 }
 
 export type WorkTraceUpdateResult =
@@ -84,5 +92,7 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     governanceCompletedAt: input.governanceCompletedAt,
     executionStartedAt: input.executionStartedAt,
     completedAt,
+    ingressPath: input.ingressPath ?? "platform_ingress",
+    hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
   };
 }

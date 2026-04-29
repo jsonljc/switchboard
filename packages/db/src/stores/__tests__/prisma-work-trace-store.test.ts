@@ -20,6 +20,8 @@ function makeTrace(overrides: Record<string, unknown> = {}) {
     governanceCompletedAt: "2026-04-16T10:00:00.050Z",
     executionStartedAt: "2026-04-16T10:00:00.060Z",
     completedAt: "2026-04-16T10:00:00.200Z",
+    ingressPath: "platform_ingress" as const,
+    hashInputVersion: 2,
     ...overrides,
   };
 }
@@ -97,5 +99,179 @@ describe("PrismaWorkTraceStore", () => {
     const call = mockPrisma.workTrace.create.mock.calls[0]![0];
     expect(call.data.errorCode).toBe("RATE_LIMIT");
     expect(call.data.errorMessage).toBe("Too many requests");
+  });
+});
+
+describe("PrismaWorkTraceStore.persist — new columns", () => {
+  it("writes ingressPath and hashInputVersion to the row", async () => {
+    const create = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create } };
+    const prisma = {
+      $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await store.persist(
+      makeTrace({ ingressPath: "store_recorded_operator_mutation", hashInputVersion: 2 }),
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0]![0].data;
+    expect(data.ingressPath).toBe("store_recorded_operator_mutation");
+    expect(data.hashInputVersion).toBe(2);
+  });
+
+  it("round-trips hashInputVersion=1 through the deserializer (pre-migration row)", async () => {
+    // Critical-issue C2 from Task 4 review: pre-migration rows have hashInputVersion=1.
+    // The deserializer MUST copy that value through so update()'s
+    // `merged.hashInputVersion ?? LATEST` reads 1, not LATEST. Otherwise we silently
+    // re-hash pre-migration rows at v2, breaking their integrity verification path.
+    const requestedAt = new Date("2026-04-01T00:00:00.000Z"); // pre-cutoff to skip anchor lookup
+    const row = {
+      workUnitId: "wu_pre_v1",
+      traceId: "tr_pre_v1",
+      parentWorkUnitId: null,
+      intent: "test.intent",
+      mode: "cartridge",
+      organizationId: "org_pre",
+      actorId: "u",
+      actorType: "user",
+      trigger: "api",
+      idempotencyKey: null,
+      parameters: null,
+      deploymentContext: null,
+      governanceOutcome: "execute",
+      riskScore: 0,
+      matchedPolicies: "[]",
+      governanceConstraints: null,
+      approvalId: null,
+      approvalOutcome: null,
+      approvalRespondedBy: null,
+      approvalRespondedAt: null,
+      outcome: "completed",
+      durationMs: 0,
+      errorCode: null,
+      errorMessage: null,
+      executionSummary: null,
+      executionOutputs: null,
+      modeMetrics: null,
+      requestedAt,
+      governanceCompletedAt: requestedAt,
+      executionStartedAt: null,
+      completedAt: null,
+      lockedAt: null,
+      contentHash: null,
+      traceVersion: 0,
+      ingressPath: "platform_ingress",
+      hashInputVersion: 1,
+    };
+    const findUnique = vi.fn().mockResolvedValue(row);
+    const prisma = {
+      workTrace: { findUnique },
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const ledger = new AuditLedger(new InMemoryLedgerStorage());
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: ledger,
+      operatorAlerter: new NoopOperatorAlerter(),
+    });
+
+    const result = await store.getByWorkUnitId("wu_pre_v1");
+    expect(result).not.toBeNull();
+    expect(result!.trace.hashInputVersion).toBe(1);
+    expect(result!.trace.ingressPath).toBe("platform_ingress");
+  });
+});
+
+describe("PrismaWorkTraceStore.recordOperatorMutation", () => {
+  it("inserts via the provided tx client (not the outer prisma)", async () => {
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const outerCreate = vi.fn().mockResolvedValue(undefined);
+    const prisma = {
+      workTrace: { create: outerCreate },
+      $transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await store.recordOperatorMutation(
+      makeTrace({
+        ingressPath: "store_recorded_operator_mutation",
+        mode: "operator_mutation",
+      }),
+      { tx: tx as never },
+    );
+
+    expect(txCreate).toHaveBeenCalledTimes(1);
+    expect(outerCreate).not.toHaveBeenCalled();
+    const data = txCreate.mock.calls[0]![0].data;
+    expect(data.ingressPath).toBe("store_recorded_operator_mutation");
+    expect(data.hashInputVersion).toBe(2);
+    expect(data.traceVersion).toBe(1);
+    expect(typeof data.contentHash).toBe("string");
+    expect((data.contentHash as string).length).toBeGreaterThan(0);
+  });
+
+  it("rejects an explicitly missing ingressPath", async () => {
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const prisma = {
+      workTrace: { create: vi.fn() },
+      $transaction: vi.fn(),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    const trace = makeTrace();
+    // @ts-expect-error force-clear to ensure runtime guard catches it
+    delete trace.ingressPath;
+
+    await expect(store.recordOperatorMutation(trace as never, { tx: tx as never })).rejects.toThrow(
+      /ingressPath/,
+    );
+    // Guard must run BEFORE any side effect — no tx.workTrace.create should fire.
+    expect(txCreate).not.toHaveBeenCalled();
+  });
+
+  it("swallows audit-ledger failures so the caller's tx is not rolled back", async () => {
+    // The method is invoked inside a caller's $transaction callback. A thrown
+    // audit-ledger error would propagate up and roll back the caller's state
+    // mutation (e.g., the conversation override) — defeating the design. The
+    // WorkTrace row was already inserted via ctx.tx; the missing anchor is
+    // observability-degraded but recoverable via verifyAndWrap on next read.
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const prisma = {
+      $transaction: vi.fn(),
+      workTrace: { create: vi.fn() },
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const auditRecord = vi.fn().mockRejectedValue(new Error("audit storage unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: auditRecord } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await expect(
+      store.recordOperatorMutation(
+        makeTrace({
+          ingressPath: "store_recorded_operator_mutation",
+          mode: "operator_mutation",
+        }),
+        { tx: tx as never },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(txCreate).toHaveBeenCalledTimes(1);
+    expect(auditRecord).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
   });
 });

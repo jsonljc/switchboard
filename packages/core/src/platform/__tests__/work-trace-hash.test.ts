@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   WORK_TRACE_HASH_VERSION,
-  WORK_TRACE_HASH_EXCLUDED_FIELDS,
+  WORK_TRACE_HASH_VERSION_V1,
+  WORK_TRACE_HASH_VERSION_V2,
+  WORK_TRACE_HASH_VERSION_LATEST,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V1,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V2,
   buildWorkTraceHashInput,
   computeWorkTraceContentHash,
 } from "../work-trace-hash.js";
@@ -23,20 +27,38 @@ function baseTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     durationMs: 100,
     requestedAt: "2026-04-29T10:00:00.000Z",
     governanceCompletedAt: "2026-04-29T10:00:00.050Z",
+    ingressPath: "platform_ingress",
+    hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
     ...overrides,
   };
 }
 
 describe("work-trace-hash", () => {
-  it("WORK_TRACE_HASH_VERSION is 1", () => {
-    expect(WORK_TRACE_HASH_VERSION).toBe(1);
+  it("WORK_TRACE_HASH_VERSION_LATEST is 2 (current default for new persists)", () => {
+    expect(WORK_TRACE_HASH_VERSION_LATEST).toBe(2);
+    // Backwards-compat alias points at the latest version.
+    expect(WORK_TRACE_HASH_VERSION).toBe(WORK_TRACE_HASH_VERSION_LATEST);
   });
 
-  it("excludes contentHash, traceVersion, lockedAt", () => {
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS).toEqual(
-      expect.arrayContaining(["contentHash", "traceVersion", "lockedAt"]),
+  it("v1 excluded set excludes contentHash, traceVersion, lockedAt, ingressPath, hashInputVersion", () => {
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1).toEqual(
+      expect.arrayContaining([
+        "contentHash",
+        "traceVersion",
+        "lockedAt",
+        "ingressPath",
+        "hashInputVersion",
+      ]),
     );
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS.length).toBe(3);
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1.length).toBe(5);
+  });
+
+  it("v2 excluded set excludes contentHash, traceVersion, lockedAt, hashInputVersion (NOT ingressPath)", () => {
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).toEqual(
+      expect.arrayContaining(["contentHash", "traceVersion", "lockedAt", "hashInputVersion"]),
+    );
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).not.toContain("ingressPath");
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2.length).toBe(4);
   });
 
   it("identical traces produce identical hashes", () => {
@@ -105,11 +127,91 @@ describe("work-trace-hash", () => {
 
   it("buildWorkTraceHashInput includes hashVersion field", () => {
     const input = buildWorkTraceHashInput(baseTrace(), 1);
-    expect(input).toHaveProperty("hashVersion", WORK_TRACE_HASH_VERSION);
+    expect(input).toHaveProperty("hashVersion", WORK_TRACE_HASH_VERSION_LATEST);
   });
 
   it("buildWorkTraceHashInput includes traceVersion field", () => {
     const input = buildWorkTraceHashInput(baseTrace(), 7);
     expect(input).toHaveProperty("traceVersionForHash", 7);
+  });
+});
+
+const baseTraceForVersionBlock: WorkTrace = {
+  workUnitId: "wu_test_1",
+  traceId: "wu_test_1",
+  intent: "test.intent",
+  mode: "skill",
+  organizationId: "org_1",
+  actor: { type: "service", id: "svc_test" },
+  trigger: "api",
+  parameters: { a: 1 },
+  governanceOutcome: "execute",
+  riskScore: 0,
+  matchedPolicies: [],
+  outcome: "completed",
+  durationMs: 1,
+  modeMetrics: undefined,
+  requestedAt: "2026-04-29T00:00:00.000Z",
+  governanceCompletedAt: "2026-04-29T00:00:00.001Z",
+  ingressPath: "platform_ingress",
+  hashInputVersion: 2,
+};
+
+describe("buildWorkTraceHashInput — v1 vs v2", () => {
+  it("v1 input shape excludes ingressPath and hashInputVersion", () => {
+    const input = buildWorkTraceHashInput(
+      { ...baseTraceForVersionBlock, hashInputVersion: WORK_TRACE_HASH_VERSION_V1 },
+      1,
+    );
+    expect(input).not.toHaveProperty("ingressPath");
+    expect(input).not.toHaveProperty("hashInputVersion");
+    expect(input.hashVersion).toBe(1);
+  });
+
+  it("v2 input shape includes ingressPath and excludes hashInputVersion", () => {
+    const input = buildWorkTraceHashInput(
+      { ...baseTraceForVersionBlock, hashInputVersion: WORK_TRACE_HASH_VERSION_V2 },
+      1,
+    );
+    expect(input).toHaveProperty("ingressPath", "platform_ingress");
+    expect(input).not.toHaveProperty("hashInputVersion");
+    expect(input.hashVersion).toBe(2);
+  });
+
+  it("v2 hashes differ when ingressPath differs", () => {
+    const a = computeWorkTraceContentHash(
+      {
+        ...baseTraceForVersionBlock,
+        hashInputVersion: WORK_TRACE_HASH_VERSION_V2,
+        ingressPath: "platform_ingress",
+      },
+      1,
+    );
+    const b = computeWorkTraceContentHash(
+      {
+        ...baseTraceForVersionBlock,
+        hashInputVersion: WORK_TRACE_HASH_VERSION_V2,
+        ingressPath: "store_recorded_operator_mutation",
+      },
+      1,
+    );
+    expect(a).not.toEqual(b);
+  });
+
+  it("v1 hash for a row matches a pinned reference fixture", () => {
+    // Pin the v1 hash so future refactors cannot silently change it and break
+    // pre-migration locked rows. If this fixture changes, we have invalidated
+    // every pre-migration row's contentHash. That is a breaking change that
+    // must be explicit, not accidental.
+    const v1Trace: WorkTrace = {
+      ...baseTraceForVersionBlock,
+      hashInputVersion: WORK_TRACE_HASH_VERSION_V1,
+      ingressPath: "platform_ingress",
+    };
+    const hash = computeWorkTraceContentHash(v1Trace, 1);
+    expect(hash).toMatchInlineSnapshot(
+      `"ccafb985781b689b6e9f66c75dcd11e160e03aa696b98558e7abe110c61aa3f5"`,
+    );
+    // ^ first run will populate the inline snapshot; reviewer must inspect.
   });
 });

@@ -1,4 +1,9 @@
-export type ExecutionModeName = "skill" | "pipeline" | "cartridge" | "workflow";
+export type ExecutionModeName =
+  | "skill"
+  | "pipeline"
+  | "cartridge"
+  | "workflow"
+  | "operator_mutation";
 export type ActorType = "user" | "agent" | "system" | "service";
 export type Trigger = "chat" | "api" | "schedule" | "internal";
 export type Priority = "low" | "normal" | "high" | "critical";

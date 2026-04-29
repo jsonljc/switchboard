@@ -23,6 +23,8 @@ function makeTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
     durationMs: 0,
     requestedAt: "2026-04-28T00:00:00.000Z",
     governanceCompletedAt: "2026-04-28T00:00:01.000Z",
+    ingressPath: "platform_ingress",
+    hashInputVersion: 2,
     ...overrides,
   };
 }
@@ -278,6 +280,40 @@ describe("validateUpdate — lockedAt is store-managed (caller cannot write)", (
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.diagnostic.rejectedFields).toContain("lockedAt");
+  });
+});
+
+describe("validateUpdate — bucket A (always-immutable): integrity fields", () => {
+  it("rejects mutating hashInputVersion to a different value", () => {
+    const current = makeTrace({ outcome: "running", hashInputVersion: 2 });
+    const result = validateUpdate({
+      current,
+      update: { hashInputVersion: 1 },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.diagnostic.rejectedFields).toContain("hashInputVersion");
+  });
+
+  it("rejects mutating ingressPath to a different value", () => {
+    const current = makeTrace({
+      outcome: "running",
+      ingressPath: "store_recorded_operator_mutation",
+    });
+    const result = validateUpdate({
+      current,
+      update: { ingressPath: "platform_ingress" },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.diagnostic.rejectedFields).toContain("ingressPath");
+  });
+
+  it("allows no-op write of hashInputVersion (same value)", () => {
+    const current = makeTrace({ outcome: "running", hashInputVersion: 2 });
+    const result = validateUpdate({
+      current,
+      update: { hashInputVersion: 2 },
+    });
+    expect(result.ok).toBe(true);
   });
 });
 

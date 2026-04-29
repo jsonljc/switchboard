@@ -53,7 +53,11 @@ export {
 export type { IntegrityVerdict, IntegrityOverride } from "./work-trace-integrity.js";
 export {
   WORK_TRACE_HASH_VERSION,
-  WORK_TRACE_HASH_EXCLUDED_FIELDS,
+  WORK_TRACE_HASH_VERSION_V1,
+  WORK_TRACE_HASH_VERSION_V2,
+  WORK_TRACE_HASH_VERSION_LATEST,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V1,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V2,
   computeWorkTraceContentHash,
   buildWorkTraceHashInput,
 } from "./work-trace-hash.js";
@@ -130,3 +134,19 @@ export type {
 export type { DeploymentResolverResult, DeploymentResolver } from "./deployment-resolver.js";
 export { DeploymentInactiveError, toDeploymentContext } from "./deployment-resolver.js";
 export { PrismaDeploymentResolver } from "./prisma-deployment-resolver.js";
+
+// Conversation State Store
+export type {
+  ConversationStateStore,
+  ConversationOperatorActionKind,
+  SetOverrideInput,
+  SetOverrideResult,
+  SendOperatorMessageInput,
+  SendOperatorMessageResult,
+  ReleaseEscalationInput,
+  ReleaseEscalationResult,
+} from "./conversation-state-store.js";
+export {
+  ConversationStateNotFoundError,
+  ConversationStateInvalidTransitionError,
+} from "./conversation-state-store.js";

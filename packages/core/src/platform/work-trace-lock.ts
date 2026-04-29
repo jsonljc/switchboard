@@ -33,6 +33,12 @@ const ALWAYS_IMMUTABLE_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([
   // Store-managed: callers must never write lockedAt directly. The store stamps
   // it automatically on terminal transition.
   "lockedAt",
+  // Integrity-critical: ingressPath is the v2-hash-covered provenance discriminator
+  // and hashInputVersion is the algorithm under which contentHash was computed.
+  // Mutating either post-persist would falsify the row's provenance or be an
+  // integrity-bypass attempt.
+  "ingressPath",
+  "hashInputVersion",
 ]);
 
 const ONE_SHOT_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([

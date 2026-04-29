@@ -51,6 +51,8 @@ function makeTrace(workUnitId: string): WorkTrace {
     durationMs: 0,
     requestedAt: new Date().toISOString(),
     governanceCompletedAt: new Date().toISOString(),
+    ingressPath: "platform_ingress",
+    hashInputVersion: 2,
   };
 }
 
