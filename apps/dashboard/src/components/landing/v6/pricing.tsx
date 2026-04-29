@@ -89,7 +89,7 @@ export function V6Pricing() {
           </h2>
           <p className="max-w-[36rem] text-base text-v6-graphite-2">
             Each agent does one thing exceptionally. Bundle when you&rsquo;re ready — they share
-            what they learn.
+            context as they go.
           </p>
         </Reveal>
 
