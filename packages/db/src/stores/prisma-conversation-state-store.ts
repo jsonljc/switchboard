@@ -214,7 +214,81 @@ export class PrismaConversationStateStore implements ConversationStateStore {
     });
   }
 
-  releaseEscalationToAi(_input: ReleaseEscalationInput): Promise<ReleaseEscalationResult> {
-    throw new Error("not implemented (Task 11)");
+  async releaseEscalationToAi(input: ReleaseEscalationInput): Promise<ReleaseEscalationResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.conversationState.findFirst({
+        where: { threadId: input.threadId, organizationId: input.organizationId },
+      });
+      if (!existing) throw new ConversationStateNotFoundError(input.threadId);
+
+      const requestedAt = new Date();
+      const ownerReply = {
+        role: "owner" as const,
+        text: input.reply.text,
+        timestamp: requestedAt.toISOString(),
+      };
+      const before = { status: existing.status };
+      const after = { status: "active" };
+      const nextMessages = [...safeMessages(existing.messages), ownerReply];
+
+      await tx.conversationState.update({
+        where: { id: existing.id },
+        data: {
+          status: "active",
+          messages: nextMessages as unknown as Prisma.InputJsonValue,
+          lastActivityAt: requestedAt,
+        },
+      });
+
+      const workUnitId = randomUUID();
+      const trace: WorkTrace = {
+        workUnitId,
+        traceId: workUnitId,
+        intent: "escalation.reply.release_to_ai",
+        mode: "operator_mutation",
+        organizationId: input.organizationId,
+        actor: input.operator,
+        trigger: "api",
+        parameters: {
+          actionKind: "escalation.reply.release_to_ai",
+          orgId: input.organizationId,
+          conversationId: existing.id,
+          escalationId: input.handoffId,
+          before,
+          after,
+          message: {
+            channel: existing.channel,
+            destination: existing.principalId,
+            redactedPreview: redactedPreview(input.reply.text),
+            bodyHash: bodyHash(input.reply.text),
+            deliveryAttempted: false,
+          },
+        },
+        governanceOutcome: "execute",
+        riskScore: 0,
+        matchedPolicies: [],
+        outcome: "running",
+        durationMs: 0,
+        executionSummary: `operator ${input.operator.id} released escalation ${input.handoffId} on conversation ${existing.id}`,
+        modeMetrics: { governanceMode: "operator_auto_allow" },
+        ingressPath: "store_recorded_operator_mutation",
+        hashInputVersion: 2,
+        requestedAt: requestedAt.toISOString(),
+        governanceCompletedAt: requestedAt.toISOString(),
+      };
+
+      await this.workTraceStore.recordOperatorMutation(trace, {
+        tx: tx as Prisma.TransactionClient,
+      });
+
+      return {
+        conversationId: existing.id,
+        threadId: existing.threadId,
+        channel: existing.channel,
+        destinationPrincipalId: existing.principalId,
+        workTraceId: workUnitId,
+        appendedReply: ownerReply,
+      };
+    });
   }
 }

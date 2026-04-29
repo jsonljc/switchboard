@@ -229,3 +229,66 @@ describe("PrismaConversationStateStore.sendOperatorMessage", () => {
     ).rejects.toBeInstanceOf(ConversationStateNotFoundError);
   });
 });
+
+describe("PrismaConversationStateStore.releaseEscalationToAi", () => {
+  it("flips conversation to active, appends owner reply, records escalation.reply.release_to_ai trace", async () => {
+    const harness = makeStore();
+    harness.txConvFindFirst.mockResolvedValueOnce({
+      id: "conv_1",
+      threadId: "t1",
+      status: "human_override",
+      messages: [],
+      channel: "whatsapp",
+      principalId: "p_customer",
+    });
+    harness.txConvUpdate.mockResolvedValueOnce({
+      id: "conv_1",
+      threadId: "t1",
+      status: "active",
+      channel: "whatsapp",
+      principalId: "p_customer",
+    });
+
+    const result = await harness.store.releaseEscalationToAi({
+      organizationId: "org_1",
+      handoffId: "h_1",
+      threadId: "t1",
+      operator,
+      reply: { text: "Thanks, taking it from here." },
+    });
+
+    expect(harness.txConvUpdate).toHaveBeenCalledWith({
+      where: { id: "conv_1" },
+      data: expect.objectContaining({ status: "active" }),
+    });
+    const trace = harness.recordOperatorMutation.mock.calls[0]![0] as WorkTrace;
+    expect(trace).toMatchObject({
+      intent: "escalation.reply.release_to_ai",
+      mode: "operator_mutation",
+      ingressPath: "store_recorded_operator_mutation",
+    });
+    expect(trace.parameters).toMatchObject({
+      actionKind: "escalation.reply.release_to_ai",
+      escalationId: "h_1",
+      before: { status: "human_override" },
+      after: { status: "active" },
+    });
+    expect(result.channel).toBe("whatsapp");
+    expect(result.destinationPrincipalId).toBe("p_customer");
+    expect(result.appendedReply.role).toBe("owner");
+  });
+
+  it("404s when conversation is missing for the threadId", async () => {
+    const harness = makeStore();
+    harness.txConvFindFirst.mockResolvedValueOnce(null);
+    await expect(
+      harness.store.releaseEscalationToAi({
+        organizationId: "org_1",
+        handoffId: "h_1",
+        threadId: "t_missing",
+        operator,
+        reply: { text: "x" },
+      }),
+    ).rejects.toBeInstanceOf(ConversationStateNotFoundError);
+  });
+});
