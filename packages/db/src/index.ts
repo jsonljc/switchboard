@@ -51,6 +51,7 @@ export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
 export {
+  PrismaApprovalStore,
   PrismaSessionStore,
   PrismaRunStore,
   PrismaPauseStore,
@@ -111,4 +112,3 @@ export { PrismaConsentRecordStore } from "./stores/prisma-consent-record-store.j
 export type { CreateConsentRecordInput } from "./stores/prisma-consent-record-store.js";
 export { PrismaPcdIdentitySnapshotStore } from "./stores/prisma-pcd-identity-snapshot-store.js";
 export type { CreatePcdIdentitySnapshotInput } from "./stores/prisma-pcd-identity-snapshot-store.js";
-export { PrismaApprovalStore } from "./storage/prisma-approval-store.js";
