@@ -34,6 +34,21 @@ export interface LedgerStorage {
     buildEntry: (previousEntryHash: string | null) => Promise<AuditEntry>,
     options?: { externalTx?: unknown },
   ): Promise<AuditEntry>;
+  /**
+   * Optional capability: deterministic version-exact anchor lookup.
+   * Returns the AuditEntry matching entityType + entityId + eventType
+   * whose snapshot has the specified field set to the specified value.
+   * Implementations MUST NOT impose an arbitrary result limit — the
+   * lookup must succeed regardless of how many entries exist for the
+   * (entityType, entityId, eventType) tuple.
+   */
+  findBySnapshotField?(params: {
+    entityType: string;
+    entityId: string;
+    eventType: string;
+    field: string;
+    value: unknown;
+  }): Promise<AuditEntry | null>;
 }
 
 export interface AuditQueryFilter {
@@ -176,6 +191,35 @@ export class AuditLedger {
       organizationId: params.organizationId ?? null,
       traceId: params.traceId ?? null,
     };
+  }
+
+  async findAnchor(params: {
+    entityType: string;
+    entityId: string;
+    eventType: AuditEventType;
+    traceVersion: number;
+  }): Promise<AuditEntry | null> {
+    if (this.storage.findBySnapshotField) {
+      return this.storage.findBySnapshotField({
+        entityType: params.entityType,
+        entityId: params.entityId,
+        eventType: params.eventType,
+        field: "traceVersion",
+        value: params.traceVersion,
+      });
+    }
+    // Fallback: query then in-memory filter. No arbitrary limit.
+    const entries = await this.storage.query({
+      eventType: params.eventType,
+      entityType: params.entityType,
+      entityId: params.entityId,
+    });
+    return (
+      entries.find((e) => {
+        const v = e.snapshot["traceVersion"];
+        return typeof v === "number" && v === params.traceVersion;
+      }) ?? null
+    );
   }
 
   async query(filter: AuditQueryFilter): Promise<AuditEntry[]> {
@@ -345,6 +389,24 @@ export class InMemoryLedgerStorage implements LedgerStorage {
     const entry = await buildEntry(latest?.entryHash ?? null);
     this.entries.push(entry);
     return entry;
+  }
+
+  async findBySnapshotField(params: {
+    entityType: string;
+    entityId: string;
+    eventType: string;
+    field: string;
+    value: unknown;
+  }): Promise<AuditEntry | null> {
+    return (
+      this.entries.find(
+        (e) =>
+          e.entityType === params.entityType &&
+          e.entityId === params.entityId &&
+          e.eventType === params.eventType &&
+          e.snapshot[params.field] === params.value,
+      ) ?? null
+    );
   }
 
   getAll(): AuditEntry[] {
