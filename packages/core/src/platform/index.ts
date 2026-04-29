@@ -53,7 +53,11 @@ export {
 export type { IntegrityVerdict, IntegrityOverride } from "./work-trace-integrity.js";
 export {
   WORK_TRACE_HASH_VERSION,
-  WORK_TRACE_HASH_EXCLUDED_FIELDS,
+  WORK_TRACE_HASH_VERSION_V1,
+  WORK_TRACE_HASH_VERSION_V2,
+  WORK_TRACE_HASH_VERSION_LATEST,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V1,
+  WORK_TRACE_HASH_EXCLUDED_FIELDS_V2,
   computeWorkTraceContentHash,
   buildWorkTraceHashInput,
 } from "./work-trace-hash.js";

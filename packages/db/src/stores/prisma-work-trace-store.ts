@@ -12,6 +12,7 @@ import {
   WorkTraceLockedError,
   computeWorkTraceContentHash,
   verifyWorkTraceIntegrity,
+  WORK_TRACE_HASH_VERSION_LATEST,
 } from "@switchboard/core/platform";
 import type { AuditLedger, OperatorAlerter } from "@switchboard/core";
 import { buildInfrastructureFailureAuditParams, safeAlert } from "@switchboard/core";
@@ -40,6 +41,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
 
   async persist(trace: WorkTrace): Promise<void> {
     const traceVersion = 1;
+    const hashInputVersion = trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
     const contentHash = computeWorkTraceContentHash(trace, traceVersion);
 
     try {
@@ -115,7 +117,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
               contentHash,
               traceVersion,
               hashAlgorithm: "sha256",
-              hashVersion: 1,
+              hashVersion: hashInputVersion,
             },
           },
           { tx },
@@ -361,6 +363,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
 
       // Build merged trace to compute the new hash.
       const merged: WorkTrace = { ...current, ...fields };
+      const hashInputVersion = merged.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST;
       const nextHash = computeWorkTraceContentHash(merged, nextVersion);
 
       data.contentHash = nextHash;
@@ -389,7 +392,7 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
             previousVersion,
             changedFields: hashRelevantKeys,
             hashAlgorithm: "sha256",
-            hashVersion: 1,
+            hashVersion: hashInputVersion,
           },
         },
         { tx },
