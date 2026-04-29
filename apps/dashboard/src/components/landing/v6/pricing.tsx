@@ -5,10 +5,13 @@ interface Card {
   agent: "alex" | "nova" | "mira";
   name: string;
   job: string;
+  /** Pilot floor. Always rendered as "From $X / month". */
   price: string;
-  strap: string;
-  bullets: string[];
+  /** One-line description of what the operator does. */
+  subtitle: string;
   cta: string;
+  /** mailto: target — pilot inbound goes through email until a real onboarding flow exists. */
+  ctaHref: string;
   featured: boolean;
   hint?: string;
 }
@@ -18,15 +21,10 @@ const CARDS: Card[] = [
     agent: "alex",
     name: "Alex",
     job: "lead reply",
-    price: "$199",
-    strap: "Replies to leads in seconds.",
-    bullets: [
-      "1,500 conversations / mo",
-      "WhatsApp + Telegram + Web",
-      "Approval-first & audited",
-      "Books to your real calendar",
-    ],
+    price: "$249",
+    subtitle: "Lead response and booking operator.",
     cta: "Start with Alex",
+    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Alex",
     featured: true,
     hint: "Recommended starting point",
   },
@@ -34,30 +32,20 @@ const CARDS: Card[] = [
     agent: "nova",
     name: "Nova",
     job: "ad optimizer",
-    price: "$149",
-    strap: "Catches bad ad sets before you do.",
-    bullets: [
-      "$5,000 managed ad spend",
-      "Period-over-period diagnosis",
-      "Never auto-publishes",
-      "Meta Ads via OAuth",
-    ],
+    price: "$249",
+    subtitle: "Ad planning and optimization operator.",
     cta: "Start with Nova",
+    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Nova",
     featured: false,
   },
   {
     agent: "mira",
     name: "Mira",
     job: "creative",
-    price: "$249",
-    strap: "Ships creative while you're busy.",
-    bullets: [
-      "500 credits / mo",
-      "Image · video · storyboard",
-      "Stops at any stage",
-      "You stay director",
-    ],
+    price: "$399",
+    subtitle: "Creative direction and production operator.",
     cta: "Start with Mira",
+    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Mira",
     featured: false,
   },
 ];
@@ -117,41 +105,30 @@ export function V6Pricing() {
                   </span>
                 </header>
 
-                <div className="-mt-1 flex items-baseline gap-[0.5rem]">
-                  <span
-                    className="whitespace-nowrap text-[2.875rem] font-medium leading-none tracking-[-0.025em] text-v6-graphite"
-                    style={{ fontFeatureSettings: '"tnum","ss01"' }}
-                  >
-                    {c.price}
+                <div className="-mt-1 flex flex-col gap-[0.4rem]">
+                  <span className="font-mono-v6 text-[10.5px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
+                    From
                   </span>
-                  <span className="inline-flex items-baseline whitespace-nowrap text-[0.9375rem] tracking-[0.005em] text-v6-graphite-2">
-                    <span className="mr-[0.3em] inline-block translate-y-[0.06em] text-[1.125rem] font-light leading-none text-v6-graphite-3">
-                      /
+                  <div className="flex items-baseline gap-[0.5rem]">
+                    <span
+                      className="whitespace-nowrap text-[2.875rem] font-medium leading-none tracking-[-0.025em] text-v6-graphite"
+                      style={{ fontFeatureSettings: '"tnum","ss01"' }}
+                    >
+                      {c.price}
                     </span>
-                    month
-                  </span>
+                    <span className="inline-flex items-baseline whitespace-nowrap text-[0.9375rem] tracking-[0.005em] text-v6-graphite-2">
+                      <span className="mr-[0.3em] inline-block translate-y-[0.06em] text-[1.125rem] font-light leading-none text-v6-graphite-3">
+                        /
+                      </span>
+                      month
+                    </span>
+                  </div>
                 </div>
 
-                <p className="text-[0.95rem] font-medium leading-[1.3] text-v6-graphite">
-                  {c.strap}
-                </p>
-
-                <ul className="mt-1 flex flex-col gap-2 border-t border-[hsl(20_8%_14%_/_0.06)] pt-4">
-                  {c.bullets.map((b) => (
-                    <li key={b} className="flex items-center gap-[0.6rem] text-sm text-v6-graphite">
-                      <svg
-                        className="h-[0.55rem] w-3 flex-shrink-0 text-v6-graphite-3"
-                        aria-hidden="true"
-                      >
-                        <use href="#check" />
-                      </svg>
-                      {b}
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-[0.95rem] leading-[1.4] text-v6-graphite">{c.subtitle}</p>
 
                 <a
-                  href="#closer"
+                  href={c.ctaHref}
                   className={`mt-auto inline-flex w-full items-center justify-center gap-[0.65rem] whitespace-nowrap rounded-full px-6 py-[0.85rem] text-sm font-medium tracking-[-0.005em] transition-[transform,background-color,box-shadow] duration-[250ms] hover:-translate-y-px ${
                     c.featured
                       ? "bg-v6-graphite text-v6-cream shadow-[0_1px_0_hsl(20_12%_4%_/_0.15)] hover:bg-black hover:text-v6-cream hover:shadow-[0_8px_24px_hsl(20_12%_4%_/_0.18)]"
@@ -172,73 +149,9 @@ export function V6Pricing() {
           ))}
         </div>
 
-        <Reveal className="mt-14 flex flex-col items-center gap-8">
-          <div className="flex flex-wrap justify-center gap-[0.6rem]">
-            {[
-              ["Pick any two", "save 15%"],
-              ["Hire all three", "save 25%"],
-              ["14-day pilot of the desk", "$199"],
-              ["Talk to us about", "Enterprise"],
-            ].map(([label, b]) => (
-              <span
-                key={label}
-                className="inline-flex items-center gap-[0.55rem] whitespace-nowrap rounded-full border border-[hsl(20_8%_14%_/_0.06)] bg-v6-cream-2 px-[1.05rem] py-[0.6rem] text-[0.8125rem] text-v6-graphite-2"
-              >
-                {label} <b className="font-medium text-v6-graphite">{b}</b>
-              </span>
-            ))}
-          </div>
-
-          <details className="v6-pricing-overage w-full max-w-[42rem] overflow-hidden rounded-xl border border-[hsl(20_8%_14%_/_0.12)] bg-v6-cream-2">
-            <summary className="flex cursor-pointer items-center justify-between px-[1.4rem] py-4 text-[0.9375rem] font-medium text-v6-graphite [&::marker]:hidden">
-              <span>What happens if I go over?</span>
-            </summary>
-            <div className="flex flex-col gap-4 border-t border-[hsl(20_8%_14%_/_0.06)] px-[1.4rem] pb-[1.4rem] pt-5">
-              <p className="text-sm leading-[1.5] text-v6-graphite-2">
-                Soft caps with predictable rates. Email warnings at 70 / 90 / 100% — no surprise
-                bills.
-              </p>
-              <table className="w-full border-collapse text-[0.8125rem]">
-                <tbody>
-                  {[
-                    ["Alex", "Beyond 1,500 conversations", "$0.15 / conversation"],
-                    ["Nova", "Beyond $5k managed spend", "0.75% of incremental spend"],
-                    ["Nova", "Beyond 200 operator chats", "$0.20 / chat"],
-                    ["Mira", "Beyond 500 credits", "$0.50 / credit"],
-                  ].map(([a, b, c], i) => (
-                    <tr key={i}>
-                      <td className="w-20 border-b border-[hsl(20_8%_14%_/_0.06)] py-[0.55rem] font-medium text-v6-graphite">
-                        <b className="font-medium">{a}</b>
-                      </td>
-                      <td className="border-b border-[hsl(20_8%_14%_/_0.06)] py-[0.55rem] text-v6-graphite-2">
-                        {b}
-                      </td>
-                      <td
-                        className="font-mono-v6 border-b border-[hsl(20_8%_14%_/_0.06)] py-[0.55rem] text-right text-v6-graphite-2"
-                        style={{ fontFeatureSettings: '"tnum"' }}
-                      >
-                        {c}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="text-xs italic leading-[1.5] text-v6-graphite-3">
-                Mira credits: image = 1 credit · short video = 10 · avatar video = 20 · HD video =
-                50. Hard cap with a buy-more prompt at 100% — never a surprise bill. Credits
-                don&rsquo;t roll over.
-              </p>
-            </div>
-          </details>
-
-          <p className="font-mono-v6 text-[11px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
-            Not sure where to start?{" "}
-            <a
-              href="#alex"
-              className="ml-[0.4rem] border-b border-v6-graphite-3 pb-[0.1rem] text-v6-graphite hover:border-v6-graphite"
-            >
-              We recommend Alex →
-            </a>
+        <Reveal className="mt-14 flex flex-col items-center">
+          <p className="font-mono-v6 max-w-[36rem] text-center text-[11px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
+            Pilot pricing. Final pricing may vary by channels, spend level, and operator setup.
           </p>
         </Reveal>
       </div>
