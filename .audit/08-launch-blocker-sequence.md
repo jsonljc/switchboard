@@ -71,6 +71,60 @@
 
 ---
 
+## Audit Status — 2026-04-29
+
+Live ledger of which entries below have shipped. Updated after each verification pass; not a substitute for reading the entry itself before spec'ing new work.
+
+### Launch-Blockers
+
+| #   | Item                                           | Status     | Evidence / PR                                                                                                                                                                                                                               |
+| --- | ---------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Webhook URL mismatch                           | ✅ SHIPPED | PR #279 (controlled-beta channel provisioning end-to-end)                                                                                                                                                                                   |
+| 2   | WhatsApp Embedded Signup routes not registered | ✅ SHIPPED | PR #279                                                                                                                                                                                                                                     |
+| 3   | No webhook auto-registration with Meta         | ✅ SHIPPED | PR #279                                                                                                                                                                                                                                     |
+| 4   | Provision-notify never called                  | ✅ SHIPPED | PR #279                                                                                                                                                                                                                                     |
+| 5   | lastHealthCheck never set                      | ✅ SHIPPED | PR #279                                                                                                                                                                                                                                     |
+| 6   | Alex listing seed data required                | ✅ SHIPPED | PR #279                                                                                                                                                                                                                                     |
+| 7   | Alex skill parameter builder not registered    | ✅ SHIPPED | `apps/api/src/bootstrap/skill-mode.ts` registers `alexBuilder` (verified 2026-04-29)                                                                                                                                                        |
+| 8   | No contact/opportunity auto-creation           | ✅ SHIPPED | PR #280                                                                                                                                                                                                                                     |
+| 9   | Calendar provider fake/incomplete              | ✅ SHIPPED | PR #280, #281, #282                                                                                                                                                                                                                         |
+| 10  | MetaCAPIDispatcher not wired to ConversionBus  | ✅ SHIPPED | `apps/api/src/bootstrap/conversion-bus-bootstrap.ts` (env-gated subscription, verified 2026-04-29)                                                                                                                                          |
+| 11  | No feature gating by billing plan              | ✅ SHIPPED | PR #284                                                                                                                                                                                                                                     |
+| 12  | Stripe webhook blocked by auth                 | ✅ SHIPPED | `apps/api/src/middleware/auth.ts:82` exempts `/api/billing/webhook` (verified 2026-04-29)                                                                                                                                                   |
+| 13  | Raw body unavailable for webhook signature     | ✅ SHIPPED | `fastify-raw-body` registered globally-opt-in; billing webhook opts in (verified 2026-04-29)                                                                                                                                                |
+| 14  | No Stripe reconciliation                       | ✅ SHIPPED | `apps/api/src/services/cron/reconciliation.ts` hourly Inngest cron (verified 2026-04-29)                                                                                                                                                    |
+| 15  | Escalation reply never delivered to channel    | ✅ SHIPPED | `apps/api/src/routes/escalations.ts` calls `agentNotifier.sendProactive()` (verified 2026-04-29). Caveat: silently skips if no channel credentials configured — operational hardening tracked separately.                                   |
+| 16  | No Sentry on chat server + no alerting         | ✅ SHIPPED | PR #287                                                                                                                                                                                                                                     |
+| 17  | Governance errors swallowed in critical path   | ✅ SHIPPED | PR #290                                                                                                                                                                                                                                     |
+| 18  | Creative-pipeline DLQ (DOCTRINE §7)            | 🔴 OPEN    | All 3 Inngest functions have `retries: 3` but no `onFailure` handler (verified 2026-04-29)                                                                                                                                                  |
+| 19  | WorkTrace cryptographic integrity              | 🟡 PARTIAL | Terminal-state locking shipped (PR #293, commit `ac5d7c82`). No hash chain on WorkTrace rows yet — `AuditLedger` chain machinery exists at `packages/core/src/audit/canonical-hash.ts` but isn't applied to WorkTrace (verified 2026-04-29) |
+
+### Launch-Risks
+
+| #   | Item                                               | Status     | Evidence / PR                                                                                                   |
+| --- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| 1   | ConversationState direct Prisma bypass             | 🔴 OPEN    | `apps/api/src/routes/conversations.ts` accesses `prisma.conversationState` directly (verified 2026-04-29)       |
+| 2   | AgentDeployment updateMany bypass                  | 🔴 OPEN    | `apps/api/src/routes/governance.ts:184,318` calls `agentDeployment.updateMany()` directly (verified 2026-04-29) |
+| 3   | Ad-optimizer outcome dispatcher idempotency        | 🟡 UNCLEAR | Local idempotency guard incomplete; relies on Meta-side dedup via eventId (verified 2026-04-29)                 |
+| 4   | Chat approval binding hash not verified            | ✅ SHIPPED | PR #305 (gateway interception, terminal branch)                                                                 |
+| 4a  | Follow-up: Chat Approval Response Identity Binding | 🔴 OPEN    | New entry — see §4a below                                                                                       |
+| 5   | Rate limits not per-endpoint                       | 🔴 OPEN    | `apps/api/src/middleware/rate-limit.ts:17` `SENSITIVE_PREFIXES` excludes approval/execute (verified 2026-04-29) |
+| 6   | Policy conflict resolution untested                | 🔴 OPEN    | No conflict-resolution tests in `packages/core/src/skill-runtime/__tests__/` (verified 2026-04-29)              |
+| 7   | Credential decryption failures silent in cron      | ✅ SHIPPED | `apps/api/src/services/cron/meta-token-refresh.ts:81–94` warns + notifies operator (verified 2026-04-29)        |
+
+### Open work, ordered by recommended next-slice priority
+
+1. **Blocker #18** — Creative-pipeline DLQ. S per function × 3, identical pattern, doctrine compliance.
+2. **Blocker #19** — WorkTrace cryptographic integrity. M-L, scaffolding (hash-chain machinery in `AuditLedger`) already exists; missing piece is `WorkTrace` schema + recorder integration.
+3. **Risk #1** — ConversationState Store abstraction. M.
+4. **Risk #2** — AgentDeployment Store methods. M.
+5. **Risk #5** — Per-endpoint rate limits for approval/execute. S.
+6. **Risk #3** — Outcome dispatcher idempotency completeness. S (decide whether local guard is needed beyond Meta-side dedup).
+7. **Risk #6** — Policy conflict resolution tests. S.
+8. **Risk #4a** — Chat approval response identity binding. M (depends on chat contact→principal mapping).
+
+---
+
 ## Launch-Blockers (ordered)
 
 ### 1. **Webhook URL mismatch blocks channel activation**
