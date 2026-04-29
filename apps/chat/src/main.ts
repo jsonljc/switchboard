@@ -91,6 +91,14 @@ async function main() {
     deploymentResolver: new StaticDeploymentResolver({}),
     platformIngress: platformIngressAdapter,
     conversationStore: new InMemoryGatewayConversationStore(),
+    // Single-tenant path is used in dev/no-DB environments. Approval payloads
+    // are not expected on this path; the store is a no-op to satisfy the required field.
+    approvalStore: {
+      save: async () => {},
+      getById: async () => null,
+      updateState: async () => {},
+      listPending: async () => [],
+    },
   });
 
   // Shared connections for health checks — avoid creating new ones on each call

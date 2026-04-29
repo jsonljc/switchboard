@@ -324,6 +324,12 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Runtime First Response", () => 
       deploymentResolver,
       platformIngress: ingress,
       conversationStore,
+      approvalStore: {
+        save: vi.fn(),
+        getById: vi.fn().mockResolvedValue(null),
+        updateState: vi.fn(),
+        listPending: vi.fn(),
+      },
     });
   });
 

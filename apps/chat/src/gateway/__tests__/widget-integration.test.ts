@@ -37,6 +37,12 @@ describe("Widget integration", () => {
         }),
         addMessage: vi.fn().mockResolvedValue(undefined),
       },
+      approvalStore: {
+        save: vi.fn(),
+        getById: vi.fn().mockResolvedValue(null),
+        updateState: vi.fn(),
+        listPending: vi.fn(),
+      },
     });
 
     // Track SSE messages

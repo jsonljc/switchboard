@@ -41,6 +41,12 @@ describe("ChannelGateway — override race condition", () => {
           },
         }),
       },
+      approvalStore: {
+        save: vi.fn(),
+        getById: vi.fn().mockResolvedValue(null),
+        updateState: vi.fn(),
+        listPending: vi.fn(),
+      },
     };
 
     return { config, getConversationStatus };

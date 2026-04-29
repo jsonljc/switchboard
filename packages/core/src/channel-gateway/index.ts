@@ -6,6 +6,7 @@ export type {
   IncomingChannelMessage,
   ReplySink,
 } from "./types.js";
+export type { ApprovalStore } from "../storage/interfaces.js";
 export { UnknownChannelError, InactiveDeploymentError } from "./types.js";
 export { resolveContactIdentity } from "./resolve-contact-identity.js";
 export type { ResolvedContactIdentity } from "./resolve-contact-identity.js";

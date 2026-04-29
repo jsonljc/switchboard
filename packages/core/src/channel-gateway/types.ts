@@ -1,6 +1,7 @@
 import type { DeploymentResolver } from "../platform/deployment-resolver.js";
 import type { SubmitWorkResponse } from "../platform/platform-ingress.js";
 import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
+import type { ApprovalStore } from "../storage/interfaces.js";
 
 export interface GatewayContactStore {
   findByPhone(orgId: string, phone: string): Promise<{ id: string } | null>;
@@ -30,6 +31,10 @@ export interface ChannelGatewayConfig {
   platformIngress: { submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> };
   /** Optional contact-identity store. When set, the gateway resolves Contact identity for WhatsApp inbound before ingress.submit. */
   contactStore?: GatewayContactStore;
+  /** Read-only approval lookup for binding-hash verification of
+      approval-shaped channel payloads. Required so verification
+      cannot be silently skipped by misconfiguration. */
+  approvalStore: ApprovalStore;
 }
 
 export interface GatewayConversationStore {
