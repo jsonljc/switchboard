@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- legacy debt: this file crossed the 600-line
+   guideline when the WorkTrace integrity admission gate was added (PR #308).
+   Splitting is tracked as a follow-up under .audit/08-launch-blocker-sequence.md
+   §19a. Remove this disable when the file is split (suggested seam: extract
+   executeAfterApproval into its own module). */
 import { timingSafeEqual } from "node:crypto";
 import type { RiskCategory, ActionEnvelope } from "@switchboard/schemas";
 import type { ExecuteResult } from "@switchboard/cartridge-sdk";
