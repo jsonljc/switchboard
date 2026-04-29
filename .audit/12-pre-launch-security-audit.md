@@ -303,7 +303,52 @@ Confirm DOCTRINE §1 (single ingress) and the recent shipped controls (PR #305 c
 
 ## Section 6: OWASP Lightweight Sweep
 
-_Pending — see Task 6 of plan._
+### Scope
+
+`apps/api`, `apps/chat`, `apps/dashboard`, `apps/mcp-server`, plus `packages/creative-pipeline` (because of its shell-exec surface). One-pass review across OWASP-relevant subjects: input validation, SSRF, injection, headers (CORS/CSP), cookies, redirects, rate limiting, error leakage, file uploads, dependency CVEs.
+
+### Method
+
+- Counted Zod usage in routes (60+ schemas) and verified `bodyLimit` (1 MB explicit, `apps/api/src/app.ts:101`).
+- Grep'd outbound `fetch(` calls for SSRF surface; specifically reviewed creative-pipeline (file downloads), marketplace (Telegram bot setup), and OAuth handlers.
+- Searched for raw queries (`$queryRaw`, `$executeRaw`, ``sql` `` template) and shell exec (`exec(`, `execFile`, `spawn`).
+- Read `apps/api/src/app.ts` for global helmet/CORS/rate-limit/error-handler config.
+- Read `apps/dashboard/next.config.mjs` for CSP and security headers.
+- Read OAuth route handlers (`facebook-oauth.ts`, `google-calendar-oauth.ts`) for open-redirect risk.
+- Ran `pnpm audit` and triaged advisories.
+
+### Items checked
+
+- [✓] Input validation present on most routes via Zod (`60` Zod usages across `apps/api/src/routes/`); body size capped at 1 MB.
+- [✗] No unvalidated SSRF surfaces. *(See OW-1.)*
+- [✓] No raw query / shell injection paths from user input. The single `Prisma.sql` use (`packages/db/src/stores/prisma-knowledge-store.ts:87`) uses parameterized substitution. Shell exec is limited to ffmpeg in creative-pipeline; args are server-constructed. Concat file path quoting (line 102) is a minor concern noted in OW-2.
+- [✓] CORS origin allowlist explicit; production refuses cross-origin without `CORS_ORIGIN` env (`apps/api/src/app.ts:111-123`). No wildcard with credentials.
+- [✗] CSP set in production but uses `'unsafe-inline'` for scripts and styles. *(See OW-3.)*
+- [✓] Auth cookies have Secure / HttpOnly / SameSite via NextAuth defaults; HSTS, X-Frame-Options DENY, Referrer-Policy strict-origin-when-cross-origin set on dashboard.
+- [✓] Redirects use server-side `dashboardUrl` from env, not user input. `apps/api/src/routes/facebook-oauth.ts:138` and `apps/api/src/routes/google-calendar-oauth.ts:202` are safe.
+- [✗] Sensitive endpoints rate-limited separately from reads. *(See AU-4 in Section 3 — only login/setup/billing-checkout get the stricter `authRateLimit`; approval/execute share with reads. Cross-referenced as OW-4.)*
+- [✓] Production error handler hides error message for 5xx (`apps/api/src/app.ts:143-155`). Logger redacts `Authorization`, `Cookie`, `stripe-signature`, `body.apiKey`, `body.password`, `body.secret`, `body.token`, `body.accessToken`.
+- [✓] No file-upload endpoints exposed. Multipart parsing exists for OAuth flows but not for arbitrary file ingest.
+- [✗] Dependency vulnerabilities. *(See OW-5.)*
+
+### Findings
+
+| ID   | Severity | Title                                                                                                | Evidence (file:line)                                                                                                                                              | Recommended fix                                                                                                                                                                                                                                                                                                                                              | Status      |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| OW-1 | HIGH     | `creative-pipeline` `VideoAssembler.downloadClips` fetches arbitrary HTTP URLs from input (SSRF)     | `packages/creative-pipeline/src/stages/video-assembler.ts:136-152` (downloadClips), `:140-141` (`fetch(clip.videoUrl)`)                                          | Apply the WhatsApp-test pattern from PR #285: validate `clip.videoUrl` against an allowlist (e.g., S3, signed-URL host, known CDN) and reject non-HTTPS or private/internal IPs. Also add a max-size guard on the response body to prevent resource exhaustion via massive downloads.                                                                            | _untriaged_ |
+| OW-2 | LOW      | `ffmpeg concat` file paths are quoted with single quotes; a path containing a single quote could break parsing | `packages/creative-pipeline/src/stages/video-assembler.ts:102`                                                                                                  | Paths today are server-constructed `clip-${i}.mp4`, so no immediate exploit. As defense-in-depth, escape single quotes in paths or use ffmpeg's `-safe 0` with absolute paths and a sanitized list. Minor.                                                                                                                                              | _untriaged_ |
+| OW-3 | MEDIUM   | Dashboard CSP includes `'unsafe-inline'` for scripts and styles in production                        | `apps/dashboard/next.config.mjs:13` (script-src), `:14` (style-src)                                                                                              | Migrate to nonce-based CSP for scripts. Standard for Next.js 14 — use middleware to inject a nonce per-request and reference it in `<Script>` tags. Style-src nonces are harder; consider keeping `'unsafe-inline'` for styles but locking down scripts. Significant work; defer post-launch unless launch-day XSS coverage matters.                              | _untriaged_ |
+| OW-4 | (DUPE)   | Sensitive endpoints share rate limit with reads                                                      | (see AU-4)                                                                                                                                                        | (see AU-4)                                                                                                                                                                                                                                                                                                                                                | _untriaged_ |
+| OW-5 | LOW      | 3 moderate dev/transitive dependency CVEs in `pnpm audit`                                            | Vite ≤6.4.1 (path traversal in optimized deps; vitest transitive — dev-only); uuid <14.0.0 (buffer bounds; transitive); postcss <8.5.10 (XSS via `</style>`; Next.js transitive) | Upgrade vite to ≥6.4.2 (vitest), bump direct uuid usage to 14.x where applicable (review usages first), upgrade postcss to ≥8.5.10 via Next.js bump. None are direct production dependencies, but housekeeping reduces signal noise in future audits.                                                                                                | _untriaged_ |
+| OW-6 | LOW      | Two `async headers()` functions defined in `apps/dashboard/next.config.mjs`; the second silently overrides the first | `apps/dashboard/next.config.mjs:28-46, 64-71`                                                                                                                    | Merge into a single `headers()` function returning all required headers. The current shadowing means a future edit to the first block has no effect — a maintenance trap.                                                                                                                                                                                | _untriaged_ |
+
+### Coverage gaps
+
+- **Dashboard server-action audit**: Next.js server actions were not exhaustively reviewed; they share NextAuth session context but each action's authorization needs to be individually checked. Recommend a focused dashboard-route audit pre-SOC2.
+- **HSTS preload list**: HSTS is set with `preload` directive but the domain is not yet on Chrome's preload list. Out of scope; track for post-launch ops.
+- **Subresource integrity (SRI)**: not enforced for external script tags. Minor — dashboard loads few external scripts; verify any third-party scripts (analytics, Sentry-frontend) use SRI.
+- **Email-verification endpoint flow**: not specifically reviewed for token-reuse / single-use enforcement (covered briefly in Section 3 coverage gaps).
+- **Webhook IP allowlists**: not currently enforced (Stripe and Meta publish IP ranges; an additional allowlist on top of signature verification is defense-in-depth). Out of scope at this stage.
 
 ---
 
