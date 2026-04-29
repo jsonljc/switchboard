@@ -212,7 +212,52 @@ Three subsystems plus all webhook signature verifiers:
 
 ## Section 4: Credential Storage
 
-_Pending — see Task 4 of plan._
+### Scope
+
+Concentrated credential surface: `packages/db/src/crypto/credentials.ts` (encryption/decryption helpers), `packages/db/src/storage/prisma-connection-store.ts` (storage boundary), `packages/db/src/oauth/token-refresh.ts` (Meta OAuth refresh), `packages/core/src/credentials/resolver.ts` (read-side resolver), and every call-site that uses these helpers.
+
+### Method
+
+- Read the encryption helper end-to-end (`packages/db/src/crypto/credentials.ts:1-92`).
+- Read the connection store (`packages/db/src/storage/prisma-connection-store.ts`) to confirm encryption-at-write and decryption-at-read are uniformly applied.
+- Read the OAuth refresh path (`packages/db/src/oauth/token-refresh.ts`).
+- Searched every call-site of `encryptCredentials` / `decryptCredentials` to confirm no plaintext leaks into logs, Sentry, or response bodies.
+- Reviewed `.env.example`, `.gitignore`, and tracked-file content for credential leakage.
+- Reviewed Sentry instrumentation (`apps/api/src/bootstrap/sentry.ts`, `apps/chat/src/bootstrap/sentry.ts`) — Sentry capture only includes `error`, `url`, `method`, `traceId`. No request-body breadcrumbs that could carry credentials.
+
+### Items checked
+
+- [✓] Encryption algorithm: AES-256-GCM (AEAD, authenticated). `packages/db/src/crypto/credentials.ts:3`.
+- [✓] Per-write random salt (32 bytes) and IV (16 bytes); authTag verified on decrypt; fail-closed on auth-tag mismatch.
+- [✓] Key derivation via scrypt (`scryptSync(secret, salt, KEY_LENGTH)`); per-write salt prevents key reuse.
+- [✓] Encryption key from env (`CREDENTIALS_ENCRYPTION_KEY`); helper throws if missing.
+- [✓] Encryption key not in source control (`.gitignore` covers `.env`, `.env.local`, `.env.*.local`).
+- [✓] All credential writes go through `encryptCredentials` (verified call-sites in `apps/api/src/routes/onboard.ts:118`, `apps/api/src/routes/google-calendar-oauth.ts:171`, `apps/api/src/routes/organizations.ts:257`, `apps/api/src/bootstrap/routes.ts:77`, `packages/db/src/storage/prisma-connection-store.ts:23`, `packages/db/src/oauth/token-refresh.ts:73`).
+- [✓] All credential reads go through `decryptCredentials` (verified call-sites in `apps/api/src/services/cron/meta-token-refresh.ts:48`, `apps/api/src/bootstrap/inngest.ts:112, 307`, `apps/api/src/lib/check-v1-channel-limit.ts:74`, `apps/api/src/routes/google-calendar-oauth.ts:246`, `apps/api/src/routes/organizations.ts:369`, `packages/db/src/storage/prisma-connection-store.ts` toConnectionRecord).
+- [✓] Decrypted plaintexts not logged. `console.warn` calls in `apps/api/src/services/cron/meta-token-refresh.ts:53, 83` log connection IDs and error messages, not credential plaintext. `app.log.warn` in `apps/api/src/bootstrap/inngest.ts` logs connection metadata, not credential bodies.
+- [✓] Decrypted plaintexts not in Sentry breadcrumbs. Sentry init does not enable request-body breadcrumbs.
+- [✓] Error responses do not include credential plaintext. Decryption failures surface as Stripe-style "Internal error" or "Connection error" without exposing the ciphertext or attempted plaintext.
+- [✓] OAuth refresh flow maintains encryption invariants: `refreshMetaOAuthToken` re-encrypts before writing back to the connection row (`packages/db/src/oauth/token-refresh.ts:73-83`). Concurrent refresh handling: relies on Prisma's row-level update; not single-flight-protected. See CR-5.
+- [✓] No real credentials in fixtures, seeds, or tracked files. `git ls-files | xargs rg -l "BEGIN PRIVATE KEY|sk_live_|whsec_"` returns nothing tracked.
+- [✓] `.env.example` uses placeholder empty values for all secrets (`API_KEYS=`, `STRIPE_WEBHOOK_SECRET=`, etc.). One exception: `POSTGRES_PASSWORD=switchboard` is a known dev-default — see CR-3.
+
+### Findings
+
+| ID   | Severity | Title                                                                                  | Evidence (file:line)                                                                                                                | Recommended fix                                                                                                                                                                                                                                                                                                                              | Status      |
+| ---- | -------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| CR-1 | LOW      | GCM IV is 16 bytes; recommended is 12                                                  | `packages/db/src/crypto/credentials.ts:4`                                                                                           | Change `IV_LENGTH = 12`. NIST SP 800-38D recommends 96-bit IVs for GCM. 128-bit IVs work but are not the standard. Migration: gracefully accept 12 OR 16 byte IVs (decrypt with whichever was used at encrypt time). For all new writes use 12.                                                                                              | _untriaged_ |
+| CR-2 | LOW      | No AAD binding — ciphertexts could theoretically be moved between connection rows by a DB-write attacker | `packages/db/src/crypto/credentials.ts:40-46`                                                                                       | Optional: pass AAD = `${connectionId}:${organizationId ?? ""}` to `cipher.setAAD(...)` and `decipher.setAAD(...)`. Defense-in-depth — prevents an attacker with raw DB write access from swapping ciphertexts between connections. Migration adds complexity; defer post-launch unless threat model includes DB-write attackers.                | _untriaged_ |
+| CR-3 | LOW      | `.env.example` ships `POSTGRES_PASSWORD=switchboard` as a default                      | `.env.example` (POSTGRES_PASSWORD line)                                                                                             | Acceptable as a dev-stack convenience but document explicitly that `POSTGRES_PASSWORD` MUST be changed in production. Consider replacing with `POSTGRES_PASSWORD=changeme-in-prod` to make the requirement loud at copy time.                                                                                                                | _untriaged_ |
+| CR-4 | LOW      | `.gitignore` covers `.env*.local` but not `.env.production`, `.env.staging`            | `.gitignore`                                                                                                                        | Add `.env.production`, `.env.staging`, `.env.development` (without `.local`) to `.gitignore` to defend against accidental tracking when a production env file is named without the `.local` suffix.                                                                                                                                          | _untriaged_ |
+| CR-5 | LOW      | OAuth refresh is not single-flight-protected; concurrent refreshes for the same connection can race | `packages/db/src/oauth/token-refresh.ts:35-90`                                                                                      | Two concurrent calls to `refreshMetaOAuthToken` for the same connection both call Meta and both write back. Last write wins. Risk: brief credential thrash. Add a single-flight lock keyed by `connection.id` (Redis SETNX with TTL or Postgres advisory lock).                                                                              | _untriaged_ |
+| CR-6 | INFO     | scrypt key derivation runs on every encryption call                                    | `packages/db/src/crypto/credentials.ts:13-15, 36-37`                                                                                | Per-write scrypt is a performance cost (each encrypt = one scrypt op = ~50–100ms). Consider caching the derived key per-salt OR using an HMAC-based KDF for higher throughput. Not a security issue; defer post-launch unless throughput becomes an issue.                                                                                   | _untriaged_ |
+
+### Coverage gaps
+
+- **Plaintext lifetime in long-lived objects** was not exhaustively traced. The `ConnectionRecord` returned by the store holds plaintext credentials and may be cached upstream. If the orchestrator caches `ConnectionRecord` instances longer than necessary, plaintext lives in memory. Recommend: read once per-action, do not cache.
+- **Key rotation procedure** is not documented. The audit confirmed `CREDENTIALS_ENCRYPTION_KEY` is the master secret; rotation would require re-encrypting every Connection row. Operational runbook recommended pre-launch.
+- **HSM / KMS integration** is out of scope. At 10 customers, env-var key storage is acceptable. At enterprise scale, recommend AWS KMS / Vault for the master key with envelope encryption.
+- **Audit of secret-exfiltration paths via tool calls** was deferred to Section 2 (AI / Skill-Runtime). Confirmed there that no credentials appear in LLM-visible prompts or tool inputs.
 
 ---
 
