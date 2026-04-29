@@ -340,7 +340,8 @@ async function respondViaLifecycle(params: {
 
 async function getWorkTrace(app: FastifyInstance, workUnitId: string) {
   if (!app.workTraceStore) return null;
-  return app.workTraceStore.getByWorkUnitId(workUnitId);
+  const result = await app.workTraceStore.getByWorkUnitId(workUnitId);
+  return result?.trace ?? null;
 }
 
 function reconstructWorkUnit(
