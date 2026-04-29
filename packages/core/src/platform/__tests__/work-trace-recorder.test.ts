@@ -207,3 +207,26 @@ describe("buildWorkTrace", () => {
     expect(trace.trigger).toBe("chat");
   });
 });
+
+describe("buildWorkTrace ingressPath", () => {
+  const baseInput: TraceInput = {
+    workUnit: baseWorkUnit,
+    governanceDecision: executeDecision,
+    governanceCompletedAt: "2026-04-16T10:00:01.000Z",
+  };
+
+  it("defaults ingressPath to 'platform_ingress'", () => {
+    const t = buildWorkTrace(baseInput);
+    expect(t.ingressPath).toBe("platform_ingress");
+  });
+
+  it("carries an explicit ingressPath through", () => {
+    const t = buildWorkTrace({ ...baseInput, ingressPath: "store_recorded_operator_mutation" });
+    expect(t.ingressPath).toBe("store_recorded_operator_mutation");
+  });
+
+  it("defaults hashInputVersion to the latest version", () => {
+    const t = buildWorkTrace(baseInput);
+    expect(t.hashInputVersion).toBeGreaterThanOrEqual(2);
+  });
+});
