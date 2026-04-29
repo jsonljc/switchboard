@@ -91,9 +91,13 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
    *
    * Used by callers that need the WorkTrace insert to commit/rollback alongside
    * their own state mutation (e.g., ConversationStateStore writes). The audit-ledger
-   * insert is intentionally OUTSIDE the caller's tx: it is observability and must
-   * not block the caller's atomic state-mutation commit. The state mutation +
-   * WorkTrace insert is what must be atomic.
+   * insert is intentionally OUTSIDE the caller's tx — and its failures are swallowed
+   * (logged via console.error, not thrown) because this method is called inside the
+   * caller's $transaction callback: a thrown audit-ledger error would propagate up
+   * and roll back the caller's state mutation, defeating the design. The state
+   * mutation + WorkTrace insert atomicity is the load-bearing invariant; the
+   * audit-ledger row is observability and degrades gracefully — a missing anchor
+   * surfaces on next read via verifyAndWrap's findAnchor path.
    */
   async recordOperatorMutation(
     trace: WorkTrace,
@@ -119,29 +123,39 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       }),
     });
 
-    // Audit-ledger record is intentionally outside the caller's tx — observability
-    // must not block the caller's atomic state-mutation tx.
-    await this.auditLedger.record({
-      eventType: "work_trace.persisted",
-      actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
-      actorId: trace.actor.id,
-      entityType: "work_trace",
-      entityId: trace.workUnitId,
-      riskCategory: "low",
-      visibilityLevel: "system",
-      summary: `WorkTrace ${trace.workUnitId} persisted at v${traceVersion} (operator mutation)`,
-      organizationId: trace.organizationId,
-      traceId: trace.traceId,
-      snapshot: {
-        workUnitId: trace.workUnitId,
+    // Audit-ledger record is observability and must not block the caller's tx.
+    // We are still inside the caller's $transaction callback at this point, so a
+    // thrown error here would reject the callback and roll back the caller's state
+    // mutation. Swallow ledger failures (log + continue) — the missing anchor is
+    // surfaced on next read via verifyAndWrap's findAnchor path.
+    try {
+      await this.auditLedger.record({
+        eventType: "work_trace.persisted",
+        actorType: trace.actor.type === "service" ? "service_account" : trace.actor.type,
+        actorId: trace.actor.id,
+        entityType: "work_trace",
+        entityId: trace.workUnitId,
+        riskCategory: "low",
+        visibilityLevel: "system",
+        summary: `WorkTrace ${trace.workUnitId} persisted at v${traceVersion} (operator mutation)`,
+        organizationId: trace.organizationId,
         traceId: trace.traceId,
-        contentHash,
-        traceVersion,
-        hashAlgorithm: "sha256",
-        hashVersion: hashInputVersion,
-        ingressPath: trace.ingressPath,
-      },
-    });
+        snapshot: {
+          workUnitId: trace.workUnitId,
+          traceId: trace.traceId,
+          contentHash,
+          traceVersion,
+          hashAlgorithm: "sha256",
+          hashVersion: hashInputVersion,
+          ingressPath: trace.ingressPath,
+        },
+      });
+    } catch (auditErr) {
+      console.error(
+        `[PrismaWorkTraceStore] recordOperatorMutation audit-ledger record failed for ${trace.workUnitId}; WorkTrace row was inserted in caller's tx`,
+        auditErr,
+      );
+    }
   }
 
   private buildWorkTraceCreateData(

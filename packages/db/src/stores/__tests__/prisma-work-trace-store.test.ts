@@ -239,4 +239,39 @@ describe("PrismaWorkTraceStore.recordOperatorMutation", () => {
     // Guard must run BEFORE any side effect — no tx.workTrace.create should fire.
     expect(txCreate).not.toHaveBeenCalled();
   });
+
+  it("swallows audit-ledger failures so the caller's tx is not rolled back", async () => {
+    // The method is invoked inside a caller's $transaction callback. A thrown
+    // audit-ledger error would propagate up and roll back the caller's state
+    // mutation (e.g., the conversation override) — defeating the design. The
+    // WorkTrace row was already inserted via ctx.tx; the missing anchor is
+    // observability-degraded but recoverable via verifyAndWrap on next read.
+    const txCreate = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: txCreate } };
+    const prisma = {
+      $transaction: vi.fn(),
+      workTrace: { create: vi.fn() },
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    const auditRecord = vi.fn().mockRejectedValue(new Error("audit storage unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: auditRecord } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+
+    await expect(
+      store.recordOperatorMutation(
+        makeTrace({
+          ingressPath: "store_recorded_operator_mutation",
+          mode: "operator_mutation",
+        }),
+        { tx: tx as never },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(txCreate).toHaveBeenCalledTimes(1);
+    expect(auditRecord).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
 });
