@@ -93,10 +93,26 @@ describe("handleApprovalResponse", () => {
     expect(sendSpy).toHaveBeenCalledWith(NOT_FOUND_MSG);
   });
 
-  it("replies STALE_MSG on binding-hash mismatch", async () => {
+  it("replies STALE_MSG when hash lengths differ (length-guard branch)", async () => {
     const store = makeStore(
       vi.fn().mockResolvedValue(makeApproval({ bindingHash: "differenthash" })),
     );
+    const { sink, sendSpy } = makeReplySink();
+
+    await handleApprovalResponse({
+      payload: PAYLOAD,
+      organizationId: "org-1",
+      approvalStore: store,
+      replySink: sink,
+    });
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).toHaveBeenCalledWith(STALE_MSG);
+  });
+
+  it("replies STALE_MSG when hashes are same length but content differs (timingSafeEqual branch)", async () => {
+    // Both "hash456" and "hash123" are 7 chars — passes length guard, fails timingSafeEqual.
+    const store = makeStore(vi.fn().mockResolvedValue(makeApproval({ bindingHash: "hash456" })));
     const { sink, sendSpy } = makeReplySink();
 
     await handleApprovalResponse({
