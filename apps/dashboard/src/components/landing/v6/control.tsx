@@ -71,13 +71,23 @@ export function V6Control() {
         <div className="flex flex-col">
           {ITEMS.map((it, i) => {
             const isOpen = openIdx === i;
+            const toggle = () => setOpenIdx(isOpen ? -1 : i);
             return (
               <div
                 key={it.num}
-                className={`v6-ability ${isOpen ? "open" : ""} grid cursor-pointer grid-cols-[5rem_1fr_1.5rem] items-start gap-8 border-b border-[hsl(20_8%_14%_/_0.12)] py-8 transition-colors hover:bg-[hsl(20_8%_14%_/_0.015)] max-[640px]:grid-cols-[3rem_1fr_1.25rem] max-[640px]:gap-4 max-[640px]:py-6 ${
+                role="button"
+                tabIndex={0}
+                aria-expanded={isOpen}
+                className={`v6-ability ${isOpen ? "open" : ""} grid cursor-pointer grid-cols-[5rem_1fr_1.5rem] items-start gap-8 border-b border-[hsl(20_8%_14%_/_0.12)] py-8 transition-colors hover:bg-[hsl(20_8%_14%_/_0.015)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v6-coral max-[640px]:grid-cols-[3rem_1fr_1.25rem] max-[640px]:gap-4 max-[640px]:py-6 ${
                   i === 0 ? "border-t border-t-[hsl(20_8%_14%_/_0.12)]" : ""
                 }`}
-                onClick={() => setOpenIdx(isOpen ? -1 : i)}
+                onClick={toggle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggle();
+                  }
+                }}
               >
                 <span className="font-mono-v6 pt-[0.55rem] text-[11px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
                   {it.num}

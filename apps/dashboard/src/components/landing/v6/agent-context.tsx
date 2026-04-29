@@ -6,7 +6,11 @@ export type AgentKey = "alex" | "nova" | "mira";
 
 export interface AgentMeta {
   name: string;
-  /** HTML for the second half of the hero headline. */
+  /**
+   * HTML for the second half of the hero headline. Static, author-controlled
+   * content only — never derive from user input. Rendered via
+   * dangerouslySetInnerHTML in v6/hero.tsx.
+   */
   head: string;
   cta: string;
   anchor: string;
@@ -86,7 +90,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(
     () => ({ agent, setAgent, userInteracted, setHeroInView }),
-    [agent, setAgent, userInteracted],
+    [agent, setAgent, userInteracted, setHeroInView],
   );
 
   return <AgentCtx.Provider value={value}>{children}</AgentCtx.Provider>;

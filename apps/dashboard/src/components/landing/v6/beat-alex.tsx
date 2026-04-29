@@ -140,7 +140,9 @@ function PhoneFrame({ thread }: { thread: Msg[] }) {
               </span>
               <span className="text-[11px] text-v6-coral">typing…</span>
             </span>
-            <span className="text-base opacity-60">📞</span>
+            <span aria-hidden="true" className="text-base opacity-60">
+              📞
+            </span>
           </header>
 
           {/* Thread */}
