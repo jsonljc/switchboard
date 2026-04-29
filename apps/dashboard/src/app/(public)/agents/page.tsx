@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getListedAgents, getDemoTaskStats } from "@/lib/demo-data";
 import { AgentMarketplaceCard } from "@/components/landing/agent-marketplace-card";
+import { LandingChrome } from "@/components/landing/landing-chrome";
 
 export const metadata: Metadata = {
   title: "Agents — Switchboard",
@@ -23,7 +24,7 @@ export default async function AgentCatalogPage() {
   );
 
   return (
-    <>
+    <LandingChrome>
       {/* ── Hero ── */}
       <section style={{ background: "#F5F3F0", paddingTop: "8rem", paddingBottom: "4rem" }}>
         <div className="page-width">
@@ -150,6 +151,6 @@ export default async function AgentCatalogPage() {
           )}
         </div>
       </section>
-    </>
+    </LandingChrome>
   );
 }

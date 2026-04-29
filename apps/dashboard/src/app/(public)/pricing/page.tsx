@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LandingChrome } from "@/components/landing/landing-chrome";
 
 export const metadata: Metadata = {
   title: "Pricing — Switchboard",
@@ -93,7 +94,7 @@ const FAQ = [
 
 export default function PricingPage() {
   return (
-    <>
+    <LandingChrome>
       {/* ── Hero ── */}
       <section style={{ background: "#F5F3F0", paddingTop: "8rem", paddingBottom: "4rem" }}>
         <div className="page-width">
@@ -503,6 +504,6 @@ export default function PricingPage() {
           </Link>
         </div>
       </section>
-    </>
+    </LandingChrome>
   );
 }
