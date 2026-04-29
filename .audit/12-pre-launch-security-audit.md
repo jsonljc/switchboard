@@ -263,7 +263,41 @@ Concentrated credential surface: `packages/db/src/crypto/credentials.ts` (encryp
 
 ## Section 5: Mutation Bypass — Verification
 
-_Pending — see Task 5 of plan._
+### Scope
+
+Confirm DOCTRINE §1 (single ingress) and the recent shipped controls (PR #305 chat approval block, PR #308 WorkTrace integrity, PR #293 terminal locking, PR #290 governance error visibility) remain intact. This is a verification pass, not discovery; new findings in this section are upgrades from previously-known issues that didn't make Section 1.
+
+### Method
+
+- Read `apps/api/src/__tests__/ingress-boundary.test.ts` to confirm the test still gates orchestrator-method calls in routes.
+- Grep'd every mutating Prisma call across `packages/core/` and `apps/*/routes/` to identify direct writes outside the platform layer.
+- Verified `bindingHash` coverage across api/chat/mcp-server.
+- Reviewed `IdempotencyRecord` usage and orgId namespacing.
+- Reviewed approval-lifecycle / WorkTrace alignment via PR #293's terminal locking and PR #308's WorkTrace integrity.
+- Verified the AgentDeployment governance bypass status from REFACTOR-PLAN P1.
+
+### Items checked
+
+- [✓] Ingress-boundary test (`apps/api/src/__tests__/ingress-boundary.test.ts`) covers all route files. `LEGACY_EXCEPTIONS` is empty (line 33), `FULLY_EXEMPT` is empty (line 35). Phase 2 cleared all legacy bridges.
+- [✗] No new direct-Prisma mutating writes outside platform layer. *(See MB-1.)*
+- [✓] Every approval-respond endpoint that exists verifies `bindingHash`. `apps/api/src/routes/approvals.ts:58-62` requires bindingHash for `approve` / `patch`. `apps/api/src/routes/approval-factory.ts:44-93` computes and returns it on issuance. `apps/mcp-server/src/adapters/api-execution-adapter.ts:25, 70` carries it through.
+- [✓] `apps/chat` does not accept approval responses on the conversational path (PR #305 blocked them). This is the intentional asymmetry — chat is **not** an approval-respond surface; only api and mcp are. The "chat asymmetry" REFACTOR-PLAN P2 flagged was resolved by removing the path, not by adding bindingHash to it.
+- [✗] Idempotency keys are orgId-namespaced. *(See TI-10 in Section 1; cross-referenced here as MB-2.)*
+- [✓] AgentDeployment governance bypass via `updateMany` (REFACTOR-PLAN P1) **resolved**. All call-sites (`apps/api/src/routes/billing.ts:247`, `apps/api/src/routes/governance.ts:184, 318`) include `organizationId: orgId` in the `where` clause.
+- [✓] Approval lifecycle / WorkTrace alignment intact. PR #293 (terminal locking) ensures terminal states cannot be re-mutated. PR #308 (WorkTrace cryptographic integrity) anchors content hashes. The duplicate-persistence concern from REFACTOR-PLAN P1 is mitigated by these recent changes.
+
+### Findings
+
+| ID   | Severity | Title                                                                                                          | Evidence (file:line)                                                                                                                | Recommended fix                                                                                                                                                                                                                                                                                | Status      |
+| ---- | -------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| MB-1 | INFO     | 39 mutating Prisma calls exist in `apps/api/src/routes/` that bypass `PlatformIngress.submit()`                | counts via `rg "prisma\\.\\w+\\.(create\|update\|upsert\|delete\|createMany\|updateMany\|deleteMany)" apps/api/src/routes/`        | These are platform-administration mutations (organizationConfig, agentRoster, managedChannel, scheduledReport, competencePolicy) — explicitly outside the "governed action" lifecycle per DOCTRINE. Document this distinction in DOCTRINE §1 so reviewers can quickly classify mutating writes. | _untriaged_ |
+| MB-2 | (DUPE)   | IdempotencyRecord lacks orgId namespacing                                                                       | (see TI-10)                                                                                                                         | (see TI-10)                                                                                                                                                                                                                                                                                    | _untriaged_ |
+
+### Coverage gaps
+
+- **Cross-reference with Section 1**: Section 5's items are mostly verified-OK. The remaining mutation-related issues surfaced in Section 1 (TI-1 ingress body-orgId, TI-2 governance body-precedence, TI-7/TI-8 updateMany without orgId in approval stores) are tracked there to avoid duplication.
+- **Workflow-mode mutations**: `WorkflowExecution`-driven mutations were not separately audited; they go through PlatformLifecycle which is itself bound to PlatformIngress. Trust assumption verified by the ingress-boundary test's coverage of all routes.
+- **Cron / scheduled-trigger mutations**: cron jobs (`apps/api/src/services/cron/meta-token-refresh.ts`) write directly to the connection table without going through PlatformIngress. This is by design — cron is a system actor, not a user. No finding; documented for clarity.
 
 ---
 
