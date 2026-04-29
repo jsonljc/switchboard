@@ -916,3 +916,25 @@ describe("IdentitySpecSchema — governanceProfile", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 20. AuditEventTypeSchema — work trace integrity events
+// ---------------------------------------------------------------------------
+describe("AuditEventTypeSchema — work trace integrity events", () => {
+  it("accepts work_trace.persisted", () => {
+    const result = AuditEventTypeSchema.safeParse("work_trace.persisted");
+    expect(result.success).toBe(true);
+  });
+  it("accepts work_trace.updated", () => {
+    const result = AuditEventTypeSchema.safeParse("work_trace.updated");
+    expect(result.success).toBe(true);
+  });
+  it("accepts work_trace.integrity_override", () => {
+    const result = AuditEventTypeSchema.safeParse("work_trace.integrity_override");
+    expect(result.success).toBe(true);
+  });
+  it("still accepts an existing event type", () => {
+    const result = AuditEventTypeSchema.safeParse("action.executed");
+    expect(result.success).toBe(true);
+  });
+});

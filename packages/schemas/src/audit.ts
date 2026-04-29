@@ -57,6 +57,9 @@ export const AuditEventTypeSchema = z.enum([
   "agent.activated",
   "agent.emergency-halted",
   "agent.resumed",
+  "work_trace.persisted",
+  "work_trace.updated",
+  "work_trace.integrity_override",
 ]);
 export type AuditEventType = z.infer<typeof AuditEventTypeSchema>;
 
