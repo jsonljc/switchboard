@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { PrismaConversationStateStore } from "../prisma-conversation-state-store.js";
-import { ConversationStateNotFoundError, type WorkTrace } from "@switchboard/core/platform";
+import {
+  ConversationStateNotFoundError,
+  ConversationStateInvalidTransitionError,
+  type WorkTrace,
+} from "@switchboard/core/platform";
 
 // Note: ActorType is "user" | "agent" | "system" | "service". Operator-driven
 // mutations use "user" (operators are humans). The id is whatever the API
@@ -135,5 +139,93 @@ describe("PrismaConversationStateStore.setOverride", () => {
     ).rejects.toBeInstanceOf(ConversationStateNotFoundError);
     expect(harness.txConvUpdate).not.toHaveBeenCalled();
     expect(harness.recordOperatorMutation).not.toHaveBeenCalled();
+  });
+});
+
+describe("PrismaConversationStateStore.sendOperatorMessage", () => {
+  it("appends owner message and records send trace", async () => {
+    const harness = makeStore();
+    harness.txConvFindFirst.mockResolvedValueOnce({
+      id: "conv_1",
+      threadId: "t1",
+      status: "human_override",
+      messages: [{ role: "agent", text: "earlier", timestamp: "2026-04-28T00:00:00.000Z" }],
+      channel: "telegram",
+      principalId: "p_customer",
+    });
+    harness.txConvUpdate.mockResolvedValueOnce({
+      id: "conv_1",
+      threadId: "t1",
+      status: "human_override",
+      channel: "telegram",
+      principalId: "p_customer",
+    });
+
+    const result = await harness.store.sendOperatorMessage({
+      organizationId: "org_1",
+      threadId: "t1",
+      operator,
+      message: { text: "Hello there, how can I help?" },
+    });
+
+    const trace = harness.recordOperatorMutation.mock.calls[0]![0] as WorkTrace;
+    expect(trace).toMatchObject({
+      intent: "conversation.message.send",
+      mode: "operator_mutation",
+      ingressPath: "store_recorded_operator_mutation",
+    });
+    expect(trace.parameters).toMatchObject({
+      actionKind: "conversation.message.send",
+      message: expect.objectContaining({
+        channel: "telegram",
+        destination: "p_customer",
+        deliveryAttempted: false,
+      }),
+    });
+    expect(typeof (trace.parameters as { message: { bodyHash: string } }).message.bodyHash).toBe(
+      "string",
+    );
+    expect(
+      (trace.parameters as { message: { bodyHash: string } }).message.bodyHash.length,
+    ).toBeGreaterThan(0);
+    expect(
+      (trace.parameters as { message: { redactedPreview: string } }).message.redactedPreview,
+    ).toBe("Hello there, how can I help?");
+    expect(result.appendedMessage.role).toBe("owner");
+    expect(result.appendedMessage.text).toBe("Hello there, how can I help?");
+    expect(result.channel).toBe("telegram");
+    expect(result.destinationPrincipalId).toBe("p_customer");
+  });
+
+  it("rejects when conversation is not in human_override", async () => {
+    const harness = makeStore();
+    harness.txConvFindFirst.mockResolvedValueOnce({
+      id: "c",
+      status: "active",
+      threadId: "t",
+      messages: [],
+    });
+    await expect(
+      harness.store.sendOperatorMessage({
+        organizationId: "org_1",
+        threadId: "t",
+        operator,
+        message: { text: "x" },
+      }),
+    ).rejects.toBeInstanceOf(ConversationStateInvalidTransitionError);
+    expect(harness.txConvUpdate).not.toHaveBeenCalled();
+  });
+
+  it("404s when conversation is missing", async () => {
+    const harness = makeStore();
+    harness.txConvFindFirst.mockResolvedValueOnce(null);
+    await expect(
+      harness.store.sendOperatorMessage({
+        organizationId: "org_1",
+        threadId: "missing",
+        operator,
+        message: { text: "x" },
+      }),
+    ).rejects.toBeInstanceOf(ConversationStateNotFoundError);
   });
 });
