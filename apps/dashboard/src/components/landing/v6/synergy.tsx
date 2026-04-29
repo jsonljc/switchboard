@@ -32,7 +32,7 @@ export function V6Synergy() {
         <div className="mx-auto flex max-w-[80rem] items-center justify-between px-10 font-mono-v6 text-[11px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3 max-[900px]:px-6 max-[900px]:text-[10px]">
           <span className="inline-flex items-center gap-[0.6rem]">
             <span className="h-[5px] w-[5px] rounded-full bg-v6-graphite-3" />
-            <span>02 — One memory</span>
+            <span>02 — Shared context</span>
           </span>
           <span>The desk / synergy</span>
         </div>
@@ -57,10 +57,9 @@ export function V6Synergy() {
               as="p"
               className="max-w-[30rem] text-[1.125rem] leading-[1.55] text-v6-graphite-2"
             >
-              Alex sees a lead asking about a product Nova is currently advertising — and tells Nova
-              which audience converted. Nova spots a saturated ad set — and tells Mira which angle
-              to retire. Mira ships a new variant — and Alex knows how to talk about it.{" "}
-              <b className="font-medium text-v6-graphite">The desk shares one memory.</b>
+              Built so each agent&rsquo;s signal can flow to the others — what Alex hears in chat,
+              what Nova sees in spend, what Mira learns from creative reviews.{" "}
+              <b className="font-medium text-v6-graphite">The desk shares context as it grows.</b>
             </Reveal>
 
             <Reveal

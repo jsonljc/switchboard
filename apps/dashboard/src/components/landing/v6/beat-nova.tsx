@@ -70,12 +70,12 @@ const ROWS = [
 ];
 
 const BULLETS = [
-  ["Plans", " campaigns from a brief — objectives, audiences, budgets"],
-  ["Launches", " ad sets, creative variants, lookalikes, retargeting"],
-  ["Scans", " spend, CPL, CPA, ROAS by ad set, every hour"],
-  ["Drafts", " pauses, budget reallocations, audience swaps"],
-  ["Tests", " new variants against control with a guardrail"],
-  ["Reports", " a Monday recap: what shipped, what it earned"],
+  ["Plans", " campaigns from a brief — objective, audience, budget, structure"],
+  ["Reads", " spend, CPL, CPA, ROAS by ad set"],
+  ["Finds", " budget leaks before they become habits"],
+  ["Drafts", " pauses, reallocations, audience swaps, and launch plans"],
+  ["Compares", " what changed against what happened"],
+  ["Reports", " the next move in plain English"],
 ];
 
 function dirClass(dir: "up" | "down" | "neutral", strong = false) {
@@ -300,6 +300,10 @@ export function V6BeatNova() {
         </Reveal>
       </div>
 
+      <p className="font-mono-v6 mx-auto mt-4 w-full max-w-[78rem] px-4 text-center text-[10.5px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3">
+        Illustrative example. Actual numbers vary by account.
+      </p>
+
       {/* Body text below dashboard */}
       <div className="mx-auto w-full max-w-[78rem] px-4 pb-32 pt-16 max-[900px]:pb-20 max-[900px]:pt-12">
         <Reveal className="flex flex-col gap-[1.4rem]">
@@ -326,19 +330,17 @@ export function V6BeatNova() {
                 style={{ fontSize: "clamp(2rem, 3.8vw, 3.5rem)" }}
               >
                 <span className="block font-normal text-v6-graphite-2">
-                  Plans the campaign. Watches it run.
+                  Bad ad sets don&rsquo;t pause themselves.
                 </span>
                 <span className="block font-semibold text-v6-graphite">
-                  Pauses what&rsquo;s{" "}
-                  <em className="font-semibold not-italic text-v6-coral">underperforming</em>.
+                  Nova finds the waste and{" "}
+                  <em className="font-semibold not-italic text-v6-coral">drafts the fix</em>.
                 </span>
               </h2>
               <p className="max-w-[26rem] text-[1.0625rem] leading-[1.5] text-v6-graphite-2">
-                Nova is your full digital marketing optimizer on shift 24/7. She plans and launches
-                campaigns, builds audiences, picks budgets, watches every ad set, drafts the fix
-                when something slips, and measures lift after you ship.{" "}
-                <b className="font-medium text-v6-graphite">Never auto-publishes the big stuff.</b>{" "}
-                You review. You publish. Or you don&rsquo;t.
+                Nova is your ad operator on shift. She plans campaigns, reads performance, spots
+                budget leaks, prepares changes, and turns the next move into a reviewable draft.{" "}
+                <b className="font-medium text-v6-graphite">You approve what goes live.</b>
               </p>
               <div className="mt-2">
                 <a

@@ -74,7 +74,7 @@ export function V6Hero() {
 
           <p className="mx-auto mt-7 max-w-[36rem] text-[1.125rem] leading-[1.5] text-v6-graphite-2">
             Hire one. Or hire the desk —{" "}
-            <b className="font-medium text-v6-graphite">they share what they learn.</b>
+            <b className="font-medium text-v6-graphite">they share context as they go.</b>
           </p>
 
           <AgentToggle id="hero-toggle" className="mt-10" />
@@ -97,7 +97,7 @@ export function V6Hero() {
           </div>
 
           <span className="font-mono-v6 mt-11 text-[11px] tracking-[0.08em] text-v6-graphite-3">
-            Setup in minutes · Approval-first · Stays in your control
+            Setup in a day · Agents draft, you publish · Stays in your control
           </span>
         </div>
       </div>

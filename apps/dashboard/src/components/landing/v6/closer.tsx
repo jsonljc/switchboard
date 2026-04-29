@@ -37,7 +37,8 @@ export function V6Closer() {
           </h2>
 
           <p className="mx-auto mt-7 max-w-[34rem] text-[1.0625rem] leading-[1.5] text-v6-graphite-2">
-            Pick the seat that hurts most. Add another when ready. Approval-first from day one.
+            Pick the seat that hurts most. Add another when ready. Agents draft, you publish — from
+            day one.
           </p>
 
           <AgentToggle id="closer-toggle" className="mt-10" />
@@ -60,7 +61,7 @@ export function V6Closer() {
           </div>
 
           <span className="font-mono-v6 mt-10 text-[11px] tracking-[0.08em] text-v6-graphite-3">
-            14-day pilot of the desk · $199 · Cancel anytime
+            Pilot access · Cancel anytime
           </span>
         </div>
       </div>

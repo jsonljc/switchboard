@@ -19,7 +19,7 @@ export interface AgentMeta {
 export const AGENTS: Record<AgentKey, AgentMeta> = {
   alex: {
     name: "Alex",
-    head: 'replies in twelve <em class="text-v6-coral not-italic">seconds</em>.',
+    head: 'replies in <em class="text-v6-coral not-italic">seconds</em>.',
     cta: "Alex",
     anchor: "#alex",
   },
