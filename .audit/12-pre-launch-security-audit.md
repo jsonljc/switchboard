@@ -155,7 +155,58 @@ The skill runtime, tool registry, agent runtime, and tool implementations: `pack
 
 ## Section 3: Auth Surface
 
-_Pending — see Task 3 of plan._
+### Scope
+
+Three subsystems plus all webhook signature verifiers:
+- Dashboard auth: NextAuth (Credentials + Email + Google) in `apps/dashboard/src/lib/auth.ts`.
+- API auth: `apps/api/src/middleware/auth.ts` + session-token JWT in `apps/api/src/auth/session-token.ts`.
+- MCP auth: `apps/mcp-server/src/auth.ts` (separate from `session-guard.ts`, which is a runtime quota guard, not auth).
+- Webhook signature verifiers: Meta (WhatsApp, Instagram), Stripe, Telegram, managed-webhook, alert-webhook.
+
+### Method
+
+- Read each auth subsystem's entry point and traced session/token verification.
+- Reviewed cookie configuration (NextAuth defaults are Secure + HttpOnly + SameSite=lax in prod).
+- Audited password hashing in `apps/dashboard/src/lib/password.ts` and the bootstrap-endpoint hash in `apps/api/src/routes/setup.ts`.
+- Reviewed every webhook signature verifier for: timing-safe compare, replay protection (timestamp tolerance), raw-body capture, fail-closed behavior.
+- Reviewed rate limiting in `apps/api/src/middleware/rate-limit.ts` (per-IP) and the global Fastify rate-limit registration in `apps/api/src/app.ts:126`.
+- Surveyed admin/internal route exposure in `apps/api/src/routes/`.
+- Reviewed setup-bootstrap protection.
+
+### Items checked
+
+- [✓] NextAuth config audited (`apps/dashboard/src/lib/auth.ts`) — JWT strategy, NEXTAUTH_SECRET enforced in production, prisma adapter, callbacks populate organizationId/principalId from DB on magic-link sign-in.
+- [✓] session-token implementation audited (`apps/api/src/auth/session-token.ts`) — HS256, expiry, issuer claim, jose library.
+- [✓] MCP auth audited (`apps/mcp-server/src/auth.ts`) — SHA-256 hash on load, timing-safe compare, fail-closed in production.
+- [✓] API keys stored hashed (apiKeyHash, SHA-256) with high-entropy random source (`provision-dashboard-user.ts:20, 83`); also stored encrypted-at-rest for display recovery.
+- [✗] API key revocation invalidates active sessions immediately. *(See AU-3 — 60s in-memory cache TTL on `dbKeyCache` in `apps/api/src/middleware/auth.ts:21`.)*
+- [✓] Stripe webhook handler verifies signature with timing-safe compare and replay-tolerance (Stripe library default 300s) — `apps/api/src/services/stripe-service.ts:73`. Raw body correctly preserved via `config: { rawBody: true }` in `apps/api/src/routes/billing.ts:160`.
+- [✓] WhatsApp/Instagram webhook signatures verified with HMAC-SHA256 + timing-safe compare; fails closed when appSecret missing.
+- [✗] Webhook replay protection. *(See AU-1 — Meta-family webhooks have no timestamp tolerance check.)*
+- [✗] Telegram webhook signature verifier fails open. *(See AU-2.)*
+- [✗] Login/reset endpoints rate-limited per IP and per account. *(See AU-4 — per-IP only.)*
+- [✓] No internal admin routes exposed without auth. `/api/setup/bootstrap` is the only sensitive setup route; protected by `INTERNAL_SETUP_SECRET` with timing-safe compare (`apps/api/src/routes/setup.ts:47-50`) and idempotency (one-time-only with 0-user check). Auth middleware exemptions are explicit and minimal (`/health`, `/metrics`, `/docs`, `/api/setup/*`, `/api/billing/webhook`).
+- [✓] Password hashing uses bcrypt cost 12 + scrypt fallback (`apps/dashboard/src/lib/password.ts`); both modern and adequately costed. Verification uses `bcrypt.compare` and `timingSafeEqual` for scrypt.
+
+### Findings
+
+| ID   | Severity | Title                                                                                                | Evidence (file:line)                                                                                                                                              | Recommended fix                                                                                                                                                                                                                                                                                              | Status      |
+| ---- | -------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| AU-1 | HIGH     | Meta-family webhook signatures (WhatsApp, Instagram) have no timestamp / replay-protection window    | `apps/chat/src/adapters/whatsapp.ts:97-113`, `apps/chat/src/adapters/instagram.ts:92-` (similar pattern)                                                          | Add a timestamp header check (Meta sends `x-hub-signature-256` but does not include a timestamp; consider tracking `(messageId, timestamp)` pairs for a deduplication window of ~10 minutes, or rely on the existing `WebhookEventLog` for idempotency — currently used only by Stripe). Document choice in adapter. | _untriaged_ |
+| AU-2 | HIGH     | Telegram adapter `verifyRequest` returns `true` (fail-open) if `webhookSecret` is not configured     | `apps/chat/src/adapters/telegram.ts:82-83`                                                                                                                        | Match the WhatsApp pattern: fail-closed (return `false`) when `webhookSecret` is missing in production. Optionally allow a dev-mode override gated by `NODE_ENV !== "production"`.                                                                                                                            | _untriaged_ |
+| AU-3 | MEDIUM   | API key revocation has up to 60s of latency due to in-memory `dbKeyCache` TTL                        | `apps/api/src/middleware/auth.ts:21, 128-137, 152`                                                                                                                | Either lower TTL (e.g., 10s) or invalidate the cache on revocation via a Redis pub/sub (or DB row-version). Acceptable risk at 10 customers but worth documenting. Defense-in-depth: a revoked key remains valid for ≤60s.                                                                                       | _untriaged_ |
+| AU-4 | MEDIUM   | Auth rate limit is per-IP only; no per-account brute-force protection                                | `apps/api/src/middleware/rate-limit.ts:14-15, 33-50`                                                                                                              | Add a per-account counter on login/reset endpoints (key: `auth-rl-account:<email-hash>`) with a tighter limit (e.g., 5/15min) and a lockout/CAPTCHA on threshold breach. Pairs with the existing per-IP limit, not a replacement.                                                                                | _untriaged_ |
+| AU-5 | LOW      | Session JWT uses HS256 (symmetric)                                                                   | `apps/api/src/auth/session-token.ts:33`                                                                                                                           | Acceptable for single-service use. If session tokens will ever be verified by external services (e.g., MCP from dashboard, dashboard from API in a future deployment topology), switch to RS256 or EdDSA. Track for post-launch reassessment.                                                                  | _untriaged_ |
+| AU-6 | LOW      | `INTERNAL_SETUP_SECRET` rotation strategy not documented                                             | `apps/api/src/routes/setup.ts:27`                                                                                                                                 | The bootstrap endpoint is hard-gated by 0-user check, so post-bootstrap it is effectively dormant. Still: documented runbook for rotating `INTERNAL_SETUP_SECRET` after bootstrap (or removing it from production env vars entirely) reduces blast radius if leaked.                                              | _untriaged_ |
+| AU-7 | INFO     | NextAuth secret rotation strategy not documented                                                     | `apps/dashboard/src/lib/auth.ts:84`                                                                                                                               | Document the JWT-rotation procedure for `NEXTAUTH_SECRET`. Rotation invalidates all active sessions, so plan a maintenance window. Track post-launch.                                                                                                                                                          | _untriaged_ |
+
+### Coverage gaps
+
+- **OAuth provider trust** (Google) was not audited beyond confirming standard NextAuth provider config. The full OAuth flow (state parameter, PKCE, redirect URI allowlist) relies on NextAuth defaults; if a launch-blocker spec calls for SOC2-grade OAuth review, do it then.
+- **Email verification flow** was not deeply audited. The token model `DashboardVerificationToken` has standard NextAuth shape with expiry; not exhaustively tested for token-reuse, time-based attacks, or single-use enforcement.
+- **CSRF on dashboard mutations** was not specifically tested; relies on NextAuth's defaults plus SameSite cookie semantics. Spot check OK; full CSRF audit recommended pre-SOC2.
+- **Webhook signing-secret rotation** procedures were not documented. Stripe publishes a tool for rotating the webhook signing secret; Meta requires re-pairing. Operational runbook recommended.
+- **Logout / session invalidation** not specifically traced. NextAuth sign-out destroys the session cookie but the JWT is self-contained (no server-side denylist). A stolen JWT remains valid until expiry. Trade-off — acceptable at this scale, not at SOC2-grade.
 
 ---
 
