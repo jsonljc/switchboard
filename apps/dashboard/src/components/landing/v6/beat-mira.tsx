@@ -56,10 +56,10 @@ export function V6BeatMira() {
             <ul className="grid w-full grid-cols-1 gap-[0.85rem] border-t border-[hsl(20_8%_14%_/_0.12)] pt-6">
               {[
                 [
-                  <b key="hook" className="font-medium">
-                    Hook generation
-                  </b>,
-                  " tuned to your brief",
+                  <span key="hook">
+                    <b className="font-medium">Hook generation</b> tuned to your brief
+                  </span>,
+                  null,
                 ],
                 ["Scripts, storyboards, video drafts", null],
                 ["Stop at any stage and take what fits", null],
