@@ -32,7 +32,7 @@ export function V6Synergy() {
         <div className="mx-auto flex max-w-[80rem] items-center justify-between px-10 font-mono-v6 text-[11px] font-medium uppercase tracking-[0.08em] text-v6-graphite-3 max-[900px]:px-6 max-[900px]:text-[10px]">
           <span className="inline-flex items-center gap-[0.6rem]">
             <span className="h-[5px] w-[5px] rounded-full bg-v6-graphite-3" />
-            <span>02 — One memory</span>
+            <span>02 — Shared context</span>
           </span>
           <span>The desk / synergy</span>
         </div>

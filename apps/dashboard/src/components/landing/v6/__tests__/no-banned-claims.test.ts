@@ -27,7 +27,7 @@ const BANNED: Banned[] = [
     reason: "no SLA telemetry — Alex's first-reply timing is unmeasured",
   },
   { pattern: /12-second/, reason: "no SLA telemetry — Alex's first-reply timing is unmeasured" },
-  { pattern: /one memory/, reason: "no shared-memory layer between agents" },
+  { pattern: /one memory/i, reason: "no shared-memory layer between agents" },
   { pattern: /14-day pilot/, reason: "no pilot SKU exists in billing" },
   { pattern: /Cal\.com/, reason: "Cal.com integration is URL-only, not a real connector" },
   { pattern: /Notion/, reason: "Notion connector does not exist" },
