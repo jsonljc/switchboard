@@ -16,7 +16,7 @@ export function V6Footer() {
             </span>
             <span className="text-[0.8125rem] leading-[1.5] text-v6-graphite-2">
               Hire your revenue desk one agent at a time. Alex replies. Nova watches spend. Mira
-              ships creative. They share what they learn.
+              ships creative. They share context as they go.
             </span>
           </div>
 
@@ -36,10 +36,7 @@ export function V6Footer() {
           </FooterCol>
 
           <FooterCol heading="Status">
-            <a href="#" className="inline-flex items-center gap-[0.5rem]">
-              <span className="v6-footer-pulse" />
-              All systems normal
-            </a>
+            <a href="#">Status</a>
             <a href="#">status.switchboard.live</a>
             <a href="#">@switchboard</a>
           </FooterCol>
