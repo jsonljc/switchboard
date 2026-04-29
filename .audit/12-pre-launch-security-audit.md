@@ -2,7 +2,7 @@
 
 **Date started:** 2026-04-29
 **Spec:** `docs/superpowers/specs/2026-04-29-pre-launch-security-audit-design.md`
-**Status:** In progress
+**Status:** Triage complete; 5 fix-now specs in flight (12 of 38 findings launch-blocking)
 **Owner:** Jason
 
 This audit covers six priority areas before the first paying-customer cohort. HIGH/CRITICAL findings block first paying customer; report completion blocks launch.
@@ -385,5 +385,17 @@ None. All HIGH+CRITICAL findings triaged as fix-now; the launch-blocking gate is
 
 _Updated as fix-now items ship. One row per launch-blocking finding._
 
-| Finding ID | Severity | Status | Spec / PR | Notes |
-| ---------- | -------- | ------ | --------- | ----- |
+| Finding ID | Severity | Status         | Spec                                                                                                                          | Notes                                          |
+| ---------- | -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| TI-1       | CRITICAL | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`                                                  | Bundled in auth-trust-binding spec             |
+| TI-2       | CRITICAL | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`                                                  | Bundled in auth-trust-binding spec             |
+| TI-3       | CRITICAL | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`                                                  | Bundled in auth-trust-binding spec             |
+| TI-4       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-auth-trust-binding-design.md`                                                  | Bundled in auth-trust-binding spec             |
+| TI-5       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md`                                     | Bundled in chat-conversation-store spec        |
+| TI-6       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-chat-conversation-store-scoping-design.md`                                     | Bundled in chat-conversation-store spec        |
+| AI-1       | CRITICAL | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md`                                     | Bundled in skill-runtime-executor-contract spec|
+| AI-2       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md`                                     | Bundled in skill-runtime-executor-contract spec|
+| AI-3       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-skill-runtime-executor-contract-design.md`                                     | Bundled in skill-runtime-executor-contract spec|
+| AU-1       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md`                                                   | Bundled in webhook-hardening spec              |
+| AU-2       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-webhook-hardening-design.md`                                                   | Bundled in webhook-hardening spec              |
+| OW-1       | HIGH     | spec authored  | `docs/superpowers/specs/2026-04-29-fix-launch-creative-pipeline-ssrf-design.md`                                              | One-off spec                                   |
