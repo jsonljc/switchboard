@@ -17,7 +17,7 @@ import { V6Dock } from "@/components/landing/v6/dock";
 export const metadata: Metadata = {
   title: "Switchboard — Hire your revenue desk. One agent at a time.",
   description:
-    "Hire your revenue desk one agent at a time. Alex replies. Nova watches spend. Mira ships creative. They share what they learn.",
+    "Hire your revenue desk one agent at a time. Alex replies. Nova watches spend. Mira ships creative. They share context as they go.",
 };
 
 export default function HomePage() {
