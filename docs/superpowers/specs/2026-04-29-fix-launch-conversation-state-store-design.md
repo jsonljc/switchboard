@@ -71,7 +71,7 @@ export interface SetOverrideInput {
   organizationId: string;
   threadId: string;
   override: boolean; // true => human_override, false => active
-  operator: Actor; // actorType "operator" expected; carried through to trace
+  operator: Actor; // actor.type = "user" expected (operators are humans; see §4.4)
 }
 
 export interface SetOverrideResult {
