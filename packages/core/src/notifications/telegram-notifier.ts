@@ -58,6 +58,7 @@ export class TelegramApprovalNotifier implements ApprovalNotifier {
           callback_data: JSON.stringify({
             action: "reject",
             approvalId: n.approvalId,
+            bindingHash: n.bindingHash,
           }),
         },
       ],

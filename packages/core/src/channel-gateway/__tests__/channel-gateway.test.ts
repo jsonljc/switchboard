@@ -49,6 +49,12 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
         workUnit: { id: "wu-1", traceId: "trace-1" },
       }),
     },
+    approvalStore: {
+      save: vi.fn().mockResolvedValue(undefined),
+      getById: vi.fn().mockResolvedValue(null),
+      updateState: vi.fn().mockResolvedValue(undefined),
+      listPending: vi.fn().mockResolvedValue([]),
+    },
     ...overrides,
   };
 }
@@ -353,6 +359,12 @@ function makeConfig(overrides: Partial<ChannelGatewayConfig> = {}): ChannelGatew
     conversationStore: {
       getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
       addMessage: vi.fn().mockResolvedValue(undefined),
+    },
+    approvalStore: {
+      save: vi.fn().mockResolvedValue(undefined),
+      getById: vi.fn().mockResolvedValue(null),
+      updateState: vi.fn().mockResolvedValue(undefined),
+      listPending: vi.fn().mockResolvedValue([]),
     },
     ...overrides,
   };

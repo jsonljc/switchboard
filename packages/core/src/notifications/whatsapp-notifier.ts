@@ -61,7 +61,11 @@ export class WhatsAppApprovalNotifier implements ApprovalNotifier {
             {
               type: "reply",
               reply: {
-                id: JSON.stringify({ action: "reject", approvalId: n.approvalId }),
+                id: JSON.stringify({
+                  action: "reject",
+                  approvalId: n.approvalId,
+                  bindingHash: n.bindingHash,
+                }),
                 title: "Reject",
               },
             },

@@ -51,6 +51,7 @@ export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
 export {
+  PrismaApprovalStore,
   PrismaSessionStore,
   PrismaRunStore,
   PrismaPauseStore,

@@ -500,6 +500,30 @@
 
 ---
 
+### 4a. **Follow-up: Chat Approval Response Identity Binding** _(deferred from Risk 4)_
+
+**Goal:** Enable deterministic approve/reject execution from chat without bypassing responder authorization.
+
+**Required before enabling chat approval execution:**
+
+- Resolve inbound chat sender to Contact.
+- Map Contact to authorized responder principal.
+- Pass `respondedBy` into the same responder authorization path used by API approvals.
+- Share approval response execution helper between API and chat.
+- Preserve terminal approval-payload branch: no LLM, no `PlatformIngress.submit`, no normal chat persistence.
+- Add lifecycle mutation tests for approve/reject from chat.
+- Do not introduce `skipResponderAuth` or channel-possession-only authorization.
+
+**Effort:** M (chat identity → contact → principal → authorization → lifecycle mutation).
+
+**Dependencies:** Risk 4 must ship first (this slice extends the gateway terminal branch into a deterministic lifecycle call once a verified principal exists).
+
+**Branch slug:** `feat/chat-approval-response-identity-binding`
+
+**Acceptance:** Chat approve/reject buttons mutate approval lifecycle state via the same authorization path as the API. Hash match no longer returns the dashboard-handoff message; it executes the approval. No `skipResponderAuth` flag exists in the codebase.
+
+---
+
 ### 5. **Rate limits not per-endpoint (approval/execute starved)**
 
 **Problem:** Global rate limit (100 req/min default) applies to all routes. High-frequency reads can exhaust window, starving approval responses and action execution.

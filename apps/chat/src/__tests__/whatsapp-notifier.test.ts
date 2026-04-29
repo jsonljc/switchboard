@@ -70,6 +70,7 @@ describe("WhatsAppApprovalNotifier", () => {
     const rejectData = JSON.parse(rejectBtn.reply.id);
     expect(rejectData.action).toBe("reject");
     expect(rejectData.approvalId).toBe("appr_1");
+    expect(rejectData.bindingHash).toBe("hash123");
   });
 
   it("includes risk category in header", async () => {
