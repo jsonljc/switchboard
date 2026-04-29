@@ -49,13 +49,18 @@ export function V6BeatMira() {
               </span>
             </h2>
             <p className="max-w-[26rem] text-[1.0625rem] leading-[1.5] text-v6-graphite-2">
-              Trend scan, hook generation, scripts, storyboards, video.{" "}
+              Hooks, scripts, storyboards, video drafts.{" "}
               <b className="font-medium text-v6-graphite">Stop at any stage</b> and take what fits.
               You stay director — Mira never auto-publishes.
             </p>
             <ul className="grid w-full grid-cols-1 gap-[0.85rem] border-t border-[hsl(20_8%_14%_/_0.12)] pt-6">
               {[
-                ["Trend scan + ", "hook generation"],
+                [
+                  <b key="hook" className="font-medium">
+                    Hook generation
+                  </b>,
+                  " tuned to your brief",
+                ],
                 ["Scripts, storyboards, video drafts", null],
                 ["Stop at any stage and take what fits", null],
                 ["You stay director, always", null],
