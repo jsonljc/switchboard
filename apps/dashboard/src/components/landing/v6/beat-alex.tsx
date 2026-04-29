@@ -74,8 +74,7 @@ export function V6BeatAlex() {
                 Leads die in twelve <em className="font-semibold not-italic">minutes</em>.
               </span>
               <span className="block font-semibold text-v6-graphite">
-                Alex replies in twelve{" "}
-                <em className="font-semibold not-italic text-v6-coral">seconds</em>.
+                Alex replies in <em className="font-semibold not-italic text-v6-coral">seconds</em>.
               </span>
             </h2>
             <p className="max-w-[26rem] text-[1.0625rem] leading-[1.5] text-v6-graphite-2">
@@ -85,7 +84,7 @@ export function V6BeatAlex() {
             </p>
             <ul className="grid w-full grid-cols-1 gap-[0.85rem] border-t border-[hsl(20_8%_14%_/_0.12)] pt-6">
               {[
-                "12-second median first reply",
+                "Fast first reply, every time",
                 "Qualifies through natural conversation",
                 "Books to your real calendar",
                 "Handoff path you control",
