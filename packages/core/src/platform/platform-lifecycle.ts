@@ -17,6 +17,7 @@ import type { WorkTraceStore } from "./work-trace-recorder.js";
 import type { ExecutionModeName } from "./types.js";
 import type { PlatformIngress } from "./platform-ingress.js";
 import { DEFAULT_CONSTRAINTS } from "./governance/constraint-resolver.js";
+import { assertExecutionAdmissible } from "./work-trace-integrity.js";
 
 import type {
   ApprovalStore as CoreApprovalStore,
@@ -84,7 +85,16 @@ export class PlatformLifecycle {
     await this.authorizeResponder(params.respondedBy, approval);
 
     const envelope = await envelopeStore.getById(approval.envelopeId);
-    const trace = await this.config.traceStore.getByWorkUnitId(approval.envelopeId);
+    const traceResult = await this.config.traceStore.getByWorkUnitId(approval.envelopeId);
+    const trace = traceResult?.trace ?? null;
+
+    if (traceResult) {
+      await assertExecutionAdmissible({
+        trace: traceResult.trace,
+        integrity: traceResult.integrity,
+        auditLedger: this.config.ledger,
+      });
+    }
 
     this.preventSelfApprovalFromTrace(params, trace, envelope);
     this.checkRateLimit(params);
@@ -282,7 +292,8 @@ export class PlatformLifecycle {
   private async executeAfterApproval(workUnitId: string): Promise<ExecuteResult> {
     const { envelopeStore, modeRegistry, traceStore, ledger } = this.config;
 
-    const trace = await traceStore.getByWorkUnitId(workUnitId);
+    const traceResult = await traceStore.getByWorkUnitId(workUnitId);
+    const trace = traceResult?.trace ?? null;
     const envelope = await envelopeStore.getById(workUnitId);
 
     if (!trace && !envelope) {
@@ -291,6 +302,14 @@ export class PlatformLifecycle {
 
     if (envelope && envelope.status !== "approved") {
       throw new Error(`Cannot execute: envelope status is ${envelope.status}, expected "approved"`);
+    }
+
+    if (traceResult) {
+      await assertExecutionAdmissible({
+        trace: traceResult.trace,
+        integrity: traceResult.integrity,
+        auditLedger: ledger,
+      });
     }
 
     const proposal = envelope?.proposals[0];
