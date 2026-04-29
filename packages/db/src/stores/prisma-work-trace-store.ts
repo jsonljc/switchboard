@@ -96,6 +96,8 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
             completedAt: trace.completedAt ? new Date(trace.completedAt) : null,
             contentHash,
             traceVersion,
+            ingressPath: trace.ingressPath, // explicit; should always be set by buildWorkTrace
+            hashInputVersion: trace.hashInputVersion ?? WORK_TRACE_HASH_VERSION_LATEST,
           },
         });
 
@@ -284,6 +286,12 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       lockedAt: row.lockedAt?.toISOString(),
       contentHash: row.contentHash ?? undefined,
       traceVersion: row.traceVersion,
+      // Integrity invariant: pre-migration rows have hashInputVersion = 1 from the
+      // migration default; copying it through preserves their contentHash verification
+      // path. Without this, update() would silently re-hash pre-migration rows at v2
+      // (LATEST) and break round-trip integrity for those rows.
+      ingressPath: (row.ingressPath ?? "platform_ingress") as WorkTrace["ingressPath"],
+      hashInputVersion: row.hashInputVersion ?? 1,
     };
   }
 
