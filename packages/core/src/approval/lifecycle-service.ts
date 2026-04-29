@@ -8,6 +8,8 @@ import type { WorkUnit } from "../platform/work-unit.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import { buildMaterializationInput } from "./executable-materializer.js";
 import { validateDispatchAdmission } from "./dispatch-admission.js";
+import { assertExecutionAdmissible } from "../platform/work-trace-integrity.js";
+import type { AuditLedger } from "../audit/ledger.js";
 
 export interface ApprovalLifecycleServiceConfig {
   store: ApprovalLifecycleStore;
@@ -138,11 +140,22 @@ export class ApprovalLifecycleService {
     lifecycleId: string;
     respondedBy: string;
     traceStore: WorkTraceStore;
+    auditLedger?: AuditLedger;
   }): Promise<LifecycleRecord> {
     const lifecycle = await this.rejectRevision({
       lifecycleId: params.lifecycleId,
       respondedBy: params.respondedBy,
     });
+
+    // Read + assert integrity before mutating the WorkTrace.
+    const readResult = await params.traceStore.getByWorkUnitId(lifecycle.actionEnvelopeId);
+    if (readResult) {
+      await assertExecutionAdmissible({
+        trace: readResult.trace,
+        integrity: readResult.integrity,
+        auditLedger: params.auditLedger,
+      });
+    }
 
     await params.traceStore.update(lifecycle.actionEnvelopeId, {
       outcome: "failed",
