@@ -25,8 +25,16 @@ async function dispatchResponse(params: {
   onMessageRecorded: ChannelGatewayConfig["onMessageRecorded"];
   replySink: ReplySink;
 }): Promise<void> {
-  const { response, sessionId, conversationId, conversationStore, resolved, message, replySink } =
-    params;
+  const {
+    response,
+    sessionId,
+    conversationId,
+    conversationStore,
+    resolved,
+    message,
+    onMessageRecorded,
+    replySink,
+  } = params;
 
   // Re-check override status — operator may have toggled during skill execution
   if (conversationStore.getConversationStatus) {
@@ -50,7 +58,7 @@ async function dispatchResponse(params: {
         ? response.result.outputs.response
         : response.result.summary;
     await conversationStore.addMessage(conversationId, "assistant", text);
-    params.onMessageRecorded?.({
+    onMessageRecorded?.({
       deploymentId: resolved.deploymentId,
       listingId: resolved.listingId,
       organizationId: resolved.organizationId,

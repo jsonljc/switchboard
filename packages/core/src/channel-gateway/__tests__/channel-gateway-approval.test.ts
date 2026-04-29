@@ -7,6 +7,7 @@ import {
   DASHBOARD_HANDOFF_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
 } from "../handle-approval-response.js";
+import { DeploymentInactiveError } from "../../platform/deployment-resolver.js";
 
 function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): ChannelGatewayConfig {
   return {
@@ -279,5 +280,43 @@ describe("ChannelGateway approval-payload interception", () => {
     expect(submit).toHaveBeenCalledTimes(1);
     expect(addMessage).toHaveBeenCalled(); // existing inbound persistence path runs
     expect(sendSpy).toHaveBeenCalledWith("Hello there");
+  });
+
+  it("approval-shaped payload on a paused deployment still returns pause message, not approval reply", async () => {
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const submit = vi.fn();
+    const addMessage = vi.fn();
+    const getById = vi.fn();
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
+        addMessage,
+      },
+      deploymentResolver: {
+        resolveByChannelToken: vi
+          .fn()
+          .mockRejectedValue(new DeploymentInactiveError("dep-x", "status is deactivated")),
+        resolveByDeploymentId: vi.fn(),
+        resolveByOrgAndSlug: vi.fn(),
+      },
+      platformIngress: { submit },
+      approvalStore: {
+        save: vi.fn().mockResolvedValue(undefined),
+        getById,
+        updateState: vi.fn().mockResolvedValue(undefined),
+        listPending: vi.fn().mockResolvedValue([]),
+      },
+    });
+
+    const gateway = new ChannelGateway(config);
+    await gateway.handleIncoming(makeMessage(), { send: sendSpy });
+
+    // Pause branch fires first (deployment resolve throws DeploymentInactiveError)
+    // and short-circuits BEFORE approval parsing — so getById is never reached.
+    expect(getById).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledWith(
+      "This service is temporarily paused. Please try again later.",
+    );
   });
 });
