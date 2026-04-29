@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TelegramApprovalNotifier } from "../telegram-notifier.js";
 import type { ApprovalNotification } from "../notifier.js";
 
@@ -8,6 +8,10 @@ describe("TelegramApprovalNotifier", () => {
   beforeEach(() => {
     fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   function makeNotification(overrides: Partial<ApprovalNotification> = {}): ApprovalNotification {
