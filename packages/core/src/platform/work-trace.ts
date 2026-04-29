@@ -43,4 +43,15 @@ export interface WorkTrace {
    * Once non-null, the trace is sealed: see work-trace-lock.ts for invariants.
    */
   lockedAt?: string;
+  /**
+   * SHA-256 of canonical-JSON of hash-included WorkTrace fields.
+   * Set by the store on persist (v1) and every hash-relevant update (v+1).
+   * Optional only because pre-migration reads return rows without it.
+   */
+  contentHash?: string;
+  /**
+   * Monotonic per workUnitId. 1 on persist; +1 per hash-relevant update.
+   * 0 on pre-migration rows (treated as missing_anchor when contentHash is non-null).
+   */
+  traceVersion?: number;
 }
