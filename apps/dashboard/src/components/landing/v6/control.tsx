@@ -11,27 +11,27 @@ interface Item {
 const ITEMS: Item[] = [
   {
     num: "/01/",
-    title: "Approval-first",
+    title: "Agents draft. You publish.",
     detail:
-      "Every action can start supervised — you see the draft, you click send. Loosen specific actions to autonomous when you trust the pattern. No agent ever publishes ads, posts creative, or moves money on its own.",
+      "Every action can start supervised — you see the draft, you click send. Loosen specific actions to autonomous when you trust the pattern. The desk is built around reviewable drafts, clear logs, and human control.",
   },
   {
     num: "/02/",
     title: "Audited",
     detail:
-      "Every reply, every ad-set change, every draft — logged with timestamp, agent, and reasoning. Exportable. Searchable. Your auditor will love it.",
+      "Every reply, every ad-set change, every draft — logged with timestamp, agent, and reasoning. Queryable from your dashboard.",
   },
   {
     num: "/03/",
     title: "Where your work lives",
     detail:
-      "Connects to the tools you already pay for: WhatsApp Business, Meta Ads, Google Calendar, Cal.com, Notion. We don't ask you to migrate. Disconnect with one click.",
+      "Connects to the tools you already pay for: WhatsApp, Telegram, Meta Ads, Google Calendar. We don't ask you to migrate. Disconnect with one click.",
   },
   {
     num: "/04/",
     title: "Hands-off when ready",
     detail:
-      "Once a workflow is proven — Alex's first replies, Nova's pause-on-CPL — graduate it to autonomous in one toggle. Revoke just as fast. You decide the leash, per agent, per action.",
+      "Once a workflow is proven — Alex's first replies, Nova's draft pauses — graduate it to autonomous as the agent earns trust. You stay in control of the leash.",
   },
 ];
 
@@ -63,7 +63,7 @@ export function V6Control() {
             Built so you stay <em className="font-semibold not-italic">in&nbsp;control</em>. Always.
           </h2>
           <p className="max-w-[22rem] text-base leading-[1.5] text-v6-graphite-2">
-            Every agent runs through the same controls. Approval-first by default. You loosen the
+            Every agent runs through the same controls. Agents draft, you publish. You loosen the
             leash on your own time, not ours.
           </p>
         </div>
