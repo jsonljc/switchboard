@@ -1,3 +1,10 @@
+/* eslint-disable max-lines -- bootstrap module: accumulates store wiring,
+   middleware, and route registration for the Fastify app. Crossed the 600-line
+   guideline when DeploymentLifecycleStore wiring was added (PR #322 / Risk #2).
+   Splitting this file (e.g. into a separate `bootstrap/decorate-stores.ts`) is
+   tracked as a follow-up — it has architectural reach beyond Risk #2's scope
+   and is best done when consolidating the store-wiring pattern across all
+   stores at once. */
 import Fastify from "fastify";
 import crypto from "node:crypto";
 import type { FastifyError } from "fastify";
