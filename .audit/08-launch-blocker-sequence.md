@@ -523,6 +523,15 @@ Live ledger of which entries below have shipped. Updated after each verification
 
 **Acceptance:** PrismaConversationStateStore created and wired into routes. Chat state mutations routed through Store indirection. Conversation updates recorded in WorkTrace.
 
+**Status:** Shipped 2026-04-30 across PRs #318 (schema + store), #319 (route refactor + bypass closure), and the final ship PR for Risk #1 (integration test + audit-doc closeout).
+
+Verification:
+
+- `pnpm reset && pnpm typecheck && pnpm test && pnpm build && pnpm lint` clean as of 2026-04-30 on the Session 3 worktree.
+- Operator-mutation routes (`PATCH /conversations/:threadId/override`, `POST /conversations/:threadId/send`, `POST /escalations/:id/reply`) no longer call `prisma.conversationState.update`; persistence boundary owned by `ConversationStateStore`. Regression-harness `apps/api/src/routes/__tests__/no-direct-conversation-state-mutation.test.ts` enforces the contract going forward.
+- Each operator mutation produces a `WorkTrace` row with `ingressPath = "store_recorded_operator_mutation"`, `mode = "operator_mutation"`, and `hashInputVersion = 2`. Pre-existing locked rows continue to verify against their original `contentHash` via the `hashInputVersion = 1` path.
+- DB-backed assertions live in `apps/api/src/__tests__/conversation-state-store.integration.test.ts` (skipped without `DATABASE_URL`).
+
 ---
 
 ### 2. **AgentDeployment updateMany bypass (halt enforcement not audited)**
