@@ -52,6 +52,7 @@ declare module "fastify" {
     resolvedSkin: { toolFilter: { include: string[]; exclude?: string[] } } | null;
     lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null;
     workTraceStore: import("@switchboard/core/platform").WorkTraceStore | null;
+    conversationStateStore: import("@switchboard/core/platform").ConversationStateStore | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
     simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
@@ -411,17 +412,23 @@ export async function buildServer() {
 
   let workTraceStore: import("@switchboard/core/platform").WorkTraceStore | undefined;
   let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
+  let conversationStateStore:
+    | import("@switchboard/core/platform").ConversationStateStore
+    | undefined;
   if (prismaClient) {
-    const { PrismaWorkTraceStore } = await import("@switchboard/db");
-    workTraceStore = new PrismaWorkTraceStore(prismaClient, {
+    const { PrismaWorkTraceStore, PrismaConversationStateStore } = await import("@switchboard/db");
+    const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
       auditLedger: ledger,
       operatorAlerter,
     });
+    workTraceStore = prismaWorkTraceStore;
+    conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
     const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
     deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
   app.decorate("deploymentResolver", deploymentResolver);
   app.decorate("workTraceStore", workTraceStore ?? null);
+  app.decorate("conversationStateStore", conversationStateStore ?? null);
 
   let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
   if (prismaClient) {
