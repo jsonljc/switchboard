@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { ConversationStateNotFoundError } from "@switchboard/core/platform";
+import { resolveOperatorActor } from "./operator-actor.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -265,8 +267,9 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const prisma = app.prisma;
-      if (!prisma) return reply.code(503).send({ error: "Database unavailable", statusCode: 503 });
+      if (!app.conversationStateStore) {
+        return reply.code(503).send({ error: "Conversation store unavailable", statusCode: 503 });
+      }
 
       const { threadId } = request.params as { threadId: string };
       const body = request.body as { override?: boolean };
@@ -275,20 +278,24 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(403).send({ error: "Organization scope required", statusCode: 403 });
       }
 
-      const existing = await (prisma as unknown as PrismaLike).conversationState.findFirst({
-        where: { threadId, organizationId: orgId },
-      });
-      if (!existing) {
-        return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
+      try {
+        const result = await app.conversationStateStore.setOverride({
+          organizationId: orgId,
+          threadId,
+          override: body.override !== false,
+          operator: resolveOperatorActor(request),
+        });
+        return reply.send({
+          id: result.conversationId,
+          threadId: result.threadId,
+          status: result.status,
+        });
+      } catch (err) {
+        if (err instanceof ConversationStateNotFoundError) {
+          return reply.code(404).send({ error: "Conversation not found", statusCode: 404 });
+        }
+        throw err;
       }
-
-      const status = body.override === false ? "active" : "human_override";
-      const updated = await (prisma as unknown as PrismaLike).conversationState.update({
-        where: { id: existing.id },
-        data: { status, lastActivityAt: new Date() },
-      });
-
-      return reply.send({ id: updated.id, threadId: updated.threadId, status: updated.status });
     },
   );
 
