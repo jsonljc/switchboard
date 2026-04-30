@@ -95,3 +95,44 @@ describe("PrismaDeploymentLifecycleStore.haltAll", () => {
     expect(wts.recordOperatorMutation).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("PrismaDeploymentLifecycleStore.resume", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("flips paused deployments to active scoped to skillSlug", async () => {
+    const { prisma, tx } = makePrismaMock({
+      findMany: [{ id: "d1" }],
+      updateCount: 1,
+    });
+    const wts = makeWorkTraceStoreMock();
+    const store = new PrismaDeploymentLifecycleStore(prisma, wts);
+
+    const result = await store.resume({
+      organizationId: "org_1",
+      skillSlug: "alex",
+      operator: { type: "user", id: "u_1" },
+    });
+
+    expect(result.count).toBe(1);
+    expect(result.affectedDeploymentIds).toEqual(["d1"]);
+
+    expect(tx.agentDeployment.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },
+      select: { id: true },
+    });
+    expect(tx.agentDeployment.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },
+      data: { status: "active" },
+    });
+
+    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(trace.intent).toBe("agent_deployment.resume");
+    expect(trace.parameters).toMatchObject({
+      actionKind: "agent_deployment.resume",
+      orgId: "org_1",
+      skillSlug: "alex",
+      before: { status: "paused", ids: ["d1"] },
+      after: { status: "active", count: 1 },
+    });
+  });
+});
