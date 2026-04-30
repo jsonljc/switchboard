@@ -191,8 +191,46 @@ export type AuditEntry = {
   createdAt: string;
   metadata?: Record<string, unknown> | null;
 };
-export function mapActivity(_entries: AuditEntry[]): { moreToday: number; rows: ActivityRow[] } {
-  throw new Error("not implemented");
+function agentForAction(action: string, actorId: string | null): AgentKey {
+  const key = (actorId ?? action).toLowerCase();
+  if (key.includes("alex")) return "alex";
+  if (key.includes("nova")) return "nova";
+  if (key.includes("mira")) return "mira";
+  return "system";
+}
+
+function formatHHMM(createdAt: string): string {
+  return new Date(createdAt).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function isToday(createdAt: string, now: Date): boolean {
+  const d = new Date(createdAt);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+export function mapActivity(entries: AuditEntry[]): {
+  moreToday: number;
+  rows: ActivityRow[];
+} {
+  const now = new Date();
+  const todayEntries = entries.filter((e) => isToday(e.createdAt, now));
+  const displayed = entries.slice(0, 9);
+  const moreToday = Math.max(0, todayEntries.length - displayed.length);
+  const rows: ActivityRow[] = displayed.map((e) => ({
+    id: e.id,
+    time: formatHHMM(e.createdAt),
+    agent: agentForAction(e.action, e.actorId),
+    message: [e.action.replace(/^[^.]+\./, "").replace(/[._]/g, " ")],
+  }));
+  return { moreToday, rows };
 }
 
 // ── Top-level composer ────────────────────────────────────────────────────

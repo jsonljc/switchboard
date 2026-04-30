@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mapActivity,
   mapAgents,
   mapApprovalGateCard,
   mapEscalationCard,
@@ -208,5 +209,38 @@ describe("mapAgents", () => {
   it("primaryStat reads 'pending option C' until per-agent stats land", () => {
     const result = mapAgents({ alex: true, nova: true, mira: true });
     expect(result.every((a) => a.primaryStat === "pending option C")).toBe(true);
+  });
+});
+
+describe("mapActivity", () => {
+  it("formats createdAt to HH:MM and synthesizes agent from action prefix", () => {
+    const result = mapActivity([
+      { id: "1", action: "alex.replied", actorId: "agent:alex", createdAt: "2026-04-30T10:42:00" },
+      {
+        id: "2",
+        action: "nova.draft.created",
+        actorId: "agent:nova",
+        createdAt: "2026-04-30T10:38:00",
+      },
+      { id: "3", action: "system.audit.tick", actorId: null, createdAt: "2026-04-30T10:00:00" },
+    ]);
+    expect(result.rows).toHaveLength(3);
+    expect(result.rows[0].agent).toBe("alex");
+    expect(result.rows[0].time).toBe("10:42");
+    expect(result.rows[1].agent).toBe("nova");
+    expect(result.rows[2].agent).toBe("system");
+  });
+
+  it("caps display at 9 rows and counts moreToday from today's overflow", () => {
+    const today = new Date().toISOString();
+    const entries = Array.from({ length: 14 }, (_, i) => ({
+      id: `e${i}`,
+      action: "alex.replied",
+      actorId: "agent:alex",
+      createdAt: today,
+    }));
+    const result = mapActivity(entries);
+    expect(result.rows).toHaveLength(9);
+    expect(result.moreToday).toBe(5);
   });
 });
