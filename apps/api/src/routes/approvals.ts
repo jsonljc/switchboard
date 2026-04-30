@@ -14,6 +14,19 @@ import { assertOrgAccess } from "../utils/org-access.js";
 
 const respondJsonSchema = zodToJsonSchema(ApprovalRespondBodySchema, { target: "openApi3" });
 
+// Per-route override for the global @fastify/rate-limit plugin. Approval responses must not be
+// starved by high-frequency reads sharing the same global window. Distinct from the per-responder
+// PlatformLifecycle.approvalRateLimit (anti-rubber-stamping cap on a single user's approve/patch
+// actions) — that is wired from APPROVAL_RATE_LIMIT_MAX in app.ts.
+const APPROVAL_HTTP_RATE_LIMIT_MAX = parseInt(
+  process.env["APPROVAL_HTTP_RATE_LIMIT_MAX"] ?? "300",
+  10,
+);
+const APPROVAL_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
+  process.env["APPROVAL_HTTP_RATE_LIMIT_WINDOW_MS"] ?? "60000",
+  10,
+);
+
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/approvals/:id/respond - Respond to an approval request
   app.post(
@@ -24,6 +37,12 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
         tags: ["Approvals"],
         params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
         body: respondJsonSchema,
+      },
+      config: {
+        rateLimit: {
+          max: APPROVAL_HTTP_RATE_LIMIT_MAX,
+          timeWindow: APPROVAL_HTTP_RATE_LIMIT_WINDOW_MS,
+        },
       },
     },
     async (request, reply) => {

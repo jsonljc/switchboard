@@ -8,6 +8,17 @@ import { createApprovalForWorkUnit } from "./approval-factory.js";
 
 const executeJsonSchema = zodToJsonSchema(ExecuteBodySchema, { target: "openApi3" });
 
+// Per-route override for the global @fastify/rate-limit plugin. Action execution must not be
+// starved by high-frequency reads sharing the same global window. Tunable per deployment via env.
+const EXECUTE_HTTP_RATE_LIMIT_MAX = parseInt(
+  process.env["EXECUTE_HTTP_RATE_LIMIT_MAX"] ?? "300",
+  10,
+);
+const EXECUTE_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
+  process.env["EXECUTE_HTTP_RATE_LIMIT_WINDOW_MS"] ?? "60000",
+  10,
+);
+
 export const executeRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/execute - Single endpoint: propose + conditional execute, returns EXECUTED | PENDING_APPROVAL | DENIED
   app.post(
@@ -23,6 +34,12 @@ export const executeRoutes: FastifyPluginAsync = async (app) => {
           properties: {
             "Idempotency-Key": { type: "string", description: "Required for replay protection" },
           },
+        },
+      },
+      config: {
+        rateLimit: {
+          max: EXECUTE_HTTP_RATE_LIMIT_MAX,
+          timeWindow: EXECUTE_HTTP_RATE_LIMIT_WINDOW_MS,
         },
       },
     },
