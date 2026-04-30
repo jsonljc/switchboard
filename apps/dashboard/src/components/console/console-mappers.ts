@@ -11,8 +11,14 @@ import type {
 } from "./console-data";
 
 // ── Op strip ──────────────────────────────────────────────────────────────
-export function mapOpStrip(_orgName: string, _now: Date, _dispatch: "live" | "halted"): OpStrip {
-  throw new Error("not implemented");
+export function mapOpStrip(orgName: string, now: Date, dispatch: "live" | "halted"): OpStrip {
+  const day = now.toLocaleDateString("en-US", { weekday: "short" });
+  const time = now.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return { orgName, now: `${day} ${time}`, dispatch };
 }
 
 // ── Numbers strip ─────────────────────────────────────────────────────────
