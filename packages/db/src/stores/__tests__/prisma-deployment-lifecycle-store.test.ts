@@ -56,7 +56,7 @@ describe("PrismaDeploymentLifecycleStore.haltAll", () => {
     });
 
     expect(wts.recordOperatorMutation).toHaveBeenCalledTimes(1);
-    const [trace, ctx] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [trace, ctx] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(trace.intent).toBe("agent_deployment.halt");
     expect(trace.mode).toBe("operator_mutation");
     expect(trace.ingressPath).toBe("store_recorded_operator_mutation");
@@ -73,7 +73,7 @@ describe("PrismaDeploymentLifecycleStore.haltAll", () => {
     expect(ctx.tx).toBe(tx);
 
     expect(wts.update).toHaveBeenCalledTimes(1);
-    const [updateId, fields] = (wts.update as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [updateId, fields] = (wts.update as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(updateId).toBe(result.workTraceId);
     expect(fields).toMatchObject({ outcome: "completed" });
     expect(fields.completedAt).toBeDefined();
@@ -125,7 +125,7 @@ describe("PrismaDeploymentLifecycleStore.resume", () => {
       data: { status: "active" },
     });
 
-    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(trace.intent).toBe("agent_deployment.resume");
     expect(trace.parameters).toMatchObject({
       actionKind: "agent_deployment.resume",
@@ -162,7 +162,7 @@ describe("PrismaDeploymentLifecycleStore.suspendAll", () => {
       data: { status: "suspended" },
     });
 
-    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [trace] = (wts.recordOperatorMutation as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(trace.intent).toBe("agent_deployment.suspend");
     // "internal" matches the Trigger union (chat|api|schedule|internal) and the
     // existing Stripe-driven pattern in apps/api/src/bootstrap/contained-workflows.ts.

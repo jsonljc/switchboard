@@ -53,6 +53,7 @@ declare module "fastify" {
     lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null;
     workTraceStore: import("@switchboard/core/platform").WorkTraceStore | null;
     conversationStateStore: import("@switchboard/core/platform").ConversationStateStore | null;
+    deploymentLifecycleStore: import("@switchboard/core/platform").DeploymentLifecycleStore | null;
     executionQueue: import("bullmq").Queue | null;
     executionWorker: import("bullmq").Worker | null;
     simulationExecutor: import("@switchboard/core/skill-runtime").SkillExecutor | null;
@@ -415,20 +416,29 @@ export async function buildServer() {
   let conversationStateStore:
     | import("@switchboard/core/platform").ConversationStateStore
     | undefined;
+  let deploymentLifecycleStore:
+    | import("@switchboard/core/platform").DeploymentLifecycleStore
+    | null = null;
   if (prismaClient) {
-    const { PrismaWorkTraceStore, PrismaConversationStateStore } = await import("@switchboard/db");
+    const { PrismaWorkTraceStore, PrismaConversationStateStore, PrismaDeploymentLifecycleStore } =
+      await import("@switchboard/db");
     const prismaWorkTraceStore = new PrismaWorkTraceStore(prismaClient, {
       auditLedger: ledger,
       operatorAlerter,
     });
     workTraceStore = prismaWorkTraceStore;
     conversationStateStore = new PrismaConversationStateStore(prismaClient, prismaWorkTraceStore);
+    deploymentLifecycleStore = new PrismaDeploymentLifecycleStore(
+      prismaClient,
+      prismaWorkTraceStore,
+    );
     const { PrismaDeploymentResolver } = await import("@switchboard/core/platform");
     deploymentResolver = new PrismaDeploymentResolver(prismaClient as never);
   }
   app.decorate("deploymentResolver", deploymentResolver);
   app.decorate("workTraceStore", workTraceStore ?? null);
   app.decorate("conversationStateStore", conversationStateStore ?? null);
+  app.decorate("deploymentLifecycleStore", deploymentLifecycleStore ?? null);
 
   let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
   if (prismaClient) {
