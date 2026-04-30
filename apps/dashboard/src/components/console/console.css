@@ -927,6 +927,21 @@
   opacity: 1;
 }
 
+/* ---------- Error banner ---------- */
+[data-v6-console] .console-error {
+  margin: 1rem 2rem;
+  padding: 1rem 1.25rem;
+  border-left: 2px solid var(--c-coral);
+  background: var(--c-coral-soft);
+  font-family: var(--c-mono);
+  font-size: 12px;
+  color: var(--c-text-2);
+}
+[data-v6-console] .console-error b {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
 /* timer chip in queue card headers */
 [data-v6-console] .timer {
   font-family: var(--c-mono);
