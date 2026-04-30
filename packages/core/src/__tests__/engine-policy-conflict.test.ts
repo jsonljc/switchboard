@@ -238,6 +238,44 @@ describe("Policy Engine — Conflict Resolution", () => {
     expect(matched[1]!.effect).toBe("deny");
   });
 
+  it("[require_approval@1, deny@10] -> approval override set first, then deny breaks; deny wins", () => {
+    // Locks in that deny terminates iteration even after policyApprovalOverride has been
+    // recorded — protects against future refactors that, e.g., clear the override on deny.
+    const approvalPolicy = makePolicy({
+      id: "require-approval-policy",
+      name: "Require approval for budget",
+      priority: 1,
+      effect: "require_approval",
+      approvalRequirement: "elevated",
+      rule: matchAllRule,
+    });
+    const denyPolicy = makePolicy({
+      id: "deny-policy",
+      name: "Deny budget updates",
+      priority: 10,
+      effect: "deny",
+      rule: matchAllRule,
+    });
+
+    const trace = evaluate(
+      makeProposal(),
+      makeEvalContext(),
+      makeEngineContext({ policies: [denyPolicy, approvalPolicy] }),
+    );
+    expect(trace.finalDecision).toBe("deny");
+    // Deny terminal denies bypass the normal approval pipeline: approvalRequired is "none"
+    // when policyDecision === "deny" (see policy-engine.ts:339).
+    expect(trace.approvalRequired).toBe("none");
+
+    const matched = trace.checks.filter((c) => c.checkCode === "POLICY_RULE" && c.matched);
+    expect(matched).toHaveLength(2);
+    // require_approval collapses to "allow" in trace.effect via mapPolicyEffect (policy-engine.ts:623);
+    // the original effect lives in the policy-rule's checkData.
+    expect(matched[0]!.effect).toBe("allow");
+    expect(matched[0]!.checkData["effect"]).toBe("require_approval");
+    expect(matched[1]!.effect).toBe("deny");
+  });
+
   it("same priority, two allows -> allow wins (positive control: no break on allow)", () => {
     const allowA = makePolicy({
       id: "allow-a",

@@ -308,6 +308,10 @@ function evaluatePolicyRules(
 
     if (ruleResult.matched) {
       if (policy.effect === "deny") {
+        // Deny short-circuits: any matched deny terminates iteration immediately, overriding
+        // any allow already set. Allow does not short-circuit, so a later deny can still flip
+        // the decision. Net invariant: among matched policies, deny wins regardless of order
+        // or priority. Locked in by engine-policy-conflict.test.ts.
         policyDecision = "deny";
         break;
       }
