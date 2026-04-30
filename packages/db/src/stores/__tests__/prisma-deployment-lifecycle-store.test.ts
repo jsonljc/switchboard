@@ -49,6 +49,7 @@ describe("PrismaDeploymentLifecycleStore.haltAll", () => {
     expect(tx.agentDeployment.findMany).toHaveBeenCalledWith({
       where: { organizationId: "org_1", status: "active" },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
     expect(tx.agentDeployment.updateMany).toHaveBeenCalledWith({
       where: { organizationId: "org_1", status: "active" },
@@ -119,6 +120,7 @@ describe("PrismaDeploymentLifecycleStore.resume", () => {
     expect(tx.agentDeployment.findMany).toHaveBeenCalledWith({
       where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
     expect(tx.agentDeployment.updateMany).toHaveBeenCalledWith({
       where: { organizationId: "org_1", skillSlug: "alex", status: "paused" },

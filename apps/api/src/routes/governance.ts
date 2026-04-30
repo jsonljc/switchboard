@@ -176,14 +176,19 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const store = app.governanceProfileStore;
-      await store.set(orgId, "locked");
-
-      // Halt all active deployments via the lifecycle store (writes WorkTrace).
+      // Guard the lifecycle store BEFORE mutating the governance profile, so a
+      // missing infra component doesn't leave the org half-halted (governance
+      // locked, deployments still active). Cannot fire today — app.ts co-creates
+      // both stores in the same `if (prismaClient)` block — but the ordering is
+      // the right defensive shape if that wiring ever drifts.
       if (!app.deploymentLifecycleStore) {
         return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
       }
 
+      const store = app.governanceProfileStore;
+      await store.set(orgId, "locked");
+
+      // Halt all active deployments via the lifecycle store (writes WorkTrace).
       const operator = resolveOperatorActor(request);
       const haltResult = await app.deploymentLifecycleStore.haltAll({
         organizationId: orgId,
@@ -319,14 +324,18 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      // Guard the lifecycle store BEFORE mutating the governance profile, so a
+      // missing infra component doesn't leave the org half-resumed (governance
+      // unlocked, deployments still paused). See emergency-halt for the same pattern.
+      if (!app.deploymentLifecycleStore) {
+        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
+      }
+
       // Restore governance to guarded (safe default)
       const store = app.governanceProfileStore;
       await store.set(orgId, "guarded");
 
       // Reactivate paused deployment(s) for the alex skill via the lifecycle store.
-      if (!app.deploymentLifecycleStore) {
-        return reply.code(503).send({ error: "Deployment store unavailable", statusCode: 503 });
-      }
       const operator = resolveOperatorActor(request);
       const resumeResult = await app.deploymentLifecycleStore.resume({
         organizationId: orgId,

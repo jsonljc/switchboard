@@ -23,9 +23,17 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     const executionStartedAt = new Date();
 
     const txResult = await this.prisma.$transaction(async (tx) => {
+      // Stable ordering keeps `before.ids` (and the resulting contentHash and
+      // result.affectedDeploymentIds) deterministic across runs and replays.
+      // Postgres READ COMMITTED (Prisma default) does not eliminate the race
+      // between findMany and updateMany — a row visible at findMany may be
+      // mutated by another tx before updateMany. The trace records both:
+      // before.ids = "what the operator's intent saw" and after.count = "what
+      // the SQL actually wrote". A divergence is expected and audit-meaningful.
       const before = await tx.agentDeployment.findMany({
         where: { organizationId: input.organizationId, status: "active" },
         select: { id: true },
+        orderBy: { id: "asc" },
       });
       const ids = before.map((r) => r.id);
 
@@ -99,6 +107,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     const executionStartedAt = new Date();
 
     const txResult = await this.prisma.$transaction(async (tx) => {
+      // See haltAll for the ordering / findMany-updateMany race rationale.
       const before = await tx.agentDeployment.findMany({
         where: {
           organizationId: input.organizationId,
@@ -106,6 +115,7 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
           status: "paused",
         },
         select: { id: true },
+        orderBy: { id: "asc" },
       });
       const ids = before.map((r) => r.id);
 
@@ -183,9 +193,11 @@ export class PrismaDeploymentLifecycleStore implements DeploymentLifecycleStore 
     const executionStartedAt = new Date();
 
     const txResult = await this.prisma.$transaction(async (tx) => {
+      // See haltAll for the ordering / findMany-updateMany race rationale.
       const before = await tx.agentDeployment.findMany({
         where: { organizationId: input.organizationId, status: "active" },
         select: { id: true },
+        orderBy: { id: "asc" },
       });
       const ids = before.map((r) => r.id);
 
