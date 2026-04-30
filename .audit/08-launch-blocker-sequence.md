@@ -103,7 +103,7 @@ Live ledger of which entries below have shipped. Updated after each verification
 
 | #   | Item                                               | Status     | Evidence / PR                                                                                                   |
 | --- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
-| 1   | ConversationState direct Prisma bypass             | 🔴 OPEN    | `apps/api/src/routes/conversations.ts` accesses `prisma.conversationState` directly (verified 2026-04-29)       |
+| 1   | ConversationState direct Prisma bypass             | ✅ SHIPPED | PRs #318 (schema + store), #319 (route refactor + bypass closure), #320 (integration test + audit closeout)     |
 | 2   | AgentDeployment updateMany bypass                  | 🔴 OPEN    | `apps/api/src/routes/governance.ts:184,318` calls `agentDeployment.updateMany()` directly (verified 2026-04-29) |
 | 3   | Ad-optimizer outcome dispatcher idempotency        | 🟡 UNCLEAR | Local idempotency guard incomplete; relies on Meta-side dedup via eventId (verified 2026-04-29)                 |
 | 4   | Chat approval binding hash not verified            | ✅ SHIPPED | PR #305 (gateway interception, terminal branch)                                                                 |
@@ -116,12 +116,11 @@ Live ledger of which entries below have shipped. Updated after each verification
 
 1. **Blocker #18** — Creative-pipeline DLQ. S per function × 3, identical pattern, doctrine compliance.
 2. **Blocker #19** — WorkTrace cryptographic integrity. M-L, scaffolding (hash-chain machinery in `AuditLedger`) already exists; missing piece is `WorkTrace` schema + recorder integration.
-3. **Risk #1** — ConversationState Store abstraction. M.
-4. **Risk #2** — AgentDeployment Store methods. M.
-5. **Risk #5** — Per-endpoint rate limits for approval/execute. S.
-6. **Risk #3** — Outcome dispatcher idempotency completeness. S (decide whether local guard is needed beyond Meta-side dedup).
-7. **Risk #6** — Policy conflict resolution tests. S.
-8. **Risk #4a** — Chat approval response identity binding. M (depends on chat contact→principal mapping).
+3. **Risk #2** — AgentDeployment Store methods. M.
+4. **Risk #5** — Per-endpoint rate limits for approval/execute. S.
+5. **Risk #3** — Outcome dispatcher idempotency completeness. S (decide whether local guard is needed beyond Meta-side dedup).
+6. **Risk #6** — Policy conflict resolution tests. S.
+7. **Risk #4a** — Chat approval response identity binding. M (depends on chat contact→principal mapping).
 
 ---
 
